@@ -14,7 +14,7 @@ const ChatHeader = ({ title, onNewChat }) => {
 
       <div className="flex items-center gap-2">
         <Button 
-          className="flex gap-2 bg-[#9F7892] hover:bg-[#8a687e] text-white border-none rounded-lg shadow-sm transition-all duration-200 font-medium px-5"
+          className="flex gap-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white border-none rounded-lg shadow-sm transition-all duration-200 font-medium px-5"
           onClick={onNewChat}
         >
           <Plus className="h-4 w-4" />
