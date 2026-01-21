@@ -1,16 +1,34 @@
-import Toast from "./toast.jsx";
-import { useToast } from "./use-toast.js";
+import {
+	Toast,
+	ToastClose,
+	ToastDescription,
+	ToastProvider,
+	ToastTitle,
+	ToastViewport,
+} from '@/components/ui/toast';
+import { useToast } from '@/components/ui/use-toast';
+import React from 'react';
 
-export default function Toaster() {
-  const { toasts } = useToast();
+export function Toaster() {
+	const { toasts } = useToast();
 
-  if (!toasts.length) return null;
-
-  return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
-      {toasts.map((toast) => (
-        <Toast key={toast.id} message={toast.message} />
-      ))}
-    </div>
-  );
+	return (
+		<ToastProvider>
+			{toasts.map(({ id, title, description, action, ...props }) => {
+				return (
+					<Toast key={id} {...props}>
+						<div className="grid gap-1">
+							{title && <ToastTitle>{title}</ToastTitle>}
+							{description && (
+								<ToastDescription>{description}</ToastDescription>
+							)}
+						</div>
+						{action}
+						<ToastClose />
+					</Toast>
+				);
+			})}
+			<ToastViewport />
+		</ToastProvider>
+	);
 }
