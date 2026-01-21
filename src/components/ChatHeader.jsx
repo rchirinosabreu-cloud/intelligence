@@ -1,17 +1,28 @@
-import CallToAction from "./CallToAction.jsx";
-import HeroImage from "./HeroImage.jsx";
+import React from 'react';
+import { Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
-export default function ChatHeader() {
+const ChatHeader = ({ title, onNewChat }) => {
   return (
-    <header className="flex items-center justify-between gap-4">
-      <div className="flex items-center gap-3">
-        <HeroImage size="sm" />
-        <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-ink/60">Brainstudio</p>
-          <h1 className="text-xl font-semibold">Brainstudio Intelligence</h1>
-        </div>
+    <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-brand-lavender px-6 py-4 flex items-center justify-between h-20 shadow-sm">
+      <div className="flex flex-col overflow-hidden">
+        <h2 className="font-semibold text-brand-charcoal truncate text-lg">
+          {title || "New Chat"}
+        </h2>
+        <p className="text-xs text-brand-charcoal/50 font-medium">Brainstudio AI 1.5-flash</p>
       </div>
-      <CallToAction />
+
+      <div className="flex items-center gap-2">
+        <Button 
+          className="flex gap-2 bg-[#9F7892] hover:bg-[#8a687e] text-white border-none rounded-lg shadow-sm transition-all duration-200 font-medium px-5"
+          onClick={onNewChat}
+        >
+          <Plus className="h-4 w-4" />
+          New Chat
+        </Button>
+      </div>
     </header>
   );
-}
+};
+
+export default ChatHeader;
