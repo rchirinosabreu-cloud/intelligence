@@ -1,7 +1,17 @@
-export default function WelcomeMessage() {
+import React from 'react';
+import { motion } from 'framer-motion';
+
+const WelcomeMessage = () => {
   return (
-    <div className="rounded-2xl border border-ink/10 bg-white/70 px-4 py-3 text-xs text-ink/70">
-      Consejo: Escribe preguntas específicas para recibir respuestas más precisas.
-    </div>
+    <motion.p
+      className='text-sm text-white leading-5 w-full'
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5, delay: 0.8 }}
+    >
+      Write in the chat what you want to create.
+    </motion.p>
   );
-}
+};
+
+export default WelcomeMessage;
