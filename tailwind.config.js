@@ -59,6 +59,15 @@ export default {
           mauve: '#F3F0F5',
           teal: '#366882',
           charcoal: '#4F4C73',
+          purple: {
+             DEFAULT: '#8B5CF6',
+             deep: '#7C3AED',
+             light: '#A78BFA'
+          },
+          gray: {
+             bg: '#F3F3F3',
+             text: '#1F2937'
+          }
         }
       },
       borderRadius: {

@@ -138,9 +138,9 @@ const ChatInterface = () => {
   };
 
   return (
-    <div className="flex h-screen w-full bg-brand-mauve overflow-hidden">
+    <div className="flex h-screen w-full bg-[#F3F3F3] overflow-hidden font-sans">
       {/* Main Chat Area - Full Width */}
-      <div className="flex-1 flex flex-col h-full relative w-full bg-[#F5F1FA]">
+      <div className="flex-1 flex flex-col h-full relative w-full bg-[#F3F3F3]">
         <ChatHeader 
           title={currentChat?.title} 
           onNewChat={createNewChat}
@@ -150,7 +150,7 @@ const ChatInterface = () => {
           {!currentChat || currentChat.messages.length === 0 ? (
             <GreetingMessage onSuggestionClick={handleSendMessage} />
           ) : (
-            <div className="py-6 px-0 space-y-6 min-h-full">
+            <div className="py-6 px-0 space-y-6 min-h-full max-w-5xl mx-auto w-full">
               {currentChat.messages.map((msg, idx) => (
                 <ChatMessage key={idx} message={msg} />
               ))}
@@ -185,7 +185,7 @@ const ChatInterface = () => {
         </div>
 
         {/* Input Area */}
-        <div className="bg-gradient-to-t from-[#F5F1FA] via-[#F5F1FA] to-transparent pt-6">
+        <div className="bg-gradient-to-t from-[#F3F3F3] via-[#F3F3F3] to-transparent pt-6">
           <ChatInput onSend={handleSendMessage} isLoading={isLoading} />
         </div>
       </div>
