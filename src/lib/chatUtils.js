@@ -7,8 +7,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
  */
 export async function sendMessage(messages, onChunk) {
   const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-  // Fallback to stable version alias
-  const MODEL_NAME = "gemini-1.5-flash-latest";
+  // Use env var or standard model name
+  const MODEL_NAME = import.meta.env.VITE_GEMINI_MODEL || "gemini-1.5-flash";
 
   if (!GEMINI_API_KEY) {
     // Log helpful debug info (masked) to console to help verify if key is being read at all
@@ -67,7 +67,7 @@ Actúa como un sistema híbrido avanzado.`;
     console.error('Error in sendMessage:', error);
     // Enhance error message for user debugging
     if (error.message.includes('404')) {
-        throw new Error(`Error 404: El modelo '${MODEL_NAME}' no fue encontrado o la API no está habilitada. Verifica tu API Key y configuración en Google AI Studio.`);
+        throw new Error(`Error 404: El modelo '${MODEL_NAME}' no fue encontrado o la API no está habilitada. Verifica tu API Key y configuración en Google AI Studio. Asegúrate de que el modelo sea válido (ej: gemini-1.5-flash).`);
     }
     throw error;
   }
