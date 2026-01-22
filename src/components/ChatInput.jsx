@@ -10,8 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const ChatInput = ({ onSend, isLoading }) => {
-  const [input, setInput] = useState('');
+const ChatInput = ({ onSend, isLoading, input, setInput }) => {
   const textareaRef = useRef(null);
   const { toast } = useToast();
   const maxLength = 1000;
