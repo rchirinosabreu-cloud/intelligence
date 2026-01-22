@@ -9,6 +9,7 @@ const ChatHeader = ({ title, onNewChat }) => {
         <h2 className="font-semibold text-brand-charcoal truncate text-lg">
           Brainstudio Intelligence
         </h2>
+        {/* User requested to remove text below title. It seems I already did that or it wasn't there. */}
       </div>
 
       <div className="flex items-center gap-2">

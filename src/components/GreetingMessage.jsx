@@ -9,104 +9,33 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
+// Icons mapping based on context since icons are imported but not all used in the previous array explicitly with strings
+// I'll try to match icons to the text.
 const allSuggestions = [
-  {
-    icon: Calendar,
-    title: "Ayúdame a organizar esta semana.",
-    prompt: "",
-  },
-  {
-    icon: AlertTriangle,
-    title: "¿Qué proyectos están en riesgo?",
-    prompt: "",
-  },
-  {
-    icon: ArrowUpCircle,
-    title: "Dame prioridades según fechas y carga.",
-    prompt: "",
-  },
-  {
-    icon: Video,
-    title: "¿Cómo es el proceso interno para entregar un video?",
-    prompt: "",
-  },
-  {
-    icon: Palette,
-    title: "¿Qué incluye el servicio de branding?",
-    prompt: "",
-  },
-  {
-    icon: CheckCircle,
-    title: "¿Cuál es el flujo de aprobación?",
-    prompt: "",
-  },
-  {
-    icon: FileText,
-    title: "Escribe una propuesta comercial para este cliente.",
-    prompt: "",
-  },
-  {
-    icon: Image,
-    title: "Dame copys para Instagram con este enfoque.",
-    prompt: "",
-  },
-  {
-    icon: Minimize2,
-    title: "Resume este texto para presentación.",
-    prompt: "",
-  },
-  {
-    icon: BarChart2,
-    title: "Hazme el resumen mensual de redes del cliente X.",
-    prompt: "",
-  },
-  {
-    icon: TrendingUp,
-    title: "Dime qué mejoró y qué no este mes.",
-    prompt: "",
-  },
-  {
-    icon: Lightbulb,
-    title: "Prepárame insights para enviar al cliente.",
-    prompt: "",
-  },
-  {
-    icon: File,
-    title: "Muéstrame el último informe de SunPartners.",
-    prompt: "",
-  },
-  {
-    icon: Users,
-    title: "¿Qué se acordó con este cliente en la última reunión?",
-    prompt: "",
-  },
-  {
-    icon: FileText,
-    title: "Resume el brief del proyecto X.",
-    prompt: "",
-  },
-  {
-    icon: ListTodo,
-    title: "¿Cuáles son mis pendientes hoy?",
-    prompt: "",
-  },
-  {
-    icon: CheckSquare,
-    title: "¿Qué tareas tengo abiertas con el cliente X?",
-    prompt: "",
-  },
-  {
-    icon: Clock,
-    title: "Recuérdame qué quedó pendiente de la última reunión.",
-    prompt: "",
-  }
+  { icon: Calendar, text: "Ayúdame a organizar esta semana." },
+  { icon: AlertTriangle, text: "¿Qué proyectos están en riesgo?" },
+  { icon: ArrowUpCircle, text: "Dame prioridades según fechas y carga." },
+  { icon: Video, text: "¿Cómo es el proceso interno para entregar un video?" },
+  { icon: Palette, text: "¿Qué incluye el servicio de branding?" },
+  { icon: CheckCircle, text: "¿Cuál es el flujo de aprobación?" },
+  { icon: FileText, text: "Escribe una propuesta comercial para este cliente." },
+  { icon: Image, text: "Dame copys para Instagram con este enfoque." },
+  { icon: Minimize2, text: "Resume este texto para presentación." },
+  { icon: BarChart2, text: "Hazme el resumen mensual de redes del cliente X." },
+  { icon: TrendingUp, text: "Dime qué mejoró y qué no este mes." },
+  { icon: Lightbulb, text: "Prepárame insights para enviar al cliente." },
+  { icon: File, text: "Muéstrame el último informe de SunPartners." },
+  { icon: Users, text: "¿Qué se acordó con este cliente en la última reunión?" },
+  { icon: FileText, text: "Resume el brief del proyecto X." },
+  { icon: ListTodo, text: "¿Cuáles son mis pendientes hoy?" },
+  { icon: CheckSquare, text: "¿Qué tareas tengo abiertas con el cliente X?" },
+  { icon: Clock, text: "Recuérdame qué quedó pendiente de la última reunión." },
 ];
 
 const GreetingMessage = ({ onSuggestionClick }) => {
   const [currentSuggestions, setCurrentSuggestions] = useState([]);
 
   const refreshSuggestions = () => {
-    // Shuffle and pick 4
     const shuffled = [...allSuggestions].sort(() => 0.5 - Math.random());
     setCurrentSuggestions(shuffled.slice(0, 4));
   };
@@ -126,27 +55,44 @@ const GreetingMessage = ({ onSuggestionClick }) => {
         <h2 className="text-3xl md:text-5xl font-bold text-gray-800 mb-4">
           ¿Listo para trascender?
         </h2>
-        <p className="text-gray-500 text-lg">
-          Genera ideas, contenidos, análisis y consultas
-        </p>
+        {/* User wanted dark gray text for the subtitle?
+            "Quitemos el 'hola' y dejemos solamente las palabras '¿Listo para trascender?' Y en color gris oscuro."
+            This might apply to the header itself.
+            The previous code had text-gray-800 for the header (dark gray) and text-gray-500 for the subtitle.
+            I will interpret "Y en color gris oscuro" as applying to the "¿Listo para trascender?" text.
+            I'll remove the subtitle "Genera ideas..." as the user said "dejemos solamente las palabras '¿Listo para trascender?'".
+            The previous code had a subtitle. I will remove it.
+        */}
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 w-full mb-6">
         {currentSuggestions.map((item, index) => (
           <motion.button
-            key={`${item.title}-${index}`}
+            key={`${item.text}-${index}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 * index }}
-            onClick={() => onSuggestionClick(item.title + (item.prompt ? " " + item.prompt : ""))}
+            onClick={() => onSuggestionClick(item.text)}
             className="group relative flex flex-col justify-between p-4 rounded-2xl bg-gray-100 hover:bg-gray-200 transition-all duration-300 text-left min-h-[140px]"
           >
             <div>
               <p className="font-semibold text-gray-900 text-sm leading-tight line-clamp-3">
-                {item.title}
+                {item.text}
               </p>
             </div>
-            <div className="mt-auto">
+            {/*
+                "los cuadros de los prompts tienen mucho espacio, quiero decir, el icono está muy abajo del texto"
+                The current layout is flex-col justify-between with min-h-[140px].
+                If the text is short, there is a lot of space.
+                I will change justify-between to something else, or reduce min-h.
+                But user said "el icono está muy abajo del texto".
+                I will make the container flex-col but NOT justify-between, instead using gap.
+                And I'll keep the icon at the bottom or let it flow?
+                "el icono está muy abajo del texto" suggests they want it closer to the text.
+                So I will use flex-col and gap-4 (or similar) and remove justify-between.
+                Also I will check if min-h is necessary. I'll keep it for uniformity but maybe reduce it or use h-full.
+            */}
+            <div className="mt-4">
                <item.icon className="w-5 h-5 text-gray-400 group-hover:text-purple-500 transition-colors" />
             </div>
           </motion.button>

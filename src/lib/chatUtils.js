@@ -1,20 +1,26 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
 /**
- * Send message to OpenAI API with streaming support
+ * Send message to Google Gemini API with streaming support
  * @param {Array} messages - Array of message objects with role and content
  * @param {Function} onChunk - Callback function for each streamed chunk
  */
 export async function sendMessage(messages, onChunk) {
-  const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
-  // Fallback to gpt-4o-mini if gpt-5-mini is not valid, but per instruction using gpt-5-mini
-  // Note: If gpt-5-mini doesn't exist, this will fail.
-  // The user insisted on 'gpt-5-mini'.
-  const MODEL = import.meta.env.VITE_OPENAI_MODEL || 'gpt-5-mini';
+  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+  // Use gemini-1.5-flash as the best stable decision for now
+  const MODEL_NAME = "gemini-1.5-flash";
 
-  if (!OPENAI_API_KEY) {
-    throw new Error('VITE_OPENAI_API_KEY no está configurado. Por favor, configura tu API key en el archivo .env');
+  if (!GEMINI_API_KEY) {
+    throw new Error('VITE_GEMINI_API_KEY no está configurado. Por favor, configura tu API key en el archivo .env');
   }
 
-  // System prompt based on user requirements
+  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+
+  // Convert messages to Gemini format
+  // Gemini expects a history of { role: "user" | "model", parts: [{ text: "..." }] }
+  // The system prompt should be handled carefully. Gemini 1.5 supports system instructions.
+
   const systemPrompt = `Eres Brain Intelligence, el sistema operativo de inteligencia artificial de la agencia Brain Studio. Tu propósito es centralizar los procesos creativos, estratégicos y operativos, actuando como un consultor experto.
 
 Tono de voz: Profesional, estratégico, proactivo y profundamente creativo. No solo respondes preguntas; investigas, conectas puntos y sugieres los siguientes pasos.
@@ -28,60 +34,30 @@ Instrucciones de Operación:
 
 Actúa como un sistema híbrido avanzado.`;
 
-  // Format messages for OpenAI API
-  const apiMessages = [
-    { role: 'system', content: systemPrompt },
-    ...messages
-  ];
+  // Filter out system messages from history as we pass system instruction separately
+  // Convert roles: 'user' -> 'user', 'assistant' -> 'model'
+  const history = messages
+    .filter(msg => msg.role !== 'system')
+    .slice(0, -1) // Exclude the last message which is the new prompt
+    .map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
+    }));
+
+  const lastMessage = messages[messages.length - 1];
 
   try {
-    const response = await fetch(
-      'https://api.openai.com/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          messages: apiMessages,
-          stream: true,
-          temperature: 0.7,
-        }),
-      }
-    );
+    const chat = model.startChat({
+      history: history,
+      systemInstruction: systemPrompt,
+    });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`API Error: ${errorData.error?.message || 'Unknown error'}`);
-    }
+    const result = await chat.sendMessageStream(lastMessage.content);
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
-
-      for (const line of lines) {
-        if (line.trim().startsWith('data: ')) {
-          const dataStr = line.replace('data: ', '').trim();
-          if (dataStr === '[DONE]') break;
-
-          try {
-            const data = JSON.parse(dataStr);
-            const text = data.choices[0]?.delta?.content || '';
-            if (text) {
-              onChunk(text);
-            }
-          } catch (e) {
-            continue;
-          }
-        }
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      if (chunkText) {
+        onChunk(chunkText);
       }
     }
   } catch (error) {
@@ -104,12 +80,12 @@ export function formatMessage(message) {
  * @returns {Object} Validation result with status and message
  */
 export function validateApiConfig() {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   
   if (!apiKey) {
     return {
       valid: false,
-      message: 'VITE_OPENAI_API_KEY no está configurado'
+      message: 'VITE_GEMINI_API_KEY no está configurado'
     };
   }
 
