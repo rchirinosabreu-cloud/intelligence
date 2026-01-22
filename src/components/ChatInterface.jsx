@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '@/components/ui/use-toast';
-import { sendMessage } from '@/lib/chatUtils';
+import { sendMessage, validateApiConfig } from '@/lib/chatUtils';
 
 import ChatInput from './ChatInput';
 import ChatMessage from './ChatMessage';
@@ -16,6 +16,7 @@ const ChatInterface = () => {
   const [currentChatId, setCurrentChatId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const apiConfig = validateApiConfig();
   
   const messagesEndRef = useRef(null);
   const { toast } = useToast();
@@ -145,6 +146,7 @@ const ChatInterface = () => {
         <ChatHeader 
           title={currentChat?.title} 
           onNewChat={createNewChat}
+          apiConfig={apiConfig}
         />
 
         <div className="flex-1 overflow-y-auto w-full scroll-smooth">
