@@ -9,7 +9,7 @@ const ChatHeader = ({ title, onNewChat }) => {
         <h2 className="font-semibold text-brand-charcoal truncate text-lg">
           {title || "New Chat"}
         </h2>
-        <p className="text-xs text-brand-charcoal/50 font-medium">Brainstudio AI 1.5-flash</p>
+        <p className="text-xs text-brand-charcoal/50 font-medium">Brainstudio Intelligence</p>
       </div>
 
       <div className="flex items-center gap-2">
@@ -18,7 +18,7 @@ const ChatHeader = ({ title, onNewChat }) => {
           onClick={onNewChat}
         >
           <Plus className="h-4 w-4" />
-          New Chat
+          Nuevo chat
         </Button>
       </div>
     </header>
