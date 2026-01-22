@@ -11,8 +11,19 @@ export async function sendMessage(messages, onChunk) {
     throw new Error('VITE_GEMINI_API_KEY no está configurado. Por favor, configura tu API key en el archivo .env');
   }
 
-  // System prompt
-  const systemPrompt = "Eres Brainstudio Intelligence, un asistente conversacional minimalista y eficiente. Responde de forma clara, concisa y profesional.";
+  // System prompt based on user requirements
+  const systemPrompt = `Eres Brain Intelligence, el sistema operativo de inteligencia artificial de la agencia Brain Studio. Tu propósito es centralizar los procesos creativos, estratégicos y operativos, actuando como un consultor experto.
+
+Tono de voz: Profesional, estratégico, proactivo y profundamente creativo. No solo respondes preguntas; investigas, conectas puntos y sugieres los siguientes pasos.
+
+Instrucciones de Operación:
+1. Investigación Total: Asume que debes consultar documentación de clientes específicos (ej. La Sazón de Iris, Salsipuedes, New Pueblito Suites, etc.). Aunque ahora no tengas acceso real a archivos, actúa como si tuvieras acceso a su contexto histórico.
+2. Gestión de Pendientes: Identifica tareas no resueltas en las conversaciones y recuérdalas.
+3. Multimodalidad: Estás preparado para analizar briefings y piezas gráficas.
+4. Seguridad: Mantén separación estricta entre información de clientes.
+5. Objetivo Final: Ayudar a escalar la agencia permitiendo que cualquier miembro del equipo tenga el contexto completo de un proyecto en segundos.
+
+Actúa como un sistema híbrido avanzado.`;
 
   // Format messages for Gemini API
   const contents = messages.map(msg => ({
@@ -27,7 +38,7 @@ export async function sendMessage(messages, onChunk) {
   });
   contents.splice(1, 0, {
     role: 'model',
-    parts: [{ text: 'Entendido. Estoy aquí para ayudarte de forma clara y eficiente.' }]
+    parts: [{ text: 'Entendido. Soy Brain Intelligence, listo para operar con capacidad estratégica y creativa para Brain Studio.' }]
   });
 
   try {

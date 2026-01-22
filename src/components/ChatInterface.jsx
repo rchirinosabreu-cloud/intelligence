@@ -15,6 +15,7 @@ const ChatInterface = () => {
   const [chats, setChats] = useState([]);
   const [currentChatId, setCurrentChatId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [inputValue, setInputValue] = useState('');
   
   const messagesEndRef = useRef(null);
   const { toast } = useToast();
@@ -148,7 +149,7 @@ const ChatInterface = () => {
 
         <div className="flex-1 overflow-y-auto w-full scroll-smooth">
           {!currentChat || currentChat.messages.length === 0 ? (
-            <GreetingMessage onSuggestionClick={handleSendMessage} />
+            <GreetingMessage onSuggestionClick={setInputValue} />
           ) : (
             <div className="py-6 px-0 space-y-6 min-h-full max-w-5xl mx-auto w-full">
               {currentChat.messages.map((msg, idx) => (
@@ -186,7 +187,12 @@ const ChatInterface = () => {
 
         {/* Input Area */}
         <div className="bg-gradient-to-t from-[#F3F3F3] via-[#F3F3F3] to-transparent pt-6">
-          <ChatInput onSend={handleSendMessage} isLoading={isLoading} />
+          <ChatInput
+            onSend={handleSendMessage}
+            isLoading={isLoading}
+            input={inputValue}
+            setInput={setInputValue}
+          />
         </div>
       </div>
     </div>

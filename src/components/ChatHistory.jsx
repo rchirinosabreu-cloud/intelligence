@@ -38,7 +38,7 @@ const ChatHistory = ({
         {/* Header */}
         <div className="p-4 border-b border-brand-lavender/50">
           <div className="flex items-center justify-between mb-4 md:hidden">
-            <h2 className="font-bold text-brand-charcoal text-lg">Menu</h2>
+            <h2 className="font-bold text-brand-charcoal text-lg">Menú</h2>
             <Button variant="ghost" size="icon" onClick={onToggle}>
               <Menu className="h-5 w-5 text-brand-charcoal" />
             </Button>
@@ -52,14 +52,14 @@ const ChatHistory = ({
             className="w-full justify-start gap-2 bg-brand-teal hover:bg-brand-teal/90 text-white shadow-sm"
           >
             <Plus className="h-5 w-5" />
-            <span>New chat</span>
+            <span>Nueva conversación</span>
           </Button>
 
           <div className="mt-4 relative">
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-charcoal/40" />
              <input 
                type="text" 
-               placeholder="Search..." 
+               placeholder="Buscar..."
                className="w-full pl-9 pr-4 py-2 bg-brand-mauve rounded-lg text-sm text-brand-charcoal placeholder:text-brand-charcoal/40 focus:outline-none focus:ring-1 focus:ring-brand-lavender transition-all"
              />
           </div>
@@ -69,7 +69,7 @@ const ChatHistory = ({
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {/* Today/Recent Section Header could go here */}
           <div className="px-3 py-2 text-xs font-semibold text-brand-charcoal/50 uppercase tracking-wider">
-            History
+            Historial
           </div>
 
           <AnimatePresence initial={false}>
@@ -99,7 +99,7 @@ const ChatHistory = ({
                     currentChatId === chat.id ? "text-brand-teal" : "text-brand-charcoal/40"
                   )} />
                   <span className="truncate text-sm flex-1">
-                    {chat.title || "New Conversation"}
+                    {chat.title || "Nueva conversación"}
                   </span>
                 </button>
                 
@@ -109,7 +109,7 @@ const ChatHistory = ({
                     onDeleteChat(chat.id);
                   }}
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 text-red-400 hover:text-red-500 transition-all"
-                  title="Delete chat"
+                  title="Eliminar chat"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -120,7 +120,7 @@ const ChatHistory = ({
           {chats.length === 0 && (
             <div className="text-center py-8 px-4 text-brand-charcoal/40">
               <History className="h-8 w-8 mx-auto mb-2 opacity-20" />
-              <p className="text-xs">No chat history yet</p>
+              <p className="text-xs">Aún no hay historial</p>
             </div>
           )}
         </div>
