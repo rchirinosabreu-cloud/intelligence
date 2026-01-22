@@ -7,23 +7,23 @@ import { Button } from '@/components/ui/button';
 const suggestions = [
   {
     icon: ListTodo,
-    title: "Write a to-do list for a",
-    prompt: "personal project or task",
+    title: "¿Cuáles son mis pendientes hoy?",
+    prompt: "",
   },
   {
     icon: Mail,
-    title: "Generate an email to reply",
-    prompt: "to a job offer",
+    title: "Resume el brief de Verona",
+    prompt: "",
   },
   {
     icon: FileText,
-    title: "Summarise this article or",
-    prompt: "text for me in one paragraph",
+    title: "Ayúdame a organizar esta semana",
+    prompt: "",
   },
   {
     icon: Cpu,
-    title: "How does AI work in a",
-    prompt: "technical capacity",
+    title: "Escribe una propuesta comercial para Trupeak",
+    prompt: "",
   }
 ];
 
@@ -37,14 +37,13 @@ const GreetingMessage = ({ onSuggestionClick }) => {
         className="text-left mb-8 w-full"
       >
         <h1 className="text-4xl md:text-6xl font-bold text-black mb-2 tracking-tight">
-          Hi there, <span className="bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 bg-clip-text text-transparent">User</span>
+         <span className="bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 bg-clip-text text-transparent">Hola,</span>
         </h1>
         <h2 className="text-3xl md:text-5xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent mb-4">
-          What would like to know?
+          ¿Listo para trascender?
         </h2>
         <p className="text-gray-500 text-lg">
-          Use one of the most common prompts<br />
-          below or use your own to begin
+          Genera ideas, contenidos, análisis y consultas
         </p>
       </motion.div>
 
@@ -83,7 +82,7 @@ const GreetingMessage = ({ onSuggestionClick }) => {
             className="text-gray-400 hover:text-gray-600 hover:bg-transparent pl-0 gap-2"
          >
             <RefreshCw className="w-4 h-4" />
-            Refresh Prompts
+            Sugerir prompts
          </Button>
       </motion.div>
     </div>
