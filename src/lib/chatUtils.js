@@ -7,8 +7,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
  */
 export async function sendMessage(messages, onChunk) {
   const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-  // Use gemini-1.5-flash as the best stable decision for now
-  const MODEL_NAME = "gemini-1.5-flash";
+  // Fallback to stable version alias
+  const MODEL_NAME = "gemini-1.5-flash-latest";
 
   if (!GEMINI_API_KEY) {
     throw new Error('VITE_GEMINI_API_KEY no está configurado. Por favor, configura tu API key en el archivo .env');
@@ -16,10 +16,6 @@ export async function sendMessage(messages, onChunk) {
 
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-
-  // Convert messages to Gemini format
-  // Gemini expects a history of { role: "user" | "model", parts: [{ text: "..." }] }
-  // The system prompt should be handled carefully. Gemini 1.5 supports system instructions.
 
   const systemPrompt = `Eres Brain Intelligence, el sistema operativo de inteligencia artificial de la agencia Brain Studio. Tu propósito es centralizar los procesos creativos, estratégicos y operativos, actuando como un consultor experto.
 
@@ -34,11 +30,9 @@ Instrucciones de Operación:
 
 Actúa como un sistema híbrido avanzado.`;
 
-  // Filter out system messages from history as we pass system instruction separately
-  // Convert roles: 'user' -> 'user', 'assistant' -> 'model'
   const history = messages
     .filter(msg => msg.role !== 'system')
-    .slice(0, -1) // Exclude the last message which is the new prompt
+    .slice(0, -1)
     .map(msg => ({
       role: msg.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: msg.content }]
@@ -62,6 +56,10 @@ Actúa como un sistema híbrido avanzado.`;
     }
   } catch (error) {
     console.error('Error in sendMessage:', error);
+    // Enhance error message for user debugging
+    if (error.message.includes('404')) {
+        throw new Error(`Error 404: El modelo '${MODEL_NAME}' no fue encontrado o la API no está habilitada. Verifica tu API Key y configuración en Google AI Studio.`);
+    }
     throw error;
   }
 }
