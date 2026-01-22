@@ -54,30 +54,14 @@ const ChatInput = ({ onSend, isLoading }) => {
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-4 pb-8 pt-2">
-      <div className="relative flex flex-col bg-white rounded-[2rem] shadow-sm border border-gray-200 focus-within:ring-2 focus-within:ring-purple-100 transition-all duration-300 p-2">
-        <form onSubmit={handleSubmit} className="flex flex-col w-full relative">
-            <div className="absolute top-2 right-4 z-10">
-                 <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="bg-gray-100 border-0 rounded-full text-xs font-medium text-gray-600 gap-1 h-7 px-3 hover:bg-gray-200">
-                             <Globe className="w-3 h-3" />
-                             All Web
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem>All Web</DropdownMenuItem>
-                        <DropdownMenuItem>Code Only</DropdownMenuItem>
-                    </DropdownMenuContent>
-                 </DropdownMenu>
-            </div>
+  
 
           <textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask whatever you want..."
+            placeholder="Empieza por aquí..."
             className="w-full bg-transparent px-4 py-4 mt-6 text-gray-800 placeholder:text-gray-400 font-medium resize-none outline-none max-h-[200px] min-h-[80px] text-base"
             rows={1}
             maxLength={maxLength}
@@ -92,7 +76,7 @@ const ChatInput = ({ onSend, isLoading }) => {
                 onClick={handleFeatureNotImplemented}
               >
                 <PlusCircle className="h-5 w-5" />
-                <span>Add Attachment</span>
+                <span>Añade un archivo</span>
               </button>
               <button
                 type="button"
@@ -100,7 +84,7 @@ const ChatInput = ({ onSend, isLoading }) => {
                 onClick={handleFeatureNotImplemented}
               >
                 <ImageIcon className="h-5 w-5" />
-                <span>Use Image</span>
+                <span>Sube una imagen</span>
               </button>
             </div>
 
