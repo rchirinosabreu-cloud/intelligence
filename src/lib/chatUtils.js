@@ -11,11 +11,12 @@ export async function sendMessage(messages, onChunk) {
   const MODEL_NAME = "gemini-1.5-flash-latest";
 
   if (!GEMINI_API_KEY) {
-    throw new Error('VITE_GEMINI_API_KEY no está configurado. Por favor, configura tu API key en el archivo .env');
+    // Log helpful debug info (masked) to console to help verify if key is being read at all
+    console.error("Debug: API Key Check Failed. Key is:", GEMINI_API_KEY ? "Present (Masked)" : "Undefined/Null");
+    throw new Error('VITE_GEMINI_API_KEY no está configurado. Asegúrate de que la variable de entorno está agregada en Railway y has realizado un REDEPLOY para que surta efecto.');
   }
 
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
 
   const systemPrompt = `Eres Brain Intelligence, el sistema operativo de inteligencia artificial de la agencia Brain Studio. Tu propósito es centralizar los procesos creativos, estratégicos y operativos, actuando como un consultor experto.
 
@@ -30,6 +31,15 @@ Instrucciones de Operación:
 
 Actúa como un sistema híbrido avanzado.`;
 
+  // Provide systemInstruction to getGenerativeModel, NOT startChat
+  const model = genAI.getGenerativeModel({
+    model: MODEL_NAME,
+    systemInstruction: {
+        role: "system",
+        parts: [{ text: systemPrompt }]
+    }
+  });
+
   const history = messages
     .filter(msg => msg.role !== 'system')
     .slice(0, -1)
@@ -43,10 +53,6 @@ Actúa como un sistema híbrido avanzado.`;
   try {
     const chat = model.startChat({
       history: history,
-      systemInstruction: {
-        role: "system",
-        parts: [{ text: systemPrompt }]
-      },
     });
 
     const result = await chat.sendMessageStream(lastMessage.content);
