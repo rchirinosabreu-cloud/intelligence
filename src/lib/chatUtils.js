@@ -43,7 +43,10 @@ Actúa como un sistema híbrido avanzado.`;
   try {
     const chat = model.startChat({
       history: history,
-      systemInstruction: systemPrompt,
+      systemInstruction: {
+        role: "system",
+        parts: [{ text: systemPrompt }]
+      },
     });
 
     const result = await chat.sendMessageStream(lastMessage.content);
