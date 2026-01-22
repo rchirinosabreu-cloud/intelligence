@@ -1,17 +1,22 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
 /**
- * Send message to Gemini API with streaming support
+ * Send message to Google Gemini API with streaming support
  * @param {Array} messages - Array of message objects with role and content
  * @param {Function} onChunk - Callback function for each streamed chunk
  */
 export async function sendMessage(messages, onChunk) {
   const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-  const MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-1.5-flash';
+  // Fallback to stable version alias
+  const MODEL_NAME = "gemini-1.5-flash-latest";
 
   if (!GEMINI_API_KEY) {
     throw new Error('VITE_GEMINI_API_KEY no está configurado. Por favor, configura tu API key en el archivo .env');
   }
 
-  // System prompt based on user requirements
+  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+
   const systemPrompt = `Eres Brain Intelligence, el sistema operativo de inteligencia artificial de la agencia Brain Studio. Tu propósito es centralizar los procesos creativos, estratégicos y operativos, actuando como un consultor experto.
 
 Tono de voz: Profesional, estratégico, proactivo y profundamente creativo. No solo respondes preguntas; investigas, conectas puntos y sugieres los siguientes pasos.
@@ -25,79 +30,36 @@ Instrucciones de Operación:
 
 Actúa como un sistema híbrido avanzado.`;
 
-  // Format messages for Gemini API
-  const contents = messages.map(msg => ({
-    role: msg.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: msg.content }]
-  }));
+  const history = messages
+    .filter(msg => msg.role !== 'system')
+    .slice(0, -1)
+    .map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
+    }));
 
-  // Add system prompt as first message
-  contents.unshift({
-    role: 'user',
-    parts: [{ text: systemPrompt }]
-  });
-  contents.splice(1, 0, {
-    role: 'model',
-    parts: [{ text: 'Entendido. Soy Brain Intelligence, listo para operar con capacidad estratégica y creativa para Brain Studio.' }]
-  });
+  const lastMessage = messages[messages.length - 1];
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents,
-          generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 2048,
-          },
-        }),
-      }
-    );
+    const chat = model.startChat({
+      history: history,
+      systemInstruction: systemPrompt,
+    });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`API Error: ${errorData.error?.message || 'Unknown error'}`);
-    }
+    const result = await chat.sendMessageStream(lastMessage.content);
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
-
-      for (const line of lines) {
-        if (line.trim() && line.trim() !== '[' && line.trim() !== ']') {
-          try {
-            // Remove trailing comma if present
-            const cleanLine = line.trim().replace(/,$/, '');
-            const data = JSON.parse(cleanLine);
-            
-            if (data.candidates && data.candidates[0]?.content?.parts) {
-              const text = data.candidates[0].content.parts[0]?.text || '';
-              if (text) {
-                onChunk(text);
-              }
-            }
-          } catch (e) {
-            // Skip invalid JSON lines
-            continue;
-          }
-        }
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      if (chunkText) {
+        onChunk(chunkText);
       }
     }
   } catch (error) {
     console.error('Error in sendMessage:', error);
+    // Enhance error message for user debugging
+    if (error.message.includes('404')) {
+        throw new Error(`Error 404: El modelo '${MODEL_NAME}' no fue encontrado o la API no está habilitada. Verifica tu API Key y configuración en Google AI Studio.`);
+    }
     throw error;
   }
 }

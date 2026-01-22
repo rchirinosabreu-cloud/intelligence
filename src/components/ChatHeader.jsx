@@ -7,9 +7,8 @@ const ChatHeader = ({ title, onNewChat }) => {
     <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-brand-lavender px-6 py-4 flex items-center justify-between h-20 shadow-sm">
       <div className="flex flex-col overflow-hidden">
         <h2 className="font-semibold text-brand-charcoal truncate text-lg">
-          {title || "Nueva conversación"}
+          Brainstudio Intelligence
         </h2>
-        <p className="text-xs text-brand-charcoal/50 font-medium">Brainstudio Intelligence</p>
       </div>
 
       <div className="flex items-center gap-2">

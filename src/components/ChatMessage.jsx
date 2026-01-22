@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { User, Bot, Copy, Check } from 'lucide-react';
+import { Copy, Check, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -25,47 +25,37 @@ const ChatMessage = ({ message }) => {
       transition={{ duration: 0.3 }}
       className={cn(
         "flex gap-4 w-full max-w-4xl mx-auto p-4 group",
-        isUser ? "flex-row-reverse" : "flex-row"
+        isUser ? "flex-row-reverse" : "flex-col"
       )}
     >
-      {/* Avatar */}
-      <div className={cn(
-        "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm mt-1",
-        isUser ? "bg-brand-teal text-white" : "bg-white border border-brand-lavender"
-      )}>
-        {isUser ? (
-          <User className="w-5 h-5" />
-        ) : (
-          <Bot className="w-5 h-5 text-brand-teal" />
-        )}
-      </div>
+      {/* Bot Icon Header (only for assistant) */}
+      {!isUser && (
+        <div className="flex items-center gap-2 mb-1">
+          <Brain className="w-4 h-4 text-gray-500" />
+          <span className="text-xs font-semibold text-gray-500">Brainstudio Intelligence</span>
+        </div>
+      )}
 
-      {/* Message Bubble */}
+      {/* Message Bubble/Content */}
       <div className={cn(
         "flex flex-col max-w-[85%] md:max-w-[75%]",
-        isUser ? "items-end" : "items-start"
+        isUser ? "items-end" : "items-start w-full max-w-none"
       )}>
-        {/* Name */}
-        <span className="text-xs text-brand-charcoal/50 mb-1 px-1">
-          {isUser ? 'You' : 'Brainstudio AI'}
-        </span>
-
-        {/* Content */}
         <div className={cn(
-          "relative rounded-2xl px-5 py-3.5 shadow-sm text-sm md:text-base leading-relaxed whitespace-pre-wrap",
+          "relative text-sm md:text-base leading-relaxed whitespace-pre-wrap",
           isUser 
-            ? "bg-brand-teal text-white rounded-tr-none" 
-            : "bg-white border border-brand-lavender/60 text-brand-charcoal rounded-tl-none"
+            ? "bg-gray-100 text-gray-900 rounded-2xl px-5 py-3.5 shadow-sm"
+            : "bg-transparent text-gray-800 px-0 py-0"
         )}>
           {message.content}
           
           {/* Action Buttons (Assistant only) */}
           {!isUser && (
-            <div className="absolute -bottom-8 left-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+            <div className="flex mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-6 w-6 text-brand-charcoal/40 hover:text-brand-teal"
+                className="h-6 w-6 text-gray-400 hover:text-gray-600"
                 onClick={copyToClipboard}
               >
                 {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
