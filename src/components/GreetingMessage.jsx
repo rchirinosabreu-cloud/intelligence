@@ -11,23 +11,8 @@ import { Button } from '@/components/ui/button';
 
 const allSuggestions = [
   {
-    icon: ListTodo,
-    title: "¿Cuáles son mis pendientes hoy?",
-    prompt: "",
-  },
-  {
-    icon: Mail,
-    title: "Resume el brief de Verona",
-    prompt: "",
-  },
-  {
     icon: Calendar,
-    title: "Ayúdame a organizar esta semana",
-    prompt: "",
-  },
-  {
-    icon: Cpu,
-    title: "Escribe una propuesta comercial para Trupeak",
+    title: "Ayúdame a organizar esta semana.",
     prompt: "",
   },
   {
@@ -37,7 +22,7 @@ const allSuggestions = [
   },
   {
     icon: ArrowUpCircle,
-    title: "Dame prioridades según fechas y carga",
+    title: "Dame prioridades según fechas y carga.",
     prompt: "",
   },
   {
@@ -57,37 +42,37 @@ const allSuggestions = [
   },
   {
     icon: FileText,
-    title: "Escribe una propuesta comercial para este cliente",
+    title: "Escribe una propuesta comercial para este cliente.",
     prompt: "",
   },
   {
     icon: Image,
-    title: "Dame copys para Instagram con este enfoque",
+    title: "Dame copys para Instagram con este enfoque.",
     prompt: "",
   },
   {
     icon: Minimize2,
-    title: "Resume este texto para presentación",
+    title: "Resume este texto para presentación.",
     prompt: "",
   },
   {
     icon: BarChart2,
-    title: "Hazme el resumen mensual de redes del cliente X",
+    title: "Hazme el resumen mensual de redes del cliente X.",
     prompt: "",
   },
   {
     icon: TrendingUp,
-    title: "Dime qué mejoró y qué no este mes",
+    title: "Dime qué mejoró y qué no este mes.",
     prompt: "",
   },
   {
     icon: Lightbulb,
-    title: "Prepárame insights para enviar al cliente",
+    title: "Prepárame insights para enviar al cliente.",
     prompt: "",
   },
   {
     icon: File,
-    title: "Muéstrame el último informe de SunPartners",
+    title: "Muéstrame el último informe de SunPartners.",
     prompt: "",
   },
   {
@@ -97,7 +82,12 @@ const allSuggestions = [
   },
   {
     icon: FileText,
-    title: "Resume el brief del proyecto X",
+    title: "Resume el brief del proyecto X.",
+    prompt: "",
+  },
+  {
+    icon: ListTodo,
+    title: "¿Cuáles son mis pendientes hoy?",
     prompt: "",
   },
   {
@@ -107,7 +97,7 @@ const allSuggestions = [
   },
   {
     icon: Clock,
-    title: "Recuérdame qué quedó pendiente de la última reunión",
+    title: "Recuérdame qué quedó pendiente de la última reunión.",
     prompt: "",
   }
 ];
@@ -149,7 +139,7 @@ const GreetingMessage = ({ onSuggestionClick }) => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 * index }}
             onClick={() => onSuggestionClick(item.title + (item.prompt ? " " + item.prompt : ""))}
-            className="group relative flex flex-col justify-between p-4 rounded-2xl bg-gray-100 hover:bg-gray-200 transition-all duration-300 text-left h-24 md:h-32"
+            className="group relative flex flex-col justify-between p-4 rounded-2xl bg-gray-100 hover:bg-gray-200 transition-all duration-300 text-left min-h-[140px]"
           >
             <div>
               <p className="font-semibold text-gray-900 text-sm leading-tight line-clamp-3">

@@ -1,14 +1,17 @@
 /**
- * Send message to Gemini API with streaming support
+ * Send message to OpenAI API with streaming support
  * @param {Array} messages - Array of message objects with role and content
  * @param {Function} onChunk - Callback function for each streamed chunk
  */
 export async function sendMessage(messages, onChunk) {
-  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-  const MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-1.5-flash';
+  const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+  // Fallback to gpt-4o-mini if gpt-5-mini is not valid, but per instruction using gpt-5-mini
+  // Note: If gpt-5-mini doesn't exist, this will fail.
+  // The user insisted on 'gpt-5-mini'.
+  const MODEL = import.meta.env.VITE_OPENAI_MODEL || 'gpt-5-mini';
 
-  if (!GEMINI_API_KEY) {
-    throw new Error('VITE_GEMINI_API_KEY no está configurado. Por favor, configura tu API key en el archivo .env');
+  if (!OPENAI_API_KEY) {
+    throw new Error('VITE_OPENAI_API_KEY no está configurado. Por favor, configura tu API key en el archivo .env');
   }
 
   // System prompt based on user requirements
@@ -25,38 +28,26 @@ Instrucciones de Operación:
 
 Actúa como un sistema híbrido avanzado.`;
 
-  // Format messages for Gemini API
-  const contents = messages.map(msg => ({
-    role: msg.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: msg.content }]
-  }));
-
-  // Add system prompt as first message
-  contents.unshift({
-    role: 'user',
-    parts: [{ text: systemPrompt }]
-  });
-  contents.splice(1, 0, {
-    role: 'model',
-    parts: [{ text: 'Entendido. Soy Brain Intelligence, listo para operar con capacidad estratégica y creativa para Brain Studio.' }]
-  });
+  // Format messages for OpenAI API
+  const apiMessages = [
+    { role: 'system', content: systemPrompt },
+    ...messages
+  ];
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?key=${GEMINI_API_KEY}`,
+      'https://api.openai.com/v1/chat/completions',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`
         },
         body: JSON.stringify({
-          contents,
-          generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 2048,
-          },
+          model: MODEL,
+          messages: apiMessages,
+          stream: true,
+          temperature: 0.7,
         }),
       }
     );
@@ -77,20 +68,17 @@ Actúa como un sistema híbrido avanzado.`;
       const lines = chunk.split('\n');
 
       for (const line of lines) {
-        if (line.trim() && line.trim() !== '[' && line.trim() !== ']') {
+        if (line.trim().startsWith('data: ')) {
+          const dataStr = line.replace('data: ', '').trim();
+          if (dataStr === '[DONE]') break;
+
           try {
-            // Remove trailing comma if present
-            const cleanLine = line.trim().replace(/,$/, '');
-            const data = JSON.parse(cleanLine);
-            
-            if (data.candidates && data.candidates[0]?.content?.parts) {
-              const text = data.candidates[0].content.parts[0]?.text || '';
-              if (text) {
-                onChunk(text);
-              }
+            const data = JSON.parse(dataStr);
+            const text = data.choices[0]?.delta?.content || '';
+            if (text) {
+              onChunk(text);
             }
           } catch (e) {
-            // Skip invalid JSON lines
             continue;
           }
         }
@@ -116,12 +104,12 @@ export function formatMessage(message) {
  * @returns {Object} Validation result with status and message
  */
 export function validateApiConfig() {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
   
   if (!apiKey) {
     return {
       valid: false,
-      message: 'VITE_GEMINI_API_KEY no está configurado'
+      message: 'VITE_OPENAI_API_KEY no está configurado'
     };
   }
 
