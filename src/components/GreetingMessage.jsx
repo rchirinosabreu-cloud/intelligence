@@ -7,23 +7,23 @@ import { Button } from '@/components/ui/button';
 const suggestions = [
   {
     icon: ListTodo,
-    title: "Gestión interna y pendientes",
-    prompt: "¿Cuáles son mis pendientes hoy?",
+    title: "¿Cuáles son mis pendientes hoy?",
+    prompt: "",
   },
   {
     icon: Mail,
-    title: "Conocimiento y documentos",
-    prompt: "Resume el brief del proyecto X",
+    title: "Resume el brief de Verona",
+    prompt: "",
   },
   {
     icon: FileText,
-    title: "Planeación y seguimiento",
-    prompt: "Ayúdame a organizar esta semana",
+    title: "Ayúdame a organizar esta semana",
+    prompt: "",
   },
   {
     icon: Cpu,
-    title: "Reportes y análisis",
-    prompt: "Necesito un resumen mensual de redes",
+    title: "Escribe una propuesta comercial para Trupeak",
+    prompt: "",
   }
 ];
 
