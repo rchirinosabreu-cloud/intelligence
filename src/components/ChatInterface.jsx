@@ -36,7 +36,11 @@ const ChatInterface = () => {
 
   // Save chats to local storage whenever they change
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
+    const timeoutId = setTimeout(() => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
+    }, 1000);
+
+    return () => clearTimeout(timeoutId);
   }, [chats]);
 
   const currentChat = chats.find(c => c.id === currentChatId);
