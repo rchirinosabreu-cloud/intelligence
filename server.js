@@ -49,7 +49,8 @@ try {
 
 const PROJECT_ID = credentials?.project_id;
 const LOCATION = 'us-central1';
-const MODEL_NAME = "gemini-1.5-flash-001";
+// Allow environment variable to override model, default to the stable 1.5-flash
+const MODEL_NAME = process.env.VERTEX_MODEL || "gemini-1.5-flash";
 
 // Vertex AI Client
 const vertexAI = new VertexAI({
