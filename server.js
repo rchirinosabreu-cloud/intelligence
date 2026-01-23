@@ -7,9 +7,20 @@ dotenv.config();
 
 const app = express();
 
-// Allow requests from anywhere (Hostinger) or specify the domain if needed later.
-// For now, "*" allows the frontend to connect without CORS issues.
-app.use(cors({ origin: '*' }));
+// Configure CORS
+const corsOptions = {
+    origin: '*', // Allow all origins
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    optionsSuccessStatus: 200
+};
+
+// Apply CORS middleware globally
+app.use(cors(corsOptions));
+
+// Remove the problematic explicit options route causing the crash
+// app.options('*', cors(corsOptions)); <--- This line caused the crash
+
 app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
