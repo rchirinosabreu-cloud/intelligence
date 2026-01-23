@@ -4,7 +4,7 @@ import { Copy, Check, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-const ChatMessage = ({ message }) => {
+const ChatMessage = React.memo(({ message }) => {
   const isUser = message.role === 'user';
   const [copied, setCopied] = React.useState(false);
 
@@ -66,6 +66,6 @@ const ChatMessage = ({ message }) => {
       </div>
     </motion.div>
   );
-};
+});
 
 export default ChatMessage;
