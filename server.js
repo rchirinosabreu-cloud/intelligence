@@ -7,14 +7,15 @@ dotenv.config();
 
 const app = express();
 
-const allowedOrigins = (process.env.CORS_ORIGINS || "")
-  .split(",")
-  .map(origin => origin.trim())
-  .filter(Boolean);
+const allowedOrigins = [
+  "https://intelligence.brainstudioagencia.com",
+  "http://localhost:3000",
+  ...(process.env.CORS_ORIGINS || "").split(",").map(origin => origin.trim()).filter(Boolean)
+];
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     return callback(new Error(`Origin not allowed by CORS: ${origin}`));
