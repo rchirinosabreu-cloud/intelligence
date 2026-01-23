@@ -7,7 +7,7 @@
 export async function sendMessage(messages, onChunk) {
   // Use VITE_API_URL if set, otherwise default to Railway URL
   // We use the full Railway URL as default to ensure it works on Hostinger without config
-  const API_URL = import.meta.env.VITE_API_URL || "https://intelligence-production-7a52.up.railway.app";
+  const API_URL = import.meta.env.VITE_API_URL || "https://intelligence-production-57e6.up.railway.app";
 
   try {
     const response = await fetch(`${API_URL}/api/chat`, {
