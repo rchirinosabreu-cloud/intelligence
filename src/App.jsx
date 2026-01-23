@@ -9,10 +9,10 @@ function App() {
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
-    // Increased duration to 4 seconds as requested
+    // Reduced duration to 2 seconds as requested
     const timer = setTimeout(() => {
       setShowSplash(false);
-    }, 4000);
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, []);
