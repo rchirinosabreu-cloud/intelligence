@@ -48,13 +48,30 @@ const streamFromSSE = async (
     buffer = parts.pop() ?? "";
 
     for (const part of parts) {
-      const lines = part.split("\n").map((line) => line.trim());
-      const dataLines = lines.filter((line) => line.startsWith("data:"));
-      if (!dataLines.length) continue;
+      let data = "";
+      let hasData = false;
+      let i = 0;
+      const len = part.length;
 
-      const data = dataLines
-        .map((line) => line.replace(/^data:\s?/, ""))
-        .join("");
+      while (i < len) {
+        let lineEnd = part.indexOf("\n", i);
+        if (lineEnd === -1) lineEnd = len;
+
+        const line = part.substring(i, lineEnd).trim();
+
+        if (line.startsWith("data:")) {
+          hasData = true;
+          let content = line.substring(5);
+          if (content.startsWith(" ")) {
+            content = content.substring(1);
+          }
+          data += content;
+        }
+
+        i = lineEnd + 1;
+      }
+
+      if (!hasData) continue;
 
       if (data === "[DONE]") {
         return;
