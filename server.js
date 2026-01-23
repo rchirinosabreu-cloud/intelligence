@@ -13,20 +13,32 @@ const allowedOrigins = [
   ...(process.env.CORS_ORIGINS || "").split(",").map(origin => origin.trim()).filter(Boolean)
 ];
 
+console.log("Allowed Origins:", allowedOrigins);
+
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Explicitly allow the production domain and localhost to prevent any array logic errors
+    if (
+      !origin ||
+      origin === "https://intelligence.brainstudioagencia.com" ||
+      origin === "http://localhost:3000" ||
+      allowedOrigins.includes(origin)
+    ) {
       return callback(null, true);
     }
+
+    console.error(`CORS blocked request from origin: ${origin}`);
     return callback(new Error(`Origin not allowed by CORS: ${origin}`));
   },
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  optionsSuccessStatus: 204,
+  credentials: true,
+  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
 };
 
-// CORS configuration (allow all by default; restrict via CORS_ORIGINS env)
+// Apply CORS middleware globally
 app.use(cors(corsOptions));
+// Handle preflight requests for all routes
 app.options("*", cors(corsOptions));
 
 app.use(express.json());
