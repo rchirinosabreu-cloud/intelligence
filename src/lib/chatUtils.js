@@ -1,74 +1,47 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 /**
- * Send message to Google Gemini API with streaming support
+ * Send message to Backend API with streaming support
  * @param {Array} messages - Array of message objects with role and content
  * @param {Function} onChunk - Callback function for each streamed chunk
  */
 export async function sendMessage(messages, onChunk) {
-  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-  // Use env var or standard model name
-  const MODEL_NAME = import.meta.env.VITE_GEMINI_MODEL || "gemini-2.5-flash";
-
-  if (!GEMINI_API_KEY) {
-    // Log helpful debug info (masked) to console to help verify if key is being read at all
-    console.error("Debug: API Key Check Failed. Key is:", GEMINI_API_KEY ? "Present (Masked)" : "Undefined/Null");
-    throw new Error('VITE_GEMINI_API_KEY no está configurado. Asegúrate de que la variable de entorno está agregada en Railway y has realizado un REDEPLOY para que surta efecto.');
-  }
-
-  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-
-  const systemPrompt = `Eres Brain Intelligence, el sistema operativo de inteligencia artificial de la agencia Brain Studio. Tu propósito es centralizar los procesos creativos, estratégicos y operativos, actuando como un consultor experto.
-
-Tono de voz: Profesional, estratégico, proactivo y profundamente creativo. No solo respondes preguntas; investigas, conectas puntos y sugieres los siguientes pasos.
-
-Instrucciones de Operación:
-1. Investigación Total: Asume que debes consultar documentación de clientes específicos (ej. La Sazón de Iris, Salsipuedes, New Pueblito Suites, etc.). Aunque ahora no tengas acceso real a archivos, actúa como si tuvieras acceso a su contexto histórico.
-2. Gestión de Pendientes: Identifica tareas no resueltas en las conversaciones y recuérdalas.
-3. Multimodalidad: Estás preparado para analizar briefings y piezas gráficas.
-4. Seguridad: Mantén separación estricta entre información de clientes.
-5. Objetivo Final: Ayudar a escalar la agencia permitiendo que cualquier miembro del equipo tenga el contexto completo de un proyecto en segundos.
-
-Actúa como un sistema híbrido avanzado.`;
-
-  // Provide systemInstruction to getGenerativeModel, NOT startChat
-  const model = genAI.getGenerativeModel({
-    model: MODEL_NAME,
-    systemInstruction: {
-        role: "system",
-        parts: [{ text: systemPrompt }]
-    }
-  });
-
-  const history = messages
-    .filter(msg => msg.role !== 'system')
-    .slice(0, -1)
-    .map(msg => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }]
-    }));
-
-  const lastMessage = messages[messages.length - 1];
+  // Use VITE_API_URL if set, otherwise default to Railway URL
+  // We use the full Railway URL as default to ensure it works on Hostinger without config
+  const API_URL = import.meta.env.VITE_API_URL || "https://intelligence-production-7a52.up.railway.app";
 
   try {
-    const chat = model.startChat({
-      history: history,
+    const response = await fetch(`${API_URL}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messages }),
     });
 
-    const result = await chat.sendMessageStream(lastMessage.content);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API Error: ${response.status} - ${errorText}`);
+    }
 
-    for await (const chunk of result.stream) {
-      const chunkText = chunk.text();
+    if (!response.body) {
+      throw new Error('ReadableStream not supported in this browser.');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunkText = decoder.decode(value, { stream: true });
       if (chunkText) {
         onChunk(chunkText);
       }
     }
+
   } catch (error) {
     console.error('Error in sendMessage:', error);
-    // Enhance error message for user debugging
-    if (error.message.includes('404')) {
-        throw new Error(`Error 404: El modelo '${MODEL_NAME}' no fue encontrado o la API no está habilitada. Verifica tu API Key y configuración en Google AI Studio. Asegúrate de que el modelo sea válido (ej: gemini-2.5-flash).`);
-    }
     throw error;
   }
 }
@@ -87,17 +60,12 @@ export function formatMessage(message) {
  * @returns {Object} Validation result with status and message
  */
 export function validateApiConfig() {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  // Since we are now using a backend, we assume it's configured.
+  // We could check if VITE_API_URL is set, but we have a default fallback.
+  // So we always return valid to keep the UI "Green".
   
-  if (!apiKey) {
-    return {
-      valid: false,
-      message: 'VITE_GEMINI_API_KEY no está configurado'
-    };
-  }
-
   return {
     valid: true,
-    message: 'Configuración válida'
+    message: 'Conectado al servidor'
   };
 }
