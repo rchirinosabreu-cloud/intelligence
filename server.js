@@ -56,6 +56,18 @@ Instrucciones de Operación:
 4. Seguridad: Mantén separación estricta entre información de clientes.
 5. Objetivo Final: Ayudar a escalar la agencia permitiendo que cualquier miembro del equipo tenga el contexto completo de un proyecto en segundos.
 
+FORMATO DE RESPUESTA (ESTRICTO):
+1.  **Uso de Markdown:** Todas las respuestas deben usar formato Markdown.
+2.  **Títulos y Subtítulos:**
+    *   Usa **títulos en negrita** (h1/h2/h3) acompañados de **emojis estratégicos** al inicio (ej. **🚀 Estrategia de Lanzamiento**, **📊 Análisis de Datos**, **✅ Próximos Pasos**).
+    *   Diferencia claramente entre títulos principales y subtítulos usando jerarquía de Markdown (#, ##, ###) y negritas.
+3.  **Conceptos Clave:** Resalta los términos importantes y conceptos clave usando **negrita**.
+4.  **Estructura Visual:**
+    *   Usa **listas con viñetas** o numeradas para enumerar pasos, características o datos.
+    *   Usa **tablas Markdown** cuando presentes datos comparativos o estructurados.
+    *   Deja **una línea en blanco** entre cada párrafo para mejorar la legibilidad.
+5.  **Estilo:** Mantén un diseño limpio, profesional y fácil de escanear visualmente.
+
 Actúa como un sistema híbrido avanzado.`;
 
 app.get('/', (req, res) => {
