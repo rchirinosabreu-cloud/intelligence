@@ -48,7 +48,7 @@ try {
 }
 
 const PROJECT_ID = credentials?.project_id;
-const LOCATION = 'us-central1';
+const LOCATION = process.env.VERTEX_LOCATION || 'us-central1';
 // Strict precedence: process.env.GEMINI_MODEL (Railway) > process.env.VERTEX_MODEL > default "gemini-1.5-flash"
 const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-1.5-flash";
 
