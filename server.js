@@ -7,9 +7,18 @@ dotenv.config();
 
 const app = express();
 
-// Allow requests from anywhere (Hostinger) or specify the domain if needed later.
-// For now, "*" allows the frontend to connect without CORS issues.
-app.use(cors({ origin: '*' }));
+// Configure CORS
+const corsOptions = {
+    origin: '*', // Allow all origins for now (Hostinger frontend)
+    methods: ['GET', 'POST', 'OPTIONS'], // Explicitly allow these methods
+    allowedHeaders: ['Content-Type', 'Authorization'], // Explicitly allow these headers
+    credentials: true, // Allow cookies if needed (though not strictly for this API key setup)
+    optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
+
 app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
