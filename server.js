@@ -10,19 +10,19 @@ const app = express();
 const allowedOrigins = [
   "https://intelligence.brainstudioagencia.com",
   "http://localhost:3000",
-  ...(process.env.CORS_ORIGINS || "").split(",").map(origin => origin.trim()).filter(Boolean)
+  ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",") : [])
 ];
 
 const corsOptions = {
   origin: (origin, callback) => {
+    // Permitir peticiones sin origen (como Postman o apps móviles)
     if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    return callback(new Error(`Origin not allowed by CORS: ${origin}`));
+    return callback(new Error(`CORS: El origen ${origin} no está autorizado.`));
   },
   methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  optionsSuccessStatus: 204,
+  credentials: true,
 };
 
 // CORS configuration (allow all by default; restrict via CORS_ORIGINS env)
