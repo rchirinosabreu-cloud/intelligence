@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
@@ -7,8 +6,31 @@ dotenv.config();
 
 const app = express();
 
-// Basic, maximally permissive CORS configuration
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+app.use((req, res, next) => {
+  const requestOrigin = req.headers.origin;
+  const allowAnyOrigin = allowedOrigins.length === 0 || allowedOrigins.includes("*");
+  const shouldAllowOrigin =
+    allowAnyOrigin || (requestOrigin && allowedOrigins.includes(requestOrigin));
+
+  if (shouldAllowOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", requestOrigin || "*");
+    res.setHeader("Vary", "Origin");
+  }
+
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
+  return next();
+});
 
 app.use(express.json());
 
