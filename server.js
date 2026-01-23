@@ -7,28 +7,21 @@ dotenv.config();
 
 const app = express();
 
-// Configure CORS
-const corsOptions = {
-    origin: '*', // Allow all origins
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    optionsSuccessStatus: 200
-};
-
-// Apply CORS middleware globally
-app.use(cors(corsOptions));
-
-// Remove the problematic explicit options route causing the crash
-// app.options('*', cors(corsOptions)); <--- This line caused the crash
+// Basic, maximally permissive CORS configuration
+app.use(cors());
 
 app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
+// Support both standard env var and VITE_ prefixed one for compatibility
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VITE_GEMINI_MODEL || "gemini-2.5-flash";
+const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VITE_GEMINI_MODEL || "gemini-1.5-flash";
 
+console.log("Starting server...");
 if (!GEMINI_API_KEY) {
-  console.warn("Warning: GEMINI_API_KEY is not set.");
+  console.error("CRITICAL ERROR: GEMINI_API_KEY is not set!");
+} else {
+  console.log("GEMINI_API_KEY found (masked):", GEMINI_API_KEY.substring(0, 4) + "...");
 }
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
@@ -47,13 +40,15 @@ Instrucciones de Operación:
 Actúa como un sistema híbrido avanzado.`;
 
 app.get('/', (req, res) => {
-    res.send('Brainstudio Intelligence API is running.');
+    res.status(200).send('Brainstudio Intelligence API is running (v4-stable-esm).');
 });
 
 app.post('/api/chat', async (req, res) => {
+    console.log("Received chat request");
     try {
         const { messages } = req.body;
         if (!messages || !Array.isArray(messages)) {
+            console.error("Invalid request body:", req.body);
             return res.status(400).json({ error: "Invalid messages format" });
         }
 
@@ -65,7 +60,6 @@ app.post('/api/chat', async (req, res) => {
             }
         });
 
-        // Convert messages to Gemini history format
         const history = messages
             .filter(msg => msg.role !== 'system')
             .slice(0, -1)
@@ -79,13 +73,13 @@ app.post('/api/chat', async (req, res) => {
              return res.status(400).json({ error: "No messages provided" });
         }
 
+        console.log("Sending request to Gemini model:", MODEL_NAME);
         const chat = model.startChat({
             history: history,
         });
 
         const result = await chat.sendMessageStream(lastMessage.content);
 
-        // Set headers for SSE-style streaming (though we are just streaming text)
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Transfer-Encoding', 'chunked');
 
@@ -97,12 +91,13 @@ app.post('/api/chat', async (req, res) => {
         }
 
         res.end();
+        console.log("Stream completed successfully");
 
     } catch (error) {
         console.error("Error in /api/chat:", error);
-        // If headers are already sent, we can't send JSON error
         if (!res.headersSent) {
-            res.status(500).json({ error: error.message });
+            // Include error message in response for easier debugging
+            res.status(500).json({ error: error.message, stack: error.stack });
         } else {
             res.end();
         }
