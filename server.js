@@ -34,7 +34,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 8080;
 // Support both standard env var and VITE_ prefixed one for compatibility
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VITE_GEMINI_MODEL || "gemini-1.5-flash";
+const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VITE_GEMINI_MODEL || "gemini-2.5-flash";
 
 console.log("Starting server...");
 if (!GEMINI_API_KEY) {
