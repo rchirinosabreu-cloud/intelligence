@@ -9,15 +9,17 @@ const app = express();
 
 // Configure CORS
 const corsOptions = {
-    origin: '*', // Allow all origins for now (Hostinger frontend)
-    methods: ['GET', 'POST', 'OPTIONS'], // Explicitly allow these methods
-    allowedHeaders: ['Content-Type', 'Authorization'], // Explicitly allow these headers
-    credentials: true, // Allow cookies if needed (though not strictly for this API key setup)
-    optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
+    origin: '*', // Allow all origins
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    optionsSuccessStatus: 200
 };
 
+// Apply CORS middleware globally
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
+
+// Remove the problematic explicit options route causing the crash
+// app.options('*', cors(corsOptions)); <--- This line caused the crash
 
 app.use(express.json());
 
