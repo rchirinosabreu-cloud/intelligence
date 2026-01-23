@@ -7,13 +7,13 @@ const SplashScreen = () => {
       initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.8, delay: 3.5 }}
+      transition={{ duration: 0.5 }}
       className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#F5F1FA] overflow-hidden"
     >
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
         className="flex flex-col items-center relative z-10"
       >
         {/* Animated Glow Behind Logo */}
@@ -29,7 +29,7 @@ const SplashScreen = () => {
             rotate: [0, 0, 360],
             scale: [0.8, 1, 1]
           }}
-          transition={{ duration: 2.5, times: [0, 0.4, 1], ease: "easeInOut" }}
+          transition={{ duration: 1.5, times: [0, 0.4, 1], ease: "easeInOut" }}
           className="mb-8 relative"
         >
           <img 
@@ -43,7 +43,7 @@ const SplashScreen = () => {
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.8, delay: 0.5 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
           className="text-center space-y-3"
         >
           <h1 className="text-4xl md:text-5xl font-bold text-brand-charcoal tracking-tight">
@@ -53,21 +53,6 @@ const SplashScreen = () => {
           <p className="text-brand-charcoal/60 text-lg font-medium">
             Your personal AI assistant
           </p>
-        </motion.div>
-
-        {/* Loading indicator bar */}
-        <motion.div
-          className="mt-12 h-1 w-48 bg-brand-lavender rounded-full overflow-hidden"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1 }}
-        >
-          <motion.div 
-            className="h-full bg-brand-teal"
-            initial={{ width: "0%" }}
-            animate={{ width: "100%" }}
-            transition={{ duration: 2.5, delay: 1, ease: "easeInOut" }}
-          />
         </motion.div>
       </motion.div>
 
