@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
@@ -61,7 +62,6 @@ app.get('/', (req, res) => {
 });
 
 app.post('/api/chat', async (req, res) => {
-    console.log("Received chat request");
     try {
         const { messages } = req.body;
         if (!messages || !Array.isArray(messages)) {
@@ -90,7 +90,6 @@ app.post('/api/chat', async (req, res) => {
              return res.status(400).json({ error: "No messages provided" });
         }
 
-        console.log("Sending request to Gemini model:", MODEL_NAME);
         const chat = model.startChat({
             history: history,
         });
@@ -108,7 +107,6 @@ app.post('/api/chat', async (req, res) => {
         }
 
         res.end();
-        console.log("Stream completed successfully");
 
     } catch (error) {
         console.error("Error in /api/chat:", error);
