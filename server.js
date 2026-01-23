@@ -11,26 +11,21 @@ const allowedOrigins = (process.env.CORS_ORIGINS || "")
   .map(origin => origin.trim())
   .filter(Boolean);
 
-app.use((req, res, next) => {
-  const requestOrigin = req.headers.origin;
-  const allowAnyOrigin = allowedOrigins.length === 0 || allowedOrigins.includes("*");
-  const shouldAllowOrigin =
-    allowAnyOrigin || (requestOrigin && allowedOrigins.includes(requestOrigin));
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`Origin not allowed by CORS: ${origin}`));
+  },
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  optionsSuccessStatus: 204,
+};
 
-  if (shouldAllowOrigin) {
-    res.setHeader("Access-Control-Allow-Origin", requestOrigin || "*");
-    res.setHeader("Vary", "Origin");
-  }
-
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
-  return next();
-});
+// CORS configuration (allow all by default; restrict via CORS_ORIGINS env)
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 app.use(express.json());
 
