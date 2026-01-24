@@ -92,7 +92,7 @@ async function searchAndReadDrive(query) {
             try {
                 let content = "";
                 if (file.mimeType === 'application/vnd.google-apps.document') {
-                    const exportData = await drive.files.export({
+                    const exportData = await files.export({
                         fileId: file.id,
                         mimeType: 'text/plain'
                     });
