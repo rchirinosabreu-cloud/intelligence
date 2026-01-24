@@ -199,6 +199,13 @@ app.post('/api/chat', async (req, res) => {
         const { messages } = req.body;
         console.log(`[API] /api/chat received request with ${messages?.length || 0} messages.`);
 
+        if (!credentials || !PROJECT_ID) {
+            console.error("CRITICAL: Missing Google credentials or project ID for Vertex AI.");
+            res.status(500);
+            res.write("Error: Missing Google credentials or project ID for Vertex AI.");
+            return res.end();
+        }
+
         // Explicitly set headers at the start to prevent CORB blocking errors
         const origin = req.headers.origin;
         if (allowedOrigins.includes(origin)) {
@@ -235,7 +242,13 @@ app.post('/api/chat', async (req, res) => {
                 parts: [{ text: msg.content }]
             }));
 
-        const lastMessageContent = messages[messages.length - 1].content;
+        const lastMessageContent = messages[messages.length - 1]?.content;
+        if (typeof lastMessageContent !== 'string' || !lastMessageContent.trim()) {
+            console.error("Invalid last message content:", lastMessageContent);
+            res.status(400);
+            res.write("Error: Missing or invalid last message content.");
+            return res.end();
+        }
 
         const chat = generativeModel.startChat({
             history: history,
@@ -249,6 +262,7 @@ app.post('/api/chat', async (req, res) => {
         console.log(`[DEBUG] chat.sendMessageStream returned. Starting to iterate stream...`);
 
         let functionCallDetected = false;
+        let wroteText = false;
 
         // Consume the first stream
         for await (const chunk of streamResult.stream) {
@@ -263,6 +277,7 @@ app.post('/api/chat', async (req, res) => {
 
             if (text) {
                 res.write(text);
+                wroteText = true;
             }
 
             // Check if this chunk indicates a function call
@@ -272,14 +287,38 @@ app.post('/api/chat', async (req, res) => {
             }
         }
 
+        // Ensure we inspect the full response to detect function calls or missing text
+        const fullResponse = await streamResult.response;
+        const fullParts = fullResponse?.candidates?.[0]?.content?.parts || [];
+        const functionCallPart = fullParts.find(part => part.functionCall);
+
+        if (functionCallPart) {
+            functionCallDetected = true;
+        }
+
+        if (!wroteText) {
+            const fallbackText = fullParts
+                .filter(part => part.text)
+                .map(part => part.text)
+                .join('');
+            if (fallbackText) {
+                res.write(fallbackText);
+                wroteText = true;
+            }
+        }
+
         // If a function call was detected during the stream, we execute it now
         if (functionCallDetected) {
-            // Get the full aggregated response to parse arguments safely
-            const fullResponse = await streamResult.response;
-            const call = fullResponse.candidates[0].content.parts[0].functionCall;
+            const call = functionCallPart?.functionCall;
 
             if (call && call.name === 'search_drive_files') {
-                const query = call.args.query;
+                const query = call.args?.query;
+                if (!query) {
+                    console.error("[FunctionCall] Missing query argument in function call:", call);
+                    res.write("Error: Missing query argument for search_drive_files.");
+                    res.end();
+                    return;
+                }
                 console.log(`[FunctionCall] Executing search_drive_files with query: ${query}`);
                 const toolOutput = await searchAndReadDrive(query);
 
@@ -306,6 +345,14 @@ app.post('/api/chat', async (req, res) => {
                     }
                 }
             }
+        }
+
+        if (!wroteText && !functionCallDetected) {
+            console.error("[VertexAI] Empty response with no function call detected.", {
+                model: MODEL_NAME,
+                parts: fullParts
+            });
+            res.write("Error: Vertex AI returned an empty response.");
         }
 
         console.log(`[DEBUG] Stream iteration finished. Ending response.`);
