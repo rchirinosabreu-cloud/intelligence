@@ -6,6 +6,18 @@ import { google } from 'googleapis';
 
 dotenv.config();
 
+// Global Crash Handler
+process.on('uncaughtException', (err) => {
+    console.error('UNCAUGHT EXCEPTION:', err);
+    // Keep alive if possible, or let Railway restart it with a log
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('UNHANDLED REJECTION:', reason);
+});
+
+console.log("Server script starting...");
+
 const app = express();
 
 const allowedOrigins = [
@@ -39,7 +51,7 @@ let credentials;
 try {
     if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
         credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
-        console.log("Credentials parsed successfully for project:", credentials.project_id);
+        console.log("Credentials parsed successfully for project:", credentials?.project_id);
     } else {
         console.error("CRITICAL: GOOGLE_APPLICATION_CREDENTIALS_JSON is missing");
     }
@@ -49,24 +61,35 @@ try {
 
 const PROJECT_ID = credentials?.project_id;
 const LOCATION = process.env.VERTEX_LOCATION || 'us-central1';
-// Strict precedence: process.env.GEMINI_MODEL (Railway) > process.env.VERTEX_MODEL > default "gemini-1.5-flash"
 const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-1.5-flash";
 
-console.log(`[VertexAI] Initializing with Project ID: ${PROJECT_ID}, Location: ${LOCATION}, Model: ${MODEL_NAME}`);
+console.log(`[VertexAI] Initializing with Project ID: ${PROJECT_ID || 'UNDEFINED'}, Location: ${LOCATION}, Model: ${MODEL_NAME}`);
 
-// Vertex AI Client
-const vertexAI = new VertexAI({
-    project: PROJECT_ID,
-    location: LOCATION,
-    googleAuthOptions: { credentials }
-});
+// Initialize Clients safely
+let vertexAI;
+try {
+    if (!PROJECT_ID) throw new Error("Project ID is missing from credentials");
+    vertexAI = new VertexAI({
+        project: PROJECT_ID,
+        location: LOCATION,
+        googleAuthOptions: { credentials }
+    });
+    console.log("[VertexAI] Client initialized successfully.");
+} catch (e) {
+    console.error("[VertexAI] Failed to initialize client:", e);
+}
 
-// Drive Client
-const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/drive.readonly']
-});
-const drive = google.drive({ version: 'v3', auth });
+let drive;
+try {
+    const auth = new google.auth.GoogleAuth({
+        credentials,
+        scopes: ['https://www.googleapis.com/auth/drive.readonly']
+    });
+    drive = google.drive({ version: 'v3', auth });
+    console.log("[Drive] Client initialized successfully.");
+} catch (e) {
+    console.error("[Drive] Failed to initialize client:", e);
+}
 
 // --- DRIVE HELPER FUNCTIONS ---
 async function searchAndReadDrive(query) {
