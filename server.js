@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai';
 import { google } from 'googleapis';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import mammoth from 'mammoth';
 
 dotenv.config();
@@ -115,6 +116,7 @@ async function searchAndReadDrive(query) {
         }
 
         let combinedContent = `Encontré ${files.length} archivos relevantes para "${query}":\n`;
+        const inlineDataParts = [];
 
         // 2. Read content (limit to first 3)
         for (const file of files.slice(0, 3)) {
@@ -136,8 +138,20 @@ async function searchAndReadDrive(query) {
                     });
                     content = getData.data;
                 } else if (file.mimeType === 'application/pdf') {
-                    // PDF (link only)
-                    content = `[PDF detectado. Enlace: ${driveLink}]`;
+                    // PDF (multimodal)
+                    const getData = await drive.files.get({
+                        fileId: file.id,
+                        alt: 'media',
+                        responseType: 'arraybuffer'
+                    });
+                    const dataBuffer = Buffer.from(getData.data);
+                    inlineDataParts.push({
+                        inlineData: {
+                            mimeType: 'application/pdf',
+                            data: dataBuffer.toString('base64')
+                        }
+                    });
+                    content = '[PDF adjunto para análisis multimodal]';
                 } else if (file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
                     // DOCX (Word)
                     const getData = await drive.files.get({
@@ -165,22 +179,38 @@ async function searchAndReadDrive(query) {
                         if (!rows.length) {
                             content = `[Hoja de cálculo vacía en "${firstSheetTitle}"]`;
                         } else {
-                            const header = rows[0];
-                            const body = rows.slice(1);
-                            const headerRow = `| ${header.join(' | ')} |`;
-                            const separatorRow = `| ${header.map(() => '---').join(' | ')} |`;
-                            const bodyRows = body.length
-                                ? body.map(row => `| ${row.join(' | ')} |`).join('\n')
-                                : `| ${header.map(() => '').join(' | ')} |`;
-                            content = `${headerRow}\n${separatorRow}\n${bodyRows}`;
+                            content = rows.map(row => row.join('\t')).join('\n');
                         }
                     }
                 } else if (file.mimeType === 'application/vnd.google-apps.presentation') {
-                    // Google Slides (link only)
-                    content = `[Presentación detectada. Enlace: ${driveLink}]`;
+                    // Google Slides (export to PDF for multimodal)
+                    const exportData = await drive.files.export({
+                        fileId: file.id,
+                        mimeType: 'application/pdf'
+                    }, { responseType: 'arraybuffer' });
+                    const dataBuffer = Buffer.from(exportData.data);
+                    inlineDataParts.push({
+                        inlineData: {
+                            mimeType: 'application/pdf',
+                            data: dataBuffer.toString('base64')
+                        }
+                    });
+                    content = '[Slides exportadas a PDF para análisis multimodal]';
                 } else if (file.mimeType?.startsWith('image/')) {
-                    // Image (link only)
-                    content = `[Imagen detectada. Enlace: ${driveLink}]`;
+                    // Image (multimodal)
+                    const getData = await drive.files.get({
+                        fileId: file.id,
+                        alt: 'media',
+                        responseType: 'arraybuffer'
+                    });
+                    const dataBuffer = Buffer.from(getData.data);
+                    inlineDataParts.push({
+                        inlineData: {
+                            mimeType: file.mimeType,
+                            data: dataBuffer.toString('base64')
+                        }
+                    });
+                    content = '[Imagen adjunta para análisis multimodal]';
                 } else {
                     content = `[Archivo detectado. Tipo: ${file.mimeType}. Contenido no legible directamente]`;
                 }
@@ -192,11 +222,11 @@ async function searchAndReadDrive(query) {
                 combinedContent += `\n--- ARCHIVO: ${file.name} (Error al leer contenido: ${err.message}) ---\n`;
             }
         }
-        return combinedContent;
+        return { text: combinedContent, inlineDataParts };
 
     } catch (error) {
         console.error("Drive Search Error:", error);
-        return "Error interno al buscar en Google Drive.";
+        return { text: "Error interno al buscar en Google Drive.", inlineDataParts: [] };
     }
 }
 
@@ -229,7 +259,7 @@ const tools = [{
     functionDeclarations: [
         {
             name: "search_drive_files",
-            description: "Busca archivos en Google Drive (Docs, Texto, Sheets, Slides, PDFs, imágenes, Word) y devuelve el contenido en texto y enlaces de Drive cuando aplica.",
+            description: "Busca archivos en Google Drive (Docs, Texto, Sheets, Slides, PDFs, imágenes, Word) y obtiene su contenido para responder preguntas sobre clientes, briefs, minutas o documentos internos.",
             parameters: {
                 type: FunctionDeclarationSchemaType.OBJECT,
                 properties: {
@@ -396,9 +426,9 @@ app.post('/api/chat', async (req, res) => {
                 const functionResponseParts = [{
                     functionResponse: {
                         name: 'search_drive_files',
-                        response: { name: 'search_drive_files', content: toolOutput }
+                        response: { name: 'search_drive_files', content: toolOutput.text }
                     }
-                }, ...inlineDataParts];
+                }, ...toolOutput.inlineDataParts];
 
                 // Start a new stream with the answer
                 console.log(`[API] Sending function response back to model...`);
