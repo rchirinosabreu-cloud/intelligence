@@ -49,7 +49,7 @@ try {
 
 const PROJECT_ID = credentials?.project_id;
 const LOCATION = 'us-central1';
-const MODEL_NAME = "gemini-1.5-flash-001";
+const MODEL_NAME = "gemini-2.5-flash";
 
 // Vertex AI Client
 const vertexAI = new VertexAI({
