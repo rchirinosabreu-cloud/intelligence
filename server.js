@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai';
 import { google } from 'googleapis';
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import mammoth from 'mammoth';
 
 dotenv.config();
@@ -234,6 +234,17 @@ const tools = [{
     ]
 }];
 
+function extractTextFromParts(parts = []) {
+    return parts
+        .filter(part => typeof part.text === 'string')
+        .map(part => part.text)
+        .join('');
+}
+
+function getChunkParts(chunk) {
+    return chunk?.candidates?.[0]?.content?.parts || [];
+}
+
 app.get('/', (req, res) => {
     res.status(200).send('Brainstudio Intelligence API is running (v6-stable-deploy).');
 });
@@ -313,10 +324,15 @@ app.post('/api/chat', async (req, res) => {
             console.log(`[DEBUG] Received chunk from Vertex AI`);
             // Check for text content
             let text = '';
-            try {
-                text = chunk.text();
-            } catch (e) {
-                // If it's a function call, text() might throw or return empty
+            if (typeof chunk?.text === 'function') {
+                try {
+                    text = chunk.text();
+                } catch (e) {
+                    // If it's a function call, text() might throw or return empty
+                }
+            }
+            if (!text) {
+                text = extractTextFromParts(getChunkParts(chunk));
             }
 
             if (text) {
@@ -325,8 +341,8 @@ app.post('/api/chat', async (req, res) => {
             }
 
             // Check if this chunk indicates a function call
-            const parts = chunk.candidates?.[0]?.content?.parts;
-            if (parts?.[0]?.functionCall) {
+            const parts = getChunkParts(chunk);
+            if (parts?.some(part => part.functionCall)) {
                 functionCallDetected = true;
             }
         }
@@ -341,10 +357,7 @@ app.post('/api/chat', async (req, res) => {
         }
 
         if (!wroteText) {
-            const fallbackText = fullParts
-                .filter(part => part.text)
-                .map(part => part.text)
-                .join('');
+            const fallbackText = extractTextFromParts(fullParts);
             if (fallbackText) {
                 res.write(fallbackText);
                 wroteText = true;
@@ -390,10 +403,15 @@ app.post('/api/chat', async (req, res) => {
                 for await (const chunk of streamResult2.stream) {
                     console.log(`[DEBUG] Received chunk (post-function) from Vertex AI`);
                     let text = '';
-                    try {
-                        text = chunk.text();
-                    } catch (e) {
-                         console.warn("[DEBUG] Chunk (post-function) has no text:", e.message);
+                    if (typeof chunk?.text === 'function') {
+                        try {
+                            text = chunk.text();
+                        } catch (e) {
+                             console.warn("[DEBUG] Chunk (post-function) has no text:", e.message);
+                        }
+                    }
+                    if (!text) {
+                        text = extractTextFromParts(getChunkParts(chunk));
                     }
 
                     if (text) {
