@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai';
 import { google } from 'googleapis';
+import pdf from 'pdf-parse';
+import mammoth from 'mammoth';
 
 dotenv.config();
 
@@ -115,27 +117,48 @@ async function searchAndReadDrive(query) {
             try {
                 let content = "";
                 if (file.mimeType === 'application/vnd.google-apps.document') {
-                    const exportData = await files.export({
+                    // Google Docs
+                    const exportData = await drive.files.export({
                         fileId: file.id,
                         mimeType: 'text/plain'
                     });
                     content = exportData.data;
-                } else if (file.mimeType === 'text/plain') {
+                } else if (file.mimeType === 'text/plain' || file.mimeType === 'text/csv') {
+                     // Plain text or CSV (if simple)
                      const getData = await drive.files.get({
                         fileId: file.id,
                         alt: 'media'
                     });
                     content = getData.data;
+                } else if (file.mimeType === 'application/pdf') {
+                    // PDF
+                    const getData = await drive.files.get({
+                        fileId: file.id,
+                        alt: 'media',
+                        responseType: 'arraybuffer'
+                    });
+                    const dataBuffer = Buffer.from(getData.data);
+                    const pdfData = await pdf(dataBuffer);
+                    content = pdfData.text;
+                } else if (file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                    // DOCX (Word)
+                    const getData = await drive.files.get({
+                        fileId: file.id,
+                        alt: 'media',
+                        responseType: 'arraybuffer'
+                    });
+                    const dataBuffer = Buffer.from(getData.data);
+                    const result = await mammoth.extractRawText({ buffer: dataBuffer });
+                    content = result.value;
                 } else {
-                    // For PDFs or others, we just note existence for now
-                    content = `[Archivo detectado. Tipo: ${file.mimeType}. Contenido no legible directamente por ahora]`;
+                    content = `[Archivo detectado. Tipo: ${file.mimeType}. Contenido no legible directamente]`;
                 }
 
                 const snippet = typeof content === 'string' ? content.substring(0, 8000) : "Contenido no textual";
                 combinedContent += `\n--- ARCHIVO: ${file.name} ---\n${snippet}\n`;
             } catch (err) {
-                console.error(`Error reading file ${file.id}:`, err);
-                combinedContent += `\n--- ARCHIVO: ${file.name} (Error al leer contenido) ---\n`;
+                console.error(`Error reading file ${file.id} (${file.mimeType}):`, err);
+                combinedContent += `\n--- ARCHIVO: ${file.name} (Error al leer contenido: ${err.message}) ---\n`;
             }
         }
         return combinedContent;
@@ -175,7 +198,7 @@ const tools = [{
     functionDeclarations: [
         {
             name: "search_drive_files",
-            description: "Busca archivos en Google Drive (Google Docs, Texto) de la agencia y lee su contenido. Útil para responder preguntas sobre clientes, briefs, minutas o documentos internos.",
+            description: "Busca archivos en Google Drive (Google Docs, Texto, PDF, Word) de la agencia y lee su contenido. Útil para responder preguntas sobre clientes, briefs, minutas o documentos internos.",
             parameters: {
                 type: FunctionDeclarationSchemaType.OBJECT,
                 properties: {
@@ -332,17 +355,35 @@ app.post('/api/chat', async (req, res) => {
 
                 // Start a new stream with the answer
                 console.log(`[API] Sending function response back to model...`);
-                const streamResult2 = await chat.sendMessageStream(functionResponseParts);
+                let streamResult2;
+                try {
+                     streamResult2 = await chat.sendMessageStream(functionResponseParts);
+                } catch (streamErr) {
+                     console.error("[API] Error calling sendMessageStream with function response:", streamErr);
+                     res.write("\n\n(Error interno al comunicar la respuesta de la herramienta al modelo).");
+                     res.end();
+                     return;
+                }
 
+                let wroteTextInSecondStream = false;
                 for await (const chunk of streamResult2.stream) {
+                    console.log(`[DEBUG] Received chunk (post-function) from Vertex AI`);
                     let text = '';
                     try {
                         text = chunk.text();
-                    } catch (e) {}
+                    } catch (e) {
+                         console.warn("[DEBUG] Chunk (post-function) has no text:", e.message);
+                    }
 
                     if (text) {
                         res.write(text);
+                        wroteTextInSecondStream = true;
                     }
+                }
+
+                if (!wroteTextInSecondStream) {
+                    console.warn("[API] Second stream finished but wrote no text. Sending fallback.");
+                    res.write("\n\n(La búsqueda se completó, pero el modelo no generó una respuesta textual adicional).");
                 }
             }
         }
