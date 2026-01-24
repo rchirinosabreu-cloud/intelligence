@@ -207,8 +207,14 @@ app.post('/api/chat', async (req, res) => {
         console.log(`[API] Sending message to Vertex AI model: ${MODEL_NAME}`);
         const streamResult = await chat.sendMessageStream(lastMessageContent);
 
+        // Strict CORB/CORS headers for streaming
+        const origin = req.headers.origin;
+        if (allowedOrigins.includes(origin)) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+        }
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Transfer-Encoding', 'chunked');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
 
         let functionCallDetected = false;
 
