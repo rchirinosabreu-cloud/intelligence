@@ -165,12 +165,14 @@ const tools = [{
 }];
 
 app.get('/', (req, res) => {
-    res.status(200).send('Brainstudio Intelligence API is running (v5-vertex-drive).');
+    res.status(200).send('Brainstudio Intelligence API is running (v6-stable-deploy).');
 });
 
 app.post('/api/chat', async (req, res) => {
     try {
         const { messages } = req.body;
+        console.log(`[API] /api/chat received request with ${messages?.length || 0} messages.`);
+
         if (!messages || !Array.isArray(messages)) {
             console.error("Invalid request body:", req.body);
             return res.status(400).json({ error: "Invalid messages format" });
@@ -199,6 +201,7 @@ app.post('/api/chat', async (req, res) => {
             history: history,
         });
 
+        console.log(`[API] Sending message to Vertex AI model: ${MODEL_NAME}`);
         const streamResult = await chat.sendMessageStream(lastMessageContent);
 
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -235,6 +238,7 @@ app.post('/api/chat', async (req, res) => {
 
             if (call && call.name === 'search_drive_files') {
                 const query = call.args.query;
+                console.log(`[FunctionCall] Executing search_drive_files with query: ${query}`);
                 const toolOutput = await searchAndReadDrive(query);
 
                 // Send the tool output back to the model
@@ -246,6 +250,7 @@ app.post('/api/chat', async (req, res) => {
                 }];
 
                 // Start a new stream with the answer
+                console.log(`[API] Sending function response back to model...`);
                 const streamResult2 = await chat.sendMessageStream(functionResponseParts);
 
                 for await (const chunk of streamResult2.stream) {
@@ -264,7 +269,14 @@ app.post('/api/chat', async (req, res) => {
         res.end();
 
     } catch (error) {
-        console.error("Error in /api/chat:", error);
+        console.error("Error in /api/chat [CRITICAL]:", {
+            message: error.message,
+            stack: error.stack,
+            code: error.code,
+            details: error.details, // Vertex AI often provides details here
+            response: error.response?.data
+        });
+
         if (!res.headersSent) {
             res.status(500).json({ error: error.message, stack: error.stack });
         } else {
