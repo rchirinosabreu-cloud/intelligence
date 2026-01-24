@@ -122,6 +122,7 @@ async function searchAndReadDrive(query) {
         for (const file of files.slice(0, 3)) {
             try {
                 let content = "";
+                const driveLink = `https://drive.google.com/file/d/${file.id}/view`;
                 if (file.mimeType === 'application/vnd.google-apps.document') {
                     // Google Docs
                     const exportData = await drive.files.export({
@@ -215,7 +216,7 @@ async function searchAndReadDrive(query) {
                 }
 
                 const snippet = typeof content === 'string' ? content.substring(0, 8000) : "Contenido no textual";
-                combinedContent += `\n--- ARCHIVO: ${file.name} ---\n${snippet}\n`;
+                combinedContent += `\n--- ARCHIVO: ${file.name} ---\n${snippet}\nEnlace: ${driveLink}\n`;
             } catch (err) {
                 console.error(`Error reading file ${file.id} (${file.mimeType}):`, err);
                 combinedContent += `\n--- ARCHIVO: ${file.name} (Error al leer contenido: ${err.message}) ---\n`;
@@ -417,6 +418,9 @@ app.post('/api/chat', async (req, res) => {
                 }
                 console.log(`[FunctionCall] Executing search_drive_files with query: ${query}`);
                 const toolOutput = await searchAndReadDrive(query);
+                const inlineDataParts = Array.isArray(toolOutput?.inlineDataParts)
+                    ? toolOutput.inlineDataParts
+                    : [];
 
                 // Send the tool output back to the model
                 const functionResponseParts = [{
