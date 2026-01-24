@@ -219,12 +219,17 @@ app.post('/api/chat', async (req, res) => {
         });
 
         console.log(`[API] Sending message to Vertex AI model: ${MODEL_NAME}`);
+
+        // --- DEBUG LOGS START ---
+        console.log(`[DEBUG] Calling chat.sendMessageStream now...`);
         const streamResult = await chat.sendMessageStream(lastMessageContent);
+        console.log(`[DEBUG] chat.sendMessageStream returned. Starting to iterate stream...`);
 
         let functionCallDetected = false;
 
         // Consume the first stream
         for await (const chunk of streamResult.stream) {
+            console.log(`[DEBUG] Received chunk from Vertex AI`);
             // Check for text content
             let text = '';
             try {
@@ -280,6 +285,7 @@ app.post('/api/chat', async (req, res) => {
             }
         }
 
+        console.log(`[DEBUG] Stream iteration finished. Ending response.`);
         res.end();
 
     } catch (error) {
@@ -288,7 +294,8 @@ app.post('/api/chat', async (req, res) => {
             stack: error.stack,
             code: error.code,
             details: error.details, // Vertex AI often provides details here
-            response: error.response?.data
+            response: error.response?.data,
+            raw: JSON.stringify(error)
         });
 
         // Return error as text/plain so it's not blocked by CORB
