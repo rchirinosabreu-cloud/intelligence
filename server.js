@@ -3,7 +3,6 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai';
 import { google } from 'googleapis';
-import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
 
 dotenv.config();
@@ -82,38 +81,21 @@ try {
 }
 
 let drive;
+let sheets;
 try {
     const auth = new google.auth.GoogleAuth({
         credentials,
-        scopes: ['https://www.googleapis.com/auth/drive.readonly']
+        scopes: [
+            'https://www.googleapis.com/auth/drive.readonly',
+            'https://www.googleapis.com/auth/spreadsheets.readonly'
+        ]
     });
     drive = google.drive({ version: 'v3', auth });
+    sheets = google.sheets({ version: 'v4', auth });
     console.log("[Drive] Client initialized successfully.");
 } catch (e) {
     console.error("[Drive] Failed to initialize client:", e);
 }
-
-// --- PDF HELPER ---
-async function extractTextFromPdf(buffer) {
-    try {
-        const data = new Uint8Array(buffer);
-        const loadingTask = pdfjsLib.getDocument({ data });
-        const pdfDocument = await loadingTask.promise;
-
-        let fullText = '';
-        for (let i = 1; i <= pdfDocument.numPages; i++) {
-            const page = await pdfDocument.getPage(i);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items.map(item => item.str).join(' ');
-            fullText += `\n--- Page ${i} ---\n${pageText}`;
-        }
-        return fullText;
-    } catch (e) {
-        console.error("Error parsing PDF with pdfjs-dist:", e);
-        return "[Error extrayendo texto del PDF]";
-    }
-}
-
 
 // --- DRIVE HELPER FUNCTIONS ---
 async function searchAndReadDrive(query) {
@@ -133,6 +115,7 @@ async function searchAndReadDrive(query) {
         }
 
         let combinedContent = `Encontré ${files.length} archivos relevantes para "${query}":\n`;
+        const inlineDataParts = [];
 
         // 2. Read content (limit to first 3)
         for (const file of files.slice(0, 3)) {
@@ -153,14 +136,20 @@ async function searchAndReadDrive(query) {
                     });
                     content = getData.data;
                 } else if (file.mimeType === 'application/pdf') {
-                    // PDF
+                    // PDF (multimodal)
                     const getData = await drive.files.get({
                         fileId: file.id,
                         alt: 'media',
                         responseType: 'arraybuffer'
                     });
-                    // Convert ArrayBuffer to Buffer for processing if needed, but pdfjs takes Uint8Array
-                    content = await extractTextFromPdf(getData.data);
+                    const dataBuffer = Buffer.from(getData.data);
+                    inlineDataParts.push({
+                        inlineData: {
+                            mimeType: 'application/pdf',
+                            data: dataBuffer.toString('base64')
+                        }
+                    });
+                    content = '[PDF adjunto para análisis multimodal]';
                 } else if (file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
                     // DOCX (Word)
                     const getData = await drive.files.get({
@@ -171,6 +160,55 @@ async function searchAndReadDrive(query) {
                     const dataBuffer = Buffer.from(getData.data);
                     const result = await mammoth.extractRawText({ buffer: dataBuffer });
                     content = result.value;
+                } else if (file.mimeType === 'application/vnd.google-apps.spreadsheet') {
+                    // Google Sheets
+                    const spreadsheet = await sheets.spreadsheets.get({
+                        spreadsheetId: file.id
+                    });
+                    const firstSheetTitle = spreadsheet.data.sheets?.[0]?.properties?.title;
+                    if (!firstSheetTitle) {
+                        content = '[Hoja de cálculo sin pestañas legibles]';
+                    } else {
+                        const valuesResponse = await sheets.spreadsheets.values.get({
+                            spreadsheetId: file.id,
+                            range: `${firstSheetTitle}!A1:Z200`
+                        });
+                        const rows = valuesResponse.data.values || [];
+                        if (!rows.length) {
+                            content = `[Hoja de cálculo vacía en "${firstSheetTitle}"]`;
+                        } else {
+                            content = rows.map(row => row.join('\t')).join('\n');
+                        }
+                    }
+                } else if (file.mimeType === 'application/vnd.google-apps.presentation') {
+                    // Google Slides (export to PDF for multimodal)
+                    const exportData = await drive.files.export({
+                        fileId: file.id,
+                        mimeType: 'application/pdf'
+                    }, { responseType: 'arraybuffer' });
+                    const dataBuffer = Buffer.from(exportData.data);
+                    inlineDataParts.push({
+                        inlineData: {
+                            mimeType: 'application/pdf',
+                            data: dataBuffer.toString('base64')
+                        }
+                    });
+                    content = '[Slides exportadas a PDF para análisis multimodal]';
+                } else if (file.mimeType?.startsWith('image/')) {
+                    // Image (multimodal)
+                    const getData = await drive.files.get({
+                        fileId: file.id,
+                        alt: 'media',
+                        responseType: 'arraybuffer'
+                    });
+                    const dataBuffer = Buffer.from(getData.data);
+                    inlineDataParts.push({
+                        inlineData: {
+                            mimeType: file.mimeType,
+                            data: dataBuffer.toString('base64')
+                        }
+                    });
+                    content = '[Imagen adjunta para análisis multimodal]';
                 } else {
                     content = `[Archivo detectado. Tipo: ${file.mimeType}. Contenido no legible directamente]`;
                 }
@@ -182,11 +220,11 @@ async function searchAndReadDrive(query) {
                 combinedContent += `\n--- ARCHIVO: ${file.name} (Error al leer contenido: ${err.message}) ---\n`;
             }
         }
-        return combinedContent;
+        return { text: combinedContent, inlineDataParts };
 
     } catch (error) {
         console.error("Drive Search Error:", error);
-        return "Error interno al buscar en Google Drive.";
+        return { text: "Error interno al buscar en Google Drive.", inlineDataParts: [] };
     }
 }
 
@@ -219,7 +257,7 @@ const tools = [{
     functionDeclarations: [
         {
             name: "search_drive_files",
-            description: "Busca archivos en Google Drive (Google Docs, Texto, PDF, Word) de la agencia y lee su contenido. Útil para responder preguntas sobre clientes, briefs, minutas o documentos internos.",
+            description: "Busca archivos en Google Drive (Docs, Texto, Sheets, Slides, PDFs, imágenes, Word) y obtiene su contenido para responder preguntas sobre clientes, briefs, minutas o documentos internos.",
             parameters: {
                 type: FunctionDeclarationSchemaType.OBJECT,
                 properties: {
@@ -233,6 +271,17 @@ const tools = [{
         }
     ]
 }];
+
+function extractTextFromParts(parts = []) {
+    return parts
+        .filter(part => typeof part.text === 'string')
+        .map(part => part.text)
+        .join('');
+}
+
+function getChunkParts(chunk) {
+    return chunk?.candidates?.[0]?.content?.parts || [];
+}
 
 app.get('/', (req, res) => {
     res.status(200).send('Brainstudio Intelligence API is running (v6-stable-deploy).');
@@ -313,10 +362,15 @@ app.post('/api/chat', async (req, res) => {
             console.log(`[DEBUG] Received chunk from Vertex AI`);
             // Check for text content
             let text = '';
-            try {
-                text = chunk.text();
-            } catch (e) {
-                // If it's a function call, text() might throw or return empty
+            if (typeof chunk?.text === 'function') {
+                try {
+                    text = chunk.text();
+                } catch (e) {
+                    // If it's a function call, text() might throw or return empty
+                }
+            }
+            if (!text) {
+                text = extractTextFromParts(getChunkParts(chunk));
             }
 
             if (text) {
@@ -325,8 +379,8 @@ app.post('/api/chat', async (req, res) => {
             }
 
             // Check if this chunk indicates a function call
-            const parts = chunk.candidates?.[0]?.content?.parts;
-            if (parts?.[0]?.functionCall) {
+            const parts = getChunkParts(chunk);
+            if (parts?.some(part => part.functionCall)) {
                 functionCallDetected = true;
             }
         }
@@ -341,10 +395,7 @@ app.post('/api/chat', async (req, res) => {
         }
 
         if (!wroteText) {
-            const fallbackText = fullParts
-                .filter(part => part.text)
-                .map(part => part.text)
-                .join('');
+            const fallbackText = extractTextFromParts(fullParts);
             if (fallbackText) {
                 res.write(fallbackText);
                 wroteText = true;
@@ -370,9 +421,9 @@ app.post('/api/chat', async (req, res) => {
                 const functionResponseParts = [{
                     functionResponse: {
                         name: 'search_drive_files',
-                        response: { name: 'search_drive_files', content: toolOutput }
+                        response: { name: 'search_drive_files', content: toolOutput.text }
                     }
-                }];
+                }, ...toolOutput.inlineDataParts];
 
                 // Start a new stream with the answer
                 console.log(`[API] Sending function response back to model...`);
@@ -390,10 +441,15 @@ app.post('/api/chat', async (req, res) => {
                 for await (const chunk of streamResult2.stream) {
                     console.log(`[DEBUG] Received chunk (post-function) from Vertex AI`);
                     let text = '';
-                    try {
-                        text = chunk.text();
-                    } catch (e) {
-                         console.warn("[DEBUG] Chunk (post-function) has no text:", e.message);
+                    if (typeof chunk?.text === 'function') {
+                        try {
+                            text = chunk.text();
+                        } catch (e) {
+                             console.warn("[DEBUG] Chunk (post-function) has no text:", e.message);
+                        }
+                    }
+                    if (!text) {
+                        text = extractTextFromParts(getChunkParts(chunk));
                     }
 
                     if (text) {
