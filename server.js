@@ -176,9 +176,23 @@ app.post('/api/chat', async (req, res) => {
         const { messages } = req.body;
         console.log(`[API] /api/chat received request with ${messages?.length || 0} messages.`);
 
+        // Explicitly set headers at the start to prevent CORB blocking errors
+        const origin = req.headers.origin;
+        if (allowedOrigins.includes(origin)) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+        }
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        // We will enable chunked encoding implicitly by writing to the stream,
+        // but setting it explicit helps some proxies.
+        res.setHeader('Transfer-Encoding', 'chunked');
+
         if (!messages || !Array.isArray(messages)) {
             console.error("Invalid request body:", req.body);
-            return res.status(400).json({ error: "Invalid messages format" });
+            // Even validation errors should return text to be visible in browser
+            res.status(400);
+            res.write("Error: Invalid messages format");
+            return res.end();
         }
 
         const generativeModel = vertexAI.getGenerativeModel({
@@ -206,15 +220,6 @@ app.post('/api/chat', async (req, res) => {
 
         console.log(`[API] Sending message to Vertex AI model: ${MODEL_NAME}`);
         const streamResult = await chat.sendMessageStream(lastMessageContent);
-
-        // Strict CORB/CORS headers for streaming
-        const origin = req.headers.origin;
-        if (allowedOrigins.includes(origin)) {
-            res.setHeader('Access-Control-Allow-Origin', origin);
-        }
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.setHeader('Transfer-Encoding', 'chunked');
-        res.setHeader('X-Content-Type-Options', 'nosniff');
 
         let functionCallDetected = false;
 
@@ -286,8 +291,11 @@ app.post('/api/chat', async (req, res) => {
             response: error.response?.data
         });
 
+        // Return error as text/plain so it's not blocked by CORB
         if (!res.headersSent) {
-            res.status(500).json({ error: error.message, stack: error.stack });
+            res.status(500);
+            res.write(`Error: ${error.message}`);
+            res.end();
         } else {
             res.end();
         }
