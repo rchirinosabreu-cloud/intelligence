@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai';
 import { google } from 'googleapis';
-import pdf from 'pdf-parse';
+import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
 
 dotenv.config();
@@ -93,6 +93,28 @@ try {
     console.error("[Drive] Failed to initialize client:", e);
 }
 
+// --- PDF HELPER ---
+async function extractTextFromPdf(buffer) {
+    try {
+        const data = new Uint8Array(buffer);
+        const loadingTask = pdfjsLib.getDocument({ data });
+        const pdfDocument = await loadingTask.promise;
+
+        let fullText = '';
+        for (let i = 1; i <= pdfDocument.numPages; i++) {
+            const page = await pdfDocument.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map(item => item.str).join(' ');
+            fullText += `\n--- Page ${i} ---\n${pageText}`;
+        }
+        return fullText;
+    } catch (e) {
+        console.error("Error parsing PDF with pdfjs-dist:", e);
+        return "[Error extrayendo texto del PDF]";
+    }
+}
+
+
 // --- DRIVE HELPER FUNCTIONS ---
 async function searchAndReadDrive(query) {
     try {
@@ -137,9 +159,8 @@ async function searchAndReadDrive(query) {
                         alt: 'media',
                         responseType: 'arraybuffer'
                     });
-                    const dataBuffer = Buffer.from(getData.data);
-                    const pdfData = await pdf(dataBuffer);
-                    content = pdfData.text;
+                    // Convert ArrayBuffer to Buffer for processing if needed, but pdfjs takes Uint8Array
+                    content = await extractTextFromPdf(getData.data);
                 } else if (file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
                     // DOCX (Word)
                     const getData = await drive.files.get({
