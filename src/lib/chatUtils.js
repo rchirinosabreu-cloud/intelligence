@@ -6,11 +6,14 @@
  */
 export async function sendMessage(messages, onChunk) {
   // Use VITE_API_URL if set, otherwise default to Railway URL
-  // We use the full Railway URL as default to ensure it works on Hostinger without config
-  const API_URL = import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com";
+  // Logic to handle potential trailing slash in the env var
+  let baseUrl = import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com";
+  if (baseUrl.endsWith('/')) {
+    baseUrl = baseUrl.slice(0, -1);
+  }
 
   try {
-    const response = await fetch(`${API_URL}/api/chat`, {
+    const response = await fetch(`${baseUrl}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
