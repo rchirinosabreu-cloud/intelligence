@@ -78,7 +78,7 @@ const ChatMessage = React.memo(({ message }) => {
                 blockquote: ({node, children, ...props}) => (
                   <blockquote
                     {...props}
-                    className="border-l-2 border-gray-200 pl-3 my-2 text-xs md:text-sm leading-tight text-gray-500/70"
+                    className="border-l-2 border-gray-200 pl-3 my-1 text-[11px] md:text-xs leading-snug text-gray-500/40"
                   >
                     {removeEmojisFromChildren(children)}
                   </blockquote>
