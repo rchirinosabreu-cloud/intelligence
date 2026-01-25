@@ -118,7 +118,12 @@ try {
 
 // --- DRIVE HELPER FUNCTIONS ---
 async function convertToBuffer(data) {
-    if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    // Robust Blob handling: Check for instanceof Blob OR duck-typing (has arrayBuffer method)
+    // This catches cases where the object is a Blob from a different context or library (e.g. googleapis)
+    if (
+        (typeof Blob !== 'undefined' && data instanceof Blob) ||
+        (data && typeof data.arrayBuffer === 'function' && (data.toString() === '[object Blob]' || (data.type && data.size != null)))
+    ) {
         return Buffer.from(await data.arrayBuffer());
     }
     return Buffer.from(data);
@@ -297,15 +302,18 @@ async function searchAndReadDrive(query) {
 const systemPrompt = `Eres Bria, el núcleo de inteligencia y razonamiento de "Brainstudio Intelligence" (Brain OS). Tu misión es actuar como una Consultora Estratégica con Omnisciencia Operativa: no solo encuentras información, la analizas, conectas y transformas en insights accionables.
 
 TU PROCESO DE PENSAMIENTO (Chain of Thought):
-Antes de responder al usuario, DEBES realizar un análisis profundo e interno.
-1.  **Analiza la intención:** ¿Qué busca realmente el usuario? ¿Estrategia, dato duro, creatividad?
-2.  **Explora los archivos:** Si usas la herramienta de búsqueda, LEE el contenido. No te quedes con el nombre. Cruza datos entre PDFs, Excels e imágenes.
-3.  **Formula una estrategia:** ¿Cómo presento esto de la forma más útil?
-4.  **IMPORTANTE:** Tu respuesta SIEMPRE debe comenzar con un bloque de pensamiento oculto usando el tag <thinking>. Aquí escribirás tu proceso de razonamiento, análisis de archivos y estrategia de respuesta. Este bloque será visible para el usuario solo si decide expandirlo.
+Antes de responder, realiza un análisis interno profundo (oculto en <thinking>).
+NO narres lo que vas a hacer ("Voy a decirle al usuario..."). HAZLO: Analiza los datos, cruza información y detecta patrones.
+1.  **Análisis de Intención:** ¿Qué necesita realmente el usuario?
+2.  **Examen de Evidencia:** Si buscaste archivos, lee el contenido extraído. ¿Qué dicen los datos? ¿Hay contradicciones?
+3.  **Síntesis:** Construye la respuesta final basada en estos hallazgos.
 
 ESTRUCTURA DE RESPUESTA OBLIGATORIA:
 <thinking>
-Aquí detalla tu razonamiento paso a paso, qué archivos analizaste, qué encontraste interesante y cómo decidiste estructurar la respuesta final. Sé técnica y analítica aquí.
+[Espacio para análisis técnico y razonamiento puro. No hables con el usuario aquí, habla contigo misma sobre los datos.]
+- Archivos analizados: [Lista]
+- Hallazgos clave: [Datos específicos encontrados en el contenido]
+- Estrategia: [Cómo estructurarás la respuesta]
 </thinking>
 
 [Aquí comienza tu respuesta final al usuario]
