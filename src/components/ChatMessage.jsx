@@ -6,6 +6,21 @@ import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
+const stripEmojis = (text) => text.replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}]/gu, '');
+
+const removeEmojisFromChildren = (children) =>
+  React.Children.map(children, (child) => {
+    if (typeof child === 'string') {
+      return stripEmojis(child);
+    }
+    if (React.isValidElement(child)) {
+      return React.cloneElement(child, {
+        children: removeEmojisFromChildren(child.props.children),
+      });
+    }
+    return child;
+  });
+
 const ChatMessage = React.memo(({ message }) => {
   const isUser = message.role === 'user';
   const [copied, setCopied] = React.useState(false);
@@ -60,6 +75,14 @@ const ChatMessage = React.memo(({ message }) => {
                 table: ({node, ...props}) => <div className="overflow-x-auto my-4"><table {...props} className="w-full border-collapse border border-gray-200" /></div>,
                 th: ({node, ...props}) => <th {...props} className="border border-gray-200 px-4 py-2 bg-gray-50 font-bold text-left" />,
                 td: ({node, ...props}) => <td {...props} className="border border-gray-200 px-4 py-2" />,
+                blockquote: ({node, children, ...props}) => (
+                  <blockquote
+                    {...props}
+                    className="border-l-2 border-gray-200 pl-3 my-2 text-xs md:text-sm leading-tight text-gray-500/70"
+                  >
+                    {removeEmojisFromChildren(children)}
+                  </blockquote>
+                ),
               }}
             >
               {message.content}

@@ -113,11 +113,15 @@ async function searchAndReadDrive(query) {
 
         const files = res.data.files;
         if (!files || files.length === 0) {
-            return `No se encontraron archivos para la búsqueda: "${query}"`;
+            return {
+                text: `No se encontraron archivos para la búsqueda: "${query}"`,
+                inlineDataParts: []
+            };
         }
 
         let combinedContent = `Encontré ${files.length} archivos relevantes para "${query}":\n`;
         const inlineDataParts = [];
+        const linkEntries = [];
 
         // 2. Read content (limit to first 5)
         for (const file of files.slice(0, 5)) {
@@ -135,9 +139,11 @@ async function searchAndReadDrive(query) {
                      // Plain text or CSV (if simple)
                      const getData = await drive.files.get({
                         fileId: file.id,
-                        alt: 'media'
+                        alt: 'media',
+                        responseType: 'arraybuffer'
                     });
-                    content = getData.data;
+                    const dataBuffer = Buffer.from(getData.data);
+                    content = dataBuffer.toString('utf8');
                 } else if (file.mimeType === 'application/pdf') {
                     // PDF (multimodal)
                     const getData = await drive.files.get({
@@ -146,13 +152,18 @@ async function searchAndReadDrive(query) {
                         responseType: 'arraybuffer'
                     });
                     const dataBuffer = Buffer.from(getData.data);
+                    const extractedPdfText = await extractPdfText(dataBuffer);
                     inlineDataParts.push({
                         inlineData: {
                             mimeType: 'application/pdf',
                             data: dataBuffer.toString('base64')
                         }
                     });
-                    content = '[PDF adjunto para análisis multimodal]';
+                    if (extractedPdfText) {
+                        content = extractedPdfText;
+                    } else {
+                        content = '[PDF adjunto para análisis multimodal]';
+                    }
                 } else if (file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
                     // DOCX (Word)
                     const getData = await drive.files.get({
@@ -235,10 +246,14 @@ async function searchAndReadDrive(query) {
 
                 const snippet = typeof content === 'string' ? content.substring(0, 8000) : "Contenido no textual";
                 combinedContent += `\n--- ARCHIVO: ${file.name} ---\n${snippet}\nEnlace: ${driveLink}\n`;
+                linkEntries.push(`- ${file.name}: ${driveLink}`);
             } catch (err) {
                 console.error(`Error reading file ${file.id} (${file.mimeType}):`, err);
                 combinedContent += `\n--- ARCHIVO: ${file.name} (Error al leer contenido: ${err.message}) ---\n`;
             }
+        }
+        if (linkEntries.length) {
+            combinedContent += `\n=== ENLACES ===\n${linkEntries.join('\n')}\n`;
         }
         return { text: combinedContent, inlineDataParts };
 
@@ -248,15 +263,15 @@ async function searchAndReadDrive(query) {
     }
 }
 
-const systemPrompt = `Eres Jules, el núcleo de inteligencia y razonamiento de "Brainstudio Intelligence" (Brain OS). Tu misión absoluta es alcanzar la Omnisciencia Operativa: comprender profundamente el contenido, contexto e intención de cada archivo y consulta para la agencia Brain Studio.
+const systemPrompt = `Eres Bria, el núcleo de inteligencia y razonamiento de "Brainstudio Intelligence" (Brain OS). Tu misión absoluta es alcanzar la Omnisciencia Operativa: comprender profundamente el contenido, contexto e intención de cada archivo y consulta para la agencia Brain Studio.
 
 PRINCIPIOS DE PENSAMIENTO AVANZADO (OBLIGATORIOS):
 
-1. 🧠 **Axioma del Razonamiento sobre la Búsqueda (Chain of Thought VISIBLE):**
-   Nunca trates una consulta como texto simple. Antes de dar la respuesta final, realiza y MUESTRA un análisis interno:
+1. 🧠 **Axioma del Razonamiento sobre la Búsqueda:**
+   Nunca trates una consulta como texto simple. Antes de dar la respuesta final, realiza un análisis interno:
    - **Decodificación de Intención:** Si hay errores ("muevles") o términos vagos ("la parrilla"), corrige e infiere el cliente o término técnico.
    - **Mapeo de Entidades:** Investiga coincidencias cercanas si el nombre no es exacto.
-   - **INSTRUCCIÓN:** Debes explicitar este proceso al inicio de tu respuesta (ej. *"🔍 Analizando consulta... Detecté 'muevles', asumo que te refieres a 'Muebles Nuva'. Buscando parrillas de contenido..."*).
+   - **INSTRUCCIÓN:** Resume este análisis de forma breve, sin revelar cadenas de pensamiento detalladas.
 
 2. 🔓 **Superación de la Barrera de Formatos (Acceso Profundo):**
    - Tu visión perfora los documentos. Trata PDFs, Excel (.xlsx), CSV e imágenes como fuentes vivas.
@@ -271,11 +286,12 @@ PRINCIPIOS DE PENSAMIENTO AVANZADO (OBLIGATORIOS):
    - Si una búsqueda falla, analiza qué metadatos faltaron y sugiérelo o reintenta mentalmente.
 
 FORMATO DE RESPUESTA (ESTRICTO):
-1.  **Razonamiento Visible:** Inicia siempre con tu análisis de intención.
+1.  **Razonamiento Visible:** Inicia siempre con un breve resumen de intención en un bloque de cita (blockquote), sin emojis.
 2.  **Uso de Markdown:** Usa formato Markdown rico.
 3.  **Títulos y Subtítulos:** Usa **títulos en negrita** (h1/h2/h3) con **emojis estratégicos** (ej. **🚀 Estrategia**, **📊 Datos**, **✅ Pasos**).
 4.  **Conceptos Clave:** Resalta en **negrita**.
 5.  **Estructura Visual:** Listas, tablas y espacios claros.
+6.  **Enlaces:** Cuando cites documentos encontrados, incluye siempre un bloque **Enlaces** con URLs clicables.
 
 Eres la guardiana de la memoria de Brainstudio. Si está en el Drive, tú lo sabes, lo entiendes y lo explicas.`;
 
@@ -307,6 +323,59 @@ function extractTextFromParts(parts = []) {
 
 function getChunkParts(chunk) {
     return chunk?.candidates?.[0]?.content?.parts || [];
+}
+
+async function extractPdfText(dataBuffer) {
+    try {
+        const loadingTask = pdfjsLib.getDocument({ data: dataBuffer });
+        const pdf = await loadingTask.promise;
+        let textContent = '';
+        const maxPages = Math.min(pdf.numPages || 0, 10);
+        for (let pageNum = 1; pageNum <= maxPages; pageNum += 1) {
+            const page = await pdf.getPage(pageNum);
+            const text = await page.getTextContent();
+            const pageText = text.items
+                .map(item => item.str)
+                .filter(Boolean)
+                .join(' ');
+            if (pageText) {
+                textContent += `${pageText}\n`;
+            }
+        }
+        return textContent.trim();
+    } catch (error) {
+        console.warn('[PDF] Failed to extract text:', error.message);
+        return '';
+    }
+}
+
+function isVertexRateLimitError(error) {
+    const code = error?.code || error?.status || error?.response?.status;
+    if (code === 429) {
+        return true;
+    }
+    const message = error?.message || '';
+    return message.includes('429') || message.includes('RESOURCE_EXHAUSTED');
+}
+
+async function sendMessageStreamWithRetry(chat, payload, maxAttempts = 3) {
+    let attempt = 0;
+    let lastError;
+    while (attempt < maxAttempts) {
+        attempt += 1;
+        try {
+            return await chat.sendMessageStream(payload);
+        } catch (error) {
+            lastError = error;
+            if (!isVertexRateLimitError(error) || attempt >= maxAttempts) {
+                throw error;
+            }
+            const delayMs = 500 * Math.pow(2, attempt - 1);
+            console.warn(`[VertexAI] Rate limited. Retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts})`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+    }
+    throw lastError;
 }
 
 app.get('/', (req, res) => {
@@ -377,7 +446,7 @@ app.post('/api/chat', async (req, res) => {
 
         // --- DEBUG LOGS START ---
         console.log(`[DEBUG] Calling chat.sendMessageStream now...`);
-        const streamResult = await chat.sendMessageStream(lastMessageContent);
+        const streamResult = await sendMessageStreamWithRetry(chat, lastMessageContent);
         console.log(`[DEBUG] chat.sendMessageStream returned. Starting to iterate stream...`);
 
         let functionCallDetected = false;
@@ -452,13 +521,13 @@ app.post('/api/chat', async (req, res) => {
                         name: 'search_drive_files',
                         response: { name: 'search_drive_files', content: toolOutput.text }
                     }
-                }, ...toolOutput.inlineDataParts];
+                }, ...inlineDataParts];
 
                 // Start a new stream with the answer
                 console.log(`[API] Sending function response back to model...`);
                 let streamResult2;
                 try {
-                     streamResult2 = await chat.sendMessageStream(functionResponseParts);
+                     streamResult2 = await sendMessageStreamWithRetry(chat, functionResponseParts);
                 } catch (streamErr) {
                      console.error("[API] Error calling sendMessageStream with function response:", streamErr);
                      res.write("\n\n(Error interno al comunicar la respuesta de la herramienta al modelo).");
@@ -517,8 +586,13 @@ app.post('/api/chat', async (req, res) => {
 
         // Return error as text/plain so it's not blocked by CORB
         if (!res.headersSent) {
-            res.status(500);
-            res.write(`Error: ${error.message}`);
+            const statusCode = isVertexRateLimitError(error) ? 429 : 500;
+            res.status(statusCode);
+            if (statusCode === 429) {
+                res.write("Error: Vertex AI rate limit exceeded. Please try again shortly.");
+            } else {
+                res.write(`Error: ${error.message}`);
+            }
             res.end();
         } else {
             res.end();
