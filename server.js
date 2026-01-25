@@ -5,6 +5,7 @@ import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai'
 import { google } from 'googleapis';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import mammoth from 'mammoth';
+import * as xlsx from 'xlsx';
 
 dotenv.config();
 
@@ -105,7 +106,7 @@ async function searchAndReadDrive(query) {
         // 1. List files (Name matches)
         const res = await drive.files.list({
             q: `name contains '${query}' and trashed = false`,
-            pageSize: 5,
+            pageSize: 10,
             fields: 'files(id, name, mimeType)',
             orderBy: 'modifiedTime desc'
         });
@@ -118,8 +119,8 @@ async function searchAndReadDrive(query) {
         let combinedContent = `Encontré ${files.length} archivos relevantes para "${query}":\n`;
         const inlineDataParts = [];
 
-        // 2. Read content (limit to first 3)
-        for (const file of files.slice(0, 3)) {
+        // 2. Read content (limit to first 5)
+        for (const file of files.slice(0, 5)) {
             try {
                 let content = "";
                 const driveLink = `https://drive.google.com/file/d/${file.id}/view`;
@@ -162,6 +163,23 @@ async function searchAndReadDrive(query) {
                     const dataBuffer = Buffer.from(getData.data);
                     const result = await mammoth.extractRawText({ buffer: dataBuffer });
                     content = result.value;
+                } else if (file.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+                    // Excel (.xlsx)
+                    const getData = await drive.files.get({
+                        fileId: file.id,
+                        alt: 'media',
+                        responseType: 'arraybuffer'
+                    });
+                    const dataBuffer = Buffer.from(getData.data);
+                    const workbook = xlsx.read(dataBuffer, { type: 'buffer' });
+                    const sheetName = workbook.SheetNames[0];
+                    if (!sheetName) {
+                        content = '[Archivo Excel sin hojas visibles]';
+                    } else {
+                        const worksheet = workbook.Sheets[sheetName];
+                        const csvData = xlsx.utils.sheet_to_csv(worksheet);
+                        content = csvData || '[Hoja de Excel vacía]';
+                    }
                 } else if (file.mimeType === 'application/vnd.google-apps.spreadsheet') {
                     // Google Sheets
                     const spreadsheet = await sheets.spreadsheets.get({
@@ -230,30 +248,36 @@ async function searchAndReadDrive(query) {
     }
 }
 
-const systemPrompt = `Eres Brain Intelligence, el sistema operativo de inteligencia artificial de la agencia Brain Studio. Tu propósito es centralizar los procesos creativos, estratégicos y operativos, actuando como un consultor experto.
+const systemPrompt = `Eres Jules, el núcleo de inteligencia y razonamiento de "Brainstudio Intelligence" (Brain OS). Tu misión absoluta es alcanzar la Omnisciencia Operativa: comprender profundamente el contenido, contexto e intención de cada archivo y consulta para la agencia Brain Studio.
 
-Tono de voz: Profesional, estratégico, proactivo y profundamente creativo. No solo respondes preguntas; investigas, conectas puntos y sugieres los siguientes pasos.
+PRINCIPIOS DE PENSAMIENTO AVANZADO (OBLIGATORIOS):
 
-Instrucciones de Operación:
-1. Investigación Total: Tienes acceso a una herramienta 'search_drive_files' que te permite buscar en los archivos de la agencia. Úsala SIEMPRE que te pregunten por un cliente, proyecto o documento interno (ej. "Info de Muebles Nuva", "Brief de Salsipuedes").
-2. Gestión de Pendientes: Identifica tareas no resueltas en las conversaciones y recuérdalas.
-3. Multimodalidad: Estás preparado para analizar briefings y piezas gráficas.
-4. Seguridad: Mantén separación estricta entre información de clientes.
-5. Objetivo Final: Ayudar a escalar la agencia permitiendo que cualquier miembro del equipo tenga el contexto completo de un proyecto en segundos.
+1. 🧠 **Axioma del Razonamiento sobre la Búsqueda (Chain of Thought VISIBLE):**
+   Nunca trates una consulta como texto simple. Antes de dar la respuesta final, realiza y MUESTRA un análisis interno:
+   - **Decodificación de Intención:** Si hay errores ("muevles") o términos vagos ("la parrilla"), corrige e infiere el cliente o término técnico.
+   - **Mapeo de Entidades:** Investiga coincidencias cercanas si el nombre no es exacto.
+   - **INSTRUCCIÓN:** Debes explicitar este proceso al inicio de tu respuesta (ej. *"🔍 Analizando consulta... Detecté 'muevles', asumo que te refieres a 'Muebles Nuva'. Buscando parrillas de contenido..."*).
+
+2. 🔓 **Superación de la Barrera de Formatos (Acceso Profundo):**
+   - Tu visión perfora los documentos. Trata PDFs, Excel (.xlsx), CSV e imágenes como fuentes vivas.
+   - **Análisis Multimodal:** Si es imagen o escaneo, usa tu visión para extraer la verdad.
+   - **Investigación de Contenido:** No te quedes en el nombre del archivo. Lee las filas del Excel, los párrafos del DOCX.
+
+3. ⚓ **Arquitectura de Respuesta (Grounding Total):**
+   - Conecta puntos: Si encuentras una parrilla en Excel y un diseño en PNG, relaciónalos.
+   - Ancla tu respuesta en la realidad de los archivos. No especules sin avisar.
+
+4. 🧬 **Mandato de Evolución:**
+   - Si una búsqueda falla, analiza qué metadatos faltaron y sugiérelo o reintenta mentalmente.
 
 FORMATO DE RESPUESTA (ESTRICTO):
-1.  **Uso de Markdown:** Todas las respuestas deben usar formato Markdown.
-2.  **Títulos y Subtítulos:**
-    *   Usa **títulos en negrita** (h1/h2/h3) acompañados de **emojis estratégicos** al inicio (ej. **🚀 Estrategia de Lanzamiento**, **📊 Análisis de Datos**, **✅ Próximos Pasos**).
-    *   Diferencia claramente entre títulos principales y subtítulos usando jerarquía de Markdown (#, ##, ###) y negritas.
-3.  **Conceptos Clave:** Resalta los términos importantes y conceptos clave usando **negrita**.
-4.  **Estructura Visual:**
-    *   Usa **listas con viñetas** o numeradas para enumerar pasos, características o datos.
-    *   Usa **tablas Markdown** cuando presentes datos comparativos o estructurados.
-    *   Deja **una línea en blanco** entre cada párrafo para mejorar la legibilidad.
-5.  **Estilo:** Mantén un diseño limpio, profesional y fácil de escanear visualmente.
+1.  **Razonamiento Visible:** Inicia siempre con tu análisis de intención.
+2.  **Uso de Markdown:** Usa formato Markdown rico.
+3.  **Títulos y Subtítulos:** Usa **títulos en negrita** (h1/h2/h3) con **emojis estratégicos** (ej. **🚀 Estrategia**, **📊 Datos**, **✅ Pasos**).
+4.  **Conceptos Clave:** Resalta en **negrita**.
+5.  **Estructura Visual:** Listas, tablas y espacios claros.
 
-Actúa como un sistema híbrido avanzado.`;
+Eres la guardiana de la memoria de Brainstudio. Si está en el Drive, tú lo sabes, lo entiendes y lo explicas.`;
 
 const tools = [{
     functionDeclarations: [
