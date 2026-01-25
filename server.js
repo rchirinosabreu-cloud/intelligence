@@ -117,6 +117,13 @@ try {
 }
 
 // --- DRIVE HELPER FUNCTIONS ---
+async function convertToBuffer(data) {
+    if (typeof Blob !== 'undefined' && data instanceof Blob) {
+        return Buffer.from(await data.arrayBuffer());
+    }
+    return Buffer.from(data);
+}
+
 async function searchAndReadDrive(query) {
     try {
         console.log(`[Drive] Searching for: ${query}`);
@@ -159,7 +166,7 @@ async function searchAndReadDrive(query) {
                         alt: 'media',
                         responseType: 'arraybuffer'
                     });
-                    const dataBuffer = Buffer.from(getData.data);
+                    const dataBuffer = await convertToBuffer(getData.data);
                     content = dataBuffer.toString('utf8');
                 } else if (file.mimeType === 'application/pdf') {
                     // PDF (multimodal)
@@ -168,7 +175,7 @@ async function searchAndReadDrive(query) {
                         alt: 'media',
                         responseType: 'arraybuffer'
                     });
-                    const dataBuffer = Buffer.from(getData.data);
+                    const dataBuffer = await convertToBuffer(getData.data);
                     const extractedPdfText = await extractDocumentText({
                         dataBuffer,
                         mimeType: 'application/pdf'
@@ -191,7 +198,7 @@ async function searchAndReadDrive(query) {
                         alt: 'media',
                         responseType: 'arraybuffer'
                     });
-                    const dataBuffer = Buffer.from(getData.data);
+                    const dataBuffer = await convertToBuffer(getData.data);
                     const result = await mammoth.extractRawText({ buffer: dataBuffer });
                     content = result.value;
                 } else if (file.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
@@ -201,7 +208,7 @@ async function searchAndReadDrive(query) {
                         alt: 'media',
                         responseType: 'arraybuffer'
                     });
-                    const dataBuffer = Buffer.from(getData.data);
+                    const dataBuffer = await convertToBuffer(getData.data);
                     const workbook = xlsx.read(dataBuffer, { type: 'buffer' });
                     const sheetName = workbook.SheetNames[0];
                     if (!sheetName) {
@@ -237,7 +244,7 @@ async function searchAndReadDrive(query) {
                         fileId: file.id,
                         mimeType: 'application/pdf'
                     }, { responseType: 'arraybuffer' });
-                    const dataBuffer = Buffer.from(exportData.data);
+                    const dataBuffer = await convertToBuffer(exportData.data);
                     inlineDataParts.push({
                         inlineData: {
                             mimeType: 'application/pdf',
@@ -252,7 +259,7 @@ async function searchAndReadDrive(query) {
                         alt: 'media',
                         responseType: 'arraybuffer'
                     });
-                    const dataBuffer = Buffer.from(getData.data);
+                    const dataBuffer = await convertToBuffer(getData.data);
                     const extractedImageText = await extractDocumentText({
                         dataBuffer,
                         mimeType: file.mimeType
