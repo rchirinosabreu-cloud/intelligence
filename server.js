@@ -113,11 +113,15 @@ async function searchAndReadDrive(query) {
 
         const files = res.data.files;
         if (!files || files.length === 0) {
-            return `No se encontraron archivos para la búsqueda: "${query}"`;
+            return {
+                text: `No se encontraron archivos para la búsqueda: "${query}"`,
+                inlineDataParts: []
+            };
         }
 
         let combinedContent = `Encontré ${files.length} archivos relevantes para "${query}":\n`;
         const inlineDataParts = [];
+        const linkEntries = [];
 
         // 2. Read content (limit to first 5)
         for (const file of files.slice(0, 5)) {
@@ -242,10 +246,14 @@ async function searchAndReadDrive(query) {
 
                 const snippet = typeof content === 'string' ? content.substring(0, 8000) : "Contenido no textual";
                 combinedContent += `\n--- ARCHIVO: ${file.name} ---\n${snippet}\nEnlace: ${driveLink}\n`;
+                linkEntries.push(`- ${file.name}: ${driveLink}`);
             } catch (err) {
                 console.error(`Error reading file ${file.id} (${file.mimeType}):`, err);
                 combinedContent += `\n--- ARCHIVO: ${file.name} (Error al leer contenido: ${err.message}) ---\n`;
             }
+        }
+        if (linkEntries.length) {
+            combinedContent += `\n=== ENLACES ===\n${linkEntries.join('\n')}\n`;
         }
         return { text: combinedContent, inlineDataParts };
 
@@ -283,6 +291,7 @@ FORMATO DE RESPUESTA (ESTRICTO):
 3.  **Títulos y Subtítulos:** Usa **títulos en negrita** (h1/h2/h3) con **emojis estratégicos** (ej. **🚀 Estrategia**, **📊 Datos**, **✅ Pasos**).
 4.  **Conceptos Clave:** Resalta en **negrita**.
 5.  **Estructura Visual:** Listas, tablas y espacios claros.
+6.  **Enlaces:** Cuando cites documentos encontrados, incluye siempre un bloque **Enlaces** con URLs clicables.
 
 Eres la guardiana de la memoria de Brainstudio. Si está en el Drive, tú lo sabes, lo entiendes y lo explicas.`;
 
@@ -512,7 +521,7 @@ app.post('/api/chat', async (req, res) => {
                         name: 'search_drive_files',
                         response: { name: 'search_drive_files', content: toolOutput.text }
                     }
-                }, ...toolOutput.inlineDataParts];
+                }, ...inlineDataParts];
 
                 // Start a new stream with the answer
                 console.log(`[API] Sending function response back to model...`);
