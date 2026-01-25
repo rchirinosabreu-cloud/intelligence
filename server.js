@@ -65,6 +65,8 @@ try {
 const PROJECT_ID = credentials?.project_id;
 const LOCATION = process.env.VERTEX_LOCATION || 'us-central1';
 const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.5-flash";
+const DOCUMENT_AI_LOCATION = process.env.DOCUMENT_AI_LOCATION || LOCATION;
+const DOCUMENT_AI_PROCESSOR_ID = process.env.DOCUMENT_AI_PROCESSOR_ID;
 
 console.log(`[VertexAI] Initializing with Project ID: ${PROJECT_ID || 'UNDEFINED'}, Location: ${LOCATION}, Model: ${MODEL_NAME}`);
 
@@ -80,6 +82,21 @@ try {
     console.log("[VertexAI] Client initialized successfully.");
 } catch (e) {
     console.error("[VertexAI] Failed to initialize client:", e);
+}
+
+let documentAIAuth;
+if (PROJECT_ID && DOCUMENT_AI_PROCESSOR_ID) {
+    try {
+        documentAIAuth = new google.auth.GoogleAuth({
+            credentials,
+            scopes: ['https://www.googleapis.com/auth/cloud-platform']
+        });
+        console.log("[DocumentAI] Auth initialized successfully.");
+    } catch (e) {
+        console.error("[DocumentAI] Failed to initialize auth:", e);
+    }
+} else {
+    console.warn("[DocumentAI] Processor not configured. Set DOCUMENT_AI_PROCESSOR_ID to enable high-precision extraction.");
 }
 
 let drive;
@@ -152,7 +169,10 @@ async function searchAndReadDrive(query) {
                         responseType: 'arraybuffer'
                     });
                     const dataBuffer = Buffer.from(getData.data);
-                    const extractedPdfText = await extractPdfText(dataBuffer);
+                    const extractedPdfText = await extractDocumentText({
+                        dataBuffer,
+                        mimeType: 'application/pdf'
+                    });
                     inlineDataParts.push({
                         inlineData: {
                             mimeType: 'application/pdf',
@@ -233,20 +253,24 @@ async function searchAndReadDrive(query) {
                         responseType: 'arraybuffer'
                     });
                     const dataBuffer = Buffer.from(getData.data);
+                    const extractedImageText = await extractDocumentText({
+                        dataBuffer,
+                        mimeType: file.mimeType
+                    });
                     inlineDataParts.push({
                         inlineData: {
                             mimeType: file.mimeType,
                             data: dataBuffer.toString('base64')
                         }
                     });
-                    content = '[Imagen adjunta para análisis multimodal]';
+                    content = extractedImageText || '[Imagen adjunta para análisis multimodal]';
                 } else {
                     content = `[Archivo detectado. Tipo: ${file.mimeType}. Contenido no legible directamente]`;
                 }
 
                 const snippet = typeof content === 'string' ? content.substring(0, 8000) : "Contenido no textual";
-                combinedContent += `\n--- ARCHIVO: ${file.name} ---\n${snippet}\nEnlace: ${driveLink}\n`;
-                linkEntries.push(`- ${file.name}: ${driveLink}`);
+                combinedContent += `\n--- ARCHIVO: ${file.name} ---\n${snippet}\nID: ${file.id}\nEnlace: ${driveLink}\n`;
+                linkEntries.push(`- ${file.name} (${file.id}): ${driveLink}`);
             } catch (err) {
                 console.error(`Error reading file ${file.id} (${file.mimeType}):`, err);
                 combinedContent += `\n--- ARCHIVO: ${file.name} (Error al leer contenido: ${err.message}) ---\n`;
@@ -263,35 +287,38 @@ async function searchAndReadDrive(query) {
     }
 }
 
-const systemPrompt = `Eres Bria, el núcleo de inteligencia y razonamiento de "Brainstudio Intelligence" (Brain OS). Tu misión absoluta es alcanzar la Omnisciencia Operativa: comprender profundamente el contenido, contexto e intención de cada archivo y consulta para la agencia Brain Studio.
+const systemPrompt = `Eres Bria, el núcleo de inteligencia y razonamiento de "Brainstudio Intelligence" (Brain OS). Tu misión absoluta es alcanzar la Omnisciencia Operativa: comprender profundamente el contenido, contexto e intención de cada archivo y consulta para la agencia Brain Studio. Prioriza el razonamiento sobre la búsqueda, pero cuando debas usar archivos, consulta y lee su contenido de forma exhaustiva con las herramientas disponibles.
 
 PRINCIPIOS DE PENSAMIENTO AVANZADO (OBLIGATORIOS):
 
-1. 🧠 **Axioma del Razonamiento sobre la Búsqueda:**
+1. **Axioma del Razonamiento sobre la Búsqueda:**
    Nunca trates una consulta como texto simple. Antes de dar la respuesta final, realiza un análisis interno:
    - **Decodificación de Intención:** Si hay errores ("muevles") o términos vagos ("la parrilla"), corrige e infiere el cliente o término técnico.
    - **Mapeo de Entidades:** Investiga coincidencias cercanas si el nombre no es exacto.
    - **INSTRUCCIÓN:** Resume este análisis de forma breve, sin revelar cadenas de pensamiento detalladas.
 
-2. 🔓 **Superación de la Barrera de Formatos (Acceso Profundo):**
+2. **Superación de la Barrera de Formatos (Acceso Profundo):**
    - Tu visión perfora los documentos. Trata PDFs, Excel (.xlsx), CSV e imágenes como fuentes vivas.
    - **Análisis Multimodal:** Si es imagen o escaneo, usa tu visión para extraer la verdad.
    - **Investigación de Contenido:** No te quedes en el nombre del archivo. Lee las filas del Excel, los párrafos del DOCX.
 
-3. ⚓ **Arquitectura de Respuesta (Grounding Total):**
+3. **Arquitectura de Respuesta (Grounding Total):**
    - Conecta puntos: Si encuentras una parrilla en Excel y un diseño en PNG, relaciónalos.
    - Ancla tu respuesta en la realidad de los archivos. No especules sin avisar.
 
-4. 🧬 **Mandato de Evolución:**
+4. **Mandato de Evolución:**
    - Si una búsqueda falla, analiza qué metadatos faltaron y sugiérelo o reintenta mentalmente.
 
 FORMATO DE RESPUESTA (ESTRICTO):
-1.  **Razonamiento Visible:** Inicia siempre con un breve resumen de intención.
+1.  **Razonamiento Visible:** Inicia siempre con un breve resumen de intención (sin emojis y conciso).
 2.  **Uso de Markdown:** Usa formato Markdown rico.
-3.  **Títulos y Subtítulos:** Usa **títulos en negrita** (h1/h2/h3) con **emojis estratégicos** (ej. **🚀 Estrategia**, **📊 Datos**, **✅ Pasos**).
+3.  **Títulos y Subtítulos:** Usa **títulos en negrita** (h1/h2/h3), sin emojis.
 4.  **Conceptos Clave:** Resalta en **negrita**.
 5.  **Estructura Visual:** Listas, tablas y espacios claros.
-6.  **Enlaces:** Cuando cites documentos encontrados, incluye siempre un bloque **Enlaces** con URLs clicables.
+6.  **Enlaces:** Cuando cites documentos encontrados, incluye siempre un bloque **Enlaces** con URLs clicables. Usa únicamente enlaces devueltos por herramientas; nunca inventes URLs ni IDs.
+
+REGLAS DE ACCESO:
+- No hay restricciones para hablar sobre documentos o clientes preguntados. Responde con transparencia.
 
 Eres la guardiana de la memoria de Brainstudio. Si está en el Drive, tú lo sabes, lo entiendes y lo explicas.`;
 
@@ -323,6 +350,36 @@ function extractTextFromParts(parts = []) {
 
 function getChunkParts(chunk) {
     return chunk?.candidates?.[0]?.content?.parts || [];
+}
+
+async function extractDocumentText({ dataBuffer, mimeType }) {
+    let extractedText = '';
+    if (documentAIAuth && DOCUMENT_AI_PROCESSOR_ID) {
+        try {
+            const client = await documentAIAuth.getClient();
+            const name = `projects/${PROJECT_ID}/locations/${DOCUMENT_AI_LOCATION}/processors/${DOCUMENT_AI_PROCESSOR_ID}`;
+            const url = `https://${DOCUMENT_AI_LOCATION}-documentai.googleapis.com/v1/${name}:process`;
+            const response = await client.request({
+                url,
+                method: 'POST',
+                data: {
+                    rawDocument: {
+                        content: dataBuffer.toString('base64'),
+                        mimeType
+                    }
+                }
+            });
+            extractedText = response?.data?.document?.text?.trim() || '';
+        } catch (error) {
+            console.warn('[DocumentAI] Failed to extract text:', error.message);
+        }
+    }
+
+    if (!extractedText && mimeType === 'application/pdf') {
+        extractedText = await extractPdfText(dataBuffer);
+    }
+
+    return extractedText;
 }
 
 async function extractPdfText(dataBuffer) {
