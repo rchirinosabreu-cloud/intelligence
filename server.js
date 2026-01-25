@@ -64,7 +64,7 @@ try {
 
 const PROJECT_ID = credentials?.project_id;
 const LOCATION = process.env.VERTEX_LOCATION || 'us-central1';
-const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-1.5-flash";
+const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.5-flash";
 
 console.log(`[VertexAI] Initializing with Project ID: ${PROJECT_ID || 'UNDEFINED'}, Location: ${LOCATION}, Model: ${MODEL_NAME}`);
 
@@ -286,7 +286,7 @@ PRINCIPIOS DE PENSAMIENTO AVANZADO (OBLIGATORIOS):
    - Si una búsqueda falla, analiza qué metadatos faltaron y sugiérelo o reintenta mentalmente.
 
 FORMATO DE RESPUESTA (ESTRICTO):
-1.  **Razonamiento Visible:** Inicia siempre con un breve resumen de intención en un bloque de cita (blockquote), sin emojis.
+1.  **Razonamiento Visible:** Inicia siempre con un breve resumen de intención.
 2.  **Uso de Markdown:** Usa formato Markdown rico.
 3.  **Títulos y Subtítulos:** Usa **títulos en negrita** (h1/h2/h3) con **emojis estratégicos** (ej. **🚀 Estrategia**, **📊 Datos**, **✅ Pasos**).
 4.  **Conceptos Clave:** Resalta en **negrita**.
