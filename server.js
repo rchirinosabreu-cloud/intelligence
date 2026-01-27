@@ -64,9 +64,6 @@ const LOCATION = process.env.VERTEX_LOCATION || 'us-central1';
 const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.5-flash";
 const DATA_STORE_ID = process.env.DATA_STORE_ID || "intelligence-connection-v-3_1769521811060";
 const DISCOVERY_ENGINE_LOCATION = process.env.DISCOVERY_ENGINE_LOCATION || 'global';
-const DISCOVERY_ENGINE_SERVING_CONFIG =
-    process.env.DISCOVERY_ENGINE_SERVING_CONFIG || '';
-const DISCOVERY_ENGINE_ENGINE_ID = process.env.DISCOVERY_ENGINE_ENGINE_ID || '';
 const DISCOVERY_ENGINE_API_ENDPOINT = DISCOVERY_ENGINE_LOCATION === 'global'
     ? 'discoveryengine.googleapis.com'
     : `${DISCOVERY_ENGINE_LOCATION}-discoveryengine.googleapis.com`;
@@ -109,12 +106,7 @@ async function searchAndReadDrive(query) {
 
     try {
         console.log(`[Discovery] Searching for: ${query}`);
-        const servingConfig = DISCOVERY_ENGINE_SERVING_CONFIG
-            ? DISCOVERY_ENGINE_SERVING_CONFIG
-            : DISCOVERY_ENGINE_ENGINE_ID
-                ? `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${DISCOVERY_ENGINE_ENGINE_ID}/servingConfigs/default_search`
-                : `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/dataStores/${DATA_STORE_ID}/servingConfigs/default_search`;
-        console.log(`[Discovery] Using servingConfig: ${servingConfig}`);
+        const servingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/dataStores/${DATA_STORE_ID}/servingConfigs/default_search`;
 
         const request = {
             servingConfig,
@@ -182,9 +174,8 @@ async function searchAndReadDrive(query) {
         if (error?.code === 5 && typeof error?.message === 'string' && error.message.includes('DataStore')) {
             return {
                 text:
-                    `Error al buscar en Discovery Engine: no se encontró el recurso. ` +
-                    `Verifica DISCOVERY_ENGINE_ENGINE_ID, DATA_STORE_ID, DISCOVERY_ENGINE_LOCATION ` +
-                    `o configura DISCOVERY_ENGINE_SERVING_CONFIG.`,
+                    `Error al buscar en Discovery Engine: no se encontró el Data Store. ` +
+                    `Verifica DATA_STORE_ID, DISCOVERY_ENGINE_LOCATION o configura DISCOVERY_ENGINE_SERVING_CONFIG.`,
                 inlineDataParts: []
             };
         }
