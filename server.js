@@ -118,7 +118,7 @@ async function searchAndReadDrive(query) {
             }
         };
 
-        const [response] = await searchClient.search(request);
+        const [response] = await searchClient.search(request, { autoPaginate: false });
         const results = response.results;
         console.log(`[Discovery] Results returned: ${results?.length || 0}`);
 
@@ -171,6 +171,14 @@ async function searchAndReadDrive(query) {
 
     } catch (error) {
         console.error("Discovery Search Error:", error);
+        if (error?.code === 5 && typeof error?.message === 'string' && error.message.includes('DataStore')) {
+            return {
+                text:
+                    `Error al buscar en Discovery Engine: no se encontró el Data Store. ` +
+                    `Verifica DATA_STORE_ID, DISCOVERY_ENGINE_LOCATION o configura DISCOVERY_ENGINE_SERVING_CONFIG.`,
+                inlineDataParts: []
+            };
+        }
         return { text: `Error al buscar en Discovery Engine: ${error.message}`, inlineDataParts: [] };
     }
 }
