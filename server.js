@@ -106,7 +106,9 @@ async function searchAndReadDrive(query) {
 
     try {
         console.log(`[Discovery] Searching for: ${query}`);
-        const servingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/dataStores/${DATA_STORE_ID}/servingConfigs/default_search`;
+        // We use 'engines' instead of 'dataStores' because the ID provided (via DISCOVERY_ENGINE_ENGINE_ID)
+        // corresponds to a Vertex AI Search App (Engine), not a raw Data Store.
+        const servingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${DATA_STORE_ID}/servingConfigs/default_search`;
 
         const request = {
             servingConfig,
