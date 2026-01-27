@@ -63,6 +63,7 @@ try {
 const PROJECT_ID = credentials?.project_id;
 const LOCATION = process.env.VERTEX_LOCATION || 'us-central1';
 const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.5-flash";
+// NOTE: DATA_STORE_ID actually refers to the VERTEX SEARCH APP ID (Engine ID), not the underlying Data Store ID.
 const DATA_STORE_ID = process.env.DISCOVERY_ENGINE_ENGINE_ID || process.env.DATA_STORE_ID || "data-storage-v-3_1769521929477";
 const DISCOVERY_ENGINE_LOCATION = process.env.DISCOVERY_ENGINE_LOCATION || 'global';
 const DISCOVERY_ENGINE_API_ENDPOINT = DISCOVERY_ENGINE_LOCATION === 'global'
