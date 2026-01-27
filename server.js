@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai';
 import { SearchServiceClient } from '@google-cloud/discoveryengine';
+import { JWT } from 'google-auth-library';
 
 dotenv.config();
 
@@ -88,8 +89,24 @@ try {
 let searchClient;
 try {
     if (!PROJECT_ID) throw new Error("Project ID is missing from credentials");
+
+    // Implement Domain-Wide Delegation (Impersonation) if GOOGLE_ADMIN_EMAIL is present
+    const adminEmail = process.env.GOOGLE_ADMIN_EMAIL || "coordinador@brainstudioagencia.com";
+    let authClient = null;
+
+    if (credentials && adminEmail) {
+        console.log(`[DiscoveryEngine] Configuring Domain-Wide Delegation for: ${adminEmail}`);
+        authClient = new JWT({
+            email: credentials.client_email,
+            key: credentials.private_key,
+            scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+            subject: adminEmail
+        });
+    }
+
     searchClient = new SearchServiceClient({
-        credentials,
+        authClient: authClient || undefined, // Use authClient if available
+        credentials: authClient ? undefined : credentials, // Fallback to standard credentials if no impersonation
         projectId: PROJECT_ID,
         apiEndpoint: DISCOVERY_ENGINE_API_ENDPOINT
     });
