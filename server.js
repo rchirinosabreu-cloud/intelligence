@@ -70,6 +70,7 @@ const DISCOVERY_ENGINE_API_ENDPOINT = DISCOVERY_ENGINE_LOCATION === 'global'
     : `${DISCOVERY_ENGINE_LOCATION}-discoveryengine.googleapis.com`;
 
 console.log(`[VertexAI] Initializing with Project ID: ${PROJECT_ID || 'UNDEFINED'}, Location: ${LOCATION}, Model: ${MODEL_NAME}`);
+console.log(`[DiscoveryEngine] Selected Engine ID: ${DATA_STORE_ID}`);
 
 // Initialize Clients safely
 let vertexAI;
