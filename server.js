@@ -63,6 +63,13 @@ const PROJECT_ID = credentials?.project_id;
 const LOCATION = process.env.VERTEX_LOCATION || 'us-central1';
 const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.5-flash";
 const DATA_STORE_ID = process.env.DATA_STORE_ID || "intelligence-connection-v-3_1769521811060";
+const DISCOVERY_ENGINE_LOCATION = process.env.DISCOVERY_ENGINE_LOCATION || 'global';
+const DISCOVERY_ENGINE_SERVING_CONFIG =
+    process.env.DISCOVERY_ENGINE_SERVING_CONFIG || '';
+const DISCOVERY_ENGINE_ENGINE_ID = process.env.DISCOVERY_ENGINE_ENGINE_ID || '';
+const DISCOVERY_ENGINE_API_ENDPOINT = DISCOVERY_ENGINE_LOCATION === 'global'
+    ? 'discoveryengine.googleapis.com'
+    : `${DISCOVERY_ENGINE_LOCATION}-discoveryengine.googleapis.com`;
 
 console.log(`[VertexAI] Initializing with Project ID: ${PROJECT_ID || 'UNDEFINED'}, Location: ${LOCATION}, Model: ${MODEL_NAME}`);
 
@@ -86,7 +93,8 @@ try {
     if (!PROJECT_ID) throw new Error("Project ID is missing from credentials");
     searchClient = new SearchServiceClient({
         credentials,
-        projectId: PROJECT_ID
+        projectId: PROJECT_ID,
+        apiEndpoint: DISCOVERY_ENGINE_API_ENDPOINT
     });
     console.log("[DiscoveryEngine] Client initialized successfully.");
 } catch (e) {
@@ -101,7 +109,12 @@ async function searchAndReadDrive(query) {
 
     try {
         console.log(`[Discovery] Searching for: ${query}`);
-        const servingConfig = `projects/${PROJECT_ID}/locations/global/collections/default_collection/dataStores/${DATA_STORE_ID}/servingConfigs/default_search`;
+        const servingConfig = DISCOVERY_ENGINE_SERVING_CONFIG
+            ? DISCOVERY_ENGINE_SERVING_CONFIG
+            : DISCOVERY_ENGINE_ENGINE_ID
+                ? `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${DISCOVERY_ENGINE_ENGINE_ID}/servingConfigs/default_search`
+                : `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/dataStores/${DATA_STORE_ID}/servingConfigs/default_search`;
+        console.log(`[Discovery] Using servingConfig: ${servingConfig}`);
 
         const request = {
             servingConfig,
@@ -113,8 +126,9 @@ async function searchAndReadDrive(query) {
             }
         };
 
-        const [response] = await searchClient.search(request);
+        const [response] = await searchClient.search(request, { autoPaginate: false });
         const results = response.results;
+        console.log(`[Discovery] Results returned: ${results?.length || 0}`);
 
         if (!results || results.length === 0) {
             return {
@@ -128,7 +142,7 @@ async function searchAndReadDrive(query) {
 
         for (const result of results) {
             const doc = result.document;
-            const derived = doc.derivedStructData;
+            const derived = doc.derivedStructData || doc.structData;
 
             const title = derived?.title || doc.name || "Documento sin título";
             const link = derived?.link || (derived?.sourceLink ? derived.sourceLink : "Sin enlace");
@@ -165,6 +179,15 @@ async function searchAndReadDrive(query) {
 
     } catch (error) {
         console.error("Discovery Search Error:", error);
+        if (error?.code === 5 && typeof error?.message === 'string' && error.message.includes('DataStore')) {
+            return {
+                text:
+                    `Error al buscar en Discovery Engine: no se encontró el recurso. ` +
+                    `Verifica DISCOVERY_ENGINE_ENGINE_ID, DATA_STORE_ID, DISCOVERY_ENGINE_LOCATION ` +
+                    `o configura DISCOVERY_ENGINE_SERVING_CONFIG.`,
+                inlineDataParts: []
+            };
+        }
         return { text: `Error al buscar en Discovery Engine: ${error.message}`, inlineDataParts: [] };
     }
 }
