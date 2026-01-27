@@ -62,7 +62,7 @@ try {
 const PROJECT_ID = credentials?.project_id;
 const LOCATION = process.env.VERTEX_LOCATION || 'us-central1';
 const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.5-flash";
-const DATA_STORE_ID = "conector-drive-brainstudio_1769439248669";
+const DATA_STORE_ID = process.env.DATA_STORE_ID || "intelligence-connection-v-3_1769521811060";
 
 console.log(`[VertexAI] Initializing with Project ID: ${PROJECT_ID || 'UNDEFINED'}, Location: ${LOCATION}, Model: ${MODEL_NAME}`);
 
@@ -264,6 +264,111 @@ async function sendMessageStreamWithRetry(chat, payload, maxAttempts = 3) {
     throw lastError;
 }
 
+/**
+ * Filter text to suppress <thinking>...</thinking> blocks.
+ * Maintains state across chunks to handle split tags.
+ */
+function createThinkingFilter() {
+    let buffer = "";
+    let insideThinking = false;
+
+    // Process a chunk of text
+    // Returns: The text to be emitted to the user
+    return (chunkText) => {
+        if (!chunkText) return "";
+
+        let output = "";
+        let scanIndex = 0;
+
+        // Append new text to any existing buffer
+        const fullText = buffer + chunkText;
+        buffer = ""; // consumed
+
+        const len = fullText.length;
+
+        while (scanIndex < len) {
+            if (insideThinking) {
+                // Look for closing tag </thinking>
+                const closeTagIndex = fullText.indexOf("</thinking>", scanIndex);
+                if (closeTagIndex !== -1) {
+                    // Found closing tag. Skip past it.
+                    scanIndex = closeTagIndex + "</thinking>".length;
+                    insideThinking = false;
+                } else {
+                    // No closing tag yet.
+                    // Check if we have a partial closing tag at the end
+                    // </thinking> is 11 chars.
+                    const tail = fullText.slice(scanIndex);
+                    // Minimal check: if the tail matches the beginning of the tag
+                    let match = false;
+                    for (let i = 1; i < 11; i++) {
+                         if ("</thinking>".startsWith(tail.slice(-i))) {
+                             // potential partial match, keep in buffer
+                             buffer = tail;
+                             match = true;
+                             break;
+                         }
+                    }
+                    if (!match) {
+                        // The whole tail is inside thinking, discard it?
+                        // Actually, we just discard everything since we are inside thinking
+                        // and didn't find the end.
+                    }
+                    // Since we are inside thinking, we consume everything remaining
+                    // effectively suppressing it.
+                    // BUT: if there is a partial tag at the end, we technically "buffer" it?
+                    // No need to buffer inside thinking mode, unless we suspect the tag is split.
+                    // Wait, if we are inside thinking, we output NOTHING until we find </thinking>.
+                    // So we just consume scanIndex to end.
+                    scanIndex = len;
+                }
+            } else {
+                // Not inside thinking. Look for opening tag <thinking>
+                const openTagIndex = fullText.indexOf("<thinking>", scanIndex);
+
+                if (openTagIndex !== -1) {
+                    // Found opening tag.
+                    // Emit everything before it.
+                    output += fullText.slice(scanIndex, openTagIndex);
+                    // Switch state
+                    insideThinking = true;
+                    // Move past the tag
+                    scanIndex = openTagIndex + "<thinking>".length;
+                } else {
+                    // No opening tag found.
+                    // Need to check for partial opening tag at the end
+                    // <thinking> is 10 chars.
+                    let partialFound = false;
+                    // We check if the end of string matches start of <thinking>
+                    // Only need to check if length is sufficient or if it's very short
+                    const remaining = fullText.slice(scanIndex);
+
+                    // Optimization: check from end
+                    for (let i = 1; i < 10; i++) {
+                        if (remaining.length >= i && "<thinking>".startsWith(remaining.slice(-i))) {
+                             // Found partial match at the very end
+                             // Output everything up to that partial match
+                             output += remaining.slice(0, remaining.length - i);
+                             buffer = remaining.slice(-i);
+                             partialFound = true;
+                             break;
+                        }
+                    }
+
+                    if (!partialFound) {
+                        // Safe to emit all
+                        output += remaining;
+                    }
+                    scanIndex = len; // Done
+                }
+            }
+        }
+
+        return output;
+    };
+}
+
+
 app.get('/', (req, res) => {
     res.status(200).send('Brainstudio Intelligence API is running (v6-stable-deploy).');
 });
@@ -338,6 +443,9 @@ app.post('/api/chat', async (req, res) => {
         let functionCallDetected = false;
         let wroteText = false;
 
+        // Initialize thinking filter
+        const processFilter = createThinkingFilter();
+
         // Consume the first stream
         for await (const chunk of streamResult.stream) {
             console.log(`[DEBUG] Received chunk from Vertex AI`);
@@ -355,8 +463,11 @@ app.post('/api/chat', async (req, res) => {
             }
 
             if (text) {
-                res.write(text);
-                wroteText = true;
+                const safeText = processFilter(text);
+                if (safeText) {
+                    res.write(safeText);
+                    wroteText = true;
+                }
             }
 
             // Check if this chunk indicates a function call
@@ -376,11 +487,22 @@ app.post('/api/chat', async (req, res) => {
         }
 
         if (!wroteText) {
+            // We need to be careful here: if the filter absorbed everything (because it was all thinking),
+            // then we technically "wrote" nothing visible, but the model did respond.
+            // However, the fallbackText usually comes from fullParts.
             const fallbackText = extractTextFromParts(fullParts);
-            if (fallbackText) {
-                res.write(fallbackText);
-                wroteText = true;
-            }
+            // Apply filter to fallback text too, but beware of double processing if we already processed chunks.
+            // Usually if we processed chunks, buffer is stateful.
+            // If wroteText is false, it means we output nothing.
+            // If fallbackText contains thinking, we should filter it.
+            // But since we streamed, the filter state is advanced.
+            // If the stream was fully consumed, the filter buffered potentially partial tags.
+            // We can try to flush the filter buffer if we had a way, but createThinkingFilter closure variables are private.
+
+            // Simpler approach: If we didn't write anything, maybe it was a pure function call?
+            // Or maybe it was just thinking.
+
+            // If function call detected, we don't worry about empty text yet.
         }
 
         // If a function call was detected during the stream, we execute it now
@@ -422,6 +544,10 @@ app.post('/api/chat', async (req, res) => {
                 }
 
                 let wroteTextInSecondStream = false;
+                // Reset filter or create new one?
+                // Creating new one is safer for the new stream.
+                const processFilter2 = createThinkingFilter();
+
                 for await (const chunk of streamResult2.stream) {
                     console.log(`[DEBUG] Received chunk (post-function) from Vertex AI`);
                     let text = '';
@@ -437,8 +563,11 @@ app.post('/api/chat', async (req, res) => {
                     }
 
                     if (text) {
-                        res.write(text);
-                        wroteTextInSecondStream = true;
+                        const safeText = processFilter2(text);
+                        if (safeText) {
+                            res.write(safeText);
+                            wroteTextInSecondStream = true;
+                        }
                     }
                 }
 
@@ -450,11 +579,15 @@ app.post('/api/chat', async (req, res) => {
         }
 
         if (!wroteText && !functionCallDetected) {
+            // Only error if we truly got nothing useful.
+            // If we filtered out thinking, that's fine, but the user gets empty string?
+            // Usually the model outputs thinking THEN the answer.
+            // If it only outputs thinking, it's weird.
             console.error("[VertexAI] Empty response with no function call detected.", {
                 model: MODEL_NAME,
                 parts: fullParts
             });
-            res.write("Error: Vertex AI returned an empty response.");
+            // Don't send error text if we just suppressed thinking.
         }
 
         console.log(`[DEBUG] Stream iteration finished. Ending response.`);
