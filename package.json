@@ -13,6 +13,7 @@
     "lint:warn": "eslint ."
   },
   "dependencies": {
+    "@google-cloud/discoveryengine": "^2.5.2",
     "@google-cloud/vertexai": "^1.10.0",
     "@radix-ui/react-alert-dialog": "^1.1.4",
     "@radix-ui/react-avatar": "^1.1.2",
@@ -31,10 +32,7 @@
     "dotenv": "^17.2.3",
     "express": "^4.22.1",
     "framer-motion": "^11.15.0",
-    "googleapis": "^170.1.0",
     "lucide-react": "^0.469.0",
-    "mammoth": "^1.11.0",
-    "pdfjs-dist": "^5.4.530",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-helmet": "^6.1.0",
@@ -42,8 +40,7 @@
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "uuid": "^13.0.0",
-    "xlsx": "^0.18.5"
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.17.10",

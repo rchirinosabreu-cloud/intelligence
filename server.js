@@ -2,10 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai';
-import { google } from 'googleapis';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
-import mammoth from 'mammoth';
-import * as xlsx from 'xlsx';
+import { SearchServiceClient } from '@google-cloud/discoveryengine';
 
 dotenv.config();
 
@@ -65,8 +62,7 @@ try {
 const PROJECT_ID = credentials?.project_id;
 const LOCATION = process.env.VERTEX_LOCATION || 'us-central1';
 const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.5-flash";
-const DOCUMENT_AI_LOCATION = process.env.DOCUMENT_AI_LOCATION || LOCATION;
-const DOCUMENT_AI_PROCESSOR_ID = process.env.DOCUMENT_AI_PROCESSOR_ID;
+const DATA_STORE_ID = "conector-drive-brainstudio_1769439248669";
 
 console.log(`[VertexAI] Initializing with Project ID: ${PROJECT_ID || 'UNDEFINED'}, Location: ${LOCATION}, Model: ${MODEL_NAME}`);
 
@@ -84,218 +80,92 @@ try {
     console.error("[VertexAI] Failed to initialize client:", e);
 }
 
-let documentAIAuth;
-if (PROJECT_ID && DOCUMENT_AI_PROCESSOR_ID) {
-    try {
-        documentAIAuth = new google.auth.GoogleAuth({
-            credentials,
-            scopes: ['https://www.googleapis.com/auth/cloud-platform']
-        });
-        console.log("[DocumentAI] Auth initialized successfully.");
-    } catch (e) {
-        console.error("[DocumentAI] Failed to initialize auth:", e);
-    }
-} else {
-    console.warn("[DocumentAI] Processor not configured. Set DOCUMENT_AI_PROCESSOR_ID to enable high-precision extraction.");
-}
-
-let drive;
-let sheets;
+// Initialize Discovery Engine Client
+let searchClient;
 try {
-    const auth = new google.auth.GoogleAuth({
+    if (!PROJECT_ID) throw new Error("Project ID is missing from credentials");
+    searchClient = new SearchServiceClient({
         credentials,
-        scopes: [
-            'https://www.googleapis.com/auth/drive.readonly',
-            'https://www.googleapis.com/auth/spreadsheets.readonly'
-        ]
+        projectId: PROJECT_ID
     });
-    drive = google.drive({ version: 'v3', auth });
-    sheets = google.sheets({ version: 'v4', auth });
-    console.log("[Drive] Client initialized successfully.");
+    console.log("[DiscoveryEngine] Client initialized successfully.");
 } catch (e) {
-    console.error("[Drive] Failed to initialize client:", e);
+     console.error("[DiscoveryEngine] Failed to initialize client:", e);
 }
 
-// --- DRIVE HELPER FUNCTIONS ---
-async function convertToBuffer(data) {
-    // Robust Blob handling: Check for instanceof Blob OR duck-typing (has arrayBuffer method)
-    // This catches cases where the object is a Blob from a different context or library (e.g. googleapis)
-    if (
-        (typeof Blob !== 'undefined' && data instanceof Blob) ||
-        (data && typeof data.arrayBuffer === 'function' && (data.toString() === '[object Blob]' || (data.type && data.size != null)))
-    ) {
-        return Buffer.from(await data.arrayBuffer());
-    }
-    return Buffer.from(data);
-}
-
+// --- DISCOVERY ENGINE SEARCH ---
 async function searchAndReadDrive(query) {
-    try {
-        console.log(`[Drive] Searching for: ${query}`);
-        // 1. List files (Name matches)
-        const res = await drive.files.list({
-            q: `name contains '${query}' and trashed = false`,
-            pageSize: 10,
-            fields: 'files(id, name, mimeType)',
-            orderBy: 'modifiedTime desc'
-        });
+    if (!searchClient) {
+        return { text: "Error: Discovery Engine client no está inicializado.", inlineDataParts: [] };
+    }
 
-        const files = res.data.files;
-        if (!files || files.length === 0) {
+    try {
+        console.log(`[Discovery] Searching for: ${query}`);
+        const servingConfig = `projects/${PROJECT_ID}/locations/global/collections/default_collection/dataStores/${DATA_STORE_ID}/servingConfigs/default_search`;
+
+        const request = {
+            servingConfig,
+            query: query,
+            pageSize: 5,
+            contentSearchSpec: {
+                snippetSpec: { returnSnippet: true },
+                extractiveContentSpec: { maxExtractiveAnswerCount: 1 }
+            }
+        };
+
+        const [response] = await searchClient.search(request);
+        const results = response.results;
+
+        if (!results || results.length === 0) {
             return {
-                text: `No se encontraron archivos para la búsqueda: "${query}"`,
+                text: `No se encontraron documentos relevantes para: "${query}"`,
                 inlineDataParts: []
             };
         }
 
-        let combinedContent = `Encontré ${files.length} archivos relevantes para "${query}":\n`;
-        const inlineDataParts = [];
+        let combinedContent = `Encontré ${results.length} documentos relevantes en el Data Store para "${query}":\n\n`;
         const linkEntries = [];
 
-        // 2. Read content (limit to first 5)
-        for (const file of files.slice(0, 5)) {
-            try {
-                let content = "";
-                const driveLink = `https://drive.google.com/file/d/${file.id}/view`;
-                if (file.mimeType === 'application/vnd.google-apps.document') {
-                    // Google Docs
-                    const exportData = await drive.files.export({
-                        fileId: file.id,
-                        mimeType: 'text/plain'
-                    });
-                    content = exportData.data;
-                } else if (file.mimeType === 'text/plain' || file.mimeType === 'text/csv') {
-                     // Plain text or CSV (if simple)
-                     const getData = await drive.files.get({
-                        fileId: file.id,
-                        alt: 'media',
-                        responseType: 'arraybuffer'
-                    });
-                    const dataBuffer = await convertToBuffer(getData.data);
-                    content = dataBuffer.toString('utf8');
-                } else if (file.mimeType === 'application/pdf') {
-                    // PDF (multimodal)
-                    const getData = await drive.files.get({
-                        fileId: file.id,
-                        alt: 'media',
-                        responseType: 'arraybuffer'
-                    });
-                    const dataBuffer = await convertToBuffer(getData.data);
-                    const extractedPdfText = await extractDocumentText({
-                        dataBuffer,
-                        mimeType: 'application/pdf'
-                    });
-                    inlineDataParts.push({
-                        inlineData: {
-                            mimeType: 'application/pdf',
-                            data: dataBuffer.toString('base64')
-                        }
-                    });
-                    if (extractedPdfText) {
-                        content = extractedPdfText;
-                    } else {
-                        content = '[PDF adjunto para análisis multimodal]';
-                    }
-                } else if (file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-                    // DOCX (Word)
-                    const getData = await drive.files.get({
-                        fileId: file.id,
-                        alt: 'media',
-                        responseType: 'arraybuffer'
-                    });
-                    const dataBuffer = await convertToBuffer(getData.data);
-                    const result = await mammoth.extractRawText({ buffer: dataBuffer });
-                    content = result.value;
-                } else if (file.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
-                    // Excel (.xlsx)
-                    const getData = await drive.files.get({
-                        fileId: file.id,
-                        alt: 'media',
-                        responseType: 'arraybuffer'
-                    });
-                    const dataBuffer = await convertToBuffer(getData.data);
-                    const workbook = xlsx.read(dataBuffer, { type: 'buffer' });
-                    const sheetName = workbook.SheetNames[0];
-                    if (!sheetName) {
-                        content = '[Archivo Excel sin hojas visibles]';
-                    } else {
-                        const worksheet = workbook.Sheets[sheetName];
-                        const csvData = xlsx.utils.sheet_to_csv(worksheet);
-                        content = csvData || '[Hoja de Excel vacía]';
-                    }
-                } else if (file.mimeType === 'application/vnd.google-apps.spreadsheet') {
-                    // Google Sheets
-                    const spreadsheet = await sheets.spreadsheets.get({
-                        spreadsheetId: file.id
-                    });
-                    const firstSheetTitle = spreadsheet.data.sheets?.[0]?.properties?.title;
-                    if (!firstSheetTitle) {
-                        content = '[Hoja de cálculo sin pestañas legibles]';
-                    } else {
-                        const valuesResponse = await sheets.spreadsheets.values.get({
-                            spreadsheetId: file.id,
-                            range: `${firstSheetTitle}!A1:Z200`
-                        });
-                        const rows = valuesResponse.data.values || [];
-                        if (!rows.length) {
-                            content = `[Hoja de cálculo vacía en "${firstSheetTitle}"]`;
-                        } else {
-                            content = rows.map(row => row.join('\t')).join('\n');
-                        }
-                    }
-                } else if (file.mimeType === 'application/vnd.google-apps.presentation') {
-                    // Google Slides (export to PDF for multimodal)
-                    const exportData = await drive.files.export({
-                        fileId: file.id,
-                        mimeType: 'application/pdf'
-                    }, { responseType: 'arraybuffer' });
-                    const dataBuffer = await convertToBuffer(exportData.data);
-                    inlineDataParts.push({
-                        inlineData: {
-                            mimeType: 'application/pdf',
-                            data: dataBuffer.toString('base64')
-                        }
-                    });
-                    content = '[Slides exportadas a PDF para análisis multimodal]';
-                } else if (file.mimeType?.startsWith('image/')) {
-                    // Image (multimodal)
-                    const getData = await drive.files.get({
-                        fileId: file.id,
-                        alt: 'media',
-                        responseType: 'arraybuffer'
-                    });
-                    const dataBuffer = await convertToBuffer(getData.data);
-                    const extractedImageText = await extractDocumentText({
-                        dataBuffer,
-                        mimeType: file.mimeType
-                    });
-                    inlineDataParts.push({
-                        inlineData: {
-                            mimeType: file.mimeType,
-                            data: dataBuffer.toString('base64')
-                        }
-                    });
-                    content = extractedImageText || '[Imagen adjunta para análisis multimodal]';
-                } else {
-                    content = `[Archivo detectado. Tipo: ${file.mimeType}. Contenido no legible directamente]`;
-                }
+        for (const result of results) {
+            const doc = result.document;
+            const derived = doc.derivedStructData;
 
-                const snippet = typeof content === 'string' ? content.substring(0, 8000) : "Contenido no textual";
-                combinedContent += `\n--- ARCHIVO: ${file.name} ---\n${snippet}\nID: ${file.id}\nEnlace: ${driveLink}\n`;
-                linkEntries.push(`- ${file.name} (${file.id}): ${driveLink}`);
-            } catch (err) {
-                console.error(`Error reading file ${file.id} (${file.mimeType}):`, err);
-                combinedContent += `\n--- ARCHIVO: ${file.name} (Error al leer contenido: ${err.message}) ---\n`;
+            const title = derived?.title || doc.name || "Documento sin título";
+            const link = derived?.link || (derived?.sourceLink ? derived.sourceLink : "Sin enlace");
+
+            // Extract snippets
+            let snippetText = "";
+            const extractiveAnswers = derived?.extractive_answers || derived?.extractiveAnswers;
+            if (Array.isArray(extractiveAnswers)) {
+                 snippetText = extractiveAnswers.map(ans => ans.content).join("\n...\n");
             }
+
+            if (!snippetText) {
+                const snippets = derived?.snippets;
+                if (Array.isArray(snippets)) {
+                    snippetText = snippets.map(s => s.snippet).join("\n...\n");
+                }
+            }
+             if (!snippetText) {
+                snippetText = "(Sin fragmento extraíble)";
+            }
+
+            combinedContent += `--- DOCUMENTO: ${title} ---\n`;
+            combinedContent += `Enlace: ${link}\n`;
+            combinedContent += `Fragmentos relevantes:\n${snippetText}\n\n`;
+
+            linkEntries.push(`- ${title}: ${link}`);
         }
+
         if (linkEntries.length) {
             combinedContent += `\n=== ENLACES ===\n${linkEntries.join('\n')}\n`;
         }
-        return { text: combinedContent, inlineDataParts };
+
+        return { text: combinedContent, inlineDataParts: [] };
 
     } catch (error) {
-        console.error("Drive Search Error:", error);
-        return { text: "Error interno al buscar en Google Drive.", inlineDataParts: [] };
+        console.error("Discovery Search Error:", error);
+        return { text: `Error al buscar en Discovery Engine: ${error.message}`, inlineDataParts: [] };
     }
 }
 
@@ -363,63 +233,6 @@ function extractTextFromParts(parts = []) {
 
 function getChunkParts(chunk) {
     return chunk?.candidates?.[0]?.content?.parts || [];
-}
-
-async function extractDocumentText({ dataBuffer, mimeType }) {
-    let extractedText = '';
-    if (documentAIAuth && DOCUMENT_AI_PROCESSOR_ID) {
-        try {
-            const client = await documentAIAuth.getClient();
-            const name = `projects/${PROJECT_ID}/locations/${DOCUMENT_AI_LOCATION}/processors/${DOCUMENT_AI_PROCESSOR_ID}`;
-            const url = `https://${DOCUMENT_AI_LOCATION}-documentai.googleapis.com/v1/${name}:process`;
-            const response = await client.request({
-                url,
-                method: 'POST',
-                data: {
-                    rawDocument: {
-                        content: dataBuffer.toString('base64'),
-                        mimeType
-                    }
-                }
-            });
-            extractedText = response?.data?.document?.text?.trim() || '';
-            if (extractedText) {
-                console.log(`[DocumentAI] Successfully extracted ${extractedText.length} characters.`);
-            }
-        } catch (error) {
-            console.warn('[DocumentAI] Failed to extract text:', error.message);
-        }
-    }
-
-    if (!extractedText && mimeType === 'application/pdf') {
-        extractedText = await extractPdfText(dataBuffer);
-    }
-
-    return extractedText;
-}
-
-async function extractPdfText(dataBuffer) {
-    try {
-        const loadingTask = pdfjsLib.getDocument({ data: dataBuffer });
-        const pdf = await loadingTask.promise;
-        let textContent = '';
-        const maxPages = Math.min(pdf.numPages || 0, 10);
-        for (let pageNum = 1; pageNum <= maxPages; pageNum += 1) {
-            const page = await pdf.getPage(pageNum);
-            const text = await page.getTextContent();
-            const pageText = text.items
-                .map(item => item.str)
-                .filter(Boolean)
-                .join(' ');
-            if (pageText) {
-                textContent += `${pageText}\n`;
-            }
-        }
-        return textContent.trim();
-    } catch (error) {
-        console.warn('[PDF] Failed to extract text:', error.message);
-        return '';
-    }
 }
 
 function isVertexRateLimitError(error) {
