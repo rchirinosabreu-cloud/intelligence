@@ -64,9 +64,10 @@ try {
     console.error("Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON", e);
 }
 
-const PROJECT_ID = credentials?.project_id;
-// Force 'global' as default if not explicitly set, prioritizing GOOGLE_CLOUD_LOCATION
-const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'global';
+// Use explicit project ID 'brainstudio-intelligence' if not found in credentials
+const PROJECT_ID = credentials?.project_id || 'brainstudio-intelligence';
+// Force 'global' location explicitly as requested
+const LOCATION = 'global';
 const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.5-flash";
 
 // Engine ID for the App (Brainstudio Intelligence)
