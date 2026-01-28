@@ -73,7 +73,7 @@ const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemi
 // Engine ID for the App (Brainstudio Intelligence)
 const ENGINE_ID = process.env.ENGINE_ID || process.env.DISCOVERY_ENGINE_ENGINE_ID || "brainstudio-intelligence-v_1769568594187";
 // Data Store ID for reference/logs (Brainstudio Unstructured Docs)
-const DATA_STORE_ID = process.env.DATA_STORE_ID || "brainstudio-unstructured-v1_1769568459490_gcs_store";
+const DATA_STORE_ID = process.env.DATA_STORE_ID || "brainstudio-unstructured-v1_1769568459490";
 
 // Ensure Discovery Engine also uses the global location derived above
 const DISCOVERY_ENGINE_LOCATION = LOCATION;
@@ -180,16 +180,15 @@ async function searchCloudStorage(query) {
         const engineServingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${ENGINE_ID}/servingConfigs/default_config`;
 
         const engineRequest = {
-            servingConfig: engineServingConfig,
-            query: query,
-            pageSize: 5,
-            contentSearchSpec: {
-                // Add summary and ensure relaxed snippet retrieval
-                summarySpec: { summaryResultCount: 3, includeCitations: true },
-                snippetSpec: { returnSnippet: true },
-                extractiveContentSpec: { maxExtractiveAnswerCount: 1 }
-            }
-        };
+    servingConfig: engineServingConfig,
+    query: query,
+    pageSize: 5,
+    contentSearchSpec: {
+        // Quitamos la restricción de 'extractiveContentSpec'
+        summarySpec: { summaryResultCount: 3, includeCitations: true },
+        snippetSpec: { returnSnippet: true } // Esto es lo que activa la búsqueda flexible
+    }
+};
 
         let results = [];
         let usedSource = "Engine";
