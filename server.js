@@ -89,6 +89,7 @@ try {
     vertexAI = new VertexAI({
         project: PROJECT_ID,
         location: LOCATION,
+        apiEndpoint: 'aiplatform.googleapis.com', // Explicitly force global endpoint for Vertex AI
         googleAuthOptions: { credentials }
     });
     console.log("[VertexAI] Client initialized successfully.");
