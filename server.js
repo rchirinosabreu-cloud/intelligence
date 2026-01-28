@@ -72,15 +72,16 @@ const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemi
 
 // Engine ID for the App (Brainstudio Intelligence)
 const ENGINE_ID = process.env.ENGINE_ID || process.env.DISCOVERY_ENGINE_ENGINE_ID || "brainstudio-intelligence-v_1769568594187";
-// Data Store ID for reference/logs (Brainstudio Unstructured Docs)
-const DATA_STORE_ID = process.env.DATA_STORE_ID || "brainstudio-unstructured-v1_1769568459490_gcs_store";
+// Data Store IDs for reference/logs (Brainstudio Unstructured Docs)
+const DATA_STORE_ID = process.env.DATA_STORE_ID || "brainstudio-unstructured-v1_1769568459490";
+const DATA_STORE_ENTITY_ID = process.env.DATA_STORE_ENTITY_ID || "brainstudio-unstructured-v1_1769568459490_gcs_store";
 
 // Ensure Discovery Engine also uses the global location derived above
-const DISCOVERY_ENGINE_LOCATION = LOCATION;
+const DISCOVERY_ENGINE_LOCATION = process.env.DISCOVERY_ENGINE_LOCATION || LOCATION;
 const DISCOVERY_ENGINE_API_ENDPOINT = 'discoveryengine.googleapis.com';
 
 console.log(`[VertexAI] Initializing with Project ID: ${PROJECT_ID || 'UNDEFINED'}, Location: ${LOCATION}, Model: ${MODEL_NAME}`);
-console.log(`[DiscoveryEngine] Selected Engine ID: ${ENGINE_ID} (DataStore: ${DATA_STORE_ID})`);
+console.log(`[DiscoveryEngine] Selected Engine ID: ${ENGINE_ID} (DataStores: ${DATA_STORE_ID}, ${DATA_STORE_ENTITY_ID})`);
 
 // Initialize Clients safely
 let vertexAI;
@@ -124,6 +125,22 @@ async function searchCloudStorage(query) {
     if (!searchClient) {
         return { text: "Error: Discovery Engine client no está inicializado.", inlineDataParts: [] };
     }
+
+    const normalizeDataStoreId = (value) => {
+        if (!value) return null;
+        if (value.endsWith('_gcs_store')) {
+            return value.replace(/_gcs_store$/, '');
+        }
+        return value;
+    };
+
+    const getSearchPayload = (response) => {
+        const normalizedResponse = Array.isArray(response) ? response[0] : response;
+        return {
+            results: normalizedResponse?.results || [],
+            summary: normalizedResponse?.summary || null
+        };
+    };
 
     // Helper to format results
     const formatResults = (results, sourceName, summary) => {
@@ -196,9 +213,10 @@ async function searchCloudStorage(query) {
 
         try {
             const [engineResponse] = await searchClient.search(engineRequest, { autoPaginate: false });
-            if (engineResponse.results && engineResponse.results.length > 0) {
-                results = engineResponse.results;
-                summary = engineResponse.summary;
+            const enginePayload = getSearchPayload(engineResponse);
+            if (enginePayload.results.length > 0) {
+                results = enginePayload.results;
+                summary = enginePayload.summary;
                 console.log(`[Discovery] Engine returned ${results.length} results.`);
             } else {
                 console.log(`[Discovery] Engine returned 0 results. Raw response keys: ${Object.keys(engineResponse).join(', ')}`);
@@ -207,35 +225,53 @@ async function searchCloudStorage(query) {
             console.warn(`[Discovery] Engine search failed: ${engineError.message}`);
         }
 
-        // 2. Fallback: Try Searching via Data Store ID if Engine failed or returned 0
+        // 2. Fallback: Try Searching via Data Store IDs if Engine failed or returned 0
         if (results.length === 0) {
-            console.log(`[Discovery] Attempting fallback to Data Store (${DATA_STORE_ID})...`);
+            const inputDataStoreIds = [DATA_STORE_ID, DATA_STORE_ENTITY_ID].filter(Boolean);
+            const normalizedDataStoreIds = inputDataStoreIds
+                .map(normalizeDataStoreId)
+                .filter(Boolean);
+            const dataStoreIds = Array.from(new Set(normalizedDataStoreIds));
+            const normalizedChanged = inputDataStoreIds.some(
+                (value, index) => value !== normalizedDataStoreIds[index]
+            );
 
-            // Note: DataStore path uses 'dataStores' collection. We keep 'default_search' here as it's standard for DataStores.
-            const dataStoreServingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/dataStores/${DATA_STORE_ID}/servingConfigs/default_search`;
+            if (normalizedChanged) {
+                console.log(`[Discovery] Normalized Data Store IDs for fallback: ${dataStoreIds.join(', ')}`);
+            }
 
-            const dataStoreRequest = {
-                servingConfig: dataStoreServingConfig,
-                query: query,
-                pageSize: 5,
-                contentSearchSpec: {
-                    snippetSpec: { returnSnippet: true },
-                    summarySpec: { summaryResultCount: 3, includeCitations: true }
-                    // Relaxed spec: Remove extractiveContentSpec to broaden results (like Preview)
+            for (const dataStoreId of dataStoreIds) {
+                console.log(`[Discovery] Attempting fallback to Data Store (${dataStoreId})...`);
+
+                // Note: DataStore path uses 'dataStores' collection. We keep 'default_search' here as it's standard for DataStores.
+                const dataStoreServingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/dataStores/${dataStoreId}/servingConfigs/default_search`;
+
+                const dataStoreRequest = {
+                    servingConfig: dataStoreServingConfig,
+                    query: query,
+                    pageSize: 5,
+                    contentSearchSpec: {
+                        snippetSpec: { returnSnippet: true },
+                        summarySpec: { summaryResultCount: 3, includeCitations: true }
+                        // Relaxed spec: Remove extractiveContentSpec to broaden results (like Preview)
+                    }
+                };
+
+                try {
+                    const [dsResponse] = await searchClient.search(dataStoreRequest, { autoPaginate: false });
+                    const dsPayload = getSearchPayload(dsResponse);
+                    if (dsPayload.results.length > 0) {
+                        results = dsPayload.results;
+                        summary = dsPayload.summary;
+                        usedSource = `DataStore:${dataStoreId}`;
+                        console.log(`[Discovery] Data Store returned ${results.length} results.`);
+                        break;
+                    } else {
+                        console.log(`[Discovery] Data Store returned 0 results for ${dataStoreId}.`);
+                    }
+                } catch (dsError) {
+                    console.error(`[Discovery] Data Store fallback failed (${dataStoreId}): ${dsError.message}`);
                 }
-            };
-
-            try {
-                const [dsResponse] = await searchClient.search(dataStoreRequest, { autoPaginate: false });
-                if (dsResponse.results && dsResponse.results.length > 0) {
-                    results = dsResponse.results;
-                    usedSource = "DataStore";
-                    console.log(`[Discovery] Data Store returned ${results.length} results.`);
-                } else {
-                     console.log(`[Discovery] Data Store also returned 0 results.`);
-                }
-            } catch (dsError) {
-                 console.error(`[Discovery] Data Store fallback failed: ${dsError.message}`);
             }
         }
 
