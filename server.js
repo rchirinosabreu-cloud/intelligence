@@ -65,7 +65,8 @@ try {
 }
 
 const PROJECT_ID = credentials?.project_id;
-const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || process.env.VERTEX_LOCATION || 'global';
+// Force 'global' as default if not explicitly set, prioritizing GOOGLE_CLOUD_LOCATION
+const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'global';
 const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.5-flash";
 
 // Engine ID for the App (Brainstudio Intelligence)
@@ -73,7 +74,8 @@ const ENGINE_ID = process.env.ENGINE_ID || process.env.DISCOVERY_ENGINE_ENGINE_I
 // Data Store ID for reference/logs (Brainstudio Unstructured Docs)
 const DATA_STORE_ID = process.env.DATA_STORE_ID || "brainstudio-unstructured-v1_1769568459490";
 
-const DISCOVERY_ENGINE_LOCATION = LOCATION; // Sync with global location
+// Ensure Discovery Engine also uses the global location derived above
+const DISCOVERY_ENGINE_LOCATION = LOCATION;
 const DISCOVERY_ENGINE_API_ENDPOINT = 'discoveryengine.googleapis.com';
 
 console.log(`[VertexAI] Initializing with Project ID: ${PROJECT_ID || 'UNDEFINED'}, Location: ${LOCATION}, Model: ${MODEL_NAME}`);
@@ -98,23 +100,9 @@ let searchClient;
 try {
     if (!PROJECT_ID) throw new Error("Project ID is missing from credentials");
 
-    // Implement Domain-Wide Delegation (Impersonation) if GOOGLE_ADMIN_EMAIL is present
-    const adminEmail = process.env.GOOGLE_ADMIN_EMAIL || "coordinador@brainstudioagencia.com";
-    let authClient = null;
-
-    if (credentials && adminEmail) {
-        console.log(`[DiscoveryEngine] Configuring Domain-Wide Delegation for: ${adminEmail}`);
-        authClient = new JWT({
-            email: credentials.client_email,
-            key: credentials.private_key,
-            scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-            subject: adminEmail
-        });
-    }
-
+    // Removed Domain-Wide Delegation: Service Account acts on its own behalf
     searchClient = new SearchServiceClient({
-        authClient: authClient || undefined, // Use authClient if available
-        credentials: authClient ? undefined : credentials, // Fallback to standard credentials if no impersonation
+        credentials,
         projectId: PROJECT_ID,
         apiEndpoint: DISCOVERY_ENGINE_API_ENDPOINT
     });
