@@ -196,20 +196,29 @@ async function searchCloudStorage(query) {
         let summary = null;
 
         try {
-            const [engineResponse] = await searchClient.search(engineRequest, { autoPaginate: false });
-            if (engineResponse.results && engineResponse.results.length > 0) {
-                results = engineResponse.results;
-                summary = engineResponse.summary;
-                console.log(`[Discovery] Engine returned ${results.length} results.`);
+            // Destructure carefully: [responseOrResults, request, rawResponse]
+            const [responsePart1, , responsePart3] = await searchClient.search(engineRequest, { autoPaginate: false });
+
+            if (Array.isArray(responsePart1)) {
+                // If it's an array, it's the results list
+                results = responsePart1;
+                // If the first part is results, the summary might be in the 3rd part (raw response)
+                summary = responsePart3?.summary;
+                console.log(`[Discovery] Engine returned ${results.length} results (Array format).`);
+            } else if (responsePart1 && responsePart1.results) {
+                // Standard SearchResponse object
+                results = responsePart1.results;
+                summary = responsePart1.summary;
+                console.log(`[Discovery] Engine returned ${results.length} results (Object format).`);
             } else {
-                console.log(`[Discovery] Engine returned 0 results. Raw response keys: ${Object.keys(engineResponse).join(', ')}`);
+                console.log(`[Discovery] Engine returned 0 results. Response keys: ${responsePart1 ? Object.keys(responsePart1).join(', ') : 'null'}`);
             }
         } catch (engineError) {
             console.warn(`[Discovery] Engine search failed: ${engineError.message}`);
         }
 
         // 2. Fallback: Try Searching via Data Store ID if Engine failed or returned 0
-        if (results.length === 0) {
+        if (!results || results.length === 0) {
             console.log(`[Discovery] Attempting fallback to Data Store (${DATA_STORE_ID})...`);
 
             // Note: DataStore path uses 'dataStores' collection. We keep 'default_search' here as it's standard for DataStores.
@@ -227,11 +236,18 @@ async function searchCloudStorage(query) {
             };
 
             try {
-                const [dsResponse] = await searchClient.search(dataStoreRequest, { autoPaginate: false });
-                if (dsResponse.results && dsResponse.results.length > 0) {
-                    results = dsResponse.results;
+                const [dsResponse1, , dsResponse3] = await searchClient.search(dataStoreRequest, { autoPaginate: false });
+
+                if (Array.isArray(dsResponse1)) {
+                     results = dsResponse1;
+                     summary = dsResponse3?.summary; // Try to capture summary from fallback too
+                     usedSource = "DataStore";
+                     console.log(`[Discovery] Data Store returned ${results.length} results (Array format).`);
+                } else if (dsResponse1 && dsResponse1.results) {
+                    results = dsResponse1.results;
+                    summary = dsResponse1.summary; // Override summary if fallback provides it
                     usedSource = "DataStore";
-                    console.log(`[Discovery] Data Store returned ${results.length} results.`);
+                    console.log(`[Discovery] Data Store returned ${results.length} results (Object format).`);
                 } else {
                      console.log(`[Discovery] Data Store also returned 0 results.`);
                 }
