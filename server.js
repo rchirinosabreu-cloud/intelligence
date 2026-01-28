@@ -110,7 +110,7 @@ try {
     searchClient = new SearchServiceClient({
         authClient: authClient,
         projectId: PROJECT_ID,
-        apiEndpoint: DISCOVERY_ENGINE_API_ENDPOINT
+        apiEndpoint: 'discoveryengine.googleapis.com' // Explicitly force global endpoint
     });
     console.log("[DiscoveryEngine] Client initialized successfully.");
 } catch (e) {
