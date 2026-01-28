@@ -125,33 +125,9 @@ async function searchCloudStorage(query) {
         return { text: "Error: Discovery Engine client no está inicializado.", inlineDataParts: [] };
     }
 
-    try {
-        console.log(`[Discovery] Searching Cloud Storage for: ${query}`);
-
-        const servingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${ENGINE_ID}/servingConfigs/default_search`;
-
-        const request = {
-            servingConfig,
-            query: query,
-            pageSize: 5,
-            contentSearchSpec: {
-                snippetSpec: { returnSnippet: true },
-                extractiveContentSpec: { maxExtractiveAnswerCount: 1 }
-            }
-        };
-
-        const [response] = await searchClient.search(request, { autoPaginate: false });
-        const results = response.results;
-        console.log(`[Discovery] Results returned: ${results?.length || 0}`);
-
-        if (!results || results.length === 0) {
-            return {
-                text: `No se encontraron documentos relevantes en Cloud Storage para: "${query}"`,
-                inlineDataParts: []
-            };
-        }
-
-        let combinedContent = `Encontré ${results.length} documentos relevantes en el repositorio para "${query}":\n\n`;
+    // Helper to format results
+    const formatResults = (results, sourceName) => {
+        let combinedContent = `Encontré ${results.length} documentos relevantes en el repositorio (${sourceName}) para "${query}":\n\n`;
         const linkEntries = [];
 
         for (const result of results) {
@@ -188,8 +164,80 @@ async function searchCloudStorage(query) {
         if (linkEntries.length) {
             combinedContent += `\n=== ENLACES ===\n${linkEntries.join('\n')}\n`;
         }
+        return combinedContent;
+    };
 
-        return { text: combinedContent, inlineDataParts: [] };
+    try {
+        console.log(`[Discovery] Searching Cloud Storage (Engine: ${ENGINE_ID}) for: ${query}`);
+
+        // 1. Try Searching via Engine ID (App)
+        const engineServingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${ENGINE_ID}/servingConfigs/default_search`;
+
+        const engineRequest = {
+            servingConfig: engineServingConfig,
+            query: query,
+            pageSize: 5,
+            contentSearchSpec: {
+                snippetSpec: { returnSnippet: true },
+                extractiveContentSpec: { maxExtractiveAnswerCount: 1 }
+            }
+        };
+
+        let results = [];
+        let usedSource = "Engine";
+
+        try {
+            const [engineResponse] = await searchClient.search(engineRequest, { autoPaginate: false });
+            if (engineResponse.results && engineResponse.results.length > 0) {
+                results = engineResponse.results;
+                console.log(`[Discovery] Engine returned ${results.length} results.`);
+            } else {
+                console.log(`[Discovery] Engine returned 0 results. Raw response keys: ${Object.keys(engineResponse).join(', ')}`);
+            }
+        } catch (engineError) {
+            console.warn(`[Discovery] Engine search failed: ${engineError.message}`);
+        }
+
+        // 2. Fallback: Try Searching via Data Store ID if Engine failed or returned 0
+        if (results.length === 0) {
+            console.log(`[Discovery] Attempting fallback to Data Store (${DATA_STORE_ID})...`);
+
+            // Note: DataStore path uses 'dataStores' collection
+            const dataStoreServingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/dataStores/${DATA_STORE_ID}/servingConfigs/default_search`;
+
+            const dataStoreRequest = {
+                servingConfig: dataStoreServingConfig,
+                query: query,
+                pageSize: 5,
+                contentSearchSpec: {
+                    snippetSpec: { returnSnippet: true },
+                    // Relaxed spec: Remove extractiveContentSpec to broaden results (like Preview)
+                }
+            };
+
+            try {
+                const [dsResponse] = await searchClient.search(dataStoreRequest, { autoPaginate: false });
+                if (dsResponse.results && dsResponse.results.length > 0) {
+                    results = dsResponse.results;
+                    usedSource = "DataStore";
+                    console.log(`[Discovery] Data Store returned ${results.length} results.`);
+                } else {
+                     console.log(`[Discovery] Data Store also returned 0 results.`);
+                }
+            } catch (dsError) {
+                 console.error(`[Discovery] Data Store fallback failed: ${dsError.message}`);
+            }
+        }
+
+        if (!results || results.length === 0) {
+            return {
+                text: `No se encontraron documentos relevantes en Cloud Storage para: "${query}" (intentado en Engine y DataStore).`,
+                inlineDataParts: []
+            };
+        }
+
+        const formattedText = formatResults(results, usedSource);
+        return { text: formattedText, inlineDataParts: [] };
 
     } catch (error) {
         console.error("Discovery Search Error:", error);
