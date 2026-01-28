@@ -61,17 +61,19 @@ try {
 }
 
 const PROJECT_ID = credentials?.project_id;
-const LOCATION = process.env.VERTEX_LOCATION || 'global';
+const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || process.env.VERTEX_LOCATION || 'global';
 const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.5-flash";
-// NOTE: DATA_STORE_ID actually refers to the VERTEX SEARCH APP ID (Engine ID), not the underlying Data Store ID.
-const DATA_STORE_ID = process.env.DISCOVERY_ENGINE_ENGINE_ID || process.env.DATA_STORE_ID || "data-storage-v-3_1769521929477";
-// Force 'global' location for Discovery Engine as most Data Stores are created there.
-// Using a specific region (like us-central1) when the store is global results in 0 matches.
-const DISCOVERY_ENGINE_LOCATION = 'global';
+
+// Engine ID for the App (Brainstudio Intelligence)
+const ENGINE_ID = process.env.ENGINE_ID || process.env.DISCOVERY_ENGINE_ENGINE_ID || "brainstudio-intelligence-v_1769568594187";
+// Data Store ID for reference/logs (Brainstudio Unstructured Docs)
+const DATA_STORE_ID = process.env.DATA_STORE_ID || "brainstudio-unstructured-v1_1769568459490";
+
+const DISCOVERY_ENGINE_LOCATION = LOCATION; // Sync with global location
 const DISCOVERY_ENGINE_API_ENDPOINT = 'discoveryengine.googleapis.com';
 
 console.log(`[VertexAI] Initializing with Project ID: ${PROJECT_ID || 'UNDEFINED'}, Location: ${LOCATION}, Model: ${MODEL_NAME}`);
-console.log(`[DiscoveryEngine] Selected Engine ID: ${DATA_STORE_ID}`);
+console.log(`[DiscoveryEngine] Selected Engine ID: ${ENGINE_ID} (DataStore: ${DATA_STORE_ID})`);
 
 // Initialize Clients safely
 let vertexAI;
@@ -117,17 +119,16 @@ try {
      console.error("[DiscoveryEngine] Failed to initialize client:", e);
 }
 
-// --- DISCOVERY ENGINE SEARCH ---
-async function searchAndReadDrive(query) {
+// --- DISCOVERY ENGINE SEARCH (Cloud Storage / Unstructured) ---
+async function searchCloudStorage(query) {
     if (!searchClient) {
         return { text: "Error: Discovery Engine client no está inicializado.", inlineDataParts: [] };
     }
 
     try {
-        console.log(`[Discovery] Searching for: ${query}`);
-        // We use 'engines' instead of 'dataStores' because the ID provided (via DISCOVERY_ENGINE_ENGINE_ID)
-        // corresponds to a Vertex AI Search App (Engine), not a raw Data Store.
-        const servingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${DATA_STORE_ID}/servingConfigs/default_search`;
+        console.log(`[Discovery] Searching Cloud Storage for: ${query}`);
+
+        const servingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${ENGINE_ID}/servingConfigs/default_search`;
 
         const request = {
             servingConfig,
@@ -145,12 +146,12 @@ async function searchAndReadDrive(query) {
 
         if (!results || results.length === 0) {
             return {
-                text: `No se encontraron documentos relevantes para: "${query}"`,
+                text: `No se encontraron documentos relevantes en Cloud Storage para: "${query}"`,
                 inlineDataParts: []
             };
         }
 
-        let combinedContent = `Encontré ${results.length} documentos relevantes en el Data Store para "${query}":\n\n`;
+        let combinedContent = `Encontré ${results.length} documentos relevantes en el repositorio para "${query}":\n\n`;
         const linkEntries = [];
 
         for (const result of results) {
@@ -160,7 +161,7 @@ async function searchAndReadDrive(query) {
             const title = derived?.title || doc.name || "Documento sin título";
             const link = derived?.link || (derived?.sourceLink ? derived.sourceLink : "Sin enlace");
 
-            // Extract snippets
+            // Extract snippets from unstructured content
             let snippetText = "";
             const extractiveAnswers = derived?.extractive_answers || derived?.extractiveAnswers;
             if (Array.isArray(extractiveAnswers)) {
@@ -195,8 +196,8 @@ async function searchAndReadDrive(query) {
         if (error?.code === 5 && typeof error?.message === 'string' && error.message.includes('DataStore')) {
             return {
                 text:
-                    `Error al buscar en Discovery Engine: no se encontró el Data Store. ` +
-                    `Verifica DATA_STORE_ID, DISCOVERY_ENGINE_LOCATION o configura DISCOVERY_ENGINE_SERVING_CONFIG.`,
+                    `Error al buscar en Discovery Engine: no se encontró el Engine/DataStore. ` +
+                    `Verifica ENGINE_ID, DISCOVERY_ENGINE_LOCATION o credenciales.`,
                 inlineDataParts: []
             };
         }
@@ -243,14 +244,14 @@ Eres la socia intelectual de Brainstudio. Piensa, luego responde.`;
 const tools = [{
     functionDeclarations: [
         {
-            name: "search_drive_files",
-            description: "Busca archivos en Google Drive (Docs, Texto, Sheets, Slides, PDFs, imágenes, Word) y obtiene su contenido para responder preguntas sobre clientes, briefs, minutas o documentos internos.",
+            name: "search_cloud_storage",
+            description: "Busca en el 'cerebro' de Brainstudio (Google Cloud Storage) documentos no estructurados (PDFs, guías, reportes) de clientes como Sunpartners, TruPeak, etc. Usa esto para consultas sobre información interna o conocimiento de proyectos.",
             parameters: {
                 type: FunctionDeclarationSchemaType.OBJECT,
                 properties: {
                     query: {
                         type: FunctionDeclarationSchemaType.STRING,
-                        description: "Término de búsqueda (ej. nombre del cliente 'Muebles Nuva', 'Brief Campaña')."
+                        description: "Término de búsqueda (ej. 'Estrategia Sunpartners', 'Reporte TruPeak', 'Guía de Estilo')."
                     }
                 },
                 required: ["query"]
@@ -544,16 +545,16 @@ app.post('/api/chat', async (req, res) => {
         if (functionCallDetected) {
             const call = functionCallPart?.functionCall;
 
-            if (call && call.name === 'search_drive_files') {
+            if (call && call.name === 'search_cloud_storage') {
                 const query = call.args?.query;
                 if (!query) {
                     console.error("[FunctionCall] Missing query argument in function call:", call);
-                    res.write("Error: Missing query argument for search_drive_files.");
+                    res.write("Error: Missing query argument for search_cloud_storage.");
                     res.end();
                     return;
                 }
-                console.log(`[FunctionCall] Executing search_drive_files with query: ${query}`);
-                const toolOutput = await searchAndReadDrive(query);
+                console.log(`[FunctionCall] Executing search_cloud_storage with query: ${query}`);
+                const toolOutput = await searchCloudStorage(query);
                 const inlineDataParts = Array.isArray(toolOutput?.inlineDataParts)
                     ? toolOutput.inlineDataParts
                     : [];
@@ -561,8 +562,8 @@ app.post('/api/chat', async (req, res) => {
                 // Send the tool output back to the model
                 const functionResponseParts = [{
                     functionResponse: {
-                        name: 'search_drive_files',
-                        response: { name: 'search_drive_files', content: toolOutput.text }
+                        name: 'search_cloud_storage',
+                        response: { name: 'search_cloud_storage', content: toolOutput.text }
                     }
                 }, ...inlineDataParts];
 
