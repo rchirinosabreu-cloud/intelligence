@@ -73,7 +73,7 @@ const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemi
 // Engine ID for the App (Brainstudio Intelligence)
 const ENGINE_ID = process.env.ENGINE_ID || process.env.DISCOVERY_ENGINE_ENGINE_ID || "brainstudio-intelligence-v_1769568594187";
 // Data Store ID for reference/logs (Brainstudio Unstructured Docs)
-const DATA_STORE_ID = process.env.DATA_STORE_ID || "brainstudio-unstructured-v1_1769568459490";
+const DATA_STORE_ID = process.env.DATA_STORE_ID || "brainstudio-unstructured-v1_1769568459490_gcs_store";
 
 // Ensure Discovery Engine also uses the global location derived above
 const DISCOVERY_ENGINE_LOCATION = LOCATION;
@@ -126,8 +126,13 @@ async function searchCloudStorage(query) {
     }
 
     // Helper to format results
-    const formatResults = (results, sourceName) => {
+    const formatResults = (results, sourceName, summary) => {
         let combinedContent = `Encontré ${results.length} documentos relevantes en el repositorio (${sourceName}) para "${query}":\n\n`;
+
+        if (summary && summary.summaryText) {
+            combinedContent += `=== RESUMEN GENERADO ===\n${summary.summaryText}\n\n`;
+        }
+
         const linkEntries = [];
 
         for (const result of results) {
@@ -171,13 +176,16 @@ async function searchCloudStorage(query) {
         console.log(`[Discovery] Searching Cloud Storage (Engine: ${ENGINE_ID}) for: ${query}`);
 
         // 1. Try Searching via Engine ID (App)
-        const engineServingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${ENGINE_ID}/servingConfigs/default_search`;
+        // Updated path to 'default_config' as requested
+        const engineServingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${ENGINE_ID}/servingConfigs/default_config`;
 
         const engineRequest = {
             servingConfig: engineServingConfig,
             query: query,
             pageSize: 5,
             contentSearchSpec: {
+                // Add summary and ensure relaxed snippet retrieval
+                summarySpec: { summaryResultCount: 3, includeCitations: true },
                 snippetSpec: { returnSnippet: true },
                 extractiveContentSpec: { maxExtractiveAnswerCount: 1 }
             }
@@ -185,11 +193,13 @@ async function searchCloudStorage(query) {
 
         let results = [];
         let usedSource = "Engine";
+        let summary = null;
 
         try {
             const [engineResponse] = await searchClient.search(engineRequest, { autoPaginate: false });
             if (engineResponse.results && engineResponse.results.length > 0) {
                 results = engineResponse.results;
+                summary = engineResponse.summary;
                 console.log(`[Discovery] Engine returned ${results.length} results.`);
             } else {
                 console.log(`[Discovery] Engine returned 0 results. Raw response keys: ${Object.keys(engineResponse).join(', ')}`);
@@ -202,7 +212,7 @@ async function searchCloudStorage(query) {
         if (results.length === 0) {
             console.log(`[Discovery] Attempting fallback to Data Store (${DATA_STORE_ID})...`);
 
-            // Note: DataStore path uses 'dataStores' collection
+            // Note: DataStore path uses 'dataStores' collection. We keep 'default_search' here as it's standard for DataStores.
             const dataStoreServingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/dataStores/${DATA_STORE_ID}/servingConfigs/default_search`;
 
             const dataStoreRequest = {
@@ -211,6 +221,7 @@ async function searchCloudStorage(query) {
                 pageSize: 5,
                 contentSearchSpec: {
                     snippetSpec: { returnSnippet: true },
+                    summarySpec: { summaryResultCount: 3, includeCitations: true }
                     // Relaxed spec: Remove extractiveContentSpec to broaden results (like Preview)
                 }
             };
@@ -236,7 +247,7 @@ async function searchCloudStorage(query) {
             };
         }
 
-        const formattedText = formatResults(results, usedSource);
+        const formattedText = formatResults(results, usedSource, summary);
         return { text: formattedText, inlineDataParts: [] };
 
     } catch (error) {
