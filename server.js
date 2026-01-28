@@ -65,10 +65,10 @@ const LOCATION = process.env.VERTEX_LOCATION || 'us-central1';
 const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.5-flash";
 // NOTE: DATA_STORE_ID actually refers to the VERTEX SEARCH APP ID (Engine ID), not the underlying Data Store ID.
 const DATA_STORE_ID = process.env.DISCOVERY_ENGINE_ENGINE_ID || process.env.DATA_STORE_ID || "data-storage-v-3_1769521929477";
-const DISCOVERY_ENGINE_LOCATION = process.env.DISCOVERY_ENGINE_LOCATION || 'global';
-const DISCOVERY_ENGINE_API_ENDPOINT = DISCOVERY_ENGINE_LOCATION === 'global'
-    ? 'discoveryengine.googleapis.com'
-    : `${DISCOVERY_ENGINE_LOCATION}-discoveryengine.googleapis.com`;
+// Force 'global' location for Discovery Engine as most Data Stores are created there.
+// Using a specific region (like us-central1) when the store is global results in 0 matches.
+const DISCOVERY_ENGINE_LOCATION = 'global';
+const DISCOVERY_ENGINE_API_ENDPOINT = 'discoveryengine.googleapis.com';
 
 console.log(`[VertexAI] Initializing with Project ID: ${PROJECT_ID || 'UNDEFINED'}, Location: ${LOCATION}, Model: ${MODEL_NAME}`);
 console.log(`[DiscoveryEngine] Selected Engine ID: ${DATA_STORE_ID}`);
