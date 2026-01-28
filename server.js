@@ -100,9 +100,15 @@ let searchClient;
 try {
     if (!PROJECT_ID) throw new Error("Project ID is missing from credentials");
 
-    // Removed Domain-Wide Delegation: Service Account acts on its own behalf
+    // Explicitly configure JWT auth with the correct scope for Service Account
+    const authClient = new JWT({
+        email: credentials.client_email,
+        key: credentials.private_key,
+        scopes: ['https://www.googleapis.com/auth/cloud-platform']
+    });
+
     searchClient = new SearchServiceClient({
-        credentials,
+        authClient: authClient,
         projectId: PROJECT_ID,
         apiEndpoint: DISCOVERY_ENGINE_API_ENDPOINT
     });
