@@ -126,14 +126,6 @@ async function searchCloudStorage(query) {
         return { text: "Error: Discovery Engine client no está inicializado.", inlineDataParts: [] };
     }
 
-    const normalizeDataStoreId = (value) => {
-        if (!value) return null;
-        if (value.endsWith('_gcs_store')) {
-            return value.replace(/_gcs_store$/, '');
-        }
-        return value;
-    };
-
     const getSearchPayload = (response) => {
         const normalizedResponse = Array.isArray(response) ? response[0] : response;
         return {
@@ -227,18 +219,9 @@ async function searchCloudStorage(query) {
 
         // 2. Fallback: Try Searching via Data Store IDs if Engine failed or returned 0
         if (results.length === 0) {
-            const inputDataStoreIds = [DATA_STORE_ID, DATA_STORE_ENTITY_ID].filter(Boolean);
-            const normalizedDataStoreIds = inputDataStoreIds
-                .map(normalizeDataStoreId)
-                .filter(Boolean);
-            const dataStoreIds = Array.from(new Set(normalizedDataStoreIds));
-            const normalizedChanged = inputDataStoreIds.some(
-                (value, index) => value !== normalizedDataStoreIds[index]
+            const dataStoreIds = Array.from(
+                new Set([DATA_STORE_ID, DATA_STORE_ENTITY_ID].filter(Boolean))
             );
-
-            if (normalizedChanged) {
-                console.log(`[Discovery] Normalized Data Store IDs for fallback: ${dataStoreIds.join(', ')}`);
-            }
 
             for (const dataStoreId of dataStoreIds) {
                 console.log(`[Discovery] Attempting fallback to Data Store (${dataStoreId})...`);
