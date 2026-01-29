@@ -76,42 +76,12 @@ const ENGINE_ID = process.env.ENGINE_ID || process.env.DISCOVERY_ENGINE_ENGINE_I
 const DATA_STORE_ID = process.env.DATA_STORE_ID || "brainstudio-unstructured-v1_1769568459490";
 const DATA_STORE_ENTITY_ID = process.env.DATA_STORE_ENTITY_ID || "brainstudio-unstructured-v1_1769568459490_gcs_store";
 
-const normalizeDataStoreId = (value) => {
-    if (!value) return null;
-    let normalized = value.trim();
-
-    if (normalized.includes('/servingConfigs/')) {
-        normalized = normalized.split('/servingConfigs/')[0];
-    }
-    if (normalized.includes('/dataStores/')) {
-        normalized = normalized.split('/dataStores/').pop();
-    } else if (normalized.includes('/')) {
-        normalized = normalized.split('/').pop();
-    }
-
-    if (normalized.endsWith('_gcs_store')) {
-        normalized = normalized.replace(/_gcs_store$/, '');
-    }
-
-    return normalized;
-};
-
-const INPUT_DATA_STORE_IDS = [DATA_STORE_ID, DATA_STORE_ENTITY_ID].filter(Boolean);
-const NORMALIZED_INPUT_DATA_STORE_IDS = INPUT_DATA_STORE_IDS.map(normalizeDataStoreId).filter(Boolean);
-const UNIQUE_NORMALIZED_DATA_STORE_IDS = Array.from(new Set(NORMALIZED_INPUT_DATA_STORE_IDS));
-const NORMALIZED_DATA_STORE_IDS = Array.from(
-    new Set([...UNIQUE_NORMALIZED_DATA_STORE_IDS, ...INPUT_DATA_STORE_IDS])
-);
-
 // Ensure Discovery Engine also uses the global location derived above
 const DISCOVERY_ENGINE_LOCATION = process.env.DISCOVERY_ENGINE_LOCATION || LOCATION;
 const DISCOVERY_ENGINE_API_ENDPOINT = 'discoveryengine.googleapis.com';
 
 console.log(`[VertexAI] Initializing with Project ID: ${PROJECT_ID || 'UNDEFINED'}, Location: ${LOCATION}, Model: ${MODEL_NAME}`);
 console.log(`[DiscoveryEngine] Selected Engine ID: ${ENGINE_ID} (DataStores: ${DATA_STORE_ID}, ${DATA_STORE_ENTITY_ID})`);
-if (INPUT_DATA_STORE_IDS.some((value, index) => value !== NORMALIZED_INPUT_DATA_STORE_IDS[index])) {
-    console.log(`[DiscoveryEngine] Normalized Data Store IDs: ${UNIQUE_NORMALIZED_DATA_STORE_IDS.join(', ') || 'none'}`);
-}
 
 // Initialize Clients safely
 let vertexAI;
@@ -249,12 +219,11 @@ async function searchCloudStorage(query) {
 
         // 2. Fallback: Try Searching via Data Store IDs if Engine failed or returned 0
         if (results.length === 0) {
-            if (NORMALIZED_DATA_STORE_IDS.length === 0) {
-                console.warn("[Discovery] No Data Store IDs configured for fallback search.");
-            }
-            console.log(`[Discovery] Fallback Data Store IDs: ${NORMALIZED_DATA_STORE_IDS.join(', ') || 'none'}`);
+            const dataStoreIds = Array.from(
+                new Set([DATA_STORE_ID, DATA_STORE_ENTITY_ID].filter(Boolean))
+            );
 
-            for (const dataStoreId of NORMALIZED_DATA_STORE_IDS) {
+            for (const dataStoreId of dataStoreIds) {
                 console.log(`[Discovery] Attempting fallback to Data Store (${dataStoreId})...`);
 
                 // Note: DataStore path uses 'dataStores' collection. We keep 'default_search' here as it's standard for DataStores.
