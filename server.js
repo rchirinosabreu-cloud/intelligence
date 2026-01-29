@@ -127,11 +127,25 @@ async function searchCloudStorage(query) {
     }
 
     const getSearchPayload = (response) => {
-        const normalizedResponse = Array.isArray(response) ? response[0] : response;
-        return {
-            results: normalizedResponse?.results || [],
-            summary: normalizedResponse?.summary || null
-        };
+        // Fix: logic specifically for when the SDK returns an array of results directly
+        // (which happens in some configurations/versions with autoPaginate: false)
+        if (Array.isArray(response)) {
+             return {
+                 results: response,
+                 summary: response.summary || null // Summary might be attached property
+             };
+        }
+
+        // Standard proto response with .results property
+        if (response?.results) {
+            return {
+                results: response.results,
+                summary: response.summary || null
+            };
+        }
+
+        // Fallback or empty
+        return { results: [], summary: null };
     };
 
     // Helper to format results
@@ -185,8 +199,8 @@ async function searchCloudStorage(query) {
         console.log(`[Discovery] Searching Cloud Storage (Engine: ${ENGINE_ID}) for: ${query}`);
 
         // 1. Try Searching via Engine ID (App)
-        // Updated path to 'default_search' (standard for Search Apps) instead of 'default_config'
-        const engineServingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${ENGINE_ID}/servingConfigs/default_search`;
+        // Updated path to 'default_config' as requested
+        const engineServingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${ENGINE_ID}/servingConfigs/default_config`;
 
         const engineRequest = {
     servingConfig: engineServingConfig,
@@ -220,12 +234,10 @@ async function searchCloudStorage(query) {
         // 2. Fallback: Try Searching via Data Store IDs if Engine failed or returned 0
         if (results.length === 0) {
             // Prioritize DATA_STORE_ID (Collection ID) over DATA_STORE_ENTITY_ID (Entity ID)
-            // Also include the hardcoded ID as a safety net in case env vars are set incorrectly
             const dataStoreIds = Array.from(
                 new Set([
                     DATA_STORE_ID,
-                    DATA_STORE_ENTITY_ID,
-                    "brainstudio-unstructured-v1_1769568459490"
+                    DATA_STORE_ENTITY_ID
                 ].filter(Boolean))
             );
             console.log(`[Discovery] Engine yielded no results. Starting Data Store fallback. IDs to try: ${dataStoreIds.join(', ')}`);
