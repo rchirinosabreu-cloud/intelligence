@@ -185,8 +185,8 @@ async function searchCloudStorage(query) {
         console.log(`[Discovery] Searching Cloud Storage (Engine: ${ENGINE_ID}) for: ${query}`);
 
         // 1. Try Searching via Engine ID (App)
-        // Updated path to 'default_config' as requested
-        const engineServingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${ENGINE_ID}/servingConfigs/default_config`;
+        // Updated path to 'default_search' (standard for Search Apps) instead of 'default_config'
+        const engineServingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${ENGINE_ID}/servingConfigs/default_search`;
 
         const engineRequest = {
     servingConfig: engineServingConfig,
@@ -219,9 +219,16 @@ async function searchCloudStorage(query) {
 
         // 2. Fallback: Try Searching via Data Store IDs if Engine failed or returned 0
         if (results.length === 0) {
+            // Prioritize DATA_STORE_ID (Collection ID) over DATA_STORE_ENTITY_ID (Entity ID)
+            // Also include the hardcoded ID as a safety net in case env vars are set incorrectly
             const dataStoreIds = Array.from(
-                new Set([DATA_STORE_ID, DATA_STORE_ENTITY_ID].filter(Boolean))
+                new Set([
+                    DATA_STORE_ID,
+                    DATA_STORE_ENTITY_ID,
+                    "brainstudio-unstructured-v1_1769568459490"
+                ].filter(Boolean))
             );
+            console.log(`[Discovery] Engine yielded no results. Starting Data Store fallback. IDs to try: ${dataStoreIds.join(', ')}`);
 
             for (const dataStoreId of dataStoreIds) {
                 console.log(`[Discovery] Attempting fallback to Data Store (${dataStoreId})...`);
