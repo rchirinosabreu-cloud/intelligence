@@ -71,10 +71,10 @@ const LOCATION = 'global';
 const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.5-flash";
 
 // Engine ID for the App (Brainstudio Intelligence)
-const ENGINE_ID = process.env.ENGINE_ID || process.env.DISCOVERY_ENGINE_ENGINE_ID || "brainstudio-intelligence-v_1769568594187";
+const ENGINE_ID = process.env.ENGINE_ID || process.env.DISCOVERY_ENGINE_ENGINE_ID || "brainstudio-intelligence-v_1769659564733";
 // Data Store IDs for reference/logs (Brainstudio Unstructured Docs)
-const DATA_STORE_ID = process.env.DATA_STORE_ID || "brainstudio-unstructured-v1_1769568459490";
-const DATA_STORE_ENTITY_ID = process.env.DATA_STORE_ENTITY_ID || "brainstudio-unstructured-v1_1769568459490_gcs_store";
+const DATA_STORE_ID = process.env.DATA_STORE_ID || "brainstudio-unstructured-v2_1769659124702";
+const DATA_STORE_ENTITY_ID = process.env.DATA_STORE_ENTITY_ID || "brainstudio-unstructured-v2_1769659124702_gcs_store";
 
 // Ensure Discovery Engine also uses the global location derived above
 const DISCOVERY_ENGINE_LOCATION = process.env.DISCOVERY_ENGINE_LOCATION || LOCATION;
