@@ -126,14 +126,6 @@ async function searchCloudStorage(query) {
         return { text: "Error: Discovery Engine client no está inicializado.", inlineDataParts: [] };
     }
 
-    const getSearchPayload = (response) => {
-        const normalizedResponse = Array.isArray(response) ? response[0] : response;
-        return {
-            results: normalizedResponse?.results || [],
-            summary: normalizedResponse?.summary || null
-        };
-    };
-
     // Helper to format results
     const formatResults = (results, sourceName, summary) => {
         let combinedContent = `Encontré ${results.length} documentos relevantes en el repositorio (${sourceName}) para "${query}":\n\n`;
@@ -204,14 +196,14 @@ async function searchCloudStorage(query) {
         let summary = null;
 
         try {
-            const [engineResponse] = await searchClient.search(engineRequest, { autoPaginate: false });
-            const enginePayload = getSearchPayload(engineResponse);
-            if (enginePayload.results.length > 0) {
-                results = enginePayload.results;
-                summary = enginePayload.summary;
+            const [engineResults, , engineRawResponse] = await searchClient.search(engineRequest, { autoPaginate: false });
+
+            if (engineResults && engineResults.length > 0) {
+                results = engineResults;
+                summary = engineRawResponse.summary;
                 console.log(`[Discovery] Engine returned ${results.length} results.`);
             } else {
-                console.log(`[Discovery] Engine returned 0 results. Raw response keys: ${Object.keys(engineResponse).join(', ')}`);
+                console.log(`[Discovery] Engine returned 0 results.`);
             }
         } catch (engineError) {
             console.warn(`[Discovery] Engine search failed: ${engineError.message}`);
@@ -248,11 +240,11 @@ async function searchCloudStorage(query) {
                 };
 
                 try {
-                    const [dsResponse] = await searchClient.search(dataStoreRequest, { autoPaginate: false });
-                    const dsPayload = getSearchPayload(dsResponse);
-                    if (dsPayload.results.length > 0) {
-                        results = dsPayload.results;
-                        summary = dsPayload.summary;
+                    const [dsResults, , dsRawResponse] = await searchClient.search(dataStoreRequest, { autoPaginate: false });
+
+                    if (dsResults && dsResults.length > 0) {
+                        results = dsResults;
+                        summary = dsRawResponse.summary;
                         usedSource = `DataStore:${dataStoreId}`;
                         console.log(`[Discovery] Data Store returned ${results.length} results.`);
                         break;
