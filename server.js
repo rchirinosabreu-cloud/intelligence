@@ -225,7 +225,7 @@ async function searchCloudStorage(query) {
                 new Set([
                     DATA_STORE_ID,
                     DATA_STORE_ENTITY_ID,
-                    "brainstudio-unstructured-v1_1769568459490"
+                    "brainstudio-unstructured-v2_1769659124702"
                 ].filter(Boolean))
             );
             console.log(`[Discovery] Engine yielded no results. Starting Data Store fallback. IDs to try: ${dataStoreIds.join(', ')}`);
