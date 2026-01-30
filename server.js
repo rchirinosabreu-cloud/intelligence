@@ -461,6 +461,16 @@ ESTRUCTURA DE RESPUESTA OBLIGATORIA:
 
 [Aquí comienza tu respuesta final al usuario]
 
+DIRECTRICES DE FORMATO VISUAL:
+1.  **Prohibido usar backticks (\`) para resaltar texto normal.**
+    -   MAL: Analizando \`Villa Montaña\`.
+    -   BIEN: Analizando **Villa Montaña**.
+2.  **Uso de Código:**
+    -   Usa bloques de código (\`\`\`) ÚNICAMENTE cuando escribas código de programación real (Python, HTML, JSON).
+3.  **Jerarquía y Énfasis:**
+    -   Usa **Negritas** para resaltar entidades, nombres de marcas o conceptos clave.
+    -   Usa Listas y Títulos (###) para estructurar respuestas largas.
+
 REGLAS DE ESTILO Y FORMATO (ESTRICTAS):
 1.  **CERO COMILLAS RARAS EN NOMBRES DE ARCHIVO:**
     -   ESTÁ PROHIBIDO usar backticks (\`) para nombres de archivos (ej: \`archivo.pdf\`). ¡Se ve horrible!
