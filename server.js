@@ -127,12 +127,8 @@ async function searchCloudStorage(query) {
     }
 
     // Helper to format results
-    const formatResults = (results, sourceName, summary) => {
+    const formatResults = (results, sourceName) => {
         let combinedContent = `Encontré ${results.length} documentos relevantes en el repositorio (${sourceName}) para "${query}":\n\n`;
-
-        if (summary && summary.summaryText) {
-            combinedContent += `=== RESUMEN GENERADO ===\n${summary.summaryText}\n\n`;
-        }
 
         const linkEntries = [];
 
@@ -144,25 +140,28 @@ async function searchCloudStorage(query) {
             const link = derived?.link || (derived?.sourceLink ? derived.sourceLink : "Sin enlace");
 
             // Extract snippets from unstructured content
-            let snippetText = "";
             const extractiveAnswers = derived?.extractive_answers || derived?.extractiveAnswers;
-            if (Array.isArray(extractiveAnswers)) {
-                 snippetText = extractiveAnswers.map(ans => ans.content).join("\n...\n");
+            const snippets = derived?.snippets;
+
+            let docContent = "";
+
+            if (Array.isArray(extractiveAnswers) && extractiveAnswers.length > 0) {
+                 const answersText = extractiveAnswers.map(ans => `- ${ans.content}`).join("\n");
+                 docContent += `Respuestas extractivas:\n${answersText}\n\n`;
             }
 
-            if (!snippetText) {
-                const snippets = derived?.snippets;
-                if (Array.isArray(snippets)) {
-                    snippetText = snippets.map(s => s.snippet).join("\n...\n");
-                }
+            if (Array.isArray(snippets) && snippets.length > 0) {
+                const snippetsText = snippets.map(s => `...${s.snippet}...`).join("\n");
+                docContent += `Contexto (Snippets):\n${snippetsText}\n\n`;
             }
-             if (!snippetText) {
-                snippetText = "(Sin fragmento extraíble)";
+
+             if (!docContent) {
+                docContent = "(Sin fragmento extraíble)\n\n";
             }
 
             combinedContent += `--- DOCUMENTO: ${title} ---\n`;
             combinedContent += `Enlace: ${link}\n`;
-            combinedContent += `Fragmentos relevantes:\n${snippetText}\n\n`;
+            combinedContent += `${docContent}`;
 
             linkEntries.push(`- ${title}: ${link}`);
         }
@@ -181,15 +180,14 @@ async function searchCloudStorage(query) {
         const engineServingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${ENGINE_ID}/servingConfigs/default_search`;
 
         const engineRequest = {
-    servingConfig: engineServingConfig,
-    query: query,
-    pageSize: 5,
-    contentSearchSpec: {
-        // Quitamos la restricción de 'extractiveContentSpec'
-        summarySpec: { summaryResultCount: 3, includeCitations: true },
-        snippetSpec: { returnSnippet: true } // Esto es lo que activa la búsqueda flexible
-    }
-};
+            servingConfig: engineServingConfig,
+            query: query,
+            pageSize: 10,
+            contentSearchSpec: {
+                extractiveContentSpec: { maxExtractiveAnswerCount: 5 },
+                snippetSpec: { returnSnippet: true }
+            }
+        };
 
         let results = [];
         let usedSource = "Engine";
@@ -231,11 +229,10 @@ async function searchCloudStorage(query) {
                 const dataStoreRequest = {
                     servingConfig: dataStoreServingConfig,
                     query: query,
-                    pageSize: 5,
+                    pageSize: 10,
                     contentSearchSpec: {
-                        snippetSpec: { returnSnippet: true },
-                        summarySpec: { summaryResultCount: 3, includeCitations: true }
-                        // Relaxed spec: Remove extractiveContentSpec to broaden results (like Preview)
+                        extractiveContentSpec: { maxExtractiveAnswerCount: 5 },
+                        snippetSpec: { returnSnippet: true }
                     }
                 };
 
@@ -264,7 +261,7 @@ async function searchCloudStorage(query) {
             };
         }
 
-        const formattedText = formatResults(results, usedSource, summary);
+        const formattedText = formatResults(results, usedSource);
         return { text: formattedText, inlineDataParts: [] };
 
     } catch (error) {
@@ -281,7 +278,17 @@ async function searchCloudStorage(query) {
     }
 }
 
-const systemPrompt = `Eres Bria, el núcleo de inteligencia y razonamiento de "Brainstudio Intelligence" (Brain OS). Tu misión es actuar como una Consultora Estratégica con Omnisciencia Operativa: no solo encuentras información, la analizas, conectas y transformas en insights accionables.
+const systemPrompt = `### PROTOCOLO DE USO DE HERRAMIENTAS Y CORRECCIÓN DE ENTIDADES:
+Tu objetivo es garantizar búsquedas exitosas incluso si el usuario comete errores.
+
+1. ANÁLISIS PREVIO: Antes de llamar a la función \`search_cloud_storage\`, analiza los nombres propios en la consulta.
+2. CORRECCIÓN FONÉTICA: Si detectas un nombre que suena similar a uno de nuestros clientes conocidos, corrígelo mentalmente.
+   - Ejemplo: Si el usuario escribe "trupik", "trupick" o "truepeak" -> TU QUERY DEBE SER "TruPeak".
+   - Ejemplo: Si el usuario escribe "artiza" -> TU QUERY DEBE SER "Artyzza".
+   - Ejemplo: Si el usuario escribe "nuba" -> TU QUERY DEBE SER "Muebles Nuva".
+3. EJECUCIÓN: Llama a la herramienta de búsqueda usando ÚNICAMENTE el nombre corregido. Nunca busques el término mal escrito.
+
+Eres Bria, el núcleo de inteligencia y razonamiento de "Brainstudio Intelligence" (Brain OS). Tu misión es actuar como una Consultora Estratégica con Omnisciencia Operativa: no solo encuentras información, la analizas, conectas y transformas en insights accionables.
 
 TU PROCESO DE PENSAMIENTO (Chain of Thought):
 Antes de responder, realiza un análisis interno profundo (oculto en <thinking>).
