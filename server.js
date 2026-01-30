@@ -126,6 +126,68 @@ async function searchCloudStorage(query) {
         return { text: "Error: Discovery Engine client no está inicializado.", inlineDataParts: [] };
     }
 
+    // HELPER: Desempaquetador de respuestas de Vertex AI (Maneja Protobuf structValue)
+    function extractGoogleContent(result) {
+      try {
+        const derived = result.document?.derivedStructData;
+        if (!derived) return "";
+
+        // Accesor seguro para navegar la estructura "fields" -> "structValue" -> "stringValue"
+        // Esto funciona tanto si llega anidado como si llega plano (por seguridad)
+        const getDeepValue = (obj, key) => {
+          if (!obj) return null;
+          // Intenta ruta Protobuf
+          if (obj.fields && obj.fields[key]) return obj.fields[key];
+          // Intenta ruta normal
+          return obj[key];
+        };
+
+        let combinedText = "";
+
+        // 1. Intentar Extraer Extractive Answers (Prioridad)
+        let answers = getDeepValue(derived, 'extractive_answers');
+        if (answers) {
+          // Manejar array (listValue)
+          const list = answers.listValue ? answers.listValue.values : answers;
+          if (Array.isArray(list) && list.length > 0) {
+             const answerTexts = list.map(item => {
+                 const struct = item.structValue ? item.structValue.fields : item;
+                 const contentObj = getDeepValue(struct, 'content');
+                 return contentObj?.stringValue || contentObj;
+             }).filter(t => typeof t === 'string' && t);
+
+             if (answerTexts.length > 0) {
+                 combinedText += "Respuestas extractivas:\n" + answerTexts.map(t => `- ${t}`).join("\n") + "\n\n";
+             }
+          }
+        }
+
+        // 2. Fallback: Intentar Extraer Snippets
+        let snippets = getDeepValue(derived, 'snippets');
+        if (snippets) {
+          const list = snippets.listValue ? snippets.listValue.values : snippets;
+          if (Array.isArray(list) && list.length > 0) {
+              const snippetTexts = list.map(item => {
+                 const struct = item.structValue ? item.structValue.fields : item;
+                 const snippetObj = getDeepValue(struct, 'snippet');
+                 return snippetObj?.stringValue || snippetObj;
+              }).filter(t => typeof t === 'string' && t);
+
+              if (snippetTexts.length > 0) {
+                 combinedText += "Contexto (Snippets):\n" + snippetTexts.map(t => `...${t}...`).join("\n") + "\n\n";
+              }
+          }
+        }
+
+        return combinedText;
+
+      } catch (e) {
+        console.error("Error parseando resultado de Vertex:", e);
+      }
+
+      return ""; // Retorna vacío si falla todo
+    }
+
     // Helper to format results
     const formatResults = (results, sourceName) => {
         let combinedContent = `Encontré ${results.length} documentos relevantes en el repositorio (${sourceName}) para "${query}":\n\n`;
@@ -139,37 +201,15 @@ async function searchCloudStorage(query) {
             const title = derived.title || doc.title || doc.name || "Documento sin título";
             const link = derived.link || (derived.sourceLink ? derived.sourceLink : (doc.uri || "Sin enlace"));
 
-            // Robust extraction strategy
-            // 1. Try Extractive Answers (best quality)
-            let extractiveAnswers = derived.extractive_answers || derived.extractiveAnswers;
-            // 2. Try Snippets (standard)
-            let snippets = derived.snippets;
-
-            let docContent = "";
-
-            if (Array.isArray(extractiveAnswers) && extractiveAnswers.length > 0) {
-                 const answersText = extractiveAnswers.map(ans => `- ${ans.content}`).join("\n");
-                 docContent += `Respuestas extractivas:\n${answersText}\n\n`;
-            }
-
-            if (Array.isArray(snippets) && snippets.length > 0) {
-                const snippetsText = snippets.map(s => `...${s.snippet}...`).join("\n");
-                docContent += `Contexto (Snippets):\n${snippetsText}\n\n`;
-            }
-
-            // 3. Fallback: If nothing found above, try to find *something* text-like
-            if (!docContent) {
-                 // Check if there is a 'content' field in derived data
-                 if (derived.content) {
-                     docContent += `Contenido:\n${derived.content.substring(0, 500)}...\n\n`;
-                 } else {
-                     docContent = " [Contenido no legible automáticamente] \n\n";
-                 }
-            }
+            const text = extractGoogleContent(result);
 
             combinedContent += `--- DOCUMENTO: ${title} ---\n`;
             combinedContent += `Enlace: ${link}\n`;
-            combinedContent += `${docContent}`;
+            if (text) {
+                combinedContent += `${text}`;
+            } else {
+                 combinedContent += " [Contenido no legible automáticamente] \n\n";
+            }
 
             linkEntries.push(`- ${title}: ${link}`);
         }
