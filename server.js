@@ -134,14 +134,16 @@ async function searchCloudStorage(query) {
 
         for (const result of results) {
             const doc = result.document;
-            const derived = doc.derivedStructData || doc.structData;
+            const derived = doc.derivedStructData || doc.structData || {};
 
-            const title = derived?.title || doc.name || "Documento sin título";
-            const link = derived?.link || (derived?.sourceLink ? derived.sourceLink : "Sin enlace");
+            const title = derived.title || doc.title || doc.name || "Documento sin título";
+            const link = derived.link || (derived.sourceLink ? derived.sourceLink : (doc.uri || "Sin enlace"));
 
-            // Extract snippets from unstructured content
-            const extractiveAnswers = derived?.extractive_answers || derived?.extractiveAnswers;
-            const snippets = derived?.snippets;
+            // Robust extraction strategy
+            // 1. Try Extractive Answers (best quality)
+            let extractiveAnswers = derived.extractive_answers || derived.extractiveAnswers;
+            // 2. Try Snippets (standard)
+            let snippets = derived.snippets;
 
             let docContent = "";
 
@@ -155,8 +157,14 @@ async function searchCloudStorage(query) {
                 docContent += `Contexto (Snippets):\n${snippetsText}\n\n`;
             }
 
-             if (!docContent) {
-                docContent = "(Sin fragmento extraíble)\n\n";
+            // 3. Fallback: If nothing found above, try to find *something* text-like
+            if (!docContent) {
+                 // Check if there is a 'content' field in derived data
+                 if (derived.content) {
+                     docContent += `Contenido:\n${derived.content.substring(0, 500)}...\n\n`;
+                 } else {
+                     docContent = " [Contenido no legible automáticamente] \n\n";
+                 }
             }
 
             combinedContent += `--- DOCUMENTO: ${title} ---\n`;
@@ -200,6 +208,10 @@ async function searchCloudStorage(query) {
                 results = engineResults;
                 summary = engineRawResponse.summary;
                 console.log(`[Discovery] Engine returned ${results.length} results.`);
+                // DEBUG URGENTE: Ver estructura del primer resultado
+                if (results[0]) {
+                    console.log("[DEBUG] First result structure:", JSON.stringify(results[0], null, 2));
+                }
             } else {
                 console.log(`[Discovery] Engine returned 0 results.`);
             }
@@ -244,6 +256,9 @@ async function searchCloudStorage(query) {
                         summary = dsRawResponse.summary;
                         usedSource = `DataStore:${dataStoreId}`;
                         console.log(`[Discovery] Data Store returned ${results.length} results.`);
+                        if (results[0]) {
+                             console.log("[DEBUG] First result structure (DataStore):", JSON.stringify(results[0], null, 2));
+                        }
                         break;
                     } else {
                         console.log(`[Discovery] Data Store returned 0 results for ${dataStoreId}.`);
