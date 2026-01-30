@@ -585,14 +585,20 @@ app.post('/api/chat', async (req, res) => {
             return res.end();
         }
 
-        const generativeModel = vertexAI.getGenerativeModel({
-            model: MODEL_NAME,
-            systemInstruction: {
-                role: "system",
-                parts: [{ text: systemPrompt }]
-            },
-            tools: tools
-        });
+        let generativeModel;
+        try {
+            generativeModel = vertexAI.getGenerativeModel({
+                model: MODEL_NAME,
+                systemInstruction: {
+                    role: "system",
+                    parts: [{ text: systemPrompt }]
+                },
+                tools: tools
+            });
+        } catch (initError) {
+            console.error("CRITICAL: Failed to initialize Vertex AI Generative Model with Tools:", initError);
+            throw initError; // Re-throw to be caught by the outer catch block
+        }
 
         const history = messages
             .filter(msg => msg.role !== 'system')
