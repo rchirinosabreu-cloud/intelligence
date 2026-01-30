@@ -385,29 +385,25 @@ PRINCIPIOS DE ANÁLISIS PROFUNDO:
 
 Eres la socia intelectual de Brainstudio. Piensa, luego responde.`;
 
-const tools = [
-    {
-        functionDeclarations: [
-            {
-                name: "search_cloud_storage",
-                description: "Busca en el 'cerebro' de Brainstudio (Google Cloud Storage) documentos no estructurados (PDFs, guías, reportes) de clientes como Sunpartners, TruPeak, etc. Usa esto para consultas sobre información interna o conocimiento de proyectos.",
-                parameters: {
-                    type: FunctionDeclarationSchemaType.OBJECT,
-                    properties: {
-                        query: {
-                            type: FunctionDeclarationSchemaType.STRING,
-                            description: "Término de búsqueda (ej. 'Estrategia Sunpartners', 'Reporte TruPeak', 'Guía de Estilo')."
-                        }
-                    },
-                    required: ["query"]
-                }
+const tools = [{
+    functionDeclarations: [
+        {
+            name: "search_cloud_storage",
+            description: "Busca en el 'cerebro' de Brainstudio (Google Cloud Storage) documentos no estructurados (PDFs, guías, reportes) de clientes como Sunpartners, TruPeak, etc. Usa esto para consultas sobre información interna o conocimiento de proyectos.",
+            parameters: {
+                type: FunctionDeclarationSchemaType.OBJECT,
+                properties: {
+                    query: {
+                        type: FunctionDeclarationSchemaType.STRING,
+                        description: "Término de búsqueda (ej. 'Estrategia Sunpartners', 'Reporte TruPeak', 'Guía de Estilo')."
+                    }
+                },
+                required: ["query"]
             }
-        ]
-    },
-    {
-        codeExecution: {}
-    }
-];
+        }
+    ],
+    codeExecution: {}
+}];
 
 function extractTextFromParts(parts = []) {
     return parts
