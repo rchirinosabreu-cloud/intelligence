@@ -343,6 +343,12 @@ Tu objetivo es garantizar búsquedas exitosas incluso si el usuario comete error
    - Ejemplo: Si el usuario escribe "nuba" -> TU QUERY DEBE SER "Muebles Nuva".
 3. EJECUCIÓN: Llama a la herramienta de búsqueda usando ÚNICAMENTE el nombre corregido. Nunca busques el término mal escrito.
 
+### PROTOCOLO DE AUDITORÍA Y EJECUCIÓN DE CÓDIGO:
+Tienes acceso a un entorno seguro de ejecución de Python. Úsalo para:
+1.  **Auditoría Web:** Utiliza las librerías "requests" y "beautifulsoup4" para analizar sitios web en tiempo real.
+    -   Ejemplo: "Analiza el H1 y meta description de https://example.com" -> Escribe un script para extraer esos datos.
+2.  **Cálculos Complejos:** Si necesitas procesar datos numéricos, usa Python en lugar de "calcularlo mentalmente".
+
 Eres Bria, el núcleo de inteligencia y razonamiento de "Brainstudio Intelligence" (Brain OS). Tu misión es actuar como una Consultora Estratégica con Omnisciencia Operativa: no solo encuentras información, la analizas, conectas y transformas en insights accionables.
 
 TU PROCESO DE PENSAMIENTO (Chain of Thought):
@@ -379,24 +385,29 @@ PRINCIPIOS DE ANÁLISIS PROFUNDO:
 
 Eres la socia intelectual de Brainstudio. Piensa, luego responde.`;
 
-const tools = [{
-    functionDeclarations: [
-        {
-            name: "search_cloud_storage",
-            description: "Busca en el 'cerebro' de Brainstudio (Google Cloud Storage) documentos no estructurados (PDFs, guías, reportes) de clientes como Sunpartners, TruPeak, etc. Usa esto para consultas sobre información interna o conocimiento de proyectos.",
-            parameters: {
-                type: FunctionDeclarationSchemaType.OBJECT,
-                properties: {
-                    query: {
-                        type: FunctionDeclarationSchemaType.STRING,
-                        description: "Término de búsqueda (ej. 'Estrategia Sunpartners', 'Reporte TruPeak', 'Guía de Estilo')."
-                    }
-                },
-                required: ["query"]
+const tools = [
+    {
+        functionDeclarations: [
+            {
+                name: "search_cloud_storage",
+                description: "Busca en el 'cerebro' de Brainstudio (Google Cloud Storage) documentos no estructurados (PDFs, guías, reportes) de clientes como Sunpartners, TruPeak, etc. Usa esto para consultas sobre información interna o conocimiento de proyectos.",
+                parameters: {
+                    type: FunctionDeclarationSchemaType.OBJECT,
+                    properties: {
+                        query: {
+                            type: FunctionDeclarationSchemaType.STRING,
+                            description: "Término de búsqueda (ej. 'Estrategia Sunpartners', 'Reporte TruPeak', 'Guía de Estilo')."
+                        }
+                    },
+                    required: ["query"]
+                }
             }
-        }
-    ]
-}];
+        ]
+    },
+    {
+        codeExecution: {}
+    }
+];
 
 function extractTextFromParts(parts = []) {
     return parts
