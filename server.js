@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai';
 import { SearchServiceClient } from '@google-cloud/discoveryengine';
 import { JWT } from 'google-auth-library';
+import * as cheerio from 'cheerio';
 
 dotenv.config();
 
@@ -118,6 +119,76 @@ try {
     console.log("[DiscoveryEngine] Client initialized successfully.");
 } catch (e) {
      console.error("[DiscoveryEngine] Failed to initialize client:", e);
+}
+
+// --- WEBSITE AUDIT TOOL (Cheerio) ---
+async function analyzeWebsiteDna(url) {
+    console.log(`[Audit] Starting DNA analysis for: ${url}`);
+    try {
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'Brainstudio-Intelligence-Bot/1.0 (Audit)'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch URL. Status: ${response.status}`);
+        }
+
+        const html = await response.text();
+        const $ = cheerio.load(html);
+
+        // Technical Health
+        const title = $('title').text().trim() || "Sin título";
+        const description = $('meta[name="description"]').attr('content') ||
+                            $('meta[property="og:description"]').attr('content') ||
+                            "Sin descripción";
+
+        const h1s = [];
+        $('h1').each((i, el) => {
+            const text = $(el).text().trim();
+            if (text) h1s.push(text);
+        });
+
+        // Branding DNA (Hex Colors)
+        // Regex to find 6-digit hex codes in the raw HTML (simple scan)
+        const colorRegex = /#([0-9a-fA-F]{6})\b/g;
+        const colorMatches = html.match(colorRegex) || [];
+
+        // Count frequency to find dominant colors
+        const colorCounts = {};
+        for (const color of colorMatches) {
+            const normalized = color.toLowerCase();
+            colorCounts[normalized] = (colorCounts[normalized] || 0) + 1;
+        }
+
+        // Sort by frequency and take top 5
+        const topColors = Object.entries(colorCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([color, count]) => `${color} (${count})`);
+
+        return JSON.stringify({
+            url: url,
+            status: "Success",
+            technical: {
+                title: title,
+                meta_description: description,
+                h1_tags: h1s
+            },
+            branding_dna: {
+                top_colors_detected: topColors.length > 0 ? topColors : ["None detected"]
+            }
+        }, null, 2);
+
+    } catch (error) {
+        console.error(`[Audit] Error analyzing ${url}:`, error.message);
+        return JSON.stringify({
+            url: url,
+            status: "Error",
+            error: error.message
+        });
+    }
 }
 
 // --- DISCOVERY ENGINE SEARCH (Cloud Storage / Unstructured) ---
@@ -343,11 +414,19 @@ Tu objetivo es garantizar búsquedas exitosas incluso si el usuario comete error
    - Ejemplo: Si el usuario escribe "nuba" -> TU QUERY DEBE SER "Muebles Nuva".
 3. EJECUCIÓN: Llama a la herramienta de búsqueda usando ÚNICAMENTE el nombre corregido. Nunca busques el término mal escrito.
 
-### PROTOCOLO DE AUDITORÍA Y EJECUCIÓN DE CÓDIGO:
-Tienes acceso a un entorno seguro de ejecución de Python. Úsalo para:
-1.  **Auditoría Web:** Utiliza las librerías "requests" y "beautifulsoup4" para analizar sitios web en tiempo real.
-    -   Ejemplo: "Analiza el H1 y meta description de https://example.com" -> Escribe un script para extraer esos datos.
-2.  **Cálculos Complejos:** Si necesitas procesar datos numéricos, usa Python en lugar de "calcularlo mentalmente".
+### PROTOCOLO DE AUDITORÍA WEB Y ANÁLISIS DE MARCA:
+Cuentas con una herramienta especializada llamada "analyze_website_dna". Úsala siempre que el usuario pida analizar, auditar o revisar un sitio web.
+
+1.  **Cuándo usarla:**
+    -   "Analiza la web de Artyzza"
+    -   "¿Qué colores usa TruPeak?"
+    -   "Revisa el SEO técnico de brainstudio.com"
+2.  **Cómo procesar la respuesta:**
+    -   La herramienta te devolverá un JSON con "title", "meta_description", "h1_tags" y "top_colors_detected".
+    -   **NO muestres el JSON crudo.**
+    -   Redacta un informe profesional:
+        -   **Salud Técnica:** Evalúa si el título y la descripción son efectivos para SEO. Revisa si hay múltiples H1 (error común) o si faltan.
+        -   **ADN de Marca:** Describe la paleta de colores detectada y sugiere qué emociones transmiten.
 
 Eres Bria, el núcleo de inteligencia y razonamiento de "Brainstudio Intelligence" (Brain OS). Tu misión es actuar como una Consultora Estratégica con Omnisciencia Operativa: no solo encuentras información, la analizas, conectas y transformas en insights accionables.
 
@@ -401,11 +480,22 @@ const tools = [
                     },
                     required: ["query"]
                 }
+            },
+            {
+                name: "analyze_website_dna",
+                description: "Scrapes a website to extract branding DNA (colors, fonts) and technical health (H1, meta).",
+                parameters: {
+                    type: FunctionDeclarationSchemaType.OBJECT,
+                    properties: {
+                        url: {
+                            type: FunctionDeclarationSchemaType.STRING,
+                            description: "The full URL to audit (e.g. https://artyzza.com)"
+                        }
+                    },
+                    required: ["url"]
+                }
             }
         ]
-    },
-    {
-        codeExecution: {}
     }
 ];
 
@@ -700,29 +790,57 @@ app.post('/api/chat', async (req, res) => {
         if (functionCallDetected) {
             const call = functionCallPart?.functionCall;
 
-            if (call && call.name === 'search_cloud_storage') {
-                const query = call.args?.query;
-                if (!query) {
-                    console.error("[FunctionCall] Missing query argument in function call:", call);
-                    res.write("Error: Missing query argument for search_cloud_storage.");
-                    res.end();
-                    return;
-                }
-                console.log(`[FunctionCall] Executing search_cloud_storage with query: ${query}`);
-                const toolOutput = await searchCloudStorage(query);
-                const inlineDataParts = Array.isArray(toolOutput?.inlineDataParts)
-                    ? toolOutput.inlineDataParts
-                    : [];
+            if (call) {
+                let functionResponseParts = [];
 
-                // Send the tool output back to the model
-                const functionResponseParts = [{
-                    functionResponse: {
-                        name: 'search_cloud_storage',
-                        response: { name: 'search_cloud_storage', content: toolOutput.text }
+                if (call.name === 'search_cloud_storage') {
+                    const query = call.args?.query;
+                    if (!query) {
+                        console.error("[FunctionCall] Missing query argument in function call:", call);
+                        res.write("Error: Missing query argument for search_cloud_storage.");
+                        res.end();
+                        return;
                     }
-                }, ...inlineDataParts];
+                    console.log(`[FunctionCall] Executing search_cloud_storage with query: ${query}`);
+                    const toolOutput = await searchCloudStorage(query);
+                    const inlineDataParts = Array.isArray(toolOutput?.inlineDataParts)
+                        ? toolOutput.inlineDataParts
+                        : [];
 
-                // Start a new stream with the answer
+                    functionResponseParts = [{
+                        functionResponse: {
+                            name: 'search_cloud_storage',
+                            response: { name: 'search_cloud_storage', content: toolOutput.text }
+                        }
+                    }, ...inlineDataParts];
+
+                } else if (call.name === 'analyze_website_dna') {
+                    const url = call.args?.url;
+                    if (!url) {
+                        console.error("[FunctionCall] Missing url argument in function call:", call);
+                        res.write("Error: Missing url argument for analyze_website_dna.");
+                        res.end();
+                        return;
+                    }
+                    console.log(`[FunctionCall] Executing analyze_website_dna for: ${url}`);
+                    const auditJson = await analyzeWebsiteDna(url);
+
+                    functionResponseParts = [{
+                        functionResponse: {
+                            name: 'analyze_website_dna',
+                            response: { name: 'analyze_website_dna', content: auditJson }
+                        }
+                    }];
+                }
+
+                // Start a new stream with the answer (if we have a response part)
+                if (functionResponseParts.length === 0) {
+                     console.error(`[FunctionCall] Unknown function called: ${call.name}`);
+                     res.write(`Error: Unknown function ${call.name}`);
+                     res.end();
+                     return;
+                }
+
                 console.log(`[API] Sending function response back to model...`);
                 let streamResult2;
                 try {
