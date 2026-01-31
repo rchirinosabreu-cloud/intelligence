@@ -507,6 +507,7 @@ Analiza el contexto de la conversación y genera 3 sugerencias de acciones corta
 1. Las sugerencias deben ser acciones concretas que tú puedes realizar (Buscar, Auditar, Redactar, Resumir).
 2. Usa un formato visual distintivo al final del mensaje.
 3. Sé específico con el contexto actual (no digas "Auditar web", di "Auditar web de [Cliente Actual]").
+4. IDIOMA Y CODIFICACIÓN: Genera el texto SIEMPRE en Español neutro y asegúrate de no usar caracteres rotos o mal codificados.
 
 **Formato de Salida Obligatorio (Markdown):**
 ---

@@ -156,7 +156,7 @@ const ChatMessage = React.memo(({ message, onSuggestionClick }) => {
                       return (
                         <button
                           onClick={() => onSuggestionClick && onSuggestionClick(buttonText)}
-                          className="bg-gray-100 hover:bg-purple-100 text-purple-700 rounded-full px-3 py-1 text-sm border border-purple-200 transition-colors inline-block cursor-pointer mx-1 font-medium select-none"
+                          className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-full px-3 py-1 my-1 mr-2 text-sm font-medium transition-colors cursor-pointer inline-flex items-center select-none"
                           title="Click para ejecutar esta acción"
                         >
                           {buttonText}
