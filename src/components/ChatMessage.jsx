@@ -59,7 +59,7 @@ const ThinkingBlock = ({ thought }) => {
   );
 };
 
-const ChatMessage = React.memo(({ message }) => {
+const ChatMessage = React.memo(({ message, onSuggestionClick }) => {
   const isUser = message.role === 'user';
   const [copied, setCopied] = React.useState(false);
 
@@ -145,6 +145,27 @@ const ChatMessage = React.memo(({ message }) => {
                       {removeEmojisFromChildren(children)}
                     </blockquote>
                   ),
+                  code: ({node, inline, className, children, ...props}) => {
+                    // Check for Action Chip pattern: [Icon Text]
+                    // This often appears as inline code
+                    const content = String(children).trim();
+                    const isActionChip = content.startsWith('[') && content.endsWith(']');
+
+                    if (isActionChip && (inline || !className)) {
+                      const buttonText = content.slice(1, -1); // Remove brackets
+                      return (
+                        <button
+                          onClick={() => onSuggestionClick && onSuggestionClick(buttonText)}
+                          className="bg-gray-100 hover:bg-purple-100 text-purple-700 rounded-full px-3 py-1 text-sm border border-purple-200 transition-colors inline-block cursor-pointer mx-1 font-medium select-none"
+                          title="Click para ejecutar esta acción"
+                        >
+                          {buttonText}
+                        </button>
+                      );
+                    }
+
+                    return <code className={className} {...props}>{children}</code>;
+                  }
                 }}
               >
                 {content}

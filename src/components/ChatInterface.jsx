@@ -159,7 +159,11 @@ const ChatInterface = () => {
           ) : (
             <div className="py-6 px-0 space-y-6 min-h-full max-w-5xl mx-auto w-full">
               {currentChat.messages.map((msg, idx) => (
-                <ChatMessage key={idx} message={msg} />
+                <ChatMessage
+                  key={idx}
+                  message={msg}
+                  onSuggestionClick={handleSendMessage}
+                />
               ))}
               
               {isLoading && (
