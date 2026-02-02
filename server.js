@@ -177,12 +177,18 @@ async function fetchAgencyTasks(responsibleName = "Rodny") {
         console.log(`[AgencyTasks] Fetched ${rows.length} rows.`);
 
         // Headers expected: PENDIENTE, CLIENTE, Responsable, Estado, Fecha entrega
-        // Case insensitive normalization for comparison
-        const targetResp = responsibleName.toLowerCase();
+        // Aggressive normalization for comparison
+        const targetResp = responsibleName.trim().toLowerCase();
 
         const pendingTasks = rows.filter(row => {
-            const resp = (row['Responsable'] || "").toLowerCase();
-            const status = (row['Estado'] || "").toLowerCase();
+            const rawResp = row['Responsable'];
+            const rawStatus = row['Estado'];
+
+            // Handle nulls/undefined safely
+            if (!rawResp) return false;
+
+            const resp = String(rawResp).trim().toLowerCase();
+            const status = String(rawStatus || "").trim().toLowerCase();
 
             // Filter logic:
             // 1. Responsable contains target name (partial match)
@@ -191,7 +197,10 @@ async function fetchAgencyTasks(responsibleName = "Rodny") {
         });
 
         if (pendingTasks.length === 0) {
-            return `No se encontraron tareas pendientes para "${responsibleName}" en la hoja "${sheet.title}".`;
+            // DEBUG: Collect first few responsible names to diagnose mapping issues
+            const sampleResponsibles = rows.slice(0, 5).map(r => r['Responsable']).join(', ');
+            return `No se encontraron tareas pendientes para "${responsibleName}" en la hoja "${sheet.title}".\n` +
+                   `DEBUG: Leí ${rows.length} filas totales. Primeros responsables encontrados: [${sampleResponsibles}]`;
         }
 
         const taskList = pendingTasks.map(row => {
