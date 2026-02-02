@@ -5,6 +5,7 @@ import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai'
 import { SearchServiceClient } from '@google-cloud/discoveryengine';
 import { JWT } from 'google-auth-library';
 import * as cheerio from 'cheerio';
+import { GoogleSpreadsheet } from 'google-spreadsheet';
 
 dotenv.config();
 
@@ -58,6 +59,9 @@ try {
             credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
         }
         console.log("Credentials parsed and sanitized successfully for project:", credentials?.project_id);
+        if (credentials?.client_email) {
+            console.log("Service Account Email:", credentials.client_email);
+        }
     } else {
         console.error("CRITICAL: GOOGLE_APPLICATION_CREDENTIALS_JSON is missing");
     }
@@ -119,6 +123,91 @@ try {
     console.log("[DiscoveryEngine] Client initialized successfully.");
 } catch (e) {
      console.error("[DiscoveryEngine] Failed to initialize client:", e);
+}
+
+// --- AGENCY TASKS TOOL (Google Sheets) ---
+function getAgencySheetName() {
+    const months = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
+    const now = new Date();
+    const month = months[now.getMonth()];
+    const year = now.getFullYear();
+    return `${month} ${year}`; // Ejemplo: "ENERO 2026"
+}
+
+async function fetchAgencyTasks(responsibleName = "Rodny") {
+    console.log(`[AgencyTasks] Fetching tasks for: ${responsibleName}`);
+    const SHEET_ID = process.env.AGENCY_TASKS_SHEET_ID;
+
+    if (!SHEET_ID) {
+        return "Error: AGENCY_TASKS_SHEET_ID no está configurado en las variables de entorno.";
+    }
+
+    if (!credentials) {
+        return "Error: No hay credenciales de Google Service Account disponibles.";
+    }
+
+    try {
+        // Auth with Service Account
+        const authClient = new JWT({
+            email: credentials.client_email,
+            key: credentials.private_key,
+            scopes: [
+                'https://www.googleapis.com/auth/spreadsheets',
+            ],
+        });
+
+        const doc = new GoogleSpreadsheet(SHEET_ID, authClient);
+        await doc.loadInfo();
+
+        const targetSheetName = getAgencySheetName();
+        let sheet = doc.sheetsByTitle[targetSheetName];
+
+        if (!sheet) {
+            console.warn(`[AgencyTasks] Sheet "${targetSheetName}" not found. Fallback to index 0.`);
+            sheet = doc.sheetsByIndex[0];
+        } else {
+            console.log(`[AgencyTasks] Using sheet: ${targetSheetName}`);
+        }
+
+        if (!sheet) {
+            return "Error: No se pudo encontrar ninguna hoja en el documento.";
+        }
+
+        const rows = await sheet.getRows();
+        console.log(`[AgencyTasks] Fetched ${rows.length} rows.`);
+
+        // Headers expected: PENDIENTE, CLIENTE, Responsable, Estado, Fecha entrega
+        // Case insensitive normalization for comparison
+        const targetResp = responsibleName.toLowerCase();
+
+        const pendingTasks = rows.filter(row => {
+            const resp = (row['Responsable'] || "").toLowerCase();
+            const status = (row['Estado'] || "").toLowerCase();
+
+            // Filter logic:
+            // 1. Responsable contains target name (partial match)
+            // 2. Status is NOT "realizado"
+            return resp.includes(targetResp) && status !== 'realizado';
+        });
+
+        if (pendingTasks.length === 0) {
+            return `No se encontraron tareas pendientes para "${responsibleName}" en la hoja "${sheet.title}".`;
+        }
+
+        const taskList = pendingTasks.map(row => {
+            const task = row['PENDIENTE'] || "Sin descripción";
+            const client = row['CLIENTE'] || "Sin cliente";
+            const date = row['Fecha entrega'] || "Sin fecha";
+            const status = row['Estado'] || "Desconocido";
+            return `- [${date}] ${task} (Cliente: ${client}) [Estado: ${status}]`;
+        }).join('\n');
+
+        return `Tareas pendientes para ${responsibleName} (Hoja: ${sheet.title}):\n\n${taskList}`;
+
+    } catch (error) {
+        console.error("[AgencyTasks] Error:", error);
+        return `Error al consultar la hoja de tareas: ${error.message}`;
+    }
 }
 
 // --- WEBSITE AUDIT TOOL (Cheerio) ---
@@ -555,6 +644,20 @@ const tools = [
                     },
                     required: ["url"]
                 }
+            },
+            {
+                name: "fetch_agency_tasks",
+                description: "Connects to the Agency Google Sheet to retrieve pending tasks filtered by responsible person.",
+                parameters: {
+                    type: FunctionDeclarationSchemaType.OBJECT,
+                    properties: {
+                        responsible_name: {
+                            type: FunctionDeclarationSchemaType.STRING,
+                            description: "Name of the responsible person (default: Rodny)."
+                        }
+                    },
+                    required: []
+                }
             }
         ]
     }
@@ -890,6 +993,17 @@ app.post('/api/chat', async (req, res) => {
                         functionResponse: {
                             name: 'analyze_website_dna',
                             response: { name: 'analyze_website_dna', content: auditJson }
+                        }
+                    }];
+                } else if (call.name === 'fetch_agency_tasks') {
+                    const responsibleName = call.args?.responsible_name || "Rodny";
+                    console.log(`[FunctionCall] Executing fetch_agency_tasks for: ${responsibleName}`);
+                    const tasksText = await fetchAgencyTasks(responsibleName);
+
+                    functionResponseParts = [{
+                        functionResponse: {
+                            name: 'fetch_agency_tasks',
+                            response: { name: 'fetch_agency_tasks', content: tasksText }
                         }
                     }];
                 }
