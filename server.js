@@ -176,6 +176,14 @@ async function fetchAgencyTasks(responsibleName = "Rodny") {
         const rows = await sheet.getRows();
         console.log(`[AgencyTasks] Fetched ${rows.length} rows.`);
 
+        // DEBUG: Check raw values for the first few rows to verify headers
+        const debugRows = rows.slice(0, 3).map(row => ({
+           responsable: row['Responsable'],
+           estado: row['Estado'],
+           cliente: row['CLIENTE']
+        }));
+        console.log("DEBUG ROWS RAW:", JSON.stringify(debugRows, null, 2));
+
         // Headers expected: PENDIENTE, CLIENTE, Responsable, Estado, Fecha entrega
         // Aggressive normalization for comparison
         const targetResp = responsibleName.trim().toLowerCase();
