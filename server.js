@@ -185,11 +185,8 @@ async function fetchAgencyTasks(responsibleName = "Rodny") {
         console.log(`[AgencyTasks] Fetched ${rows.length} rows.`);
 
         // DEBUG: Check raw values for the first few rows to verify headers
-        const debugRows = rows.slice(0, 3).map(row => ({
-           responsable: row['Responsable'],
-           estado: row['Estado'],
-           cliente: row['CLIENTE']
-        }));
+        // Use toObject() to see the actual data mapped by headers
+        const debugRows = rows.slice(0, 3).map(row => row.toObject());
         console.log("DEBUG ROWS RAW:", JSON.stringify(debugRows, null, 2));
 
         // Headers expected: PENDIENTE, CLIENTE, Responsable, Estado, Fecha entrega
@@ -197,8 +194,8 @@ async function fetchAgencyTasks(responsibleName = "Rodny") {
         const targetResp = responsibleName.trim().toLowerCase();
 
         const pendingTasks = rows.filter(row => {
-            const rawResp = row['Responsable'];
-            const rawStatus = row['Estado'];
+            const rawResp = row.get('Responsable');
+            const rawStatus = row.get('Estado');
 
             // Handle nulls/undefined safely
             if (!rawResp) return false;
@@ -214,16 +211,16 @@ async function fetchAgencyTasks(responsibleName = "Rodny") {
 
         if (pendingTasks.length === 0) {
             // DEBUG: Collect first few responsible names to diagnose mapping issues
-            const sampleResponsibles = rows.slice(0, 5).map(r => r['Responsable']).join(', ');
+            const sampleResponsibles = rows.slice(0, 5).map(r => r.get('Responsable')).join(', ');
             return `No se encontraron tareas pendientes para "${responsibleName}" en la hoja "${sheet.title}".\n` +
                    `DEBUG: Leí ${rows.length} filas totales. Primeros responsables encontrados: [${sampleResponsibles}]`;
         }
 
         const taskList = pendingTasks.map(row => {
-            const task = row['PENDIENTE'] || "Sin descripción";
-            const client = row['CLIENTE'] || "Sin cliente";
-            const date = row['Fecha entrega'] || "Sin fecha";
-            const status = row['Estado'] || "Desconocido";
+            const task = row.get('PENDIENTE') || "Sin descripción";
+            const client = row.get('CLIENTE') || "Sin cliente";
+            const date = row.get('Fecha entrega') || "Sin fecha";
+            const status = row.get('Estado') || "Desconocido";
             return `- [${date}] ${task} (Cliente: ${client}) [Estado: ${status}]`;
         }).join('\n');
 
