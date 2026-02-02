@@ -173,6 +173,14 @@ async function fetchAgencyTasks(responsibleName = "Rodny") {
             return "Error: No se pudo encontrar ninguna hoja en el documento.";
         }
 
+        // Force header load and log them for debugging
+        try {
+            await sheet.loadHeaderRow();
+            console.log(`[AgencyTasks] DETECTED HEADERS for sheet "${sheet.title}":`, sheet.headerValues);
+        } catch (headerError) {
+            console.warn("[AgencyTasks] Warning: Could not load header row.", headerError);
+        }
+
         const rows = await sheet.getRows();
         console.log(`[AgencyTasks] Fetched ${rows.length} rows.`);
 
