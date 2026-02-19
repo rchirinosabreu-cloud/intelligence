@@ -255,6 +255,80 @@ async function fetchAgencyTasks(responsibleName = "Rodny") {
     }
 }
 
+async function getAgencyTasksJSON() {
+    console.log(`[AgencyTasksJSON] Fetching all tasks in JSON format.`);
+    const SHEET_ID = process.env.AGENCY_TASKS_SHEET_ID;
+
+    if (!SHEET_ID || !credentials) {
+        throw new Error("Missing SHEET_ID or credentials.");
+    }
+
+    try {
+        const authClient = new JWT({
+            email: credentials.client_email,
+            key: credentials.private_key,
+            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        });
+
+        const doc = new GoogleSpreadsheet(SHEET_ID, authClient);
+        await doc.loadInfo();
+
+        let sheet = findTargetSheet(doc);
+        if (!sheet) {
+             console.warn(`[AgencyTasksJSON] No sheet found matching current month. Fallback to index 0.`);
+             sheet = doc.sheetsByIndex[0];
+        }
+
+        if (!sheet) throw new Error("No sheet found.");
+
+        await sheet.loadHeaderRow();
+        const rows = await sheet.getRows();
+
+        const tasks = rows.map((row, index) => {
+            // Helper to safely get cell value
+            const get = (key) => {
+                const val = row.get(key);
+                return val ? String(val).trim() : "";
+            };
+
+            // Map Priority to Boolean
+            // Assumes "Alta", "Urgente", "High", "Critical", "1" -> true
+            const priorityRaw = get('Prioridad').toLowerCase();
+            const es_prioritaria = ["alta", "urgente", "high", "critical", "si", "yes", "1"].some(k => priorityRaw.includes(k));
+
+            // Map Responsible Name to UI Avatar
+            const respName = get('Responsable') || "Sin Asignar";
+            const responsableUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(respName)}&background=random&color=fff&size=128`;
+
+            return {
+                id: get('ID') || `row-${index}`, // Fallback ID if column missing
+                pendiente: get('PENDIENTE') || "Sin título",
+                cliente: get('CLIENTE') || "Sin Cliente",
+                responsable: responsableUrl, // Send URL for frontend <img src>
+                responsable_name: respName, // Send raw name just in case
+                fecha_entrega: get('Fecha entrega') || "",
+                estado: get('Estado') || "Pendiente",
+                es_prioritaria: es_prioritaria
+            };
+        });
+
+        // Optional: Filter out empty rows or completed if desired?
+        // User asked for "Pendientes", so maybe filter 'Realizado'?
+        // The user said "Mapeo esperado... El endpoint GET /api/pendientes debe devolver ese array JSON limpio."
+        // Usually "Pendientes" implies filtering, but the Kanban has a "Finalizado" column.
+        // So I should return ALL tasks to populate the Kanban board correctly (including Done).
+        // The user said "En el módulo Pendientes... vea mis tareas reales del Excel organizadas en el Kanban."
+        // If I filter out 'Realizado', the 'Finalizado' column will be empty.
+        // I will return ALL rows.
+
+        return tasks;
+
+    } catch (error) {
+        console.error("[AgencyTasksJSON] Error:", error);
+        throw error;
+    }
+}
+
 // --- WEBSITE AUDIT TOOL (Cheerio) ---
 async function analyzeWebsiteDna(url) {
     console.log(`[Audit] Starting DNA analysis for: ${url}`);
@@ -855,6 +929,16 @@ function createThinkingFilter() {
 
 app.get('/', (req, res) => {
     res.status(200).send('Brainstudio Intelligence API is running (v6-stable-deploy).');
+});
+
+app.get('/api/pendientes', async (req, res) => {
+    try {
+        const tasks = await getAgencyTasksJSON();
+        res.json(tasks);
+    } catch (error) {
+        console.error("[API] /api/pendientes error:", error);
+        res.status(500).json({ error: "Failed to fetch tasks", details: error.message });
+    }
 });
 
 app.post('/api/chat', async (req, res) => {

@@ -16,57 +16,75 @@ export const MOCK_DATA = {
   tasks: [
     {
       id: 1,
-      client: "SunPartners",
-      task: "Auditoría SEO Técnico",
-      status: "En Proceso",
-      priority: "Alta",
-      date: "Oct 24",
-      avatar: "https://i.pravatar.cc/150?u=a042581f4e29026024d"
+      pendiente: "Auditoría SEO Técnico",
+      cliente: "SunPartners",
+      responsable: "https://i.pravatar.cc/150?u=a042581f4e29026024d",
+      fecha_entrega: "19/02",
+      estado: "En Proceso",
+      es_prioritaria: true
     },
     {
       id: 2,
-      client: "TechFlow",
-      task: "Redacción Blog Post (x4)",
-      status: "Pendiente",
-      priority: "Media",
-      date: "Oct 26",
-      avatar: "https://i.pravatar.cc/150?u=a042581f4e29026704d"
+      pendiente: "Redacción Blog Post (x4)",
+      cliente: "TechFlow",
+      responsable: "https://i.pravatar.cc/150?u=a042581f4e29026704d",
+      fecha_entrega: "20/02",
+      estado: "Pendiente",
+      es_prioritaria: false
     },
     {
       id: 3,
-      client: "Urban Coffee",
-      task: "Campaña Ads Q4",
-      status: "Revisión",
-      priority: "Alta",
-      date: "Oct 28",
-      avatar: "https://i.pravatar.cc/150?u=a04258114e29026302d"
+      pendiente: "Campaña Ads Q4",
+      cliente: "Urban Coffee",
+      responsable: "https://i.pravatar.cc/150?u=a04258114e29026302d",
+      fecha_entrega: "28/10",
+      estado: "Realizado",
+      es_prioritaria: true
     },
     {
       id: 4,
-      client: "Dr. Smile",
-      task: "Diseño Creativos RRSS",
-      status: "Pendiente",
-      priority: "Baja",
-      date: "Nov 01",
-      avatar: "https://i.pravatar.cc/150?u=a048581f4e29026701d"
+      pendiente: "Diseño Creativos RRSS",
+      cliente: "Dr. Smile",
+      responsable: "https://i.pravatar.cc/150?u=a048581f4e29026701d",
+      fecha_entrega: "01/11",
+      estado: "Pendiente",
+      es_prioritaria: false
     },
     {
       id: 5,
-      client: "SunPartners",
-      task: "Keyword Research",
-      status: "En Proceso",
-      priority: "Alta",
-      date: "Nov 02",
-      avatar: "https://i.pravatar.cc/150?u=a042581f4e29026024d"
+      pendiente: "Keyword Research",
+      cliente: "SunPartners",
+      responsable: "https://i.pravatar.cc/150?u=a042581f4e29026024d",
+      fecha_entrega: "02/11",
+      estado: "En Proceso",
+      es_prioritaria: true
     },
     {
       id: 6,
-      client: "Velvet Hotel",
-      task: "Setup Analytics GA4",
-      status: "Completado",
-      priority: "Media",
-      date: "Oct 20",
-      avatar: "https://i.pravatar.cc/150?u=a042581f4e29026704d"
+      pendiente: "Setup Analytics GA4",
+      cliente: "Velvet Hotel",
+      responsable: "https://i.pravatar.cc/150?u=a042581f4e29026704d",
+      fecha_entrega: "20/10",
+      estado: "Realizado",
+      es_prioritaria: false
+    },
+    {
+      id: 7,
+      pendiente: "Propuesta Rediseño Web",
+      cliente: "TechFlow",
+      responsable: "https://i.pravatar.cc/150?u=a042581f4e29026704d",
+      fecha_entrega: "30/10",
+      estado: "Pendiente",
+      es_prioritaria: true
+    },
+    {
+      id: 8,
+      pendiente: "Estrategia Email Marketing",
+      cliente: "Urban Coffee",
+      responsable: "https://i.pravatar.cc/150?u=a04258114e29026302d",
+      fecha_entrega: "25/10",
+      estado: "Pendiente",
+      es_prioritaria: false
     },
   ],
   chat: [
