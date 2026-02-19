@@ -272,19 +272,17 @@ async function getAgencyTasksJSON() {
             // Col G (6): comentarios
 
             const pendiente = getByIndex(1);
-            if (!pendiente) return null; // Skip empty rows
+            // Skip empty rows if needed, or handle fallback
+            // User requested explicit mapping to fix "undefined" in frontend
 
             const fecha_entrega = getByIndex(5);
 
             // Priority Logic:
-            // If fecha_entrega exists AND <= Today -> Alta (true)
-            // Else -> Normal (false)
             let es_prioritaria = false;
             const dateObj = parseDate(fecha_entrega);
             if (dateObj) {
                 const now = new Date();
                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                // Compare timestamps to be safe, or just date parts
                 if (dateObj.getTime() <= today.getTime()) {
                     es_prioritaria = true;
                 }
@@ -293,8 +291,9 @@ async function getAgencyTasksJSON() {
             // Normalization Logic:
             const rawStatus = getByIndex(4).toLowerCase();
             let estado = 'Pendiente';
-            if (rawStatus === 'realizado' || rawStatus === 'finalizado' || rawStatus === 'hecho') estado = 'Realizado';
-            else if (rawStatus.includes('proceso') || rawStatus.includes('curso')) estado = 'En proceso';
+            if (rawStatus === 'realizado' || rawStatus === 'finalizado' || rawStatus === 'hecho') estado = 'Realizado'; // Match frontend expected value
+            else if (rawStatus.includes('proceso') || rawStatus.includes('curso')) estado = 'En Proceso'; // Match frontend expected value (Title Case)
+            // Default 'Pendiente' matches frontend default
 
             // Avatar Logic
             const respName = getByIndex(3) || "Sin Asignar";
@@ -303,16 +302,21 @@ async function getAgencyTasksJSON() {
             return {
                 id: index + 2, // Row Index + 2 as requested
                 fecha_asignacion: getByIndex(0),
-                pendiente: pendiente,
-                cliente: getByIndex(2) || "Sin Cliente",
+                pendiente: pendiente || "Sin título",
+                cliente: getByIndex(2) || "General",
                 responsable: responsableUrl,
                 responsable_name: respName,
                 estado: estado,
                 fecha_entrega: fecha_entrega, // Keep original string
                 comentarios: getByIndex(6),
-                es_prioritaria: es_prioritaria
+                es_prioritaria: es_prioritaria,
+                prioridad: es_prioritaria ? 'Alta' : 'Normal' // Explicit string priority if frontend needs it
             };
-        }).filter(t => t !== null);
+        }).filter(t => t.pendiente !== "Sin título");
+
+        if (tasks.length > 0) {
+            console.log('Datos procesados (Sample):', JSON.stringify(tasks[0], null, 2));
+        }
 
         return tasks;
 
