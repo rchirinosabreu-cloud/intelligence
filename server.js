@@ -271,31 +271,37 @@ async function getAgencyTasksJSON() {
         }
 
         const tasks = rows.map((row, index) => {
-            // Helper to safely get cell value by column index (0-based)
-            const getByIndex = (colIndex) => {
-                if (colIndex >= headers.length) return "";
-                const header = headers[colIndex];
-                // Google Spreadsheet v5: row[headerName]
-                const val = row[header];
-                return val ? String(val).trim() : "";
+            // Use _rawData for direct array access as requested
+            // row._rawData[0] = Col A, [1] = Col B, etc.
+            const data = row._rawData || [];
+
+            const getRaw = (idx) => {
+                if (idx < 0 || idx >= data.length) return "";
+                return String(data[idx] || "").trim();
             };
 
-            // Mapping requested:
-            // Col A (0): fecha_asignacion
-            // Col B (1): pendiente
-            // Col C (2): cliente
-            // Col D (3): responsable
-            // Col E (4): estado
-            // Col F (5): fecha_entrega
-            // Col G (6): comentarios
+            // Col A (0): Fecha Asignación
+            // Col B (1): Pendiente (Task Title)
+            // Col C (2): Cliente
+            // Col D (3): Responsable
+            // Col E (4): Estado
+            // Col F (5): Fecha Entrega
+            // Col G (6): Comentarios (Check for 'urgente')
 
-            const pendiente = getByIndex(1);
-            // Skip empty rows if needed, or handle fallback
-            // User requested explicit mapping to fix "undefined" in frontend
+            const pendiente = getRaw(1) || 'Sin título';
+            const cliente = getRaw(2) || 'General';
+            const respName = getRaw(3) || 'Sin asignar';
+            const rawStatus = getRaw(4).toLowerCase();
+            const fecha_entrega = getRaw(5);
+            const comentarios = getRaw(6);
 
-            const fecha_entrega = getByIndex(5);
+            // Normalization Logic for Status
+            let estado = 'Pendiente';
+            if (rawStatus === 'realizado' || rawStatus === 'finalizado' || rawStatus === 'hecho' || rawStatus === 'done') estado = 'Realizado';
+            else if (rawStatus.includes('proceso') || rawStatus.includes('curso') || rawStatus.includes('working')) estado = 'En Proceso';
 
-            // Priority Logic:
+            // Priority Logic
+            // 1. Date Check
             let es_prioritaria = false;
             const dateObj = parseDate(fecha_entrega);
             if (dateObj) {
@@ -305,30 +311,26 @@ async function getAgencyTasksJSON() {
                     es_prioritaria = true;
                 }
             }
-
-            // Normalization Logic:
-            const rawStatus = getByIndex(4).toLowerCase();
-            let estado = 'Pendiente';
-            if (rawStatus === 'realizado' || rawStatus === 'finalizado' || rawStatus === 'hecho') estado = 'Realizado'; // Match frontend expected value
-            else if (rawStatus.includes('proceso') || rawStatus.includes('curso')) estado = 'En Proceso'; // Match frontend expected value (Title Case)
-            // Default 'Pendiente' matches frontend default
+            // 2. Comments Check (e.g. "URGENTE" in Col G)
+            if (comentarios.toLowerCase().includes('urgente')) {
+                es_prioritaria = true;
+            }
 
             // Avatar Logic
-            const respName = getByIndex(3) || "Sin Asignar";
             const responsableUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(respName)}&background=random&color=fff&size=128`;
 
             return {
-                id: index + 2, // Row Index + 2 as requested
-                fecha_asignacion: getByIndex(0),
-                pendiente: pendiente || "Sin título",
-                cliente: getByIndex(2) || "General",
-                responsable: responsableUrl,
-                responsable_name: respName,
+                id: index + 2,
+                fecha_asignacion: getRaw(0),
+                pendiente: pendiente,
+                cliente: cliente,
+                responsable: responsableUrl, // Frontend <img> src
+                responsable_name: respName,  // Frontend text
                 estado: estado,
-                fecha_entrega: fecha_entrega, // Keep original string
-                comentarios: getByIndex(6),
+                fecha_entrega: fecha_entrega,
+                comentarios: comentarios,
                 es_prioritaria: es_prioritaria,
-                prioridad: es_prioritaria ? 'Alta' : 'Normal' // Explicit string priority if frontend needs it
+                prioridad: es_prioritaria ? 'Alta' : 'Normal'
             };
         }).filter(t => t.pendiente !== "Sin título");
 
