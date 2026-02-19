@@ -126,12 +126,36 @@ try {
 }
 
 // --- AGENCY TASKS TOOL (Google Sheets) ---
-function getAgencySheetName() {
+function findTargetSheet(doc) {
     const months = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
     const now = new Date();
-    const month = months[now.getMonth()];
-    const year = now.getFullYear();
-    return `${month} ${year}`; // Ejemplo: "ENERO 2026"
+    const currentMonthName = months[now.getMonth()]; // e.g., "FEBRERO"
+
+    console.log(`[AgencyTasks] Looking for sheet matching month: ${currentMonthName}`);
+
+    let bestMatch = null;
+    let maxYear = -1;
+
+    // Iterate through all sheets to find the best match
+    // Strategy: Find sheets containing the current month name.
+    // If multiple exist (e.g., "Febrero 2025", "Febrero 2026"), pick the one with the highest year.
+    for (const sheet of doc.sheetsByIndex) {
+        const title = sheet.title.toUpperCase();
+
+        if (title.includes(currentMonthName)) {
+            // Found a candidate
+            const yearMatch = title.match(/\d{4}/);
+            const sheetYear = yearMatch ? parseInt(yearMatch[0], 10) : 0;
+
+            // If it's the first match or has a higher year than previous match
+            if (!bestMatch || sheetYear > maxYear) {
+                bestMatch = sheet;
+                maxYear = sheetYear;
+            }
+        }
+    }
+
+    return bestMatch;
 }
 
 async function fetchAgencyTasks(responsibleName = "Rodny") {
@@ -159,14 +183,13 @@ async function fetchAgencyTasks(responsibleName = "Rodny") {
         const doc = new GoogleSpreadsheet(SHEET_ID, authClient);
         await doc.loadInfo();
 
-        const targetSheetName = getAgencySheetName();
-        let sheet = doc.sheetsByTitle[targetSheetName];
+        let sheet = findTargetSheet(doc);
 
         if (!sheet) {
-            console.warn(`[AgencyTasks] Sheet "${targetSheetName}" not found. Fallback to index 0.`);
+            console.warn(`[AgencyTasks] No sheet found matching current month. Fallback to index 0.`);
             sheet = doc.sheetsByIndex[0];
         } else {
-            console.log(`[AgencyTasks] Using sheet: ${targetSheetName}`);
+            console.log(`[AgencyTasks] Using sheet: ${sheet.title}`);
         }
 
         if (!sheet) {
