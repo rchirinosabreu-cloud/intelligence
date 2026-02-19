@@ -5,26 +5,47 @@
 @tailwind utilities;
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-  
-  body {
-    @apply bg-brand-mauve text-brand-charcoal font-sans;
-    font-feature-settings: "rlig" 1, "calt" 1;
-  }
-}
+  :root {
+    --background: 240 10% 3.9%; /* Zinc 950 approx */
+    --foreground: 0 0% 98%;     /* Zinc 50 approx */
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+
+    --radius: 0.75rem;
+  }
+
+  body {
+    @apply bg-zinc-950 text-zinc-100 font-sans antialiased selection:bg-indigo-500/30 selection:text-indigo-200;
   }
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -32,15 +53,9 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #E7DCF0; /* lavender */
-  border-radius: 4px;
+  @apply bg-zinc-800 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #CCC0D4;
-}
-
-/* Smooth scrolling */
-html {
-  scroll-behavior: smooth;
+  @apply bg-zinc-700;
 }
