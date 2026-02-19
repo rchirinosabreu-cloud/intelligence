@@ -240,6 +240,10 @@ async function getAgencyTasksJSON() {
         const doc = new GoogleSpreadsheet(SHEET_ID, authClient);
         await doc.loadInfo();
 
+        // DEBUG EXTREMO: Listar todas las hojas
+        const availableSheets = doc.sheetsByIndex.map(s => s.title);
+        console.log('[DEBUG EXTREMO] Hojas disponibles en el documento:', availableSheets);
+
         let sheet = findTargetSheet(doc);
         if (!sheet) {
              console.warn(`[AgencyTasksJSON] No sheet found matching current month. Fallback to index 0.`);
@@ -247,11 +251,24 @@ async function getAgencyTasksJSON() {
         }
 
         if (!sheet) throw new Error("No sheet found.");
+        console.log(`[DEBUG EXTREMO] Intentando leer hoja: "${sheet.title}"`);
 
         await sheet.loadHeaderRow();
         const headers = sheet.headerValues;
+        console.log('[DEBUG EXTREMO] Headers detectados:', headers);
 
         const rows = await sheet.getRows();
+        console.log(`[DEBUG EXTREMO] Filas leídas: ${rows.length}`);
+
+        if (rows.length > 0) {
+            // Log raw data from internal property if available, or try to reconstruct
+            try {
+                 // _rawData is internal to google-spreadsheet but useful for debug
+                 console.log('[DEBUG EXTREMO] Fila 0 Raw (_rawData):', rows[0]._rawData);
+            } catch (e) {
+                 console.log('[DEBUG EXTREMO] Fila 0 (toObject):', rows[0].toObject());
+            }
+        }
 
         const tasks = rows.map((row, index) => {
             // Helper to safely get cell value by column index (0-based)
