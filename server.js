@@ -127,10 +127,11 @@ try {
 
 // --- AGENCY TASKS TOOL (Google Sheets) ---
 function findTargetSheet(doc) {
-    // 1. Priority: Specific sheet requested by user
-    const targetTitle = 'PENDIENTES BRAIN STUDIO 2026';
+    // 1. Priority: Specific sheet requested by user (e.g., 'Febrero 2026')
+    // We can also check for variations if needed, but strict match is requested first.
+    const targetTitle = 'Febrero 2026';
     for (const sheet of doc.sheetsByIndex) {
-        if (sheet.title.trim().toUpperCase() === targetTitle) {
+        if (sheet.title.trim() === targetTitle) {
              console.log(`[AgencyTasks] Found priority sheet: ${sheet.title}`);
              return sheet;
         }
