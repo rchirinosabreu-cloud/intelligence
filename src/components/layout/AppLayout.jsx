@@ -3,9 +3,9 @@ import Sidebar from './Sidebar';
 
 const AppLayout = ({ children, activeTab, setActiveTab }) => {
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-indigo-500/20 overflow-hidden relative">
-      {/* Ambient Glow Background - Fixed, z-0 */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-indigo-500/20 overflow-hidden relative transition-colors duration-300">
+      {/* Ambient Glow Background - Fixed, z-0 (Dark Mode Only) */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden hidden dark:block">
           {/* Top Left Orb - Indigo */}
           <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-indigo-500/10 blur-[140px] rounded-full opacity-40 mix-blend-screen animate-pulse-slow" />
 

@@ -4,8 +4,9 @@ import Dashboard from './components/modules/Dashboard';
 import Tasks from './components/modules/Tasks';
 import Chat from './components/modules/Chat';
 import Files from './components/modules/Files';
+import { ThemeProvider } from './context/ThemeContext';
 
-function App() {
+function AppContent() {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const renderContent = () => {
@@ -22,6 +23,14 @@ function App() {
     <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
       {renderContent()}
     </AppLayout>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }
 
