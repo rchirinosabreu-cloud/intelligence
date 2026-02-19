@@ -1,27 +1,40 @@
-import React, { useState, useMemo } from 'react';
-import { MOCK_DATA } from '@/data';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User } from 'lucide-react';
+import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Helper to check if date is today or past
-// Assumes format "DD/MM" and current year
+// Assumes format "DD/MM" or similar
 const isOverdue = (dateStr) => {
     if (!dateStr) return false;
-    const [day, month] = dateStr.split('/').map(Number);
+    const parts = dateStr.split('/');
+    if (parts.length !== 2 && parts.length !== 3) return false;
+
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const year = parts[2] ? parseInt(parts[2], 10) : new Date().getFullYear(); // Assume current year if missing
+
+    if (isNaN(day) || isNaN(month)) return false;
+
     const now = new Date();
-    const taskDate = new Date(now.getFullYear(), month - 1, day);
+    const taskDate = new Date(year, month - 1, day);
     // Reset time for comparison
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
     return taskDate <= today;
 };
 
 // Helper for date filtering
 const isToday = (dateStr) => {
     if (!dateStr) return false;
-    const [day, month] = dateStr.split('/').map(Number);
+    const parts = dateStr.split('/');
+    if (parts.length < 2) return false;
+
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+
     const now = new Date();
     return day === now.getDate() && (month - 1) === now.getMonth();
 };
@@ -29,10 +42,17 @@ const isToday = (dateStr) => {
 // Helper for "This Week" (next 7 days)
 const isThisWeek = (dateStr) => {
     if (!dateStr) return false;
-    const [day, month] = dateStr.split('/').map(Number);
+    const parts = dateStr.split('/');
+    if (parts.length < 2) return false;
+
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const year = parts[2] ? parseInt(parts[2], 10) : new Date().getFullYear();
+
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const taskDate = new Date(now.getFullYear(), month - 1, day);
+    const taskDate = new Date(year, month - 1, day);
+
     const diffTime = taskDate - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays >= 0 && diffDays <= 7;
@@ -50,17 +70,44 @@ const Tasks = () => {
   const [responsibleFilter, setResponsibleFilter] = useState('Todos');
   const [dateFilter, setDateFilter] = useState('Todas');
 
-  const tasks = MOCK_DATA.tasks || [];
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Extract unique responsibles (URLs)
+  useEffect(() => {
+      const fetchTasks = async () => {
+          try {
+              setLoading(true);
+              const response = await fetch(`${import.meta.env.VITE_API_URL?.replace(/\/$/, '') || ''}/api/pendientes`);
+              if (!response.ok) {
+                  throw new Error(`Error ${response.status}: ${response.statusText}`);
+              }
+              const data = await response.json();
+              setTasks(data);
+          } catch (err) {
+              console.error("Failed to fetch tasks:", err);
+              setError(err.message);
+          } finally {
+              setLoading(false);
+          }
+      };
+
+      fetchTasks();
+  }, []);
+
+  // Extract unique responsibles (URLs/Names)
   const responsibles = useMemo(() => {
-      const unique = [...new Set(tasks.map(t => t.responsable))];
+      // We use 'responsable_name' for the dropdown if available, otherwise fallback
+      // But we filter by 'responsable' (URL) or 'responsable_name'?
+      // The backend returns both.
+      // Let's stick to filtering by Name for better UX in dropdown.
+      const unique = [...new Set(tasks.map(t => t.responsable_name || "Desconocido"))].filter(Boolean);
       return ['Todos', ...unique];
   }, [tasks]);
 
   const filteredTasks = tasks.filter(task => {
     // Filter by Responsible
-    if (responsibleFilter !== 'Todos' && task.responsable !== responsibleFilter) return false;
+    if (responsibleFilter !== 'Todos' && (task.responsable_name || "Desconocido") !== responsibleFilter) return false;
 
     // Filter by Date
     if (dateFilter === 'Para Hoy') {
@@ -76,8 +123,51 @@ const Tasks = () => {
   const columns = [
       { id: 'Pendiente', title: 'Por Hacer', color: 'bg-zinc-100 dark:bg-zinc-800/50' },
       { id: 'En Proceso', title: 'En Proceso', color: 'bg-blue-50/50 dark:bg-blue-900/10' },
-      { id: 'Realizado', title: 'Finalizado', color: 'bg-emerald-50/50 dark:bg-emerald-900/10' }
+      { id: 'Finalizado', title: 'Finalizado', color: 'bg-emerald-50/50 dark:bg-emerald-900/10' }
   ];
+
+  // Note: Backend might return 'Realizado', 'Hecho', 'Finalizado'.
+  // We need to normalize or map the backend status to our column IDs.
+  // Or just flexible matching.
+  const getColumnId = (status) => {
+      if (!status) return 'Pendiente';
+      const s = status.toLowerCase();
+      if (s.includes('realizado') || s.includes('finalizado') || s.includes('hecho') || s.includes('done')) return 'Finalizado';
+      if (s.includes('proceso') || s.includes('working') || s.includes('curso')) return 'En Proceso';
+      return 'Pendiente';
+  };
+
+  if (loading) {
+      return (
+          <div className="h-full flex flex-col items-center justify-center space-y-4">
+              <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
+              <p className="text-zinc-500 dark:text-zinc-400 text-sm animate-pulse">Sincronizando con Google Sheets...</p>
+          </div>
+      );
+  }
+
+  if (error) {
+       return (
+          <div className="h-full flex flex-col items-center justify-center space-y-4">
+              <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
+                  <AlertCircle className="w-6 h-6 text-red-500" />
+              </div>
+              <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">No pudimos cargar tus tareas</h3>
+              <p className="text-zinc-500 dark:text-zinc-400 text-sm max-w-sm text-center">
+                  Hubo un problema al conectar con la hoja de cálculo. Por favor verifica tu conexión o las credenciales.
+              </p>
+              <p className="text-xs text-zinc-400 font-mono bg-zinc-100 dark:bg-zinc-900 px-2 py-1 rounded">
+                  {error}
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-4 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+              >
+                  Reintentar
+              </button>
+          </div>
+      );
+  }
 
   return (
     <div className="space-y-6 h-full flex flex-col">
@@ -85,7 +175,7 @@ const Tasks = () => {
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-1">Pendientes</h2>
-          <p className="text-zinc-500 dark:text-zinc-400 text-sm">Gestión de tareas visual (Kanban).</p>
+          <p className="text-zinc-500 dark:text-zinc-400 text-sm">Gestión de tareas visual (Sincronizado con Google Sheets).</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -98,7 +188,7 @@ const Tasks = () => {
                 >
                     {responsibles.map((r, i) => (
                         <option key={i} value={r}>
-                            {r === 'Todos' ? 'Todos los responsables' : `Responsable ${i}`}
+                            {r === 'Todos' ? 'Todos los responsables' : r}
                         </option>
                     ))}
                 </select>
@@ -126,7 +216,7 @@ const Tasks = () => {
       {/* Kanban Board */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 min-h-[500px]">
           {columns.map((col) => {
-              const columnTasks = filteredTasks.filter(t => t.estado === col.id);
+              const columnTasks = filteredTasks.filter(t => getColumnId(t.estado) === col.id);
 
               return (
                 <div key={col.id} className="flex flex-col gap-4">
@@ -204,15 +294,19 @@ const TaskCard = ({ task }) => {
                             isOverdueTask ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
                         )}>
                             <Calendar className="w-3.5 h-3.5" />
-                            {task.fecha_entrega}
+                            {task.fecha_entrega || "Sin fecha"}
                         </div>
 
-                        <div className="flex items-center">
+                        <div className="flex items-center gap-2">
+                            {/* Initials fallback or name if no image? */}
                              <img
                                 src={task.responsable}
-                                alt="Responsable"
+                                alt={task.responsable_name}
                                 className="w-6 h-6 rounded-full ring-2 ring-white dark:ring-zinc-900"
-                                title="Responsable"
+                                title={task.responsable_name}
+                                onError={(e) => {
+                                    e.target.style.display = 'none'; // Hide if fails
+                                }}
                              />
                         </div>
                     </div>
