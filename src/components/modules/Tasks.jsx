@@ -78,7 +78,8 @@ const Tasks = () => {
       const fetchTasks = async () => {
           try {
               setLoading(true);
-              const response = await fetch(`${import.meta.env.VITE_API_URL?.replace(/\/$/, '') || ''}/api/pendientes`);
+              const baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
+              const response = await fetch(`${baseUrl}/api/pendientes`);
               if (!response.ok) {
                   throw new Error(`Error ${response.status}: ${response.statusText}`);
               }
