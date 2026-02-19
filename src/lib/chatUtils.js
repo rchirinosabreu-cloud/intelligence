@@ -5,12 +5,8 @@
  * @param {Function} onChunk - Callback function for each streamed chunk
  */
 export async function sendMessage(messages, onChunk) {
-  // Use VITE_API_URL if set, otherwise default to Railway URL
-  // Logic to handle potential trailing slash in the env var
-  let baseUrl = import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com";
-  if (baseUrl.endsWith('/')) {
-    baseUrl = baseUrl.slice(0, -1);
-  }
+  // Use VITE_API_URL if set, otherwise default to Brain Studio API
+  let baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
 
   try {
     const response = await fetch(`${baseUrl}/api/chat`, {
