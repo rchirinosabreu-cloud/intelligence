@@ -127,11 +127,20 @@ try {
 
 // --- AGENCY TASKS TOOL (Google Sheets) ---
 function findTargetSheet(doc) {
+    // 1. Priority: Specific sheet requested by user
+    const targetTitle = 'PENDIENTES BRAIN STUDIO 2026';
+    for (const sheet of doc.sheetsByIndex) {
+        if (sheet.title.trim().toUpperCase() === targetTitle) {
+             console.log(`[AgencyTasks] Found priority sheet: ${sheet.title}`);
+             return sheet;
+        }
+    }
+
     const months = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
     const now = new Date();
     const currentMonthName = months[now.getMonth()]; // e.g., "FEBRERO"
 
-    console.log(`[AgencyTasks] Looking for sheet matching month: ${currentMonthName}`);
+    console.log(`[AgencyTasks] Priority sheet not found. Looking for sheet matching month: ${currentMonthName}`);
 
     let bestMatch = null;
     let maxYear = -1;
@@ -158,96 +167,53 @@ function findTargetSheet(doc) {
     return bestMatch;
 }
 
+// Helper: Parse dates (DD/MM/YYYY or YYYY-MM-DD)
+function parseDate(dateStr) {
+    if (!dateStr) return null;
+    const d = String(dateStr).trim();
+    if (!d) return null;
+
+    // Handle "DD/MM/YYYY" or "DD/MM"
+    const parts = d.split('/');
+    if (parts.length >= 2) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parts[2] ? parseInt(parts[2], 10) : new Date().getFullYear();
+        if (!isNaN(day) && !isNaN(month)) {
+            return new Date(year, month, day);
+        }
+    }
+
+    // Handle "YYYY-MM-DD"
+    const date = new Date(d);
+    if (!isNaN(date.getTime())) return date;
+
+    return null;
+}
+
 async function fetchAgencyTasks(responsibleName = "Rodny") {
     console.log(`[AgencyTasks] Fetching tasks for: ${responsibleName}`);
-    const SHEET_ID = process.env.AGENCY_TASKS_SHEET_ID;
-
-    if (!SHEET_ID) {
-        return "Error: AGENCY_TASKS_SHEET_ID no está configurado en las variables de entorno.";
-    }
-
-    if (!credentials) {
-        return "Error: No hay credenciales de Google Service Account disponibles.";
-    }
-
     try {
-        // Auth with Service Account
-        const authClient = new JWT({
-            email: credentials.client_email,
-            key: credentials.private_key,
-            scopes: [
-                'https://www.googleapis.com/auth/spreadsheets',
-            ],
-        });
-
-        const doc = new GoogleSpreadsheet(SHEET_ID, authClient);
-        await doc.loadInfo();
-
-        let sheet = findTargetSheet(doc);
-
-        if (!sheet) {
-            console.warn(`[AgencyTasks] No sheet found matching current month. Fallback to index 0.`);
-            sheet = doc.sheetsByIndex[0];
-        } else {
-            console.log(`[AgencyTasks] Using sheet: ${sheet.title}`);
-        }
-
-        if (!sheet) {
-            return "Error: No se pudo encontrar ninguna hoja en el documento.";
-        }
-
-        // Force header load and log them for debugging
-        try {
-            await sheet.loadHeaderRow();
-            console.log(`[AgencyTasks] DETECTED HEADERS for sheet "${sheet.title}":`, sheet.headerValues);
-        } catch (headerError) {
-            console.warn("[AgencyTasks] Warning: Could not load header row.", headerError);
-        }
-
-        const rows = await sheet.getRows();
-        console.log(`[AgencyTasks] Fetched ${rows.length} rows.`);
-
-        // DEBUG: Check raw values for the first few rows to verify headers
-        // Use toObject() to see the actual data mapped by headers
-        const debugRows = rows.slice(0, 3).map(row => row.toObject());
-        console.log("DEBUG ROWS RAW:", JSON.stringify(debugRows, null, 2));
-
-        // Headers expected: PENDIENTE, CLIENTE, Responsable, Estado, Fecha entrega
-        // Aggressive normalization for comparison
+        const allTasks = await getAgencyTasksJSON();
         const targetResp = responsibleName.trim().toLowerCase();
 
-        const pendingTasks = rows.filter(row => {
-            const rawResp = row.get('Responsable');
-            const rawStatus = row.get('Estado');
-
-            // Handle nulls/undefined safely
-            if (!rawResp) return false;
-
-            const resp = String(rawResp).trim().toLowerCase();
-            const status = String(rawStatus || "").trim().toLowerCase();
-
-            // Filter logic:
-            // 1. Responsable contains target name (partial match)
-            // 2. Status is NOT "realizado"
-            return resp.includes(targetResp) && status !== 'realizado';
+        const pendingTasks = allTasks.filter(task => {
+            const rName = (task.responsable_name || "").toLowerCase();
+            const status = (task.estado || "").toLowerCase();
+            // Filter logic: Match name and exclude "Realizado"
+            return rName.includes(targetResp) && status !== 'realizado';
         });
 
         if (pendingTasks.length === 0) {
-            // DEBUG: Collect first few responsible names to diagnose mapping issues
-            const sampleResponsibles = rows.slice(0, 5).map(r => r.get('Responsable')).join(', ');
-            return `No se encontraron tareas pendientes para "${responsibleName}" en la hoja "${sheet.title}".\n` +
-                   `DEBUG: Leí ${rows.length} filas totales. Primeros responsables encontrados: [${sampleResponsibles}]`;
+            return `No se encontraron tareas pendientes para "${responsibleName}".`;
         }
 
-        const taskList = pendingTasks.map(row => {
-            const task = row.get('PENDIENTE') || "Sin descripción";
-            const client = row.get('CLIENTE') || "Sin cliente";
-            const date = row.get('Fecha entrega') || "Sin fecha";
-            const status = row.get('Estado') || "Desconocido";
-            return `- [${date}] ${task} (Cliente: ${client}) [Estado: ${status}]`;
+        const taskList = pendingTasks.map(t => {
+            const urgency = t.es_prioritaria ? " [URGENTE]" : "";
+            return `- [${t.fecha_entrega || "Sin fecha"}] ${t.pendiente} (Cliente: ${t.cliente}) [Estado: ${t.estado}]${urgency}`;
         }).join('\n');
 
-        return `Tareas pendientes para ${responsibleName} (Hoja: ${sheet.title}):\n\n${taskList}`;
+        return `Tareas pendientes para ${responsibleName}:\n\n${taskList}`;
 
     } catch (error) {
         console.error("[AgencyTasks] Error:", error);
@@ -282,44 +248,71 @@ async function getAgencyTasksJSON() {
         if (!sheet) throw new Error("No sheet found.");
 
         await sheet.loadHeaderRow();
+        const headers = sheet.headerValues;
+
         const rows = await sheet.getRows();
 
         const tasks = rows.map((row, index) => {
-            // Helper to safely get cell value
-            const get = (key) => {
-                const val = row.get(key);
+            // Helper to safely get cell value by column index (0-based)
+            const getByIndex = (colIndex) => {
+                if (colIndex >= headers.length) return "";
+                const header = headers[colIndex];
+                // Google Spreadsheet v5: row[headerName]
+                const val = row[header];
                 return val ? String(val).trim() : "";
             };
 
-            // Map Priority to Boolean
-            // Assumes "Alta", "Urgente", "High", "Critical", "1" -> true
-            const priorityRaw = get('Prioridad').toLowerCase();
-            const es_prioritaria = ["alta", "urgente", "high", "critical", "si", "yes", "1"].some(k => priorityRaw.includes(k));
+            // Mapping requested:
+            // Col A (0): fecha_asignacion
+            // Col B (1): pendiente
+            // Col C (2): cliente
+            // Col D (3): responsable
+            // Col E (4): estado
+            // Col F (5): fecha_entrega
+            // Col G (6): comentarios
 
-            // Map Responsible Name to UI Avatar
-            const respName = get('Responsable') || "Sin Asignar";
+            const pendiente = getByIndex(1);
+            if (!pendiente) return null; // Skip empty rows
+
+            const fecha_entrega = getByIndex(5);
+
+            // Priority Logic:
+            // If fecha_entrega exists AND <= Today -> Alta (true)
+            // Else -> Normal (false)
+            let es_prioritaria = false;
+            const dateObj = parseDate(fecha_entrega);
+            if (dateObj) {
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                // Compare timestamps to be safe, or just date parts
+                if (dateObj.getTime() <= today.getTime()) {
+                    es_prioritaria = true;
+                }
+            }
+
+            // Normalization Logic:
+            const rawStatus = getByIndex(4).toLowerCase();
+            let estado = 'Pendiente';
+            if (rawStatus === 'realizado' || rawStatus === 'finalizado' || rawStatus === 'hecho') estado = 'Realizado';
+            else if (rawStatus.includes('proceso') || rawStatus.includes('curso')) estado = 'En proceso';
+
+            // Avatar Logic
+            const respName = getByIndex(3) || "Sin Asignar";
             const responsableUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(respName)}&background=random&color=fff&size=128`;
 
             return {
-                id: get('ID') || `row-${index}`, // Fallback ID if column missing
-                pendiente: get('PENDIENTE') || "Sin título",
-                cliente: get('CLIENTE') || "Sin Cliente",
-                responsable: responsableUrl, // Send URL for frontend <img src>
-                responsable_name: respName, // Send raw name just in case
-                fecha_entrega: get('Fecha entrega') || "",
-                estado: get('Estado') || "Pendiente",
+                id: index + 2, // Row Index + 2 as requested
+                fecha_asignacion: getByIndex(0),
+                pendiente: pendiente,
+                cliente: getByIndex(2) || "Sin Cliente",
+                responsable: responsableUrl,
+                responsable_name: respName,
+                estado: estado,
+                fecha_entrega: fecha_entrega, // Keep original string
+                comentarios: getByIndex(6),
                 es_prioritaria: es_prioritaria
             };
-        });
-
-        // Optional: Filter out empty rows or completed if desired?
-        // User asked for "Pendientes", so maybe filter 'Realizado'?
-        // The user said "Mapeo esperado... El endpoint GET /api/pendientes debe devolver ese array JSON limpio."
-        // Usually "Pendientes" implies filtering, but the Kanban has a "Finalizado" column.
-        // So I should return ALL tasks to populate the Kanban board correctly (including Done).
-        // The user said "En el módulo Pendientes... vea mis tareas reales del Excel organizadas en el Kanban."
-        // If I filter out 'Realizado', the 'Finalizado' column will be empty.
-        // I will return ALL rows.
+        }).filter(t => t !== null);
 
         return tasks;
 
