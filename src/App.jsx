@@ -1,43 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { Helmet } from 'react-helmet';
-import { AnimatePresence } from 'framer-motion';
-import SplashScreen from '@/components/SplashScreen';
-import ChatInterface from '@/components/ChatInterface';
-import { Toaster } from '@/components/ui/toaster';
+import React, { useState } from 'react';
+import AppLayout from './components/layout/AppLayout';
+import Dashboard from './components/modules/Dashboard';
+import Tasks from './components/modules/Tasks';
+import Chat from './components/modules/Chat';
+import Files from './components/modules/Files';
 
 function App() {
-  const [showSplash, setShowSplash] = useState(true);
+  const [activeTab, setActiveTab] = useState('dashboard');
 
-  useEffect(() => {
-    // Reduced duration to 2 seconds as requested
-    const timer = setTimeout(() => {
-      setShowSplash(false);
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, []);
+  const renderContent = () => {
+    switch(activeTab) {
+      case 'dashboard': return <Dashboard />;
+      case 'bria': return <Chat />;
+      case 'tasks': return <Tasks />;
+      case 'files': return <Files />;
+      default: return <Dashboard />;
+    }
+  };
 
   return (
-    <>
-      <Helmet>
-        <title>Brainstudio Intelligence - AI Conversational Assistant</title>
-        <meta name="description" content="Brainstudio Intelligence - A minimal ChatGPT-style conversational assistant powered by Google Gemini AI" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="true" />
-      </Helmet>
-      
-      <div className="h-screen w-full bg-brand-mauve text-brand-charcoal font-sans antialiased overflow-hidden">
-        <AnimatePresence mode="wait">
-          {showSplash ? (
-            <SplashScreen key="splash" />
-          ) : (
-            <ChatInterface key="chat" />
-          )}
-        </AnimatePresence>
-      </div>
-      
-      <Toaster />
-    </>
+    <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+      {renderContent()}
+    </AppLayout>
   );
 }
 
