@@ -4,16 +4,22 @@ import Sidebar from './Sidebar';
 const AppLayout = ({ children, activeTab, setActiveTab }) => {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-indigo-500/20 overflow-hidden relative transition-colors duration-300">
-      {/* Ambient Glow Background - Fixed, z-0 (Dark Mode Only) */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden hidden dark:block">
+      {/* Ambient Glow Background - Fixed, z-0 */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
           {/* Top Left Orb - Indigo */}
-          <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-indigo-500/10 blur-[140px] rounded-full opacity-40 mix-blend-screen animate-pulse-slow" />
+          <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] rounded-full blur-[140px] opacity-40 animate-pulse-slow
+            bg-indigo-300/30 mix-blend-multiply dark:bg-indigo-500/10 dark:mix-blend-screen"
+          />
 
           {/* Bottom Right Orb - Violet */}
-          <div className="absolute bottom-[-20%] right-[-10%] w-[800px] h-[800px] bg-violet-600/10 blur-[140px] rounded-full opacity-40 mix-blend-screen animate-pulse-slow delay-1000" />
+          <div className="absolute bottom-[-20%] right-[-10%] w-[800px] h-[800px] rounded-full blur-[140px] opacity-40 animate-pulse-slow delay-1000
+            bg-violet-300/30 mix-blend-multiply dark:bg-violet-600/10 dark:mix-blend-screen"
+          />
 
           {/* Center Orb (Optional, smaller) - Fuchsia */}
-           <div className="absolute top-[30%] left-[30%] w-[500px] h-[500px] bg-fuchsia-500/5 blur-[120px] rounded-full opacity-20 mix-blend-screen" />
+           <div className="absolute top-[30%] left-[30%] w-[500px] h-[500px] rounded-full blur-[120px] opacity-20
+             bg-fuchsia-200/30 mix-blend-multiply dark:bg-fuchsia-500/5 dark:mix-blend-screen"
+           />
       </div>
 
       {/* Sidebar - z-50 */}

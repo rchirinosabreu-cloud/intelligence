@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 const Files = () => {
-  const { files } = MOCK_DATA.files || { files: [] }; // Fallback if data structure changes
+  const files = MOCK_DATA.files || [];
 
   const getFileIcon = (type) => {
     switch (type) {
