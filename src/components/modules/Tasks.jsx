@@ -122,8 +122,8 @@ const Tasks = () => {
   });
 
   const columns = [
-      { id: 'Pendiente', title: 'Por Hacer', color: 'bg-zinc-100 dark:bg-zinc-800/50' },
-      { id: 'En Proceso', title: 'En Proceso', color: 'bg-blue-50/50 dark:bg-blue-900/10' },
+      { id: 'Pendiente', title: 'Pendiente', color: 'bg-zinc-100 dark:bg-zinc-800/50' },
+      { id: 'En Proceso', title: 'En proceso', color: 'bg-blue-50/50 dark:bg-blue-900/10' },
       { id: 'Finalizado', title: 'Finalizado', color: 'bg-emerald-50/50 dark:bg-emerald-900/10' }
   ];
 
@@ -175,8 +175,8 @@ const Tasks = () => {
       {/* Header & Filters */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-1">Pendientes</h2>
-          <p className="text-zinc-500 dark:text-zinc-400 text-sm">Gestión de tareas visual (Sincronizado con Google Sheets).</p>
+          <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-1">Gestión de tareas</h2>
+          <p className="text-zinc-500 dark:text-zinc-400 text-sm">(Sincronizado con Google Sheets).</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
