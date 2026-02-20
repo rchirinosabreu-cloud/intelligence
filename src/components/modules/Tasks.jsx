@@ -295,25 +295,21 @@ const Tasks = () => {
                                     {...provided.droppableProps}
                                     ref={provided.innerRef}
                                     className={cn(
-                                        "flex-1 rounded-xl p-2 transition-colors",
+                                        "flex-1 rounded-xl p-2 transition-colors space-y-3 min-h-[100px]", // Merged styles
                                         col.color,
                                         "bg-opacity-50 dark:bg-opacity-20 border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-700/50",
                                         snapshot.isDraggingOver && "ring-2 ring-indigo-500/20"
                                     )}
                                 >
-                                    <div className="space-y-3 min-h-[100px]">
-                                         <AnimatePresence mode='popLayout'>
-                                            {columnTasks.map((task, index) => (
-                                                <TaskCard key={task.id} task={task} index={index} />
-                                            ))}
-                                         </AnimatePresence>
-                                         {provided.placeholder}
-                                         {columnTasks.length === 0 && !snapshot.isDraggingOver && (
-                                             <div className="h-24 flex items-center justify-center text-zinc-400 dark:text-zinc-600 text-sm border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg">
-                                                 Sin tareas
-                                             </div>
-                                         )}
-                                    </div>
+                                    {columnTasks.map((task, index) => (
+                                        <TaskCard key={task.id} task={task} index={index} />
+                                    ))}
+                                    {provided.placeholder}
+                                    {columnTasks.length === 0 && !snapshot.isDraggingOver && (
+                                        <div className="h-24 flex items-center justify-center text-zinc-400 dark:text-zinc-600 text-sm border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg">
+                                            Sin tareas
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </Droppable>
@@ -340,17 +336,14 @@ const TaskCard = ({ task, index }) => {
                     className="mb-3"
                     style={{
                         ...provided.draggableProps.style,
-                        // Ensure transform is preserved and not overridden by external CSS
-                        transform: provided.draggableProps.style?.transform,
                     }}
                 >
                     <div
-                        // Removed motion.div and transition classes temporarily to debug DND conflict
                         className={cn(
-                            "rounded-xl border bg-card text-card-foreground shadow-sm", // Basic Card styles manually applied or reduced
+                            "rounded-xl border bg-card text-card-foreground shadow-sm",
                             "group cursor-pointer relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm",
                             task.es_prioritaria ? "border-l-4 border-l-red-500" : "border-zinc-200 dark:border-zinc-800",
-                            snapshot.isDragging && "shadow-xl ring-2 ring-indigo-500 z-50" // Removed rotate/scale
+                            snapshot.isDragging && "shadow-xl ring-2 ring-indigo-500 z-50"
                         )}
                     >
                         <div className="flex flex-col gap-3 p-4">
