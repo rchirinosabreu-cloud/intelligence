@@ -338,21 +338,22 @@ const TaskCard = ({ task, index }) => {
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
                     className="mb-3"
-                    style={{ ...provided.draggableProps.style }}
+                    style={{
+                        ...provided.draggableProps.style,
+                        // Ensure transform is preserved and not overridden by external CSS
+                        transform: provided.draggableProps.style?.transform,
+                    }}
                 >
-                    <motion.div
-                        layout
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ duration: 0.2 }}
+                    <div
+                        // Removed motion.div and transition classes temporarily to debug DND conflict
+                        className={cn(
+                            "rounded-xl border bg-card text-card-foreground shadow-sm", // Basic Card styles manually applied or reduced
+                            "group cursor-pointer relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm",
+                            task.es_prioritaria ? "border-l-4 border-l-red-500" : "border-zinc-200 dark:border-zinc-800",
+                            snapshot.isDragging && "shadow-xl ring-2 ring-indigo-500 z-50" // Removed rotate/scale
+                        )}
                     >
-                        <Card className={cn(
-                            "group hover:border-indigo-300 dark:hover:border-indigo-500/30 transition-all cursor-pointer relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm",
-                            task.es_prioritaria ? "border-l-4 border-l-red-500" : "",
-                            snapshot.isDragging && "shadow-xl ring-2 ring-indigo-500 rotate-2 scale-105 z-50"
-                        )}>
-                            <div className="flex flex-col gap-3 p-4">
+                        <div className="flex flex-col gap-3 p-4">
                                 {/* Header: Client Badge */}
                                 <div className="flex justify-between items-start">
                                      <span className={cn("text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md border", clientColorClass)}>
@@ -394,8 +395,7 @@ const TaskCard = ({ task, index }) => {
                                     </div>
                                 </div>
                             </div>
-                        </Card>
-                    </motion.div>
+                    </div>
                 </div>
             )}
         </Draggable>
