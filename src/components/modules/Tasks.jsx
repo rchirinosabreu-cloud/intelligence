@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -295,14 +295,14 @@ const Tasks = () => {
                                     {...provided.droppableProps}
                                     ref={provided.innerRef}
                                     className={cn(
-                                        "flex-1 rounded-xl p-2 transition-colors space-y-3 min-h-[100px]", // Merged styles
+                                        "flex-1 rounded-xl p-2 transition-colors space-y-3 min-h-[100px]",
                                         col.color,
                                         "bg-opacity-50 dark:bg-opacity-20 border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-700/50",
                                         snapshot.isDraggingOver && "ring-2 ring-indigo-500/20"
                                     )}
                                 >
                                     {columnTasks.map((task, index) => (
-                                        <TaskCard key={task.id} task={task} index={index} />
+                                        <TaskCard key={String(task.id)} task={task} index={index} />
                                     ))}
                                     {provided.placeholder}
                                     {columnTasks.length === 0 && !snapshot.isDraggingOver && (
