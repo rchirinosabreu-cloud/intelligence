@@ -153,21 +153,24 @@ const Tasks = () => {
           return;
       }
 
+      // 1. Column IDs must match Backend/Kanban states exactly: 'Pendiente', 'En Proceso', 'Finalizado'
+      // These come from Droppable IDs
       const newStatus = destination.droppableId;
-      const taskId = draggableId; // We use numeric ID from tasks but DND treats as string
+      const taskId = draggableId;
 
-      // Optimistic UI Update
+      // 2. Optimistic UI Update
+      // Create a snapshot for rollback
       const originalTasks = [...tasks];
-      const updatedTasks = tasks.map(t => {
+
+      // Update state immediately to move the card
+      setTasks(prevTasks => prevTasks.map(t => {
           if (String(t.id) === String(taskId)) {
               return { ...t, estado: newStatus };
           }
           return t;
-      });
+      }));
 
-      setTasks(updatedTasks);
-
-      // API Call
+      // 3. API Call (Background)
       try {
           const baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
           const response = await fetch(`${baseUrl}/api/pendientes/${taskId}/status`, {
@@ -181,7 +184,7 @@ const Tasks = () => {
           }
       } catch (err) {
           console.error("Drag and drop failed:", err);
-          // Rollback
+          // 4. Rollback on Error
           setTasks(originalTasks);
           toast({
               title: "Error de sincronización",
