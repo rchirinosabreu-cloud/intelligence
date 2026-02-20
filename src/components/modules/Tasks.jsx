@@ -4,6 +4,8 @@ import { Badge } from '@/components/ui/Badge';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { useToast } from '@/hooks/use-toast';
 
 // Helper to check if date is today or past
 // Assumes format "DD/MM" or similar
@@ -73,6 +75,7 @@ const Tasks = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { toast } = useToast();
 
   useEffect(() => {
       const fetchTasks = async () => {
@@ -136,6 +139,56 @@ const Tasks = () => {
       if (s.includes('realizado') || s.includes('finalizado') || s.includes('hecho') || s.includes('done')) return 'Finalizado';
       if (s.includes('proceso') || s.includes('working') || s.includes('curso')) return 'En Proceso';
       return 'Pendiente';
+  };
+
+  const onDragEnd = async (result) => {
+      const { destination, source, draggableId } = result;
+
+      if (!destination) return;
+
+      if (
+          destination.droppableId === source.droppableId &&
+          destination.index === source.index
+      ) {
+          return;
+      }
+
+      const newStatus = destination.droppableId;
+      const taskId = draggableId; // We use numeric ID from tasks but DND treats as string
+
+      // Optimistic UI Update
+      const originalTasks = [...tasks];
+      const updatedTasks = tasks.map(t => {
+          if (String(t.id) === String(taskId)) {
+              return { ...t, estado: newStatus };
+          }
+          return t;
+      });
+
+      setTasks(updatedTasks);
+
+      // API Call
+      try {
+          const baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
+          const response = await fetch(`${baseUrl}/api/pendientes/${taskId}/status`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: newStatus })
+          });
+
+          if (!response.ok) {
+              throw new Error("Failed to update");
+          }
+      } catch (err) {
+          console.error("Drag and drop failed:", err);
+          // Rollback
+          setTasks(originalTasks);
+          toast({
+              title: "Error de sincronización",
+              description: "No se pudo actualizar el estado en Google Sheets.",
+              variant: "destructive"
+          });
+      }
   };
 
   if (loading) {
@@ -215,105 +268,134 @@ const Tasks = () => {
       </div>
 
       {/* Kanban Board */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 min-h-[500px]">
-          {columns.map((col) => {
-              const columnTasks = filteredTasks.filter(t => getColumnId(t.estado) === col.id);
+      <DragDropContext onDragEnd={onDragEnd}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 min-h-[500px]">
+              {columns.map((col) => {
+                  const columnTasks = filteredTasks.filter(t => getColumnId(t.estado) === col.id);
 
-              return (
-                <div key={col.id} className="flex flex-col gap-4">
-                    {/* Column Header */}
-                    <div className="flex items-center justify-between px-1">
-                        <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-zinc-700 dark:text-zinc-200 text-sm">{col.title}</h3>
-                            <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs px-2 py-0.5 rounded-full font-medium">
-                                {columnTasks.length}
-                            </span>
+                  return (
+                    <div key={col.id} className="flex flex-col gap-4">
+                        {/* Column Header */}
+                        <div className="flex items-center justify-between px-1">
+                            <div className="flex items-center gap-2">
+                                <h3 className="font-semibold text-zinc-700 dark:text-zinc-200 text-sm">{col.title}</h3>
+                                <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs px-2 py-0.5 rounded-full font-medium">
+                                    {columnTasks.length}
+                                </span>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Column Area */}
-                    <div className={cn("flex-1 rounded-xl p-2 transition-colors", col.color, "bg-opacity-50 dark:bg-opacity-20 border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-700/50")}>
-                        <div className="space-y-3">
-                             <AnimatePresence mode='popLayout'>
-                                {columnTasks.map((task) => (
-                                    <TaskCard key={task.id} task={task} />
-                                ))}
-                             </AnimatePresence>
-                             {columnTasks.length === 0 && (
-                                 <div className="h-24 flex items-center justify-center text-zinc-400 dark:text-zinc-600 text-sm border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg">
-                                     Sin tareas
-                                 </div>
-                             )}
-                        </div>
+                        {/* Column Area */}
+                        <Droppable droppableId={col.id}>
+                            {(provided, snapshot) => (
+                                <div
+                                    {...provided.droppableProps}
+                                    ref={provided.innerRef}
+                                    className={cn(
+                                        "flex-1 rounded-xl p-2 transition-colors",
+                                        col.color,
+                                        "bg-opacity-50 dark:bg-opacity-20 border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-700/50",
+                                        snapshot.isDraggingOver && "ring-2 ring-indigo-500/20"
+                                    )}
+                                >
+                                    <div className="space-y-3 min-h-[100px]">
+                                         <AnimatePresence mode='popLayout'>
+                                            {columnTasks.map((task, index) => (
+                                                <TaskCard key={task.id} task={task} index={index} />
+                                            ))}
+                                         </AnimatePresence>
+                                         {provided.placeholder}
+                                         {columnTasks.length === 0 && !snapshot.isDraggingOver && (
+                                             <div className="h-24 flex items-center justify-center text-zinc-400 dark:text-zinc-600 text-sm border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg">
+                                                 Sin tareas
+                                             </div>
+                                         )}
+                                    </div>
+                                </div>
+                            )}
+                        </Droppable>
                     </div>
-                </div>
-              );
-          })}
-      </div>
+                  );
+              })}
+          </div>
+      </DragDropContext>
     </div>
   );
 };
 
-const TaskCard = ({ task }) => {
+const TaskCard = ({ task, index }) => {
     const isOverdueTask = isOverdue(task.fecha_entrega);
     const clientColorClass = CLIENT_COLORS[task.cliente] || "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
 
     return (
-        <motion.div
-            layout
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-        >
-            <Card className={cn(
-                "group hover:border-indigo-300 dark:hover:border-indigo-500/30 transition-all cursor-pointer relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm",
-                task.es_prioritaria ? "border-l-4 border-l-red-500" : ""
-            )}>
-                <div className="flex flex-col gap-3 p-4">
-                    {/* Header: Client Badge */}
-                    <div className="flex justify-between items-start">
-                         <span className={cn("text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md border", clientColorClass)}>
-                             {task.cliente}
-                         </span>
-                         {task.es_prioritaria && (
-                             <span className="text-[10px] font-bold text-red-500 flex items-center gap-1 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-900/30">
-                                 Prioritario
-                             </span>
-                         )}
-                    </div>
-
-                    {/* Body: Task Title */}
-                    <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 leading-snug">
-                        {task.pendiente}
-                    </h4>
-
-                    {/* Footer: Date & Avatar */}
-                    <div className="flex items-center justify-between mt-1 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
-                        <div className={cn(
-                            "flex items-center gap-1.5 text-xs font-medium transition-colors",
-                            isOverdueTask ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
+        <Draggable draggableId={String(task.id)} index={index}>
+            {(provided, snapshot) => (
+                <div
+                    ref={provided.innerRef}
+                    {...provided.draggableProps}
+                    {...provided.dragHandleProps}
+                    className="mb-3"
+                    style={{ ...provided.draggableProps.style }}
+                >
+                    <motion.div
+                        layout
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.2 }}
+                    >
+                        <Card className={cn(
+                            "group hover:border-indigo-300 dark:hover:border-indigo-500/30 transition-all cursor-pointer relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm",
+                            task.es_prioritaria ? "border-l-4 border-l-red-500" : "",
+                            snapshot.isDragging && "shadow-xl ring-2 ring-indigo-500 rotate-2 scale-105 z-50"
                         )}>
-                            <Calendar className="w-3.5 h-3.5" />
-                            {task.fecha_entrega || "Sin fecha"}
-                        </div>
+                            <div className="flex flex-col gap-3 p-4">
+                                {/* Header: Client Badge */}
+                                <div className="flex justify-between items-start">
+                                     <span className={cn("text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md border", clientColorClass)}>
+                                         {task.cliente}
+                                     </span>
+                                     {task.es_prioritaria && (
+                                         <span className="text-[10px] font-bold text-red-500 flex items-center gap-1 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-900/30">
+                                             Prioritario
+                                         </span>
+                                     )}
+                                </div>
 
-                        <div className="flex items-center gap-2">
-                            {/* Initials fallback or name if no image? */}
-                             <img
-                                src={task.responsable}
-                                alt={task.responsable_name}
-                                className="w-6 h-6 rounded-full ring-2 ring-white dark:ring-zinc-900"
-                                title={task.responsable_name}
-                                onError={(e) => {
-                                    e.target.style.display = 'none'; // Hide if fails
-                                }}
-                             />
-                        </div>
-                    </div>
+                                {/* Body: Task Title */}
+                                <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 leading-snug">
+                                    {task.pendiente}
+                                </h4>
+
+                                {/* Footer: Date & Avatar */}
+                                <div className="flex items-center justify-between mt-1 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
+                                    <div className={cn(
+                                        "flex items-center gap-1.5 text-xs font-medium transition-colors",
+                                        isOverdueTask ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
+                                    )}>
+                                        <Calendar className="w-3.5 h-3.5" />
+                                        {task.fecha_entrega || "Sin fecha"}
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        {/* Initials fallback or name if no image? */}
+                                         <img
+                                            src={task.responsable}
+                                            alt={task.responsable_name}
+                                            className="w-6 h-6 rounded-full ring-2 ring-white dark:ring-zinc-900"
+                                            title={task.responsable_name}
+                                            onError={(e) => {
+                                                e.target.style.display = 'none'; // Hide if fails
+                                            }}
+                                         />
+                                    </div>
+                                </div>
+                            </div>
+                        </Card>
+                    </motion.div>
                 </div>
-            </Card>
-        </motion.div>
+            )}
+        </Draggable>
     );
 };
 
