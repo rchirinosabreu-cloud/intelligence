@@ -8,9 +8,9 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
   const { theme, toggleTheme } = useTheme();
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
     { id: 'bria', label: 'Bria Intelligence', icon: Sparkles },
-    { id: 'tasks', label: 'Pendientes', icon: CheckSquare },
+    { id: 'tasks', label: 'Gestión', icon: CheckSquare },
     { id: 'files', label: 'Archivos', icon: FolderOpen },
   ];
 
