@@ -346,6 +346,65 @@ async function getAgencyTasksJSON() {
     }
 }
 
+async function updateTaskStatus(id, newStatus) {
+    console.log(`[UpdateTask] Updating task ID ${id} to status: ${newStatus}`);
+    const SHEET_ID = process.env.AGENCY_TASKS_SHEET_ID;
+
+    if (!SHEET_ID || !credentials) {
+        throw new Error("Missing SHEET_ID or credentials.");
+    }
+
+    try {
+        const authClient = new JWT({
+            email: credentials.client_email,
+            key: credentials.private_key,
+            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        });
+
+        const doc = new GoogleSpreadsheet(SHEET_ID, authClient);
+        await doc.loadInfo();
+
+        let sheet = findTargetSheet(doc);
+        if (!sheet) throw new Error("Target sheet not found.");
+
+        // The ID in our system is (index + 2).
+        // So row index = id - 2.
+        // google-spreadsheet rows are 0-indexed relative to the data range (usually skipping header).
+        // But getRows() returns rows starting from row 2 (index 0).
+        // So fetching rows[id - 2] should work if we loaded all rows.
+        // CAUTION: This assumes the sheet hasn't been sorted/filtered in a way that breaks index-based ID.
+        // Ideally we'd search for the ID column, but we are using implicit ID = Row Number.
+
+        const rowIndex = parseInt(id, 10) - 2;
+        if (isNaN(rowIndex) || rowIndex < 0) {
+            throw new Error(`Invalid ID: ${id}`);
+        }
+
+        // Fetching specific row range is more efficient but getRows(offset) is easiest
+        // We need to fetch enough rows to reach our target.
+        // For simplicity and safety against race conditions (rows moving), we'll load the specific cell or row.
+
+        // Using loadCells is better for single update
+        // Row in sheet = rowIndex + 2 (header is 1, data starts 2)
+        // Column E is index 4.
+        const rowNumber = rowIndex + 2;
+        const range = `E${rowNumber}`; // e.g. E2
+
+        console.log(`[UpdateTask] Loading cell ${range} in sheet ${sheet.title}`);
+        await sheet.loadCells(range);
+        const cell = sheet.getCellByA1(range);
+        cell.value = newStatus;
+        await sheet.saveUpdatedCells();
+
+        console.log(`[UpdateTask] Success.`);
+        return { success: true };
+
+    } catch (error) {
+        console.error("[UpdateTask] Error:", error);
+        throw error;
+    }
+}
+
 // --- WEBSITE AUDIT TOOL (Cheerio) ---
 async function analyzeWebsiteDna(url) {
     console.log(`[Audit] Starting DNA analysis for: ${url}`);
@@ -955,6 +1014,24 @@ app.get('/api/pendientes', async (req, res) => {
     } catch (error) {
         console.error("[API] /api/pendientes error:", error);
         res.status(500).json({ error: "Failed to fetch tasks", details: error.message });
+    }
+});
+
+app.patch('/api/pendientes/:id/status', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!status) {
+            return res.status(400).json({ error: "Missing status in body" });
+        }
+
+        console.log(`[API] Updating task ${id} to ${status}`);
+        await updateTaskStatus(id, status);
+        res.json({ success: true, message: "Status updated" });
+    } catch (error) {
+        console.error("[API] /api/pendientes/:id/status error:", error);
+        res.status(500).json({ error: "Failed to update status", details: error.message });
     }
 });
 
