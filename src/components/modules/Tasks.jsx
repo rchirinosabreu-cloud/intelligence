@@ -71,6 +71,7 @@ const CLIENT_COLORS = {
 const Tasks = () => {
   const [responsibleFilter, setResponsibleFilter] = useState('Todos');
   const [dateFilter, setDateFilter] = useState('Todas');
+  const [clientFilter, setClientFilter] = useState('Todos');
 
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -99,19 +100,24 @@ const Tasks = () => {
       fetchTasks();
   }, []);
 
-  // Extract unique responsibles (URLs/Names)
+  // Extract unique responsibles (Names)
   const responsibles = useMemo(() => {
-      // We use 'responsable_name' for the dropdown if available, otherwise fallback
-      // But we filter by 'responsable' (URL) or 'responsable_name'?
-      // The backend returns both.
-      // Let's stick to filtering by Name for better UX in dropdown.
-      const unique = [...new Set(tasks.map(t => t.responsable_name || "Desconocido"))].filter(Boolean);
+      const unique = [...new Set(tasks.map(t => t.responsable_name || "Desconocido"))].filter(Boolean).sort();
+      return ['Todos', ...unique];
+  }, [tasks]);
+
+  // Extract unique clients
+  const clients = useMemo(() => {
+      const unique = [...new Set(tasks.map(t => t.cliente || "Desconocido"))].filter(Boolean).sort();
       return ['Todos', ...unique];
   }, [tasks]);
 
   const filteredTasks = tasks.filter(task => {
     // Filter by Responsible
     if (responsibleFilter !== 'Todos' && (task.responsable_name || "Desconocido") !== responsibleFilter) return false;
+
+    // Filter by Client
+    if (clientFilter !== 'Todos' && (task.cliente || "Desconocido") !== clientFilter) return false;
 
     // Filter by Date
     if (dateFilter === 'Para Hoy') {
@@ -169,39 +175,64 @@ const Tasks = () => {
       setTasks((prevTasks) => {
           originalTasksSnapshot = prevTasks;
 
-          const tasksByColumn = {
-              'pendiente': [],
-              'en-proceso': [],
-              'realizado': []
-          };
+          // Find the actual task index in the full list using ID
+          const taskIndex = prevTasks.findIndex(t => String(t.id) === taskId);
+          if (taskIndex === -1) return prevTasks;
 
-          prevTasks.forEach((task) => {
-              const columnId = getColumnId(task.estado);
-              // Safety check: if getColumnId returns something else (shouldn't happen), fallback to 'pendiente'
-              if (tasksByColumn[columnId]) {
-                  tasksByColumn[columnId].push(task);
-              } else {
-                  tasksByColumn['pendiente'].push(task);
-              }
-          });
+          const movedTask = { ...prevTasks[taskIndex] };
 
-          const sourceTasks = [...tasksByColumn[sourceColumnId]];
-          const [movedTask] = sourceTasks.splice(source.index, 1);
+          // Check if filters are active
+          // Note: dateFilter defaults to 'Todas' in state init but string check was slightly off in previous logic
+          const hasFilters = responsibleFilter !== 'Todos' || clientFilter !== 'Todos' || dateFilter !== 'Todas';
 
-          if (!movedTask) {
-              return prevTasks;
+          // SCENARIO 1: REORDERING WITHIN SAME COLUMN
+          if (sourceColumnId === destinationColumnId) {
+             if (hasFilters) {
+                  // If filtered, exact reordering is ambiguous because hidden items exist.
+                  // We prevent visual reordering to avoid state corruption or snapping.
+                  // The item snaps back, effectively disabling reorder in filtered view.
+                  return prevTasks;
+             }
+
+             // If NOT filtered, we can safely reorder using the bucket strategy (original behavior restored but safer)
+             const tasksByColumn = { 'pendiente': [], 'en-proceso': [], 'realizado': [] };
+             prevTasks.forEach(t => {
+                 const cId = getColumnId(t.estado);
+                 if (tasksByColumn[cId]) tasksByColumn[cId].push(t);
+                 else tasksByColumn['pendiente'].push(t);
+             });
+
+             const sourceTasks = [...tasksByColumn[sourceColumnId]];
+             // source.index matches the column index because no filters are active
+             const [removed] = sourceTasks.splice(source.index, 1);
+
+             // Check if 'removed' exists. It should, but safety first.
+             if (!removed) return prevTasks;
+
+             sourceTasks.splice(destination.index, 0, removed);
+
+             tasksByColumn[sourceColumnId] = sourceTasks;
+             return columns.flatMap(col => tasksByColumn[col.id]);
           }
 
-          tasksByColumn[sourceColumnId] = sourceTasks;
+          // SCENARIO 2: MOVING TO DIFFERENT COLUMN (STATUS CHANGE)
+          // Regardless of filters, we want to allow changing status.
 
-          const destinationTasks = [...tasksByColumn[destinationColumnId]];
-          destinationTasks.splice(destination.index, 0, {
-              ...movedTask,
-              estado: destinationColumnId // Store normalized ID temporarily in state
-          });
-          tasksByColumn[destinationColumnId] = destinationTasks;
+          // Remove from old position
+          const newTasks = [...prevTasks];
+          newTasks.splice(taskIndex, 1);
 
-          return columns.flatMap((column) => tasksByColumn[column.id]);
+          // Update status
+          movedTask.estado = destinationColumnId;
+
+          // Insert logic:
+          // If filtered, we can't trust destination.index to map to the global list accurately without complex math.
+          // Simplest User Experience: Push to top or bottom of the new column in the global list.
+          // Let's push to the end of the list for simplicity, which renders at the bottom.
+          // Or unshift to top.
+          newTasks.push(movedTask);
+
+          return newTasks;
       });
 
       // Si solo cambió el orden en la misma columna, no sincronizamos estado en backend.
@@ -296,6 +327,23 @@ const Tasks = () => {
                     ))}
                 </select>
                 <User className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5 pointer-events-none" />
+                <ChevronDown className="w-4 h-4 text-zinc-400 absolute right-3 top-2.5 pointer-events-none group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors" />
+            </div>
+
+             {/* Client Filter */}
+             <div className="relative group">
+                <select
+                    value={clientFilter}
+                    onChange={(e) => setClientFilter(e.target.value)}
+                    className="appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-sm transition-all w-48 truncate"
+                >
+                    {clients.map((c, i) => (
+                        <option key={i} value={c}>
+                            {c === 'Todos' ? 'Todos los clientes' : c}
+                        </option>
+                    ))}
+                </select>
+                <Filter className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5 pointer-events-none" />
                 <ChevronDown className="w-4 h-4 text-zinc-400 absolute right-3 top-2.5 pointer-events-none group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors" />
             </div>
 
