@@ -194,6 +194,67 @@ async function fetchAgencyTasks(responsibleName = "Rodny") {
     }
 }
 
+const normalizeTaskStatus = (rawStatus = "") => {
+    const status = String(rawStatus || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, '').trim();
+
+    if (!status) return 'Pendiente';
+
+    if (['pendiente', 'por hacer', 'to do', 'todo'].includes(status)) return 'Pendiente';
+    if (['en proceso', 'en curso', 'proceso', 'working', 'doing', 'in progress'].includes(status)) return 'En Proceso';
+    if (['realizado', 'finalizado', 'hecho', 'done', 'completado', 'terminado'].includes(status)) return 'Realizado';
+
+    // Fallback conservador: si no coincide exactamente con estados conocidos, mantener Pendiente.
+    return 'Pendiente';
+};
+
+
+const normalizeHeader = (header = '') => String(header || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+
+const findColumnIndex = (headers = [], candidates = [], options = {}) => {
+    const { exactOnly = false } = options;
+    const normalizedHeaders = headers.map(normalizeHeader);
+    const normalizedCandidates = candidates.map(normalizeHeader);
+
+    // 1) Match exact first (más seguro).
+    for (const candidate of normalizedCandidates) {
+        const idx = normalizedHeaders.findIndex(h => h === candidate);
+        if (idx !== -1) return idx;
+    }
+
+    // 2) Si se permite, hacer fallback por inclusión.
+    if (!exactOnly) {
+        for (const candidate of normalizedCandidates) {
+            const idx = normalizedHeaders.findIndex(h => h.includes(candidate));
+            if (idx !== -1) return idx;
+        }
+    }
+
+    return -1;
+};
+
+const columnIndexToLetter = (index) => {
+    let n = index + 1;
+    let result = '';
+    while (n > 0) {
+        const rem = (n - 1) % 26;
+        result = String.fromCharCode(65 + rem) + result;
+        n = Math.floor((n - 1) / 26);
+    }
+    return result;
+};
+
+const isSummaryOrInvalidTaskTitle = (title = '') => {
+    const normalized = String(title || '').trim().toLowerCase();
+    if (!normalized) return true;
+
+    // Filas típicas de resumen en Sheets: "607 PENDIENTES", "Total pendientes", etc.
+    if (/^\d+\s*pendientes?$/.test(normalized)) return true;
+    if (/^total\s*pendientes?$/.test(normalized)) return true;
+    if (/^pendientes?$/.test(normalized)) return true;
+
+    return false;
+};
+
 async function getAgencyTasksJSON() {
     console.log(`[AgencyTasksJSON] Fetching all tasks in JSON format.`);
     const SHEET_ID = process.env.AGENCY_TASKS_SHEET_ID;
@@ -229,6 +290,32 @@ async function getAgencyTasksJSON() {
         const headers = sheet.headerValues;
         console.log('[DEBUG EXTREMO] Headers detectados:', headers);
 
+        const colFechaAsignacion = findColumnIndex(headers, ['fecha asignacion', 'fecha_asignacion', 'asignacion', 'fecha de asignacion']);
+        const colPendiente = findColumnIndex(headers, ['pendiente', 'tarea', 'actividad', 'task']);
+        const colCliente = findColumnIndex(headers, ['cliente', 'marca', 'cuenta']);
+        const colResponsable = findColumnIndex(headers, ['responsable', 'owner', 'asignado']);
+        const colEstado = findColumnIndex(headers, ['estado', 'estatus', 'status'], { exactOnly: true });
+        const colFechaEntrega = findColumnIndex(headers, ['fecha entrega', 'fecha_entrega', 'entrega', 'due date', 'vencimiento']);
+        const colComentarios = findColumnIndex(headers, ['comentarios', 'comentario', 'observaciones', 'notas']);
+
+        console.log('[DEBUG EXTREMO] Índices detectados:', {
+            colFechaAsignacion,
+            colPendiente,
+            colCliente,
+            colResponsable,
+            colEstado,
+            colFechaEntrega,
+            colComentarios
+        });
+
+        const headerFechaAsignacion = colFechaAsignacion >= 0 ? headers[colFechaAsignacion] : null;
+        const headerPendiente = colPendiente >= 0 ? headers[colPendiente] : null;
+        const headerCliente = colCliente >= 0 ? headers[colCliente] : null;
+        const headerResponsable = colResponsable >= 0 ? headers[colResponsable] : null;
+        const headerEstado = colEstado >= 0 ? headers[colEstado] : null;
+        const headerFechaEntrega = colFechaEntrega >= 0 ? headers[colFechaEntrega] : null;
+        const headerComentarios = colComentarios >= 0 ? headers[colComentarios] : null;
+
         const rows = await sheet.getRows();
         console.log(`[DEBUG EXTREMO] Filas leídas: ${rows.length}`);
 
@@ -252,36 +339,29 @@ async function getAgencyTasksJSON() {
                 return String(data[idx] || "").trim();
             };
 
-            // Mapping per requirements:
-            // Col A (0): fecha_asignacion
-            // Col B (1): pendiente
-            // Col C (2): cliente
-            // Col D (3): responsable
-            // Col E (4): estado
-            // Col F (5): fecha_entrega
-            // Col G (6): comentarios
+            const rowObject = row.toObject ? row.toObject() : {};
 
-            const fecha_asignacion = getRaw(0);
-            const pendiente = getRaw(1);
+            const getValue = (headerName, fallbackIndex) => {
+                if (headerName && Object.prototype.hasOwnProperty.call(rowObject, headerName)) {
+                    return String(rowObject[headerName] || '').trim();
+                }
+                return getRaw(fallbackIndex);
+            };
 
-            // Filter empty 'Pendiente' (Title)
-            if (!pendiente) return null;
+            const fecha_asignacion = getValue(headerFechaAsignacion, 0);
+            const pendiente = getValue(headerPendiente, 1);
 
-            const cliente = getRaw(2);
-            const respName = getRaw(3);
-            const rawStatus = getRaw(4);
-            const fecha_entrega = getRaw(5);
-            const comentarios = getRaw(6);
+            // Filtrar filas vacías o filas-resumen de la hoja.
+            if (isSummaryOrInvalidTaskTitle(pendiente)) return null;
 
-            // Status Normalization
-            let estado = 'Pendiente';
-            const cleanStatus = rawStatus.toLowerCase().replace(/\s+/g, ' ').trim();
+            const cliente = getValue(headerCliente, 2);
+            const respName = getValue(headerResponsable, 3);
+            const rawStatus = getValue(headerEstado, 4);
+            const fecha_entrega = getValue(headerFechaEntrega, 5);
+            const comentarios = getValue(headerComentarios, 6);
 
-            if (['realizado', 'finalizado', 'hecho', 'done'].some(s => cleanStatus.includes(s))) {
-                estado = 'Realizado';
-            } else if (['proceso', 'curso', 'working', 'en proceso'].some(s => cleanStatus.includes(s))) {
-                estado = 'En proceso';
-            }
+            // Status Normalization (alineado con vocabulario de Google Sheet)
+            const estado = normalizeTaskStatus(rawStatus);
 
             // Priority Calculation
             let es_prioritaria = false;
@@ -303,7 +383,7 @@ async function getAgencyTasksJSON() {
             const responsableUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(respName || "Sin Asignar")}&background=random&color=fff&size=128`;
 
             return {
-                id: index + 2,
+                id: row.rowNumber || (index + 2),
                 fecha_asignacion: fecha_asignacion,
                 pendiente: pendiente,
                 cliente: cliente,
@@ -350,28 +430,23 @@ async function updateTaskStatus(id, newStatus) {
         let sheet = findTargetSheet(doc);
         if (!sheet) throw new Error("Target sheet not found.");
 
-        // The ID in our system is (index + 2).
-        // So row index = id - 2.
-        // google-spreadsheet rows are 0-indexed relative to the data range (usually skipping header).
-        // But getRows() returns rows starting from row 2 (index 0).
-        // So fetching rows[id - 2] should work if we loaded all rows.
-        // CAUTION: This assumes the sheet hasn't been sorted/filtered in a way that breaks index-based ID.
-        // Ideally we'd search for the ID column, but we are using implicit ID = Row Number.
+        // El ID recibido desde frontend es el número de fila real en Google Sheet.
+        // Esto evita desalineaciones cuando existen filas-resumen o filtros visuales.
 
-        const rowIndex = parseInt(id, 10) - 2;
-        if (isNaN(rowIndex) || rowIndex < 0) {
+        await sheet.loadHeaderRow();
+        const headers = sheet.headerValues;
+        const statusColIndex = findColumnIndex(headers, ['estado', 'estatus', 'status'], { exactOnly: true });
+        if (statusColIndex < 0) {
+            throw new Error('No se encontró la columna de estado en la hoja.');
+        }
+
+        const rowNumber = parseInt(id, 10);
+        if (isNaN(rowNumber) || rowNumber < 2) {
             throw new Error(`Invalid ID: ${id}`);
         }
 
-        // Fetching specific row range is more efficient but getRows(offset) is easiest
-        // We need to fetch enough rows to reach our target.
-        // For simplicity and safety against race conditions (rows moving), we'll load the specific cell or row.
-
-        // Using loadCells is better for single update
-        // Row in sheet = rowIndex + 2 (header is 1, data starts 2)
-        // Column E is index 4.
-        const rowNumber = rowIndex + 2;
-        const range = `E${rowNumber}`; // e.g. E2
+        const statusColumnLetter = columnIndexToLetter(statusColIndex);
+        const range = `${statusColumnLetter}${rowNumber}`;
 
         console.log(`[UpdateTask] Loading cell ${range} in sheet ${sheet.title}`);
         await sheet.loadCells(range);
