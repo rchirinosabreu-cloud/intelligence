@@ -127,7 +127,7 @@ const Tasks = () => {
   const columns = [
       { id: 'Pendiente', title: 'Pendiente', color: 'bg-zinc-100 dark:bg-zinc-800/50' },
       { id: 'En Proceso', title: 'En proceso', color: 'bg-blue-50/50 dark:bg-blue-900/10' },
-      { id: 'Finalizado', title: 'Finalizado', color: 'bg-emerald-50/50 dark:bg-emerald-900/10' }
+      { id: 'Realizado', title: 'Realizado', color: 'bg-emerald-50/50 dark:bg-emerald-900/10' }
   ];
 
   // Note: Backend might return 'Realizado', 'Hecho', 'Finalizado'.
@@ -135,9 +135,14 @@ const Tasks = () => {
   // Or just flexible matching.
   const getColumnId = (status) => {
       if (!status) return 'Pendiente';
-      const s = status.toLowerCase();
-      if (s.includes('realizado') || s.includes('finalizado') || s.includes('hecho') || s.includes('done')) return 'Finalizado';
-      if (s.includes('proceso') || s.includes('working') || s.includes('curso')) return 'En Proceso';
+      const normalized = String(status)
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[̀-ͯ]/g, '')
+          .trim();
+
+      if (['realizado', 'finalizado', 'hecho', 'done', 'completado', 'terminado'].includes(normalized)) return 'Realizado';
+      if (['en proceso', 'en curso', 'proceso', 'working', 'doing', 'in progress'].includes(normalized)) return 'En Proceso';
       return 'Pendiente';
   };
 

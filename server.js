@@ -194,6 +194,31 @@ async function fetchAgencyTasks(responsibleName = "Rodny") {
     }
 }
 
+const normalizeTaskStatus = (rawStatus = "") => {
+    const status = String(rawStatus || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, '').trim();
+
+    if (!status) return 'Pendiente';
+
+    if (['pendiente', 'por hacer', 'to do', 'todo'].includes(status)) return 'Pendiente';
+    if (['en proceso', 'en curso', 'proceso', 'working', 'doing', 'in progress'].includes(status)) return 'En Proceso';
+    if (['realizado', 'finalizado', 'hecho', 'done', 'completado', 'terminado'].includes(status)) return 'Realizado';
+
+    // Fallback conservador: si no coincide exactamente con estados conocidos, mantener Pendiente.
+    return 'Pendiente';
+};
+
+const isSummaryOrInvalidTaskTitle = (title = '') => {
+    const normalized = String(title || '').trim().toLowerCase();
+    if (!normalized) return true;
+
+    // Filas típicas de resumen en Sheets: "607 PENDIENTES", "Total pendientes", etc.
+    if (/^\d+\s*pendientes?$/.test(normalized)) return true;
+    if (/^total\s*pendientes?$/.test(normalized)) return true;
+    if (/^pendientes?$/.test(normalized)) return true;
+
+    return false;
+};
+
 async function getAgencyTasksJSON() {
     console.log(`[AgencyTasksJSON] Fetching all tasks in JSON format.`);
     const SHEET_ID = process.env.AGENCY_TASKS_SHEET_ID;
@@ -264,8 +289,8 @@ async function getAgencyTasksJSON() {
             const fecha_asignacion = getRaw(0);
             const pendiente = getRaw(1);
 
-            // Filter empty 'Pendiente' (Title)
-            if (!pendiente) return null;
+            // Filtrar filas vacías o filas-resumen de la hoja.
+            if (isSummaryOrInvalidTaskTitle(pendiente)) return null;
 
             const cliente = getRaw(2);
             const respName = getRaw(3);
@@ -273,15 +298,8 @@ async function getAgencyTasksJSON() {
             const fecha_entrega = getRaw(5);
             const comentarios = getRaw(6);
 
-            // Status Normalization
-            let estado = 'Pendiente';
-            const cleanStatus = rawStatus.toLowerCase().replace(/\s+/g, ' ').trim();
-
-            if (['realizado', 'finalizado', 'hecho', 'done'].some(s => cleanStatus.includes(s))) {
-                estado = 'Realizado';
-            } else if (['proceso', 'curso', 'working', 'en proceso'].some(s => cleanStatus.includes(s))) {
-                estado = 'En proceso';
-            }
+            // Status Normalization (alineado con vocabulario de Google Sheet)
+            const estado = normalizeTaskStatus(rawStatus);
 
             // Priority Calculation
             let es_prioritaria = false;
