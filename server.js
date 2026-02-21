@@ -207,29 +207,6 @@ const normalizeTaskStatus = (rawStatus = "") => {
     return 'Pendiente';
 };
 
-
-const normalizeHeader = (header = '') => String(header || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
-
-const findColumnIndex = (headers = [], candidates = []) => {
-    const normalizedHeaders = headers.map(normalizeHeader);
-    for (const candidate of candidates.map(normalizeHeader)) {
-        const idx = normalizedHeaders.findIndex(h => h === candidate || h.includes(candidate));
-        if (idx !== -1) return idx;
-    }
-    return -1;
-};
-
-const columnIndexToLetter = (index) => {
-    let n = index + 1;
-    let result = '';
-    while (n > 0) {
-        const rem = (n - 1) % 26;
-        result = String.fromCharCode(65 + rem) + result;
-        n = Math.floor((n - 1) / 26);
-    }
-    return result;
-};
-
 const isSummaryOrInvalidTaskTitle = (title = '') => {
     const normalized = String(title || '').trim().toLowerCase();
     if (!normalized) return true;
@@ -318,17 +295,26 @@ async function getAgencyTasksJSON() {
                 return String(data[idx] || "").trim();
             };
 
-            const fecha_asignacion = getRaw(colFechaAsignacion >= 0 ? colFechaAsignacion : 0);
-            const pendiente = getRaw(colPendiente >= 0 ? colPendiente : 1);
+            // Mapping per requirements:
+            // Col A (0): fecha_asignacion
+            // Col B (1): pendiente
+            // Col C (2): cliente
+            // Col D (3): responsable
+            // Col E (4): estado
+            // Col F (5): fecha_entrega
+            // Col G (6): comentarios
+
+            const fecha_asignacion = getRaw(0);
+            const pendiente = getRaw(1);
 
             // Filtrar filas vacías o filas-resumen de la hoja.
             if (isSummaryOrInvalidTaskTitle(pendiente)) return null;
 
-            const cliente = getRaw(colCliente >= 0 ? colCliente : 2);
-            const respName = getRaw(colResponsable >= 0 ? colResponsable : 3);
-            const rawStatus = getRaw(colEstado >= 0 ? colEstado : 4);
-            const fecha_entrega = getRaw(colFechaEntrega >= 0 ? colFechaEntrega : 5);
-            const comentarios = getRaw(colComentarios >= 0 ? colComentarios : 6);
+            const cliente = getRaw(2);
+            const respName = getRaw(3);
+            const rawStatus = getRaw(4);
+            const fecha_entrega = getRaw(5);
+            const comentarios = getRaw(6);
 
             // Status Normalization (alineado con vocabulario de Google Sheet)
             const estado = normalizeTaskStatus(rawStatus);
