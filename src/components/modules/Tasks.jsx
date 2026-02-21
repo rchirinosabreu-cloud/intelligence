@@ -171,7 +171,7 @@ const Tasks = () => {
           const tasksByColumn = {
               Pendiente: [],
               'En Proceso': [],
-              Realizado: []
+              Finalizado: []
           };
 
           prevTasks.forEach((task) => {
