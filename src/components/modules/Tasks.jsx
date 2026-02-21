@@ -161,6 +161,7 @@ const Tasks = () => {
       const sourceColumnId = source.droppableId;
       const destinationColumnId = destination.droppableId;
       const taskId = draggableId;
+      let originalTasksSnapshot = tasks;
 
       let originalTasksSnapshot = tasks;
 

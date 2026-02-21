@@ -254,6 +254,24 @@ async function getAgencyTasksJSON() {
         const headers = sheet.headerValues;
         console.log('[DEBUG EXTREMO] Headers detectados:', headers);
 
+        const colFechaAsignacion = findColumnIndex(headers, ['fecha asignacion', 'fecha_asignacion', 'asignacion', 'fecha de asignacion']);
+        const colPendiente = findColumnIndex(headers, ['pendiente', 'tarea', 'actividad', 'task']);
+        const colCliente = findColumnIndex(headers, ['cliente', 'marca', 'cuenta']);
+        const colResponsable = findColumnIndex(headers, ['responsable', 'owner', 'asignado']);
+        const colEstado = findColumnIndex(headers, ['estado', 'status', 'estatus']);
+        const colFechaEntrega = findColumnIndex(headers, ['fecha entrega', 'fecha_entrega', 'entrega', 'due date', 'vencimiento']);
+        const colComentarios = findColumnIndex(headers, ['comentarios', 'comentario', 'observaciones', 'notas']);
+
+        console.log('[DEBUG EXTREMO] Índices detectados:', {
+            colFechaAsignacion,
+            colPendiente,
+            colCliente,
+            colResponsable,
+            colEstado,
+            colFechaEntrega,
+            colComentarios
+        });
+
         const rows = await sheet.getRows();
         console.log(`[DEBUG EXTREMO] Filas leídas: ${rows.length}`);
 
@@ -321,7 +339,7 @@ async function getAgencyTasksJSON() {
             const responsableUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(respName || "Sin Asignar")}&background=random&color=fff&size=128`;
 
             return {
-                id: index + 2,
+                id: row.rowNumber || (index + 2),
                 fecha_asignacion: fecha_asignacion,
                 pendiente: pendiente,
                 cliente: cliente,
@@ -368,28 +386,23 @@ async function updateTaskStatus(id, newStatus) {
         let sheet = findTargetSheet(doc);
         if (!sheet) throw new Error("Target sheet not found.");
 
-        // The ID in our system is (index + 2).
-        // So row index = id - 2.
-        // google-spreadsheet rows are 0-indexed relative to the data range (usually skipping header).
-        // But getRows() returns rows starting from row 2 (index 0).
-        // So fetching rows[id - 2] should work if we loaded all rows.
-        // CAUTION: This assumes the sheet hasn't been sorted/filtered in a way that breaks index-based ID.
-        // Ideally we'd search for the ID column, but we are using implicit ID = Row Number.
+        // El ID recibido desde frontend es el número de fila real en Google Sheet.
+        // Esto evita desalineaciones cuando existen filas-resumen o filtros visuales.
 
-        const rowIndex = parseInt(id, 10) - 2;
-        if (isNaN(rowIndex) || rowIndex < 0) {
+        await sheet.loadHeaderRow();
+        const headers = sheet.headerValues;
+        const statusColIndex = findColumnIndex(headers, ['estado', 'status', 'estatus']);
+        if (statusColIndex < 0) {
+            throw new Error('No se encontró la columna de estado en la hoja.');
+        }
+
+        const rowNumber = parseInt(id, 10);
+        if (isNaN(rowNumber) || rowNumber < 2) {
             throw new Error(`Invalid ID: ${id}`);
         }
 
-        // Fetching specific row range is more efficient but getRows(offset) is easiest
-        // We need to fetch enough rows to reach our target.
-        // For simplicity and safety against race conditions (rows moving), we'll load the specific cell or row.
-
-        // Using loadCells is better for single update
-        // Row in sheet = rowIndex + 2 (header is 1, data starts 2)
-        // Column E is index 4.
-        const rowNumber = rowIndex + 2;
-        const range = `E${rowNumber}`; // e.g. E2
+        const statusColumnLetter = columnIndexToLetter(statusColIndex);
+        const range = `${statusColumnLetter}${rowNumber}`;
 
         console.log(`[UpdateTask] Loading cell ${range} in sheet ${sheet.title}`);
         await sheet.loadCells(range);
