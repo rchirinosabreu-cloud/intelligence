@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 
 // Helper to check if date is today or past
 // Assumes format "DD/MM" or similar
@@ -153,30 +153,57 @@ const Tasks = () => {
           return;
       }
 
-      // 1. Column IDs must match Backend/Kanban states exactly: 'Pendiente', 'En Proceso', 'Finalizado'
-      // These come from Droppable IDs
-      const newStatus = destination.droppableId;
+      const sourceColumnId = source.droppableId;
+      const destinationColumnId = destination.droppableId;
       const taskId = draggableId;
 
-      // 2. Optimistic UI Update
-      // Create a snapshot for rollback
-      const originalTasks = [...tasks];
+      let originalTasksSnapshot = tasks;
 
-      // Update state immediately to move the card
-      setTasks(prevTasks => prevTasks.map(t => {
-          if (String(t.id) === String(taskId)) {
-              return { ...t, estado: newStatus };
+      // Reordenar SIEMPRE en UI (misma columna o cambio de columna)
+      setTasks((prevTasks) => {
+          originalTasksSnapshot = prevTasks;
+
+          const tasksByColumn = {
+              Pendiente: [],
+              'En Proceso': [],
+              Finalizado: []
+          };
+
+          prevTasks.forEach((task) => {
+              const columnId = getColumnId(task.estado);
+              tasksByColumn[columnId].push(task);
+          });
+
+          const sourceTasks = [...tasksByColumn[sourceColumnId]];
+          const [movedTask] = sourceTasks.splice(source.index, 1);
+
+          if (!movedTask) {
+              return prevTasks;
           }
-          return t;
-      }));
 
-      // 3. API Call (Background)
+          tasksByColumn[sourceColumnId] = sourceTasks;
+
+          const destinationTasks = [...tasksByColumn[destinationColumnId]];
+          destinationTasks.splice(destination.index, 0, {
+              ...movedTask,
+              estado: destinationColumnId
+          });
+          tasksByColumn[destinationColumnId] = destinationTasks;
+
+          return columns.flatMap((column) => tasksByColumn[column.id]);
+      });
+
+      // Si solo cambió el orden en la misma columna, no sincronizamos estado en backend.
+      if (sourceColumnId === destinationColumnId) {
+          return;
+      }
+
       try {
           const baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
           const response = await fetch(`${baseUrl}/api/pendientes/${taskId}/status`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: newStatus })
+              body: JSON.stringify({ status: destinationColumnId })
           });
 
           if (!response.ok) {
@@ -184,11 +211,10 @@ const Tasks = () => {
           }
       } catch (err) {
           console.error("Drag and drop failed:", err);
-          // 4. Rollback on Error
-          setTasks(originalTasks);
+          setTasks(originalTasksSnapshot);
           toast({
               title: "Error de sincronización",
-              description: "No se pudo actualizar el estado en Google Sheets.",
+              description: "Se revirtió el movimiento porque no se pudo actualizar el estado en Google Sheets.",
               variant: "destructive"
           });
       }
