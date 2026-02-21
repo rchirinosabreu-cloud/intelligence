@@ -37,8 +37,9 @@ const corsOptions = {
     }
     return callback(new Error(`CORS: El origen ${origin} no está autorizado.`));
   },
-  methods: ["GET", "POST", "OPTIONS"],
+  methods: ["GET", "POST", "PATCH", "OPTIONS"],
   credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 // CORS configuration (allow all by default; restrict via CORS_ORIGINS env)
