@@ -125,31 +125,33 @@ const Tasks = () => {
   });
 
   const columns = [
-      { id: 'Pendiente', title: 'Pendiente', color: 'bg-zinc-100 dark:bg-zinc-800/50' },
-      { id: 'En Proceso', title: 'En proceso', color: 'bg-blue-50/50 dark:bg-blue-900/10' },
-      { id: 'Realizado', title: 'Realizado', color: 'bg-emerald-50/50 dark:bg-emerald-900/10' }
+      { id: 'pendiente', title: 'Pendiente', color: 'bg-zinc-100 dark:bg-zinc-800/50' },
+      { id: 'en-proceso', title: 'En proceso', color: 'bg-blue-50/50 dark:bg-blue-900/10' },
+      { id: 'realizado', title: 'Realizado', color: 'bg-emerald-50/50 dark:bg-emerald-900/10' }
   ];
 
   // Note: Backend might return 'Realizado', 'Hecho', 'Finalizado'.
   // We need to normalize or map the backend status to our column IDs.
   // Or just flexible matching.
   const getColumnId = (status) => {
-      if (!status) return 'Pendiente';
+      if (!status) return 'pendiente';
       const normalized = String(status)
           .toLowerCase()
           .normalize('NFD')
           .replace(/[̀-ͯ]/g, '')
           .trim();
 
-      if (['realizado', 'finalizado', 'hecho', 'done', 'completado', 'terminado'].includes(normalized)) return 'Realizado';
-      if (['en proceso', 'en curso', 'proceso', 'working', 'doing', 'in progress'].includes(normalized)) return 'En Proceso';
-      return 'Pendiente';
+      if (['realizado', 'finalizado', 'hecho', 'done', 'completado', 'terminado'].includes(normalized)) return 'realizado';
+      if (['en proceso', 'en curso', 'proceso', 'working', 'doing', 'in progress', 'en-proceso'].includes(normalized)) return 'en-proceso';
+      return 'pendiente';
   };
 
   const onDragEnd = async (result) => {
+      // 1. Crash Fix: Validar existencia de source/destination
       const { destination, source, draggableId } = result;
 
       if (!destination) return;
+      if (!source) return;
 
       if (
           destination.droppableId === source.droppableId &&
@@ -163,21 +165,24 @@ const Tasks = () => {
       const taskId = draggableId;
       let originalTasksSnapshot = tasks;
 
-      let originalTasksSnapshot = tasks;
-
       // Reordenar SIEMPRE en UI (misma columna o cambio de columna)
       setTasks((prevTasks) => {
           originalTasksSnapshot = prevTasks;
 
           const tasksByColumn = {
-              Pendiente: [],
-              'En Proceso': [],
-              Finalizado: []
+              'pendiente': [],
+              'en-proceso': [],
+              'realizado': []
           };
 
           prevTasks.forEach((task) => {
               const columnId = getColumnId(task.estado);
-              tasksByColumn[columnId].push(task);
+              // Safety check: if getColumnId returns something else (shouldn't happen), fallback to 'pendiente'
+              if (tasksByColumn[columnId]) {
+                  tasksByColumn[columnId].push(task);
+              } else {
+                  tasksByColumn['pendiente'].push(task);
+              }
           });
 
           const sourceTasks = [...tasksByColumn[sourceColumnId]];
@@ -192,7 +197,7 @@ const Tasks = () => {
           const destinationTasks = [...tasksByColumn[destinationColumnId]];
           destinationTasks.splice(destination.index, 0, {
               ...movedTask,
-              estado: destinationColumnId
+              estado: destinationColumnId // Store normalized ID temporarily in state
           });
           tasksByColumn[destinationColumnId] = destinationTasks;
 
@@ -204,12 +209,21 @@ const Tasks = () => {
           return;
       }
 
+      // 2. Mapeo para Google Sheets (Pretty Format)
+      const SHEET_STATUS_MAP = {
+          'pendiente': 'Pendiente',
+          'en-proceso': 'En Proceso',
+          'realizado': 'Realizado'
+      };
+
+      const newStatusForSheet = SHEET_STATUS_MAP[destinationColumnId] || 'Pendiente';
+
       try {
           const baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
           const response = await fetch(`${baseUrl}/api/pendientes/${taskId}/status`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: destinationColumnId })
+              body: JSON.stringify({ status: newStatusForSheet })
           });
 
           if (!response.ok) {
