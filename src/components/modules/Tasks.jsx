@@ -163,50 +163,48 @@ const Tasks = () => {
       const taskId = draggableId;
       let originalTasksSnapshot = tasks;
 
-      try {
-          // Reordenar SIEMPRE en UI (misma columna o cambio de columna)
-          setTasks((prevTasks) => {
-              originalTasksSnapshot = prevTasks;
+      let originalTasksSnapshot = tasks;
 
-              const tasksByColumn = columns.reduce((acc, column) => {
-                  acc[column.id] = [];
-                  return acc;
-              }, {});
+      // Reordenar SIEMPRE en UI (misma columna o cambio de columna)
+      setTasks((prevTasks) => {
+          originalTasksSnapshot = prevTasks;
 
-              prevTasks.forEach((task) => {
-                  const columnId = getColumnId(task.estado);
-                  const safeColumnId = tasksByColumn[columnId] ? columnId : 'Pendiente';
-                  tasksByColumn[safeColumnId].push(task);
-              });
+          const tasksByColumn = {
+              Pendiente: [],
+              'En Proceso': [],
+              Finalizado: []
+          };
 
-              if (!tasksByColumn[sourceColumnId] || !tasksByColumn[destinationColumnId]) {
-                  return prevTasks;
-              }
-
-              const sourceTasks = [...tasksByColumn[sourceColumnId]];
-              const [movedTask] = sourceTasks.splice(source.index, 1);
-
-              if (!movedTask) {
-                  return prevTasks;
-              }
-
-              tasksByColumn[sourceColumnId] = sourceTasks;
-
-              const destinationTasks = [...tasksByColumn[destinationColumnId]];
-              destinationTasks.splice(destination.index, 0, {
-                  ...movedTask,
-                  estado: destinationColumnId
-              });
-              tasksByColumn[destinationColumnId] = destinationTasks;
-
-              return columns.flatMap((column) => tasksByColumn[column.id]);
+          prevTasks.forEach((task) => {
+              const columnId = getColumnId(task.estado);
+              tasksByColumn[columnId].push(task);
           });
 
-          // Si solo cambió el orden en la misma columna, no sincronizamos estado en backend.
-          if (sourceColumnId === destinationColumnId) {
-              return;
+          const sourceTasks = [...tasksByColumn[sourceColumnId]];
+          const [movedTask] = sourceTasks.splice(source.index, 1);
+
+          if (!movedTask) {
+              return prevTasks;
           }
 
+          tasksByColumn[sourceColumnId] = sourceTasks;
+
+          const destinationTasks = [...tasksByColumn[destinationColumnId]];
+          destinationTasks.splice(destination.index, 0, {
+              ...movedTask,
+              estado: destinationColumnId
+          });
+          tasksByColumn[destinationColumnId] = destinationTasks;
+
+          return columns.flatMap((column) => tasksByColumn[column.id]);
+      });
+
+      // Si solo cambió el orden en la misma columna, no sincronizamos estado en backend.
+      if (sourceColumnId === destinationColumnId) {
+          return;
+      }
+
+      try {
           const baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
           const response = await fetch(`${baseUrl}/api/pendientes/${taskId}/status`, {
               method: 'PATCH',
@@ -221,8 +219,8 @@ const Tasks = () => {
           console.error("Drag and drop failed:", err);
           setTasks(originalTasksSnapshot);
           toast({
-              title: "Error al mover la tarea",
-              description: "Ocurrió un problema al aplicar el cambio. Se revirtió el movimiento.",
+              title: "Error de sincronización",
+              description: "Se revirtió el movimiento porque no se pudo actualizar el estado en Google Sheets.",
               variant: "destructive"
           });
       }
