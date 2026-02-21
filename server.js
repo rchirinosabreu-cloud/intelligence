@@ -151,16 +151,27 @@ function columnIndexToLetter(index) {
 }
 
 function findTargetSheet(doc) {
-    // 1. Priority: Specific sheet requested by user
-    const targetTitle = 'PENDIENTES BRAIN STUDIO 2026';
+    // Calculate dynamic sheet name based on current date (Spanish Month + Year)
+    // e.g., "Febrero 2026"
+    const now = new Date();
+    const months = [
+        'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    const currentMonthName = months[now.getMonth()];
+    const currentYear = now.getFullYear();
+    const targetTitle = `${currentMonthName} ${currentYear}`;
+
+    console.log(`[AgencyTasks] Looking for target sheet: "${targetTitle}"`);
+
     for (const sheet of doc.sheetsByIndex) {
         if (sheet.title.trim() === targetTitle) {
-             console.log(`[AgencyTasks] Found priority sheet: ${sheet.title}`);
+             console.log(`[AgencyTasks] Found target sheet: ${sheet.title}`);
              return sheet;
         }
     }
 
-    console.warn(`[AgencyTasks] Priority sheet "${targetTitle}" not found. Falling back to first sheet.`);
+    console.warn(`[AgencyTasks] Target sheet "${targetTitle}" not found. Falling back to first sheet (Index 0).`);
     return doc.sheetsByIndex[0];
 }
 
