@@ -127,9 +127,8 @@ try {
 
 // --- AGENCY TASKS TOOL (Google Sheets) ---
 function findTargetSheet(doc) {
-    // 1. Priority: Specific sheet requested by user (e.g., 'Febrero 2026')
-    // We can also check for variations if needed, but strict match is requested first.
-    const targetTitle = 'Febrero 2026';
+    // 1. Priority: Specific sheet requested by user
+    const targetTitle = 'PENDIENTES BRAIN STUDIO 2026';
     for (const sheet of doc.sheetsByIndex) {
         if (sheet.title.trim() === targetTitle) {
              console.log(`[AgencyTasks] Found priority sheet: ${sheet.title}`);
@@ -137,35 +136,8 @@ function findTargetSheet(doc) {
         }
     }
 
-    const months = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
-    const now = new Date();
-    const currentMonthName = months[now.getMonth()]; // e.g., "FEBRERO"
-
-    console.log(`[AgencyTasks] Priority sheet not found. Looking for sheet matching month: ${currentMonthName}`);
-
-    let bestMatch = null;
-    let maxYear = -1;
-
-    // Iterate through all sheets to find the best match
-    // Strategy: Find sheets containing the current month name.
-    // If multiple exist (e.g., "Febrero 2025", "Febrero 2026"), pick the one with the highest year.
-    for (const sheet of doc.sheetsByIndex) {
-        const title = sheet.title.toUpperCase();
-
-        if (title.includes(currentMonthName)) {
-            // Found a candidate
-            const yearMatch = title.match(/\d{4}/);
-            const sheetYear = yearMatch ? parseInt(yearMatch[0], 10) : 0;
-
-            // If it's the first match or has a higher year than previous match
-            if (!bestMatch || sheetYear > maxYear) {
-                bestMatch = sheet;
-                maxYear = sheetYear;
-            }
-        }
-    }
-
-    return bestMatch;
+    console.warn(`[AgencyTasks] Priority sheet "${targetTitle}" not found. Falling back to first sheet.`);
+    return doc.sheetsByIndex[0];
 }
 
 // Helper: Parse dates (DD/MM/YYYY or YYYY-MM-DD)
@@ -280,48 +252,59 @@ async function getAgencyTasksJSON() {
                 return String(data[idx] || "").trim();
             };
 
-            // Col A (0): Fecha Asignación
-            // Col B (1): Pendiente (Task Title)
-            // Col C (2): Cliente
-            // Col D (3): Responsable
-            // Col E (4): Estado
-            // Col F (5): Fecha Entrega
-            // Col G (6): Comentarios (Check for 'urgente')
+            // Mapping per requirements:
+            // Col A (0): fecha_asignacion
+            // Col B (1): pendiente
+            // Col C (2): cliente
+            // Col D (3): responsable
+            // Col E (4): estado
+            // Col F (5): fecha_entrega
+            // Col G (6): comentarios
 
-            const pendiente = getRaw(1) || 'Sin título';
-            const cliente = getRaw(2) || 'General';
-            const respName = getRaw(3) || 'Sin asignar';
-            const rawStatus = getRaw(4).toLowerCase();
+            const fecha_asignacion = getRaw(0);
+            const pendiente = getRaw(1);
+
+            // Filter empty 'Pendiente' (Title)
+            if (!pendiente) return null;
+
+            const cliente = getRaw(2);
+            const respName = getRaw(3);
+            const rawStatus = getRaw(4);
             const fecha_entrega = getRaw(5);
             const comentarios = getRaw(6);
 
-            // Normalization Logic for Status
+            // Status Normalization
             let estado = 'Pendiente';
-            if (rawStatus === 'realizado' || rawStatus === 'finalizado' || rawStatus === 'hecho' || rawStatus === 'done') estado = 'Realizado';
-            else if (rawStatus.includes('proceso') || rawStatus.includes('curso') || rawStatus.includes('working')) estado = 'En Proceso';
+            const cleanStatus = rawStatus.toLowerCase().replace(/\s+/g, ' ').trim();
 
-            // Priority Logic
-            // 1. Date Check
-            let es_prioritaria = false;
-            const dateObj = parseDate(fecha_entrega);
-            if (dateObj) {
-                const now = new Date();
-                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                if (dateObj.getTime() <= today.getTime()) {
-                    es_prioritaria = true;
-                }
+            if (['realizado', 'finalizado', 'hecho', 'done'].some(s => cleanStatus.includes(s))) {
+                estado = 'Realizado';
+            } else if (['proceso', 'curso', 'working', 'en proceso'].some(s => cleanStatus.includes(s))) {
+                estado = 'En proceso';
             }
-            // 2. Comments Check (e.g. "URGENTE" in Col G)
-            if (comentarios.toLowerCase().includes('urgente')) {
-                es_prioritaria = true;
+
+            // Priority Calculation
+            let es_prioritaria = false;
+
+            // Si fecha_entrega existe Y es menor o igual a la fecha de hoy ➡️ prioridad = 'Alta'.
+            const deliveryDate = parseDate(fecha_entrega);
+            if (deliveryDate) {
+                 const now = new Date();
+                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                 // Reset time to compare only dates
+                 const deliveryDateOnly = new Date(deliveryDate.getFullYear(), deliveryDate.getMonth(), deliveryDate.getDate());
+
+                 if (deliveryDateOnly <= today) {
+                     es_prioritaria = true;
+                 }
             }
 
             // Avatar Logic
-            const responsableUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(respName)}&background=random&color=fff&size=128`;
+            const responsableUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(respName || "Sin Asignar")}&background=random&color=fff&size=128`;
 
             return {
                 id: index + 2,
-                fecha_asignacion: getRaw(0),
+                fecha_asignacion: fecha_asignacion,
                 pendiente: pendiente,
                 cliente: cliente,
                 responsable: responsableUrl, // Frontend <img> src
@@ -332,7 +315,7 @@ async function getAgencyTasksJSON() {
                 es_prioritaria: es_prioritaria,
                 prioridad: es_prioritaria ? 'Alta' : 'Normal'
             };
-        }).filter(t => t.pendiente !== "Sin título");
+        }).filter(t => t !== null);
 
         if (tasks.length > 0) {
             console.log('Datos procesados (Sample):', JSON.stringify(tasks[0], null, 2));
