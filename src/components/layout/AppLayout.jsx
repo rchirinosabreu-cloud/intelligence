@@ -27,7 +27,7 @@ const AppLayout = ({ children, activeTab, setActiveTab }) => {
 
       {/* Main Content Area - z-10 (above background) */}
       <main className="ml-64 p-8 min-h-screen relative z-10">
-        <div className="max-w-7xl mx-auto space-y-8">
+        <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700">
           {children}
         </div>
       </main>
