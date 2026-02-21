@@ -126,6 +126,29 @@ try {
 }
 
 // --- AGENCY TASKS TOOL (Google Sheets) ---
+
+// Helper: Find column index by keywords (case-insensitive)
+function findColumnIndex(headers, keywords) {
+    if (!headers || !Array.isArray(headers)) return -1;
+    const lowerKeywords = keywords.map(k => k.toLowerCase());
+    return headers.findIndex(h => {
+        const header = String(h || "").toLowerCase().trim();
+        return lowerKeywords.includes(header);
+    });
+}
+
+// Helper: Convert 0-based index to Excel column letter (0->A, 25->Z, 26->AA)
+function columnIndexToLetter(index) {
+    let temp, letter = '';
+    let col = index;
+    while (col >= 0) {
+        temp = col % 26;
+        letter = String.fromCharCode(temp + 65) + letter;
+        col = Math.floor(col / 26) - 1;
+    }
+    return letter;
+}
+
 function findTargetSheet(doc) {
     // 1. Priority: Specific sheet requested by user
     const targetTitle = 'PENDIENTES BRAIN STUDIO 2026';
@@ -207,42 +230,6 @@ const normalizeTaskStatus = (rawStatus = "") => {
     return 'Pendiente';
 };
 
-
-const normalizeHeader = (header = '') => String(header || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
-
-const findColumnIndex = (headers = [], candidates = [], options = {}) => {
-    const { exactOnly = false } = options;
-    const normalizedHeaders = headers.map(normalizeHeader);
-    const normalizedCandidates = candidates.map(normalizeHeader);
-
-    // 1) Match exact first (más seguro).
-    for (const candidate of normalizedCandidates) {
-        const idx = normalizedHeaders.findIndex(h => h === candidate);
-        if (idx !== -1) return idx;
-    }
-
-    // 2) Si se permite, hacer fallback por inclusión.
-    if (!exactOnly) {
-        for (const candidate of normalizedCandidates) {
-            const idx = normalizedHeaders.findIndex(h => h.includes(candidate));
-            if (idx !== -1) return idx;
-        }
-    }
-
-    return -1;
-};
-
-const columnIndexToLetter = (index) => {
-    let n = index + 1;
-    let result = '';
-    while (n > 0) {
-        const rem = (n - 1) % 26;
-        result = String.fromCharCode(65 + rem) + result;
-        n = Math.floor((n - 1) / 26);
-    }
-    return result;
-};
-
 const isSummaryOrInvalidTaskTitle = (title = '') => {
     const normalized = String(title || '').trim().toLowerCase();
     if (!normalized) return true;
@@ -294,7 +281,7 @@ async function getAgencyTasksJSON() {
         const colPendiente = findColumnIndex(headers, ['pendiente', 'tarea', 'actividad', 'task']);
         const colCliente = findColumnIndex(headers, ['cliente', 'marca', 'cuenta']);
         const colResponsable = findColumnIndex(headers, ['responsable', 'owner', 'asignado']);
-        const colEstado = findColumnIndex(headers, ['estado', 'estatus', 'status'], { exactOnly: true });
+        const colEstado = findColumnIndex(headers, ['estado', 'status', 'estatus']);
         const colFechaEntrega = findColumnIndex(headers, ['fecha entrega', 'fecha_entrega', 'entrega', 'due date', 'vencimiento']);
         const colComentarios = findColumnIndex(headers, ['comentarios', 'comentario', 'observaciones', 'notas']);
 
@@ -307,14 +294,6 @@ async function getAgencyTasksJSON() {
             colFechaEntrega,
             colComentarios
         });
-
-        const headerFechaAsignacion = colFechaAsignacion >= 0 ? headers[colFechaAsignacion] : null;
-        const headerPendiente = colPendiente >= 0 ? headers[colPendiente] : null;
-        const headerCliente = colCliente >= 0 ? headers[colCliente] : null;
-        const headerResponsable = colResponsable >= 0 ? headers[colResponsable] : null;
-        const headerEstado = colEstado >= 0 ? headers[colEstado] : null;
-        const headerFechaEntrega = colFechaEntrega >= 0 ? headers[colFechaEntrega] : null;
-        const headerComentarios = colComentarios >= 0 ? headers[colComentarios] : null;
 
         const rows = await sheet.getRows();
         console.log(`[DEBUG EXTREMO] Filas leídas: ${rows.length}`);
@@ -334,31 +313,38 @@ async function getAgencyTasksJSON() {
             // row._rawData[0] = Col A, [1] = Col B, etc.
             const data = row._rawData || [];
 
-            const getRaw = (idx) => {
-                if (idx < 0 || idx >= data.length) return "";
-                return String(data[idx] || "").trim();
+            const getRaw = (idx, fallbackIdx) => {
+                // If dynamic index found (>=0), use it. Else fallback to hardcoded.
+                const targetIdx = (idx >= 0) ? idx : fallbackIdx;
+                if (targetIdx < 0 || targetIdx >= data.length) return "";
+                return String(data[targetIdx] || "").trim();
             };
 
-            const rowObject = row.toObject ? row.toObject() : {};
+            // Mapping with Dynamic Indices (Fallback to standard order A-G)
+            // Col A (0): fecha_asignacion
+            // Col B (1): pendiente
+            // Col C (2): cliente
+            // Col D (3): responsable
+            // Col E (4): estado
+            // Col F (5): fecha_entrega
+            // Col G (6): comentarios
 
-            const getValue = (headerName, fallbackIndex) => {
-                if (headerName && Object.prototype.hasOwnProperty.call(rowObject, headerName)) {
-                    return String(rowObject[headerName] || '').trim();
-                }
-                return getRaw(fallbackIndex);
-            };
-
-            const fecha_asignacion = getValue(headerFechaAsignacion, 0);
-            const pendiente = getValue(headerPendiente, 1);
+            const fecha_asignacion = getRaw(colFechaAsignacion, 0);
+            const pendiente = getRaw(colPendiente, 1);
 
             // Filtrar filas vacías o filas-resumen de la hoja.
             if (isSummaryOrInvalidTaskTitle(pendiente)) return null;
 
-            const cliente = getValue(headerCliente, 2);
-            const respName = getValue(headerResponsable, 3);
-            const rawStatus = getValue(headerEstado, 4);
-            const fecha_entrega = getValue(headerFechaEntrega, 5);
-            const comentarios = getValue(headerComentarios, 6);
+            const cliente = getRaw(colCliente, 2);
+            const respName = getRaw(colResponsable, 3);
+            const rawStatus = getRaw(colEstado, 4);
+            const fecha_entrega = getRaw(colFechaEntrega, 5);
+            const comentarios = getRaw(colComentarios, 6);
+
+            // DEBUG: Log first few rows to debug status issues
+            if (index < 3) {
+                console.log(`[DEBUG Row ${index}] Status Raw: "${rawStatus}" (Col: ${colEstado >= 0 ? colEstado : 4}) -> Normalized: "${normalizeTaskStatus(rawStatus)}"`);
+            }
 
             // Status Normalization (alineado con vocabulario de Google Sheet)
             const estado = normalizeTaskStatus(rawStatus);
@@ -435,7 +421,7 @@ async function updateTaskStatus(id, newStatus) {
 
         await sheet.loadHeaderRow();
         const headers = sheet.headerValues;
-        const statusColIndex = findColumnIndex(headers, ['estado', 'estatus', 'status'], { exactOnly: true });
+        const statusColIndex = findColumnIndex(headers, ['estado', 'status', 'estatus']);
         if (statusColIndex < 0) {
             throw new Error('No se encontró la columna de estado en la hoja.');
         }
