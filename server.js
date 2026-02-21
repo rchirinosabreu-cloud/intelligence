@@ -126,6 +126,29 @@ try {
 }
 
 // --- AGENCY TASKS TOOL (Google Sheets) ---
+
+// Helper: Find column index by keywords (case-insensitive)
+function findColumnIndex(headers, keywords) {
+    if (!headers || !Array.isArray(headers)) return -1;
+    const lowerKeywords = keywords.map(k => k.toLowerCase());
+    return headers.findIndex(h => {
+        const header = String(h || "").toLowerCase().trim();
+        return lowerKeywords.includes(header);
+    });
+}
+
+// Helper: Convert 0-based index to Excel column letter (0->A, 25->Z, 26->AA)
+function columnIndexToLetter(index) {
+    let temp, letter = '';
+    let col = index;
+    while (col >= 0) {
+        temp = col % 26;
+        letter = String.fromCharCode(temp + 65) + letter;
+        col = Math.floor(col / 26) - 1;
+    }
+    return letter;
+}
+
 function findTargetSheet(doc) {
     // 1. Priority: Specific sheet requested by user
     const targetTitle = 'PENDIENTES BRAIN STUDIO 2026';
@@ -290,12 +313,14 @@ async function getAgencyTasksJSON() {
             // row._rawData[0] = Col A, [1] = Col B, etc.
             const data = row._rawData || [];
 
-            const getRaw = (idx) => {
-                if (idx < 0 || idx >= data.length) return "";
-                return String(data[idx] || "").trim();
+            const getRaw = (idx, fallbackIdx) => {
+                // If dynamic index found (>=0), use it. Else fallback to hardcoded.
+                const targetIdx = (idx >= 0) ? idx : fallbackIdx;
+                if (targetIdx < 0 || targetIdx >= data.length) return "";
+                return String(data[targetIdx] || "").trim();
             };
 
-            // Mapping per requirements:
+            // Mapping with Dynamic Indices (Fallback to standard order A-G)
             // Col A (0): fecha_asignacion
             // Col B (1): pendiente
             // Col C (2): cliente
@@ -304,17 +329,22 @@ async function getAgencyTasksJSON() {
             // Col F (5): fecha_entrega
             // Col G (6): comentarios
 
-            const fecha_asignacion = getRaw(0);
-            const pendiente = getRaw(1);
+            const fecha_asignacion = getRaw(colFechaAsignacion, 0);
+            const pendiente = getRaw(colPendiente, 1);
 
             // Filtrar filas vacías o filas-resumen de la hoja.
             if (isSummaryOrInvalidTaskTitle(pendiente)) return null;
 
-            const cliente = getRaw(2);
-            const respName = getRaw(3);
-            const rawStatus = getRaw(4);
-            const fecha_entrega = getRaw(5);
-            const comentarios = getRaw(6);
+            const cliente = getRaw(colCliente, 2);
+            const respName = getRaw(colResponsable, 3);
+            const rawStatus = getRaw(colEstado, 4);
+            const fecha_entrega = getRaw(colFechaEntrega, 5);
+            const comentarios = getRaw(colComentarios, 6);
+
+            // DEBUG: Log first few rows to debug status issues
+            if (index < 3) {
+                console.log(`[DEBUG Row ${index}] Status Raw: "${rawStatus}" (Col: ${colEstado >= 0 ? colEstado : 4}) -> Normalized: "${normalizeTaskStatus(rawStatus)}"`);
+            }
 
             // Status Normalization (alineado con vocabulario de Google Sheet)
             const estado = normalizeTaskStatus(rawStatus);
