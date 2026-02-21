@@ -235,7 +235,7 @@ const normalizeTaskStatus = (rawStatus = "") => {
     if (!status) return 'Pendiente';
 
     if (['pendiente', 'por hacer', 'to do', 'todo'].includes(status)) return 'Pendiente';
-    if (['en proceso', 'en curso', 'proceso', 'working', 'doing', 'in progress'].includes(status)) return 'En Proceso';
+    if (['en proceso', 'en curso', 'proceso', 'working', 'doing', 'in progress'].includes(status)) return 'En proceso';
     if (['realizado', 'finalizado', 'hecho', 'done', 'completado', 'terminado'].includes(status)) return 'Realizado';
 
     // Fallback conservador: si no coincide exactamente con estados conocidos, mantener Pendiente.
