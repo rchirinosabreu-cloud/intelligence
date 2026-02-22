@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/Card';
 import { motion } from 'framer-motion';
 import { ArrowUpRight, ArrowDownRight, Zap, TrendingUp, Clock, CheckCircle2, Activity, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import StudioBroadcastWidget from './StudioBroadcastWidget';
 
 const container = {
   hidden: { opacity: 0 },
@@ -174,14 +175,9 @@ const Dashboard = () => {
               </Card>
             </motion.div>
 
-           {/* Chart Placeholder (Bottom of metrics) */}
-           <motion.div variants={item} className="col-span-2">
-            <Card className="h-64 flex items-center justify-center border-dashed border-zinc-300 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/20">
-               <div className="text-center">
-                 <Activity className="w-8 h-8 text-zinc-400 dark:text-zinc-700 mx-auto mb-2" />
-                 <p className="text-zinc-500 dark:text-zinc-600 text-sm">Visualización de Datos (Próximamente)</p>
-               </div>
-            </Card>
+           {/* Chart Placeholder (Bottom of metrics) -> REPLACED BY BROADCAST WIDGET */}
+           <motion.div variants={item} className="col-span-2 h-[320px]">
+                <StudioBroadcastWidget />
            </motion.div>
         </div>
 
