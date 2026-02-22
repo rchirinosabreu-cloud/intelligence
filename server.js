@@ -364,7 +364,9 @@ async function getAgencyTasksJSON() {
             // Priority Calculation
             let es_prioritaria = false;
 
-            // Si fecha_entrega existe Y es menor o igual a la fecha de hoy ➡️ prioridad = 'Alta'.
+            // Priority Logic:
+            // 1. Must be due today or overdue.
+            // 2. Must NOT be completed ('Realizado').
             const deliveryDate = parseDate(fecha_entrega);
             if (deliveryDate) {
                  const now = new Date();
@@ -373,7 +375,10 @@ async function getAgencyTasksJSON() {
                  const deliveryDateOnly = new Date(deliveryDate.getFullYear(), deliveryDate.getMonth(), deliveryDate.getDate());
 
                  if (deliveryDateOnly <= today) {
-                     es_prioritaria = true;
+                     // Check if task is already completed to remove priority tag
+                     if (estado !== 'Realizado') {
+                         es_prioritaria = true;
+                     }
                  }
             }
 
