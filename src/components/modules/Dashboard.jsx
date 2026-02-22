@@ -59,18 +59,35 @@ const Dashboard = () => {
       return { total, completed, pending, percentage };
   }, [tasks]);
 
-  // --- LOGIC: FEED DE LOGROS (Completed Tasks) ---
+  // --- LOGIC: FEED DE LOGROS (Completed TODAY) ---
   const completedFeed = useMemo(() => {
+      const today = new Date();
+      // Reset time to compare only dates (YYYY-MM-DD)
+      const todayStr = today.toISOString().split('T')[0];
+
       return tasks
           .filter(t => {
+               // 1. Check Status
                const s = String(t.estado || "").toLowerCase().trim();
-               return ['realizado', 'finalizado', 'hecho', 'done'].includes(s);
+               if (!['realizado', 'finalizado', 'hecho', 'done'].includes(s)) return false;
+
+               // 2. Check Date (completed_at)
+               // If completed_at is missing, we assume it's old (or manual entry without date), so we exclude it.
+               if (!t.completed_at) return false;
+
+               try {
+                   const d = new Date(t.completed_at);
+                   const dStr = d.toISOString().split('T')[0];
+                   return dStr === todayStr;
+               } catch (e) {
+                   return false;
+               }
           })
-          // Since we don't have a 'completed_at' timestamp, we assume the list order (often bottom = newest in sheets)
-          // So we reverse to show the bottom-most (newest) first.
-          .slice()
-          .reverse()
-          .slice(0, 5); // Take top 5
+          .sort((a, b) => {
+              // Sort by Time (Newest First)
+              // If timestamps are ISO strings, string comparison works reversely
+              return new Date(b.completed_at) - new Date(a.completed_at);
+          });
   }, [tasks]);
 
   return (
@@ -180,7 +197,11 @@ const Dashboard = () => {
               {loading ? (
                   <p className="text-sm text-zinc-400 animate-pulse">Cargando feed...</p>
               ) : completedFeed.length === 0 ? (
-                  <p className="text-sm text-zinc-400">Aún no hay tareas completadas.</p>
+                  <div className="text-center py-8">
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400 italic">
+                          "Aún no hay victorias hoy. ¡Tú puedes!"
+                      </p>
+                  </div>
               ) : (
                   completedFeed.map((task, idx) => (
                     <div key={idx} className="relative pl-6 border-l border-zinc-200 dark:border-zinc-800 pb-2 last:pb-0">
@@ -194,7 +215,8 @@ const Dashboard = () => {
                         </h4>
                         <div className="flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
                           <Clock className="w-3 h-3" />
-                          {task.fecha_entrega || "Reciente"}
+                          {/* Show Time instead of Due Date for Today's feed */}
+                          {new Date(task.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       </div>
                     </div>
