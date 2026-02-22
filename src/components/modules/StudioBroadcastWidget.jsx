@@ -12,9 +12,9 @@ const CURRENT_USER = {
 };
 
 const TYPES = [
-    { id: 'urgent', label: 'Urgente', icon: AlertCircle, color: 'text-red-500', border: 'border-l-red-500', bg: 'bg-red-500/10' },
-    { id: 'win', label: 'Win', icon: Trophy, iconColor: 'text-yellow-500', color: 'text-emerald-500', border: 'border-l-emerald-500', bg: 'bg-emerald-500/10' },
-    { id: 'info', label: 'Info', icon: Info, color: 'text-blue-500', border: 'border-l-blue-500', bg: 'bg-blue-500/10' }
+    { id: 'urgent', label: 'URGENTE', icon: AlertCircle, color: 'text-red-500', border: 'border-l-red-500', bg: 'bg-red-500/10' },
+    { id: 'win', label: 'LOGRO', icon: Trophy, iconColor: 'text-yellow-500', color: 'text-emerald-500', border: 'border-l-emerald-500', bg: 'bg-emerald-500/10' },
+    { id: 'info', label: 'INFO', icon: Info, color: 'text-blue-500', border: 'border-l-blue-500', bg: 'bg-blue-500/10' }
 ];
 
 const StudioBroadcastWidget = () => {
@@ -116,7 +116,7 @@ const StudioBroadcastWidget = () => {
             </div>
 
             {/* List Area */}
-            <div className="flex-1 overflow-y-auto min-h-[200px] space-y-3 pr-1 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto min-h-0 space-y-3 pr-1 custom-scrollbar">
                 <AnimatePresence mode='popLayout'>
                     {announcements.length === 0 ? (
                         <motion.div
@@ -182,37 +182,14 @@ const StudioBroadcastWidget = () => {
             </div>
 
             {/* Input Area */}
-            <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+            <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-800 shrink-0">
                 {isFull && !error && (
                     <div className="mb-2 text-xs text-center text-amber-500 font-medium bg-amber-500/10 py-1 rounded">
                         Tablero lleno (máx 5).
                     </div>
                 )}
 
-                <div className="flex flex-col gap-3">
-                    {/* Type Selector */}
-                    <div className="flex gap-2">
-                        {TYPES.map(t => (
-                            <button
-                                key={t.id}
-                                onClick={() => !isFull && setSelectedType(t.id)}
-                                disabled={isFull}
-                                className={cn(
-                                    "flex-1 py-1 px-2 rounded-md text-[10px] font-bold uppercase tracking-wider border transition-all flex items-center justify-center gap-1",
-                                    selectedType === t.id
-                                        ? cn(t.bg, t.color, "border-transparent ring-1 ring-inset", t.id === 'urgent' ? 'ring-red-500' : t.id === 'win' ? 'ring-emerald-500' : 'ring-blue-500')
-                                        : "bg-transparent border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800",
-                                    isFull && "opacity-50 cursor-not-allowed"
-                                )}
-                            >
-                                {t.id === 'urgent' && <AlertCircle className="w-3 h-3" />}
-                                {t.id === 'win' && <Trophy className="w-3 h-3" />}
-                                {t.id === 'info' && <Info className="w-3 h-3" />}
-                                {t.label}
-                            </button>
-                        ))}
-                    </div>
-
+                <div className="flex flex-col gap-2">
                     {/* Text Input */}
                     <div className="relative">
                         <input
@@ -223,21 +200,44 @@ const StudioBroadcastWidget = () => {
                             maxLength={140}
                             disabled={isFull}
                             placeholder={isFull ? "Límite alcanzado" : "¿Qué está pasando?"}
-                            className="w-full bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800 rounded-xl py-2.5 pl-3 pr-10 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800 rounded-xl py-2 pl-3 pr-10 text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed h-9"
                         />
                         <button
                             onClick={handleAdd}
                             disabled={!text.trim() || isFull}
-                            className="absolute right-1.5 top-1.5 p-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-lg text-white transition-colors"
+                            className="absolute right-1 top-1 p-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-lg text-white transition-colors h-7 w-7 flex items-center justify-center"
                         >
-                            <Send className="w-3.5 h-3.5" />
+                            <Send className="w-3 h-3" />
                         </button>
                     </div>
 
-                    {/* Char Counter */}
-                    <div className="flex justify-end px-1">
+                    <div className="flex items-center justify-between gap-2">
+                        {/* Type Selector */}
+                        <div className="flex gap-1.5 flex-1">
+                            {TYPES.map(t => (
+                                <button
+                                    key={t.id}
+                                    onClick={() => !isFull && setSelectedType(t.id)}
+                                    disabled={isFull}
+                                    className={cn(
+                                        "flex-1 py-1 px-1.5 rounded-md text-[9px] font-bold uppercase tracking-wider border transition-all flex items-center justify-center gap-1 h-6",
+                                        selectedType === t.id
+                                            ? cn(t.bg, t.color, "border-transparent ring-1 ring-inset", t.id === 'urgent' ? 'ring-red-500' : t.id === 'win' ? 'ring-emerald-500' : 'ring-blue-500')
+                                            : "bg-transparent border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800",
+                                        isFull && "opacity-50 cursor-not-allowed"
+                                    )}
+                                >
+                                    {t.id === 'urgent' && <AlertCircle className="w-2.5 h-2.5" />}
+                                    {t.id === 'win' && <Trophy className="w-2.5 h-2.5" />}
+                                    {t.id === 'info' && <Info className="w-2.5 h-2.5" />}
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Char Counter */}
                         <span className={cn(
-                            "text-[10px]",
+                            "text-[9px]",
                             text.length > 120 ? "text-red-500 font-bold" : "text-zinc-400"
                         )}>
                             {text.length}/140
