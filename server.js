@@ -296,6 +296,7 @@ async function getAgencyTasksJSON() {
         const colEstado = findColumnIndex(headers, ['estado', 'status', 'estatus']);
         const colFechaEntrega = findColumnIndex(headers, ['fecha entrega', 'fecha_entrega', 'entrega', 'due date', 'vencimiento']);
         const colComentarios = findColumnIndex(headers, ['comentarios', 'comentario', 'observaciones', 'notas']);
+        const colCompletedAt = findColumnIndex(headers, ['completed_at', 'completado_el', 'fecha_fin', 'fecha completado', 'fecha_realizado']);
 
         console.log('[DEBUG EXTREMO] Índices detectados:', {
             colFechaAsignacion,
@@ -304,7 +305,8 @@ async function getAgencyTasksJSON() {
             colResponsable,
             colEstado,
             colFechaEntrega,
-            colComentarios
+            colComentarios,
+            colCompletedAt
         });
 
         const rows = await sheet.getRows();
@@ -352,6 +354,8 @@ async function getAgencyTasksJSON() {
             const rawStatus = getRaw(colEstado, 4);
             const fecha_entrega = getRaw(colFechaEntrega, 5);
             const comentarios = getRaw(colComentarios, 6);
+            // Default to col 7 (H) if header not found
+            const completed_at = getRaw(colCompletedAt, 7);
 
             // DEBUG: Log first few rows to debug status issues
             if (index < 3) {
@@ -395,6 +399,7 @@ async function getAgencyTasksJSON() {
                 estado: estado,
                 fecha_entrega: fecha_entrega,
                 comentarios: comentarios,
+                completed_at: completed_at,
                 es_prioritaria: es_prioritaria,
                 prioridad: es_prioritaria ? 'Alta' : 'Normal'
             };
@@ -438,6 +443,8 @@ async function updateTaskStatus(id, newStatus) {
 
         await sheet.loadHeaderRow();
         const headers = sheet.headerValues;
+
+        // 1. Update Status
         const statusColIndex = findColumnIndex(headers, ['estado', 'status', 'estatus']);
         if (statusColIndex < 0) {
             throw new Error('No se encontró la columna de estado en la hoja.');
@@ -449,12 +456,41 @@ async function updateTaskStatus(id, newStatus) {
         }
 
         const statusColumnLetter = columnIndexToLetter(statusColIndex);
-        const range = `${statusColumnLetter}${rowNumber}`;
+        const rangeStatus = `${statusColumnLetter}${rowNumber}`;
 
-        console.log(`[UpdateTask] Loading cell ${range} in sheet ${sheet.title}`);
-        await sheet.loadCells(range);
-        const cell = sheet.getCellByA1(range);
-        cell.value = newStatus;
+        // 2. Update Completed At (if transitioning to 'Realizado')
+        let rangeCompletedAt = null;
+        const isCompleted = normalizeTaskStatus(newStatus) === 'Realizado';
+
+        if (isCompleted) {
+             let completedAtColIndex = findColumnIndex(headers, ['completed_at', 'completado_el', 'fecha_fin', 'fecha completado']);
+             // Fallback to column H (index 7) if header not found
+             if (completedAtColIndex < 0) completedAtColIndex = 7;
+
+             const completedAtColumnLetter = columnIndexToLetter(completedAtColIndex);
+             rangeCompletedAt = `${completedAtColumnLetter}${rowNumber}`;
+        }
+
+        // Load necessary cells
+        const rangesToLoad = [rangeStatus];
+        if (rangeCompletedAt) rangesToLoad.push(rangeCompletedAt);
+
+        console.log(`[UpdateTask] Loading cells ${rangesToLoad.join(', ')} in sheet ${sheet.title}`);
+        await sheet.loadCells(rangesToLoad);
+
+        // Set Status
+        const cellStatus = sheet.getCellByA1(rangeStatus);
+        cellStatus.value = newStatus;
+
+        // Set Completed At (if applicable)
+        if (rangeCompletedAt && isCompleted) {
+             const cellCompletedAt = sheet.getCellByA1(rangeCompletedAt);
+             // Write ISO string for sorting, or localized date?
+             // ISO string is safer for sorting: 2023-10-27T10:00:00.000Z
+             // Or simple date: new Date().toISOString()
+             cellCompletedAt.value = new Date().toISOString();
+        }
+
         await sheet.saveUpdatedCells();
 
         console.log(`[UpdateTask] Success.`);
