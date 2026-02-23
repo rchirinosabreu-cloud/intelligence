@@ -284,6 +284,7 @@ async function getAgencyTasksJSON() {
         const colEstado = findColumnIndex(headers, ['estado', 'status', 'estatus']);
         const colFechaEntrega = findColumnIndex(headers, ['fecha entrega', 'fecha_entrega', 'entrega', 'due date', 'vencimiento']);
         const colComentarios = findColumnIndex(headers, ['comentarios', 'comentario', 'observaciones', 'notas']);
+        const colLastUpdated = findColumnIndex(headers, ['ultima actualizacion', 'actualizacion', 'update', 'last updated', 'timestamp']);
 
         console.log('[DEBUG EXTREMO] Índices detectados:', {
             colFechaAsignacion,
@@ -292,7 +293,8 @@ async function getAgencyTasksJSON() {
             colResponsable,
             colEstado,
             colFechaEntrega,
-            colComentarios
+            colComentarios,
+            colLastUpdated
         });
 
         const rows = await sheet.getRows();
@@ -340,6 +342,7 @@ async function getAgencyTasksJSON() {
             const rawStatus = getRaw(colEstado, 4);
             const fecha_entrega = getRaw(colFechaEntrega, 5);
             const comentarios = getRaw(colComentarios, 6);
+            const last_updated = getRaw(colLastUpdated, 7);
 
             // DEBUG: Log first few rows to debug status issues
             if (index < 3) {
@@ -378,6 +381,7 @@ async function getAgencyTasksJSON() {
                 estado: estado,
                 fecha_entrega: fecha_entrega,
                 comentarios: comentarios,
+                last_updated: last_updated,
                 es_prioritaria: es_prioritaria,
                 prioridad: es_prioritaria ? 'Alta' : 'Normal'
             };
@@ -432,16 +436,38 @@ async function updateTaskStatus(id, newStatus) {
         }
 
         const statusColumnLetter = columnIndexToLetter(statusColIndex);
-        const range = `${statusColumnLetter}${rowNumber}`;
 
-        console.log(`[UpdateTask] Loading cell ${range} in sheet ${sheet.title}`);
-        await sheet.loadCells(range);
-        const cell = sheet.getCellByA1(range);
-        cell.value = newStatus;
+        // Find Column H (or index 7) for timestamp
+        const timestampColIndex = findColumnIndex(headers, ['ultima actualizacion', 'actualizacion', 'update', 'last updated', 'timestamp']);
+        const targetTimestampCol = timestampColIndex >= 0 ? timestampColIndex : 7; // Default to H (7)
+        const timestampColumnLetter = columnIndexToLetter(targetTimestampCol);
+
+        // Define range covering both Status and Timestamp if possible, or load separately
+        // We load the bounding range to minimize API calls and ensure compatibility
+        const minColIndex = Math.min(statusColIndex, targetTimestampCol);
+        const maxColIndex = Math.max(statusColIndex, targetTimestampCol);
+        const minLetter = columnIndexToLetter(minColIndex);
+        const maxLetter = columnIndexToLetter(maxColIndex);
+
+        const boundingRange = `${minLetter}${rowNumber}:${maxLetter}${rowNumber}`;
+        const rangeStatus = `${statusColumnLetter}${rowNumber}`;
+        const rangeTimestamp = `${timestampColumnLetter}${rowNumber}`;
+
+        console.log(`[UpdateTask] Loading range ${boundingRange} in sheet ${sheet.title}`);
+        await sheet.loadCells(boundingRange);
+
+        const cellStatus = sheet.getCellByA1(rangeStatus);
+        cellStatus.value = newStatus;
+
+        // Update timestamp with Colombia Time
+        const bogotaTime = new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" });
+        const cellTimestamp = sheet.getCellByA1(rangeTimestamp);
+        cellTimestamp.value = bogotaTime;
+
         await sheet.saveUpdatedCells();
 
-        console.log(`[UpdateTask] Success.`);
-        return { success: true };
+        console.log(`[UpdateTask] Success. Updated status to "${newStatus}" and timestamp to "${bogotaTime}" at ${rangeTimestamp}.`);
+        return { success: true, timestamp: bogotaTime };
 
     } catch (error) {
         console.error("[UpdateTask] Error:", error);
