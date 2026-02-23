@@ -153,12 +153,10 @@ const Tasks = () => {
   };
 
   const onDragEnd = async (result) => {
-      // 1. Crash Fix: Validar existencia de source/destination
       const { destination, source, draggableId } = result;
 
+      // 1. Validation
       if (!destination) return;
-      if (!source) return;
-
       if (
           destination.droppableId === source.droppableId &&
           destination.index === source.index
@@ -166,81 +164,75 @@ const Tasks = () => {
           return;
       }
 
-      const sourceColumnId = source.droppableId;
-      const destinationColumnId = destination.droppableId;
+      // 2. Snapshot for reverting (Optimistic UI)
+      const previousTasks = [...tasks];
       const taskId = draggableId;
-      let originalTasksSnapshot = tasks;
+      const destinationColumnId = destination.droppableId;
+      const sourceColumnId = source.droppableId;
 
-      // Reordenar SIEMPRE en UI (misma columna o cambio de columna)
-      setTasks((prevTasks) => {
-          originalTasksSnapshot = prevTasks;
+      // 3. Optimistic Update Logic
+      const newTasks = [...tasks];
+      const taskIndex = newTasks.findIndex(t => String(t.id) === taskId);
 
-          // Find the actual task index in the full list using ID
-          const taskIndex = prevTasks.findIndex(t => String(t.id) === taskId);
-          if (taskIndex === -1) return prevTasks;
+      if (taskIndex === -1) return;
 
-          const movedTask = { ...prevTasks[taskIndex] };
+      // Get the task and remove it from original position
+      const movedTask = { ...newTasks[taskIndex] };
+      newTasks.splice(taskIndex, 1);
 
-          // Check if filters are active
-          // Note: dateFilter defaults to 'Todas' in state init but string check was slightly off in previous logic
-          const hasFilters = responsibleFilter !== 'Todos' || clientFilter !== 'Todos' || dateFilter !== 'Todas';
+      // Update internal status
+      movedTask.estado = destinationColumnId;
 
-          // SCENARIO 1: REORDERING WITHIN SAME COLUMN
-          if (sourceColumnId === destinationColumnId) {
-             if (hasFilters) {
-                  // If filtered, exact reordering is ambiguous because hidden items exist.
-                  // We prevent visual reordering to avoid state corruption or snapping.
-                  // The item snaps back, effectively disabling reorder in filtered view.
-                  return prevTasks;
-             }
+      // Calculate Insertion Position (handling filters and visibility)
+      // Filter the *remaining* tasks to match what's visible in the destination column
+      const visibleTasksInDestColumn = newTasks.filter(task => {
+          // Match Column
+          if (getColumnId(task.estado) !== destinationColumnId) return false;
 
-             // If NOT filtered, we can safely reorder using the bucket strategy (original behavior restored but safer)
-             const tasksByColumn = { 'pendiente': [], 'en-proceso': [], 'realizado': [] };
-             prevTasks.forEach(t => {
-                 const cId = getColumnId(t.estado);
-                 if (tasksByColumn[cId]) tasksByColumn[cId].push(t);
-                 else tasksByColumn['pendiente'].push(t);
-             });
+          // Match Active Filters
+          if (responsibleFilter !== 'Todos' && (task.responsable_name || "Desconocido") !== responsibleFilter) return false;
+          if (clientFilter !== 'Todos' && (task.cliente || "Desconocido") !== clientFilter) return false;
+          if (dateFilter === 'Para Hoy' && !isToday(task.fecha_entrega)) return false;
+          if (dateFilter === 'Esta semana' && !isThisWeek(task.fecha_entrega)) return false;
 
-             const sourceTasks = [...tasksByColumn[sourceColumnId]];
-             // source.index matches the column index because no filters are active
-             const [removed] = sourceTasks.splice(source.index, 1);
-
-             // Check if 'removed' exists. It should, but safety first.
-             if (!removed) return prevTasks;
-
-             sourceTasks.splice(destination.index, 0, removed);
-
-             tasksByColumn[sourceColumnId] = sourceTasks;
-             return columns.flatMap(col => tasksByColumn[col.id]);
-          }
-
-          // SCENARIO 2: MOVING TO DIFFERENT COLUMN (STATUS CHANGE)
-          // Regardless of filters, we want to allow changing status.
-
-          // Remove from old position
-          const newTasks = [...prevTasks];
-          newTasks.splice(taskIndex, 1);
-
-          // Update status
-          movedTask.estado = destinationColumnId;
-
-          // Insert logic:
-          // If filtered, we can't trust destination.index to map to the global list accurately without complex math.
-          // Simplest User Experience: Push to top or bottom of the new column in the global list.
-          // Let's push to the end of the list for simplicity, which renders at the bottom.
-          // Or unshift to top.
-          newTasks.push(movedTask);
-
-          return newTasks;
+          return true;
       });
 
-      // Si solo cambió el orden en la misma columna, no sincronizamos estado en backend.
+      // Determine where to insert in the global 'newTasks' list
+      let insertionIndexInGlobal = -1;
+
+      if (visibleTasksInDestColumn.length === 0) {
+          // If column is empty, append to end
+          insertionIndexInGlobal = newTasks.length;
+      } else if (destination.index >= visibleTasksInDestColumn.length) {
+          // Insert after the last visible task
+          const lastVisibleTask = visibleTasksInDestColumn[visibleTasksInDestColumn.length - 1];
+          const lastVisibleIndex = newTasks.findIndex(t => t.id === lastVisibleTask.id);
+          insertionIndexInGlobal = lastVisibleIndex + 1;
+      } else {
+          // Insert before the task at destination.index
+          const anchorTask = visibleTasksInDestColumn[destination.index];
+          insertionIndexInGlobal = newTasks.findIndex(t => t.id === anchorTask.id);
+      }
+
+      // Safe insertion
+      if (insertionIndexInGlobal !== -1) {
+           newTasks.splice(insertionIndexInGlobal, 0, movedTask);
+      } else {
+           // Fallback (should not happen if logic is correct)
+           newTasks.push(movedTask);
+      }
+
+      // Apply Optimistic Update
+      setTasks(newTasks);
+
+      // 4. API Sync (Only if column changed)
+      // Note: If reordering within same column, we don't sync to backend (as per original logic/requirement)
+      // unless we want to persist order (which is not supported by backend yet).
       if (sourceColumnId === destinationColumnId) {
           return;
       }
 
-      // 2. Mapeo para Google Sheets (Pretty Format)
       const SHEET_STATUS_MAP = {
           'pendiente': 'Pendiente',
           'en-proceso': 'En Proceso',
@@ -258,11 +250,11 @@ const Tasks = () => {
           });
 
           if (!response.ok) {
-              throw new Error("Failed to update");
+              throw new Error("Failed to update status in backend");
           }
       } catch (err) {
           console.error("Drag and drop failed:", err);
-          setTasks(originalTasksSnapshot);
+          setTasks(previousTasks);
           toast({
               title: "Error de sincronización",
               description: "Se revirtió el movimiento porque no se pudo actualizar el estado en Google Sheets.",
