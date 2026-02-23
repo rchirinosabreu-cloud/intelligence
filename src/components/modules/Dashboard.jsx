@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { ArrowUpRight, ArrowDownRight, Zap, TrendingUp, Clock, CheckCircle2, Activity, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import StudioBroadcastWidget from './StudioBroadcastWidget';
+import MeetingWidget from './MeetingWidget';
 
 const container = {
   hidden: { opacity: 0 },
@@ -218,8 +219,13 @@ const Dashboard = () => {
             </motion.div>
 
            {/* Chart Placeholder (Bottom of metrics) -> REPLACED BY BROADCAST WIDGET */}
-           <motion.div variants={item} className="col-span-2">
+           <motion.div variants={item} className="col-span-1">
                 <StudioBroadcastWidget />
+           </motion.div>
+
+           {/* WIDGET 3: AGENDA / MEETING WIDGET (New) */}
+           <motion.div variants={item} className="col-span-1">
+                <MeetingWidget />
            </motion.div>
         </div>
 
