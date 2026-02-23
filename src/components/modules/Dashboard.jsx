@@ -176,7 +176,7 @@ const Dashboard = () => {
             </motion.div>
 
            {/* Chart Placeholder (Bottom of metrics) -> REPLACED BY BROADCAST WIDGET */}
-           <motion.div variants={item} className="col-span-2 h-[320px]">
+           <motion.div variants={item} className="col-span-2">
                 <StudioBroadcastWidget />
            </motion.div>
         </div>
