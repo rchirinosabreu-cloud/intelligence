@@ -37,8 +37,9 @@ const corsOptions = {
     }
     return callback(new Error(`CORS: El origen ${origin} no está autorizado.`));
   },
-  methods: ["GET", "POST", "OPTIONS"],
+  methods: ["GET", "POST", "PATCH", "OPTIONS"],
   credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 // CORS configuration (allow all by default; restrict via CORS_ORIGINS env)
@@ -150,16 +151,27 @@ function columnIndexToLetter(index) {
 }
 
 function findTargetSheet(doc) {
-    // 1. Priority: Specific sheet requested by user
-    const targetTitle = 'PENDIENTES BRAIN STUDIO 2026';
+    // Calculate dynamic sheet name based on current date (Spanish Month + Year)
+    // e.g., "Febrero 2026"
+    const now = new Date();
+    const months = [
+        'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    const currentMonthName = months[now.getMonth()];
+    const currentYear = now.getFullYear();
+    const targetTitle = `${currentMonthName} ${currentYear}`;
+
+    console.log(`[AgencyTasks] Looking for target sheet: "${targetTitle}"`);
+
     for (const sheet of doc.sheetsByIndex) {
         if (sheet.title.trim() === targetTitle) {
-             console.log(`[AgencyTasks] Found priority sheet: ${sheet.title}`);
+             console.log(`[AgencyTasks] Found target sheet: ${sheet.title}`);
              return sheet;
         }
     }
 
-    console.warn(`[AgencyTasks] Priority sheet "${targetTitle}" not found. Falling back to first sheet.`);
+    console.warn(`[AgencyTasks] Target sheet "${targetTitle}" not found. Falling back to first sheet (Index 0).`);
     return doc.sheetsByIndex[0];
 }
 
@@ -223,7 +235,7 @@ const normalizeTaskStatus = (rawStatus = "") => {
     if (!status) return 'Pendiente';
 
     if (['pendiente', 'por hacer', 'to do', 'todo'].includes(status)) return 'Pendiente';
-    if (['en proceso', 'en curso', 'proceso', 'working', 'doing', 'in progress'].includes(status)) return 'En Proceso';
+    if (['en proceso', 'en curso', 'proceso', 'working', 'doing', 'in progress'].includes(status)) return 'En proceso';
     if (['realizado', 'finalizado', 'hecho', 'done', 'completado', 'terminado'].includes(status)) return 'Realizado';
 
     // Fallback conservador: si no coincide exactamente con estados conocidos, mantener Pendiente.
@@ -284,7 +296,7 @@ async function getAgencyTasksJSON() {
         const colEstado = findColumnIndex(headers, ['estado', 'status', 'estatus']);
         const colFechaEntrega = findColumnIndex(headers, ['fecha entrega', 'fecha_entrega', 'entrega', 'due date', 'vencimiento']);
         const colComentarios = findColumnIndex(headers, ['comentarios', 'comentario', 'observaciones', 'notas']);
-        const colLastUpdated = findColumnIndex(headers, ['ultima actualizacion', 'actualizacion', 'update', 'last updated', 'timestamp']);
+        const colCompletedAt = findColumnIndex(headers, ['completed_at', 'completado_el', 'fecha_fin', 'fecha completado', 'fecha_realizado']);
 
         console.log('[DEBUG EXTREMO] Índices detectados:', {
             colFechaAsignacion,
@@ -294,7 +306,7 @@ async function getAgencyTasksJSON() {
             colEstado,
             colFechaEntrega,
             colComentarios,
-            colLastUpdated
+            colCompletedAt
         });
 
         const rows = await sheet.getRows();
@@ -342,7 +354,8 @@ async function getAgencyTasksJSON() {
             const rawStatus = getRaw(colEstado, 4);
             const fecha_entrega = getRaw(colFechaEntrega, 5);
             const comentarios = getRaw(colComentarios, 6);
-            const last_updated = getRaw(colLastUpdated, 7);
+            // Default to col 7 (H) if header not found
+            const completed_at = getRaw(colCompletedAt, 7);
 
             // DEBUG: Log first few rows to debug status issues
             if (index < 3) {
@@ -355,7 +368,9 @@ async function getAgencyTasksJSON() {
             // Priority Calculation
             let es_prioritaria = false;
 
-            // Si fecha_entrega existe Y es menor o igual a la fecha de hoy ➡️ prioridad = 'Alta'.
+            // Priority Logic:
+            // 1. Must be due today or overdue.
+            // 2. Must NOT be completed ('Realizado').
             const deliveryDate = parseDate(fecha_entrega);
             if (deliveryDate) {
                  const now = new Date();
@@ -364,7 +379,10 @@ async function getAgencyTasksJSON() {
                  const deliveryDateOnly = new Date(deliveryDate.getFullYear(), deliveryDate.getMonth(), deliveryDate.getDate());
 
                  if (deliveryDateOnly <= today) {
-                     es_prioritaria = true;
+                     // Check if task is already completed to remove priority tag
+                     if (estado !== 'Realizado') {
+                         es_prioritaria = true;
+                     }
                  }
             }
 
@@ -381,7 +399,7 @@ async function getAgencyTasksJSON() {
                 estado: estado,
                 fecha_entrega: fecha_entrega,
                 comentarios: comentarios,
-                last_updated: last_updated,
+                completed_at: completed_at,
                 es_prioritaria: es_prioritaria,
                 prioridad: es_prioritaria ? 'Alta' : 'Normal'
             };
@@ -425,6 +443,8 @@ async function updateTaskStatus(id, newStatus) {
 
         await sheet.loadHeaderRow();
         const headers = sheet.headerValues;
+
+        // 1. Update Status
         const statusColIndex = findColumnIndex(headers, ['estado', 'status', 'estatus']);
         if (statusColIndex < 0) {
             throw new Error('No se encontró la columna de estado en la hoja.');
@@ -436,33 +456,40 @@ async function updateTaskStatus(id, newStatus) {
         }
 
         const statusColumnLetter = columnIndexToLetter(statusColIndex);
-
-        // Find Column H (or index 7) for timestamp
-        const timestampColIndex = findColumnIndex(headers, ['ultima actualizacion', 'actualizacion', 'update', 'last updated', 'timestamp']);
-        const targetTimestampCol = timestampColIndex >= 0 ? timestampColIndex : 7; // Default to H (7)
-        const timestampColumnLetter = columnIndexToLetter(targetTimestampCol);
-
-        // Define range covering both Status and Timestamp if possible, or load separately
-        // We load the bounding range to minimize API calls and ensure compatibility
-        const minColIndex = Math.min(statusColIndex, targetTimestampCol);
-        const maxColIndex = Math.max(statusColIndex, targetTimestampCol);
-        const minLetter = columnIndexToLetter(minColIndex);
-        const maxLetter = columnIndexToLetter(maxColIndex);
-
-        const boundingRange = `${minLetter}${rowNumber}:${maxLetter}${rowNumber}`;
         const rangeStatus = `${statusColumnLetter}${rowNumber}`;
-        const rangeTimestamp = `${timestampColumnLetter}${rowNumber}`;
 
-        console.log(`[UpdateTask] Loading range ${boundingRange} in sheet ${sheet.title}`);
-        await sheet.loadCells(boundingRange);
+        // 2. Update Completed At (if transitioning to 'Realizado')
+        let rangeCompletedAt = null;
+        const isCompleted = normalizeTaskStatus(newStatus) === 'Realizado';
 
+        if (isCompleted) {
+             let completedAtColIndex = findColumnIndex(headers, ['completed_at', 'completado_el', 'fecha_fin', 'fecha completado']);
+             // Fallback to column H (index 7) if header not found
+             if (completedAtColIndex < 0) completedAtColIndex = 7;
+
+             const completedAtColumnLetter = columnIndexToLetter(completedAtColIndex);
+             rangeCompletedAt = `${completedAtColumnLetter}${rowNumber}`;
+        }
+
+        // Load necessary cells
+        const rangesToLoad = [rangeStatus];
+        if (rangeCompletedAt) rangesToLoad.push(rangeCompletedAt);
+
+        console.log(`[UpdateTask] Loading cells ${rangesToLoad.join(', ')} in sheet ${sheet.title}`);
+        await sheet.loadCells(rangesToLoad);
+
+        // Set Status
         const cellStatus = sheet.getCellByA1(rangeStatus);
         cellStatus.value = newStatus;
 
-        // Update timestamp with Colombia Time
-        const bogotaTime = new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" });
-        const cellTimestamp = sheet.getCellByA1(rangeTimestamp);
-        cellTimestamp.value = bogotaTime;
+        // Set Completed At (if applicable)
+        if (rangeCompletedAt && isCompleted) {
+             const cellCompletedAt = sheet.getCellByA1(rangeCompletedAt);
+             // Write ISO string for sorting, or localized date?
+             // ISO string is safer for sorting: 2023-10-27T10:00:00.000Z
+             // Or simple date: new Date().toISOString()
+             cellCompletedAt.value = new Date().toISOString();
+        }
 
         await sheet.saveUpdatedCells();
 

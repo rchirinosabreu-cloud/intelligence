@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { MOCK_DATA } from '@/data';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/Card';
 import { motion } from 'framer-motion';
-import { ArrowUpRight, ArrowDownRight, Zap, TrendingUp, Clock, Globe, Activity, CheckCircle2 } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Zap, TrendingUp, Clock, CheckCircle2, Activity, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import StudioBroadcastWidget from './StudioBroadcastWidget';
 
 const container = {
   hidden: { opacity: 0 },
@@ -63,40 +63,75 @@ const parseDate = (dateStr) => {
 };
 
 const Dashboard = () => {
-  const { welcome, metrics } = MOCK_DATA.dashboard;
-  const [recentAchievements, setRecentAchievements] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchAchievements = async () => {
-      try {
-        const baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
-        // Cache busting to ensure fresh data on mount/reload
-        const response = await fetch(`${baseUrl}/api/pendientes?t=${new Date().getTime()}`);
-        if (!response.ok) throw new Error('Failed to fetch');
-
-        const tasks = await response.json();
-
-        // Filter "Realizado" tasks and Sort by last_updated descending
-        const completed = tasks
-            .filter(t => t.estado === 'Realizado')
-            .sort((a, b) => {
-                const dateA = parseDate(a.last_updated || a.fecha_entrega);
-                const dateB = parseDate(b.last_updated || b.fecha_entrega);
-                return dateB - dateA; // Descending
-            })
-            .slice(0, 5); // Take top 5
-
-        setRecentAchievements(completed);
-      } catch (err) {
-        console.error("Error fetching achievements:", err);
-      } finally {
-        setLoading(false);
-      }
+    const fetchTasks = async () => {
+        try {
+            setLoading(true);
+            const baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/pendientes`);
+            if (!response.ok) {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+            }
+            const data = await response.json();
+            setTasks(data);
+        } catch (err) {
+            console.error("Failed to fetch tasks for dashboard:", err);
+            // On error, we just show empty states, not a crash
+        } finally {
+            setLoading(false);
+        }
     };
 
-    fetchAchievements();
+    fetchTasks();
   }, []);
+
+  // --- LOGIC: METAS DEL MES ---
+  const goalsStats = useMemo(() => {
+      const total = tasks.length;
+      // Normalizar estado 'Realizado'
+      const completed = tasks.filter(t => {
+          const s = String(t.estado || "").toLowerCase().trim();
+          return ['realizado', 'finalizado', 'hecho', 'done'].includes(s);
+      }).length;
+      const pending = total - completed;
+      const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      return { total, completed, pending, percentage };
+  }, [tasks]);
+
+  // --- LOGIC: FEED DE LOGROS (Completed TODAY) ---
+  const completedFeed = useMemo(() => {
+      const today = new Date();
+      // Reset time to compare only dates (YYYY-MM-DD)
+      const todayStr = today.toISOString().split('T')[0];
+
+      return tasks
+          .filter(t => {
+               // 1. Check Status
+               const s = String(t.estado || "").toLowerCase().trim();
+               if (!['realizado', 'finalizado', 'hecho', 'done'].includes(s)) return false;
+
+               // 2. Check Date (completed_at)
+               // If completed_at is missing, we assume it's old (or manual entry without date), so we exclude it.
+               if (!t.completed_at) return false;
+
+               try {
+                   const d = new Date(t.completed_at);
+                   const dStr = d.toISOString().split('T')[0];
+                   return dStr === todayStr;
+               } catch (e) {
+                   return false;
+               }
+          })
+          .sort((a, b) => {
+              // Sort by Time (Newest First)
+              // If timestamps are ISO strings, string comparison works reversely
+              return new Date(b.completed_at) - new Date(a.completed_at);
+          });
+  }, [tasks]);
 
   return (
     <motion.div
@@ -110,8 +145,8 @@ const Dashboard = () => {
         <Card className="bg-gradient-to-r from-white to-zinc-50 border-zinc-200/60 dark:from-zinc-900 dark:to-zinc-900/50 dark:border-zinc-800">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">{welcome}</h2>
-              <p className="text-zinc-500 dark:text-zinc-400">Resumen de actividad diaria y métricas clave.</p>
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">¡Hola, Equipo Brain!</h2>
+              <p className="text-zinc-500 dark:text-zinc-400">Aquí está el resumen de progreso y logros del mes.</p>
             </div>
             <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-full dark:bg-indigo-500/10 dark:border-indigo-500/20">
               <Zap className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
@@ -125,78 +160,111 @@ const Dashboard = () => {
 
         {/* Metrics Column (Left - 2/3 width) */}
         <div className="md:col-span-2 grid grid-cols-2 gap-6">
-          {metrics.map((metric) => (
-            <motion.div variants={item} key={metric.id}>
+
+            {/* WIDGET 1: PENDIENTES DEL MES (Counter + Progress) */}
+            <motion.div variants={item} className="col-span-1">
               <Card className="h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
                 <div className="flex justify-between items-start mb-4">
-                  <span className="text-sm font-medium text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors">{metric.label}</span>
-                  <div className={cn(
-                    "flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border",
-                    metric.trend === 'up'
-                      ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
-                      : 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20'
-                  )}>
-                    {metric.trend === 'up' ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                    {metric.change}
+                  <span className="text-sm font-medium text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors">
+                      Pendientes del Mes
+                  </span>
+                  <div className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20">
+                    <Target className="w-3 h-3" />
+                    En curso
                   </div>
                 </div>
+
                 <div>
-                  <span className="text-3xl font-bold text-zinc-900 dark:text-white tracking-tight">{metric.value}</span>
+                  <div className="flex items-end gap-2 mb-2">
+                      <span className="text-4xl font-bold text-zinc-900 dark:text-white tracking-tight">
+                          {loading ? '...' : goalsStats.pending}
+                      </span>
+                      <span className="text-sm text-zinc-400 mb-1.5">
+                          / {goalsStats.total} total
+                      </span>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-2.5 overflow-hidden">
+                      <div
+                        className="bg-indigo-600 dark:bg-indigo-500 h-2.5 rounded-full transition-all duration-1000 ease-out"
+                        style={{ width: `${goalsStats.percentage}%` }}
+                      ></div>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-2 text-right">{goalsStats.percentage}% Completado</p>
                 </div>
               </Card>
             </motion.div>
-          ))}
 
-           {/* Chart Placeholder (Bottom of metrics) */}
+             {/* WIDGET 2: COMPLETED (Counter) */}
+             <motion.div variants={item} className="col-span-1">
+              <Card className="h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
+                <div className="flex justify-between items-start mb-4">
+                  <span className="text-sm font-medium text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors">
+                      Total Realizadas
+                  </span>
+                  <div className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
+                    <TrendingUp className="w-3 h-3" />
+                    +Impacto
+                  </div>
+                </div>
+                <div>
+                  <span className="text-4xl font-bold text-zinc-900 dark:text-white tracking-tight">
+                      {loading ? '...' : goalsStats.completed}
+                  </span>
+                  <p className="text-xs text-zinc-400 mt-2">Tareas finalizadas este mes</p>
+                </div>
+              </Card>
+            </motion.div>
+
+           {/* Chart Placeholder (Bottom of metrics) -> REPLACED BY BROADCAST WIDGET */}
            <motion.div variants={item} className="col-span-2">
-            <Card className="h-64 flex items-center justify-center border-dashed border-zinc-300 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/20">
-               <div className="text-center">
-                 <Activity className="w-8 h-8 text-zinc-400 dark:text-zinc-700 mx-auto mb-2" />
-                 <p className="text-zinc-500 dark:text-zinc-600 text-sm">Visualización de Datos (Próximamente)</p>
-               </div>
-            </Card>
+                <StudioBroadcastWidget />
            </motion.div>
         </div>
 
-        {/* Logros Recientes (Renamed from Actualizaciones) */}
+        {/* News/Updates Column (Right - 1/3 width) -> FEED DE LOGROS */}
         <motion.div variants={item} className="md:col-span-1 h-full">
           <Card className="h-full">
             <div className="flex items-center gap-2 mb-6">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
               <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Logros Recientes</h3>
             </div>
 
-            {loading ? (
-                <div className="flex justify-center py-8">
-                    <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-                </div>
-            ) : recentAchievements.length === 0 ? (
-                <div className="text-center py-8 text-zinc-400 text-sm">
-                    No hay logros recientes.
-                </div>
-            ) : (
-                <div className="space-y-6">
-                  {recentAchievements.map((task) => (
-                    <div key={task.id} className="relative pl-6 border-l border-zinc-200 dark:border-zinc-800 pb-2 last:pb-0">
-                      <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-emerald-200 border border-emerald-300 dark:bg-emerald-900 dark:border-emerald-700 group-hover:bg-emerald-500 transition-colors" />
-                      <div className="group cursor-pointer">
-                        <span className="text-xs text-emerald-600 dark:text-emerald-400 mb-1 block font-medium uppercase tracking-wider">{task.cliente}</span>
-                        <h4 className="text-zinc-700 hover:text-zinc-900 dark:text-zinc-200 text-sm font-medium mb-1 dark:group-hover:text-white transition-colors line-clamp-2" title={task.pendiente}>
+            <div className="space-y-6">
+              {loading ? (
+                  <p className="text-sm text-zinc-400 animate-pulse">Cargando feed...</p>
+              ) : completedFeed.length === 0 ? (
+                  <div className="text-center py-8">
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400 italic">
+                          "Aún no hay victorias hoy. ¡Tú puedes!"
+                      </p>
+                  </div>
+              ) : (
+                  completedFeed.map((task, idx) => (
+                    <div key={idx} className="relative pl-6 border-l border-zinc-200 dark:border-zinc-800 pb-2 last:pb-0">
+                      <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-200 dark:border-emerald-900 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+                      <div className="group">
+                        <span className="text-xs text-emerald-600 dark:text-emerald-400 mb-0.5 block font-medium">
+                            {task.responsable_name || "Equipo"} completó:
+                        </span>
+                        <h4 className="text-zinc-700 hover:text-zinc-900 dark:text-zinc-200 text-sm font-medium mb-1 dark:group-hover:text-white transition-colors line-clamp-2">
                             {task.pendiente}
                         </h4>
                         <div className="flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
                           <Clock className="w-3 h-3" />
-                          {task.last_updated || task.fecha_entrega || "Reciente"}
+                          {/* Show Time instead of Due Date for Today's feed */}
+                          {new Date(task.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-            )}
+                  ))
+              )}
+            </div>
 
             <div className="mt-8 pt-6 border-t border-zinc-200 dark:border-zinc-800">
                <button className="w-full py-2 text-xs font-medium text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-500 dark:hover:text-white transition-colors dark:border-zinc-800 rounded-lg dark:hover:bg-zinc-800">
-                 Ver todas las tareas completadas
+                 Ver historial completo
                </button>
             </div>
           </Card>
