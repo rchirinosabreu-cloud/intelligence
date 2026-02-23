@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 
 // Mock User
 const CURRENT_USER = {
-    name: 'Tú',
+    name: 'Team Lead',
     avatar: '/brainstudio-logo.png'
 };
 
@@ -124,8 +124,8 @@ const StudioBroadcastWidget = () => {
                             animate={{ opacity: 1 }}
                             className="min-h-[120px] flex flex-col items-center justify-center text-center p-4 opacity-50"
                         >
-                            <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-2">
-                                <span className="text-xl">🍃</span>
+                            <div className="w-20 h-20 rounded-full bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center mb-2 overflow-hidden border border-zinc-100 dark:border-zinc-800">
+                                <img src="/chill.png" alt="Chill" className="w-full h-full object-cover opacity-80 hover:scale-110 transition-transform duration-700" />
                             </div>
                             <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Todo tranquilo en Brain...</p>
                             <p className="text-xs text-zinc-400">Comparte una actualización.</p>
@@ -151,7 +151,7 @@ const StudioBroadcastWidget = () => {
                                 >
                                     <div className="flex justify-between items-start gap-3">
                                         <div className="flex gap-3">
-                                            <img src={item.author.avatar} alt="Avatar" className="w-8 h-8 rounded-full bg-zinc-200 ring-2 ring-white dark:ring-zinc-900" />
+                                            <img src={item.author.avatar} alt="Avatar" className="w-8 h-8 bg-white rounded-full border border-black/10 object-contain p-0.5" />
                                             <div>
                                                 <div className="flex items-center gap-2 mb-0.5">
                                                     <span className="text-xs font-bold text-zinc-900 dark:text-white">{item.author.name}</span>

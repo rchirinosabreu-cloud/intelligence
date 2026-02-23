@@ -103,7 +103,7 @@ const Dashboard = () => {
         <Card className="bg-gradient-to-r from-white to-zinc-50 border-zinc-200/60 dark:from-zinc-900 dark:to-zinc-900/50 dark:border-zinc-800">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">¡Hola, Equipo Brain! 🧠</h2>
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">¡Hola, Equipo Brain!</h2>
               <p className="text-zinc-500 dark:text-zinc-400">Aquí está el resumen de progreso y logros del mes.</p>
             </div>
             <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-full dark:bg-indigo-500/10 dark:border-indigo-500/20">
