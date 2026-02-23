@@ -94,7 +94,7 @@ const StudioBroadcastWidget = () => {
                     <div className="p-1.5 bg-indigo-500/10 rounded-lg">
                         <Megaphone className="w-4 h-4 text-indigo-500" />
                     </div>
-                    <h3 className="font-semibold text-zinc-900 dark:text-white text-sm">Studio Broadcast</h3>
+                    <h3 className="font-semibold text-zinc-900 dark:text-white text-sm">Anuncios importantes</h3>
                     <span className={cn(
                         "text-[10px] px-1.5 py-0.5 rounded-full font-medium border",
                         isFull
@@ -124,8 +124,8 @@ const StudioBroadcastWidget = () => {
                             animate={{ opacity: 1 }}
                             className="min-h-[120px] flex flex-col items-center justify-center text-center p-4 opacity-50"
                         >
-                            <div className="w-20 h-20 rounded-full bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center mb-2 overflow-hidden border border-zinc-100 dark:border-zinc-800">
-                                <img src="/chill.png" alt="Chill" className="w-full h-full object-cover opacity-80 hover:scale-110 transition-transform duration-700" />
+                            <div className="mb-2">
+                                <img src="/chill.png" alt="Chill" className="w-16 h-16 object-contain opacity-80 hover:scale-110 transition-transform duration-700" />
                             </div>
                             <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Todo tranquilo en Brain...</p>
                             <p className="text-xs text-zinc-400">Comparte una actualización.</p>
