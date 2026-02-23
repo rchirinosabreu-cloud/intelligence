@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 // Mock User
 const CURRENT_USER = {
     name: 'Tú',
-    avatar: 'https://ui-avatars.com/api/?name=User&background=6366f1&color=fff'
+    avatar: '/brainstudio-logo.png'
 };
 
 const TYPES = [
@@ -86,7 +86,7 @@ const StudioBroadcastWidget = () => {
     };
 
     return (
-        <Card className="h-full flex flex-col relative overflow-hidden group border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl transition-all hover:border-zinc-300 dark:hover:border-zinc-700">
+        <Card className="flex flex-col relative overflow-hidden group border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl transition-all hover:border-zinc-300 dark:hover:border-zinc-700">
 
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
@@ -116,13 +116,13 @@ const StudioBroadcastWidget = () => {
             </div>
 
             {/* List Area */}
-            <div className="flex-1 overflow-y-auto min-h-0 space-y-3 pr-1 custom-scrollbar">
+            <div className="space-y-3 pr-1">
                 <AnimatePresence mode='popLayout'>
                     {announcements.length === 0 ? (
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            className="h-full flex flex-col items-center justify-center text-center p-4 opacity-50"
+                            className="min-h-[120px] flex flex-col items-center justify-center text-center p-4 opacity-50"
                         >
                             <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-2">
                                 <span className="text-xl">🍃</span>
