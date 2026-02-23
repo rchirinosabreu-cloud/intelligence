@@ -493,8 +493,8 @@ async function updateTaskStatus(id, newStatus) {
 
         await sheet.saveUpdatedCells();
 
-        console.log(`[UpdateTask] Success.`);
-        return { success: true };
+        console.log(`[UpdateTask] Success. Updated status to "${newStatus}" and timestamp to "${bogotaTime}" at ${rangeTimestamp}.`);
+        return { success: true, timestamp: bogotaTime };
 
     } catch (error) {
         console.error("[UpdateTask] Error:", error);

@@ -20,6 +20,48 @@ const item = {
   show: { y: 0, opacity: 1 }
 };
 
+// Helper: Parse date string for sorting
+// Tries to handle "D/M/YYYY, H:mm:ss" (es-CO locale) or ISO
+const parseDate = (dateStr) => {
+    if (!dateStr) return 0;
+    try {
+        // Try standard Date.parse first
+        const timestamp = Date.parse(dateStr);
+        if (!isNaN(timestamp)) return timestamp;
+
+        // Try manual parsing for "DD/MM/YYYY" or "DD/MM/YYYY, HH:mm:ss"
+        // Detect AM/PM
+        const isPM = /p\.?\s*m\.?/i.test(dateStr);
+        const isAM = /a\.?\s*m\.?/i.test(dateStr);
+
+        // Remove "a. m." / "p. m." for parsing numbers
+        const cleanStr = dateStr.replace(/[ap]\.?\s*m\.?/gi, '').trim();
+        const parts = cleanStr.split(/[\s,\/:-]+/);
+
+        // Expect at least [D, M, Y]
+        if (parts.length >= 3) {
+             const day = parseInt(parts[0], 10);
+             const month = parseInt(parts[1], 10) - 1;
+             const year = parseInt(parts[2], 10);
+             let hour = parts.length > 3 ? parseInt(parts[3], 10) : 0;
+             const min = parts.length > 4 ? parseInt(parts[4], 10) : 0;
+             const sec = parts.length > 5 ? parseInt(parts[5], 10) : 0;
+
+             // Handle 12-hour format adjustment
+             if (isPM && hour < 12) hour += 12;
+             if (isAM && hour === 12) hour = 0;
+
+             // Check year validity (e.g. 2023 vs 23)
+             const fullYear = year < 100 ? 2000 + year : year;
+
+             return new Date(fullYear, month, day, hour, min, sec).getTime();
+        }
+    } catch (e) {
+        return 0;
+    }
+    return 0;
+};
+
 const Dashboard = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
