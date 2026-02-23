@@ -6,6 +6,7 @@ import { SearchServiceClient } from '@google-cloud/discoveryengine';
 import { JWT } from 'google-auth-library';
 import * as cheerio from 'cheerio';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
+import { getUpcomingEvents } from './src/services/calendarService.js';
 
 dotenv.config();
 
@@ -1129,6 +1130,20 @@ app.patch('/api/pendientes/:id/status', async (req, res) => {
     } catch (error) {
         console.error("[API] /api/pendientes/:id/status error:", error);
         res.status(500).json({ error: "Failed to update status", details: error.message });
+    }
+});
+
+app.get('/api/calendar/upcoming', async (req, res) => {
+    try {
+        console.log("[API] /api/calendar/upcoming called");
+        const events = await getUpcomingEvents();
+        res.json(events);
+    } catch (error) {
+        console.error("[API] /api/calendar/upcoming error:", error);
+        res.status(500).json({
+            error: "Failed to fetch calendar events",
+            details: error.message
+        });
     }
 });
 
