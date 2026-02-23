@@ -420,16 +420,16 @@ const TaskCard = ({ task, index }) => {
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
                     className="mb-3"
-                    style={{
-                        ...provided.draggableProps.style,
-                    }}
+                    // Important: Only pass style if provided.draggableProps.style exists
+                    style={provided.draggableProps.style}
                 >
                     <div
                         className={cn(
                             "rounded-xl border bg-card text-card-foreground shadow-sm",
-                            "group cursor-pointer relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm",
+                            // Removed motion/layout props or animations that interfere with DND positioning
+                            "group cursor-pointer relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm transition-shadow",
                             task.es_prioritaria ? "border-l-4 border-l-red-500" : "border-zinc-200 dark:border-zinc-800",
-                            snapshot.isDragging && "shadow-xl ring-2 ring-indigo-500 z-50"
+                            snapshot.isDragging && "shadow-xl ring-2 ring-indigo-500 z-50 opacity-90 rotate-2 scale-105"
                         )}
                     >
                         <div className="flex flex-col gap-3 p-4">
