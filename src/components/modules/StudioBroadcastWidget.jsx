@@ -28,9 +28,23 @@ const StudioBroadcastWidget = () => {
         const stored = localStorage.getItem('brain_broadcasts');
         if (stored) {
             const parsed = JSON.parse(stored);
-            // 24h Cleanup Logic
-            const now = Date.now();
-            const valid = parsed.filter(a => (now - a.timestamp) < 24 * 60 * 60 * 1000);
+
+            // Logic: Delete at 6:00 PM (18:00) every day
+            const now = new Date();
+            const resetHour = 18; // 6 PM
+
+            // Calculate last reset time
+            let lastResetTime = new Date(now);
+            lastResetTime.setHours(resetHour, 0, 0, 0);
+
+            // If it's before 6 PM today, the last reset was yesterday at 6 PM
+            if (now.getHours() < resetHour) {
+                lastResetTime.setDate(lastResetTime.getDate() - 1);
+            }
+
+            // Filter: Keep only items created AFTER the last reset
+            const valid = parsed.filter(a => a.timestamp > lastResetTime.getTime());
+
             setAnnouncements(valid);
             if (valid.length !== parsed.length) {
                 localStorage.setItem('brain_broadcasts', JSON.stringify(valid));
