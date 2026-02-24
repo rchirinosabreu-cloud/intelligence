@@ -494,8 +494,9 @@ async function updateTaskStatus(id, newStatus) {
 
         await sheet.saveUpdatedCells();
 
-        console.log(`[UpdateTask] Success. Updated status to "${newStatus}" and timestamp to "${bogotaTime}" at ${rangeTimestamp}.`);
-        return { success: true, timestamp: bogotaTime };
+        const timestamp = new Date().toISOString();
+        console.log(`[UpdateTask] Success. Updated status to "${newStatus}".`);
+        return { success: true, timestamp: timestamp };
 
     } catch (error) {
         console.error("[UpdateTask] Error:", error);

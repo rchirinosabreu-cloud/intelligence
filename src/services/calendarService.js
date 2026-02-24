@@ -47,7 +47,7 @@ export async function getUpcomingEvents(calendarId = 'social.brainstudio@gmail.c
         const response = await calendar.events.list({
             calendarId: calendarId,
             timeMin: now.toISOString(),
-            maxResults: 5,
+            maxResults: 10, // Increased to filter out non-meetings if needed
             singleEvents: true,
             orderBy: 'startTime',
         });
@@ -60,17 +60,26 @@ export async function getUpcomingEvents(calendarId = 'social.brainstudio@gmail.c
             const start = event.start.dateTime || event.start.date;
             const end = event.end.dateTime || event.end.date;
 
+            // Robust Meet Link Extraction
+            let meetLink = event.hangoutLink;
+            if (!meetLink && event.conferenceData && event.conferenceData.entryPoints) {
+                const videoEntry = event.conferenceData.entryPoints.find(ep => ep.entryPointType === 'video');
+                if (videoEntry) {
+                    meetLink = videoEntry.uri;
+                }
+            }
+
             return {
                 id: event.id,
                 title: event.summary || 'Sin título',
                 start_time: start,
                 end_time: end,
-                meet_link: event.hangoutLink, // Specifically extracting Meet link as requested
+                meet_link: meetLink, // Prioritized Meet Link
                 html_link: event.htmlLink,    // Fallback link to calendar event
                 description: event.description,
                 location: event.location
             };
-        });
+        }).slice(0, 5); // Return top 5
 
     } catch (error) {
         console.error(`[CalendarService] Error fetching events:`, error.message);
