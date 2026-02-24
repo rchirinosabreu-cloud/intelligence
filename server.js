@@ -535,30 +535,30 @@ async function fetchClientHealth() {
         // Load Header Row (Row 3, Index 2)
         // This sets the header row, so getRows() will fetch everything after it.
         await sheet.loadHeaderRow(3);
+        const headers = sheet.headerValues;
+
+        console.log(`[ClientHealth] Headers found: ${headers.join(', ')}`);
+
+        // Dynamic Column Detection
+        // Default to B (Index 1) and K (Index 10) if not found by name
+        let colNameIndex = findColumnIndex(headers, ['cliente', 'nombre', 'marca', 'cuenta']);
+        if (colNameIndex < 0) colNameIndex = 1; // Fallback to B
+
+        let colStatusIndex = findColumnIndex(headers, ['estado', 'status', 'estatus', 'semáforo', 'semaforo', 'indicador', 'situación', 'situacion']);
+        if (colStatusIndex < 0) colStatusIndex = 10; // Fallback to K
+
+        console.log(`[ClientHealth] Using columns: Name=${colNameIndex}, Status=${colStatusIndex}`);
 
         const rows = await sheet.getRows();
 
         const clients = [];
 
-        // Row indices:
-        // Name: Column B (Index 1? No, if header row is loaded, access by header name or generic index?)
-        // If we use header names, we need to know them. Column B header is at index 1 of sheet.headerValues.
-        // But headers might be complex.
-        // Let's rely on _rawData or generic cell access if possible?
-        // google-spreadsheet v4 rows allow access by key (header) or index (if no header? No).
-        // Let's just iterate and use _rawData if available or use the known structure.
-        // Row 3 (Header) -> Row 4 (Data).
-        // If we loaded headers, row 0 is the first data row.
-
-        // Let's use generic index access on _rawData to be safe against header name changes.
-        // _rawData array corresponds to columns A, B, C...
-        // Col B = Index 1.
-        // Col K = Index 10.
-
         for (const row of rows) {
              const data = row._rawData || [];
-             const name = String(data[1] || "").trim(); // Column B
-             const statusText = String(data[10] || "").trim(); // Column K
+
+             // Use dynamic indices
+             const name = String(data[colNameIndex] || "").trim();
+             const statusText = String(data[colStatusIndex] || "").trim();
 
              if (!name) continue;
 
@@ -568,21 +568,25 @@ async function fetchClientHealth() {
              const lowerStatus = statusText.toLowerCase();
 
              // Strict Mapping & Priority:
-             // 1. Crítico / Atención -> ROJO
+             // 1. Crítico / Atención / Riesgo / Urgente -> ROJO
              // 2. Al día -> VERDE
              // 3. Servicios -> AMARILLO
              // 4. Sin parrilla -> NARANJA
 
-             if (lowerStatus.includes('crítico') || lowerStatus.includes('critico') || lowerStatus.includes('atención') || lowerStatus.includes('atencion')) {
+             // Expanded Critical list based on potential variations
+             if (lowerStatus.includes('crítico') || lowerStatus.includes('critico') ||
+                 lowerStatus.includes('atención') || lowerStatus.includes('atencion') ||
+                 lowerStatus.includes('riesgo') || lowerStatus.includes('urgente') ||
+                 lowerStatus.includes('demora') || lowerStatus.includes('retraso')) {
                  status = 'critical';
                  priority = 1;
-             } else if (lowerStatus.includes('al día') || lowerStatus.includes('al dia')) {
+             } else if (lowerStatus.includes('al día') || lowerStatus.includes('al dia') || lowerStatus.includes('ok')) {
                  status = 'ok';
                  priority = 2;
-             } else if (lowerStatus.includes('servicios')) {
+             } else if (lowerStatus.includes('servicios') || lowerStatus.includes('servicio')) {
                  status = 'services';
                  priority = 3;
-             } else if (lowerStatus.includes('sin parrilla')) {
+             } else if (lowerStatus.includes('sin parrilla') || lowerStatus.includes('no grid')) {
                  status = 'no_grid';
                  priority = 4;
              } else {
@@ -590,13 +594,12 @@ async function fetchClientHealth() {
                  priority = 5;
              }
 
-             // Add to list if it has a relevant status or name
-             // User said: "Si la celda está vacía o tiene otro valor ... márcalos como Neutro/Gris"
              clients.push({
                  name: name,
                  status: status,
-                 status_text: statusText || "Sin estado",
-                 priority: priority
+                 status_text: statusText || "Sin estado", // Raw value for debugging
+                 priority: priority,
+                 _debug_col_status: colStatusIndex // Debugging
              });
         }
 

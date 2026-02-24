@@ -135,7 +135,7 @@ const HealthCheckWidget = () => {
                             <div
                                 key={idx}
                                 className={cn(
-                                    "flex items-center justify-between p-2 rounded-lg border border-transparent transition-all",
+                                    "relative flex items-center justify-between p-2 rounded-lg border border-transparent transition-all group",
                                     config.rowClass
                                 )}
                             >
@@ -155,6 +155,12 @@ const HealthCheckWidget = () => {
                                         {config.label}
                                     </span>
                                 </div>
+
+                                {client.status === 'neutral' && client.status_text && client.status_text !== 'Sin estado' && (
+                                     <span className="absolute right-0 top-0 text-[9px] text-zinc-300 -mt-2 mr-1 bg-zinc-800 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                         Raw: {client.status_text}
+                                     </span>
+                                )}
                             </div>
                         );
                     })
