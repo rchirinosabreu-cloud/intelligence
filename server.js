@@ -563,19 +563,31 @@ async function fetchClientHealth() {
              if (!name) continue;
 
              let status = 'neutral';
-             let priority = 0; // 0=Low, 1=High (Critical), 2=OK
+             let priority = 5; // Default low priority
 
              const lowerStatus = statusText.toLowerCase();
 
-             if (lowerStatus.includes('al día') || lowerStatus.includes('al dia')) {
-                 status = 'ok';
-                 priority = 2;
-             } else if (lowerStatus.includes('atención') || lowerStatus.includes('atencion')) {
+             // Strict Mapping & Priority:
+             // 1. Crítico / Atención -> ROJO
+             // 2. Al día -> VERDE
+             // 3. Servicios -> AMARILLO
+             // 4. Sin parrilla -> NARANJA
+
+             if (lowerStatus.includes('crítico') || lowerStatus.includes('critico') || lowerStatus.includes('atención') || lowerStatus.includes('atencion')) {
                  status = 'critical';
                  priority = 1;
-             } else if (lowerStatus.includes('sin parrilla') || lowerStatus.includes('servicios')) {
-                 status = 'warning';
+             } else if (lowerStatus.includes('al día') || lowerStatus.includes('al dia')) {
+                 status = 'ok';
+                 priority = 2;
+             } else if (lowerStatus.includes('servicios')) {
+                 status = 'services';
                  priority = 3;
+             } else if (lowerStatus.includes('sin parrilla')) {
+                 status = 'no_grid';
+                 priority = 4;
+             } else {
+                 status = 'neutral';
+                 priority = 5;
              }
 
              // Add to list if it has a relevant status or name
@@ -588,12 +600,8 @@ async function fetchClientHealth() {
              });
         }
 
-        // Sort: Critical (1) first.
-        clients.sort((a, b) => {
-             if (a.status === 'critical' && b.status !== 'critical') return -1;
-             if (b.status === 'critical' && a.status !== 'critical') return 1;
-             return 0;
-        });
+        // Sort strictly by Priority (1 -> 5)
+        clients.sort((a, b) => a.priority - b.priority);
 
         console.log(`[ClientHealth] Found ${clients.length} clients.`);
         return clients;
