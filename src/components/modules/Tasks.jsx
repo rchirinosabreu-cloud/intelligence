@@ -11,14 +11,21 @@ import { useToast } from '@/components/ui/use-toast';
 
 const parseDate = (dateStr) => {
     if (!dateStr) return null;
-    const parts = dateStr.split('/');
+    const cleanStr = dateStr.trim();
+    // Support both / and - separators
+    const separator = cleanStr.includes('/') ? '/' : '-';
+    const parts = cleanStr.split(separator);
+
     if (parts.length < 2) return null;
     const day = parseInt(parts[0], 10);
     const month = parseInt(parts[1], 10) - 1; // JS months are 0-based
-    const year = parts[2] ? parseInt(parts[2], 10) : new Date().getFullYear();
+
+    // Handle 2-digit years or full years
+    let yearVal = parts[2] ? parseInt(parts[2], 10) : new Date().getFullYear();
+    if (yearVal < 100) yearVal += 2000; // Assume 20xx for 2-digit years
 
     if (isNaN(day) || isNaN(month)) return null;
-    return new Date(year, month, day);
+    return new Date(yearVal, month, day);
 };
 
 // Check if task is overdue (Date < Today)
@@ -124,7 +131,7 @@ const getColumnId = (status) => {
 
 const Tasks = () => {
   const [responsibleFilter, setResponsibleFilter] = useState('Todos');
-  const [dateFilter, setDateFilter] = useState('Hoy + Vencidos'); // Default changed
+  const [dateFilter, setDateFilter] = useState('Hoy + Vencidos');
   const [clientFilter, setClientFilter] = useState('Todos');
 
   const [tasks, setTasks] = useState([]);
@@ -175,51 +182,16 @@ const Tasks = () => {
         if (clientFilter !== 'Todos' && (task.cliente || "Desconocido") !== clientFilter) return false;
 
         // Filter by Date Logic
-        // 'Hoy + Vencidos' (Default): Muestra fecha <= HOY Y estado !== 'Realizado'.
+        // 'Hoy + Vencidos' (Default): Muestra fecha <= HOY.
         // 'Solo Vencidos' (⚠️): Muestra fecha < HOY.
         // 'Esta Semana': Muestra fecha >= Lunes Y fecha <= Domingo.
-        // 'Todo el Mes': Muestra todas las tareas del mes actual.
+        // 'Todos': Muestra TODO (tenga fecha o no).
 
-        const status = getColumnId(task.estado);
-        const isDone = status === 'realizado';
+        if (dateFilter === 'Todos') {
+            return true;
+        }
 
         if (dateFilter === 'Hoy + Vencidos') {
-            // "Nueva Condición: Mostrar tareas donde fecha_entrega <= HOY Y estado !== 'Realizado'."
-            // User requested explicit logic for visual cleanup.
-            // Wait, if I hide 'Realizado', I break the 'Realizado' column?
-            // The user said: "Las tareas vencidas desaparecen del Kanban porque el filtro es estricto".
-            // "Las tareas futuras siguen ocultas".
-            // "Nueva Condición: Mostrar tareas donde fecha_entrega <= HOY Y estado !== 'Realizado'".
-
-            // If I apply "estado !== Realizado", then the 'Realizado' column will be empty!
-            // Maybe they only mean for the 'Por Hacer' / 'Pendiente' items?
-            // "Las tareas vencidas... desaparecen del Kanban".
-
-            // Let's assume the filter applies to *what tasks are eligible to be shown*.
-            // If a task is 'Realizado' and date <= Today, it should probably show in Realizado?
-            // "Nueva Condición: Mostrar tareas donde fecha_entrega <= HOY Y estado !== 'Realizado'."
-            // This phrasing implies hiding completed tasks?
-            // BUT usually Kanban shows completed tasks.
-
-            // Interpretation: The user is focused on "Pending" work.
-            // If I filter out 'Realizado', they won't see completed work for today.
-            // Let's stick to the date logic primarily, but check the prompt detail:
-            // "Mostrar tareas donde fecha_entrega <= HOY (Menor o igual a hoy) Y estado !== 'Realizado'."
-
-            // If I literally implement "AND status != Realizado", the Realizado column vanishes.
-            // I will implement: (Date <= Today) OR (Status == Realizado AND Date <= Today)?
-            // Or maybe they just want to see pending work?
-            // Let's try to interpret "Las tareas vencidas desaparecen".
-            // If I filter by Date <= Today. A task from Yesterday (Overdue) shows up.
-            // Why did they add "Y estado !== Realizado"?
-            // Maybe they want to exclude OLD completed tasks?
-            // Let's play safe: Show everything <= Today. The "status != Realizado" might be a confusion in their prompt
-            // or they really want to hide completed tasks.
-            // Given "Visualización de tareas vencidas", I'll show all <= Today.
-
-            // Wait, if I strictly follow "estado !== Realizado", the 3rd column is useless.
-            // I'll assume they meant "For pending tasks, strict date logic applies".
-            // I will include ALL tasks <= Today.
              return isTodayOrOverdue(task.fecha_entrega);
         }
 
@@ -229,10 +201,6 @@ const Tasks = () => {
 
         if (dateFilter === 'Esta Semana') {
             return isThisWeek(task.fecha_entrega);
-        }
-
-        if (dateFilter === 'Todo el Mes') {
-            return isThisMonth(task.fecha_entrega);
         }
 
         return true;
@@ -296,12 +264,11 @@ const Tasks = () => {
           if (responsibleFilter !== 'Todos' && (task.responsable_name || "Desconocido") !== responsibleFilter) return false;
           if (clientFilter !== 'Todos' && (task.cliente || "Desconocido") !== clientFilter) return false;
 
-          // Match Date Filter Logic (Reuse the logic or verify roughly)
-          // Simplified verification for insertion context
+          // Match Date Filter Logic
           if (dateFilter === 'Hoy + Vencidos' && !isTodayOrOverdue(task.fecha_entrega)) return false;
           if (dateFilter === 'Solo Vencidos' && !isOverdue(task.fecha_entrega)) return false;
           if (dateFilter === 'Esta Semana' && !isThisWeek(task.fecha_entrega)) return false;
-          if (dateFilter === 'Todo el Mes' && !isThisMonth(task.fecha_entrega)) return false;
+          if (dateFilter === 'Todos') return true;
 
           return true;
       });
@@ -457,10 +424,10 @@ const Tasks = () => {
                             : "border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700"
                     )}
                 >
-                    <option value="Hoy + Vencidos">Hoy + Vencidos (Default)</option>
+                    <option value="Hoy + Vencidos">Hoy + Vencidos</option>
                     <option value="Solo Vencidos">⚠️ Solo Vencidos</option>
                     <option value="Esta Semana">Esta Semana</option>
-                    <option value="Todo el Mes">Todo el Mes</option>
+                    <option value="Todos">Todos</option>
                 </select>
 
                 {/* Dynamic Icon */}
@@ -529,7 +496,8 @@ const Tasks = () => {
 
 const TaskCard = ({ task, index }) => {
     // Overdue Logic for Style
-    const overdue = isOverdue(task.fecha_entrega);
+    const isDone = getColumnId(task.estado) === 'realizado';
+    const overdue = !isDone && isOverdue(task.fecha_entrega);
     const daysOverdue = overdue ? getDaysOverdue(task.fecha_entrega) : 0;
 
     // Check if we should highlight overdue items (visual indicator logic)
