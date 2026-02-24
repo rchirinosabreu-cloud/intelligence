@@ -108,6 +108,20 @@ const CLIENT_COLORS = {
     "Velvet Hotel": "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800",
 };
 
+// Note: Backend might return 'Realizado', 'Hecho', 'Finalizado'.
+const getColumnId = (status) => {
+    if (!status) return 'pendiente';
+    const normalized = String(status)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .trim();
+
+    if (['realizado', 'finalizado', 'hecho', 'done', 'completado', 'terminado'].includes(normalized)) return 'realizado';
+    if (['en proceso', 'en curso', 'proceso', 'working', 'doing', 'in progress', 'en-proceso'].includes(normalized)) return 'en-proceso';
+    return 'pendiente';
+};
+
 const Tasks = () => {
   const [responsibleFilter, setResponsibleFilter] = useState('Todos');
   const [dateFilter, setDateFilter] = useState('Hoy + Vencidos'); // Default changed
@@ -240,20 +254,6 @@ const Tasks = () => {
       { id: 'en-proceso', title: 'En proceso', color: 'bg-blue-50/50 dark:bg-blue-900/10' },
       { id: 'realizado', title: 'Realizado', color: 'bg-emerald-50/50 dark:bg-emerald-900/10' }
   ];
-
-  // Note: Backend might return 'Realizado', 'Hecho', 'Finalizado'.
-  const getColumnId = (status) => {
-      if (!status) return 'pendiente';
-      const normalized = String(status)
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[̀-ͯ]/g, '')
-          .trim();
-
-      if (['realizado', 'finalizado', 'hecho', 'done', 'completado', 'terminado'].includes(normalized)) return 'realizado';
-      if (['en proceso', 'en curso', 'proceso', 'working', 'doing', 'in progress', 'en-proceso'].includes(normalized)) return 'en-proceso';
-      return 'pendiente';
-  };
 
   const onDragEnd = async (result) => {
       const { destination, source, draggableId } = result;
