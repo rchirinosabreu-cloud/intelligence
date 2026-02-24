@@ -504,6 +504,106 @@ async function updateTaskStatus(id, newStatus) {
     }
 }
 
+async function fetchClientHealth() {
+    console.log(`[ClientHealth] Fetching client health indicators...`);
+    const SHEET_ID = process.env.AGENCY_TASKS_SHEET_ID;
+
+    if (!SHEET_ID || !credentials) {
+        throw new Error("Missing SHEET_ID or credentials.");
+    }
+
+    try {
+        const authClient = new JWT({
+            email: credentials.client_email,
+            key: credentials.private_key,
+            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        });
+
+        const doc = new GoogleSpreadsheet(SHEET_ID, authClient);
+        await doc.loadInfo();
+
+        const sheetTitle = "INDICADORES 2026";
+        const sheet = doc.sheetsByTitle[sheetTitle];
+
+        if (!sheet) {
+            // DEBUG: List available sheets to help diagnose
+            const available = doc.sheetsByIndex.map(s => s.title).join(', ');
+            console.error(`[ClientHealth] Sheet "${sheetTitle}" not found. Available: ${available}`);
+            throw new Error(`Sheet "${sheetTitle}" not found.`);
+        }
+
+        // Load Header Row (Row 3, Index 2)
+        // This sets the header row, so getRows() will fetch everything after it.
+        await sheet.loadHeaderRow(3);
+
+        const rows = await sheet.getRows();
+
+        const clients = [];
+
+        // Row indices:
+        // Name: Column B (Index 1? No, if header row is loaded, access by header name or generic index?)
+        // If we use header names, we need to know them. Column B header is at index 1 of sheet.headerValues.
+        // But headers might be complex.
+        // Let's rely on _rawData or generic cell access if possible?
+        // google-spreadsheet v4 rows allow access by key (header) or index (if no header? No).
+        // Let's just iterate and use _rawData if available or use the known structure.
+        // Row 3 (Header) -> Row 4 (Data).
+        // If we loaded headers, row 0 is the first data row.
+
+        // Let's use generic index access on _rawData to be safe against header name changes.
+        // _rawData array corresponds to columns A, B, C...
+        // Col B = Index 1.
+        // Col K = Index 10.
+
+        for (const row of rows) {
+             const data = row._rawData || [];
+             const name = String(data[1] || "").trim(); // Column B
+             const statusText = String(data[10] || "").trim(); // Column K
+
+             if (!name) continue;
+
+             let status = 'neutral';
+             let priority = 0; // 0=Low, 1=High (Critical), 2=OK
+
+             const lowerStatus = statusText.toLowerCase();
+
+             if (lowerStatus.includes('al día') || lowerStatus.includes('al dia')) {
+                 status = 'ok';
+                 priority = 2;
+             } else if (lowerStatus.includes('atención') || lowerStatus.includes('atencion')) {
+                 status = 'critical';
+                 priority = 1;
+             } else if (lowerStatus.includes('sin parrilla') || lowerStatus.includes('servicios')) {
+                 status = 'warning';
+                 priority = 3;
+             }
+
+             // Add to list if it has a relevant status or name
+             // User said: "Si la celda está vacía o tiene otro valor ... márcalos como Neutro/Gris"
+             clients.push({
+                 name: name,
+                 status: status,
+                 status_text: statusText || "Sin estado",
+                 priority: priority
+             });
+        }
+
+        // Sort: Critical (1) first.
+        clients.sort((a, b) => {
+             if (a.status === 'critical' && b.status !== 'critical') return -1;
+             if (b.status === 'critical' && a.status !== 'critical') return 1;
+             return 0;
+        });
+
+        console.log(`[ClientHealth] Found ${clients.length} clients.`);
+        return clients;
+
+    } catch (error) {
+        console.error("[ClientHealth] Error:", error);
+        throw error;
+    }
+}
+
 // --- WEBSITE AUDIT TOOL (Cheerio) ---
 async function analyzeWebsiteDna(url) {
     console.log(`[Audit] Starting DNA analysis for: ${url}`);
@@ -1143,6 +1243,20 @@ app.get('/api/calendar/upcoming', async (req, res) => {
         console.error("[API] /api/calendar/upcoming error:", error);
         res.status(500).json({
             error: "Failed to fetch calendar events",
+            details: error.message
+        });
+    }
+});
+
+app.get('/api/clients/health', async (req, res) => {
+    try {
+        console.log("[API] /api/clients/health called");
+        const clients = await fetchClientHealth();
+        res.json(clients);
+    } catch (error) {
+        console.error("[API] /api/clients/health error:", error);
+        res.status(500).json({
+            error: "Failed to fetch client health indicators",
             details: error.message
         });
     }
