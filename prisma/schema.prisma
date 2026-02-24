@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Cliente de la Agencia
+model Client {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique // Para urls tipo /sunpartners
+  status    String   @default("active") // active, paused, archived
+  logoUrl   String?
+  createdAt DateTime @default(now())
+
+  // Relaciones
+  brandAssets BrandAsset[]
+  files       ClientFile[]
+}
+
+// Activos de Marca (Colores, Fuentes)
+model BrandAsset {
+  id        String  @id @default(uuid())
+  clientId  String
+  client    Client  @relation(fields: [clientId], references: [id])
+  type      String  // 'COLOR', 'TYPOGRAPHY', 'LINK'
+  name      String  // 'Color Primario', 'Fuente Web'
+  value     String  // '#FF0000', 'Montserrat'
+}
+
+// Archivos del Cliente (Bucket References)
+model ClientFile {
+  id          String   @id @default(uuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id])
+  name        String   // Nombre visible
+  bucketUrl   String   // URL del archivo en Railway/S3
+  category    String   // 'Legal', 'Deliverable', 'Asset'
+  createdAt   DateTime @default(now())
+}
