@@ -180,7 +180,7 @@ const Dashboard = () => {
 
            {/* WIDGET 3: BROADCAST WIDGET (Full Width) */}
            <motion.div variants={item} className="col-span-2">
-                <StudioBroadcastWidget />
+                <StudioBroadcastWidget variant="dashboard" />
            </motion.div>
 
            {/* ROW: MEETING + HEALTH CHECK */}

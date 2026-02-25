@@ -17,7 +17,7 @@ const TYPES = [
     { id: 'info', label: 'INFO', icon: Info, color: 'text-blue-500', border: 'border-l-blue-500', bg: 'bg-blue-500/10' }
 ];
 
-const StudioBroadcastWidget = ({ clientId = null }) => {
+const StudioBroadcastWidget = ({ clientId = null, variant = 'dashboard' }) => {
     const [announcements, setAnnouncements] = useState([]);
     const [text, setText] = useState('');
     const [selectedType, setSelectedType] = useState('info');
@@ -50,12 +50,11 @@ const StudioBroadcastWidget = ({ clientId = null }) => {
     const handleAdd = async () => {
         if (!text.trim()) return;
 
-        // Optimistic UI Update (Optional, but let's stick to simple first)
         try {
             const payload = {
                 content: text.slice(0, 140),
                 type: selectedType,
-                clientId: clientId, // Can be null
+                clientId: clientId,
                 authorName: CURRENT_USER.name,
                 authorAvatar: CURRENT_USER.avatar
             };
@@ -68,7 +67,7 @@ const StudioBroadcastWidget = ({ clientId = null }) => {
 
             if (!res.ok) throw new Error('Failed to create broadcast');
 
-            await fetchBroadcasts(); // Refresh list
+            await fetchBroadcasts();
             setText('');
             setError(null);
         } catch (err) {
@@ -83,17 +82,14 @@ const StudioBroadcastWidget = ({ clientId = null }) => {
                 method: 'DELETE'
             });
             if (!res.ok) throw new Error('Failed to delete broadcast');
-
-            // Optimistic Remove
             setAnnouncements(prev => prev.filter(a => a.id !== id));
         } catch (err) {
             alert('Error eliminando anuncio.');
         }
     };
 
-    const isFull = announcements.length >= 20; // Soft limit for UI cleanliness
+    const isFull = announcements.length >= 20;
 
-    // Helper for "Time Ago"
     const getTimeAgo = (timestamp) => {
         const diff = Date.now() - new Date(timestamp).getTime();
         const minutes = Math.floor(diff / 60000);
@@ -106,6 +102,10 @@ const StudioBroadcastWidget = ({ clientId = null }) => {
         return 'Ahora';
     };
 
+    // Variant Config
+    const isDashboard = variant === 'dashboard';
+    const widgetTitle = isDashboard ? 'Anuncios importantes' : 'Anuncios';
+
     return (
         <Card className="flex flex-col relative overflow-hidden group h-full border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl transition-all hover:border-zinc-300 dark:hover:border-zinc-700">
 
@@ -115,7 +115,7 @@ const StudioBroadcastWidget = ({ clientId = null }) => {
                     <div className="p-1.5 bg-indigo-500/10 rounded-lg">
                         <Megaphone className="w-4 h-4 text-indigo-500" />
                     </div>
-                    <h3 className="font-semibold text-zinc-900 dark:text-white text-sm">Bitácora</h3>
+                    <h3 className="font-semibold text-zinc-900 dark:text-white text-sm">{widgetTitle}</h3>
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium border bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700">
                         {announcements.length}
                     </span>
@@ -136,8 +136,20 @@ const StudioBroadcastWidget = ({ clientId = null }) => {
                             animate={{ opacity: 1 }}
                             className="h-full flex flex-col items-center justify-center text-center p-4 opacity-50 min-h-[150px]"
                         >
-                            <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Aún no hay anuncios</p>
-                            <p className="text-xs text-zinc-400 mt-1">Comparte un hito importante.</p>
+                            {isDashboard ? (
+                                <>
+                                    <div className="mb-2">
+                                        <img src="/chill.png" alt="Chill" className="w-16 h-16 object-contain opacity-80 hover:scale-110 transition-transform duration-700" />
+                                    </div>
+                                    <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Todo tranquilo en Brain...</p>
+                                    <p className="text-xs text-zinc-400">Comparte una actualización.</p>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Aún no hay anuncios</p>
+                                    <p className="text-xs text-zinc-400 mt-1">Comparte un hito importante.</p>
+                                </>
+                            )}
                         </motion.div>
                     ) : (
                         announcements.map((item) => {
