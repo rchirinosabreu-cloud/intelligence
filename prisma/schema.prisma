@@ -20,6 +20,7 @@ model Client {
   brandAssets BrandAsset[]
   files       ClientFile[]
   broadcasts  Broadcast[] // Anuncios/Bitácora del cliente
+  tasks       ClientTask[] // Pendientes del cliente
 }
 
 // Activos de Marca (Colores, Fuentes)
@@ -59,4 +60,15 @@ model Broadcast {
   // Metadatos opcionales para UI
   authorName   String? // 'Team Lead', 'Bria', etc.
   authorAvatar String? // URL del avatar
+}
+
+// Pendientes del Cliente (To-Do List)
+model ClientTask {
+  id        String   @id @default(uuid())
+  text      String   // Título de la tarea
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
 }
