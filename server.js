@@ -9,6 +9,7 @@ import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { getUpcomingEvents } from './src/services/calendarService.js';
 import { getClients, getClientBySlug, createClient, updateClient, deleteClient } from './src/services/clientService.js';
 import { getBroadcasts, createBroadcast, deleteBroadcast } from './src/services/broadcastService.js';
+import { getTasks, createTask, updateTask, deleteTask } from './src/services/clientTaskService.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -1374,6 +1375,53 @@ app.delete('/api/broadcasts/:id', async (req, res) => {
     } catch (error) {
         console.error(`[API] /api/broadcasts/${req.params.id} (DELETE) error:`, error);
         res.status(500).json({ error: "Failed to delete broadcast", details: error.message });
+    }
+});
+
+// --- CLIENT TASKS API (Pendientes del Cliente) ---
+
+app.get('/api/db/clients/:clientId/tasks', async (req, res) => {
+    try {
+        console.log(`[API] /api/db/clients/${req.params.clientId}/tasks (GET) called`);
+        const tasks = await getTasks(req.params.clientId);
+        res.json(tasks);
+    } catch (error) {
+        console.error("[API] /api/db/clients/:id/tasks error:", error);
+        res.status(500).json({ error: "Failed to fetch client tasks", details: error.message });
+    }
+});
+
+app.post('/api/db/clients/:clientId/tasks', async (req, res) => {
+    try {
+        console.log(`[API] /api/db/clients/${req.params.clientId}/tasks (POST) called`);
+        const { text } = req.body;
+        const task = await createTask(req.params.clientId, text);
+        res.json(task);
+    } catch (error) {
+        console.error("[API] /api/db/clients/:id/tasks (POST) error:", error);
+        res.status(500).json({ error: "Failed to create task", details: error.message });
+    }
+});
+
+app.patch('/api/db/tasks/:taskId', async (req, res) => {
+    try {
+        console.log(`[API] /api/db/tasks/${req.params.taskId} (PATCH) called`);
+        const task = await updateTask(req.params.taskId, req.body);
+        res.json(task);
+    } catch (error) {
+        console.error("[API] /api/db/tasks/:id (PATCH) error:", error);
+        res.status(500).json({ error: "Failed to update task", details: error.message });
+    }
+});
+
+app.delete('/api/db/tasks/:taskId', async (req, res) => {
+    try {
+        console.log(`[API] /api/db/tasks/${req.params.taskId} (DELETE) called`);
+        await deleteTask(req.params.taskId);
+        res.json({ success: true });
+    } catch (error) {
+        console.error("[API] /api/db/tasks/:id (DELETE) error:", error);
+        res.status(500).json({ error: "Failed to delete task", details: error.message });
     }
 });
 

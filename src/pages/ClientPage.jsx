@@ -140,7 +140,7 @@ const ClientPage = () => {
 
             {/* 3. Pendientes (Bottom) */}
             <div className="h-[320px]">
-                <ClientTasksWidget />
+                <ClientTasksWidget clientId={client.id} />
             </div>
 
         </div>
