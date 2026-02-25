@@ -1,4 +1,7 @@
 import prisma from '../lib/prisma.js';
+import { PrismaClient } from '@prisma/client';
+
+const prismaClient = new PrismaClient(); // Local instance if needed, but imported one is better. Using the imported one 'prisma' from line 1.
 
 // Helper to slugify strings
 function slugify(text) {
@@ -32,6 +35,27 @@ export async function getClients() {
   }
 }
 
+export async function getClientBySlug(slug) {
+  if (!slug) throw new Error("Slug is required");
+
+  try {
+    const client = await prisma.client.findUnique({
+      where: { slug: slug },
+      include: {
+        brandAssets: true,
+        files: true,
+        _count: {
+          select: { files: true, broadcasts: true }
+        }
+      }
+    });
+    return client;
+  } catch (error) {
+    console.error(`[ClientService] Error fetching client by slug ${slug}:`, error);
+    throw new Error("Failed to fetch client");
+  }
+}
+
 export async function createClient(data) {
   const { name } = data;
   if (!name) {
@@ -42,6 +66,7 @@ export async function createClient(data) {
   let uniqueSlug = slug;
   let counter = 1;
 
+  // Check for uniqueness
   while (true) {
       const existing = await prisma.client.findUnique({
           where: { slug: uniqueSlug }
@@ -82,8 +107,11 @@ export async function updateClient(id, data) {
   }
 
   if (slug !== undefined && slug !== null) {
-    updateData.slug = slugify(slug);
-    // TODO: Ideally check uniqueness, but DB will throw if duplicate.
+    // Only update slug if it changed and is valid
+    const newSlug = slugify(slug);
+    if (newSlug) {
+        updateData.slug = newSlug;
+    }
   }
 
   try {
@@ -100,9 +128,11 @@ export async function updateClient(id, data) {
 
 export async function deleteClient(id) {
   try {
+    // Transactional delete to clean up related records
     await prisma.$transaction([
         prisma.brandAsset.deleteMany({ where: { clientId: id } }),
         prisma.clientFile.deleteMany({ where: { clientId: id } }),
+        prisma.broadcast.deleteMany({ where: { clientId: id } }), // Added broadcast cleanup
         prisma.client.delete({ where: { id } })
     ]);
 

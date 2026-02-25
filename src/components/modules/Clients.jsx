@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Plus, Users, Search, MoreVertical, ExternalLink, Loader2, Edit, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
@@ -356,73 +357,78 @@ const Clients = () => {
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
               >
-                <Card className="group h-full flex flex-col cursor-pointer hover:border-indigo-500/30 dark:hover:border-indigo-400/30 transition-all duration-300 relative">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="relative">
-                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 shadow-sm border border-zinc-200 dark:border-white/5">
-                            {client.logoUrl ? (
-                                <img src={client.logoUrl} alt={client.name} className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center text-zinc-400">
-                                    <Users className="w-6 h-6" />
-                                </div>
-                            )}
-                        </div>
-                        <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white dark:border-zinc-900 ${client.status === 'active' ? 'bg-emerald-500' : client.status === 'paused' ? 'bg-amber-500' : 'bg-zinc-400'}`} />
+                <Link to={`/clients/${client.slug}`} className="block h-full outline-none">
+                  <Card className="group h-full flex flex-col cursor-pointer hover:border-indigo-500/30 dark:hover:border-indigo-400/30 transition-all duration-300 relative">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="relative">
+                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 shadow-sm border border-zinc-200 dark:border-white/5 group-hover:border-indigo-500/30 transition-colors">
+                              {client.logoUrl ? (
+                                  <img src={client.logoUrl} alt={client.name} className="w-full h-full object-cover" />
+                              ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-zinc-400">
+                                      <Users className="w-6 h-6" />
+                                  </div>
+                              )}
+                          </div>
+                          <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white dark:border-zinc-900 ${client.status === 'active' ? 'bg-emerald-500' : client.status === 'paused' ? 'bg-amber-500' : 'bg-zinc-400'}`} />
+                      </div>
+
+                      <DropdownMenu.Root>
+                        <DropdownMenu.Trigger asChild>
+                          <button
+                            className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 outline-none"
+                            onClick={(e) => e.preventDefault()} // Prevent Link navigation
+                          >
+                              <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </DropdownMenu.Trigger>
+                        <DropdownMenu.Portal>
+                          <DropdownMenu.Content className="min-w-[160px] bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-zinc-200 dark:border-white/10 p-1 z-50 animate-in zoom-in-95 duration-200" sideOffset={5} align="end">
+                            <DropdownMenu.Item
+                              className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer outline-none"
+                              onClick={(e) => { e.preventDefault(); openEditModal(client); }}
+                            >
+                              <Edit className="w-4 h-4" />
+                              Editar
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Separator className="h-px bg-zinc-100 dark:bg-white/10 my-1" />
+                            <DropdownMenu.Item
+                              className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg cursor-pointer outline-none"
+                              onClick={(e) => { e.preventDefault(); openDeleteAlert(client); }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Eliminar
+                            </DropdownMenu.Item>
+                          </DropdownMenu.Content>
+                        </DropdownMenu.Portal>
+                      </DropdownMenu.Root>
                     </div>
 
-                    <DropdownMenu.Root>
-                      <DropdownMenu.Trigger asChild>
-                        <button className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 outline-none">
-                            <MoreVertical className="w-4 h-4" />
-                        </button>
-                      </DropdownMenu.Trigger>
-                      <DropdownMenu.Portal>
-                        <DropdownMenu.Content className="min-w-[160px] bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-zinc-200 dark:border-white/10 p-1 z-50 animate-in zoom-in-95 duration-200" sideOffset={5} align="end">
-                          <DropdownMenu.Item
-                            className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer outline-none"
-                            onClick={() => openEditModal(client)}
-                          >
-                            <Edit className="w-4 h-4" />
-                            Editar
-                          </DropdownMenu.Item>
-                          <DropdownMenu.Separator className="h-px bg-zinc-100 dark:bg-white/10 my-1" />
-                          <DropdownMenu.Item
-                            className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg cursor-pointer outline-none"
-                            onClick={() => openDeleteAlert(client)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Eliminar
-                          </DropdownMenu.Item>
-                        </DropdownMenu.Content>
-                      </DropdownMenu.Portal>
-                    </DropdownMenu.Root>
-                  </div>
-
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-zinc-900 dark:text-white text-lg mb-1 truncate">
-                        {client.name}
-                    </h3>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
-                        /{client.slug}
-                    </p>
-                  </div>
-
-                  <div className="mt-6 pt-4 border-t border-zinc-100 dark:border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
-                        <span className="flex items-center gap-1">
-                            <ExternalLink className="w-3 h-3" />
-                            Space
-                        </span>
-                        {client._count?.files > 0 && (
-                             <span>• {client._count.files} Archivos</span>
-                        )}
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-zinc-900 dark:text-white text-lg mb-1 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {client.name}
+                      </h3>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
+                          /{client.slug}
+                      </p>
                     </div>
-                    <span className="text-xs px-2 py-1 rounded-full bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 font-medium">
-                        {new Date(client.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                </Card>
+
+                    <div className="mt-6 pt-4 border-t border-zinc-100 dark:border-white/5 flex items-center justify-between">
+                      <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+                          <span className="flex items-center gap-1">
+                              <ExternalLink className="w-3 h-3 group-hover:text-indigo-500 transition-colors" />
+                              Space
+                          </span>
+                          {client._count?.files > 0 && (
+                               <span>• {client._count.files} Archivos</span>
+                          )}
+                      </div>
+                      <span className="text-xs px-2 py-1 rounded-full bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 font-medium">
+                          {new Date(client.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </Card>
+                </Link>
               </motion.div>
             ))}
           </AnimatePresence>
