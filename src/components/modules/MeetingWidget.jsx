@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Video, Calendar, ExternalLink, Loader2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
 // Helper to format time (e.g., "10:30 AM")
 const formatTime = (dateStr) => {
@@ -26,7 +27,7 @@ const MeetingWidget = () => {
     useEffect(() => {
         const fetchEvents = async () => {
             try {
-                const baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
+                const baseUrl = getApiBaseUrl();
                 const response = await fetch(`${baseUrl}/api/calendar/upcoming`);
 
                 if (!response.ok) {

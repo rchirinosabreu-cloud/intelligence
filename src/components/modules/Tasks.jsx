@@ -6,6 +6,7 @@ import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, Che
 import { cn } from '@/lib/utils';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useToast } from '@/components/ui/use-toast';
+import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
 // --- DATE HELPERS ---
 
@@ -143,7 +144,7 @@ const Tasks = () => {
       const fetchTasks = async () => {
           try {
               setLoading(true);
-              const baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
+              const baseUrl = getApiBaseUrl();
               const response = await fetch(`${baseUrl}/api/pendientes`);
               if (!response.ok) {
                   throw new Error(`Error ${response.status}: ${response.statusText}`);
@@ -315,7 +316,7 @@ const Tasks = () => {
       const newStatusForSheet = SHEET_STATUS_MAP[destinationColumnId] || 'Pendiente';
 
       try {
-          const baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
+          const baseUrl = getApiBaseUrl();
           const response = await fetch(`${baseUrl}/api/pendientes/${taskId}/status`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
