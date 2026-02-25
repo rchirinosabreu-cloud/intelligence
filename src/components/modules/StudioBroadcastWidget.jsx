@@ -136,11 +136,8 @@ const StudioBroadcastWidget = ({ clientId = null }) => {
                             animate={{ opacity: 1 }}
                             className="h-full flex flex-col items-center justify-center text-center p-4 opacity-50 min-h-[150px]"
                         >
-                            <div className="mb-2">
-                                <img src="/chill.png" alt="Chill" className="w-16 h-16 object-contain opacity-80 hover:scale-110 transition-transform duration-700" />
-                            </div>
-                            <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Bitácora vacía...</p>
-                            <p className="text-xs text-zinc-400">Registra un hito o actualización.</p>
+                            <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Aún no hay anuncios</p>
+                            <p className="text-xs text-zinc-400 mt-1">Comparte un hito importante.</p>
                         </motion.div>
                     ) : (
                         announcements.map((item) => {
