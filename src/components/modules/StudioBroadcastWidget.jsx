@@ -115,7 +115,7 @@ const StudioBroadcastWidget = ({ clientId = null }) => {
                     <div className="p-1.5 bg-indigo-500/10 rounded-lg">
                         <Megaphone className="w-4 h-4 text-indigo-500" />
                     </div>
-                    <h3 className="font-semibold text-zinc-900 dark:text-white text-sm">Anuncios</h3>
+                    <h3 className="font-semibold text-zinc-900 dark:text-white text-sm">Bitácora</h3>
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium border bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700">
                         {announcements.length}
                     </span>
@@ -136,11 +136,8 @@ const StudioBroadcastWidget = ({ clientId = null }) => {
                             animate={{ opacity: 1 }}
                             className="h-full flex flex-col items-center justify-center text-center p-4 opacity-50 min-h-[150px]"
                         >
-                            <div className="mb-2">
-                                <img src="/chill.png" alt="Chill" className="w-16 h-16 object-contain opacity-80 hover:scale-110 transition-transform duration-700" />
-                            </div>
-                            <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Todo tranquilo en Brain...</p>
-                            <p className="text-xs text-zinc-400">Comparte una actualización.</p>
+                            <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Aún no hay anuncios</p>
+                            <p className="text-xs text-zinc-400 mt-1">Comparte un hito importante.</p>
                         </motion.div>
                     ) : (
                         announcements.map((item) => {
