@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Loader2, Activity, AlertTriangle, CheckCircle2, Wrench, FolderOpen, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
 const HealthCheckWidget = () => {
     const [clients, setClients] = useState([]);
@@ -12,11 +13,11 @@ const HealthCheckWidget = () => {
         const fetchHealth = async () => {
             try {
                 // Use relative URL to leverage proxy or fallback to env var
-                const baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
+                const baseUrl = getApiBaseUrl();
                 // If running on same origin (dev/prod), relative path works best if proxy is set up,
                 // but here we likely need the full URL if VITE_API_URL is defined.
                 // Fallback logic in case VITE_API_URL is missing in dev:
-                const url = `${baseUrl}/api/clients/health`;
+                const url = `${baseUrl}/api/clients`;
 
                 const response = await fetch(url);
 
