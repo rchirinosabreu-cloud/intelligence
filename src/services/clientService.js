@@ -39,13 +39,9 @@ export async function createClient(data) {
   }
 
   let slug = slugify(name);
-
-  // Ensure unique slug by appending random string if needed
-  // Or check existence. For MVP, just try catch unique constraint or use uuid if needed.
-  // Ideally check existence.
-
   let uniqueSlug = slug;
   let counter = 1;
+
   while (true) {
       const existing = await prisma.client.findUnique({
           where: { slug: uniqueSlug }
@@ -68,5 +64,51 @@ export async function createClient(data) {
   } catch (error) {
     console.error("[ClientService] Error creating client:", error);
     throw new Error("Failed to create client");
+  }
+}
+
+export async function updateClient(id, data) {
+  const { name, status, slug } = data;
+
+  const updateData = {};
+
+  if (name !== undefined && name !== null) {
+    updateData.name = name;
+    updateData.logoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff&size=128`;
+  }
+
+  if (status !== undefined && status !== null) {
+    updateData.status = status;
+  }
+
+  if (slug !== undefined && slug !== null) {
+    updateData.slug = slugify(slug);
+    // TODO: Ideally check uniqueness, but DB will throw if duplicate.
+  }
+
+  try {
+    const client = await prisma.client.update({
+      where: { id },
+      data: updateData
+    });
+    return client;
+  } catch (error) {
+    console.error(`[ClientService] Error updating client ${id}:`, error);
+    throw new Error("Failed to update client");
+  }
+}
+
+export async function deleteClient(id) {
+  try {
+    await prisma.$transaction([
+        prisma.brandAsset.deleteMany({ where: { clientId: id } }),
+        prisma.clientFile.deleteMany({ where: { clientId: id } }),
+        prisma.client.delete({ where: { id } })
+    ]);
+
+    return { success: true };
+  } catch (error) {
+    console.error(`[ClientService] Error deleting client ${id}:`, error);
+    throw new Error("Failed to delete client");
   }
 }

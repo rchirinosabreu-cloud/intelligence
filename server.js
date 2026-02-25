@@ -7,7 +7,7 @@ import { JWT } from 'google-auth-library';
 import * as cheerio from 'cheerio';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { getUpcomingEvents } from './src/services/calendarService.js';
-import { getClients, createClient } from './src/services/clientService.js';
+import { getClients, createClient, updateClient, deleteClient } from './src/services/clientService.js';
 
 dotenv.config();
 
@@ -44,7 +44,7 @@ const corsOptions = {
     }
     return callback(new Error(`CORS: El origen ${origin} no está autorizado.`));
   },
-  methods: ["GET", "POST", "PATCH", "OPTIONS"],
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization"],
 };
@@ -1287,6 +1287,28 @@ app.post('/api/db/clients', async (req, res) => {
     } catch (error) {
         console.error("[API] /api/db/clients (POST) error:", error);
         res.status(500).json({ error: "Failed to create client", details: error.message });
+    }
+});
+
+app.patch('/api/db/clients/:id', async (req, res) => {
+    try {
+        console.log(`[API] /api/db/clients/${req.params.id} (PATCH) called`);
+        const client = await updateClient(req.params.id, req.body);
+        res.json(client);
+    } catch (error) {
+        console.error(`[API] /api/db/clients/${req.params.id} (PATCH) error:`, error);
+        res.status(500).json({ error: "Failed to update client", details: error.message });
+    }
+});
+
+app.delete('/api/db/clients/:id', async (req, res) => {
+    try {
+        console.log(`[API] /api/db/clients/${req.params.id} (DELETE) called`);
+        await deleteClient(req.params.id);
+        res.json({ success: true });
+    } catch (error) {
+        console.error(`[API] /api/db/clients/${req.params.id} (DELETE) error:`, error);
+        res.status(500).json({ error: "Failed to delete client", details: error.message });
     }
 });
 
