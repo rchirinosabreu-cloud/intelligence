@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Sparkles, CheckSquare, FolderOpen, User, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, Sparkles, CheckSquare, FolderOpen, Users, User, Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
@@ -11,7 +11,7 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
     { id: 'bria', label: 'Bria Intelligence', icon: Sparkles },
     { id: 'tasks', label: 'Gestión', icon: CheckSquare },
-    { id: 'files', label: 'Archivos', icon: FolderOpen },
+    { id: 'clients', label: 'Clientes', icon: Users },
   ];
 
   return (
