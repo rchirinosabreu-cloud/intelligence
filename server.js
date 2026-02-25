@@ -9,8 +9,13 @@ import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { getUpcomingEvents } from './src/services/calendarService.js';
 import { getClients, getClientBySlug, createClient, updateClient, deleteClient } from './src/services/clientService.js';
 import { getBroadcasts, createBroadcast, deleteBroadcast } from './src/services/broadcastService.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Global Crash Handler
 process.on('uncaughtException', (err) => {
@@ -1678,6 +1683,37 @@ app.post('/api/chat', async (req, res) => {
             res.end();
         }
     }
+});
+
+// --- FALLBACK ROUTE (SPA History Mode) ---
+// Serve static frontend files if available (e.g. in 'dist' or 'public')
+// For development (Vite), this might not be hit if we use separate ports,
+// but for production builds served by this server, it is essential.
+
+// Optionally serve static files first
+// app.use(express.static(path.join(__dirname, 'dist')));
+
+app.get('*', (req, res) => {
+    // Check if we have a build folder to serve
+    const buildPath = path.resolve(__dirname, 'dist', 'index.html');
+    // For now, we just acknowledge the request. In a real single-port deploy:
+    // res.sendFile(buildPath);
+
+    // If we are strictly API server in dev, we might 404.
+    // But user requested catch-all.
+
+    // Safety check: Don't intercept API calls that missed
+    if (req.path.startsWith('/api')) {
+         return res.status(404).json({ error: 'API endpoint not found' });
+    }
+
+    // Serve index.html for React Router
+    res.sendFile(buildPath, (err) => {
+        if (err) {
+            // If dist/index.html doesn't exist (dev mode), just 404 or send a message
+             res.status(404).send('Frontend build not found. If in dev, use port 3000.');
+        }
+    });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
