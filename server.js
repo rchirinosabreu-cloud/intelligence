@@ -27,6 +27,11 @@ const app = express();
 const allowedOrigins = [
   "https://intelligence.brainstudioagencia.com",
   "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:4173",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:4173",
   ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",") : [])
 ];
 
@@ -109,6 +114,9 @@ try {
 let searchClient;
 try {
     if (!PROJECT_ID) throw new Error("Project ID is missing from credentials");
+    if (!credentials?.client_email || !credentials?.private_key) {
+        throw new Error("Missing service account credentials for Discovery Engine client initialization");
+    }
 
     // Explicitly configure JWT auth with the correct scope for Service Account
     const authClient = new JWT({
@@ -1259,19 +1267,22 @@ app.get('/api/calendar/upcoming', async (req, res) => {
     }
 });
 
-app.get('/api/clients/health', async (req, res) => {
+const handleClientsHealthRequest = async (req, res, routeLabel) => {
     try {
-        console.log("[API] /api/clients/health called");
+        console.log(`[API] ${routeLabel} called`);
         const clients = await fetchClientHealth();
         res.json(clients);
     } catch (error) {
-        console.error("[API] /api/clients/health error:", error);
+        console.error(`[API] ${routeLabel} error:`, error);
         res.status(500).json({
             error: "Failed to fetch client health indicators",
             details: error.message
         });
     }
-});
+};
+
+app.get('/api/clients', async (req, res) => handleClientsHealthRequest(req, res, '/api/clients'));
+app.get('/api/clients/health', async (req, res) => handleClientsHealthRequest(req, res, '/api/clients/health'));
 
 app.post('/api/chat', async (req, res) => {
     try {
