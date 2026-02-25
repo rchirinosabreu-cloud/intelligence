@@ -1394,8 +1394,8 @@ app.get('/api/db/clients/:clientId/tasks', async (req, res) => {
 app.post('/api/db/clients/:clientId/tasks', async (req, res) => {
     try {
         console.log(`[API] /api/db/clients/${req.params.clientId}/tasks (POST) called`);
-        const { text } = req.body;
-        const task = await createTask(req.params.clientId, text);
+        // Pass the whole body now: { text, dueDate, assignee }
+        const task = await createTask(req.params.clientId, req.body);
         res.json(task);
     } catch (error) {
         console.error("[API] /api/db/clients/:id/tasks (POST) error:", error);

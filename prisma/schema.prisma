@@ -67,6 +67,11 @@ model ClientTask {
   id        String   @id @default(uuid())
   text      String   // Título de la tarea
   completed Boolean  @default(false)
+
+  // Nuevos campos para enriquecimiento
+  dueDate   DateTime? // Fecha de entrega opcional
+  assignee  String?   // Nombre del responsable (ej: 'Claudia')
+
   createdAt DateTime @default(now())
 
   clientId  String
