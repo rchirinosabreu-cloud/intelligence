@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import StudioBroadcastWidget from './StudioBroadcastWidget';
 import MeetingWidget from './MeetingWidget';
 import HealthCheckWidget from './HealthCheckWidget';
+import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
 const container = {
   hidden: { opacity: 0 },
@@ -30,7 +31,7 @@ const Dashboard = () => {
     const fetchTasks = async () => {
         try {
             setLoading(true);
-            const baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
+            const baseUrl = getApiBaseUrl();
             const response = await fetch(`${baseUrl}/api/pendientes`);
             if (!response.ok) {
                 throw new Error(`Error ${response.status}: ${response.statusText}`);

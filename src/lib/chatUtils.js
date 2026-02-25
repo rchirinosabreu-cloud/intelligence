@@ -1,3 +1,4 @@
+import { getApiBaseUrl } from './apiBaseUrl';
 
 /**
  * Send message to Backend API with streaming support
@@ -6,7 +7,7 @@
  */
 export async function sendMessage(messages, onChunk) {
   // Use VITE_API_URL if set, otherwise default to Brain Studio API
-  let baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
+  let baseUrl = getApiBaseUrl();
 
   try {
     const response = await fetch(`${baseUrl}/api/chat`, {

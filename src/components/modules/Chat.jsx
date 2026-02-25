@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
 const Chat = () => {
   const [input, setInput] = useState('');
@@ -40,7 +41,7 @@ const Chat = () => {
     abortControllerRef.current = new AbortController();
 
     try {
-      const baseUrl = (import.meta.env.VITE_API_URL || "https://api.brainstudioagencia.com").replace(/\/$/, '');
+      const baseUrl = getApiBaseUrl();
       const response = await fetch(`${baseUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
