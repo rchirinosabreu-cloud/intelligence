@@ -22,7 +22,7 @@ const INITIAL_MESSAGES = [
   { id: 3, userId: 'jarlan', text: 'Ojo con el logo en el slide 4, parece pixelado.', timestamp: new Date(Date.now() - 3600000).toISOString() },
 ];
 
-// --- Sub-Component: Chat Interface (The full drawer content) ---
+// --- Sub-Component: Chat Interface (Full Modal Content) ---
 const ChatInterface = ({ messages, setMessages, currentUser, setCurrentUser, onClose }) => {
     const [text, setText] = useState('');
     const messagesEndRef = useRef(null);
@@ -57,7 +57,7 @@ const ChatInterface = ({ messages, setMessages, currentUser, setCurrentUser, onC
     };
 
     return (
-        <div className="flex flex-col h-full bg-zinc-50 dark:bg-zinc-900">
+        <div className="flex flex-col h-full bg-zinc-50 dark:bg-zinc-900 rounded-2xl overflow-hidden shadow-2xl border border-zinc-200 dark:border-zinc-800">
             {/* Header */}
             <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-white dark:bg-zinc-900 shadow-sm z-10">
                 <div className="flex items-center gap-3">
@@ -81,7 +81,7 @@ const ChatInterface = ({ messages, setMessages, currentUser, setCurrentUser, onC
                             </button>
                         </DropdownMenu.Trigger>
                         <DropdownMenu.Portal>
-                            <DropdownMenu.Content className="min-w-[140px] bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-zinc-200 dark:border-zinc-800 p-1 z-[60] animate-in zoom-in-95 duration-200" sideOffset={5} align="end">
+                            <DropdownMenu.Content className="min-w-[140px] bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-zinc-200 dark:border-zinc-800 p-1 z-[70] animate-in zoom-in-95 duration-200" sideOffset={5} align="end">
                                 <div className="px-2 py-1.5 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
                                     Publicar como...
                                 </div>
@@ -104,7 +104,7 @@ const ChatInterface = ({ messages, setMessages, currentUser, setCurrentUser, onC
                         </DropdownMenu.Portal>
                     </DropdownMenu.Root>
 
-                    <button onClick={onClose} className="p-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">
+                    <button onClick={onClose} className="p-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -251,6 +251,17 @@ const CampfireWidget = () => {
     const [messages, setMessages] = useState(INITIAL_MESSAGES);
     const [currentUser, setCurrentUser] = useState(TEAM_MEMBERS[0]);
 
+    // Handle ESC key to close modal
+    useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') setIsOpen(false);
+        };
+        if (isOpen) {
+            window.addEventListener('keydown', handleEsc);
+        }
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [isOpen]);
+
     return (
         <>
             <CampfirePreview
@@ -261,30 +272,34 @@ const CampfireWidget = () => {
             <AnimatePresence>
                 {isOpen && (
                     <>
-                        {/* Backdrop */}
+                        {/* Centered Modal Overlay */}
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            onClick={() => setIsOpen(false)}
-                            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[50]"
-                        />
-
-                        {/* Drawer */}
-                        <motion.div
-                            initial={{ x: "100%" }}
-                            animate={{ x: 0 }}
-                            exit={{ x: "100%" }}
-                            transition={{ type: "spring", damping: 30, stiffness: 300 }}
-                            className="fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white dark:bg-zinc-900 shadow-2xl z-[60] border-l border-zinc-200 dark:border-zinc-800"
+                            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6"
+                            onClick={(e) => {
+                                // Close only if clicking the backdrop directly
+                                if (e.target === e.currentTarget) setIsOpen(false);
+                            }}
                         >
-                            <ChatInterface
-                                messages={messages}
-                                setMessages={setMessages}
-                                currentUser={currentUser}
-                                setCurrentUser={setCurrentUser}
-                                onClose={() => setIsOpen(false)}
-                            />
+                            {/* Modal Content */}
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                                transition={{ type: "spring", duration: 0.4, bounce: 0.2 }}
+                                className="w-full max-w-4xl h-[85vh] relative z-50"
+                                onClick={(e) => e.stopPropagation()} // Prevent click through
+                            >
+                                <ChatInterface
+                                    messages={messages}
+                                    setMessages={setMessages}
+                                    currentUser={currentUser}
+                                    setCurrentUser={setCurrentUser}
+                                    onClose={() => setIsOpen(false)}
+                                />
+                            </motion.div>
                         </motion.div>
                     </>
                 )}
