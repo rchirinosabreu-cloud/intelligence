@@ -3,7 +3,7 @@ import AppLayout from './components/layout/AppLayout';
 import Dashboard from './components/modules/Dashboard';
 import Tasks from './components/modules/Tasks';
 import Chat from './components/modules/Chat';
-import Files from './components/modules/Files';
+import Clients from './components/modules/Clients';
 import { ThemeProvider } from './context/ThemeContext';
 
 function AppContent() {
@@ -14,7 +14,7 @@ function AppContent() {
       case 'dashboard': return <Dashboard />;
       case 'bria': return <Chat />;
       case 'tasks': return <Tasks />;
-      case 'files': return <Files />;
+      case 'clients': return <Clients />;
       default: return <Dashboard />;
     }
   };

@@ -7,6 +7,7 @@ import { JWT } from 'google-auth-library';
 import * as cheerio from 'cheerio';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { getUpcomingEvents } from './src/services/calendarService.js';
+import { getClients, createClient } from './src/services/clientService.js';
 
 dotenv.config();
 
@@ -1264,6 +1265,28 @@ app.get('/api/calendar/upcoming', async (req, res) => {
             error: "Failed to fetch calendar events",
             details: error.message
         });
+    }
+});
+
+app.get('/api/db/clients', async (req, res) => {
+    try {
+        console.log("[API] /api/db/clients called");
+        const clients = await getClients();
+        res.json(clients);
+    } catch (error) {
+        console.error("[API] /api/db/clients error:", error);
+        res.status(500).json({ error: "Failed to fetch clients", details: error.message });
+    }
+});
+
+app.post('/api/db/clients', async (req, res) => {
+    try {
+        console.log("[API] /api/db/clients (POST) called");
+        const client = await createClient(req.body);
+        res.json(client);
+    } catch (error) {
+        console.error("[API] /api/db/clients (POST) error:", error);
+        res.status(500).json({ error: "Failed to create client", details: error.message });
     }
 });
 
