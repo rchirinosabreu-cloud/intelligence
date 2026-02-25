@@ -117,48 +117,35 @@ const ClientPage = () => {
         </div>
       </div>
 
-      {/* Bento Grid Layout */}
       {/*
-         Structure:
-         Row 1: Broadcast (2 cols) | Campfire (1 col, spans 2 rows) | Digital Identity (1 col, spans 2 rows)
-         Row 2: Deliverables (2 cols)
-         Wait, 4 cols total?
-         Let's try:
-         - Broadcast: Col 1-2, Row 1 (Height ~300px)
-         - Campfire: Col 3, Row 1-2 (Height ~600px - Tall)
-         - Digital Identity: Col 4, Row 1-2 (Height ~600px - Tall)
-         - Deliverables: Col 1-2, Row 2 (Height ~300px)
-         - Quick Links: Maybe inside Digital Identity or separate? Let's put Quick Links below Broadcast if space permits, or make Broadcast smaller.
+         UPDATED Bento Grid Layout (Opción B)
+         - Campfire reducido (1 fila)
+         - Deliverables expandido (3 filas)
+         - Digital Identity (3 filas)
       */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 auto-rows-[minmax(280px,auto)]">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 auto-rows-[minmax(200px,auto)]">
+
+        {/* COL 1 & 2 (LEFT) */}
 
         {/* 1. Anuncios (Broadcast) - Top Left (2x1) */}
         <div className="md:col-span-2 md:row-span-1 h-full min-h-[300px]">
            <StudioBroadcastWidget clientId={client.id} />
         </div>
 
-        {/* 2. Campfire (Chat) - Tall Column (1x2) */}
-        <div className="md:col-span-1 md:row-span-2 h-full min-h-[600px]">
-           <CampfireWidget />
-        </div>
-
-        {/* 3. Identidad Digital - Tall Column (1x2) */}
-        <div className="md:col-span-1 md:row-span-2 h-full min-h-[600px]">
-           <DigitalIdentityWidget />
-        </div>
-
-        {/* 4. Entregables - Bottom Left (2x1) */}
-        <div className="md:col-span-2 md:row-span-1 h-full min-h-[300px]">
+        {/* 2. Entregables - Bottom Left (2x2) EXPANDED */}
+        <div className="md:col-span-2 md:row-span-2 h-full min-h-[420px]">
             <DeliverablesWidget />
         </div>
 
-        {/* 5. Quick Links (Optional, small row below or stacked?) */}
-        {/* Let's fit it somewhere. Maybe col-span-1 row-span-1 if we add more rows?
-            For now, let's add it below Deliverables or integrated.
-            User didn't explicitly ask for Quick Links in this turn, but they were there before.
-            Let's keep them as a small block if possible or remove for now to keep focus on the 4 requested widgets.
-            Let's add it as a small card.
-        */}
+
+        {/* COL 3 (MIDDLE) */}
+
+        {/* 3. Campfire (Chat Preview) - Top Middle (1x1) COMPACT */}
+        <div className="md:col-span-1 md:row-span-1 h-full min-h-[200px]">
+           <CampfireWidget />
+        </div>
+
+        {/* 4. Quick Links - Middle (1x1) */}
          <BentoCard title="Enlaces Clave" icon={LinkIcon} className="md:col-span-1 md:row-span-1 h-full">
              <div className="space-y-2">
                 {['Sitio Web', 'Drive Folder', 'Figma Design'].map((link, i) => (
@@ -171,12 +158,20 @@ const ClientPage = () => {
              </div>
         </BentoCard>
 
-        {/* Placeholder for future expansion */}
+        {/* 5. Placeholder - Bottom Middle (1x1) */}
         <BentoCard title="Archivos Recientes" icon={FileText} className="md:col-span-1 md:row-span-1 h-full opacity-50">
              <div className="flex items-center justify-center h-full">
                  <p className="text-xs text-zinc-400">Historial de archivos</p>
              </div>
         </BentoCard>
+
+
+        {/* COL 4 (RIGHT) */}
+
+        {/* 6. Identidad Digital - Right (1x3) TALL */}
+        <div className="md:col-span-1 md:row-span-3 h-full min-h-[600px]">
+           <DigitalIdentityWidget />
+        </div>
 
       </div>
     </div>
