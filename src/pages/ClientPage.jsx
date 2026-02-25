@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Settings, ExternalLink, Loader2, Link as LinkIcon, FileText } from 'lucide-react';
+import { ArrowLeft, Settings, ExternalLink, Loader2, Link as LinkIcon } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import StudioBroadcastWidget from '@/components/modules/StudioBroadcastWidget';
 import DigitalIdentityWidget from '@/components/modules/client-page/DigitalIdentityWidget';
 import DeliverablesWidget from '@/components/modules/client-page/DeliverablesWidget';
 import CampfireWidget from '@/components/modules/client-page/CampfireWidget';
+import ClientTasksWidget from '@/components/modules/client-page/ClientTasksWidget';
 import { cn } from '@/lib/utils';
 
 // Placeholder Card for Bento Grid (Generic)
@@ -117,66 +118,63 @@ const ClientPage = () => {
         </div>
       </div>
 
-      {/* Bento Grid Layout */}
       {/*
-         Structure:
-         Row 1: Broadcast (2 cols) | Campfire (1 col, spans 2 rows) | Digital Identity (1 col, spans 2 rows)
-         Row 2: Deliverables (2 cols)
-         Wait, 4 cols total?
-         Let's try:
-         - Broadcast: Col 1-2, Row 1 (Height ~300px)
-         - Campfire: Col 3, Row 1-2 (Height ~600px - Tall)
-         - Digital Identity: Col 4, Row 1-2 (Height ~600px - Tall)
-         - Deliverables: Col 1-2, Row 2 (Height ~300px)
-         - Quick Links: Maybe inside Digital Identity or separate? Let's put Quick Links below Broadcast if space permits, or make Broadcast smaller.
+         2-COLUMN BENTO LAYOUT (RE-APPLIED)
+         Left Column (65%): Anuncios -> Entregables -> Pendientes
+         Right Column (35%): Campfire -> Identidad Digital -> Enlaces Clave
       */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 auto-rows-[minmax(280px,auto)]">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* 1. Anuncios (Broadcast) - Top Left (2x1) */}
-        <div className="md:col-span-2 md:row-span-1 h-full min-h-[300px]">
-           <StudioBroadcastWidget clientId={client.id} variant="client" />
+        {/* === LEFT COLUMN (MAIN - 2 Cols Wide) === */}
+        <div className="lg:col-span-2 flex flex-col gap-6">
+
+            {/* 1. Anuncios (Top) */}
+            <div className="h-[280px]">
+               <StudioBroadcastWidget clientId={client.id} variant="client" />
+            </div>
+
+            {/* 2. Entregables (Middle) */}
+            <div className="h-[400px]">
+                <DeliverablesWidget />
+            </div>
+
+            {/* 3. Pendientes (Bottom) */}
+            <div className="h-[320px]">
+                <ClientTasksWidget />
+            </div>
+
         </div>
 
-        {/* 2. Campfire (Chat) - Tall Column (1x2) */}
-        <div className="md:col-span-1 md:row-span-2 h-full min-h-[600px]">
-           <CampfireWidget />
-        </div>
 
-        {/* 3. Identidad Digital - Tall Column (1x2) */}
-        <div className="md:col-span-1 md:row-span-2 h-full min-h-[600px]">
-           <DigitalIdentityWidget />
-        </div>
+        {/* === RIGHT COLUMN (SIDEBAR - 1 Col Wide) === */}
+        <div className="lg:col-span-1 flex flex-col gap-6">
 
-        {/* 4. Entregables - Bottom Left (2x1) */}
-        <div className="md:col-span-2 md:row-span-1 h-full min-h-[300px]">
-            <DeliverablesWidget />
-        </div>
+            {/* 4. Campfire (Top) */}
+            <div className="h-[200px]">
+               <CampfireWidget />
+            </div>
 
-        {/* 5. Quick Links (Optional, small row below or stacked?) */}
-        {/* Let's fit it somewhere. Maybe col-span-1 row-span-1 if we add more rows?
-            For now, let's add it below Deliverables or integrated.
-            User didn't explicitly ask for Quick Links in this turn, but they were there before.
-            Let's keep them as a small block if possible or remove for now to keep focus on the 4 requested widgets.
-            Let's add it as a small card.
-        */}
-         <BentoCard title="Enlaces Clave" icon={LinkIcon} className="md:col-span-1 md:row-span-1 h-full">
-             <div className="space-y-2">
-                {['Sitio Web', 'Drive Folder', 'Figma Design'].map((link, i) => (
-                    <div key={i} className="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer group/link">
-                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                        <span className="text-sm text-zinc-600 dark:text-zinc-300 flex-1">{link}</span>
-                        <ExternalLink className="w-3 h-3 text-zinc-300 group-hover/link:text-zinc-500" />
+            {/* 5. Identidad Digital (Middle) */}
+            <div className="flex-1 min-h-[400px]">
+               <DigitalIdentityWidget />
+            </div>
+
+            {/* 6. Enlaces Clave (Bottom) */}
+             <div className="h-auto">
+                <BentoCard title="Enlaces Clave" icon={LinkIcon} className="h-full">
+                    <div className="space-y-2">
+                        {['Sitio Web', 'Drive Folder', 'Figma Design'].map((link, i) => (
+                            <div key={i} className="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer group/link">
+                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                <span className="text-sm text-zinc-600 dark:text-zinc-300 flex-1">{link}</span>
+                                <ExternalLink className="w-3 h-3 text-zinc-300 group-hover/link:text-zinc-500" />
+                            </div>
+                        ))}
                     </div>
-                ))}
+                </BentoCard>
              </div>
-        </BentoCard>
 
-        {/* Placeholder for future expansion */}
-        <BentoCard title="Archivos Recientes" icon={FileText} className="md:col-span-1 md:row-span-1 h-full opacity-50">
-             <div className="flex items-center justify-center h-full">
-                 <p className="text-xs text-zinc-400">Historial de archivos</p>
-             </div>
-        </BentoCard>
+        </div>
 
       </div>
     </div>
