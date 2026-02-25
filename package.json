@@ -5,12 +5,13 @@
   "private": true,
   "description": "Brainstudio Intelligence - Minimal ChatGPT-style conversational assistant",
   "scripts": {
-    "start": "node scripts_fix_prisma_import.mjs && node server.js",
+    "start": "npx prisma generate && node scripts_fix_prisma_import.mjs && node server.js",
     "dev": "vite --host :: --port 3000",
     "build": "vite build",
     "preview": "vite preview --host :: --port 3000",
     "lint": "eslint . --quiet",
-    "lint:warn": "eslint ."
+    "lint:warn": "eslint .",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@google-cloud/discoveryengine": "^2.5.2",
@@ -39,6 +40,7 @@
     "google-spreadsheet": "^5.2.0",
     "googleapis": "^171.4.0",
     "lucide-react": "^0.469.0",
+    "prisma": "^7.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-helmet": "^6.1.0",
@@ -62,7 +64,6 @@
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.14.0",
     "postcss": "^8.4.49",
-    "prisma": "^7.4.1",
     "tailwindcss": "^3.4.17",
     "vite": "^4.4.5"
   }
