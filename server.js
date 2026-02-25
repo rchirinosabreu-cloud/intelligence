@@ -7,7 +7,8 @@ import { JWT } from 'google-auth-library';
 import * as cheerio from 'cheerio';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { getUpcomingEvents } from './src/services/calendarService.js';
-import { getClients, createClient, updateClient, deleteClient } from './src/services/clientService.js';
+import { getClients, getClientBySlug, createClient, updateClient, deleteClient } from './src/services/clientService.js';
+import { getBroadcasts, createBroadcast, deleteBroadcast } from './src/services/broadcastService.js';
 
 dotenv.config();
 
@@ -1279,6 +1280,29 @@ app.get('/api/db/clients', async (req, res) => {
     }
 });
 
+app.get('/api/db/clients/:slug', async (req, res) => {
+    try {
+        // If it looks like a UUID, skip or handle differently?
+        // Our service handles slug lookup. If the user passes an ID by mistake, it won't find it by slug.
+        // Wait, updateClient uses :id which is UUID.
+        // We need to distinguish between /:id (PATCH/DELETE) and /:slug (GET).
+        // Express routes are matched in order.
+        // PATCH /:id matches this pattern? No, method differs.
+        // GET /:slug matches GET /:id? Yes if we had GET /:id. We don't have GET /:id, only GET / (list).
+        // So GET /api/db/clients/:slug is safe.
+
+        console.log(`[API] /api/db/clients/${req.params.slug} (GET) called`);
+        const client = await getClientBySlug(req.params.slug);
+        if (!client) {
+            return res.status(404).json({ error: "Client not found" });
+        }
+        res.json(client);
+    } catch (error) {
+        console.error(`[API] /api/db/clients/${req.params.slug} (GET) error:`, error);
+        res.status(500).json({ error: "Failed to fetch client", details: error.message });
+    }
+});
+
 app.post('/api/db/clients', async (req, res) => {
     try {
         console.log("[API] /api/db/clients (POST) called");
@@ -1309,6 +1333,42 @@ app.delete('/api/db/clients/:id', async (req, res) => {
     } catch (error) {
         console.error(`[API] /api/db/clients/${req.params.id} (DELETE) error:`, error);
         res.status(500).json({ error: "Failed to delete client", details: error.message });
+    }
+});
+
+// --- BROADCAST API (Bitácora) ---
+
+app.get('/api/broadcasts', async (req, res) => {
+    try {
+        const { clientId } = req.query; // Optional filter
+        console.log(`[API] /api/broadcasts called (clientId: ${clientId || 'General'})`);
+        const broadcasts = await getBroadcasts(clientId);
+        res.json(broadcasts);
+    } catch (error) {
+        console.error("[API] /api/broadcasts error:", error);
+        res.status(500).json({ error: "Failed to fetch broadcasts", details: error.message });
+    }
+});
+
+app.post('/api/broadcasts', async (req, res) => {
+    try {
+        console.log("[API] /api/broadcasts (POST) called");
+        const broadcast = await createBroadcast(req.body);
+        res.json(broadcast);
+    } catch (error) {
+        console.error("[API] /api/broadcasts (POST) error:", error);
+        res.status(500).json({ error: "Failed to create broadcast", details: error.message });
+    }
+});
+
+app.delete('/api/broadcasts/:id', async (req, res) => {
+    try {
+        console.log(`[API] /api/broadcasts/${req.params.id} (DELETE) called`);
+        await deleteBroadcast(req.params.id);
+        res.json({ success: true });
+    } catch (error) {
+        console.error(`[API] /api/broadcasts/${req.params.id} (DELETE) error:`, error);
+        res.status(500).json({ error: "Failed to delete broadcast", details: error.message });
     }
 });
 
