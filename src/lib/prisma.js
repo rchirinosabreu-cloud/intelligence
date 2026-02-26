@@ -3,6 +3,7 @@ const require = createRequire(import.meta.url);
 const { PrismaClient } = require('@prisma/client');
 
 let prisma;
+const isProduction = process.env.NODE_ENV === 'production';
 
 // In-memory store for mock mode
 const mockClients = [];
@@ -10,7 +11,7 @@ const mockLinks = []; // Store links here
 const mockTasks = []; // Store tasks here
 
 try {
-  if (process.env.NODE_ENV === 'production') {
+  if (isProduction) {
     prisma = new PrismaClient();
   } else {
     if (!global.prisma) {
@@ -19,17 +20,23 @@ try {
     prisma = global.prisma;
   }
 } catch (e) {
-  if (process.env.NODE_ENV === 'production') {
-    // Never crash the entire API because DB is temporarily unavailable/misconfigured.
-    // Endpoints that do not depend on DB should continue serving traffic.
-    console.error("CRITICAL: Failed to initialize PrismaClient in production. Falling back to in-memory mock.", e);
-  } else {
-    console.error("Failed to initialize PrismaClient locally. Using mock.", e);
+  const message = "Failed to initialize PrismaClient";
+  if (isProduction) {
+    // In production we should never silently fallback to mock storage,
+    // otherwise the API appears to work while nothing is persisted.
+    console.error(`${message} in production.`, e);
+    throw e;
   }
+
+  console.error(`${message} locally.`, e);
 }
 
-// Explicit override for testing environments or when DB is missing locally
-if (!prisma || (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('dummy'))) {
+const shouldUseMockDb =
+  !isProduction &&
+  (!prisma || process.env.USE_MOCK_DB === 'true' || (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('dummy')));
+
+// Explicit override for testing/local development only.
+if (shouldUseMockDb) {
     console.warn("Using In-Memory Mock Prisma Client (Fallback)");
     prisma = {
         client: {
