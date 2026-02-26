@@ -13,8 +13,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 // In-memory store for mock mode
 const mockClients = [];
-const mockLinks = []; // Store links here
-const mockTasks = []; // Store tasks here
+const mockLinks = [];
+const mockTasks = [];
 
 try {
   if (isProduction) {
@@ -76,7 +76,6 @@ if (shouldUseMockDb) {
                     createdAt: new Date()
                 };
                 mockLinks.push(newLink);
-                // Update client count
                 const client = mockClients.find(c => c.id === args.data.clientId);
                 if (client) client._count.links = (client._count.links || 0) + 1;
                 return newLink;
@@ -91,7 +90,6 @@ if (shouldUseMockDb) {
                 if (index !== -1) {
                      const link = mockLinks[index];
                      mockLinks.splice(index, 1);
-                     // Update client count
                      const client = mockClients.find(c => c.id === link.clientId);
                      if (client && client._count.links > 0) client._count.links--;
                 }
