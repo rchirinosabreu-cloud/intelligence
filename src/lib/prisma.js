@@ -24,33 +24,16 @@ try {
   if (isProduction) {
     // In production we should never silently fallback to mock storage,
     // otherwise the API appears to work while nothing is persisted.
-    console.error(`${message} in production. Database-backed endpoints will return errors until DB is healthy.`, e);
-  } else {
-    console.error(`${message} locally.`, e);
+    console.error(`${message} in production.`, e);
+    throw e;
   }
+
+  console.error(`${message} locally.`, e);
 }
 
-const createUnavailableModel = (modelName) => ({
-  findMany: async () => { throw new Error(`DB_UNAVAILABLE:${modelName}.findMany`); },
-  create: async () => { throw new Error(`DB_UNAVAILABLE:${modelName}.create`); },
-  findUnique: async () => { throw new Error(`DB_UNAVAILABLE:${modelName}.findUnique`); },
-  count: async () => { throw new Error(`DB_UNAVAILABLE:${modelName}.count`); },
-  delete: async () => { throw new Error(`DB_UNAVAILABLE:${modelName}.delete`); },
-  update: async () => { throw new Error(`DB_UNAVAILABLE:${modelName}.update`); },
-});
-
-const shouldUseUnavailableDb = isProduction && !prisma;
 const shouldUseMockDb =
   !isProduction &&
   (!prisma || process.env.USE_MOCK_DB === 'true' || (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('dummy')));
-
-if (shouldUseUnavailableDb) {
-  prisma = {
-    client: createUnavailableModel('client'),
-    clientLink: createUnavailableModel('clientLink'),
-    clientTask: createUnavailableModel('clientTask'),
-  };
-}
 
 // Explicit override for testing/local development only.
 if (shouldUseMockDb) {
