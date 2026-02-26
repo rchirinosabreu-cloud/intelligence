@@ -18,6 +18,7 @@ model Client {
   // Relaciones
   brandAssets BrandAsset[]
   files       ClientFile[]
+  links       ClientLink[]
 }
 
 // Activos de Marca (Colores, Fuentes)
@@ -39,4 +40,14 @@ model ClientFile {
   bucketUrl   String   // URL del archivo en Railway/S3
   category    String   // 'Legal', 'Deliverable', 'Asset'
   createdAt   DateTime @default(now())
+}
+
+// Enlaces Clave del Cliente (Max 5 por cliente)
+model ClientLink {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  title     String
+  url       String
+  createdAt DateTime @default(now())
 }

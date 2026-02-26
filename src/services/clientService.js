@@ -21,7 +21,10 @@ export async function getClients() {
       },
       include: {
         _count: {
-            select: { files: true }
+            select: {
+              files: true,
+              links: true
+            }
         }
       }
     });
@@ -39,11 +42,6 @@ export async function createClient(data) {
   }
 
   let slug = slugify(name);
-
-  // Ensure unique slug by appending random string if needed
-  // Or check existence. For MVP, just try catch unique constraint or use uuid if needed.
-  // Ideally check existence.
-
   let uniqueSlug = slug;
   let counter = 1;
   while (true) {
@@ -69,4 +67,61 @@ export async function createClient(data) {
     console.error("[ClientService] Error creating client:", error);
     throw new Error("Failed to create client");
   }
+}
+
+// --- LINK MANAGEMENT ---
+
+export async function getClientLinks(clientId) {
+    if (!clientId) throw new Error("Client ID required");
+    try {
+        const links = await prisma.clientLink.findMany({
+            where: { clientId },
+            orderBy: { createdAt: 'asc' }
+        });
+        return links;
+    } catch (error) {
+        console.error("[ClientService] Error fetching links:", error);
+        throw error; // Re-throw to handle in controller
+    }
+}
+
+export async function addClientLink(clientId, title, url) {
+    if (!clientId || !title || !url) throw new Error("Missing required fields");
+
+    // 1. Check limit (Max 5)
+    const count = await prisma.clientLink.count({
+        where: { clientId }
+    });
+
+    if (count >= 5) {
+        throw new Error("MAX_LINKS_REACHED");
+    }
+
+    // 2. Create Link
+    try {
+        const link = await prisma.clientLink.create({
+            data: {
+                clientId,
+                title,
+                url
+            }
+        });
+        return link;
+    } catch (error) {
+        console.error("[ClientService] Error creating link:", error);
+        throw new Error("Failed to create link");
+    }
+}
+
+export async function removeClientLink(linkId) {
+    if (!linkId) throw new Error("Link ID required");
+    try {
+        await prisma.clientLink.delete({
+            where: { id: linkId }
+        });
+        return true;
+    } catch (error) {
+         console.error("[ClientService] Error deleting link:", error);
+         throw new Error("Failed to delete link");
+    }
 }

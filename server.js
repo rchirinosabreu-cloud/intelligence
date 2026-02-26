@@ -7,7 +7,7 @@ import { JWT } from 'google-auth-library';
 import * as cheerio from 'cheerio';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { getUpcomingEvents } from './src/services/calendarService.js';
-import { getClients, createClient } from './src/services/clientService.js';
+import { getClients, createClient, getClientLinks, addClientLink, removeClientLink } from './src/services/clientService.js';
 
 dotenv.config();
 
@@ -1287,6 +1287,53 @@ app.post('/api/db/clients', async (req, res) => {
     } catch (error) {
         console.error("[API] /api/db/clients (POST) error:", error);
         res.status(500).json({ error: "Failed to create client", details: error.message });
+    }
+});
+
+// --- CLIENT LINKS ENDPOINTS ---
+
+app.get('/api/db/clients/:clientId/links', async (req, res) => {
+    const { clientId } = req.params;
+    try {
+        console.log(`[API] Fetching links for client: ${clientId}`);
+        const links = await getClientLinks(clientId);
+        res.json(links);
+    } catch (error) {
+        console.error("[API] Failed to fetch links:", error);
+        res.status(500).json({ error: "Error al obtener enlaces" });
+    }
+});
+
+app.post('/api/db/clients/:clientId/links', async (req, res) => {
+    const { clientId } = req.params;
+    const { title, url } = req.body;
+
+    if (!title || !url) {
+        return res.status(400).json({ error: "Faltan campos requeridos (title, url)" });
+    }
+
+    try {
+        console.log(`[API] Adding link for client: ${clientId}`);
+        const link = await addClientLink(clientId, title, url);
+        res.json(link);
+    } catch (error) {
+        console.error("[API] Failed to add link:", error);
+        if (error.message === "MAX_LINKS_REACHED") {
+            return res.status(400).json({ error: "Límite de 5 enlaces alcanzado." });
+        }
+        res.status(500).json({ error: "Error al crear enlace" });
+    }
+});
+
+app.delete('/api/db/links/:linkId', async (req, res) => {
+    const { linkId } = req.params;
+    try {
+        console.log(`[API] Deleting link: ${linkId}`);
+        await removeClientLink(linkId);
+        res.json({ success: true });
+    } catch (error) {
+        console.error("[API] Failed to delete link:", error);
+        res.status(500).json({ error: "Error al eliminar enlace" });
     }
 });
 

@@ -5,12 +5,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import * as Dialog from '@radix-ui/react-dialog';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import ClientDetail from './ClientDetail';
 
 const Clients = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [selectedClient, setSelectedClient] = useState(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -64,6 +67,10 @@ const Clients = () => {
   const filteredClients = clients.filter(client =>
     client.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (selectedClient) {
+    return <ClientDetail client={selectedClient} onBack={() => setSelectedClient(null)} />;
+  }
 
   return (
     <div className="space-y-8 p-6 pb-20">
@@ -184,7 +191,10 @@ const Clients = () => {
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
               >
-                <Card className="group h-full flex flex-col cursor-pointer hover:border-indigo-500/30 dark:hover:border-indigo-400/30 transition-all duration-300">
+                <Card
+                  onClick={() => setSelectedClient(client)}
+                  className="group h-full flex flex-col cursor-pointer hover:border-indigo-500/30 dark:hover:border-indigo-400/30 transition-all duration-300"
+                >
                   <div className="flex items-start justify-between mb-4">
                     <div className="relative">
                         <div className="w-12 h-12 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 shadow-sm border border-zinc-200 dark:border-white/5">
