@@ -269,45 +269,51 @@ const ClientTasksWidget = ({ clientId }) => {
                                 animate={{ opacity: task.isTemp ? 0.5 : 1, y: 0 }}
                                 exit={{ opacity: 0, height: 0, marginBottom: 0 }}
                                 className={cn(
-                                    "flex items-center gap-3 p-2.5 rounded-lg border transition-all cursor-pointer group relative",
+                                    "flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer group relative",
                                     task.completed
                                         ? "bg-zinc-50 dark:bg-zinc-800/30 border-transparent opacity-60"
-                                        : overdue
-                                            ? "bg-white dark:bg-zinc-900 border-red-200 dark:border-red-900/30"
-                                            : "bg-white dark:bg-zinc-900 border-zinc-100 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"
+                                        : "bg-white dark:bg-zinc-900 border-zinc-100 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-sm"
                                 )}
                                 onClick={() => toggleTask(task.id, task.completed)}
                             >
+                                {/* Checkbox */}
                                 <div className={cn(
-                                    "flex-shrink-0 transition-colors",
-                                    task.completed ? "text-blue-500" : overdue ? "text-red-500" : "text-zinc-300 group-hover:text-zinc-400"
+                                    "flex-shrink-0 transition-colors mt-0.5",
+                                    task.completed ? "text-blue-500" : "text-zinc-300 group-hover:text-zinc-400"
                                 )}>
                                     {task.completed ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
                                 </div>
 
-                                <div className="flex-1 min-w-0 flex flex-col">
+                                <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                                    {/* Task Title */}
                                     <span className={cn(
-                                        "text-sm truncate transition-all select-none",
-                                        task.completed ? "text-zinc-400 line-through" : overdue ? "text-red-600 dark:text-red-400" : "text-zinc-700 dark:text-zinc-200"
+                                        "text-sm font-medium leading-tight select-none",
+                                        task.completed ? "text-zinc-400 line-through decoration-zinc-300" : "text-zinc-700 dark:text-zinc-200"
                                     )}>
                                         {task.text}
                                     </span>
 
-                                    {/* Meta Info (Date & Assignee) */}
+                                    {/* Meta Badges (Date & Assignee) */}
                                     {(task.dueDate || task.assignee) && (
-                                        <div className="flex items-center gap-2 mt-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {/* Date Badge */}
                                             {task.dueDate && (
                                                 <span className={cn(
-                                                    "text-[10px] flex items-center gap-1",
-                                                    overdue ? "text-red-500 font-medium" : "text-zinc-400"
+                                                    "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border",
+                                                    overdue && !task.completed
+                                                        ? "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 border-red-200 dark:border-red-800"
+                                                        : "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 border-blue-100 dark:border-blue-800"
                                                 )}>
                                                     <CalendarIcon className="w-3 h-3" />
                                                     {formatDateDisplay(task.dueDate)}
                                                 </span>
                                             )}
+
+                                            {/* Assignee Badge */}
                                             {assignee && (
-                                                <div className="flex items-center gap-1" title={`Asignado a: ${assignee.name}`}>
+                                                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
                                                     <img src={assignee.avatar} className="w-3.5 h-3.5 rounded-full" alt={assignee.name} />
+                                                    {assignee.name}
                                                 </div>
                                             )}
                                         </div>
@@ -317,7 +323,7 @@ const ClientTasksWidget = ({ clientId }) => {
                                 {!task.isTemp && (
                                     <button
                                         onClick={(e) => deleteTask(task.id, e)}
-                                        className="opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-red-500 transition-colors"
+                                        className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-all absolute top-2 right-2"
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
                                     </button>
