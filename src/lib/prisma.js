@@ -1,32 +1,48 @@
-import { PrismaClient } from '@prisma/client';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
+let PrismaClient;
+try {
+  ({ PrismaClient } = require('@prisma/client'));
+} catch (error) {
+  console.error('[Prisma] Failed to load @prisma/client module.', error);
+}
 
 let prisma;
+const isProduction = process.env.NODE_ENV === 'production';
 
 // In-memory store for mock mode
 const mockClients = [];
 const mockLinks = [];
 const mockTasks = [];
 
-const initializePrisma = () => {
-    try {
-        if (process.env.NODE_ENV === 'production') {
-            return new PrismaClient();
-        } else {
-            if (!global.prisma) {
-                global.prisma = new PrismaClient();
-            }
-            return global.prisma;
-        }
-    } catch (e) {
-        console.error("PrismaClient initialization failed (likely missing DB url). Falling back to mock.", e);
-        return null;
+try {
+  if (isProduction) {
+    prisma = new PrismaClient();
+  } else {
+    if (!global.prisma) {
+      global.prisma = new PrismaClient();
     }
-};
+    prisma = global.prisma;
+  }
+} catch (e) {
+  const message = "Failed to initialize PrismaClient";
+  if (isProduction) {
+    // In production we should never silently fallback to mock storage,
+    // otherwise the API appears to work while nothing is persisted.
+    console.error(`${message} in production.`, e);
+    throw e;
+  }
 
-prisma = initializePrisma();
+  console.error(`${message} locally.`, e);
+}
 
-// Fallback Mock Implementation if initialization failed OR if specifically requested (dummy url)
-if (!prisma || (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('dummy'))) {
+const shouldUseMockDb =
+  !isProduction &&
+  (!prisma || process.env.USE_MOCK_DB === 'true' || (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('dummy')));
+
+// Explicit override for testing/local development only.
+if (shouldUseMockDb) {
     console.warn("Using In-Memory Mock Prisma Client (Fallback)");
     prisma = {
         client: {
