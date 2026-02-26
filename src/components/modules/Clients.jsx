@@ -60,6 +60,7 @@ const Clients = () => {
       setNewClientName('');
       setIsModalOpen(false);
     } catch (err) {
+      console.error("Error creating client:", err);
       alert(err.message);
     } finally {
       setIsCreating(false);
