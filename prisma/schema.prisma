@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // Cliente de la Agencia
@@ -19,8 +18,7 @@ model Client {
   // Relaciones
   brandAssets BrandAsset[]
   files       ClientFile[]
-  broadcasts  Broadcast[] // Anuncios/Bitácora del cliente
-  tasks       ClientTask[] // Pendientes del cliente
+  links       ClientLink[]
 }
 
 // Activos de Marca (Colores, Fuentes)
@@ -44,36 +42,12 @@ model ClientFile {
   createdAt   DateTime @default(now())
 }
 
-// Anuncios / Bitácora (General o Por Cliente)
-model Broadcast {
+// Enlaces Clave del Cliente (Max 5 por cliente)
+model ClientLink {
   id        String   @id @default(uuid())
-  content   String   // Mensaje del anuncio
-  type      String   // 'urgent', 'win', 'info'
-  createdAt DateTime @default(now())
-
-  // Relación Opcional con Cliente
-  // Si clientId es NULL -> Es un anuncio General (Dashboard)
-  // Si clientId tiene valor -> Es un anuncio específico de ese Cliente
-  clientId  String?
-  client    Client?  @relation(fields: [clientId], references: [id])
-
-  // Metadatos opcionales para UI
-  authorName   String? // 'Team Lead', 'Bria', etc.
-  authorAvatar String? // URL del avatar
-}
-
-// Pendientes del Cliente (To-Do List)
-model ClientTask {
-  id        String   @id @default(uuid())
-  text      String   // Título de la tarea
-  completed Boolean  @default(false)
-
-  // Nuevos campos para enriquecimiento
-  dueDate   DateTime? // Fecha de entrega opcional
-  assignee  String?   // Nombre del responsable (ej: 'Claudia')
-
-  createdAt DateTime @default(now())
-
   clientId  String
   client    Client   @relation(fields: [clientId], references: [id])
+  title     String
+  url       String
+  createdAt DateTime @default(now())
 }
