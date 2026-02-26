@@ -1,6 +1,12 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { PrismaClient } = require('@prisma/client');
+
+let PrismaClient;
+try {
+  ({ PrismaClient } = require('@prisma/client'));
+} catch (error) {
+  console.error('[Prisma] Failed to load @prisma/client module.', error);
+}
 
 let prisma;
 const isProduction = process.env.NODE_ENV === 'production';
