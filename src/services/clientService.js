@@ -24,7 +24,10 @@ export async function getClients() {
       },
       include: {
         _count: {
-            select: { files: true }
+            select: {
+              files: true,
+              links: true
+            }
         }
       }
     });

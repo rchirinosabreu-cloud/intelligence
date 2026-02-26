@@ -8,6 +8,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import ClientDetail from './ClientDetail';
 
 const Clients = () => {
   const [clients, setClients] = useState([]);
@@ -138,6 +139,10 @@ const Clients = () => {
   const filteredClients = clients.filter(client =>
     client.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (selectedClient) {
+    return <ClientDetail client={selectedClient} onBack={() => setSelectedClient(null)} />;
+  }
 
   return (
     <div className="space-y-8 p-6 pb-20">
