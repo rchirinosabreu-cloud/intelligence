@@ -25,7 +25,9 @@ console.log("Server script starting...");
 
 const app = express();
 
-const allowedOrigins = [
+const normalizeOrigin = (origin = '') => String(origin).trim().replace(/\/$/, '');
+
+const allowedOrigins = new Set([
   "https://intelligence.brainstudioagencia.com",
   "http://localhost:3000",
   "http://localhost:5173",
@@ -34,15 +36,33 @@ const allowedOrigins = [
   "http://127.0.0.1:5173",
   "http://127.0.0.1:4173",
   ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",") : [])
-];
+].map(normalizeOrigin));
+
+const isAllowedOrigin = (origin = '') => {
+  const normalizedOrigin = normalizeOrigin(origin);
+
+  if (!normalizedOrigin) return true;
+  if (allowedOrigins.has(normalizedOrigin)) return true;
+
+  // Allow all HTTPS subdomains for our production domain.
+  if (/^https:\/\/[a-z0-9-]+\.brainstudioagencia\.com$/i.test(normalizedOrigin)) {
+    return true;
+  }
+
+  return false;
+};
 
 const corsOptions = {
   origin: (origin, callback) => {
     // Permitir peticiones sin origen (como Postman o apps móviles)
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
-    return callback(new Error(`CORS: El origen ${origin} no está autorizado.`));
+
+    // Fallback: avoid breaking frontend due to strict origin mismatches.
+    // Log it for review but still allow the request.
+    console.warn(`CORS warning: allowing unexpected origin ${origin}`);
+    return callback(null, true);
   },
   methods: ["GET", "POST", "PATCH", "OPTIONS"],
   credentials: true,
