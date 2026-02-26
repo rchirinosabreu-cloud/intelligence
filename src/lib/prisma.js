@@ -19,10 +19,12 @@ try {
   }
 } catch (e) {
   if (process.env.NODE_ENV === 'production') {
-      console.error("CRITICAL: Failed to initialize PrismaClient in production.", e);
-      throw e;
+    // Never crash the entire API because DB is temporarily unavailable/misconfigured.
+    // Endpoints that do not depend on DB should continue serving traffic.
+    console.error("CRITICAL: Failed to initialize PrismaClient in production. Falling back to in-memory mock.", e);
+  } else {
+    console.error("Failed to initialize PrismaClient locally. Using mock.", e);
   }
-  console.error("Failed to initialize PrismaClient locally. Using mock.", e);
 }
 
 // Explicit override for testing environments or when DB is missing locally
