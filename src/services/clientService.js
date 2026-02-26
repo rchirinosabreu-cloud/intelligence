@@ -23,7 +23,8 @@ export async function getClients() {
         _count: {
             select: {
               files: true,
-              links: true
+              links: true,
+              tasks: true
             }
         }
       }

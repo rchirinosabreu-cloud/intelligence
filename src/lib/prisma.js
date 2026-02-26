@@ -7,6 +7,7 @@ let prisma;
 // In-memory store for mock mode
 const mockClients = [];
 const mockLinks = []; // Store links here
+const mockTasks = []; // Store tasks here
 
 try {
   if (process.env.NODE_ENV === 'production') {
@@ -41,7 +42,7 @@ if (!prisma || (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('d
                     status: 'active',
                     logoUrl: args.data.logoUrl,
                     createdAt: new Date(),
-                    _count: { files: 0, links: 0 }
+                    _count: { files: 0, links: 0, tasks: 0 }
                 };
                 mockClients.push(newClient);
                 return newClient;
@@ -82,6 +83,42 @@ if (!prisma || (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('d
                      if (client && client._count.links > 0) client._count.links--;
                 }
                 return { id: linkId };
+            }
+        },
+        clientTask: {
+            findMany: async (args) => {
+                const clientId = args.where?.clientId;
+                if (!clientId) return [];
+                return mockTasks
+                    .filter(t => t.clientId === clientId)
+                    .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+            },
+            create: async (args) => {
+                const newTask = {
+                    id: 'task-id-' + Date.now(),
+                    ...args.data,
+                    createdAt: new Date(),
+                    completed: args.data.completed || false
+                };
+                mockTasks.push(newTask);
+                return newTask;
+            },
+            update: async (args) => {
+                const taskId = args.where.id;
+                const index = mockTasks.findIndex(t => t.id === taskId);
+                if (index === -1) throw { code: 'P2025' };
+
+                const updatedTask = { ...mockTasks[index], ...args.data };
+                mockTasks[index] = updatedTask;
+                return updatedTask;
+            },
+            delete: async (args) => {
+                const taskId = args.where.id;
+                const index = mockTasks.findIndex(t => t.id === taskId);
+                if (index === -1) throw { code: 'P2025' };
+
+                mockTasks.splice(index, 1);
+                return { id: taskId };
             }
         }
     };

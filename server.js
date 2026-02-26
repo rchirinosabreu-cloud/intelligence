@@ -8,6 +8,7 @@ import * as cheerio from 'cheerio';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { getUpcomingEvents } from './src/services/calendarService.js';
 import { getClients, createClient, getClientLinks, addClientLink, removeClientLink } from './src/services/clientService.js';
+import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from './src/services/clientTaskService.js';
 
 dotenv.config();
 
@@ -1307,6 +1308,58 @@ app.post('/api/db/clients', async (req, res) => {
     } catch (error) {
         console.error("[API] /api/db/clients (POST) error:", error);
         res.status(500).json({ error: "Failed to create client", details: error.message });
+    }
+});
+
+// --- CLIENT TASKS ENDPOINTS ---
+
+app.get('/api/db/clients/:clientId/tasks', async (req, res) => {
+    try {
+        const { clientId } = req.params;
+        console.log(`[API] Fetching tasks for client: ${clientId}`);
+        const tasks = await getClientTasks(clientId);
+        res.json(tasks);
+    } catch (error) {
+        console.error("Error fetching tasks:", error);
+        res.status(500).json({ error: "Failed to fetch tasks" });
+    }
+});
+
+app.post('/api/db/clients/:clientId/tasks', async (req, res) => {
+    try {
+        const { clientId } = req.params;
+        console.log(`[API] Creating task for client: ${clientId}`);
+        const { text, dueDate, assignee } = req.body;
+        if (!text) return res.status(400).json({ error: "Missing text" });
+
+        const task = await createClientTask({ clientId, text, dueDate, assignee });
+        res.json(task);
+    } catch (error) {
+        console.error("Error creating task:", error);
+        res.status(500).json({ error: "Failed to create task" });
+    }
+});
+
+app.patch('/api/db/tasks/:taskId', async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        // Pass the entire body to support updating multiple fields (completed, dueDate, assignee)
+        const task = await updateClientTaskStatus(taskId, req.body);
+        res.json(task);
+    } catch (error) {
+        console.error("Error updating task:", error);
+        res.status(500).json({ error: "Failed to update task" });
+    }
+});
+
+app.delete('/api/db/tasks/:taskId', async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        await deleteTask(taskId);
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Error deleting task:", error);
+        res.status(500).json({ error: "Failed to delete task" });
     }
 });
 
