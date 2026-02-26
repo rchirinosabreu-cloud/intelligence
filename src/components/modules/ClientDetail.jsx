@@ -11,7 +11,7 @@ const ClientDetail = ({ client, onBack }) => {
   if (!client) return <div>No se seleccionó cliente</div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 pb-20">
+    <div className="w-full max-w-7xl mx-auto p-6 space-y-6 animate-in fade-in duration-300 pb-20">
       {/* Header */}
       <div className="flex items-center gap-4">
         <button
@@ -27,17 +27,17 @@ const ClientDetail = ({ client, onBack }) => {
       </div>
 
       {/* Main Grid Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
 
         {/* Left Column (Main Content) */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 flex flex-col gap-6">
             <StudioBroadcastWidget variant="client" />
             <DeliverablesWidget />
             <ClientTasksWidget clientId={client.id} />
         </div>
 
         {/* Right Column (Sidebar) */}
-        <div className="space-y-6">
+        <div className="lg:col-span-1 flex flex-col gap-6">
             <CampfireWidget />
             <DigitalIdentityWidget />
             <KeyLinksWidget clientId={client.id} />

@@ -11,7 +11,7 @@ const DigitalIdentityWidget = () => {
     ];
 
     return (
-        <Card className="flex flex-col h-full min-h-[300px] p-6">
+        <Card className="w-full flex flex-col h-full min-h-[300px] p-6">
             <div className="flex items-center gap-2 mb-6">
                 <div className="p-1.5 bg-purple-500/10 rounded-lg">
                     <Palette className="w-4 h-4 text-purple-500" />

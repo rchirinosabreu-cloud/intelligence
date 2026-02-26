@@ -86,7 +86,7 @@ const KeyLinksWidget = ({ clientId }) => {
     const isLimitReached = links.length >= 5;
 
     return (
-        <Card className="flex flex-col h-full min-h-[200px]">
+        <Card className="w-full flex flex-col h-full min-h-[200px]">
             <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-zinc-900 dark:text-white flex items-center gap-2">
                     <LinkIcon className="w-4 h-4 text-indigo-500" />
