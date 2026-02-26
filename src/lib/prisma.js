@@ -1,34 +1,31 @@
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const { PrismaClient } = require('@prisma/client');
+import { PrismaClient } from '@prisma/client';
 
 let prisma;
 
 // In-memory store for mock mode
 const mockClients = [];
-const mockLinks = []; // Store links here
-const mockTasks = []; // Store tasks here
+const mockLinks = [];
+const mockTasks = [];
 
-try {
-  if (process.env.NODE_ENV === 'production') {
-    prisma = new PrismaClient();
-  } else {
-    if (!global.prisma) {
-      global.prisma = new PrismaClient();
+const initializePrisma = () => {
+    try {
+        if (process.env.NODE_ENV === 'production') {
+            return new PrismaClient();
+        } else {
+            if (!global.prisma) {
+                global.prisma = new PrismaClient();
+            }
+            return global.prisma;
+        }
+    } catch (e) {
+        console.error("PrismaClient initialization failed (likely missing DB url). Falling back to mock.", e);
+        return null;
     }
-    prisma = global.prisma;
-  }
-} catch (e) {
-  if (process.env.NODE_ENV === 'production') {
-    // Never crash the entire API because DB is temporarily unavailable/misconfigured.
-    // Endpoints that do not depend on DB should continue serving traffic.
-    console.error("CRITICAL: Failed to initialize PrismaClient in production. Falling back to in-memory mock.", e);
-  } else {
-    console.error("Failed to initialize PrismaClient locally. Using mock.", e);
-  }
-}
+};
 
-// Explicit override for testing environments or when DB is missing locally
+prisma = initializePrisma();
+
+// Fallback Mock Implementation if initialization failed OR if specifically requested (dummy url)
 if (!prisma || (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('dummy'))) {
     console.warn("Using In-Memory Mock Prisma Client (Fallback)");
     prisma = {
@@ -63,7 +60,6 @@ if (!prisma || (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('d
                     createdAt: new Date()
                 };
                 mockLinks.push(newLink);
-                // Update client count
                 const client = mockClients.find(c => c.id === args.data.clientId);
                 if (client) client._count.links = (client._count.links || 0) + 1;
                 return newLink;
@@ -78,7 +74,6 @@ if (!prisma || (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('d
                 if (index !== -1) {
                      const link = mockLinks[index];
                      mockLinks.splice(index, 1);
-                     // Update client count
                      const client = mockClients.find(c => c.id === link.clientId);
                      if (client && client._count.links > 0) client._count.links--;
                 }
