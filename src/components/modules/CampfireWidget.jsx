@@ -4,7 +4,7 @@ import { Flame, Maximize2 } from 'lucide-react';
 
 const CampfireWidget = () => {
     return (
-        <Card className="flex flex-col h-full min-h-[160px] relative p-6">
+        <Card className="w-full flex flex-col h-full min-h-[160px] relative p-6">
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-orange-500/10 rounded-lg">
