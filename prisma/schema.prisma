@@ -19,6 +19,7 @@ model Client {
   brandAssets BrandAsset[]
   files       ClientFile[]
   links       ClientLink[]
+  tasks       ClientTask[]
 }
 
 // Activos de Marca (Colores, Fuentes)
@@ -49,5 +50,17 @@ model ClientLink {
   client    Client   @relation(fields: [clientId], references: [id])
   title     String
   url       String
+  createdAt DateTime @default(now())
+}
+
+// Tareas del Cliente (Feature nueva)
+model ClientTask {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  text      String
+  completed Boolean  @default(false)
+  dueDate   DateTime?
+  assignee  String?
   createdAt DateTime @default(now())
 }

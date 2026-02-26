@@ -1,0 +1,63 @@
+import prisma from '../lib/prisma.js';
+
+export const getClientTasks = async (clientId) => {
+    try {
+        const tasks = await prisma.clientTask.findMany({
+            where: { clientId },
+            orderBy: { createdAt: 'desc' }
+        });
+        return tasks;
+    } catch (error) {
+        console.error("Error fetching client tasks:", error);
+        throw error;
+    }
+};
+
+export const createClientTask = async (data) => {
+    try {
+        const task = await prisma.clientTask.create({
+            data: {
+                clientId: data.clientId,
+                text: data.text,
+                completed: false,
+                dueDate: data.dueDate ? new Date(data.dueDate) : null,
+                assignee: data.assignee || null
+            }
+        });
+        return task;
+    } catch (error) {
+        console.error("Error creating client task:", error);
+        throw error;
+    }
+};
+
+export const updateTaskStatus = async (taskId, data) => {
+    try {
+        // Construct update object dynamically
+        const updateData = {};
+        if (data.completed !== undefined) updateData.completed = data.completed;
+        if (data.dueDate !== undefined) updateData.dueDate = data.dueDate ? new Date(data.dueDate) : null;
+        if (data.assignee !== undefined) updateData.assignee = data.assignee;
+
+        const task = await prisma.clientTask.update({
+            where: { id: taskId },
+            data: updateData
+        });
+        return task;
+    } catch (error) {
+        console.error("Error updating task status:", error);
+        throw error;
+    }
+};
+
+export const deleteTask = async (taskId) => {
+    try {
+        await prisma.clientTask.delete({
+            where: { id: taskId }
+        });
+        return { success: true };
+    } catch (error) {
+        console.error("Error deleting task:", error);
+        throw error;
+    }
+};
