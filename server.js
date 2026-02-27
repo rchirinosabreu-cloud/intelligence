@@ -1440,8 +1440,21 @@ const handleClientsHealthRequest = async (req, res, routeLabel) => {
     }
 };
 
+// Handle GET /api/clients (Health Indicators)
 app.get('/api/clients', async (req, res) => handleClientsHealthRequest(req, res, '/api/clients'));
 app.get('/api/clients/health', async (req, res) => handleClientsHealthRequest(req, res, '/api/clients/health'));
+
+// Handle POST /api/clients (Create Client in DB) - Matches user request
+app.post('/api/clients', async (req, res) => {
+    try {
+        console.log("[API] /api/clients (POST) called");
+        const client = await createClient(req.body);
+        res.json(client);
+    } catch (error) {
+        console.error("[API] /api/clients (POST) error:", error);
+        res.status(500).json({ error: "Failed to create client", details: error.message });
+    }
+});
 
 app.post('/api/chat', async (req, res) => {
     try {

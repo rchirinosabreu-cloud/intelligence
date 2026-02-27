@@ -48,15 +48,18 @@ const Clients = () => {
     try {
       setIsCreating(true);
       const baseUrl = getApiBaseUrl();
-      const res = await fetch(`${baseUrl}/api/db/clients`, {
+      // Changed to /api/clients as requested and implemented optimistic-like update
+      const res = await fetch(`${baseUrl}/api/clients`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newClientName }),
       });
 
-      if (!res.ok) throw new Error('Error al crear cliente');
+      if (!res.ok) throw new Error('Error al crear el cliente en el servidor');
 
-      await fetchClients(); // Refresh list
+      const newClient = await res.json();
+      setClients(prev => [newClient, ...prev]);
+
       setNewClientName('');
       setIsModalOpen(false);
     } catch (err) {
