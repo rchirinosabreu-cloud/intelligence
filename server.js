@@ -66,7 +66,7 @@ const corsOptions = {
     console.warn(`CORS warning: allowing unexpected origin ${origin}`);
     return callback(null, true);
   },
-  methods: ["GET", "POST", "PATCH", "OPTIONS"],
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization"],
 };
