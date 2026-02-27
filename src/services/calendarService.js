@@ -30,7 +30,7 @@ function getCalendarClient() {
         console.log("[CalendarService] Initialized successfully.");
         return calendarClient;
     } catch (error) {
-        console.error("[CalendarService] Initialization failed:", error);
+        console.error("[CalendarService] Initialization failed:", error?.message || error);
         return null;
     }
 }
@@ -42,7 +42,8 @@ export async function getUpcomingEvents(calendarId = 'social.brainstudio@gmail.c
     }
 
     try {
-        console.log(`[CalendarService] Fetching events for ${calendarId}`);
+        // Simple log with timestamp
+        console.log(`[${new Date().toISOString()}] [CalendarService] Fetching events for ${calendarId}`);
         const now = new Date();
         const response = await calendar.events.list({
             calendarId: calendarId,

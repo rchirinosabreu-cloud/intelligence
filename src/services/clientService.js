@@ -31,7 +31,7 @@ export async function getClients() {
     });
     return clients;
   } catch (error) {
-    console.error("[ClientService] Error fetching clients:", error);
+    console.error(`[${new Date().toISOString()}] [ClientService] Error fetching clients:`, error?.message || error);
     throw new Error("Failed to fetch clients");
   }
 }
