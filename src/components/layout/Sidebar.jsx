@@ -1,17 +1,19 @@
+
 import React from 'react';
 import { LayoutDashboard, Sparkles, CheckSquare, FolderOpen, Users, User, Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
+import { NavLink } from 'react-router-dom';
 
-const Sidebar = ({ activeTab, setActiveTab }) => {
+const Sidebar = () => {
   const { theme, toggleTheme } = useTheme();
 
   const menuItems = [
-    { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
-    { id: 'bria', label: 'Bria Intelligence', icon: Sparkles },
-    { id: 'tasks', label: 'Gestión', icon: CheckSquare },
-    { id: 'clients', label: 'Clientes', icon: Users },
+    { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, path: '/' },
+    { id: 'bria', label: 'Bria Intelligence', icon: Sparkles, path: '/bria' },
+    { id: 'tasks', label: 'Gestión', icon: CheckSquare, path: '/pendientes' },
+    { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes' },
   ];
 
   return (
@@ -36,42 +38,45 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
       <nav className="flex-1 px-4 py-6 space-y-2">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeTab === item.id;
 
           return (
-            <button
+            <NavLink
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={cn(
+              to={item.path}
+              className={({ isActive }) => cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group relative overflow-hidden border",
                 isActive
                   ? "bg-indigo-50/50 text-indigo-700 border-indigo-100/50 shadow-sm dark:text-white dark:bg-white/10 dark:border-white/10 dark:shadow-sm backdrop-blur-md"
                   : "text-zinc-500 hover:text-zinc-900 hover:bg-white/40 border-transparent dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-white/5 dark:hover:border-white/5"
               )}
             >
-              {isActive && (
-                <motion.div
-                  layoutId="activeTab"
-                  className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-violet-500/5 dark:from-indigo-500/10 dark:to-violet-500/5 rounded-xl opacity-100"
-                  initial={false}
-                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                />
-              )}
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeTab"
+                      className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-violet-500/5 dark:from-indigo-500/10 dark:to-violet-500/5 rounded-xl opacity-100"
+                      initial={false}
+                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    />
+                  )}
 
-              <span className="relative z-10 flex items-center gap-3 w-full">
-                <Icon className={cn(
-                  "w-5 h-5 transition-colors duration-300",
-                  isActive
-                    ? "text-indigo-600 dark:text-indigo-400 drop-shadow-sm dark:drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]"
-                    : "text-zinc-400 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-300"
-                )} />
-                {item.label}
-              </span>
+                  <span className="relative z-10 flex items-center gap-3 w-full">
+                    <Icon className={cn(
+                      "w-5 h-5 transition-colors duration-300",
+                      isActive
+                        ? "text-indigo-600 dark:text-indigo-400 drop-shadow-sm dark:drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]"
+                        : "text-zinc-400 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-300"
+                    )} />
+                    {item.label}
+                  </span>
 
-              {isActive && (
-                <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)] dark:shadow-[0_0_8px_rgba(99,102,241,0.8)] animate-pulse" />
+                  {isActive && (
+                    <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)] dark:shadow-[0_0_8px_rgba(99,102,241,0.8)] animate-pulse" />
+                  )}
+                </>
               )}
-            </button>
+            </NavLink>
           );
         })}
       </nav>

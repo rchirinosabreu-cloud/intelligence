@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Plus, Users, Search, MoreVertical, ExternalLink, Loader2 } from 'lucide-react';
@@ -5,17 +6,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import * as Dialog from '@radix-ui/react-dialog';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import ClientDetail from './ClientDetail';
+import { useNavigate } from 'react-router-dom';
 
 const Clients = () => {
+  const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // This is the variable that caused the ReferenceError.
-  // Ensuring it is declared at the top level of the component scope.
-  const [selectedClient, setSelectedClient] = useState(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,7 +46,6 @@ const Clients = () => {
     try {
       setIsCreating(true);
       const baseUrl = getApiBaseUrl();
-      // Changed to /api/clients as requested and implemented optimistic-like update
       const res = await fetch(`${baseUrl}/api/clients`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -74,17 +71,6 @@ const Clients = () => {
     client.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Render Client Detail if a client is selected
-  if (selectedClient) {
-    return (
-      <ClientDetail
-        client={selectedClient}
-        onBack={() => setSelectedClient(null)}
-      />
-    );
-  }
-
-  // Otherwise render Client List
   return (
     <div className="space-y-8 p-6 pb-20">
       {/* Header Section */}
@@ -204,56 +190,58 @@ const Clients = () => {
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
               >
-                <Card
-                  onClick={() => setSelectedClient(client)}
+                <div
+                  onClick={() => navigate(`/cliente/${client.id}`)}
                   className="group h-full flex flex-col cursor-pointer hover:border-indigo-500/30 dark:hover:border-indigo-400/30 transition-all duration-300"
                 >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="relative">
-                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 shadow-sm border border-zinc-200 dark:border-white/5">
-                            {client.logoUrl ? (
-                                <img src={client.logoUrl} alt={client.name} className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center text-zinc-400">
-                                    <Users className="w-6 h-6" />
-                                </div>
-                            )}
-                        </div>
-                        <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white dark:border-zinc-900 ${client.status === 'active' ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+                  <Card className="h-full flex flex-col">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="relative">
+                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 shadow-sm border border-zinc-200 dark:border-white/5">
+                              {client.logoUrl ? (
+                                  <img src={client.logoUrl} alt={client.name} className="w-full h-full object-cover" />
+                              ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-zinc-400">
+                                      <Users className="w-6 h-6" />
+                                  </div>
+                              )}
+                          </div>
+                          <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white dark:border-zinc-900 ${client.status === 'active' ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+                      </div>
+
+                      <button className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100">
+                          <MoreVertical className="w-4 h-4" />
+                      </button>
                     </div>
 
-                    <button className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100">
-                        <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-zinc-900 dark:text-white text-lg mb-1 truncate">
-                        {client.name}
-                    </h3>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
-                        /{client.slug}
-                    </p>
-                  </div>
-
-                  <div className="mt-6 pt-4 border-t border-zinc-100 dark:border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
-                        <span className="flex items-center gap-1">
-                            <ExternalLink className="w-3 h-3" />
-                            Space
-                        </span>
-                        {client._count?.files > 0 && (
-                             <span>• {client._count.files} Archivos</span>
-                        )}
-                        {client._count?.links > 0 && (
-                             <span>• {client._count.links} Links</span>
-                        )}
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-zinc-900 dark:text-white text-lg mb-1 truncate">
+                          {client.name}
+                      </h3>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
+                          /{client.slug}
+                      </p>
                     </div>
-                    <span className="text-xs px-2 py-1 rounded-full bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 font-medium">
-                        {new Date(client.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                </Card>
+
+                    <div className="mt-6 pt-4 border-t border-zinc-100 dark:border-white/5 flex items-center justify-between">
+                      <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+                          <span className="flex items-center gap-1">
+                              <ExternalLink className="w-3 h-3" />
+                              Space
+                          </span>
+                          {client._count?.files > 0 && (
+                              <span>• {client._count.files} Archivos</span>
+                          )}
+                          {client._count?.links > 0 && (
+                              <span>• {client._count.links} Links</span>
+                          )}
+                      </div>
+                      <span className="text-xs px-2 py-1 rounded-full bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 font-medium">
+                          {new Date(client.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </Card>
+                </div>
               </motion.div>
             ))}
           </AnimatePresence>

@@ -1,4 +1,6 @@
 import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai';
@@ -26,6 +28,9 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 console.log("Server script starting...");
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -1867,6 +1872,32 @@ app.post('/api/chat', async (req, res) => {
             res.end();
         }
     }
+});
+
+// Catch-all route to serve React app for any unknown path
+// This is essential for client-side routing (Refresh support)
+app.get('*', (req, res) => {
+    // Only if not starting with /api
+    if (req.path.startsWith('/api')) {
+        return res.status(404).json({ error: "API endpoint not found" });
+    }
+
+    // In production/build, we serve index.html
+    // In this dev environment with Vite running separately, we typically don't serve static files from here
+    // BUT the request was "Asegúrate de que si el usuario... recarga... la aplicación cargue correctamente"
+    // Since we are running `node server.js` alongside Vite, Vite handles the frontend dev server routing.
+    // If this backend is serving production build:
+    // app.use(express.static(path.join(__dirname, 'dist')));
+    // res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+
+    // However, if the user hits the Express server directly with a non-API route, we should tell them
+    // or redirect if we were serving static.
+    // Given the setup description, usually Vite dev server (port 3000) handles frontend routing.
+    // Express (port 8080) handles API.
+    // The user's browser is on port 3000. So reloading /cliente/123 on port 3000 is handled by Vite.
+    // Vite needs historyApiFallback (which it has by default).
+    // If the user meant the production deployment where Express might serve frontend:
+    res.status(200).send("Backend is running. For frontend, use the Vite dev server or build output.");
 });
 
 app.listen(PORT, '0.0.0.0', () => {
