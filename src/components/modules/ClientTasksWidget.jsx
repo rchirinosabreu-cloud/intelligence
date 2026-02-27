@@ -3,6 +3,11 @@ import { Card } from '@/components/ui/Card';
 import { CheckSquare, Plus, CheckCircle2, Circle, Calendar, User, Loader2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import DatePicker, { registerLocale } from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { es } from 'date-fns/locale';
+
+registerLocale('es', es);
 
 const TEAM = [
     { name: 'Claudia', initial: 'CL', color: 'bg-pink-500' },
@@ -21,7 +26,7 @@ const ClientTasksWidget = ({ clientId }) => {
     const [newTask, setNewTask] = useState('');
 
     // New Fields State
-    const [newDueDate, setNewDueDate] = useState('');
+    const [newDueDate, setNewDueDate] = useState(null);
     const [newAssignee, setNewAssignee] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -64,7 +69,7 @@ const ClientTasksWidget = ({ clientId }) => {
                 if (res.ok) {
                     await fetchTasks();
                     setNewTask('');
-                    setNewDueDate('');
+                    setNewDueDate(null);
                     setNewAssignee('');
                 }
             } catch (error) {
@@ -99,10 +104,15 @@ const ClientTasksWidget = ({ clientId }) => {
         if (!confirm("¿Eliminar tarea?")) return;
         try {
              const baseUrl = getApiBaseUrl();
-             await fetch(`${baseUrl}/api/db/tasks/${taskId}`, {
+             const res = await fetch(`${baseUrl}/api/db/tasks/${taskId}`, {
                  method: 'DELETE'
              });
-             setTasks(prev => prev.filter(t => t.id !== taskId));
+
+             if (res.ok) {
+                setTasks(prev => prev.filter(t => t.id !== taskId));
+             } else {
+                console.error("Failed to delete task:", await res.text());
+             }
         } catch (error) {
             console.error("Error deleting task:", error);
         }
@@ -133,8 +143,8 @@ const ClientTasksWidget = ({ clientId }) => {
     };
 
     return (
-        <Card className="w-full flex flex-col h-full min-h-[400px] p-6 space-y-6">
-            <div className="flex items-center justify-between">
+        <Card className="w-full flex flex-col h-full min-h-[400px] p-6">
+            <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-blue-500/10 rounded-lg">
                         <CheckSquare className="w-4 h-4 text-blue-500" />
@@ -145,7 +155,7 @@ const ClientTasksWidget = ({ clientId }) => {
             </div>
 
             {/* Input Area */}
-            <div className="space-y-3">
+            <div className="space-y-3 mb-6">
                 <div className="relative group">
                     <Plus className="w-4 h-4 text-zinc-400 absolute left-3 top-3 group-focus-within:text-blue-500 transition-colors" />
                     <input
@@ -162,13 +172,16 @@ const ClientTasksWidget = ({ clientId }) => {
                 {/* Secondary Inputs (Date & Assignee) */}
                 <div className="flex gap-2">
                     {/* Date Picker */}
-                    <div className="relative flex-1">
-                        <Calendar className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5 pointer-events-none" />
-                        <input
-                            type="date"
-                            value={newDueDate}
-                            onChange={(e) => setNewDueDate(e.target.value)}
+                    <div className="relative flex-1 group">
+                        <Calendar className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5 pointer-events-none z-10" />
+                        <DatePicker
+                            selected={newDueDate}
+                            onChange={(date) => setNewDueDate(date)}
+                            dateFormat="dd MMM, yyyy"
+                            locale="es"
+                            placeholderText="Fecha de entrega"
                             className="w-full pl-9 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                            popperClassName="z-50 shadow-lg rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
                         />
                     </div>
 
