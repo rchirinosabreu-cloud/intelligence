@@ -164,7 +164,7 @@ const CampfireWidget = ({ clientId }) => {
                         <div className="p-1.5 bg-orange-500/10 rounded-lg">
                             <Flame className="w-4 h-4 text-orange-500 fill-orange-500" />
                         </div>
-                        <h3 className="font-semibold text-zinc-900 dark:text-white">Campfire</h3>
+                        <h3 className="font-semibold text-zinc-900 dark:text-white">Chat de Equipo</h3>
                     </div>
                 </div>
 
@@ -215,7 +215,7 @@ const CampfireWidget = ({ clientId }) => {
             <SlideOver
                 open={isModalOpen}
                 onOpenChange={setIsModalOpen}
-                title="Campfire"
+                title="Chat de Equipo"
                 description="Chat operativo del equipo"
                 icon={<Flame className="w-5 h-5 text-orange-500 fill-orange-500" />}
                 iconBgColor="bg-orange-500/10"
