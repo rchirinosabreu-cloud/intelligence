@@ -85,15 +85,20 @@ const CampfireWidget = ({ clientId }) => {
 
     // Link Parser Helper
     const renderContentWithLinks = (text) => {
-        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        // Regex matches http://, https://, or www. followed by non-whitespace characters
+        const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
         const parts = text.split(urlRegex);
 
         return parts.map((part, index) => {
             if (part.match(urlRegex)) {
+                let href = part;
+                if (part.startsWith('www.')) {
+                    href = `https://${part}`;
+                }
                 return (
                     <a
                         key={index}
-                        href={part}
+                        href={href}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-500 hover:underline break-all"
