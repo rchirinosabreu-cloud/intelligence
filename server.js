@@ -11,6 +11,7 @@ import { getClients, createClient, getClientLinks, addClientLink, removeClientLi
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from './src/services/clientTaskService.js';
 import { getClientAnnouncements, createClientAnnouncement } from './src/services/clientAnnouncementService.js';
 import { getCampfireMessages, createCampfireMessage } from './src/services/campfireService.js';
+import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
 
 dotenv.config();
 
@@ -1471,6 +1472,45 @@ app.post('/api/clients', async (req, res) => {
     } catch (error) {
         logError('API', "/api/clients (POST) error", error);
         res.status(500).json({ error: "Failed to create client", details: error.message });
+    }
+});
+
+// --- GLOBAL ANNOUNCEMENTS ENDPOINTS (Dashboard) ---
+
+app.get('/api/global-announcements', async (req, res) => {
+    try {
+        log('API', "Fetching global announcements");
+        const announcements = await getGlobalAnnouncements();
+        res.json(announcements);
+    } catch (error) {
+        logError('API', "Failed to fetch global announcements", error);
+        res.status(500).json({ error: "Failed to fetch global announcements" });
+    }
+});
+
+app.post('/api/global-announcements', async (req, res) => {
+    const { content, type } = req.body;
+    if (!content) return res.status(400).json({ error: "Missing content" });
+
+    try {
+        log('API', "Creating global announcement");
+        const announcement = await createGlobalAnnouncement({ content, type });
+        res.json(announcement);
+    } catch (error) {
+        logError('API', "Failed to create global announcement", error);
+        res.status(500).json({ error: "Failed to create global announcement" });
+    }
+});
+
+app.delete('/api/global-announcements/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        log('API', `Deleting global announcement: ${id}`);
+        await deleteGlobalAnnouncement(id);
+        res.json({ success: true });
+    } catch (error) {
+        logError('API', "Failed to delete global announcement", error);
+        res.status(500).json({ error: "Failed to delete global announcement" });
     }
 });
 

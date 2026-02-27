@@ -87,3 +87,11 @@ model CampfireMessage {
   author    String
   createdAt DateTime @default(now())
 }
+
+// Anuncios Globales del Dashboard (Feature nueva)
+model GlobalAnnouncement {
+  id        String   @id @default(uuid())
+  content   String   // Max 140
+  type      String   // 'urgent', 'win', 'info'
+  createdAt DateTime @default(now())
+}
