@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // Cliente de la Agencia
@@ -23,6 +22,21 @@ model Client {
   tasks       ClientTask[]
   announcements ClientAnnouncement[]
   campfireMessages CampfireMessage[]
+  nativeTasks Task[]
+}
+
+// Fase 1: Migración del Kanban de Google Sheets a Prisma
+model Task {
+  id        String   @id @default(uuid())
+  title     String
+  dueDate   DateTime?
+  assignee  String?
+  comments  String?
+  status    String   @default("Pendiente") // Pendiente, En proceso, Realizado
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Activos de Marca (Colores, Fuentes)

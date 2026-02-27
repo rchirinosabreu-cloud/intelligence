@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import AppLayout from './components/layout/AppLayout';
 import Dashboard from './components/modules/Dashboard';
 import Tasks from './components/modules/Tasks';
+import NativeTasks from './components/modules/NativeTasks';
 import Chat from './components/modules/Chat';
 import Clients from './components/modules/Clients';
 import ClientDetailWrapper from './components/modules/ClientDetailWrapper';
@@ -21,6 +22,7 @@ function App() {
 
             <Route path="/bria" element={<Chat />} />
             <Route path="/pendientes" element={<Tasks />} />
+            <Route path="/pendientes-nativo" element={<NativeTasks />} />
 
             <Route path="/clientes" element={<Clients />} />
             <Route path="/cliente/:clientId" element={<ClientDetailWrapper />} />

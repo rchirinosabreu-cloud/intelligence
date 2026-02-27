@@ -14,6 +14,7 @@ import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskS
 import { getClientAnnouncements, createClientAnnouncement } from './src/services/clientAnnouncementService.js';
 import { getCampfireMessages, createCampfireMessage } from './src/services/campfireService.js';
 import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
+import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask } from './src/services/nativeTaskService.js';
 
 dotenv.config();
 
@@ -1348,6 +1349,59 @@ app.post('/api/db/clients', async (req, res) => {
     } catch (error) {
         console.error("[API] /api/db/clients (POST) error:", error);
         res.status(500).json({ error: "Failed to create client", details: error.message });
+    }
+});
+
+// --- NATIVE TASKS ENDPOINTS (Fase 1 Prisma Kanban) ---
+
+app.get('/api/tasks', async (req, res) => {
+    try {
+        const { clientId } = req.query;
+        log('API', `Fetching native tasks ${clientId ? `for client: ${clientId}` : 'globally'}`);
+        const tasks = await getTasks(clientId);
+        res.json(tasks);
+    } catch (error) {
+        logError('API', "Failed to fetch native tasks", error);
+        res.status(500).json({ error: "Failed to fetch native tasks" });
+    }
+});
+
+app.post('/api/tasks', async (req, res) => {
+    try {
+        log('API', `Creating new native task`);
+        const taskData = req.body;
+        if (!taskData.title || !taskData.clientId) {
+            return res.status(400).json({ error: "Missing required fields (title, clientId)" });
+        }
+        const task = await createTask(taskData);
+        res.status(201).json(task);
+    } catch (error) {
+        logError('API', "Failed to create native task", error);
+        res.status(500).json({ error: "Failed to create native task" });
+    }
+});
+
+app.patch('/api/tasks/:taskId', async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        log('API', `Updating native task: ${taskId}`);
+        const updatedTask = await updateTask(taskId, req.body);
+        res.json(updatedTask);
+    } catch (error) {
+        logError('API', `Failed to update native task ${req.params.taskId}`, error);
+        res.status(500).json({ error: "Failed to update native task" });
+    }
+});
+
+app.delete('/api/tasks/:taskId', async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        log('API', `Deleting native task: ${taskId}`);
+        await deleteNativeTask(taskId);
+        res.json({ success: true });
+    } catch (error) {
+        logError('API', `Failed to delete native task ${req.params.taskId}`, error);
+        res.status(500).json({ error: "Failed to delete native task" });
     }
 });
 
