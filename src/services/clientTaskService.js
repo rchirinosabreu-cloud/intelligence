@@ -8,7 +8,7 @@ export const getClientTasks = async (clientId) => {
         });
         return tasks;
     } catch (error) {
-        console.error("Error fetching client tasks:", error);
+        console.error(`[${new Date().toISOString()}] [ClientTaskService] Error fetching client tasks:`, error?.message || error);
         throw error;
     }
 };

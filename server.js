@@ -30,6 +30,7 @@ const normalizeOrigin = (origin = '') => String(origin).trim().replace(/\/$/, ''
 
 const allowedOrigins = new Set([
   "https://intelligence.brainstudioagencia.com",
+  "https://intelligence.brainstudioagencia.com/",
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:4173",
@@ -197,6 +198,23 @@ function columnIndexToLetter(index) {
     return letter;
 }
 
+// --- LOGGING HELPER ---
+const log = (context, message, data = null) => {
+    const timestamp = new Date().toISOString();
+    const logPrefix = `[${timestamp}] [${context}]`;
+    if (data) {
+        console.log(`${logPrefix} ${message}`, JSON.stringify(data, null, 2));
+    } else {
+        console.log(`${logPrefix} ${message}`);
+    }
+};
+
+const logError = (context, message, error) => {
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] [${context}] ERROR: ${message}`, error?.message || error);
+    if (error?.stack) console.error(error.stack);
+};
+
 function findTargetSheet(doc) {
     // Calculate dynamic sheet name based on current date (Spanish Month + Year)
     // e.g., "Febrero 2026"
@@ -209,16 +227,16 @@ function findTargetSheet(doc) {
     const currentYear = now.getFullYear();
     const targetTitle = `${currentMonthName} ${currentYear}`;
 
-    console.log(`[AgencyTasks] Looking for target sheet: "${targetTitle}"`);
+    log('AgencyTasks', `Looking for target sheet: "${targetTitle}"`);
 
     for (const sheet of doc.sheetsByIndex) {
         if (sheet.title.trim() === targetTitle) {
-             console.log(`[AgencyTasks] Found target sheet: ${sheet.title}`);
+             log('AgencyTasks', `Found target sheet: ${sheet.title}`);
              return sheet;
         }
     }
 
-    console.warn(`[AgencyTasks] Target sheet "${targetTitle}" not found. Falling back to first sheet (Index 0).`);
+    log('AgencyTasks', `Target sheet "${targetTitle}" not found. Falling back to first sheet (Index 0).`);
     return doc.sheetsByIndex[0];
 }
 
@@ -247,7 +265,7 @@ function parseDate(dateStr) {
 }
 
 async function fetchAgencyTasks(responsibleName = "Rodny") {
-    console.log(`[AgencyTasks] Fetching tasks for: ${responsibleName}`);
+    log('AgencyTasks', `Fetching tasks for: ${responsibleName}`);
     try {
         const allTasks = await getAgencyTasksJSON();
         const targetResp = responsibleName.trim().toLowerCase();
@@ -271,7 +289,7 @@ async function fetchAgencyTasks(responsibleName = "Rodny") {
         return `Tareas pendientes para ${responsibleName}:\n\n${taskList}`;
 
     } catch (error) {
-        console.error("[AgencyTasks] Error:", error);
+        logError('AgencyTasks', "Error fetching tasks", error);
         return `Error al consultar la hoja de tareas: ${error.message}`;
     }
 }
@@ -302,7 +320,7 @@ const isSummaryOrInvalidTaskTitle = (title = '') => {
 };
 
 async function getAgencyTasksJSON() {
-    console.log(`[AgencyTasksJSON] Fetching all tasks in JSON format.`);
+    log('AgencyTasksJSON', `Fetching all tasks in JSON format.`);
     const SHEET_ID = process.env.AGENCY_TASKS_SHEET_ID;
 
     if (!SHEET_ID || !credentials) {
@@ -319,22 +337,21 @@ async function getAgencyTasksJSON() {
         const doc = new GoogleSpreadsheet(SHEET_ID, authClient);
         await doc.loadInfo();
 
-        // DEBUG EXTREMO: Listar todas las hojas
         const availableSheets = doc.sheetsByIndex.map(s => s.title);
-        console.log('[DEBUG EXTREMO] Hojas disponibles en el documento:', availableSheets);
+        log('AgencyTasksJSON', 'Hojas disponibles:', availableSheets);
 
         let sheet = findTargetSheet(doc);
         if (!sheet) {
-             console.warn(`[AgencyTasksJSON] No sheet found matching current month. Fallback to index 0.`);
+             log('AgencyTasksJSON', `No sheet found matching current month. Fallback to index 0.`);
              sheet = doc.sheetsByIndex[0];
         }
 
         if (!sheet) throw new Error("No sheet found.");
-        console.log(`[DEBUG EXTREMO] Intentando leer hoja: "${sheet.title}"`);
+        log('AgencyTasksJSON', `Intentando leer hoja: "${sheet.title}"`);
 
         await sheet.loadHeaderRow();
         const headers = sheet.headerValues;
-        console.log('[DEBUG EXTREMO] Headers detectados:', headers);
+        log('AgencyTasksJSON', 'Headers detectados:', headers);
 
         const colFechaAsignacion = findColumnIndex(headers, ['fecha asignacion', 'fecha_asignacion', 'asignacion', 'fecha de asignacion']);
         const colPendiente = findColumnIndex(headers, ['pendiente', 'tarea', 'actividad', 'task']);
@@ -345,7 +362,7 @@ async function getAgencyTasksJSON() {
         const colComentarios = findColumnIndex(headers, ['comentarios', 'comentario', 'observaciones', 'notas']);
         const colCompletedAt = findColumnIndex(headers, ['completed_at', 'completado_el', 'fecha_fin', 'fecha completado', 'fecha_realizado']);
 
-        console.log('[DEBUG EXTREMO] Índices detectados:', {
+        log('AgencyTasksJSON', 'Índices detectados:', {
             colFechaAsignacion,
             colPendiente,
             colCliente,
@@ -357,15 +374,14 @@ async function getAgencyTasksJSON() {
         });
 
         const rows = await sheet.getRows();
-        console.log(`[DEBUG EXTREMO] Filas leídas: ${rows.length}`);
+        log('AgencyTasksJSON', `Filas leídas: ${rows.length}`);
 
         if (rows.length > 0) {
-            // Log raw data from internal property if available, or try to reconstruct
             try {
                  // _rawData is internal to google-spreadsheet but useful for debug
-                 console.log('[DEBUG EXTREMO] Fila 0 Raw (_rawData):', rows[0]._rawData);
+                 log('AgencyTasksJSON', 'Fila 0 Raw (_rawData sample):', rows[0]._rawData);
             } catch (e) {
-                 console.log('[DEBUG EXTREMO] Fila 0 (toObject):', rows[0].toObject());
+                 // ignore
             }
         }
 
@@ -406,7 +422,7 @@ async function getAgencyTasksJSON() {
 
             // DEBUG: Log first few rows to debug status issues
             if (index < 3) {
-                console.log(`[DEBUG Row ${index}] Status Raw: "${rawStatus}" (Col: ${colEstado >= 0 ? colEstado : 4}) -> Normalized: "${normalizeTaskStatus(rawStatus)}"`);
+                log('AgencyTasksJSON', `Row ${index} Status Raw: "${rawStatus}" -> Normalized: "${normalizeTaskStatus(rawStatus)}"`);
             }
 
             // Status Normalization (alineado con vocabulario de Google Sheet)
@@ -453,19 +469,19 @@ async function getAgencyTasksJSON() {
         }).filter(t => t !== null);
 
         if (tasks.length > 0) {
-            console.log('Datos procesados (Sample):', JSON.stringify(tasks[0], null, 2));
+            log('AgencyTasksJSON', 'Datos procesados (Sample):', tasks[0]);
         }
 
         return tasks;
 
     } catch (error) {
-        console.error("[AgencyTasksJSON] Error:", error);
+        logError('AgencyTasksJSON', "Error fetching tasks", error);
         throw error;
     }
 }
 
 async function updateTaskStatus(id, newStatus) {
-    console.log(`[UpdateTask] Updating task ID ${id} to status: ${newStatus}`);
+    log('UpdateTask', `Updating task ID ${id} to status: ${newStatus}`);
     const SHEET_ID = process.env.AGENCY_TASKS_SHEET_ID;
 
     if (!SHEET_ID || !credentials) {
@@ -522,7 +538,7 @@ async function updateTaskStatus(id, newStatus) {
         const rangesToLoad = [rangeStatus];
         if (rangeCompletedAt) rangesToLoad.push(rangeCompletedAt);
 
-        console.log(`[UpdateTask] Loading cells ${rangesToLoad.join(', ')} in sheet ${sheet.title}`);
+        log('UpdateTask', `Loading cells ${rangesToLoad.join(', ')} in sheet ${sheet.title}`);
         await sheet.loadCells(rangesToLoad);
 
         // Set Status
@@ -541,17 +557,17 @@ async function updateTaskStatus(id, newStatus) {
         await sheet.saveUpdatedCells();
 
         const timestamp = new Date().toISOString();
-        console.log(`[UpdateTask] Success. Updated status to "${newStatus}".`);
+        log('UpdateTask', `Success. Updated status to "${newStatus}".`);
         return { success: true, timestamp: timestamp };
 
     } catch (error) {
-        console.error("[UpdateTask] Error:", error);
+        logError('UpdateTask', "Error updating task", error);
         throw error;
     }
 }
 
 async function fetchClientHealth() {
-    console.log(`[ClientHealth] Fetching client health indicators...`);
+    log('ClientHealth', `Fetching client health indicators...`);
     const SHEET_ID = process.env.AGENCY_TASKS_SHEET_ID;
 
     if (!SHEET_ID || !credentials) {
@@ -583,7 +599,7 @@ async function fetchClientHealth() {
         await sheet.loadHeaderRow(3);
         const headers = sheet.headerValues;
 
-        console.log(`[ClientHealth] Headers found: ${headers.join(', ')}`);
+        log('ClientHealth', `Headers found: ${headers.join(', ')}`);
 
         // Dynamic Column Detection
         // Default to B (Index 1) and K (Index 10) if not found by name
@@ -593,7 +609,7 @@ async function fetchClientHealth() {
         let colStatusIndex = findColumnIndex(headers, ['estado', 'status', 'estatus', 'semáforo', 'semaforo', 'indicador', 'situación', 'situacion']);
         if (colStatusIndex < 0) colStatusIndex = 10; // Fallback to K
 
-        console.log(`[ClientHealth] Using columns: Name=${colNameIndex}, Status=${colStatusIndex}`);
+        log('ClientHealth', `Using columns: Name=${colNameIndex}, Status=${colStatusIndex}`);
 
         const rows = await sheet.getRows();
 
@@ -652,11 +668,11 @@ async function fetchClientHealth() {
         // Sort strictly by Priority (1 -> 5)
         clients.sort((a, b) => a.priority - b.priority);
 
-        console.log(`[ClientHealth] Found ${clients.length} clients.`);
+        log('ClientHealth', `Found ${clients.length} clients.`);
         return clients;
 
     } catch (error) {
-        console.error("[ClientHealth] Error:", error);
+        logError('ClientHealth', "Error fetching client health", error);
         throw error;
     }
 }
