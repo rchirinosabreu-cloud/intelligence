@@ -76,6 +76,22 @@ app.options("*", cors(corsOptions));
 
 app.use(express.json());
 
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'brainstudio-intelligence-api',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'brainstudio-intelligence-api',
+    timestamp: new Date().toISOString()
+  });
+});
+
 const PORT = process.env.PORT || 8080;
 
 // --- AUTHENTICATION SETUP ---
