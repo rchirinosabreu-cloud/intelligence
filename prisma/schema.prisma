@@ -21,6 +21,7 @@ model Client {
   files       ClientFile[]
   links       ClientLink[]
   tasks       ClientTask[]
+  announcements ClientAnnouncement[]
 }
 
 // Activos de Marca (Colores, Fuentes)
@@ -63,5 +64,15 @@ model ClientTask {
   completed Boolean  @default(false)
   dueDate   DateTime?
   assignee  String?
+  createdAt DateTime @default(now())
+}
+
+// Anuncios específicos por Cliente
+model ClientAnnouncement {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  content   String   // Sin límite de caracteres
+  type      String   // 'urgent', 'win', 'info'
   createdAt DateTime @default(now())
 }

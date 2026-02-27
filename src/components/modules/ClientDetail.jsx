@@ -6,6 +6,7 @@ import DigitalIdentityWidget from './DigitalIdentityWidget';
 import DeliverablesWidget from './DeliverablesWidget';
 import ClientTasksWidget from './ClientTasksWidget';
 import KeyLinksWidget from './KeyLinksWidget';
+import ClientAnnouncementsWidget from './ClientAnnouncementsWidget';
 
 const ClientDetail = ({ client, onBack }) => {
   if (!client) return <div>No se seleccionó cliente</div>;
@@ -31,7 +32,7 @@ const ClientDetail = ({ client, onBack }) => {
 
         {/* Left Column (Main Content) */}
         <div className="lg:col-span-2 flex flex-col gap-6">
-            <StudioBroadcastWidget variant="client" />
+            <ClientAnnouncementsWidget clientId={client.id} />
             <DeliverablesWidget />
             <ClientTasksWidget clientId={client.id} />
         </div>
