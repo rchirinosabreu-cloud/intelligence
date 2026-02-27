@@ -9,6 +9,7 @@ import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { getUpcomingEvents } from './src/services/calendarService.js';
 import { getClients, createClient, getClientLinks, addClientLink, removeClientLink } from './src/services/clientService.js';
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from './src/services/clientTaskService.js';
+import { getClientAnnouncements, createClientAnnouncement } from './src/services/clientAnnouncementService.js';
 
 dotenv.config();
 
@@ -1463,12 +1464,44 @@ app.get('/api/clients/health', async (req, res) => handleClientsHealthRequest(re
 // Handle POST /api/clients (Create Client in DB) - Matches user request
 app.post('/api/clients', async (req, res) => {
     try {
-        console.log("[API] /api/clients (POST) called");
+        log('API', "/api/clients (POST) called");
         const client = await createClient(req.body);
         res.json(client);
     } catch (error) {
-        console.error("[API] /api/clients (POST) error:", error);
+        logError('API', "/api/clients (POST) error", error);
         res.status(500).json({ error: "Failed to create client", details: error.message });
+    }
+});
+
+// --- CLIENT ANNOUNCEMENTS ENDPOINTS ---
+
+app.get('/api/clients/:clientId/announcements', async (req, res) => {
+    const { clientId } = req.params;
+    try {
+        log('API', `Fetching announcements for client: ${clientId}`);
+        const announcements = await getClientAnnouncements(clientId);
+        res.json(announcements);
+    } catch (error) {
+        logError('API', "Failed to fetch client announcements", error);
+        res.status(500).json({ error: "Failed to fetch announcements" });
+    }
+});
+
+app.post('/api/clients/:clientId/announcements', async (req, res) => {
+    const { clientId } = req.params;
+    const { content, type } = req.body;
+
+    if (!content) {
+        return res.status(400).json({ error: "Missing content" });
+    }
+
+    try {
+        log('API', `Creating announcement for client: ${clientId}`);
+        const announcement = await createClientAnnouncement({ clientId, content, type });
+        res.json(announcement);
+    } catch (error) {
+        logError('API', "Failed to create client announcement", error);
+        res.status(500).json({ error: "Failed to create announcement" });
     }
 });
 
