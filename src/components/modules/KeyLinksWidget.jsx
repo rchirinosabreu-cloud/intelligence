@@ -85,6 +85,14 @@ const KeyLinksWidget = ({ clientId }) => {
 
     const isLimitReached = links.length >= 5;
 
+    const ensureAbsoluteUrl = (url) => {
+        if (!url) return '#';
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+            return url;
+        }
+        return `https://${url}`;
+    };
+
     return (
         <Card className="w-full flex flex-col h-full min-h-[200px]">
             <div className="flex items-center justify-between mb-4">
@@ -167,7 +175,7 @@ const KeyLinksWidget = ({ clientId }) => {
                             className="group flex items-center justify-between p-3 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800/50 border border-transparent hover:border-zinc-100 dark:hover:border-white/5 transition-all"
                         >
                             <a
-                                href={link.url}
+                                href={ensureAbsoluteUrl(link.url)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-3 flex-1 min-w-0"
