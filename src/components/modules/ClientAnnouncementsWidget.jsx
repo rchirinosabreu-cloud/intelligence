@@ -5,7 +5,7 @@ import { Send, Trash2, Megaphone, AlertCircle, Trophy, Info, X, Loader2, ArrowRi
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import * as Dialog from '@radix-ui/react-dialog';
+import SlideOver from '@/components/ui/SlideOver';
 
 // Types Configuration
 const TYPES = [
@@ -172,35 +172,18 @@ const ClientAnnouncementsWidget = ({ clientId }) => {
             </Card>
 
             {/* EXPANDED MODAL VIEW (Basecamp Style) */}
-            <Dialog.Root open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <Dialog.Portal>
-                    <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
-                    <Dialog.Content className="fixed right-0 top-0 h-full w-full max-w-2xl bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800 shadow-2xl z-50 animate-in slide-in-from-right duration-300 flex flex-col focus:outline-none">
+            <SlideOver
+                open={isModalOpen}
+                onOpenChange={setIsModalOpen}
+                title="Tablero de Anuncios"
+                description="Historial completo y actualizaciones"
+                icon={<Megaphone className="w-5 h-5 text-indigo-500" />}
+                iconBgColor="bg-indigo-500/10"
+            >
+                {/* Modal Body (Scrollable) */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-zinc-50/50 dark:bg-zinc-900/20">
 
-                        {/* Modal Header */}
-                        <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-indigo-500/10 rounded-xl">
-                                    <Megaphone className="w-5 h-5 text-indigo-500" />
-                                </div>
-                                <div>
-                                    <Dialog.Title className="text-lg font-bold text-zinc-900 dark:text-white">
-                                        Tablero de Anuncios
-                                    </Dialog.Title>
-                                    <p className="text-xs text-zinc-500">Historial completo y actualizaciones</p>
-                                </div>
-                            </div>
-                            <Dialog.Close asChild>
-                                <button className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-zinc-900 transition-colors">
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </Dialog.Close>
-                        </div>
-
-                        {/* Modal Body (Scrollable) */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-zinc-50/50 dark:bg-zinc-900/20">
-
-                            {/* Creation Area (Top) */}
+                    {/* Creation Area (Top) */}
                             <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm border border-zinc-200 dark:border-zinc-800 space-y-4">
                                 <div className="flex items-center gap-2 mb-2">
                                     <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
@@ -288,12 +271,10 @@ const ClientAnnouncementsWidget = ({ clientId }) => {
                                         </div>
                                     </div>
                                 ))}
-                            </div>
+                    </div>
 
-                        </div>
-                    </Dialog.Content>
-                </Dialog.Portal>
-            </Dialog.Root>
+                </div>
+            </SlideOver>
         </>
     );
 };
