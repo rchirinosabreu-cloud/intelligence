@@ -79,16 +79,76 @@ const CampfireWidget = ({ clientId }) => {
         return TEAM.find(t => t.name === name) || { initial: '??', color: 'bg-gray-500' };
     };
 
-    const formatTimestamp = (dateStr) => {
-        const date = new Date(dateStr);
-        return date.toLocaleString('es-ES', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'short',
-            hour: '2-digit',
-            minute: '2-digit'
+    const formatTime = (dateStr) => {
+        return new Date(dateStr).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    };
+
+    // Link Parser Helper
+    const renderContentWithLinks = (text) => {
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        const parts = text.split(urlRegex);
+
+        return parts.map((part, index) => {
+            if (part.match(urlRegex)) {
+                return (
+                    <a
+                        key={index}
+                        href={part}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:underline break-all"
+                    >
+                        {part}
+                    </a>
+                );
+            }
+            return part;
         });
     };
+
+    // Grouping Logic (Basecamp Style)
+    const getGroupedMessages = () => {
+        const groups = {};
+        const today = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        const isSameDay = (d1, d2) => d1.getDate() === d2.getDate() && d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
+
+        // Sort messages asc for the view (Oldest -> Newest) or desc?
+        // Usually chat is bottom-up (Newest at bottom). But if we want scrolling history, it might be top-down.
+        // User requested "Scroll interno". Standard chat: scroll to bottom.
+        // Let's assume standard order: Newest at bottom (Ascending).
+        // But backend returns Descending (Newest first).
+        // So we reverse them for display in the modal timeline.
+
+        const sortedMessages = [...messages].reverse();
+
+        sortedMessages.forEach(msg => {
+            const d = new Date(msg.createdAt);
+            let dateKey = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+
+            if (isSameDay(d, today)) dateKey = 'HOY';
+            else if (isSameDay(d, yesterday)) dateKey = 'AYER';
+
+            dateKey = dateKey.toUpperCase();
+
+            if (!groups[dateKey]) groups[dateKey] = [];
+            groups[dateKey].push(msg);
+        });
+
+        return groups;
+    };
+
+    const groupedMessages = getGroupedMessages();
+
+    // Auto-scroll to bottom on open/new message
+    const scrollRef = useRef(null);
+    useEffect(() => {
+        if (isModalOpen && scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [isModalOpen, messages]);
 
     return (
         <>
@@ -150,7 +210,7 @@ const CampfireWidget = ({ clientId }) => {
             <Dialog.Root open={isModalOpen} onOpenChange={setIsModalOpen}>
                 <Dialog.Portal>
                     <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
-                    <Dialog.Content className="fixed right-0 top-0 h-full w-full max-w-xl bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800 shadow-2xl z-50 animate-in slide-in-from-right duration-300 flex flex-col">
+                    <Dialog.Content className="fixed right-0 top-0 h-full w-full max-w-2xl bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800 shadow-2xl z-50 animate-in slide-in-from-right duration-300 flex flex-col">
 
                         {/* Header */}
                         <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
@@ -173,39 +233,48 @@ const CampfireWidget = ({ clientId }) => {
                         </div>
 
                         {/* Messages List (Scrollable) */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-50/50 dark:bg-zinc-900/20 flex flex-col-reverse">
-                            {/* Flex-col-reverse allows auto-scroll to bottom behavior logic,
-                                but messages are ordered desc (newest first).
-                                So simple mapping is fine if we want newest at top.
-                                User asked for "Historial completo". Usually chat is oldest at top, newest at bottom.
-                                But if I map desc (newest first), the top of the list is the newest.
-                                For a "Campfire" log, typically newest is at top or bottom.
-                                Let's stick to standard feed: Newest at top of the container.
-                            */}
-                            {messages.map((msg) => {
-                                const style = getAuthorStyle(msg.author);
-                                return (
-                                    <div key={msg.id} className="flex gap-4">
-                                        <div className={cn(
-                                            "w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm",
-                                            style.color
-                                        )}>
-                                            {style.initial}
+                        <div
+                            ref={scrollRef}
+                            className="flex-1 overflow-y-auto p-6 bg-zinc-50/50 dark:bg-zinc-900/20"
+                        >
+                            <div className="space-y-8 pb-4">
+                                {Object.keys(groupedMessages).map(dateKey => (
+                                    <div key={dateKey} className="relative">
+                                        <div className="sticky top-0 z-10 flex justify-center mb-6">
+                                            <span className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 text-[10px] font-bold px-3 py-1 rounded-full shadow-sm uppercase tracking-wider">
+                                                {dateKey}
+                                            </span>
                                         </div>
-                                        <div className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-2xl rounded-tl-none shadow-sm">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className="text-sm font-bold text-zinc-900 dark:text-white">{msg.author}</span>
-                                                <span className="text-[10px] text-zinc-400 uppercase tracking-wide">
-                                                    {formatTimestamp(msg.createdAt)}
-                                                </span>
-                                            </div>
-                                            <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                                                {msg.content}
-                                            </p>
+
+                                        <div className="space-y-6">
+                                            {groupedMessages[dateKey].map((msg) => {
+                                                const style = getAuthorStyle(msg.author);
+                                                return (
+                                                    <div key={msg.id} className="flex gap-4 group">
+                                                        <div className={cn(
+                                                            "w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm mt-1",
+                                                            style.color
+                                                        )}>
+                                                            {style.initial}
+                                                        </div>
+                                                        <div className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-2xl rounded-tl-none shadow-sm hover:shadow-md transition-shadow">
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <span className="text-sm font-bold text-zinc-900 dark:text-white">{msg.author}</span>
+                                                                <span className="text-[10px] text-zinc-400 group-hover:text-zinc-500 transition-colors">
+                                                                    {formatTime(msg.createdAt)}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                                                                {renderContentWithLinks(msg.content)}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
-                                );
-                            })}
+                                ))}
+                            </div>
                         </div>
 
                         {/* Input Area (Fixed at Bottom) */}
