@@ -39,7 +39,7 @@ const ClientDetail = ({ client, onBack }) => {
 
         {/* Right Column (Sidebar) */}
         <div className="lg:col-span-1 flex flex-col gap-6">
-            <CampfireWidget />
+            <CampfireWidget clientId={client.id} />
             <DigitalIdentityWidget />
             <KeyLinksWidget clientId={client.id} />
         </div>
