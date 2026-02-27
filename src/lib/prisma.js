@@ -1,35 +1,94 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { PrismaClient } = require('@prisma/client');
+
+let PrismaClient;
+try {
+  ({ PrismaClient } = require('@prisma/client'));
+} catch (error) {
+  console.error('[Prisma] Failed to load @prisma/client module.', error);
+}
 
 let prisma;
+let PrismaPg;
+let PgPool;
+try {
+  ({ PrismaPg } = require('@prisma/adapter-pg'));
+  ({ Pool: PgPool } = require('pg'));
+} catch (error) {
+  // Optional in this repo/runtime. If unavailable, we'll fallback to unavailable/mock DB modes below.
+}
+
+const isProduction = process.env.NODE_ENV === 'production';
+const hasDatabaseUrl = Boolean(process.env.DATABASE_URL && String(process.env.DATABASE_URL).trim());
+const hasAccelerateUrl = Boolean(process.env.PRISMA_ACCELERATE_URL && String(process.env.PRISMA_ACCELERATE_URL).trim());
 
 // In-memory store for mock mode
 const mockClients = [];
 const mockLinks = []; // Store links here
 const mockTasks = []; // Store tasks here
 
-try {
-  if (process.env.NODE_ENV === 'production') {
-    prisma = new PrismaClient();
-  } else {
-    if (!global.prisma) {
-      global.prisma = new PrismaClient();
+if (PrismaClient && (hasDatabaseUrl || hasAccelerateUrl)) {
+  try {
+    const buildPrismaClient = () => {
+      if (hasAccelerateUrl) {
+        return new PrismaClient({ accelerateUrl: process.env.PRISMA_ACCELERATE_URL });
+      }
+
+      if (hasDatabaseUrl && PrismaPg && PgPool) {
+        const pool = new PgPool({ connectionString: process.env.DATABASE_URL });
+        const adapter = new PrismaPg(pool);
+        return new PrismaClient({ adapter });
+      }
+
+      throw new Error('Missing Prisma adapter config. Install @prisma/adapter-pg + pg or set PRISMA_ACCELERATE_URL.');
+    };
+
+    if (isProduction) {
+      prisma = buildPrismaClient();
+    } else {
+      if (!global.prisma) {
+        global.prisma = buildPrismaClient();
+      }
+      prisma = global.prisma;
     }
-    prisma = global.prisma;
+  } catch (e) {
+    const message = "Failed to initialize PrismaClient";
+    if (isProduction) {
+      // In production we should never silently fallback to mock storage,
+      // otherwise the API appears to work while nothing is persisted.
+      console.error(`${message} in production. Database-backed endpoints will return errors until DB is healthy.`, e);
+    } else {
+      console.error(`${message} locally.`, e);
+    }
   }
-} catch (e) {
-  if (process.env.NODE_ENV === 'production') {
-    // Never crash the entire API because DB is temporarily unavailable/misconfigured.
-    // Endpoints that do not depend on DB should continue serving traffic.
-    console.error("CRITICAL: Failed to initialize PrismaClient in production. Falling back to in-memory mock.", e);
-  } else {
-    console.error("Failed to initialize PrismaClient locally. Using mock.", e);
-  }
+} else if (!hasDatabaseUrl && !hasAccelerateUrl) {
+  console.error('[Prisma] DATABASE_URL/PRISMA_ACCELERATE_URL missing. Database-backed endpoints will return errors.');
 }
 
-// Explicit override for testing environments or when DB is missing locally
-if (!prisma || (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('dummy'))) {
+const createUnavailableModel = (modelName) => ({
+  findMany: async () => { throw new Error(`DB_UNAVAILABLE:${modelName}.findMany`); },
+  create: async () => { throw new Error(`DB_UNAVAILABLE:${modelName}.create`); },
+  findUnique: async () => { throw new Error(`DB_UNAVAILABLE:${modelName}.findUnique`); },
+  count: async () => { throw new Error(`DB_UNAVAILABLE:${modelName}.count`); },
+  delete: async () => { throw new Error(`DB_UNAVAILABLE:${modelName}.delete`); },
+  update: async () => { throw new Error(`DB_UNAVAILABLE:${modelName}.update`); },
+});
+
+const shouldUseUnavailableDb = isProduction && !prisma;
+const shouldUseMockDb =
+  !isProduction &&
+  (!prisma || process.env.USE_MOCK_DB === 'true' || (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('dummy')));
+
+if (shouldUseUnavailableDb) {
+  prisma = {
+    client: createUnavailableModel('client'),
+    clientLink: createUnavailableModel('clientLink'),
+    clientTask: createUnavailableModel('clientTask'),
+  };
+}
+
+// Explicit override for testing/local development only.
+if (shouldUseMockDb) {
     console.warn("Using In-Memory Mock Prisma Client (Fallback)");
     prisma = {
         client: {
