@@ -22,6 +22,7 @@ model Client {
   links       ClientLink[]
   tasks       ClientTask[]
   announcements ClientAnnouncement[]
+  campfireMessages CampfireMessage[]
 }
 
 // Activos de Marca (Colores, Fuentes)
@@ -74,5 +75,15 @@ model ClientAnnouncement {
   client    Client   @relation(fields: [clientId], references: [id])
   content   String   // Sin límite de caracteres
   type      String   // 'urgent', 'win', 'info'
+  createdAt DateTime @default(now())
+}
+
+// Chat Campfire (Inmutable)
+model CampfireMessage {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  content   String
+  author    String
   createdAt DateTime @default(now())
 }

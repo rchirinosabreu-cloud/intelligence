@@ -10,6 +10,7 @@ import { getUpcomingEvents } from './src/services/calendarService.js';
 import { getClients, createClient, getClientLinks, addClientLink, removeClientLink } from './src/services/clientService.js';
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from './src/services/clientTaskService.js';
 import { getClientAnnouncements, createClientAnnouncement } from './src/services/clientAnnouncementService.js';
+import { getCampfireMessages, createCampfireMessage } from './src/services/campfireService.js';
 
 dotenv.config();
 
@@ -1502,6 +1503,38 @@ app.post('/api/clients/:clientId/announcements', async (req, res) => {
     } catch (error) {
         logError('API', "Failed to create client announcement", error);
         res.status(500).json({ error: "Failed to create announcement" });
+    }
+});
+
+// --- CAMPFIRE ENDPOINTS (Immutable Chat) ---
+
+app.get('/api/clients/:clientId/campfire', async (req, res) => {
+    const { clientId } = req.params;
+    try {
+        log('API', `Fetching campfire messages for client: ${clientId}`);
+        const messages = await getCampfireMessages(clientId);
+        res.json(messages);
+    } catch (error) {
+        logError('API', "Failed to fetch campfire messages", error);
+        res.status(500).json({ error: "Failed to fetch messages" });
+    }
+});
+
+app.post('/api/clients/:clientId/campfire', async (req, res) => {
+    const { clientId } = req.params;
+    const { content, author } = req.body;
+
+    if (!content || !author) {
+        return res.status(400).json({ error: "Missing content or author" });
+    }
+
+    try {
+        log('API', `Creating campfire message for client: ${clientId} by ${author}`);
+        const message = await createCampfireMessage({ clientId, content, author });
+        res.json(message);
+    } catch (error) {
+        logError('API', "Failed to create campfire message", error);
+        res.status(500).json({ error: "Failed to create message" });
     }
 });
 
