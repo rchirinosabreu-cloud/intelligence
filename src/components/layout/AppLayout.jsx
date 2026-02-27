@@ -1,7 +1,7 @@
 import React from 'react';
 import Sidebar from './Sidebar';
 
-const AppLayout = ({ children, activeTab, setActiveTab }) => {
+const AppLayout = ({ children }) => {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-indigo-500/20 overflow-hidden relative transition-colors duration-300">
       {/* Ambient Glow Background - Fixed, z-0 */}
@@ -23,7 +23,7 @@ const AppLayout = ({ children, activeTab, setActiveTab }) => {
       </div>
 
       {/* Sidebar - z-50 */}
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar />
 
       {/* Main Content Area - z-10 (above background) */}
       <main className="ml-64 p-8 min-h-screen relative z-10">
