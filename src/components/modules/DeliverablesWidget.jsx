@@ -9,8 +9,8 @@ const DeliverablesWidget = () => {
     ];
 
     return (
-        <Card className="w-full flex flex-col h-full min-h-[350px] p-6 space-y-6">
-            <div className="flex items-center justify-between">
+        <Card className="w-full flex flex-col h-full min-h-[350px] p-6">
+            <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-emerald-500/10 rounded-lg">
                         <Download className="w-4 h-4 text-emerald-500" />

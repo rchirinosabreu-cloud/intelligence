@@ -1,8 +1,6 @@
 
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
-
-dotenv.config();
 
 const colors = {
     reset: "\x1b[0m",
