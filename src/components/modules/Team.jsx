@@ -12,19 +12,9 @@ export default function Team() {
 
   // Modal Form State
   const [name, setName] = useState('');
-  const [role, setRole] = useState('Diseñador');
+  const [role, setRole] = useState('');
   const [email, setEmail] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
-
-  const roles = [
-    "Director",
-    "Project Manager",
-    "Diseñador",
-    "Copywriter",
-    "Editor de Video",
-    "Ejecutivo de Cuentas",
-    "Otro"
-  ];
 
   const fetchTeam = async () => {
     try {
@@ -56,7 +46,7 @@ export default function Team() {
     } else {
       setEditingMember(null);
       setName('');
-      setRole('Diseñador');
+      setRole('');
       setEmail('');
       setAvatarUrl('');
     }
@@ -130,7 +120,7 @@ export default function Team() {
 
       {loading ? (
         <div className="flex justify-center items-center h-64">
-          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -212,23 +202,21 @@ export default function Team() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                 required
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-zinc-400 mb-1">Rol</label>
-              <select
+              <input
+                type="text"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                placeholder="Ej. Desarrollador, Diseñador, Project Manager"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                 required
-              >
-                {roles.map(r => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
+              />
             </div>
 
             <div>
@@ -237,7 +225,7 @@ export default function Team() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
               />
             </div>
 
@@ -248,7 +236,7 @@ export default function Team() {
                 value={avatarUrl}
                 onChange={(e) => setAvatarUrl(e.target.value)}
                 placeholder="https://..."
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
               />
             </div>
 
