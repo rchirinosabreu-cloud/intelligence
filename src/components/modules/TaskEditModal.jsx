@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
+import { cn } from '@/lib/utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 const STRICT_RESPONSIBLES = ['Claudia', 'Helen', 'Rodny', 'Jarlan', 'Francisco', 'Camila', 'Elisa', 'Melissa'];
 
@@ -85,24 +93,19 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
         }
     };
 
-    if (!isOpen) return null;
-
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={(e) => { if(e.target === e.currentTarget) onClose() }}>
-            <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/50">
-                    <div>
-                        <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Editar Tarea</h2>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+        <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-lg p-0 shadow-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden gap-0">
+                <DialogHeader className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/50">
+                    <DialogTitle className="text-lg font-semibold text-zinc-900 dark:text-white m-0">
+                        Editar Tarea
+                    </DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Formulario para editar detalles de la tarea existente.
+                    </DialogDescription>
+                </DialogHeader>
 
-                <form onSubmit={handleEditTask} className="p-6 space-y-4">
+                <form onSubmit={handleEditTask} className="p-6 space-y-4 pt-4">
                     <div>
                         <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Título de la tarea</label>
                         <input
@@ -196,8 +199,8 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 };
 

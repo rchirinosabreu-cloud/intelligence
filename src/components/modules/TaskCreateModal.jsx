@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
+import { cn } from '@/lib/utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 const STRICT_RESPONSIBLES = ['Claudia', 'Helen', 'Rodny', 'Jarlan', 'Francisco', 'Camila', 'Elisa', 'Melissa'];
 
@@ -78,17 +86,15 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
         }
     };
 
-    if (!isOpen) return null;
-
     return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-md p-6 shadow-xl border border-zinc-200 dark:border-zinc-800">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Nueva Tarea</h3>
-                    <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+        <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-md p-6 shadow-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                <DialogHeader className="mb-4">
+                    <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-white">Nueva Tarea</DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Formulario para crear una nueva tarea en el sistema.
+                    </DialogDescription>
+                </DialogHeader>
                 <form onSubmit={handleCreateTask} className="space-y-4">
                     <div>
                         <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Título de la Tarea</label>
@@ -152,7 +158,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                             placeholder="Detalles adicionales..."
                         />
                     </div>
-                    <div className="flex justify-end gap-2 mt-6">
+                    <div className="flex justify-end gap-2 mt-6 pt-2 border-t border-zinc-100 dark:border-zinc-800">
                         <button
                             type="button"
                             onClick={onClose}
@@ -163,15 +169,15 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                             Crear Tarea
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 };
 
