@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Flame, Maximize, X, Send, Loader2, ArrowRight } from 'lucide-react';
+import { Flame, Maximize, X, Send, Loader2, ArrowRight, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import SlideOver from '@/components/ui/SlideOver';
@@ -158,8 +158,8 @@ const CampfireWidget = ({ clientId }) => {
             <Card className="w-full flex flex-col h-full min-h-[300px] p-6 relative group overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
                 <div className="flex justify-between items-center mb-4">
                     <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-orange-500/10 rounded-lg">
-                            <Flame className="w-4 h-4 text-orange-500 fill-orange-500" />
+                        <div className="p-1.5 bg-primary/10 rounded-lg">
+                            <MessageSquare className="w-4 h-4 text-primary" />
                         </div>
                         <h3 className="font-semibold text-zinc-900 dark:text-white">Chat de Equipo</h3>
                     </div>
@@ -218,8 +218,8 @@ const CampfireWidget = ({ clientId }) => {
                 onOpenChange={setIsModalOpen}
                 title="Chat de Equipo"
                 description="Chat operativo del equipo"
-                icon={<Flame className="w-5 h-5 text-orange-500 fill-orange-500" />}
-                iconBgColor="bg-orange-500/10"
+                icon={<MessageSquare className="w-5 h-5 text-primary fill-primary" />}
+                iconBgColor="bg-primary/10"
             >
                 {/* Messages List (Scrollable) */}
                 <div
@@ -300,7 +300,7 @@ const CampfireWidget = ({ clientId }) => {
                         <button
                             onClick={handleSendMessage}
                             disabled={!content.trim() || !authorId || isSubmitting}
-                            className="absolute right-2 bottom-2 p-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-lg text-white transition-colors h-8 w-8 flex items-center justify-center shadow-sm"
+                            className="absolute right-2 bottom-2 p-1.5 bg-primary hover:bg-primary/90 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-lg text-primary-foreground transition-colors h-8 w-8 flex items-center justify-center shadow-sm"
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4" />}
                         </button>

@@ -210,7 +210,7 @@ const StudioBroadcastWidget = () => {
                         <button
                             onClick={handleAdd}
                             disabled={!text.trim() || isSubmitting}
-                            className="absolute right-1 top-1 p-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-lg text-white transition-colors h-7 w-7 flex items-center justify-center"
+                            className="absolute right-1 top-1 p-1.5 bg-primary hover:bg-indigo-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-lg text-white transition-colors h-7 w-7 flex items-center justify-center"
                         >
                             {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin"/> : <Send className="w-3 h-3" />}
                         </button>

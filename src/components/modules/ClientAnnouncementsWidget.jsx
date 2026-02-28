@@ -219,7 +219,7 @@ const ClientAnnouncementsWidget = ({ clientId }) => {
                                     <button
                                         onClick={handleAdd}
                                         disabled={!text.trim() || isSubmitting}
-                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-lg text-white text-xs font-bold transition-all flex items-center gap-2"
+                                        className="px-4 py-2 bg-primary hover:bg-indigo-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-lg text-white text-xs font-bold transition-all flex items-center gap-2"
                                     >
                                         {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin"/> : <Send className="w-3 h-3" />}
                                         PUBLICAR

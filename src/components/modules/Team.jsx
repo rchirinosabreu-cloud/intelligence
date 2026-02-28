@@ -121,7 +121,7 @@ export default function Team() {
         </div>
         <button
           onClick={() => handleOpenModal()}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl flex items-center transition-colors"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm px-4 py-2 rounded-xl flex items-center transition-colors"
         >
           <Plus size={18} className="mr-2" />
           Añadir Miembro
@@ -146,7 +146,7 @@ export default function Team() {
               <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-2">
                 <button
                   onClick={() => handleOpenModal(member)}
-                  className="p-1.5 bg-zinc-800 rounded-lg hover:bg-blue-600 transition-colors text-zinc-300 hover:text-white"
+                  className="p-1.5 bg-zinc-800 rounded-lg hover:bg-primary transition-colors text-zinc-300 hover:text-white"
                   title="Editar"
                 >
                   <Edit2 size={16} />
@@ -262,7 +262,7 @@ export default function Team() {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+                className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm rounded-lg transition-colors font-medium"
               >
                 Guardar
               </button>
