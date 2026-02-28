@@ -35,7 +35,7 @@ const ClientTasksWidget = ({ clientId }) => {
         try {
             setLoading(true);
             const baseUrl = getApiBaseUrl();
-            const res = await fetch(`${baseUrl}/api/db/clients/${clientId}/tasks`);
+            const res = await fetch(`${baseUrl}/api/tasks?clientId=${clientId}`);
             if (res.ok) {
                 const data = await res.json();
                 setTasks(data);
@@ -56,13 +56,15 @@ const ClientTasksWidget = ({ clientId }) => {
             try {
                 setIsSubmitting(true);
                 const baseUrl = getApiBaseUrl();
-                const res = await fetch(`${baseUrl}/api/db/clients/${clientId}/tasks`, {
+                const res = await fetch(`${baseUrl}/api/tasks`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        text: newTask,
+                        title: newTask,
                         dueDate: newDueDate || null,
-                        assignee: newAssignee || null
+                        assignee: newAssignee || null,
+                        clientId,
+                        status: 'Pendiente'
                     })
                 });
 
@@ -84,14 +86,14 @@ const ClientTasksWidget = ({ clientId }) => {
         try {
             // Optimistic update
             setTasks(prev => prev.map(t =>
-                t.id === task.id ? { ...t, completed: !t.completed } : t
+                t.id === task.id ? { ...t, status: t.status === 'Realizado' ? 'Pendiente' : 'Realizado' } : t
             ));
 
             const baseUrl = getApiBaseUrl();
-            await fetch(`${baseUrl}/api/db/tasks/${task.id}`, {
+            await fetch(`${baseUrl}/api/tasks/${task.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ completed: !task.completed })
+                body: JSON.stringify({ status: task.status === 'Realizado' ? 'Pendiente' : 'Realizado' })
             });
         } catch (error) {
             console.error("Error toggling task:", error);
@@ -104,7 +106,7 @@ const ClientTasksWidget = ({ clientId }) => {
         if (!confirm("¿Eliminar tarea?")) return;
         try {
              const baseUrl = getApiBaseUrl();
-             const res = await fetch(`${baseUrl}/api/db/tasks/${taskId}`, {
+             const res = await fetch(`${baseUrl}/api/tasks/${taskId}`, {
                  method: 'DELETE'
              });
 
@@ -118,7 +120,7 @@ const ClientTasksWidget = ({ clientId }) => {
         }
     };
 
-    const remaining = tasks.filter(t => !t.completed).length;
+    const remaining = tasks.filter(t => t.status !== 'Realizado').length;
 
     // Helper to get assignee details
     const getAssigneeDetails = (name) => {
@@ -213,7 +215,7 @@ const ClientTasksWidget = ({ clientId }) => {
                 ) : (
                     tasks.map((task) => {
                         const assignee = task.assignee ? getAssigneeDetails(task.assignee) : null;
-                        const overdue = !task.completed && isOverdue(task.dueDate);
+                        const overdue = task.status !== 'Realizado' && isOverdue(task.dueDate);
 
                         return (
                             <div
@@ -221,24 +223,24 @@ const ClientTasksWidget = ({ clientId }) => {
                                 onClick={() => handleToggleTask(task)}
                                 className={cn(
                                     "flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer group select-none relative",
-                                    task.completed
+                                    task.status === 'Realizado'
                                         ? "bg-zinc-50/50 dark:bg-zinc-900/20 border-transparent opacity-60 hover:opacity-80"
                                         : "bg-white dark:bg-zinc-800/50 border-zinc-100 dark:border-zinc-800 hover:border-blue-200 dark:hover:border-blue-900/30 hover:shadow-sm"
                                 )}
                             >
                                 <div className={cn(
                                     "transition-colors mt-0.5",
-                                    task.completed ? "text-blue-500" : "text-zinc-300 group-hover:text-blue-400"
+                                    task.status === 'Realizado' ? "text-blue-500" : "text-zinc-300 group-hover:text-blue-400"
                                 )}>
-                                    {task.completed ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
+                                    {task.status === 'Realizado' ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
                                 </div>
 
                                 <div className="flex-1 min-w-0">
                                     <span className={cn(
                                         "text-sm font-medium transition-all block mb-1.5",
-                                        task.completed ? "text-zinc-400 line-through decoration-zinc-300" : "text-zinc-700 dark:text-zinc-200"
+                                        task.status === 'Realizado' ? "text-zinc-400 line-through decoration-zinc-300" : "text-zinc-700 dark:text-zinc-200"
                                     )}>
-                                        {task.text}
+                                        {task.title}
                                     </span>
 
                                     {/* Metadata Row */}
@@ -246,7 +248,7 @@ const ClientTasksWidget = ({ clientId }) => {
                                         {task.dueDate && (
                                             <div className={cn(
                                                 "flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded-md font-medium border",
-                                                task.completed
+                                                task.status === 'Realizado'
                                                     ? "bg-zinc-100 text-zinc-400 border-zinc-200"
                                                     : overdue
                                                         ? "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:border-red-900/30 dark:text-red-400"

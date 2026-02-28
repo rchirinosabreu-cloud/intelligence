@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { motion } from 'framer-motion';
-import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2, AlertTriangle, AlertOctagon } from 'lucide-react';
+import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2, AlertTriangle, AlertOctagon, MessageSquare, Edit2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useToast } from '@/components/ui/use-toast';
@@ -108,6 +108,8 @@ const getDaysOverdue = (dateStr) => {
 
 // --- STYLES ---
 
+const STRICT_RESPONSIBLES = ['Claudia', 'Helen', 'Rodny', 'Jarlan', 'Francisco', 'Camila', 'Elisa', 'Melissa'];
+
 const CLIENT_COLORS = {
     "SunPartners": "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200 dark:border-orange-800",
     "TechFlow": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800",
@@ -142,8 +144,51 @@ const NativeTasks = () => {
 
   const [clientsList, setClientsList] = useState([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const [editFormData, setEditFormData] = useState({});
   const [newTaskData, setNewTaskData] = useState({ title: '', clientId: '', assignee: '', dueDate: '', comments: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleEditTask = async (e) => {
+      e.preventDefault();
+      setIsSubmitting(true);
+      try {
+          const baseUrl = getApiBaseUrl();
+          // Parse DD-MM-YYYY to YYYY-MM-DD ISO string if needed
+          let isoDate = null;
+          if (editFormData.fecha_entrega) {
+              const parts = editFormData.fecha_entrega.split('-');
+              if (parts.length === 3 && parts[0].length === 2) {
+                 isoDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).toISOString();
+              } else {
+                 isoDate = new Date(editFormData.fecha_entrega).toISOString();
+              }
+          }
+          const res = await fetch(`${baseUrl}/api/tasks/${editingTask.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  title: editFormData.pendiente,
+                  clientId: editFormData.clientId,
+                  assignee: editFormData.responsable_name,
+                  dueDate: isoDate,
+                  comments: editFormData.comentarios,
+                  status: editFormData.estado
+              })
+          });
+          if (res.ok) {
+              setEditingTask(null);
+              fetchTasks();
+              toast({ title: 'Tarea actualizada', description: 'Los cambios se guardaron correctamente.' });
+          } else { throw new Error('Error updating task'); }
+      } catch (err) {
+          console.error(err);
+          toast({ title: 'Error', description: 'No se pudo actualizar la tarea.', variant: 'destructive' });
+      } finally {
+          setIsSubmitting(false);
+      }
+  };
+
 
   const fetchTasks = async () => {
       try {
@@ -574,13 +619,16 @@ const NativeTasks = () => {
                       <div className="grid grid-cols-2 gap-4">
                           <div>
                               <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Responsable</label>
-                              <input
-                                  type="text"
+                              <select
                                   value={newTaskData.assignee}
                                   onChange={e => setNewTaskData({...newTaskData, assignee: e.target.value})}
                                   className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50 text-zinc-900 dark:text-white"
-                                  placeholder="Nombre..."
-                              />
+                              >
+                                  <option value="">Seleccionar...</option>
+                                  {STRICT_RESPONSIBLES.map(r => (
+                                      <option key={r} value={r}>{r}</option>
+                                  ))}
+                              </select>
                           </div>
                           <div>
                               <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Fecha Límite</label>
@@ -623,6 +671,122 @@ const NativeTasks = () => {
           </div>
       )}
 
+
+      {/* Edit Modal */}
+      {editingTask && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={(e) => { if(e.target === e.currentTarget) setEditingTask(null) }}>
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/50">
+                      <div>
+                          <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Editar Tarea</h2>
+                      </div>
+                      <button
+                          onClick={() => setEditingTask(null)}
+                          className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                      >
+                          <X className="w-5 h-5" />
+                      </button>
+                  </div>
+
+                  <form onSubmit={handleEditTask} className="p-6 space-y-4">
+                      <div>
+                          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Título de la tarea</label>
+                          <input
+                              type="text"
+                              required
+                              value={editFormData.pendiente || ''}
+                              onChange={e => setEditFormData({...editFormData, pendiente: e.target.value})}
+                              className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-zinc-900 dark:text-white"
+                          />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Cliente</label>
+                              <select
+                                  required
+                                  value={editFormData.clientId || ''}
+                                  onChange={e => setEditFormData({...editFormData, clientId: e.target.value})}
+                                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-zinc-900 dark:text-white"
+                              >
+                                  <option value="">Selecciona un cliente...</option>
+                                  {clientsList.map(c => (
+                                      <option key={c.id} value={c.id}>{c.name}</option>
+                                  ))}
+                              </select>
+                          </div>
+                          <div>
+                              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Responsable</label>
+                              <select
+                                  value={editFormData.responsable_name || ''}
+                                  onChange={e => setEditFormData({...editFormData, responsable_name: e.target.value})}
+                                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-zinc-900 dark:text-white"
+                              >
+                                  <option value="">Seleccionar...</option>
+                                  {STRICT_RESPONSIBLES.map(r => (
+                                      <option key={r} value={r}>{r}</option>
+                                  ))}
+                              </select>
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Estado</label>
+                              <select
+                                  value={editFormData.estado || 'Pendiente'}
+                                  onChange={e => setEditFormData({...editFormData, estado: e.target.value})}
+                                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-zinc-900 dark:text-white"
+                              >
+                                  <option value="Pendiente">Pendiente</option>
+                                  <option value="En proceso">En proceso</option>
+                                  <option value="Realizado">Realizado</option>
+                              </select>
+                          </div>
+                          <div>
+                              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Fecha Límite</label>
+                              <input
+                                  type="date"
+                                  value={editFormData.fecha_entrega || ''}
+                                  onChange={e => setEditFormData({...editFormData, fecha_entrega: e.target.value})}
+                                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-zinc-900 dark:text-white"
+                              />
+                          </div>
+                      </div>
+
+                      <div>
+                          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Comentarios</label>
+                          <textarea
+                              value={editFormData.comentarios || ''}
+                              onChange={e => setEditFormData({...editFormData, comentarios: e.target.value})}
+                              className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-zinc-900 dark:text-white resize-none h-24"
+                              placeholder="Detalles adicionales..."
+                          />
+                      </div>
+
+                      <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                          <button
+                              type="button"
+                              onClick={() => setEditingTask(null)}
+                              className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                          >
+                              Cancelar
+                          </button>
+                          <button
+                              type="submit"
+                              disabled={isSubmitting}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
+                          >
+                              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                              Guardar Cambios
+                          </button>
+                      </div>
+                  </form>
+              </div>
+          </div>
+      )}
+
+
       {/* Kanban Board */}
       <DragDropContext onDragEnd={onDragEnd}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 min-h-[500px]">
@@ -655,7 +819,21 @@ const NativeTasks = () => {
                                     )}
                                 >
                                     {columnTasks.map((task, index) => (
-                                        <TaskCard key={String(task.id)} task={task} index={index} />
+                                        <TaskCard key={String(task.id)} task={task} index={index} onClick={(t) => {
+                                            const client = clientsList.find(c => c.name === t.cliente);
+                                            setEditingTask(t);
+                                            // Ensure date format is YYYY-MM-DD for input type="date"
+                                            let formattedDate = '';
+                                            if (t.fecha_entrega) {
+                                                const parts = t.fecha_entrega.split('-');
+                                                if (parts.length === 3) formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                                            }
+                                            setEditFormData({
+                                                ...t,
+                                                clientId: client ? client.id : '',
+                                                fecha_entrega: formattedDate
+                                            });
+                                        }} />
                                     ))}
                                     {provided.placeholder}
                                     {columnTasks.length === 0 && !snapshot.isDraggingOver && (
@@ -675,7 +853,7 @@ const NativeTasks = () => {
   );
 };
 
-const TaskCard = ({ task, index }) => {
+const TaskCard = ({ task, index, onClick }) => {
     // Overdue Logic for Style
     const isDone = getColumnId(task.estado) === 'realizado';
     const overdue = !isDone && isOverdue(task.fecha_entrega);
@@ -694,7 +872,8 @@ const TaskCard = ({ task, index }) => {
                     ref={provided.innerRef}
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
-                    className="mb-3"
+                    className="mb-3 cursor-pointer group"
+                    onClick={() => onClick(task)}
                     // Important: Only pass style if provided.draggableProps.style exists
                     style={provided.draggableProps.style}
                 >
