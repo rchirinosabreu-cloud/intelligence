@@ -3,17 +3,17 @@ import Sidebar from './Sidebar';
 
 const AppLayout = ({ children }) => {
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-indigo-500/20 overflow-hidden relative transition-colors duration-300">
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-primary/20 overflow-hidden relative transition-colors duration-300 font-sans">
       {/* Ambient Glow Background - Fixed, z-0 */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-          {/* Top Left Orb - Indigo */}
+          {/* Top Left Orb - Primary */}
           <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] rounded-full blur-[140px] opacity-40 animate-pulse-slow
-            bg-indigo-300/30 mix-blend-multiply dark:bg-indigo-500/10 dark:mix-blend-screen"
+            bg-primary/30 mix-blend-multiply dark:bg-primary/10 dark:mix-blend-screen"
           />
 
-          {/* Bottom Right Orb - Violet */}
+          {/* Bottom Right Orb - Primary */}
           <div className="absolute bottom-[-20%] right-[-10%] w-[800px] h-[800px] rounded-full blur-[140px] opacity-40 animate-pulse-slow delay-1000
-            bg-violet-300/30 mix-blend-multiply dark:bg-violet-600/10 dark:mix-blend-screen"
+            bg-primary/20 mix-blend-multiply dark:bg-primary/10 dark:mix-blend-screen"
           />
 
           {/* Center Orb (Optional, smaller) - Fuchsia */}

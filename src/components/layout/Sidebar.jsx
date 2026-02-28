@@ -48,7 +48,7 @@ const Sidebar = () => {
               className={({ isActive }) => cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group relative overflow-hidden border",
                 isActive
-                  ? "bg-indigo-50/50 text-indigo-700 border-indigo-100/50 shadow-sm dark:text-white dark:bg-white/10 dark:border-white/10 dark:shadow-sm backdrop-blur-md"
+                  ? "bg-primary/10 text-primary border-primary/20 shadow-sm dark:text-white dark:bg-white/10 dark:border-white/10 dark:shadow-sm backdrop-blur-md"
                   : "text-zinc-500 hover:text-zinc-900 hover:bg-white/40 border-transparent dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-white/5 dark:hover:border-white/5"
               )}
             >
@@ -57,7 +57,7 @@ const Sidebar = () => {
                   {isActive && (
                     <motion.div
                       layoutId="activeTab"
-                      className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-violet-500/5 dark:from-indigo-500/10 dark:to-violet-500/5 rounded-xl opacity-100"
+                      className="absolute inset-0 bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5 rounded-xl opacity-100"
                       initial={false}
                       transition={{ type: "spring", stiffness: 500, damping: 30 }}
                     />
@@ -67,14 +67,14 @@ const Sidebar = () => {
                     <Icon className={cn(
                       "w-5 h-5 transition-colors duration-300",
                       isActive
-                        ? "text-indigo-600 dark:text-indigo-400 drop-shadow-sm dark:drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]"
+                        ? "text-primary dark:text-primary-foreground drop-shadow-sm"
                         : "text-zinc-400 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-300"
                     )} />
                     {item.label}
                   </span>
 
                   {isActive && (
-                    <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)] dark:shadow-[0_0_8px_rgba(99,102,241,0.8)] animate-pulse" />
+                    <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)] animate-pulse" />
                   )}
                 </>
               )}
@@ -91,7 +91,7 @@ const Sidebar = () => {
               <User className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
             </div>
             <div className="flex flex-col text-left">
-              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-200 group-hover:text-indigo-600 dark:group-hover:text-white transition-colors">Admin User</span>
+              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-200 group-hover:text-primary dark:group-hover:text-white transition-colors">Admin User</span>
               <span className="text-xs text-zinc-500 dark:text-zinc-500 group-hover:text-zinc-600 dark:group-hover:text-zinc-400 transition-colors">Director</span>
             </div>
           </div>
@@ -102,7 +102,7 @@ const Sidebar = () => {
               e.stopPropagation();
               toggleTheme();
             }}
-            className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-500 hover:text-indigo-600 dark:hover:bg-white/10 dark:text-zinc-500 dark:hover:text-zinc-300 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-500 hover:text-primary dark:hover:bg-white/10 dark:text-zinc-500 dark:hover:text-zinc-300 transition-colors"
           >
              {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
