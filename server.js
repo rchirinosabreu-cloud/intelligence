@@ -15,6 +15,7 @@ import { getClientAnnouncements, createClientAnnouncement } from './src/services
 import { getCampfireMessages, createCampfireMessage } from './src/services/campfireService.js';
 import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
 import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask } from './src/services/nativeTaskService.js';
+import teamRouter from './src/routes/api/team.js';
 
 dotenv.config();
 
@@ -1352,6 +1353,28 @@ app.post('/api/db/clients', async (req, res) => {
     }
 });
 
+// Handle PATCH /api/clients/:id (Update Client Name/Slug)
+app.patch('/api/clients/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, slug } = req.body;
+        log('API', `/api/clients/${id} (PATCH) called`);
+
+        // Dynamic import since we're in top-level app logic
+        const { default: prisma } = await import('./src/lib/prisma.js');
+
+        const updatedClient = await prisma.client.update({
+            where: { id },
+            data: { name, slug }
+        });
+
+        res.json(updatedClient);
+    } catch (error) {
+        logError('API', `/api/clients/${req.params.id} (PATCH) error`, error);
+        res.status(500).json({ error: "Failed to update client" });
+    }
+});
+
 // --- NATIVE TASKS ENDPOINTS (Fase 1 Prisma Kanban) ---
 
 app.get('/api/tasks', async (req, res) => {
@@ -1423,10 +1446,10 @@ app.post('/api/db/clients/:clientId/tasks', async (req, res) => {
     try {
         const { clientId } = req.params;
         console.log(`[API] Creating task for client: ${clientId}`);
-        const { text, dueDate, assignee } = req.body;
+        const { text, dueDate, assigneeId } = req.body;
         if (!text) return res.status(400).json({ error: "Missing text" });
 
-        const task = await createClientTask({ clientId, text, dueDate, assignee });
+        const task = await createClientTask({ clientId, text, dueDate, assigneeId });
         res.json(task);
     } catch (error) {
         console.error("Error creating task:", error);
@@ -1437,7 +1460,7 @@ app.post('/api/db/clients/:clientId/tasks', async (req, res) => {
 app.patch('/api/db/tasks/:taskId', async (req, res) => {
     try {
         const { taskId } = req.params;
-        // Pass the entire body to support updating multiple fields (completed, dueDate, assignee)
+        // Pass the entire body to support updating multiple fields (completed, dueDate, assigneeId)
         const task = await updateClientTaskStatus(taskId, req.body);
         res.json(task);
     } catch (error) {
@@ -1517,6 +1540,9 @@ const handleClientsHealthRequest = async (req, res, routeLabel) => {
         });
     }
 };
+
+// --- Team Management Endpoints ---
+app.use('/api/team', teamRouter);
 
 // Handle GET /api/clients (Health Indicators)
 app.get('/api/clients', async (req, res) => handleClientsHealthRequest(req, res, '/api/clients'));
@@ -1621,15 +1647,15 @@ app.get('/api/clients/:clientId/campfire', async (req, res) => {
 
 app.post('/api/clients/:clientId/campfire', async (req, res) => {
     const { clientId } = req.params;
-    const { content, author } = req.body;
+    const { content, authorId } = req.body;
 
-    if (!content || !author) {
-        return res.status(400).json({ error: "Missing content or author" });
+    if (!content || !authorId) {
+        return res.status(400).json({ error: "Missing content or authorId" });
     }
 
     try {
-        log('API', `Creating campfire message for client: ${clientId} by ${author}`);
-        const message = await createCampfireMessage({ clientId, content, author });
+        log('API', `Creating campfire message for client: ${clientId} by teamMember: ${authorId}`);
+        const message = await createCampfireMessage({ clientId, content, authorId });
         res.json(message);
     } catch (error) {
         logError('API', "Failed to create campfire message", error);

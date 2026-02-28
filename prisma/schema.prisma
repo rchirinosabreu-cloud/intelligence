@@ -26,16 +26,34 @@ model Client {
   nativeTasks Task[]
 }
 
+// Miembros del Equipo de la Agencia
+model TeamMember {
+  id        String   @id @default(uuid())
+  name      String
+  role      String   // "Director", "Project Manager", "Diseñador", "Copywriter", "Editor de Video", "Ejecutivo de Cuentas", "Otro"
+  email     String?
+  avatarUrl String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  nativeTasks     Task[]
+  clientTasks     ClientTask[]
+  campfireMessages CampfireMessage[]
+}
+
 // Fase 1: Migración del Kanban de Google Sheets a Prisma
 model Task {
   id        String   @id @default(uuid())
   title     String
   dueDate   DateTime?
-  assignee  String?
+  assigneeId String?
+  assignee  TeamMember? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
   comments  String?
   status    String   @default("Pendiente") // Pendiente, En proceso, Realizado
   clientId  String
-  client    Client   @relation(fields: [clientId], references: [id])
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -75,11 +93,12 @@ model ClientLink {
 model ClientTask {
   id        String   @id @default(uuid())
   clientId  String
-  client    Client   @relation(fields: [clientId], references: [id])
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   text      String
   completed Boolean  @default(false)
   dueDate   DateTime?
-  assignee  String?
+  assigneeId String?
+  assignee  TeamMember? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
 }
 
@@ -87,7 +106,7 @@ model ClientTask {
 model ClientAnnouncement {
   id        String   @id @default(uuid())
   clientId  String
-  client    Client   @relation(fields: [clientId], references: [id])
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   content   String   // Sin límite de caracteres
   type      String   // 'urgent', 'win', 'info'
   createdAt DateTime @default(now())
@@ -97,9 +116,10 @@ model ClientAnnouncement {
 model CampfireMessage {
   id        String   @id @default(uuid())
   clientId  String
-  client    Client   @relation(fields: [clientId], references: [id])
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   content   String
-  author    String
+  authorId  String
+  author    TeamMember @relation(fields: [authorId], references: [id])
   createdAt DateTime @default(now())
 }
 

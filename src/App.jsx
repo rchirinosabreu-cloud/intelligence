@@ -8,6 +8,7 @@ import NativeTasks from './components/modules/NativeTasks';
 import Chat from './components/modules/Chat';
 import Clients from './components/modules/Clients';
 import ClientDetailWrapper from './components/modules/ClientDetailWrapper';
+import Team from './components/modules/Team';
 import { ThemeProvider } from './context/ThemeContext';
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
 
             <Route path="/clientes" element={<Clients />} />
             <Route path="/cliente/:clientId" element={<ClientDetailWrapper />} />
+            <Route path="/equipo" element={<Team />} />
 
             {/* Fallback para rutas no encontradas - redirigir a inicio */}
             <Route path="*" element={<Navigate to="/" replace />} />

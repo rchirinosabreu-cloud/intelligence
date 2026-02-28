@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Plus, Users, Search, MoreVertical, ExternalLink, Loader2 } from 'lucide-react';
+import { Plus, Users, Search, MoreVertical, ExternalLink, Loader2, Edit } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Dialog from '@radix-ui/react-dialog';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useNavigate } from 'react-router-dom';
@@ -15,10 +16,53 @@ const Clients = () => {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Modal State
+  // Create Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newClientName, setNewClientName] = useState('');
+  const [newClientSlug, setNewClientSlug] = useState('');
+  const [isManualSlugCreate, setIsManualSlugCreate] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+
+  // Edit Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState(null);
+  const [editClientName, setEditClientName] = useState('');
+  const [editClientSlug, setEditClientSlug] = useState('');
+  const [isManualSlugEdit, setIsManualSlugEdit] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const generateSlug = (name) => {
+    return name
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove accents
+      .replace(/[^a-z0-9\s-]/g, '') // remove invalid chars
+      .trim()
+      .replace(/\s+/g, '-'); // replace spaces with dashes
+  };
+
+  // Auto-complete slug when typing name (Create)
+  useEffect(() => {
+    if (!isManualSlugCreate && newClientName) {
+      setNewClientSlug(generateSlug(newClientName));
+    } else if (!newClientName) {
+      setNewClientSlug('');
+    }
+  }, [newClientName, isManualSlugCreate]);
+
+  // Auto-complete slug when typing name (Edit)
+  useEffect(() => {
+    if (!isManualSlugEdit && editClientName) {
+      setEditClientSlug(generateSlug(editClientName));
+    }
+  }, [editClientName, isManualSlugEdit]);
+
+  const handleOpenEditModal = (client) => {
+    setEditingClient(client);
+    setEditClientName(client.name);
+    setEditClientSlug(client.slug);
+    setIsManualSlugEdit(true);
+    setIsEditModalOpen(true);
+  };
 
   const fetchClients = async () => {
     try {
@@ -41,7 +85,7 @@ const Clients = () => {
 
   const handleCreateClient = async (e) => {
     e.preventDefault();
-    if (!newClientName.trim()) return;
+    if (!newClientName.trim() || !newClientSlug.trim()) return;
 
     try {
       setIsCreating(true);
@@ -49,7 +93,7 @@ const Clients = () => {
       const res = await fetch(`${baseUrl}/api/clients`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newClientName }),
+        body: JSON.stringify({ name: newClientName, slug: newClientSlug }),
       });
 
       if (!res.ok) throw new Error('Error al crear el cliente en el servidor');
@@ -58,12 +102,44 @@ const Clients = () => {
       setClients(prev => [newClient, ...prev]);
 
       setNewClientName('');
+      setNewClientSlug('');
+      setIsManualSlugCreate(false);
       setIsModalOpen(false);
     } catch (err) {
       console.error("Error creating client:", err);
       alert(err.message);
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleUpdateClient = async (e) => {
+    e.preventDefault();
+    if (!editClientName.trim() || !editClientSlug.trim() || !editingClient) return;
+
+    try {
+      setIsUpdating(true);
+      const baseUrl = getApiBaseUrl();
+      const response = await fetch(`${baseUrl}/api/clients/${editingClient.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editClientName, slug: editClientSlug })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update client');
+      }
+
+      const updatedClient = await response.json();
+      setClients(prev => prev.map(c => c.id === updatedClient.id ? updatedClient : c));
+
+      setIsEditModalOpen(false);
+      setEditingClient(null);
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -108,21 +184,43 @@ const Clients = () => {
                 </Dialog.Title>
 
                 <form onSubmit={handleCreateClient} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                      Nombre del Cliente
-                    </label>
-                    <input
-                      type="text"
-                      value={newClientName}
-                      onChange={(e) => setNewClientName(e.target.value)}
-                      placeholder="Ej. SunPartners"
-                      className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                      autoFocus
-                    />
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                        Nombre del Cliente
+                      </label>
+                      <input
+                        type="text"
+                        value={newClientName}
+                        onChange={(e) => {
+                          setNewClientName(e.target.value);
+                          setIsManualSlugCreate(false);
+                        }}
+                        placeholder="Ej. SunPartners"
+                        className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-zinc-900 dark:text-white"
+                        autoFocus
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                        URL (Slug)
+                      </label>
+                      <input
+                        type="text"
+                        value={newClientSlug}
+                        onChange={(e) => {
+                          setNewClientSlug(e.target.value);
+                          setIsManualSlugCreate(true);
+                        }}
+                        placeholder="ej-sunpartners"
+                        className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-sm text-zinc-900 dark:text-white"
+                        required
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex justify-end gap-3 pt-2">
+                  <div className="flex justify-end gap-3 pt-4">
                     <Dialog.Close asChild>
                       <button type="button" className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 rounded-lg transition-colors font-medium text-sm">
                         Cancelar
@@ -130,7 +228,7 @@ const Clients = () => {
                     </Dialog.Close>
                     <button
                       type="submit"
-                      disabled={isCreating || !newClientName.trim()}
+                      disabled={isCreating || !newClientName.trim() || !newClientSlug.trim()}
                       className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors shadow-lg shadow-indigo-500/20 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear Espacio'}
@@ -142,6 +240,71 @@ const Clients = () => {
           </Dialog.Root>
         </div>
       </div>
+
+      {/* Edit Client Modal */}
+      <Dialog.Root open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 p-6 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95 duration-200">
+            <Dialog.Title className="text-xl font-semibold text-zinc-900 dark:text-white mb-4">
+              Editar Cliente
+            </Dialog.Title>
+
+            <form onSubmit={handleUpdateClient} className="space-y-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Nombre del Cliente
+                  </label>
+                  <input
+                    type="text"
+                    value={editClientName}
+                    onChange={(e) => {
+                      setEditClientName(e.target.value);
+                      setIsManualSlugEdit(false);
+                    }}
+                    placeholder="Ej. SunPartners"
+                    className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-zinc-900 dark:text-white"
+                    autoFocus
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    URL (Slug)
+                  </label>
+                  <input
+                    type="text"
+                    value={editClientSlug}
+                    onChange={(e) => {
+                      setEditClientSlug(e.target.value);
+                      setIsManualSlugEdit(true);
+                    }}
+                    placeholder="ej-sunpartners"
+                    className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono text-sm text-zinc-900 dark:text-white"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Dialog.Close asChild>
+                  <button type="button" className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 rounded-lg transition-colors font-medium text-sm">
+                    Cancelar
+                  </button>
+                </Dialog.Close>
+                <button
+                  type="submit"
+                  disabled={isUpdating || !editClientName.trim() || !editClientSlug.trim()}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors shadow-lg shadow-indigo-500/20 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Guardar Cambios'}
+                </button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {/* Content Grid */}
       {loading ? (
@@ -209,9 +372,35 @@ const Clients = () => {
                           <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white dark:border-zinc-900 ${client.status === 'active' ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
                       </div>
 
-                      <button className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100">
-                          <MoreVertical className="w-4 h-4" />
-                      </button>
+                      <DropdownMenu.Root>
+                        <DropdownMenu.Trigger asChild>
+                          <button
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                            className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100 focus:outline-none"
+                          >
+                              <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </DropdownMenu.Trigger>
+                        <DropdownMenu.Portal>
+                          <DropdownMenu.Content
+                            align="end"
+                            sideOffset={5}
+                            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg p-1 min-w-[150px] z-50 animate-in fade-in-80 zoom-in-95"
+                          >
+                            <DropdownMenu.Item
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleOpenEditModal(client);
+                              }}
+                              className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer outline-none"
+                            >
+                              <Edit className="w-4 h-4" />
+                              <span>Editar</span>
+                            </DropdownMenu.Item>
+                          </DropdownMenu.Content>
+                        </DropdownMenu.Portal>
+                      </DropdownMenu.Root>
                     </div>
 
                     <div className="flex-1">
