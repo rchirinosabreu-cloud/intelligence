@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Sparkles, CheckSquare, FolderOpen, Users, User, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, Sparkles, CheckSquare, FolderOpen, Users, UserCheck, User, Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
@@ -15,6 +15,7 @@ const Sidebar = () => {
     { id: 'tasks', label: 'Gestión (Sheets)', icon: CheckSquare, path: '/pendientes' },
     { id: 'tasks-native', label: 'Gestión (Nuevo)', icon: CheckSquare, path: '/pendientes-nativo' },
     { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes' },
+    { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo' },
   ];
 
   return (

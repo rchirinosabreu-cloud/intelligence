@@ -103,11 +103,6 @@ const ClientTasksWidget = ({ clientId }) => {
 
     const remaining = tasks.filter(t => t.status !== 'Realizado').length;
 
-    // Helper to get assignee details
-    const getAssigneeDetails = (name) => {
-        return TEAM.find(t => t.name === name) || { initial: name?.substring(0,2).toUpperCase(), color: 'bg-zinc-400' };
-    };
-
     // Helper to check overdue
     const isOverdue = (dateStr) => {
         if (!dateStr) return false;
@@ -154,7 +149,8 @@ const ClientTasksWidget = ({ clientId }) => {
                     </div>
                 ) : (
                     tasks.map((task) => {
-                        const assignee = task.assignee ? getAssigneeDetails(task.assignee) : null;
+                        const assigneeName = task.assignee?.name;
+                        const assigneeAvatar = task.assignee?.avatarUrl;
                         const overdue = task.status !== 'Realizado' && isOverdue(task.dueDate);
 
                         return (
@@ -202,16 +198,15 @@ const ClientTasksWidget = ({ clientId }) => {
                                             </div>
                                         )}
 
-                                        {assignee && (
-                                            <div className="flex items-center gap-1.5" title={`Asignado a: ${task.assignee}`}>
-                                                <div className={cn(
-                                                    "w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white",
-                                                    assignee.color
-                                                )}>
-                                                    {assignee.initial}
-                                                </div>
+                                        {assigneeName && (
+                                            <div className="flex items-center gap-1.5" title={`Asignado a: ${assigneeName}`}>
+                                                {assigneeAvatar ? (
+                                                    <img src={assigneeAvatar} alt={assigneeName} className="w-5 h-5 rounded-full object-cover ring-1 ring-white/10" />
+                                                ) : (
+                                                    <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(assigneeName)}&background=random&color=fff&size=64`} alt={assigneeName} className="w-5 h-5 rounded-full ring-1 ring-white/10" />
+                                                )}
                                                 <span className="text-[10px] text-zinc-500 dark:text-zinc-400 hidden sm:inline-block">
-                                                    {task.assignee}
+                                                    {assigneeName}
                                                 </span>
                                             </div>
                                         )}

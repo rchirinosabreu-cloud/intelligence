@@ -10,7 +10,8 @@ export const getTasks = async (clientId) => {
             include: {
                 client: {
                     select: { name: true, logoUrl: true }
-                }
+                },
+                assignee: true
             },
             orderBy: {
                 createdAt: 'asc' // Oldest first to match current kanban logic
@@ -23,13 +24,13 @@ export const getTasks = async (clientId) => {
     }
 };
 
-export const createTask = async ({ title, dueDate, assignee, comments, status, clientId }) => {
+export const createTask = async ({ title, dueDate, assigneeId, comments, status, clientId }) => {
     try {
         const newTask = await prisma.task.create({
             data: {
                 title,
                 dueDate: dueDate ? new Date(dueDate) : null,
-                assignee,
+                assigneeId,
                 comments,
                 status: status || 'Pendiente',
                 clientId
@@ -37,7 +38,8 @@ export const createTask = async ({ title, dueDate, assignee, comments, status, c
             include: {
                 client: {
                     select: { name: true, logoUrl: true }
-                }
+                },
+                assignee: true
             }
         });
         return newTask;
@@ -60,7 +62,8 @@ export const updateTask = async (id, data) => {
             include: {
                 client: {
                     select: { name: true, logoUrl: true }
-                }
+                },
+                assignee: true
             }
         });
         return updatedTask;

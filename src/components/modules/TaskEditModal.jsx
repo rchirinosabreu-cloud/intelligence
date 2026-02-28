@@ -11,12 +11,21 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 
-const STRICT_RESPONSIBLES = ['Claudia', 'Helen', 'Rodny', 'Jarlan', 'Francisco', 'Camila', 'Elisa', 'Melissa'];
-
 const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) => {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [teamMembers, setTeamMembers] = useState([]);
     const [editFormData, setEditFormData] = useState({});
+
+    // Fetch team members
+    useEffect(() => {
+        if (isOpen) {
+            fetch(`${getApiBaseUrl()}/api/team`)
+                .then(res => res.json())
+                .then(data => setTeamMembers(data))
+                .catch(err => console.error("Error fetching team members:", err));
+        }
+    }, [isOpen]);
 
     // Populate form data when the modal opens or taskData changes
     useEffect(() => {
@@ -44,7 +53,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 id: taskData.id,
                 pendiente: taskData.pendiente || taskData.title || '',
                 clientId: cId,
-                responsable_name: taskData.responsable_name || taskData.assignee || '',
+                responsable_name: taskData.assigneeId || taskData.responsable_name || taskData.assignee || '',
                 estado: taskData.estado || taskData.status || 'Pendiente',
                 fecha_entrega: formattedDate,
                 comentarios: taskData.comentarios || taskData.comments || ''
@@ -73,7 +82,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 body: JSON.stringify({
                     title: editFormData.pendiente,
                     clientId: editFormData.clientId,
-                    assignee: editFormData.responsable_name,
+                    assigneeId: editFormData.responsable_name || null,
                     dueDate: isoDate,
                     comments: editFormData.comentarios,
                     status: editFormData.estado
@@ -139,9 +148,9 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                                 onChange={e => setEditFormData({...editFormData, responsable_name: e.target.value})}
                                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-zinc-900 dark:text-white"
                             >
-                                <option value="">Seleccionar...</option>
-                                {STRICT_RESPONSIBLES.map(r => (
-                                    <option key={r} value={r}>{r}</option>
+                                <option value="">Sin Asignar</option>
+                                {teamMembers.map(member => (
+                                    <option key={member.id} value={member.id}>{member.name}</option>
                                 ))}
                             </select>
                         </div>

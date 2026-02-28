@@ -11,18 +11,27 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 
-const STRICT_RESPONSIBLES = ['Claudia', 'Helen', 'Rodny', 'Jarlan', 'Francisco', 'Camila', 'Elisa', 'Melissa'];
-
 const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClientId = null }) => {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [teamMembers, setTeamMembers] = useState([]);
     const [newTaskData, setNewTaskData] = useState({
         title: '',
         clientId: defaultClientId || '',
-        assignee: '',
+        assigneeId: '',
         dueDate: '',
         comments: ''
     });
+
+    // Fetch team members
+    useEffect(() => {
+        if (isOpen) {
+            fetch(`${getApiBaseUrl()}/api/team`)
+                .then(res => res.json())
+                .then(data => setTeamMembers(data))
+                .catch(err => console.error("Error fetching team members:", err));
+        }
+    }, [isOpen]);
 
     // Reset form when opened with new defaultClientId
     useEffect(() => {
@@ -30,7 +39,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
             setNewTaskData({
                 title: '',
                 clientId: defaultClientId || '',
-                assignee: '',
+                assigneeId: '',
                 dueDate: '',
                 comments: ''
             });
@@ -67,7 +76,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                 body: JSON.stringify({
                     title: newTaskData.title,
                     clientId: newTaskData.clientId,
-                    assignee: newTaskData.assignee,
+                    assigneeId: newTaskData.assigneeId || null,
                     dueDate: isoDate,
                     comments: newTaskData.comments,
                     status: 'Pendiente'
@@ -129,13 +138,13 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                         <div>
                             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Responsable</label>
                             <select
-                                value={newTaskData.assignee}
-                                onChange={e => setNewTaskData({...newTaskData, assignee: e.target.value})}
+                                value={newTaskData.assigneeId}
+                                onChange={e => setNewTaskData({...newTaskData, assigneeId: e.target.value})}
                                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50 text-zinc-900 dark:text-white"
                             >
-                                <option value="">Seleccionar...</option>
-                                {STRICT_RESPONSIBLES.map(r => (
-                                    <option key={r} value={r}>{r}</option>
+                                <option value="">Sin Asignar</option>
+                                {teamMembers.map(member => (
+                                    <option key={member.id} value={member.id}>{member.name}</option>
                                 ))}
                             </select>
                         </div>

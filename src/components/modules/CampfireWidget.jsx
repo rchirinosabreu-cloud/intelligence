@@ -6,27 +6,24 @@ import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import SlideOver from '@/components/ui/SlideOver';
 
-// Team Configuration
-const TEAM = [
-    { name: 'Claudia', initial: 'CL', color: 'bg-red-500' },
-    { name: 'Helen', initial: 'HE', color: 'bg-blue-500' },
-    { name: 'Rodny', initial: 'RO', color: 'bg-green-500' },
-    { name: 'Jarlan', initial: 'JA', color: 'bg-amber-500' },
-    { name: 'Francisco', initial: 'FR', color: 'bg-purple-500' },
-    { name: 'Camila', initial: 'CA', color: 'bg-pink-500' },
-    { name: 'Elisa', initial: 'EL', color: 'bg-rose-500' },
-    { name: 'Melissa', initial: 'ME', color: 'bg-orange-500' }
-];
-
 const CampfireWidget = ({ clientId }) => {
     const [messages, setMessages] = useState([]);
+    const [teamMembers, setTeamMembers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     // Form State
     const [content, setContent] = useState('');
-    const [author, setAuthor] = useState('');
+    const [authorId, setAuthorId] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Fetch Team
+    useEffect(() => {
+        fetch(`${getApiBaseUrl()}/api/team`)
+            .then(res => res.json())
+            .then(data => setTeamMembers(data))
+            .catch(err => console.error("Error fetching team:", err));
+    }, []);
 
     // Fetch Messages
     const fetchMessages = async () => {
@@ -51,7 +48,7 @@ const CampfireWidget = ({ clientId }) => {
     }, [clientId]);
 
     const handleSendMessage = async () => {
-        if (!content.trim() || !author || isSubmitting) return;
+        if (!content.trim() || !authorId || isSubmitting) return;
 
         try {
             setIsSubmitting(true);
@@ -59,7 +56,7 @@ const CampfireWidget = ({ clientId }) => {
             const res = await fetch(`${baseUrl}/api/clients/${clientId}/campfire`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content, author })
+                body: JSON.stringify({ content, authorId })
             });
 
             if (res.ok) {
@@ -180,15 +177,19 @@ const CampfireWidget = ({ clientId }) => {
                             const style = getAuthorStyle(msg.author);
                             return (
                                 <div key={msg.id} className="flex gap-3">
-                                    <div className={cn(
-                                        "w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5",
-                                        style.color
-                                    )}>
-                                        {style.initial}
-                                    </div>
+                                    {style.avatarUrl ? (
+                                        <img src={style.avatarUrl} alt={style.name} className="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5" />
+                                    ) : (
+                                        <div className={cn(
+                                            "w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5",
+                                            style.color
+                                        )}>
+                                            {style.initial}
+                                        </div>
+                                    )}
                                     <div className="min-w-0">
                                         <p className="text-xs font-bold text-zinc-900 dark:text-white mb-0.5">
-                                            {msg.author}
+                                            {style.name}
                                         </p>
                                         <p className="text-xs text-zinc-600 dark:text-zinc-300 line-clamp-2">
                                             {msg.content}
@@ -239,15 +240,19 @@ const CampfireWidget = ({ clientId }) => {
                                         const style = getAuthorStyle(msg.author);
                                         return (
                                             <div key={msg.id} className="flex gap-4 group">
-                                                <div className={cn(
-                                                    "w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm mt-1",
-                                                    style.color
-                                                )}>
-                                                    {style.initial}
-                                                </div>
+                                                {style.avatarUrl ? (
+                                                    <img src={style.avatarUrl} alt={style.name} className="w-10 h-10 rounded-full object-cover shrink-0 shadow-sm mt-1" />
+                                                ) : (
+                                                    <div className={cn(
+                                                        "w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm mt-1",
+                                                        style.color
+                                                    )}>
+                                                        {style.initial}
+                                                    </div>
+                                                )}
                                                 <div className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-2xl rounded-tl-none shadow-sm hover:shadow-md transition-shadow">
                                                     <div className="flex items-center justify-between mb-2">
-                                                        <span className="text-sm font-bold text-zinc-900 dark:text-white">{msg.author}</span>
+                                                        <span className="text-sm font-bold text-zinc-900 dark:text-white">{style.name}</span>
                                                         <span className="text-[10px] text-zinc-400 group-hover:text-zinc-500 transition-colors">
                                                             {formatTime(msg.createdAt)}
                                                         </span>
@@ -269,13 +274,13 @@ const CampfireWidget = ({ clientId }) => {
                 <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 mt-auto">
                     <div className="flex gap-2 mb-2">
                         <select
-                            value={author}
-                            onChange={(e) => setAuthor(e.target.value)}
+                            value={authorId}
+                            onChange={(e) => setAuthorId(e.target.value)}
                             className="text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-orange-500/20"
                         >
                             <option value="">Selecciona tu nombre...</option>
-                            {TEAM.map(t => (
-                                <option key={t.name} value={t.name}>{t.name}</option>
+                            {teamMembers.map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
                             ))}
                         </select>
                     </div>
@@ -294,7 +299,7 @@ const CampfireWidget = ({ clientId }) => {
                         />
                         <button
                             onClick={handleSendMessage}
-                            disabled={!content.trim() || !author || isSubmitting}
+                            disabled={!content.trim() || !authorId || isSubmitting}
                             className="absolute right-2 bottom-2 p-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-lg text-white transition-colors h-8 w-8 flex items-center justify-center shadow-sm"
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4" />}

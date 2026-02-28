@@ -6,6 +6,7 @@ export const getCampfireMessages = async (clientId) => {
     try {
         const messages = await prisma.campfireMessage.findMany({
             where: { clientId },
+            include: { author: true },
             orderBy: { createdAt: 'desc' }
         });
         return messages;
@@ -22,8 +23,9 @@ export const createCampfireMessage = async (data) => {
             data: {
                 clientId: data.clientId,
                 content: data.content,
-                author: data.author
-            }
+                authorId: data.authorId
+            },
+            include: { author: true }
         });
         return message;
     } catch (error) {

@@ -4,6 +4,7 @@ export const getClientTasks = async (clientId) => {
     try {
         const tasks = await prisma.clientTask.findMany({
             where: { clientId },
+            include: { assignee: true },
             orderBy: { createdAt: 'desc' }
         });
         return tasks;
@@ -21,8 +22,9 @@ export const createClientTask = async (data) => {
                 text: data.text,
                 completed: false,
                 dueDate: data.dueDate ? new Date(data.dueDate) : null,
-                assignee: data.assignee || null
-            }
+                assigneeId: data.assigneeId || null
+            },
+            include: { assignee: true }
         });
         return task;
     } catch (error) {
@@ -37,11 +39,12 @@ export const updateTaskStatus = async (taskId, data) => {
         const updateData = {};
         if (data.completed !== undefined) updateData.completed = data.completed;
         if (data.dueDate !== undefined) updateData.dueDate = data.dueDate ? new Date(data.dueDate) : null;
-        if (data.assignee !== undefined) updateData.assignee = data.assignee;
+        if (data.assigneeId !== undefined) updateData.assigneeId = data.assigneeId;
 
         const task = await prisma.clientTask.update({
             where: { id: taskId },
-            data: updateData
+            data: updateData,
+            include: { assignee: true }
         });
         return task;
     } catch (error) {
