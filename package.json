@@ -8,7 +8,7 @@
     "start": "node server.js",
     "dev": "vite --host :: --port 3000",
     "build": "vite build",
-    "postinstall": "npx prisma generate",
+    "postinstall": "prisma generate",
     "preview": "vite preview --host :: --port 3000",
     "lint": "eslint . --quiet",
     "lint:warn": "eslint ."
