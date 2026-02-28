@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useToast } from '@/components/ui/use-toast';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import TaskCreateModal from './TaskCreateModal';
+import TaskEditModal from './TaskEditModal';
 
 // --- DATE HELPERS ---
 
@@ -145,50 +147,6 @@ const NativeTasks = () => {
   const [clientsList, setClientsList] = useState([]);
   const [isCreating, setIsCreating] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
-  const [editFormData, setEditFormData] = useState({});
-  const [newTaskData, setNewTaskData] = useState({ title: '', clientId: '', assignee: '', dueDate: '', comments: '' });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleEditTask = async (e) => {
-      e.preventDefault();
-      setIsSubmitting(true);
-      try {
-          const baseUrl = getApiBaseUrl();
-          // Parse DD-MM-YYYY to YYYY-MM-DD ISO string if needed
-          let isoDate = null;
-          if (editFormData.fecha_entrega) {
-              const parts = editFormData.fecha_entrega.split('-');
-              if (parts.length === 3 && parts[0].length === 2) {
-                 isoDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).toISOString();
-              } else {
-                 isoDate = new Date(editFormData.fecha_entrega).toISOString();
-              }
-          }
-          const res = await fetch(`${baseUrl}/api/tasks/${editingTask.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  title: editFormData.pendiente,
-                  clientId: editFormData.clientId,
-                  assignee: editFormData.responsable_name,
-                  dueDate: isoDate,
-                  comments: editFormData.comentarios,
-                  status: editFormData.estado
-              })
-          });
-          if (res.ok) {
-              setEditingTask(null);
-              fetchTasks();
-              toast({ title: 'Tarea actualizada', description: 'Los cambios se guardaron correctamente.' });
-          } else { throw new Error('Error updating task'); }
-      } catch (err) {
-          console.error(err);
-          toast({ title: 'Error', description: 'No se pudo actualizar la tarea.', variant: 'destructive' });
-      } finally {
-          setIsSubmitting(false);
-      }
-  };
-
 
   const fetchTasks = async () => {
       try {
@@ -238,64 +196,6 @@ const NativeTasks = () => {
       fetchTasks();
       fetchClients();
   }, []);
-
-  const handleCreateTask = async (e) => {
-      e.preventDefault();
-      if (!newTaskData.title || !newTaskData.clientId) return;
-
-      setIsSubmitting(true);
-      try {
-          const baseUrl = getApiBaseUrl();
-          // Date conversion: DD-MM-YYYY or DD/MM/YYYY back to ISO or YYYY-MM-DD for backend
-          let isoDate = null;
-          if (newTaskData.dueDate) {
-              // Try to parse basic formats manually
-              const parts = newTaskData.dueDate.split(/[-/]/);
-              if (parts.length === 3) {
-                  // Assuming DD-MM-YYYY
-                  const day = parseInt(parts[0], 10);
-                  const month = parseInt(parts[1], 10) - 1;
-                  let year = parseInt(parts[2], 10);
-                  if (year < 100) year += 2000;
-                  const d = new Date(year, month, day);
-                  if (!isNaN(d.getTime())) {
-                      isoDate = d.toISOString();
-                  }
-              } else {
-                  // Fallback
-                  isoDate = new Date(newTaskData.dueDate).toISOString();
-              }
-          }
-
-          // Note: the backend health endpoint returns `name` and `status` but we need `id` for `clientId`.
-          // We need to fetch clients from `/api/db/clients` instead of `/api/clients/health` to get DB ids.
-          // Wait, let's fix fetchClients to use `/api/db/clients` in NativeTasks!
-
-          const res = await fetch(`${baseUrl}/api/tasks`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  title: newTaskData.title,
-                  clientId: newTaskData.clientId,
-                  assignee: newTaskData.assignee,
-                  dueDate: isoDate,
-                  comments: newTaskData.comments,
-                  status: 'Pendiente'
-              })
-          });
-
-          if (!res.ok) throw new Error("Failed to create task");
-
-          await fetchTasks();
-          setIsCreating(false);
-          setNewTaskData({ title: '', clientId: '', assignee: '', dueDate: '', comments: '' });
-          toast({ title: "Tarea Creada", description: "La tarea se ha guardado en la base de datos." });
-      } catch (err) {
-          toast({ variant: "destructive", title: "Error", description: err.message });
-      } finally {
-          setIsSubmitting(false);
-      }
-  };
 
   // Extract unique responsibles (Names)
   const responsibles = useMemo(() => {
@@ -585,207 +485,20 @@ const NativeTasks = () => {
         </div>
       </div>
 
-      {/* MODAL CREAR TAREA */}
-      {isCreating && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-md p-6 shadow-xl border border-zinc-200 dark:border-zinc-800">
-                  <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">Nueva Tarea</h3>
-                  <form onSubmit={handleCreateTask} className="space-y-4">
-                      <div>
-                          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Título de la Tarea</label>
-                          <input
-                              type="text"
-                              required
-                              value={newTaskData.title}
-                              onChange={e => setNewTaskData({...newTaskData, title: e.target.value})}
-                              className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50 text-zinc-900 dark:text-white"
-                              placeholder="Ej: Revisión de artes"
-                          />
-                      </div>
-                      <div>
-                          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Cliente</label>
-                          <select
-                              required
-                              value={newTaskData.clientId}
-                              onChange={e => setNewTaskData({...newTaskData, clientId: e.target.value})}
-                              className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50 text-zinc-900 dark:text-white"
-                          >
-                              <option value="">Selecciona un cliente...</option>
-                              {clientsList.map(c => (
-                                  <option key={c.id} value={c.id}>{c.name}</option>
-                              ))}
-                          </select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Responsable</label>
-                              <select
-                                  value={newTaskData.assignee}
-                                  onChange={e => setNewTaskData({...newTaskData, assignee: e.target.value})}
-                                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50 text-zinc-900 dark:text-white"
-                              >
-                                  <option value="">Seleccionar...</option>
-                                  {STRICT_RESPONSIBLES.map(r => (
-                                      <option key={r} value={r}>{r}</option>
-                                  ))}
-                              </select>
-                          </div>
-                          <div>
-                              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Fecha Límite</label>
-                              <input
-                                  type="date"
-                                  value={newTaskData.dueDate}
-                                  onChange={e => setNewTaskData({...newTaskData, dueDate: e.target.value})}
-                                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50 text-zinc-900 dark:text-white"
-                              />
-                          </div>
-                      </div>
-                      <div>
-                          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Comentarios (Opcional)</label>
-                          <textarea
-                              value={newTaskData.comments}
-                              onChange={e => setNewTaskData({...newTaskData, comments: e.target.value})}
-                              className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50 text-zinc-900 dark:text-white resize-none h-20"
-                              placeholder="Detalles adicionales..."
-                          />
-                      </div>
-                      <div className="flex justify-end gap-2 mt-6">
-                          <button
-                              type="button"
-                              onClick={() => setIsCreating(false)}
-                              className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                          >
-                              Cancelar
-                          </button>
-                          <button
-                              type="submit"
-                              disabled={isSubmitting}
-                              className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                          >
-                              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                              Crear Tarea
-                          </button>
-                      </div>
-                  </form>
-              </div>
-          </div>
-      )}
-
-
-      {/* Edit Modal */}
-      {editingTask && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={(e) => { if(e.target === e.currentTarget) setEditingTask(null) }}>
-              <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                  <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/50">
-                      <div>
-                          <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Editar Tarea</h2>
-                      </div>
-                      <button
-                          onClick={() => setEditingTask(null)}
-                          className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                      >
-                          <X className="w-5 h-5" />
-                      </button>
-                  </div>
-
-                  <form onSubmit={handleEditTask} className="p-6 space-y-4">
-                      <div>
-                          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Título de la tarea</label>
-                          <input
-                              type="text"
-                              required
-                              value={editFormData.pendiente || ''}
-                              onChange={e => setEditFormData({...editFormData, pendiente: e.target.value})}
-                              className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-zinc-900 dark:text-white"
-                          />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Cliente</label>
-                              <select
-                                  required
-                                  value={editFormData.clientId || ''}
-                                  onChange={e => setEditFormData({...editFormData, clientId: e.target.value})}
-                                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-zinc-900 dark:text-white"
-                              >
-                                  <option value="">Selecciona un cliente...</option>
-                                  {clientsList.map(c => (
-                                      <option key={c.id} value={c.id}>{c.name}</option>
-                                  ))}
-                              </select>
-                          </div>
-                          <div>
-                              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Responsable</label>
-                              <select
-                                  value={editFormData.responsable_name || ''}
-                                  onChange={e => setEditFormData({...editFormData, responsable_name: e.target.value})}
-                                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-zinc-900 dark:text-white"
-                              >
-                                  <option value="">Seleccionar...</option>
-                                  {STRICT_RESPONSIBLES.map(r => (
-                                      <option key={r} value={r}>{r}</option>
-                                  ))}
-                              </select>
-                          </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Estado</label>
-                              <select
-                                  value={editFormData.estado || 'Pendiente'}
-                                  onChange={e => setEditFormData({...editFormData, estado: e.target.value})}
-                                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-zinc-900 dark:text-white"
-                              >
-                                  <option value="Pendiente">Pendiente</option>
-                                  <option value="En proceso">En proceso</option>
-                                  <option value="Realizado">Realizado</option>
-                              </select>
-                          </div>
-                          <div>
-                              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Fecha Límite</label>
-                              <input
-                                  type="date"
-                                  value={editFormData.fecha_entrega || ''}
-                                  onChange={e => setEditFormData({...editFormData, fecha_entrega: e.target.value})}
-                                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-zinc-900 dark:text-white"
-                              />
-                          </div>
-                      </div>
-
-                      <div>
-                          <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Comentarios</label>
-                          <textarea
-                              value={editFormData.comentarios || ''}
-                              onChange={e => setEditFormData({...editFormData, comentarios: e.target.value})}
-                              className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-zinc-900 dark:text-white resize-none h-24"
-                              placeholder="Detalles adicionales..."
-                          />
-                      </div>
-
-                      <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                          <button
-                              type="button"
-                              onClick={() => setEditingTask(null)}
-                              className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                          >
-                              Cancelar
-                          </button>
-                          <button
-                              type="submit"
-                              disabled={isSubmitting}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
-                          >
-                              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                              Guardar Cambios
-                          </button>
-                      </div>
-                  </form>
-              </div>
-          </div>
-      )}
-
+      {/* Modals */}
+      <TaskCreateModal
+          isOpen={isCreating}
+          onClose={() => setIsCreating(false)}
+          onSuccess={fetchTasks}
+          clientsList={clientsList}
+      />
+      <TaskEditModal
+          isOpen={!!editingTask}
+          onClose={() => setEditingTask(null)}
+          onSuccess={fetchTasks}
+          clientsList={clientsList}
+          taskData={editingTask}
+      />
 
       {/* Kanban Board */}
       <DragDropContext onDragEnd={onDragEnd}>
@@ -819,21 +532,12 @@ const NativeTasks = () => {
                                     )}
                                 >
                                     {columnTasks.map((task, index) => (
-                                        <TaskCard key={String(task.id)} task={task} index={index} onClick={(t) => {
-                                            const client = clientsList.find(c => c.name === t.cliente);
-                                            setEditingTask(t);
-                                            // Ensure date format is YYYY-MM-DD for input type="date"
-                                            let formattedDate = '';
-                                            if (t.fecha_entrega) {
-                                                const parts = t.fecha_entrega.split('-');
-                                                if (parts.length === 3) formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-                                            }
-                                            setEditFormData({
-                                                ...t,
-                                                clientId: client ? client.id : '',
-                                                fecha_entrega: formattedDate
-                                            });
-                                        }} />
+                                        <TaskCard
+                                            key={String(task.id)}
+                                            task={task}
+                                            index={index}
+                                            onClick={(t) => setEditingTask(t)}
+                                        />
                                     ))}
                                     {provided.placeholder}
                                     {columnTasks.length === 0 && !snapshot.isDraggingOver && (
@@ -915,7 +619,7 @@ const TaskCard = ({ task, index, onClick }) => {
                                     {task.pendiente}
                                 </h4>
 
-                                {/* Footer: Date & Avatar */}
+                                {/* Footer: Date & Avatar & Comments */}
                                 <div className="flex items-center justify-between mt-1 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
                                     <div className={cn(
                                         "flex items-center gap-1.5 text-xs font-medium transition-colors",
@@ -926,7 +630,12 @@ const TaskCard = ({ task, index, onClick }) => {
                                     </div>
 
                                     <div className="flex items-center gap-2">
-                                         <img
+                                        {task.comentarios && task.comentarios.trim() !== '' && (
+                                            <div className="text-zinc-400 dark:text-zinc-500 mr-1" title="Tiene comentarios">
+                                                <MessageSquare className="w-3.5 h-3.5" />
+                                            </div>
+                                        )}
+                                        <img
                                             src={task.responsable}
                                             alt={task.responsable_name}
                                             className="w-6 h-6 rounded-full ring-2 ring-white dark:ring-zinc-900"

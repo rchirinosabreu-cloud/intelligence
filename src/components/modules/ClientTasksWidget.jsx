@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
-import { CheckSquare, Plus, CheckCircle2, Circle, Calendar, User, Loader2, Trash2 } from 'lucide-react';
+import { CheckSquare, Plus, CheckCircle2, Circle, Calendar, Loader2, Trash2, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import DatePicker, { registerLocale } from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
-import { es } from 'date-fns/locale';
-
-registerLocale('es', es);
+import TaskCreateModal from './TaskCreateModal';
+import TaskEditModal from './TaskEditModal';
 
 const TEAM = [
     { name: 'Claudia', initial: 'CL', color: 'bg-pink-500' },
@@ -23,12 +20,25 @@ const TEAM = [
 const ClientTasksWidget = ({ clientId }) => {
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [newTask, setNewTask] = useState('');
 
-    // New Fields State
-    const [newDueDate, setNewDueDate] = useState(null);
-    const [newAssignee, setNewAssignee] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    // Modal state
+    const [isCreating, setIsCreating] = useState(false);
+    const [editingTask, setEditingTask] = useState(null);
+    const [clientsList, setClientsList] = useState([]); // Needed for the modal dropdowns
+
+    // Fetch clients to pass to modals
+    const fetchClients = async () => {
+        try {
+            const baseUrl = getApiBaseUrl();
+            const response = await fetch(`${baseUrl}/api/db/clients`);
+            if (response.ok) {
+                const data = await response.json();
+                setClientsList(data);
+            }
+        } catch (err) {
+            console.error("Error fetching clients:", err);
+        }
+    };
 
     const fetchTasks = async () => {
         if (!clientId) return;
@@ -49,40 +59,11 @@ const ClientTasksWidget = ({ clientId }) => {
 
     useEffect(() => {
         fetchTasks();
+        fetchClients();
     }, [clientId]);
 
-    const handleAddTask = async (e) => {
-        if (e.key === 'Enter' && newTask.trim() && !isSubmitting) {
-            try {
-                setIsSubmitting(true);
-                const baseUrl = getApiBaseUrl();
-                const res = await fetch(`${baseUrl}/api/tasks`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        title: newTask,
-                        dueDate: newDueDate || null,
-                        assignee: newAssignee || null,
-                        clientId,
-                        status: 'Pendiente'
-                    })
-                });
-
-                if (res.ok) {
-                    await fetchTasks();
-                    setNewTask('');
-                    setNewDueDate(null);
-                    setNewAssignee('');
-                }
-            } catch (error) {
-                console.error("Error adding task:", error);
-            } finally {
-                setIsSubmitting(false);
-            }
-        }
-    };
-
-    const handleToggleTask = async (task) => {
+    const handleToggleTask = async (e, task) => {
+        e.stopPropagation(); // Prevent opening edit modal
         try {
             // Optimistic update
             setTasks(prev => prev.map(t =>
@@ -152,56 +133,15 @@ const ClientTasksWidget = ({ clientId }) => {
                         <CheckSquare className="w-4 h-4 text-blue-500" />
                     </div>
                     <h3 className="font-semibold text-zinc-900 dark:text-white">Pendientes</h3>
+                    <span className="text-xs text-zinc-400 font-medium ml-2">{remaining} restantes</span>
                 </div>
-                <span className="text-xs text-zinc-400 font-medium">{remaining} restantes</span>
-            </div>
-
-            {/* Input Area */}
-            <div className="space-y-3 mb-6">
-                <div className="relative group">
-                    <Plus className="w-4 h-4 text-zinc-400 absolute left-3 top-3 group-focus-within:text-blue-500 transition-colors" />
-                    <input
-                        type="text"
-                        value={newTask}
-                        onChange={(e) => setNewTask(e.target.value)}
-                        onKeyDown={handleAddTask}
-                        placeholder="Añadir tarea..."
-                        disabled={isSubmitting}
-                        className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-zinc-400"
-                    />
-                </div>
-
-                {/* Secondary Inputs (Date & Assignee) */}
-                <div className="flex gap-2">
-                    {/* Date Picker */}
-                    <div className="relative flex-1 group">
-                        <Calendar className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5 pointer-events-none z-10" />
-                        <DatePicker
-                            selected={newDueDate}
-                            onChange={(date) => setNewDueDate(date)}
-                            dateFormat="dd MMM, yyyy"
-                            locale="es"
-                            placeholderText="Fecha de entrega"
-                            className="w-full pl-9 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                            popperClassName="z-50 shadow-lg rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
-                        />
-                    </div>
-
-                    {/* Assignee Select */}
-                    <div className="relative flex-1">
-                         <User className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5 pointer-events-none" />
-                         <select
-                            value={newAssignee}
-                            onChange={(e) => setNewAssignee(e.target.value)}
-                            className="w-full pl-9 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 appearance-none cursor-pointer"
-                         >
-                            <option value="">Asignar a...</option>
-                            {TEAM.map(member => (
-                                <option key={member.name} value={member.name}>{member.name}</option>
-                            ))}
-                         </select>
-                    </div>
-                </div>
+                <button
+                    onClick={() => setIsCreating(true)}
+                    className="flex items-center justify-center w-8 h-8 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors"
+                    title="Nueva Tarea"
+                >
+                    <Plus className="w-4 h-4" />
+                </button>
             </div>
 
             {/* Task List */}
@@ -220,7 +160,7 @@ const ClientTasksWidget = ({ clientId }) => {
                         return (
                             <div
                                 key={task.id}
-                                onClick={() => handleToggleTask(task)}
+                                onClick={() => setEditingTask(task)}
                                 className={cn(
                                     "flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer group select-none relative",
                                     task.status === 'Realizado'
@@ -228,10 +168,13 @@ const ClientTasksWidget = ({ clientId }) => {
                                         : "bg-white dark:bg-zinc-800/50 border-zinc-100 dark:border-zinc-800 hover:border-blue-200 dark:hover:border-blue-900/30 hover:shadow-sm"
                                 )}
                             >
-                                <div className={cn(
-                                    "transition-colors mt-0.5",
-                                    task.status === 'Realizado' ? "text-blue-500" : "text-zinc-300 group-hover:text-blue-400"
-                                )}>
+                                <div
+                                    className={cn(
+                                        "transition-colors mt-0.5 cursor-pointer",
+                                        task.status === 'Realizado' ? "text-blue-500" : "text-zinc-300 hover:text-blue-400"
+                                    )}
+                                    onClick={(e) => handleToggleTask(e, task)}
+                                >
                                     {task.status === 'Realizado' ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
                                 </div>
 
@@ -272,6 +215,12 @@ const ClientTasksWidget = ({ clientId }) => {
                                                 </span>
                                             </div>
                                         )}
+
+                                        {task.comments && task.comments.trim() !== '' && (
+                                            <div className="text-zinc-400 dark:text-zinc-500 ml-1" title="Tiene comentarios">
+                                                <MessageSquare className="w-3.5 h-3.5" />
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -286,6 +235,23 @@ const ClientTasksWidget = ({ clientId }) => {
                     })
                 )}
             </div>
+
+            {/* Modals */}
+            <TaskCreateModal
+                isOpen={isCreating}
+                onClose={() => setIsCreating(false)}
+                onSuccess={fetchTasks}
+                clientsList={clientsList}
+                defaultClientId={clientId}
+            />
+
+            <TaskEditModal
+                isOpen={!!editingTask}
+                onClose={() => setEditingTask(null)}
+                onSuccess={fetchTasks}
+                clientsList={clientsList}
+                taskData={editingTask}
+            />
         </Card>
     );
 };
