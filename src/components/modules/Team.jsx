@@ -103,11 +103,11 @@ export default function Team() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-6 animate-fade-in text-white font-sans">
+    <div className="w-full max-w-7xl mx-auto p-6 animate-fade-in font-sans">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-light text-white mb-2 tracking-tight">Equipo</h1>
-          <p className="text-zinc-400 font-light">Gestiona a los miembros de la agencia y sus roles.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-950 dark:text-white mb-2 font-sans">Equipo</h1>
+          <p className="text-zinc-500 dark:text-zinc-400 font-light">Gestiona a los miembros de la agencia y sus roles.</p>
         </div>
         <button
           onClick={() => handleOpenModal()}
@@ -128,25 +128,25 @@ export default function Team() {
             <div
               key={member.id}
               className={cn(
-                "bg-zinc-900/50 backdrop-blur-xl border rounded-2xl p-6 relative group transition-all",
-                member.isActive ? "border-zinc-800" : "border-red-900/50 opacity-60 grayscale"
+                "bg-white border border-slate-200 shadow-sm rounded-2xl p-6 relative group transition-all",
+                member.isActive ? "" : "border-red-300 opacity-60 grayscale"
               )}
             >
               {/* Dropdown Menu Toggle (Hover Actions for now to keep it simple without full Radix Dropdown) */}
               <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-2">
                 <button
                   onClick={() => handleOpenModal(member)}
-                  className="p-1.5 bg-zinc-800 rounded-lg hover:bg-primary transition-colors text-zinc-300 hover:text-white"
+                  className="p-1.5 bg-slate-100 rounded-lg hover:bg-primary hover:text-white transition-colors text-slate-500"
                   title="Editar"
                 >
                   <Edit2 size={16} />
                 </button>
                 <button
                   onClick={() => handleToggleActive(member)}
-                  className="p-1.5 bg-zinc-800 rounded-lg hover:bg-zinc-700 transition-colors text-zinc-300 hover:text-white"
+                  className="p-1.5 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors text-slate-500"
                   title={member.isActive ? "Desactivar" : "Reactivar"}
                 >
-                  {member.isActive ? <UserX size={16} className="text-red-400" /> : <UserCheck size={16} className="text-green-400" />}
+                  {member.isActive ? <UserX size={16} className="text-red-400 hover:text-red-600" /> : <UserCheck size={16} className="text-green-400 hover:text-green-600" />}
                 </button>
               </div>
 
@@ -154,29 +154,29 @@ export default function Team() {
                 <img
                   src={getAvatar(member)}
                   alt={member.name}
-                  className="w-16 h-16 rounded-full border-2 border-zinc-800 object-cover"
+                  className="w-16 h-16 rounded-full border-2 border-slate-200 object-cover"
                 />
                 <div>
-                  <h3 className="text-lg font-medium text-white">{member.name}</h3>
-                  <span className="text-sm px-2 py-0.5 bg-zinc-800 text-zinc-300 rounded-full inline-block mt-1">
+                  <h3 className="text-lg font-semibold text-slate-900">{member.name}</h3>
+                  <span className="text-sm px-2 py-0.5 bg-primary/10 text-primary rounded-full inline-block mt-1">
                     {member.role}
                   </span>
                   {!member.isActive && (
-                    <span className="text-xs text-red-400 block mt-2 font-medium uppercase tracking-wider">
+                    <span className="text-xs text-red-500 block mt-2 font-medium uppercase tracking-wider">
                       Inactivo
                     </span>
                   )}
                 </div>
               </div>
               {member.email && (
-                <div className="mt-4 pt-4 border-t border-zinc-800/50">
-                  <p className="text-sm text-zinc-400 truncate">{member.email}</p>
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                  <p className="text-sm text-slate-500 truncate">{member.email}</p>
                 </div>
               )}
             </div>
           ))}
           {team.length === 0 && (
-            <div className="col-span-full text-center py-12 bg-zinc-900/30 rounded-2xl border border-zinc-800/50 border-dashed">
+            <div className="col-span-full text-center py-12 bg-white rounded-2xl border border-slate-200 border-dashed shadow-sm">
               <p className="text-zinc-500">No hay miembros del equipo registrados.</p>
             </div>
           )}
