@@ -68,12 +68,19 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
             const baseUrl = getApiBaseUrl();
             let isoDate = null;
             if (editFormData.fecha_entrega) {
-                const parts = editFormData.fecha_entrega.split('-');
+                // To avoid timezone offset issues (UTC midnight shifting to previous day in UTC-5),
+                // we explicitly set the time to 12:00:00 UTC. This guarantees that when the browser
+                // parses the date back in any timezone from UTC-12 to UTC+12, it lands on the same day.
+                let cleanDate = editFormData.fecha_entrega;
+                const parts = cleanDate.split('-');
                 if (parts.length === 3 && parts[0].length === 2 && parts[2].length === 4) {
-                   isoDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).toISOString();
+                   // Convert DD-MM-YYYY to YYYY-MM-DD
+                   cleanDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
                 } else {
-                   isoDate = new Date(editFormData.fecha_entrega).toISOString();
+                   // Ensure it's just the date part (if passed as full ISO)
+                   cleanDate = cleanDate.split('T')[0];
                 }
+                isoDate = `${cleanDate}T12:00:00.000Z`;
             }
 
             const res = await fetch(`${baseUrl}/api/tasks/${editFormData.id}`, {
