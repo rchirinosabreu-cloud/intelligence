@@ -2,8 +2,8 @@ import React from 'react';
 import Avatar from 'boring-avatars';
 import { cn } from '../../lib/utils';
 
-// Brainstudio palette (purples, dark blues, soft teals)
-const brainstudioColors = ["#4f46e5", "#3730a3", "#0f172a", "#38bdf8", "#818cf8"];
+// Vibrant, high-contrast palette for easy identification
+const brainstudioColors = ["#ef4444", "#eab308", "#22c55e", "#06b6d4", "#d946ef", "#f97316"];
 
 /**
  * TeamAvatar - A globally consistent avatar component for team members.
