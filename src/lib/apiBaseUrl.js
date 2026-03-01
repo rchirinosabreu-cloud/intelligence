@@ -9,7 +9,7 @@ export function getApiBaseUrl() {
 
     // Dev frontend ports -> local backend default
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      if (port === '3000' || port === '5173' || port === '4173') {
+      if (port === '3000' || port === '3001' || port === '5173' || port === '4173') {
         return `${protocol}//${hostname}:8080`;
       }
     }
