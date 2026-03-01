@@ -227,8 +227,8 @@ const Dashboard = () => {
                       <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-200 dark:border-emerald-900 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
                       <div className="group">
                         <div className="flex items-center gap-2 mb-1">
-                          {task.assigneeId ? (
-                              <TeamAvatar userId={task.assigneeId} size="xs" />
+                          {task.assignee ? (
+                              <TeamAvatar member={task.assignee} className="w-4 h-4" />
                           ) : null}
                           <span className="text-xs text-emerald-600 dark:text-emerald-400 block font-medium">
                               {task.assignee ? task.assignee.name : "Equipo"} completó:
