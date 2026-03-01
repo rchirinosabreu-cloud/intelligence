@@ -181,7 +181,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose, tasks }) => {
                     <div key={userGroup.id} className="space-y-4">
                         {/* User Header */}
                         <div className="flex items-center gap-3 pb-2 border-b border-zinc-100 dark:border-zinc-800/50">
-                            <TeamAvatar userId={userGroup.id !== 'unassigned' ? userGroup.id : null} size="sm" />
+                            <TeamAvatar member={userGroup.id !== 'unassigned' ? { name: userGroup.name } : null} className="w-8 h-8" />
                             <h3 className="font-semibold text-zinc-900 dark:text-white text-lg">{userGroup.name}</h3>
                         </div>
 
