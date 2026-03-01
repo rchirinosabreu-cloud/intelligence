@@ -23,9 +23,15 @@ const item = {
   show: { y: 0, opacity: 1 }
 };
 
+import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
+import TeamAvatar from '@/components/ui/TeamAvatar';
+
 const Dashboard = () => {
   const [tasks, setTasks] = useState([]);
+  const [completedNativeTasks, setCompletedNativeTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingNative, setLoadingNative] = useState(true);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -46,7 +52,25 @@ const Dashboard = () => {
         }
     };
 
+    const fetchCompletedNativeTasks = async () => {
+        try {
+            setLoadingNative(true);
+            const baseUrl = getApiBaseUrl();
+            const response = await fetch(`${baseUrl}/api/tasks/completed`);
+            if (!response.ok) {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+            }
+            const data = await response.json();
+            setCompletedNativeTasks(data);
+        } catch (err) {
+            console.error("Failed to fetch completed native tasks:", err);
+        } finally {
+            setLoadingNative(false);
+        }
+    };
+
     fetchTasks();
+    fetchCompletedNativeTasks();
   }, []);
 
   // --- LOGIC: METAS DEL MES ---
@@ -63,36 +87,23 @@ const Dashboard = () => {
       return { total, completed, pending, percentage };
   }, [tasks]);
 
-  // --- LOGIC: FEED DE LOGROS (Completed TODAY) ---
+  // --- LOGIC: FEED DE LOGROS (Completed TODAY from Native Tasks) ---
   const completedFeed = useMemo(() => {
       const today = new Date();
       // Reset time to compare only dates (YYYY-MM-DD)
       const todayStr = today.toISOString().split('T')[0];
 
-      return tasks
-          .filter(t => {
-               // 1. Check Status
-               const s = String(t.estado || "").toLowerCase().trim();
-               if (!['realizado', 'finalizado', 'hecho', 'done'].includes(s)) return false;
-
-               // 2. Check Date (completed_at)
-               // If completed_at is missing, we assume it's old (or manual entry without date), so we exclude it.
-               if (!t.completed_at) return false;
-
-               try {
-                   const d = new Date(t.completed_at);
-                   const dStr = d.toISOString().split('T')[0];
-                   return dStr === todayStr;
-               } catch (e) {
-                   return false;
-               }
-          })
-          .sort((a, b) => {
-              // Sort by Time (Newest First)
-              // If timestamps are ISO strings, string comparison works reversely
-              return new Date(b.completed_at) - new Date(a.completed_at);
-          });
-  }, [tasks]);
+      return completedNativeTasks.filter(t => {
+          if (!t.completedAt) return false;
+          try {
+              const d = new Date(t.completedAt);
+              const dStr = d.toISOString().split('T')[0];
+              return dStr === todayStr;
+          } catch (e) {
+              return false;
+          }
+      }).slice(0, 5); // Limit to the 5 most recent
+  }, [completedNativeTasks]);
 
   return (
     <motion.div
@@ -202,7 +213,7 @@ const Dashboard = () => {
             </div>
 
             <div className="space-y-6">
-              {loading ? (
+              {loadingNative ? (
                   <p className="text-sm text-zinc-400 animate-pulse">Cargando feed...</p>
               ) : completedFeed.length === 0 ? (
                   <div className="text-center py-8">
@@ -215,16 +226,26 @@ const Dashboard = () => {
                     <div key={idx} className="relative pl-6 border-l border-zinc-200 dark:border-zinc-800 pb-2 last:pb-0">
                       <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-200 dark:border-emerald-900 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
                       <div className="group">
-                        <span className="text-xs text-emerald-600 dark:text-emerald-400 mb-0.5 block font-medium">
-                            {task.responsable_name || "Equipo"} completó:
-                        </span>
+                        <div className="flex items-center gap-2 mb-1">
+                          {task.assigneeId ? (
+                              <TeamAvatar userId={task.assigneeId} size="xs" />
+                          ) : null}
+                          <span className="text-xs text-emerald-600 dark:text-emerald-400 block font-medium">
+                              {task.assignee ? task.assignee.name : "Equipo"} completó:
+                          </span>
+                        </div>
                         <h4 className="text-zinc-700 hover:text-zinc-900 dark:text-zinc-200 text-sm font-medium mb-1 dark:group-hover:text-white transition-colors line-clamp-2">
-                            {task.pendiente}
+                            {task.title}
                         </h4>
                         <div className="flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
                           <Clock className="w-3 h-3" />
-                          {/* Show Time instead of Due Date for Today's feed */}
-                          {new Date(task.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(task.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {task.client && (
+                            <>
+                                <span className="mx-1">•</span>
+                                <span>{task.client.name}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -233,13 +254,24 @@ const Dashboard = () => {
             </div>
 
             <div className="mt-8 pt-6 border-t border-zinc-200 dark:border-zinc-800">
-               <button className="w-full py-2 text-xs font-medium text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-500 dark:hover:text-white transition-colors dark:border-zinc-800 rounded-lg dark:hover:bg-zinc-800">
+               <button
+                  onClick={() => setShowHistoryModal(true)}
+                  className="w-full py-2 text-xs font-medium text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-500 dark:hover:text-white transition-colors dark:border-zinc-800 rounded-lg dark:hover:bg-zinc-800"
+               >
                  Ver historial completo
                </button>
             </div>
           </Card>
         </motion.div>
       </div>
+
+      {showHistoryModal && (
+        <CompletedTasksHistoryModal
+          isOpen={showHistoryModal}
+          onClose={() => setShowHistoryModal(false)}
+          tasks={completedNativeTasks}
+        />
+      )}
     </motion.div>
   );
 };
