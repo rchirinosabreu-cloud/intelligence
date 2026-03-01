@@ -1,3 +1,4 @@
+import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useMemo, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -567,14 +568,9 @@ const TaskCard = ({ task, index }) => {
                                     </div>
 
                                     <div className="flex items-center gap-2">
-                                         <img
-                                            src={task.responsable}
-                                            alt={task.responsable_name}
-                                            className="w-6 h-6 rounded-full ring-2 ring-white dark:ring-zinc-900"
-                                            title={task.responsable_name}
-                                            onError={(e) => {
-                                                e.target.style.display = 'none'; // Hide if fails
-                                            }}
+                                         <TeamAvatar
+                                             member={{ name: task.responsable_name, avatarUrl: task.assigneeAvatar || task.responsable }}
+                                             className="w-6 h-6 ring-2 ring-white dark:ring-zinc-900"
                                          />
                                     </div>
                                 </div>

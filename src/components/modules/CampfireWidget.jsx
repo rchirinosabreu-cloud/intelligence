@@ -1,3 +1,4 @@
+import TeamAvatar from "../../components/ui/TeamAvatar";
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/Card';
@@ -200,16 +201,7 @@ const CampfireWidget = ({ clientId }) => {
                             const style = getAuthorStyle(msg.author);
                             return (
                                 <div key={msg.id} className="flex gap-3">
-                                    {style.avatarUrl ? (
-                                        <img src={style.avatarUrl} alt={style.name} className="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5" />
-                                    ) : (
-                                        <div className={cn(
-                                            "w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 mt-0.5",
-                                            style.color
-                                        )}>
-                                            {style.initial}
-                                        </div>
-                                    )}
+                                    <TeamAvatar member={{ name: style.name, avatarUrl: style.avatarUrl }} className="w-6 h-6 mt-0.5" />
                                     <div className="min-w-0">
                                         <p className="text-xs font-bold text-zinc-900 dark:text-white mb-0.5">
                                             {style.name}
@@ -263,16 +255,7 @@ const CampfireWidget = ({ clientId }) => {
                                         const style = getAuthorStyle(msg.author);
                                         return (
                                             <div key={msg.id} className="flex gap-4 group">
-                                                {style.avatarUrl ? (
-                                                    <img src={style.avatarUrl} alt={style.name} className="w-10 h-10 rounded-full object-cover shrink-0 shadow-sm mt-1" />
-                                                ) : (
-                                                    <div className={cn(
-                                                        "w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm mt-1",
-                                                        style.color
-                                                    )}>
-                                                        {style.initial}
-                                                    </div>
-                                                )}
+                                                <TeamAvatar member={{ name: style.name, avatarUrl: style.avatarUrl }} className="w-10 h-10 mt-1" />
                                                 <div className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-2xl rounded-tl-none shadow-sm hover:shadow-md transition-shadow">
                                                     <div className="flex items-center justify-between mb-2">
                                                         <span className="text-sm font-bold text-zinc-900 dark:text-white">{style.name}</span>

@@ -1,3 +1,4 @@
+import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useMemo, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -637,15 +638,10 @@ const TaskCard = ({ task, index, onClick }) => {
                                                 <MessageSquare className="w-3.5 h-3.5" />
                                             </div>
                                         )}
-                                        <img
-                                            src={task.responsable}
-                                            alt={task.responsable_name}
-                                            className="w-6 h-6 rounded-full ring-2 ring-white dark:ring-zinc-900"
-                                            title={task.responsable_name}
-                                            onError={(e) => {
-                                                e.target.style.display = 'none'; // Hide if fails
-                                            }}
-                                         />
+                                        <TeamAvatar
+                                            member={{ name: task.responsable_name, avatarUrl: task.assigneeAvatar }}
+                                            className="w-6 h-6 ring-2 ring-white dark:ring-zinc-900"
+                                        />
                                     </div>
                                 </div>
                             </div>
