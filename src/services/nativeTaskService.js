@@ -49,11 +49,46 @@ export const createTask = async ({ title, dueDate, assigneeId, comments, status,
     }
 };
 
+export const getCompletedTasks = async () => {
+    try {
+        const tasks = await prisma.task.findMany({
+            where: {
+                status: 'Realizado',
+                completedAt: {
+                    not: null
+                }
+            },
+            include: {
+                client: {
+                    select: { name: true, logoUrl: true }
+                },
+                assignee: true
+            },
+            orderBy: {
+                completedAt: 'desc'
+            },
+            take: 100 // Limit to recent 100 for performance
+        });
+        return tasks;
+    } catch (error) {
+        console.error("Error fetching completed tasks:", error);
+        throw error;
+    }
+};
+
 export const updateTask = async (id, data) => {
     try {
         const updateData = { ...data };
         if (updateData.dueDate) {
             updateData.dueDate = new Date(updateData.dueDate);
+        }
+
+        if (updateData.status) {
+            if (updateData.status === 'Realizado') {
+                updateData.completedAt = new Date();
+            } else {
+                updateData.completedAt = null;
+            }
         }
 
         const updatedTask = await prisma.task.update({

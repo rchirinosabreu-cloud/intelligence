@@ -14,7 +14,7 @@ import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskS
 import { getClientAnnouncements, createClientAnnouncement } from './src/services/clientAnnouncementService.js';
 import { getCampfireMessages, createCampfireMessage } from './src/services/campfireService.js';
 import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
-import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask } from './src/services/nativeTaskService.js';
+import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks } from './src/services/nativeTaskService.js';
 import teamRouter from './src/routes/api/team.js';
 
 dotenv.config();
@@ -1376,6 +1376,17 @@ app.patch('/api/clients/:id', async (req, res) => {
 });
 
 // --- NATIVE TASKS ENDPOINTS (Fase 1 Prisma Kanban) ---
+
+app.get('/api/tasks/completed', async (req, res) => {
+    try {
+        log('API', 'Fetching completed native tasks');
+        const tasks = await getCompletedTasks();
+        res.json(tasks);
+    } catch (error) {
+        logError('API', 'Failed to fetch completed native tasks', error);
+        res.status(500).json({ error: "Failed to fetch completed tasks" });
+    }
+});
 
 app.get('/api/tasks', async (req, res) => {
     try {
