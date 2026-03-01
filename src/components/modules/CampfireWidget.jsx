@@ -276,7 +276,7 @@ const CampfireWidget = ({ clientId }) => {
                         <select
                             value={authorId}
                             onChange={(e) => setAuthorId(e.target.value)}
-                            className="text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-orange-500/20"
+                            className="text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-primary/20"
                         >
                             <option value="">Selecciona tu nombre...</option>
                             {teamMembers.map(t => (
@@ -295,7 +295,7 @@ const CampfireWidget = ({ clientId }) => {
                                 }
                             }}
                             placeholder="Escribe un mensaje..."
-                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl py-3 pl-4 pr-12 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 resize-none min-h-[50px]"
+                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl py-3 pl-4 pr-12 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none min-h-[50px]"
                         />
                         <button
                             onClick={handleSendMessage}

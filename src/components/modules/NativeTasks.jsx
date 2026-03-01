@@ -428,7 +428,7 @@ const NativeTasks = () => {
                 <select
                     value={responsibleFilter}
                     onChange={(e) => setResponsibleFilter(e.target.value)}
-                    className="appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-sm transition-all w-48 truncate"
+                    className="appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-sm transition-all w-48 truncate"
                 >
                     {responsibles.map((r, i) => (
                         <option key={i} value={r}>
@@ -445,7 +445,7 @@ const NativeTasks = () => {
                 <select
                     value={clientFilter}
                     onChange={(e) => setClientFilter(e.target.value)}
-                    className="appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-sm transition-all w-48 truncate"
+                    className="appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-sm transition-all w-48 truncate"
                 >
                     {clients.map((c, i) => (
                         <option key={i} value={c}>
@@ -463,7 +463,7 @@ const NativeTasks = () => {
                     value={dateFilter}
                     onChange={(e) => setDateFilter(e.target.value)}
                     className={cn(
-                        "appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-sm transition-all",
+                        "appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-sm transition-all",
                         dateFilter === 'Solo Vencidos'
                             ? "border-red-200 text-red-600 bg-red-50 dark:bg-red-900/10 dark:text-red-400 dark:border-red-900/30"
                             : "border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700"
