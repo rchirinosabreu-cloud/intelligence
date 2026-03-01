@@ -1,3 +1,4 @@
+import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { CheckSquare, Plus, CheckCircle2, Circle, Calendar, Loader2, Trash2, MessageSquare } from 'lucide-react';
@@ -200,11 +201,7 @@ const ClientTasksWidget = ({ clientId }) => {
 
                                         {assigneeName && (
                                             <div className="flex items-center gap-1.5" title={`Asignado a: ${assigneeName}`}>
-                                                {assigneeAvatar ? (
-                                                    <img src={assigneeAvatar} alt={assigneeName} className="w-5 h-5 rounded-full object-cover ring-1 ring-white/10" />
-                                                ) : (
-                                                    <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(assigneeName)}&background=random&color=fff&size=64`} alt={assigneeName} className="w-5 h-5 rounded-full ring-1 ring-white/10" />
-                                                )}
+                                                <TeamAvatar member={{ name: assigneeName, avatarUrl: assigneeAvatar }} className="w-5 h-5" />
                                                 <span className="text-[10px] text-zinc-500 dark:text-zinc-400 hidden sm:inline-block">
                                                     {assigneeName}
                                                 </span>
