@@ -55,19 +55,12 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
             const baseUrl = getApiBaseUrl();
             let isoDate = null;
             if (newTaskData.dueDate) {
-                const parts = newTaskData.dueDate.split(/[-/]/);
-                if (parts.length === 3) {
-                    const day = parseInt(parts[0], 10);
-                    const month = parseInt(parts[1], 10) - 1;
-                    let year = parseInt(parts[2], 10);
-                    if (year < 100) year += 2000;
-                    const d = new Date(year, month, day);
-                    if (!isNaN(d.getTime())) {
-                        isoDate = d.toISOString();
-                    }
-                } else {
-                    isoDate = new Date(newTaskData.dueDate).toISOString();
-                }
+                // Ensure date string uses YYYY-MM-DD format if coming from input type="date"
+                // To avoid timezone offset issues (UTC midnight shifting to previous day in UTC-5),
+                // we explicitly set the time to 12:00:00 UTC. This guarantees that when the browser
+                // parses the date back in any timezone from UTC-12 to UTC+12, it lands on the same day.
+                const cleanDate = newTaskData.dueDate.split('T')[0]; // Extract just the date part if needed
+                isoDate = `${cleanDate}T12:00:00.000Z`;
             }
 
             const res = await fetch(`${baseUrl}/api/tasks`, {

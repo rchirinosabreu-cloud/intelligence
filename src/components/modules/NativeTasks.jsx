@@ -167,7 +167,10 @@ const NativeTasks = () => {
               assigneeId: task.assigneeId,
               assigneeAvatar: task.assignee?.avatarUrl || null,
               estado: task.status,
-              fecha_entrega: task.dueDate ? new Date(task.dueDate).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : null,
+              // Parse the date explicitly avoiding browser local timezone shifts if it comes as an ISO string
+              // Because we save it with T12:00:00.000Z, we can just safely slice it or convert it to a date that won't shift.
+              // We'll extract the YYYY-MM-DD from the raw ISO string directly.
+              fecha_entrega: task.dueDate ? task.dueDate.split('T')[0].split('-').reverse().join('-') : null,
               comentarios: task.comments,
               es_prioritaria: false, // Update logic later if needed
           }));
