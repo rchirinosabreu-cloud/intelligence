@@ -177,9 +177,9 @@ export default function Team() {
 
       {/* Modal - Shadcn Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-light">
+        <DialogContent className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-md p-6 shadow-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-white">
               {editingMember ? 'Editar Miembro' : 'Añadir Miembro'}
             </DialogTitle>
             <DialogDescription className="sr-only">
@@ -187,62 +187,62 @@ export default function Team() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSave} className="space-y-4 mt-4">
+          <form onSubmit={handleSave} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">Nombre Completo</label>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Nombre Completo</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">Rol</label>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Rol</label>
               <input
                 type="text"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
                 placeholder="Ej. Desarrollador, Diseñador, Project Manager"
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">Correo Electrónico (Opcional)</label>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Correo Electrónico (Opcional)</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">URL de Avatar (Opcional)</label>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">URL de Avatar (Opcional)</label>
               <input
                 type="url"
                 value={avatarUrl}
                 onChange={(e) => setAvatarUrl(e.target.value)}
                 placeholder="https://..."
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
               />
             </div>
 
-            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-zinc-800">
+            <div className="flex justify-end gap-2 mt-6 pt-2 border-t border-zinc-100 dark:border-zinc-800">
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 text-zinc-400 hover:text-white transition-colors"
+                className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm rounded-lg transition-colors font-medium"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
               >
                 Guardar
               </button>
