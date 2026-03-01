@@ -72,8 +72,31 @@ const CampfireWidget = ({ clientId }) => {
         }
     };
 
-    const getAuthorStyle = (name) => {
-        return TEAM.find(t => t.name === name) || { initial: '??', color: 'bg-gray-500' };
+    const getAuthorStyle = (author) => {
+        if (!author) return { name: 'Desconocido', initial: '??', color: 'bg-slate-500' };
+
+        // If author is a populated object from Prisma relation
+        if (typeof author === 'object' && author.name) {
+            return {
+                name: author.name,
+                initial: author.name.substring(0, 2).toUpperCase(),
+                avatarUrl: author.avatarUrl,
+                color: 'bg-primary'
+            };
+        }
+
+        // Fallback: if author is just an ID or string name, try to find in teamMembers
+        const found = teamMembers?.find(t => t.id === author || t.name === author);
+        if (found) {
+            return {
+                name: found.name,
+                initial: found.name.substring(0, 2).toUpperCase(),
+                avatarUrl: found.avatarUrl,
+                color: 'bg-primary'
+            };
+        }
+
+        return { name: String(author), initial: String(author).substring(0, 2).toUpperCase(), color: 'bg-slate-500' };
     };
 
     const formatTime = (dateStr) => {
