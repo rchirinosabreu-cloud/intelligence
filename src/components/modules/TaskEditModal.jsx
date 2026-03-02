@@ -3,6 +3,8 @@ import { Loader2 } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 import {
   Dialog,
   DialogContent,
@@ -178,11 +180,20 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                         </div>
                         <div>
                             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Fecha Límite</label>
-                            <input
-                                type="date"
-                                value={editFormData.fecha_entrega || ''}
-                                onChange={e => setEditFormData({...editFormData, fecha_entrega: e.target.value})}
+                            <DatePicker
+                                selected={editFormData.fecha_entrega ? new Date(`${editFormData.fecha_entrega.split('T')[0]}T12:00:00.000Z`) : null}
+                                onChange={(date) => {
+                                    if (date) {
+                                        const dateStr = date.toISOString().split('T')[0];
+                                        setEditFormData({...editFormData, fecha_entrega: dateStr});
+                                    } else {
+                                        setEditFormData({...editFormData, fecha_entrega: ''});
+                                    }
+                                }}
+                                dateFormat="dd/MM/yyyy"
                                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                                placeholderText="Seleccionar fecha"
+                                isClearable
                             />
                         </div>
                     </div>
