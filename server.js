@@ -9,7 +9,7 @@ import { JWT } from 'google-auth-library';
 import * as cheerio from 'cheerio';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { getUpcomingEvents } from './src/services/calendarService.js';
-import { getClients, createClient, getClientLinks, addClientLink, removeClientLink } from './src/services/clientService.js';
+import { getClients, getClientByIdentifier, createClient, getClientLinks, addClientLink, removeClientLink } from './src/services/clientService.js';
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from './src/services/clientTaskService.js';
 import { getClientAnnouncements, createClientAnnouncement } from './src/services/clientAnnouncementService.js';
 import { getCampfireMessages, createCampfireMessage } from './src/services/campfireService.js';
@@ -936,6 +936,22 @@ app.get('/api/calendar/upcoming', async (req, res) => {
             error: "Failed to fetch calendar events",
             details: error.message
         });
+    }
+});
+
+app.get('/api/db/clients/:identifier', async (req, res) => {
+    try {
+        const { identifier } = req.params;
+        console.log(`[API] /api/db/clients/${identifier} called`);
+        const client = await getClientByIdentifier(identifier);
+
+        if (!client) {
+            return res.status(404).json({ error: "Client not found" });
+        }
+        res.json(client);
+    } catch (error) {
+        console.error("[API] Error fetching client by identifier:", error);
+        res.status(500).json({ error: "Failed to fetch client", details: error.message });
     }
 });
 

@@ -19,21 +19,28 @@ const ClientDetailWrapper = () => {
                 setLoading(true);
                 const baseUrl = getApiBaseUrl();
 
-                // Fetch ALL clients and filter locally for now to be safe
-                // This avoids potential missing endpoints in backend while refactoring
-                const response = await fetch(`${baseUrl}/api/db/clients`);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch clients: ${response.status}`);
-                }
-                const clients = await response.json();
+                const response = await fetch(`${baseUrl}/api/db/clients/${clientId}`);
 
-                // Find client by ID
-                const found = clients.find(c => c.id === clientId);
-                if (found) {
-                    setClient(found);
-                } else {
+                if (response.status === 404) {
                     setError("Cliente no encontrado");
+                    return;
                 }
+
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch client: ${response.status}`);
+                }
+
+                const clientData = await response.json();
+
+                // Redirection check: If the URL param was a UUID but we found the client,
+                // redirect to the clean slug URL
+                const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientId);
+                if (isUUID && clientData.slug) {
+                    navigate(`/cliente/${clientData.slug}`, { replace: true });
+                    return; // Stop execution, the new route will re-trigger the effect
+                }
+
+                setClient(clientData);
             } catch (err) {
                 console.error("Error fetching client:", err);
                 setError("Error al cargar cliente");
@@ -43,7 +50,7 @@ const ClientDetailWrapper = () => {
         };
 
         fetchClient();
-    }, [clientId]);
+    }, [clientId, navigate]);
 
     if (loading) {
         return (
