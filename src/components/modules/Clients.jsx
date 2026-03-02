@@ -354,7 +354,7 @@ const Clients = () => {
                 transition={{ duration: 0.2 }}
               >
                 <div
-                  onClick={() => navigate(`/cliente/${client.id}`)}
+                  onClick={() => navigate(`/cliente/${client.slug}`)}
                   className="group h-full flex flex-col cursor-pointer transition-all duration-300"
                 >
                   <Card className="h-full flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:border-primary/30 dark:hover:border-primary/30">

@@ -13,6 +13,31 @@ function slugify(text) {
     .replace(/-+$/, '');      // Trim - from end of text
 }
 
+export async function getClientByIdentifier(identifier) {
+  try {
+    // Check if the identifier is a valid UUID
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(identifier);
+
+    const client = await prisma.client.findFirst({
+      where: isUUID ? { id: identifier } : { slug: identifier },
+      include: {
+        _count: {
+            select: {
+              files: true,
+              links: true,
+              tasks: true
+            }
+        }
+      }
+    });
+
+    return client;
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] [ClientService] Error fetching client by identifier:`, error?.message || error);
+    throw new Error("Failed to fetch client");
+  }
+}
+
 export async function getClients() {
   try {
     const clients = await prisma.client.findMany({
