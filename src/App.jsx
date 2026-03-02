@@ -3,7 +3,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import Dashboard from './components/modules/Dashboard';
-import Tasks from './components/modules/Tasks';
 import NativeTasks from './components/modules/NativeTasks';
 import Chat from './components/modules/Chat';
 import Clients from './components/modules/Clients';
@@ -22,7 +21,6 @@ function App() {
             <Route path="/inicio" element={<Navigate to="/" replace />} />
 
             <Route path="/bria" element={<Chat />} />
-            <Route path="/pendientes" element={<Tasks />} />
             <Route path="/pendientes-nativo" element={<NativeTasks />} />
 
             <Route path="/clientes" element={<Clients />} />

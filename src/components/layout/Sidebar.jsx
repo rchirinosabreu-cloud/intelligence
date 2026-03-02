@@ -12,8 +12,7 @@ const Sidebar = () => {
   const menuItems = [
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, path: '/' },
     { id: 'bria', label: 'Bria Intelligence', icon: Sparkles, path: '/bria' },
-    { id: 'tasks', label: 'Gestión (Sheets)', icon: CheckSquare, path: '/pendientes' },
-    { id: 'tasks-native', label: 'Gestión (Nuevo)', icon: CheckSquare, path: '/pendientes-nativo' },
+    { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/pendientes-nativo' },
     { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes' },
     { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo' },
   ];

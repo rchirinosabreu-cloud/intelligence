@@ -1,5 +1,41 @@
 import prisma from '../lib/prisma.js';
 
+export const getDashboardMetrics = async () => {
+    try {
+        // Total historical completed tasks
+        const totalCompleted = await prisma.task.count({
+            where: {
+                OR: [
+                    { status: 'Realizado' },
+                    { completedAt: { not: null } }
+                ]
+            }
+        });
+
+        // Pending tasks (anything not completed)
+        const pendingCount = await prisma.task.count({
+            where: {
+                status: {
+                    not: 'Realizado'
+                }
+            }
+        });
+
+        const totalActive = pendingCount + totalCompleted;
+        const percentage = totalActive > 0 ? Math.round((totalCompleted / totalActive) * 100) : 0;
+
+        return {
+            total: totalActive,
+            completed: totalCompleted,
+            pending: pendingCount,
+            percentage
+        };
+    } catch (error) {
+        console.error("Error fetching dashboard metrics:", error);
+        throw error;
+    }
+};
+
 export const getTasks = async (clientId) => {
     try {
         const whereClause = clientId ? { clientId } : {};
