@@ -27,26 +27,25 @@ import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 
 const Dashboard = () => {
-  const [tasks, setTasks] = useState([]);
+  const [metrics, setMetrics] = useState({ total: 0, completed: 0, pending: 0, percentage: 0 });
   const [completedNativeTasks, setCompletedNativeTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingNative, setLoadingNative] = useState(true);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   useEffect(() => {
-    const fetchTasks = async () => {
+    const fetchMetrics = async () => {
         try {
             setLoading(true);
             const baseUrl = getApiBaseUrl();
-            const response = await fetch(`${baseUrl}/api/pendientes`);
+            const response = await fetch(`${baseUrl}/api/metrics/tasks`);
             if (!response.ok) {
                 throw new Error(`Error ${response.status}: ${response.statusText}`);
             }
             const data = await response.json();
-            setTasks(data);
+            setMetrics(data);
         } catch (err) {
-            console.error("Failed to fetch tasks for dashboard:", err);
-            // On error, we just show empty states, not a crash
+            console.error("Failed to fetch dashboard metrics:", err);
         } finally {
             setLoading(false);
         }
@@ -69,23 +68,9 @@ const Dashboard = () => {
         }
     };
 
-    fetchTasks();
+    fetchMetrics();
     fetchCompletedNativeTasks();
   }, []);
-
-  // --- LOGIC: METAS DEL MES ---
-  const goalsStats = useMemo(() => {
-      const total = tasks.length;
-      // Normalizar estado 'Realizado'
-      const completed = tasks.filter(t => {
-          const s = String(t.estado || "").toLowerCase().trim();
-          return ['realizado', 'finalizado', 'hecho', 'done'].includes(s);
-      }).length;
-      const pending = total - completed;
-      const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-      return { total, completed, pending, percentage };
-  }, [tasks]);
 
   // --- LOGIC: FEED DE LOGROS (Completed TODAY from Native Tasks) ---
   const completedFeed = useMemo(() => {
@@ -149,10 +134,10 @@ const Dashboard = () => {
                 <div>
                   <div className="flex items-end gap-2 mb-2">
                       <span className="text-4xl font-bold text-zinc-900 dark:text-white tracking-tight">
-                          {loading ? '...' : goalsStats.pending}
+                          {loading ? '...' : metrics.pending}
                       </span>
                       <span className="text-sm text-zinc-400 mb-1.5">
-                          / {goalsStats.total} total
+                          / {metrics.total} total
                       </span>
                   </div>
 
@@ -160,10 +145,10 @@ const Dashboard = () => {
                   <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-2.5 overflow-hidden">
                       <div
                         className="bg-indigo-600 dark:bg-indigo-500 h-2.5 rounded-full transition-all duration-1000 ease-out"
-                        style={{ width: `${goalsStats.percentage}%` }}
+                        style={{ width: `${metrics.percentage}%` }}
                       ></div>
                   </div>
-                  <p className="text-xs text-zinc-400 mt-2 text-right">{goalsStats.percentage}% Completado</p>
+                  <p className="text-xs text-zinc-400 mt-2 text-right">{metrics.percentage}% Completado</p>
                 </div>
               </Card>
             </motion.div>
@@ -182,9 +167,9 @@ const Dashboard = () => {
                 </div>
                 <div>
                   <span className="text-4xl font-bold text-zinc-900 dark:text-white tracking-tight">
-                      {loading ? '...' : goalsStats.completed}
+                      {loading ? '...' : metrics.completed}
                   </span>
-                  <p className="text-xs text-zinc-400 mt-2">Tareas finalizadas este mes</p>
+                  <p className="text-xs text-zinc-400 mt-2">Tareas finalizadas en el historial</p>
                 </div>
               </Card>
             </motion.div>

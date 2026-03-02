@@ -14,7 +14,7 @@ import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskS
 import { getClientAnnouncements, createClientAnnouncement } from './src/services/clientAnnouncementService.js';
 import { getCampfireMessages, createCampfireMessage } from './src/services/campfireService.js';
 import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
-import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks } from './src/services/nativeTaskService.js';
+import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics } from './src/services/nativeTaskService.js';
 import teamRouter from './src/routes/api/team.js';
 
 dotenv.config();
@@ -184,30 +184,6 @@ try {
      console.error("[DiscoveryEngine] Failed to initialize client:", e);
 }
 
-// --- AGENCY TASKS TOOL (Google Sheets) ---
-
-// Helper: Find column index by keywords (case-insensitive)
-function findColumnIndex(headers, keywords) {
-    if (!headers || !Array.isArray(headers)) return -1;
-    const lowerKeywords = keywords.map(k => k.toLowerCase());
-    return headers.findIndex(h => {
-        const header = String(h || "").toLowerCase().trim();
-        return lowerKeywords.includes(header);
-    });
-}
-
-// Helper: Convert 0-based index to Excel column letter (0->A, 25->Z, 26->AA)
-function columnIndexToLetter(index) {
-    let temp, letter = '';
-    let col = index;
-    while (col >= 0) {
-        temp = col % 26;
-        letter = String.fromCharCode(temp + 65) + letter;
-        col = Math.floor(col / 26) - 1;
-    }
-    return letter;
-}
-
 // --- LOGGING HELPER ---
 const log = (context, message, data = null) => {
     const timestamp = new Date().toISOString();
@@ -225,355 +201,14 @@ const logError = (context, message, error) => {
     if (error?.stack) console.error(error.stack);
 };
 
-function findTargetSheet(doc) {
-    // Calculate dynamic sheet name based on current date (Spanish Month + Year)
-    // e.g., "Febrero 2026"
-    const now = new Date();
-    const months = [
-        'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-    ];
-    const currentMonthName = months[now.getMonth()];
-    const currentYear = now.getFullYear();
-    const targetTitle = `${currentMonthName} ${currentYear}`;
-
-    log('AgencyTasks', `Looking for target sheet: "${targetTitle}"`);
-
-    for (const sheet of doc.sheetsByIndex) {
-        if (sheet.title.trim() === targetTitle) {
-             log('AgencyTasks', `Found target sheet: ${sheet.title}`);
-             return sheet;
-        }
-    }
-
-    log('AgencyTasks', `Target sheet "${targetTitle}" not found. Falling back to first sheet (Index 0).`);
-    return doc.sheetsByIndex[0];
-}
-
-// Helper: Parse dates (DD/MM/YYYY or YYYY-MM-DD)
-function parseDate(dateStr) {
-    if (!dateStr) return null;
-    const d = String(dateStr).trim();
-    if (!d) return null;
-
-    // Handle "DD/MM/YYYY" or "DD/MM"
-    const parts = d.split('/');
-    if (parts.length >= 2) {
-        const day = parseInt(parts[0], 10);
-        const month = parseInt(parts[1], 10) - 1;
-        const year = parts[2] ? parseInt(parts[2], 10) : new Date().getFullYear();
-        if (!isNaN(day) && !isNaN(month)) {
-            return new Date(year, month, day);
-        }
-    }
-
-    // Handle "YYYY-MM-DD"
-    const date = new Date(d);
-    if (!isNaN(date.getTime())) return date;
-
-    return null;
-}
-
-async function fetchAgencyTasks(responsibleName = "Rodny") {
-    log('AgencyTasks', `Fetching tasks for: ${responsibleName}`);
-    try {
-        const allTasks = await getAgencyTasksJSON();
-        const targetResp = responsibleName.trim().toLowerCase();
-
-        const pendingTasks = allTasks.filter(task => {
-            const rName = (task.responsable_name || "").toLowerCase();
-            const status = (task.estado || "").toLowerCase();
-            // Filter logic: Match name and exclude "Realizado"
-            return rName.includes(targetResp) && status !== 'realizado';
-        });
-
-        if (pendingTasks.length === 0) {
-            return `No se encontraron tareas pendientes para "${responsibleName}".`;
-        }
-
-        const taskList = pendingTasks.map(t => {
-            const urgency = t.es_prioritaria ? " [URGENTE]" : "";
-            return `- [${t.fecha_entrega || "Sin fecha"}] ${t.pendiente} (Cliente: ${t.cliente}) [Estado: ${t.estado}]${urgency}`;
-        }).join('\n');
-
-        return `Tareas pendientes para ${responsibleName}:\n\n${taskList}`;
-
-    } catch (error) {
-        logError('AgencyTasks', "Error fetching tasks", error);
-        return `Error al consultar la hoja de tareas: ${error.message}`;
-    }
-}
-
-const normalizeTaskStatus = (rawStatus = "") => {
-    const status = String(rawStatus || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, '').trim();
-
-    if (!status) return 'Pendiente';
-
-    if (['pendiente', 'por hacer', 'to do', 'todo'].includes(status)) return 'Pendiente';
-    if (['en proceso', 'en curso', 'proceso', 'working', 'doing', 'in progress'].includes(status)) return 'En proceso';
-    if (['realizado', 'finalizado', 'hecho', 'done', 'completado', 'terminado'].includes(status)) return 'Realizado';
-
-    // Fallback conservador: si no coincide exactamente con estados conocidos, mantener Pendiente.
-    return 'Pendiente';
-};
-
-const isSummaryOrInvalidTaskTitle = (title = '') => {
-    const normalized = String(title || '').trim().toLowerCase();
-    if (!normalized) return true;
-
-    // Filas típicas de resumen en Sheets: "607 PENDIENTES", "Total pendientes", etc.
-    if (/^\d+\s*pendientes?$/.test(normalized)) return true;
-    if (/^total\s*pendientes?$/.test(normalized)) return true;
-    if (/^pendientes?$/.test(normalized)) return true;
-
-    return false;
-};
-
-async function getAgencyTasksJSON() {
-    log('AgencyTasksJSON', `Fetching all tasks in JSON format.`);
-    const SHEET_ID = process.env.AGENCY_TASKS_SHEET_ID;
-
-    if (!SHEET_ID || !credentials) {
-        throw new Error("Missing SHEET_ID or credentials.");
-    }
-
-    try {
-        const authClient = new JWT({
-            email: credentials.client_email,
-            key: credentials.private_key,
-            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-        });
-
-        const doc = new GoogleSpreadsheet(SHEET_ID, authClient);
-        await doc.loadInfo();
-
-        const availableSheets = doc.sheetsByIndex.map(s => s.title);
-        log('AgencyTasksJSON', 'Hojas disponibles:', availableSheets);
-
-        let sheet = findTargetSheet(doc);
-        if (!sheet) {
-             log('AgencyTasksJSON', `No sheet found matching current month. Fallback to index 0.`);
-             sheet = doc.sheetsByIndex[0];
-        }
-
-        if (!sheet) throw new Error("No sheet found.");
-        log('AgencyTasksJSON', `Intentando leer hoja: "${sheet.title}"`);
-
-        await sheet.loadHeaderRow();
-        const headers = sheet.headerValues;
-        log('AgencyTasksJSON', 'Headers detectados:', headers);
-
-        const colFechaAsignacion = findColumnIndex(headers, ['fecha asignacion', 'fecha_asignacion', 'asignacion', 'fecha de asignacion']);
-        const colPendiente = findColumnIndex(headers, ['pendiente', 'tarea', 'actividad', 'task']);
-        const colCliente = findColumnIndex(headers, ['cliente', 'marca', 'cuenta']);
-        const colResponsable = findColumnIndex(headers, ['responsable', 'owner', 'asignado']);
-        const colEstado = findColumnIndex(headers, ['estado', 'status', 'estatus']);
-        const colFechaEntrega = findColumnIndex(headers, ['fecha entrega', 'fecha_entrega', 'entrega', 'due date', 'vencimiento']);
-        const colComentarios = findColumnIndex(headers, ['comentarios', 'comentario', 'observaciones', 'notas']);
-        const colCompletedAt = findColumnIndex(headers, ['completed_at', 'completado_el', 'fecha_fin', 'fecha completado', 'fecha_realizado']);
-
-        log('AgencyTasksJSON', 'Índices detectados:', {
-            colFechaAsignacion,
-            colPendiente,
-            colCliente,
-            colResponsable,
-            colEstado,
-            colFechaEntrega,
-            colComentarios,
-            colCompletedAt
-        });
-
-        const rows = await sheet.getRows();
-        log('AgencyTasksJSON', `Filas leídas: ${rows.length}`);
-
-        if (rows.length > 0) {
-            try {
-                 // _rawData is internal to google-spreadsheet but useful for debug
-                 log('AgencyTasksJSON', 'Fila 0 Raw (_rawData sample):', rows[0]._rawData);
-            } catch (e) {
-                 // ignore
-            }
-        }
-
-        const tasks = rows.map((row, index) => {
-            // Use _rawData for direct array access as requested
-            // row._rawData[0] = Col A, [1] = Col B, etc.
-            const data = row._rawData || [];
-
-            const getRaw = (idx, fallbackIdx) => {
-                // If dynamic index found (>=0), use it. Else fallback to hardcoded.
-                const targetIdx = (idx >= 0) ? idx : fallbackIdx;
-                if (targetIdx < 0 || targetIdx >= data.length) return "";
-                return String(data[targetIdx] || "").trim();
-            };
-
-            // Mapping with Dynamic Indices (Fallback to standard order A-G)
-            // Col A (0): fecha_asignacion
-            // Col B (1): pendiente
-            // Col C (2): cliente
-            // Col D (3): responsable
-            // Col E (4): estado
-            // Col F (5): fecha_entrega
-            // Col G (6): comentarios
-
-            const fecha_asignacion = getRaw(colFechaAsignacion, 0);
-            const pendiente = getRaw(colPendiente, 1);
-
-            // Filtrar filas vacías o filas-resumen de la hoja.
-            if (isSummaryOrInvalidTaskTitle(pendiente)) return null;
-
-            const cliente = getRaw(colCliente, 2);
-            const respName = getRaw(colResponsable, 3);
-            const rawStatus = getRaw(colEstado, 4);
-            const fecha_entrega = getRaw(colFechaEntrega, 5);
-            const comentarios = getRaw(colComentarios, 6);
-            // Default to col 7 (H) if header not found
-            const completed_at = getRaw(colCompletedAt, 7);
-
-            // DEBUG: Log first few rows to debug status issues
-            if (index < 3) {
-                log('AgencyTasksJSON', `Row ${index} Status Raw: "${rawStatus}" -> Normalized: "${normalizeTaskStatus(rawStatus)}"`);
-            }
-
-            // Status Normalization (alineado con vocabulario de Google Sheet)
-            const estado = normalizeTaskStatus(rawStatus);
-
-            // Priority Calculation
-            let es_prioritaria = false;
-
-            // Priority Logic:
-            // 1. Must be due today or overdue.
-            // 2. Must NOT be completed ('Realizado').
-            const deliveryDate = parseDate(fecha_entrega);
-            if (deliveryDate) {
-                 const now = new Date();
-                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                 // Reset time to compare only dates
-                 const deliveryDateOnly = new Date(deliveryDate.getFullYear(), deliveryDate.getMonth(), deliveryDate.getDate());
-
-                 if (deliveryDateOnly <= today) {
-                     // Check if task is already completed to remove priority tag
-                     if (estado !== 'Realizado') {
-                         es_prioritaria = true;
-                     }
-                 }
-            }
-
-            // Avatar Logic
-            const responsableUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(respName || "Sin Asignar")}&background=random&color=fff&size=128`;
-
-            return {
-                id: row.rowNumber || (index + 2),
-                fecha_asignacion: fecha_asignacion,
-                pendiente: pendiente,
-                cliente: cliente,
-                responsable: responsableUrl, // Frontend <img> src
-                responsable_name: respName,  // Frontend text
-                estado: estado,
-                fecha_entrega: fecha_entrega,
-                comentarios: comentarios,
-                completed_at: completed_at,
-                es_prioritaria: es_prioritaria,
-                prioridad: es_prioritaria ? 'Alta' : 'Normal'
-            };
-        }).filter(t => t !== null);
-
-        if (tasks.length > 0) {
-            log('AgencyTasksJSON', 'Datos procesados (Sample):', tasks[0]);
-        }
-
-        return tasks;
-
-    } catch (error) {
-        logError('AgencyTasksJSON', "Error fetching tasks", error);
-        throw error;
-    }
-}
-
-async function updateTaskStatus(id, newStatus) {
-    log('UpdateTask', `Updating task ID ${id} to status: ${newStatus}`);
-    const SHEET_ID = process.env.AGENCY_TASKS_SHEET_ID;
-
-    if (!SHEET_ID || !credentials) {
-        throw new Error("Missing SHEET_ID or credentials.");
-    }
-
-    try {
-        const authClient = new JWT({
-            email: credentials.client_email,
-            key: credentials.private_key,
-            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-        });
-
-        const doc = new GoogleSpreadsheet(SHEET_ID, authClient);
-        await doc.loadInfo();
-
-        let sheet = findTargetSheet(doc);
-        if (!sheet) throw new Error("Target sheet not found.");
-
-        // El ID recibido desde frontend es el número de fila real en Google Sheet.
-        // Esto evita desalineaciones cuando existen filas-resumen o filtros visuales.
-
-        await sheet.loadHeaderRow();
-        const headers = sheet.headerValues;
-
-        // 1. Update Status
-        const statusColIndex = findColumnIndex(headers, ['estado', 'status', 'estatus']);
-        if (statusColIndex < 0) {
-            throw new Error('No se encontró la columna de estado en la hoja.');
-        }
-
-        const rowNumber = parseInt(id, 10);
-        if (isNaN(rowNumber) || rowNumber < 2) {
-            throw new Error(`Invalid ID: ${id}`);
-        }
-
-        const statusColumnLetter = columnIndexToLetter(statusColIndex);
-        const rangeStatus = `${statusColumnLetter}${rowNumber}`;
-
-        // 2. Update Completed At (if transitioning to 'Realizado')
-        let rangeCompletedAt = null;
-        const isCompleted = normalizeTaskStatus(newStatus) === 'Realizado';
-
-        if (isCompleted) {
-             let completedAtColIndex = findColumnIndex(headers, ['completed_at', 'completado_el', 'fecha_fin', 'fecha completado']);
-             // Fallback to column H (index 7) if header not found
-             if (completedAtColIndex < 0) completedAtColIndex = 7;
-
-             const completedAtColumnLetter = columnIndexToLetter(completedAtColIndex);
-             rangeCompletedAt = `${completedAtColumnLetter}${rowNumber}`;
-        }
-
-        // Load necessary cells
-        const rangesToLoad = [rangeStatus];
-        if (rangeCompletedAt) rangesToLoad.push(rangeCompletedAt);
-
-        log('UpdateTask', `Loading cells ${rangesToLoad.join(', ')} in sheet ${sheet.title}`);
-        await sheet.loadCells(rangesToLoad);
-
-        // Set Status
-        const cellStatus = sheet.getCellByA1(rangeStatus);
-        cellStatus.value = newStatus;
-
-        // Set Completed At (if applicable)
-        if (rangeCompletedAt && isCompleted) {
-             const cellCompletedAt = sheet.getCellByA1(rangeCompletedAt);
-             // Write ISO string for sorting, or localized date?
-             // ISO string is safer for sorting: 2023-10-27T10:00:00.000Z
-             // Or simple date: new Date().toISOString()
-             cellCompletedAt.value = new Date().toISOString();
-        }
-
-        await sheet.saveUpdatedCells();
-
-        const timestamp = new Date().toISOString();
-        log('UpdateTask', `Success. Updated status to "${newStatus}".`);
-        return { success: true, timestamp: timestamp };
-
-    } catch (error) {
-        logError('UpdateTask', "Error updating task", error);
-        throw error;
-    }
+// Helper: Find column index by keywords (case-insensitive)
+function findColumnIndex(headers, keywords) {
+    if (!headers || !Array.isArray(headers)) return -1;
+    const lowerKeywords = keywords.map(k => k.toLowerCase());
+    return headers.findIndex(h => {
+        const header = String(h || "").toLowerCase().trim();
+        return lowerKeywords.includes(header);
+    });
 }
 
 async function fetchClientHealth() {
@@ -1289,33 +924,6 @@ app.get('/', (req, res) => {
     res.status(200).send('Brainstudio Intelligence API is running (v6-stable-deploy).');
 });
 
-app.get('/api/pendientes', async (req, res) => {
-    try {
-        const tasks = await getAgencyTasksJSON();
-        res.json(tasks);
-    } catch (error) {
-        console.error("[API] /api/pendientes error:", error);
-        res.status(500).json({ error: "Failed to fetch tasks", details: error.message });
-    }
-});
-
-app.patch('/api/pendientes/:id/status', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { status } = req.body;
-
-        if (!status) {
-            return res.status(400).json({ error: "Missing status in body" });
-        }
-
-        console.log(`[API] Updating task ${id} to ${status}`);
-        await updateTaskStatus(id, status);
-        res.json({ success: true, message: "Status updated" });
-    } catch (error) {
-        console.error("[API] /api/pendientes/:id/status error:", error);
-        res.status(500).json({ error: "Failed to update status", details: error.message });
-    }
-});
 
 app.get('/api/calendar/upcoming', async (req, res) => {
     try {
@@ -1376,6 +984,17 @@ app.patch('/api/clients/:id', async (req, res) => {
 });
 
 // --- NATIVE TASKS ENDPOINTS (Fase 1 Prisma Kanban) ---
+
+app.get('/api/metrics/tasks', async (req, res) => {
+    try {
+        log('API', 'Fetching dashboard task metrics');
+        const metrics = await getDashboardMetrics();
+        res.json(metrics);
+    } catch (error) {
+        logError('API', 'Failed to fetch dashboard metrics', error);
+        res.status(500).json({ error: "Failed to fetch metrics" });
+    }
+});
 
 app.get('/api/tasks/completed', async (req, res) => {
     try {
