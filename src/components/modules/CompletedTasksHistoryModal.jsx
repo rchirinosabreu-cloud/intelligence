@@ -1,31 +1,54 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, Search, Filter } from 'lucide-react';
+import { X, Search, Filter, Loader2, CalendarDays } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import TeamAvatar from '@/components/ui/TeamAvatar';
+import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
-const CompletedTasksHistoryModal = ({ isOpen, onClose, tasks }) => {
+const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState('all');
-  const [selectedDate, setSelectedDate] = useState('all');
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Helper to group tasks by User, then by Date
+  // Default to today's date in YYYY-MM-DD format based on local timezone
+  const todayStr = new Date().toLocaleDateString('en-CA'); // e.g. YYYY-MM-DD safely
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchTasksByDate = async () => {
+      try {
+        setLoading(true);
+        const baseUrl = getApiBaseUrl();
+        // Option B: Fetch directly from backend passing the selected date
+        const response = await fetch(`${baseUrl}/api/tasks/completed?date=${selectedDate}`);
+        if (!response.ok) throw new Error('Network response was not ok');
+        const data = await response.json();
+        setTasks(data);
+      } catch (error) {
+        console.error('Error fetching completed tasks history:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTasksByDate();
+  }, [isOpen, selectedDate]);
+
+  // Helper to group tasks by User
+  // Since we are fetching by a specific day, grouping by date is no longer strictly necessary,
+  // but we keep the structure clean by grouping by User first.
   const groupedTasks = useMemo(() => {
     if (!tasks || tasks.length === 0) return {};
 
-    // Filter tasks based on search, user selection, and date selection
+    // Filter tasks based on search and user selection locally
     const filteredTasks = tasks.filter(task => {
         const matchesSearch = task.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                               task.client?.name?.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesUser = selectedUser === 'all' || task.assigneeId === selectedUser;
-
-        let matchesDate = true;
-        if (selectedDate !== 'all') {
-             const dateStr = task.completedAt ? new Date(task.completedAt).toISOString().split('T')[0] : 'Sin fecha';
-             matchesDate = dateStr === selectedDate;
-        }
-
-        return matchesSearch && matchesUser && matchesDate;
+        return matchesSearch && matchesUser;
     });
 
     const groupedByUser = {};
@@ -38,23 +61,16 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose, tasks }) => {
             groupedByUser[userId] = {
                 name: userName,
                 id: userId,
-                dates: {}
+                items: []
             };
         }
-
-        const dateStr = task.completedAt ? new Date(task.completedAt).toLocaleDateString() : 'Sin fecha';
-
-        if (!groupedByUser[userId].dates[dateStr]) {
-            groupedByUser[userId].dates[dateStr] = [];
-        }
-
-        groupedByUser[userId].dates[dateStr].push(task);
+        groupedByUser[userId].items.push(task);
     });
 
     return groupedByUser;
   }, [tasks, searchTerm, selectedUser]);
 
-  // Extract unique users for the filter dropdown
+  // Extract unique users for the filter dropdown based on the currently loaded date
   const uniqueUsers = useMemo(() => {
       const users = [];
       const seen = new Set();
@@ -65,26 +81,6 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose, tasks }) => {
           }
       });
       return users;
-  }, [tasks]);
-
-  // Extract unique dates for the filter dropdown
-  const uniqueDates = useMemo(() => {
-      const dates = [];
-      const seen = new Set();
-      tasks.forEach(task => {
-          if (task.completedAt) {
-              const d = new Date(task.completedAt);
-              const dateStr = d.toISOString().split('T')[0];
-              const displayDate = d.toLocaleDateString();
-
-              if (!seen.has(dateStr)) {
-                  seen.add(dateStr);
-                  dates.push({ value: dateStr, label: displayDate });
-              }
-          }
-      });
-      // Sort newest first
-      return dates.sort((a, b) => new Date(b.value) - new Date(a.value));
   }, [tasks]);
 
   if (!isOpen) return null;
@@ -135,20 +131,14 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose, tasks }) => {
 
             <div className="flex gap-4 min-w-[320px]">
                 <div className="relative flex-1">
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                    <select
+                    <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                    <input
+                        type="date"
                         value={selectedDate}
                         onChange={(e) => setSelectedDate(e.target.value)}
-                        className="w-full pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-                    >
-                        <option value="all">Cualquier fecha</option>
-                        {uniqueDates.map(d => (
-                            <option key={d.value} value={d.value}>{d.label}</option>
-                        ))}
-                    </select>
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </div>
+                        max={todayStr}
+                        className="w-full pl-9 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                    />
                 </div>
 
                 <div className="relative flex-1">
@@ -171,10 +161,19 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose, tasks }) => {
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-            {Object.keys(groupedTasks).length === 0 ? (
-                <div className="text-center py-12">
-                    <p className="text-zinc-500 dark:text-zinc-400">No se encontraron tareas completadas con estos filtros.</p>
+          <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar min-h-[300px]">
+            {loading ? (
+                <div className="flex flex-col items-center justify-center h-full space-y-3 opacity-70">
+                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">Cargando logros de este día...</p>
+                </div>
+            ) : Object.keys(groupedTasks).length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center py-12 space-y-3">
+                    <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800/50 flex items-center justify-center mb-2">
+                        <CalendarDays className="w-6 h-6 text-zinc-400" />
+                    </div>
+                    <p className="text-zinc-600 dark:text-zinc-300 font-medium">No hay tareas completadas</p>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-500">Prueba buscando en otra fecha o con otros filtros.</p>
                 </div>
             ) : (
                 Object.values(groupedTasks).map((userGroup) => (
@@ -185,44 +184,34 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose, tasks }) => {
                             <h3 className="font-semibold text-zinc-900 dark:text-white text-lg">{userGroup.name}</h3>
                         </div>
 
-                        {/* Dates mapping */}
-                        <div className="space-y-6 pl-4 sm:pl-10">
-                            {Object.entries(userGroup.dates).map(([dateStr, dayTasks]) => (
-                                <div key={dateStr} className="space-y-3">
-                                    <div className="flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/50 inline-flex px-2 py-1 rounded-md">
-                                        <Calendar className="w-3.5 h-3.5" />
-                                        {dateStr}
+                        {/* Task Cards Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-2 sm:pl-11">
+                            {userGroup.items.map(task => (
+                                <Card key={task.id} className="p-3 border-zinc-200 dark:border-zinc-800 hover:border-emerald-200 dark:hover:border-emerald-900/50 transition-colors group">
+                                    <div className="flex items-start gap-3">
+                                        <div className="mt-0.5">
+                                            <div className="w-4 h-4 rounded-full bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-500 flex items-center justify-center">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                            </div>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="text-sm font-medium text-zinc-900 dark:text-white truncate" title={task.title}>
+                                                {task.title}
+                                            </h4>
+                                            <div className="flex items-center gap-2 mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                                                <span>{new Date(task.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                {task.client && (
+                                                    <>
+                                                        <span>•</span>
+                                                        <span className="truncate max-w-[120px]" title={task.client.name}>
+                                                            {task.client.name}
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        {dayTasks.map(task => (
-                                            <Card key={task.id} className="p-3 border-zinc-200 dark:border-zinc-800 hover:border-emerald-200 dark:hover:border-emerald-900/50 transition-colors group">
-                                                <div className="flex items-start gap-3">
-                                                    <div className="mt-0.5">
-                                                        <div className="w-4 h-4 rounded-full bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-500 flex items-center justify-center">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <h4 className="text-sm font-medium text-zinc-900 dark:text-white truncate" title={task.title}>
-                                                            {task.title}
-                                                        </h4>
-                                                        <div className="flex items-center gap-2 mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-                                                            <span>{new Date(task.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                                            {task.client && (
-                                                                <>
-                                                                    <span>•</span>
-                                                                    <span className="truncate max-w-[120px]" title={task.client.name}>
-                                                                        {task.client.name}
-                                                                    </span>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                </div>
+                                </Card>
                             ))}
                         </div>
                     </div>
