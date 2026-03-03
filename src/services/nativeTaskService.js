@@ -112,17 +112,44 @@ export const getCompletedTasks = async () => {
 
 export const updateTask = async (id, data) => {
     try {
+        // 1. Fetch current task state to evaluate transitions (TDD Edge Cases)
+        const currentTask = await prisma.task.findUnique({
+            where: { id },
+            select: { status: true, completedAt: true }
+        });
+
+        if (!currentTask) {
+            throw new Error(`Task with id ${id} not found`);
+        }
+
         const updateData = { ...data };
+
+        // Handle explicit incoming date parsing
         if (updateData.dueDate) {
             updateData.dueDate = new Date(updateData.dueDate);
         }
 
-        if (updateData.status) {
-            if (updateData.status === 'Realizado') {
-                updateData.completedAt = new Date();
+        // Strict Task Lifecycle Logic (completedAt)
+        // Only evaluate if the payload actually attempts to change the 'status' (Edge Case B)
+        if ('status' in updateData) {
+            const newStatus = updateData.status;
+
+            if (newStatus === 'Realizado') {
+                // Edge Case A: Only set completedAt to NOW if it wasn't already 'Realizado' / completed.
+                // If it already has a completedAt, preserve the history.
+                if (!currentTask.completedAt || currentTask.status !== 'Realizado') {
+                    updateData.completedAt = new Date();
+                } else {
+                    // Do not touch completedAt to preserve historical data
+                    delete updateData.completedAt;
+                }
             } else {
+                // Test 2: Transition from Realizado to anything else strictly nullifies completedAt
                 updateData.completedAt = null;
             }
+        } else {
+            // If status is not in payload, strictly do not modify completedAt
+            delete updateData.completedAt;
         }
 
         const updatedTask = await prisma.task.update({
