@@ -1014,8 +1014,9 @@ app.get('/api/metrics/tasks', async (req, res) => {
 
 app.get('/api/tasks/completed', async (req, res) => {
     try {
-        log('API', 'Fetching completed native tasks');
-        const tasks = await getCompletedTasks();
+        const { date } = req.query;
+        log('API', `Fetching completed native tasks for date: ${date || 'today'}`);
+        const tasks = await getCompletedTasks(date);
         res.json(tasks);
     } catch (error) {
         logError('API', 'Failed to fetch completed native tasks', error);

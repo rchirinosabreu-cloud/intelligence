@@ -83,13 +83,23 @@ export const createTask = async ({ title, dueDate, assigneeId, comments, status,
     }
 };
 
-export const getCompletedTasks = async () => {
+export const getCompletedTasks = async (dateString) => {
     try {
+        // Option B: Backend filtering. Determine the date boundaries.
+        // If dateString is provided (YYYY-MM-DD), use it. Otherwise, default to 'today'.
+        const targetDate = dateString ? new Date(dateString) : new Date();
+
+        // Construct the start and end of the target day
+        const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
+        const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999);
+
         const tasks = await prisma.task.findMany({
             where: {
                 status: 'Realizado',
                 completedAt: {
-                    not: null
+                    not: null,
+                    gte: startOfDay,
+                    lte: endOfDay
                 }
             },
             include: {
@@ -100,8 +110,8 @@ export const getCompletedTasks = async () => {
             },
             orderBy: {
                 completedAt: 'desc'
-            },
-            take: 100 // Limit to recent 100 for performance
+            }
+            // Removed take: 100 as we are now strictly filtering by day
         });
         return tasks;
     } catch (error) {

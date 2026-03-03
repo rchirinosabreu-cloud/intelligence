@@ -254,7 +254,6 @@ const Dashboard = () => {
         <CompletedTasksHistoryModal
           isOpen={showHistoryModal}
           onClose={() => setShowHistoryModal(false)}
-          tasks={completedNativeTasks}
         />
       )}
     </motion.div>
