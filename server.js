@@ -1323,8 +1323,8 @@ app.post('/api/chat', async (req, res) => {
 
         // Explicitly set headers at the start to prevent CORB blocking errors
         const origin = req.headers.origin;
-        if (allowedOrigins.includes(origin)) {
-            res.setHeader('Access-Control-Allow-Origin', origin);
+        if (isAllowedOrigin(origin)) {
+            res.setHeader('Access-Control-Allow-Origin', origin || '*');
         }
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('X-Content-Type-Options', 'nosniff');
