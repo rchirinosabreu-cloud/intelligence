@@ -14,6 +14,7 @@ model Client {
   slug      String   @unique // Para urls tipo /sunpartners
   status    String   @default("active") // active, paused, archived
   logoUrl   String?
+  aiInstructions String? @db.Text // Contexto específico para el agente Bria
   createdAt DateTime @default(now())
 
   // Relaciones

@@ -13,6 +13,24 @@ function slugify(text) {
     .replace(/-+$/, '');      // Trim - from end of text
 }
 
+export async function getClientGuidelines(identifier) {
+  try {
+    const client = await getClientByIdentifier(identifier);
+    if (!client) {
+      return `Error: No se encontró ningún cliente bajo el nombre o identificador "${identifier}".`;
+    }
+
+    if (!client.aiInstructions || client.aiInstructions.trim() === '') {
+      return `El cliente "${client.name}" no tiene reglas específicas de redacción configuradas en la base de datos. Utiliza las reglas generales de la agencia.`;
+    }
+
+    return `Guidelines para ${client.name}:\n\n${client.aiInstructions}`;
+  } catch (error) {
+    console.error("[ClientService] Error fetching guidelines:", error);
+    return `Error al obtener las guías del cliente.`;
+  }
+}
+
 export async function getClientByIdentifier(identifier) {
   try {
     // Check if the identifier is a valid UUID
