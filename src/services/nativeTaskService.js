@@ -85,13 +85,25 @@ export const createTask = async ({ title, dueDate, assigneeId, comments, status,
 
 export const getCompletedTasks = async (dateString) => {
     try {
-        // Option B: Backend filtering. Determine the date boundaries.
-        // If dateString is provided (YYYY-MM-DD), use it. Otherwise, default to 'today'.
-        const targetDate = dateString ? new Date(dateString) : new Date();
+        // Fix Timezone Offset (America/Bogota UTC-5)
+        let targetDateStr = dateString;
 
-        // Construct the start and end of the target day
-        const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
-        const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999);
+        if (!targetDateStr) {
+            // If no date provided, get "today" in UTC-5
+            const formatter = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Bogota',
+                year: 'numeric', month: '2-digit', day: '2-digit'
+            });
+            targetDateStr = formatter.format(new Date()); // Returns YYYY-MM-DD
+        }
+
+        // Construct the boundaries in strict UTC to match Prisma's stored values
+        // A day in Bogota (e.g. 2026-03-03) starts at 2026-03-03T05:00:00.000Z
+        // and ends at 2026-03-04T04:59:59.999Z
+        const startOfDay = new Date(`${targetDateStr}T05:00:00.000Z`);
+
+        // To get the end of the day, add 24 hours and subtract 1 millisecond
+        const endOfDay = new Date(startOfDay.getTime() + (24 * 60 * 60 * 1000) - 1);
 
         const tasks = await prisma.task.findMany({
             where: {
