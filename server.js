@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai';
 import { SearchServiceClient } from '@google-cloud/discoveryengine';
 import { JWT } from 'google-auth-library';
+import fs from 'fs';
 import * as cheerio from 'cheerio';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { getUpcomingEvents } from './src/services/calendarService.js';
@@ -1319,7 +1320,54 @@ app.post('/api/chat', async (req, res) => {
             return res.end();
         }
 
-        const chat = generativeModel.startChat({
+        // --- SKILLS ROUTING (Context Injection) ---
+        let injectedSkillText = "";
+        const lowerMessage = lastMessageContent.toLowerCase();
+
+        // Check for Social Media Keywords
+        if (/parrilla|redes sociales|post|reel|instagram|carrusel|storytelling/i.test(lowerMessage)) {
+            try {
+                const socialSkillPath = path.join(__dirname, 'src', 'skills', 'Skill_Social_Copy.md');
+                if (fs.existsSync(socialSkillPath)) {
+                    injectedSkillText = "\n\n### HABILIDAD INYECTADA: SOCIAL MEDIA COPYWRITING ###\n" + fs.readFileSync(socialSkillPath, 'utf8');
+                    console.log("[Skills Router] Injected Skill_Social_Copy.md");
+                }
+            } catch (err) {
+                console.error("[Skills Router] Error reading Social Skill:", err);
+            }
+        }
+        // Check for Web/CRO Keywords
+        else if (/landing page|página web|página de precios|email sequence|página de ventas/i.test(lowerMessage)) {
+             try {
+                const croSkillPath = path.join(__dirname, 'src', 'skills', 'Skill_Web_CRO.md');
+                if (fs.existsSync(croSkillPath)) {
+                    injectedSkillText = "\n\n### HABILIDAD INYECTADA: WEB CRO COPYWRITING ###\n" + fs.readFileSync(croSkillPath, 'utf8');
+                    console.log("[Skills Router] Injected Skill_Web_CRO.md");
+                }
+            } catch (err) {
+                console.error("[Skills Router] Error reading CRO Skill:", err);
+            }
+        }
+
+        // We must re-instantiate the model to pass the dynamically extended system instruction
+        const finalSystemPrompt = systemPrompt + injectedSkillText;
+
+        let dynamicGenerativeModel;
+        try {
+            dynamicGenerativeModel = vertexAI.getGenerativeModel({
+                model: MODEL_NAME,
+                systemInstruction: {
+                    role: "system",
+                    parts: [{ text: finalSystemPrompt }]
+                },
+                tools: tools
+            });
+        } catch (initError) {
+            console.error("CRITICAL: Failed to dynamically initialize Vertex AI Generative Model:", initError);
+            throw initError;
+        }
+
+        const chat = dynamicGenerativeModel.startChat({
             history: history,
         });
 
