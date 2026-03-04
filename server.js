@@ -1325,15 +1325,26 @@ app.post('/api/chat', async (req, res) => {
         const lowerMessage = lastMessageContent.toLowerCase();
 
         // Check for Social Media Keywords
-        if (/parrilla|redes sociales|post|reel|instagram|carrusel|storytelling/i.test(lowerMessage)) {
+        if (/parrilla|redes sociales|post|carrusel|instagram|tiktok|reel/i.test(lowerMessage)) {
             try {
-                const socialSkillPath = path.join(__dirname, 'src', 'skills', 'Skill_Social_Copy.md');
-                if (fs.existsSync(socialSkillPath)) {
-                    injectedSkillText = "\n\n### HABILIDAD INYECTADA: SOCIAL MEDIA COPYWRITING ###\n" + fs.readFileSync(socialSkillPath, 'utf8');
-                    console.log("[Skills Router] Injected Skill_Social_Copy.md");
+                // We combine our internal framework with Corey's social-content skill
+                const socialSkillPath1 = path.join(__dirname, 'src', 'skills', 'Skill_Social_Copy.md');
+                const socialSkillPath2 = path.join(__dirname, 'src', 'skills', 'Skill_Social_Content.md');
+
+                let combinedSocialSkill = "";
+                if (fs.existsSync(socialSkillPath1)) {
+                    combinedSocialSkill += fs.readFileSync(socialSkillPath1, 'utf8') + "\n\n";
+                }
+                if (fs.existsSync(socialSkillPath2)) {
+                    combinedSocialSkill += "--- NORMAS DE SOCIAL CONTENT (COREY HAINES) ---\n" + fs.readFileSync(socialSkillPath2, 'utf8');
+                }
+
+                if (combinedSocialSkill) {
+                    injectedSkillText += "\n\n### HABILIDAD INYECTADA: SOCIAL MEDIA EXPERT ###\n" + combinedSocialSkill;
+                    console.log("[Skills Router] Injected Social Media Skills");
                 }
             } catch (err) {
-                console.error("[Skills Router] Error reading Social Skill:", err);
+                console.error("[Skills Router] Error reading Social Skills:", err);
             }
         }
         // Check for Web/CRO Keywords
@@ -1341,11 +1352,36 @@ app.post('/api/chat', async (req, res) => {
              try {
                 const croSkillPath = path.join(__dirname, 'src', 'skills', 'Skill_Web_CRO.md');
                 if (fs.existsSync(croSkillPath)) {
-                    injectedSkillText = "\n\n### HABILIDAD INYECTADA: WEB CRO COPYWRITING ###\n" + fs.readFileSync(croSkillPath, 'utf8');
+                    injectedSkillText += "\n\n### HABILIDAD INYECTADA: WEB CRO COPYWRITING ###\n" + fs.readFileSync(croSkillPath, 'utf8');
                     console.log("[Skills Router] Injected Skill_Web_CRO.md");
                 }
             } catch (err) {
                 console.error("[Skills Router] Error reading CRO Skill:", err);
+            }
+        }
+        // Check for Ad Creative Keywords
+        else if (/anuncios|pauta|meta ads|facebook ads|campañas|copy para pauta/i.test(lowerMessage)) {
+            try {
+               const adSkillPath = path.join(__dirname, 'src', 'skills', 'Skill_Ad_Creative.md');
+               if (fs.existsSync(adSkillPath)) {
+                   injectedSkillText += "\n\n### HABILIDAD INYECTADA: AD CREATIVE EXPERT ###\n" + fs.readFileSync(adSkillPath, 'utf8');
+                   console.log("[Skills Router] Injected Skill_Ad_Creative.md");
+               }
+           } catch (err) {
+               console.error("[Skills Router] Error reading Ad Creative Skill:", err);
+           }
+        }
+
+        // NON-EXCLUSIVE MODIFIER: Marketing Psychology
+        if (/persuasivo|sesgos|psicología de ventas/i.test(lowerMessage)) {
+            try {
+                const psychSkillPath = path.join(__dirname, 'src', 'skills', 'Skill_Marketing_Psychology.md');
+                if (fs.existsSync(psychSkillPath)) {
+                    injectedSkillText += "\n\n### MODIFICADOR INYECTADO: MARKETING PSYCHOLOGY ###\n" + fs.readFileSync(psychSkillPath, 'utf8');
+                    console.log("[Skills Router] Injected Skill_Marketing_Psychology.md");
+                }
+            } catch (err) {
+                console.error("[Skills Router] Error reading Marketing Psychology Skill:", err);
             }
         }
 
