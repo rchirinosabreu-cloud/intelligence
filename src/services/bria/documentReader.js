@@ -1,5 +1,6 @@
 import { Storage } from '@google-cloud/storage';
 import pdfParse from 'pdf-parse';
+import csvParser from 'csv-parser';
 
 export class DocumentNotFoundError extends Error {
     constructor(message) {
@@ -52,17 +53,54 @@ function getStorageClient() {
 }
 
 /**
- * Descarga un PDF desde un bucket de GCP y extrae su texto limpio.
+ * Internal helper to parse CSV streams into a token-efficient string
+ */
+async function parseCsvStream(fileStream) {
+    return new Promise((resolve, reject) => {
+        const results = [];
+        let headers = [];
+
+        fileStream.pipe(csvParser())
+            .on('headers', (h) => {
+                headers = h;
+                // Add header row to our results
+                results.push(headers.join(' | '));
+            })
+            .on('data', (data) => {
+                // Convert row object to a pipe-separated string to save tokens
+                // e.g. "Value1 | Value2 | Value3"
+                const rowValues = headers.map(h => data[h] || '');
+                results.push(rowValues.join(' | '));
+            })
+            .on('end', () => {
+                // Join all rows with newlines
+                const finalString = results.join('\n');
+                resolve(finalString);
+            })
+            .on('error', (error) => {
+                reject(new Error(`CSV Parsing Error: ${error.message}`));
+            });
+    });
+}
+
+/**
+ * Descarga un PDF o CSV desde un bucket de GCP y extrae su texto limpio o estructurado.
  * Cumple con los lineamientos de TDD definidos en src/tests/bria/documentReader.test.js.
  *
  * @param {string} bucketName - El nombre del bucket en GCP.
  * @param {string} fileName - La ruta o nombre del archivo en el bucket.
  * @returns {Promise<string>} El texto extraído del documento.
  */
-export async function readPdfFromBucket(bucketName, fileName) {
-    // Test 5: Formato no soportado
-    if (!fileName || !fileName.toLowerCase().endsWith('.pdf')) {
-        throw new Error('Unsupported format. Only PDFs are allowed.');
+export async function readDocumentFromBucket(bucketName, fileName) {
+    if (!fileName) throw new Error('File name is required.');
+
+    const lowerFileName = fileName.toLowerCase();
+    const isPdf = lowerFileName.endsWith('.pdf');
+    const isCsv = lowerFileName.endsWith('.csv');
+
+    // Test 5: Formato no soportado (actualizado para permitir CSV)
+    if (!isPdf && !isCsv) {
+        throw new Error('Unsupported format. Only PDFs and CSVs are allowed.');
     }
 
     // Test 3: Falla de Entorno / Credenciales
@@ -73,7 +111,7 @@ export async function readPdfFromBucket(bucketName, fileName) {
     }
 
     try {
-        console.log(`[Bria Optic Nerve] Intentando descargar: gs://${bucketName}/${fileName}`);
+        console.log(`[Bria Optic Nerve] Intentando leer: gs://${bucketName}/${fileName}`);
 
         const file = storage.bucket(bucketName).file(fileName);
 
@@ -84,18 +122,30 @@ export async function readPdfFromBucket(bucketName, fileName) {
             throw new DocumentNotFoundError(`El archivo gs://${bucketName}/${fileName} no fue encontrado en el bucket.`);
         }
 
-        // Descargar archivo a memoria (buffer)
-        const [buffer] = await file.download();
+        let extractedText = '';
 
-        console.log(`[Bria Optic Nerve] Archivo descargado en memoria. Iniciando parseo PDF...`);
+        if (isPdf) {
+            // Descargar archivo a memoria (buffer)
+            const [buffer] = await file.download();
+            console.log(`[Bria Optic Nerve] PDF en memoria. Iniciando parseo...`);
 
-        // Extraer texto
-        const pdfData = await pdfParse(buffer);
-        const extractedText = pdfData.text ? pdfData.text.trim() : '';
+            // Extraer texto
+            const pdfData = await pdfParse(buffer);
+            extractedText = pdfData.text ? pdfData.text.trim() : '';
 
-        // Test 4: PDF no legible (Escaneado)
-        if (extractedText.length === 0) {
-            throw new UnreadablePdfError(`El PDF fue procesado pero no contiene texto seleccionable. Es probable que sea una imagen escaneada que requiere OCR.`);
+            // Test 4: PDF no legible (Escaneado)
+            if (extractedText.length === 0) {
+                throw new UnreadablePdfError(`El PDF fue procesado pero no contiene texto seleccionable. Es probable que sea una imagen escaneada que requiere OCR.`);
+            }
+        } else if (isCsv) {
+            console.log(`[Bria Optic Nerve] Iniciando stream de CSV...`);
+            // Stream the file directly into the CSV parser to avoid loading giant files into memory
+            const fileStream = file.createReadStream();
+            extractedText = await parseCsvStream(fileStream);
+
+            if (!extractedText || extractedText.trim().length === 0) {
+                 throw new Error("The CSV file appears to be empty.");
+            }
         }
 
         // Test 1: Happy Path

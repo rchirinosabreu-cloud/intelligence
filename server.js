@@ -9,7 +9,7 @@ import { JWT } from 'google-auth-library';
 import * as cheerio from 'cheerio';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { getUpcomingEvents } from './src/services/calendarService.js';
-import { getClients, getClientByIdentifier, createClient, getClientLinks, addClientLink, removeClientLink } from './src/services/clientService.js';
+import { getClients, getClientByIdentifier, getClientGuidelines, createClient, getClientLinks, addClientLink, removeClientLink } from './src/services/clientService.js';
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from './src/services/clientTaskService.js';
 import { getClientAnnouncements, createClientAnnouncement } from './src/services/clientAnnouncementService.js';
 import { getCampfireMessages, createCampfireMessage } from './src/services/campfireService.js';
@@ -629,8 +629,20 @@ Cuentas con una herramienta especializada llamada "analyze_website_dna". Úsala 
         -   **Salud Técnica:** Evalúa si el título y la descripción son efectivos para SEO. Revisa si hay múltiples H1 (error común) o si faltan.
         -   **ADN de Marca:** Describe la paleta de colores detectada y sugiere qué emociones transmiten.
 
-### ROL: DIRECTOR DE ESTRATEGIA (BRAIN STUDIO)
-No eres un simple asistente que lista datos. Eres un Consultor Senior de Negocios.
+### ROL: DIRECTOR DE ESTRATEGIA Y COPYWRITER SENIOR (BRAIN STUDIO)
+No eres un simple asistente que lista datos. Eres una Copywriter Senior y Analista de Datos experta.
+
+### REGLAS GLOBALES DE REDACCIÓN (COPYWRITING):
+1. **Cero Redundancia:** Sé directa. Elimina el "fluff". Si puedes decirlo en 5 palabras, no uses 10. Prohibidos los muros de texto.
+2. **Hook y CTA siempre:** Todo copy o propuesta de contenido DEBE tener un "Gancho" atrapante en la primera línea y un Call To Action (CTA) claro al final.
+3. **Formatos Limpios:** Usa párrafos muy cortos (1-2 líneas). Usa el mínimo de emojis posible (1 o 2 por post máximo).
+4. **Guiones de Video:** Si te piden un guion para Reels o TikTok, hazlo corto, visual y directo a la cámara.
+5. **Inyección de Contexto OBLIGATORIA:** **SIEMPRE** que el usuario te pida crear contenido para un cliente específico, TU PRIMER PASO DEBE SER llamar a la herramienta \`get_client_guidelines\` para obtener sus instrucciones de IA (idioma, tono, palabras prohibidas) ANTES de empezar a escribir.
+
+### PROTOCOLO DE ANÁLISIS DE DATOS (CSVs):
+Cuando busques en el Storage y encuentres un reporte de métricas (ej. CSV de Meta Ads), tu objetivo es ser analítica:
+- Encuentra patrones: ¿Qué tipo de ganchos generaron más CTR? ¿Qué formato (video/imagen) funcionó mejor?
+- Aplica esos aprendizajes al generar nuevo contenido para ese cliente.
 
 CUANDO ENTREGUES UN ANÁLISIS (AUDITORÍA O LECTURA):
 1. **El "So What?":** Nunca des un dato sin explicar su impacto en dinero o marca.
@@ -730,14 +742,28 @@ const tools = [
     {
         functionDeclarations: [
             {
+                name: "get_client_guidelines",
+                description: "Obtiene las reglas de redacción (brand guidelines y ai_instructions) de un cliente específico directamente desde la base de datos. DEBE llamarse SIEMPRE antes de generar contenido para asegurar el tono de la marca.",
+                parameters: {
+                    type: FunctionDeclarationSchemaType.OBJECT,
+                    properties: {
+                        identifier: {
+                            type: FunctionDeclarationSchemaType.STRING,
+                            description: "Nombre de la marca o slug del cliente (ej. 'TruPeak' o 'trupeak')."
+                        }
+                    },
+                    required: ["identifier"]
+                }
+            },
+            {
                 name: "search_cloud_storage",
-                description: "Busca en el 'cerebro' de Brainstudio (Google Cloud Storage) documentos no estructurados (PDFs, guías, reportes) de clientes como Sunpartners, TruPeak, etc. Usa esto para consultas sobre información interna o conocimiento de proyectos.",
+                description: "Busca en el 'cerebro' de Brainstudio (Google Cloud Storage) documentos no estructurados (PDFs, CSVs, reportes de métricas) de clientes. Usa esto para consultas sobre información interna, manuales o para analizar resultados de campañas pasadas.",
                 parameters: {
                     type: FunctionDeclarationSchemaType.OBJECT,
                     properties: {
                         query: {
                             type: FunctionDeclarationSchemaType.STRING,
-                            description: "Término de búsqueda (ej. 'Estrategia Sunpartners', 'Reporte TruPeak', 'Guía de Estilo')."
+                            description: "Término de búsqueda (ej. 'Estrategia Sunpartners', 'Métricas Meta TruPeak')."
                         }
                     },
                     required: ["query"]
@@ -1455,7 +1481,24 @@ app.post('/api/chat', async (req, res) => {
             if (call) {
                 let functionResponseParts = [];
 
-                if (call.name === 'search_cloud_storage') {
+                if (call.name === 'get_client_guidelines') {
+                    const identifier = call.args?.identifier;
+                    if (!identifier) {
+                        console.error("[FunctionCall] Missing identifier argument in function call:", call);
+                        res.write("Error: Missing identifier argument for get_client_guidelines.");
+                        res.end();
+                        return;
+                    }
+                    console.log(`[FunctionCall] Executing get_client_guidelines for: ${identifier}`);
+                    const guidelinesText = await getClientGuidelines(identifier);
+
+                    functionResponseParts = [{
+                        functionResponse: {
+                            name: 'get_client_guidelines',
+                            response: { name: 'get_client_guidelines', content: guidelinesText }
+                        }
+                    }];
+                } else if (call.name === 'search_cloud_storage') {
                     const query = call.args?.query;
                     if (!query) {
                         console.error("[FunctionCall] Missing query argument in function call:", call);
