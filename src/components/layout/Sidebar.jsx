@@ -84,14 +84,30 @@ const Sidebar = () => {
 
       {/* Footer */}
       <div className="p-4 border-t border-zinc-200/50 dark:border-white/5 bg-white/30 dark:bg-zinc-900/30 backdrop-blur-md transition-colors">
-        <div className="flex items-center justify-between p-3 rounded-xl bg-white/60 border border-zinc-200/50 shadow-sm hover:shadow-md hover:border-zinc-300/50 dark:bg-white/5 dark:border-white/5 dark:hover:bg-white/10 dark:hover:border-white/10 transition-all duration-300 cursor-pointer group backdrop-blur-sm">
+        <div
+          onClick={() => {
+              sessionStorage.removeItem('authToken');
+              sessionStorage.removeItem('currentUser');
+              window.location.reload();
+          }}
+          className="flex items-center justify-between p-3 rounded-xl bg-white/60 border border-zinc-200/50 shadow-sm hover:shadow-md hover:border-zinc-300/50 dark:bg-white/5 dark:border-white/5 dark:hover:bg-white/10 dark:hover:border-white/10 transition-all duration-300 cursor-pointer group backdrop-blur-sm"
+        >
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-zinc-100 border border-zinc-200 dark:bg-zinc-800/80 dark:border-white/10 flex items-center justify-center shadow-inner transition-colors">
-              <User className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+            <div className="w-9 h-9 rounded-full bg-zinc-100 border border-zinc-200 dark:bg-zinc-800/80 dark:border-white/10 flex items-center justify-center shadow-inner transition-colors group-hover:bg-red-50 dark:group-hover:bg-red-900/20">
+              <User className="w-4 h-4 text-zinc-500 dark:text-zinc-400 group-hover:text-red-500 transition-colors" />
             </div>
             <div className="flex flex-col text-left">
-              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-200 group-hover:text-primary dark:group-hover:text-white transition-colors">Admin User</span>
-              <span className="text-xs text-zinc-500 dark:text-zinc-500 group-hover:text-zinc-600 dark:group-hover:text-zinc-400 transition-colors">Director</span>
+              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-200 group-hover:text-red-500 transition-colors">Cerrar Sesión</span>
+              <span className="text-xs text-zinc-500 dark:text-zinc-500 group-hover:text-red-400 transition-colors">
+                {(() => {
+                    try {
+                        const user = JSON.parse(sessionStorage.getItem('currentUser'));
+                        return user ? user.name : 'Admin';
+                    } catch(e) {
+                        return 'Admin';
+                    }
+                })()}
+              </span>
             </div>
           </div>
 
