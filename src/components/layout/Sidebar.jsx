@@ -14,7 +14,6 @@ const Sidebar = () => {
     { id: 'bria', label: 'Bria Intelligence', icon: Sparkles, path: '/bria' },
     { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/pendientes-nativo' },
     { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes' },
-    { id: 'minutes', label: 'Minutas', icon: Users, path: '/minutas' },
     { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo' },
   ];
 
