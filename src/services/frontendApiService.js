@@ -23,8 +23,8 @@ const blobToBase64 = async (blob) => {
 };
 
 const frontendApiService = {
-  // OpenAI API Call with retry logic
-  generateCompletion: async (prompt, systemMessage = "You are a helpful assistant.") => {
+  // OpenAI API Call with retry and SSE streaming logic
+  generateCompletion: async (prompt, systemMessage = "You are a helpful assistant.", onChunk = null) => {
     // Add Spanish instruction to system message
     const languageInstruction = " Responde SIEMPRE en español. Todos los textos, títulos, labels deben estar en español.";
     const finalSystemMessage = systemMessage + languageInstruction;
@@ -38,39 +38,84 @@ const frontendApiService = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: "gpt-4o", // Changed to gpt-4o as gpt-5.1 is invalid
+            model: "gpt-4o",
             messages: [
               { role: "system", content: finalSystemMessage },
               { role: "user", content: prompt }
             ],
-            response_format: { type: "json_object" },
+            stream: true, // Request streaming from OpenAI
             temperature: 0.7
           })
         });
 
         if (!response.ok) {
             if (response.status === 429) throw new Error("Rate limited");
-            throw new Error(`OpenAI HTTP Error: ${response.status}`);
+            const errText = await response.text();
+            throw new Error(`OpenAI HTTP Error: ${response.status} - ${errText}`);
         }
 
-        const data = await response.json();
-        return data.choices[0].message.content;
+        // Handle streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let fullText = "";
+        let buffer = ""; // Required to handle chunk fragmentation in TCP streams
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Split by newline, keeping the last potentially incomplete line in the buffer
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ""; // The last element is either empty (if ended in \n) or an incomplete line
+
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (trimmedLine.startsWith('data: ') && trimmedLine !== 'data: [DONE]') {
+                    try {
+                        const jsonStr = trimmedLine.slice(6);
+                        const data = JSON.parse(jsonStr);
+                        const content = data.choices[0]?.delta?.content || "";
+                        if (content) {
+                            fullText += content;
+                            if (onChunk) {
+                                onChunk(content, fullText);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn("Error parsing chunk:", e, trimmedLine);
+                    }
+                }
+            }
+        }
+
+        // If there's anything left in the buffer that looks like a data line, process it
+        if (buffer.trim().startsWith('data: ') && buffer.trim() !== 'data: [DONE]') {
+             try {
+                 const jsonStr = buffer.trim().slice(6);
+                 const data = JSON.parse(jsonStr);
+                 const content = data.choices[0]?.delta?.content || "";
+                 if (content) fullText += content;
+             } catch(e) {
+                 // Ignore trailing garbage
+             }
+        }
+
+        return fullText;
+
       } catch (error) {
-        if (error.response && error.response.status === 429) {
-          // Rate limited
+        if (error.message.includes("Rate limited") || error.message.includes("429")) {
           attempt++;
-          const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff
+          const waitTime = Math.pow(2, attempt) * 1000;
           console.warn(`Rate limited by OpenAI. Retrying in ${waitTime}ms...`);
           await delay(waitTime);
         } else {
           console.error("OpenAI API Error:", error);
           if (error.message === 'Network Error' && !error.response) {
-            throw new Error("Network Error: La llamada a OpenAI necesita un proxy/servidor para evitar CORS. Configura el backend /api/openai o VITE_API_BASE_URL.");
+            throw new Error("Network Error: Failed to connect to proxy.");
           }
-          if (error.response?.status === 502) {
-             throw new Error("Error de autenticación con el servicio de OpenAI. Por favor contacta al soporte.");
-          }
-          throw new Error(error.response?.data?.error?.message || "Failed to generate completion from OpenAI");
+          throw new Error(error.message || "Failed to generate completion from OpenAI");
         }
       }
     }

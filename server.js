@@ -298,29 +298,80 @@ const openaiApiKey = process.env.OPENAI_API_KEY;
 const firefliesApiKey = process.env.FIREFLIES_API_KEY;
 const geminiApiKey = process.env.GEMINI_API_KEY;
 
-app.use(
-  '/api/openai',
-  authenticateToken,
-  createProxyMiddleware({
-    target: 'https://api.openai.com',
-    changeOrigin: true,
-    secure: true,
-    pathRewrite: (path) => path.replace(/^\/api\/openai/, ''),
-    onProxyReq: (proxyReq) => {
-      proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
-      proxyReq.removeHeader('Authorization');
-      if (openaiApiKey) {
-        proxyReq.setHeader('Authorization', `Bearer ${openaiApiKey}`);
-      }
-    },
-    onProxyRes: (proxyRes) => {
-      if (proxyRes.statusCode === 401 || proxyRes.statusCode === 403) {
-        proxyRes.statusCode = 502;
-        console.error(`[Proxy] OpenAI API ${proxyRes.statusCode} - Converting to 502 to avoid frontend logout`);
-      }
-    },
-  })
-);
+// --- OPENAI DIRECT STREAMING ROUTE ---
+app.post('/api/openai/v1/chat/completions', authenticateToken, async (req, res) => {
+    try {
+        if (!openaiApiKey) {
+            console.error("[OpenAI API] Missing OPENAI_API_KEY");
+            return res.status(500).json({ error: "Missing OpenAI API Key" });
+        }
+
+        // Force stream to true
+        const requestBody = {
+            ...req.body,
+            stream: true
+        };
+
+        console.log("[OpenAI API] Forwarding request to OpenAI with streaming enabled...");
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${openaiApiKey}`,
+                'User-Agent': 'BrainStudioIntelligence/2.0'
+            },
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[OpenAI API] HTTP Error ${response.status}:`, errorText);
+            return res.status(response.status).send(errorText);
+        }
+
+        // Set Headers for SSE (Server-Sent Events)
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        // Pipe the fetch response body directly to the Express response
+        if (response.body) {
+             const reader = response.body.getReader();
+
+             const pump = async () => {
+                 try {
+                     while (true) {
+                         const { done, value } = await reader.read();
+                         if (done) break;
+                         res.write(value);
+                     }
+                     res.end();
+                 } catch (err) {
+                     console.error("[OpenAI API] Stream reading error:", err);
+                     res.end();
+                 }
+             };
+
+             pump();
+
+             // Handle client disconnects to prevent memory leaks
+             req.on('close', () => {
+                 reader.cancel();
+             });
+
+        } else {
+             // Fallback for Node environments where response.body isn't a streamable standard ReadableStream
+             // In Node 18+, fetch bodies are web streams, but just in case:
+             const text = await response.text();
+             res.send(text);
+        }
+
+    } catch (error) {
+        console.error("[OpenAI API] Critical Fetch Error:", error.message);
+        res.status(504).json({ error: "Failed to connect to OpenAI API", details: error.message });
+    }
+});
 
 // --- FIREFLIES GRAPHQL ROUTE (Direct Fetch instead of Proxy for better error handling) ---
 app.post('/api/fireflies/graphql', authenticateToken, async (req, res) => {
