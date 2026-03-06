@@ -226,6 +226,66 @@ app.post('/api/users', authenticateToken, async (req, res) => {
     }
 });
 
+// --- TEMPORARY SYNC ENDPOINT ---
+// Used to bootstrap existing TeamMembers into Users because Railway terminal is inaccessible.
+app.get('/api/sync-users', async (req, res) => {
+  console.log("[Sync] Iniciando sincronización de TeamMembers a Users...");
+
+  try {
+    const teamMembers = await prisma.teamMember.findMany({
+      where: {
+        isActive: true,
+        email: { not: null, not: '' }
+      }
+    });
+
+    if (teamMembers.length === 0) {
+      return res.json({ success: true, message: "No se encontraron TeamMembers con email para sincronizar." });
+    }
+
+    const defaultPassword = 'Brainstudio2026';
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+    let createdCount = 0;
+    let skippedCount = 0;
+
+    for (const member of teamMembers) {
+      const normalizedEmail = member.email.trim().toLowerCase();
+
+      const existingUser = await prisma.user.findUnique({
+        where: { email: normalizedEmail }
+      });
+
+      if (existingUser) {
+        skippedCount++;
+        continue;
+      }
+
+      await prisma.user.create({
+        data: {
+          name: member.name,
+          email: normalizedEmail,
+          password: hashedPassword,
+          role: 'EDITOR'
+        }
+      });
+
+      createdCount++;
+    }
+
+    res.json({
+        success: true,
+        message: "Sincronización completada",
+        sincronizados: createdCount,
+        omitidos_ya_existian: skippedCount
+    });
+
+  } catch (error) {
+    console.error("[Sync] Error durante la sincronización:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Protect core intelligence API endpoints
 app.use('/api/db', authenticateToken);
 app.use('/api/clients', authenticateToken);
