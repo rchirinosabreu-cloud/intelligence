@@ -3,6 +3,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import { createProxyMiddleware } from 'http-proxy-middleware';
+import prisma from './src/lib/prisma.js';
 import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai';
 import { SearchServiceClient } from '@google-cloud/discoveryengine';
 import { JWT } from 'google-auth-library';
@@ -105,6 +109,200 @@ app.get('/api/health', (req, res) => {
 });
 
 const PORT = process.env.PORT || 8080;
+
+// --- LOGIN & AUTHENTICATION MIDDLEWARE ---
+const JWT_SECRET = process.env.JWT_SECRET || 'brainstudio-secret-key-2025';
+
+app.post('/api/login', async (req, res) => {
+  try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+          return res.status(400).json({ message: 'Email y contraseña son requeridos' });
+      }
+
+      // 0. Bootstrapping: If the User table is completely empty, auto-seed the first Admin.
+      const userCount = await prisma.user.count();
+      if (userCount === 0) {
+          console.log("[Bootstrapping] No users found in database. Creating default admin user.");
+          const defaultAdminEmail = process.env.ADMIN_USER || 'admin@brainstudio.com';
+          const defaultAdminPassword = process.env.ADMIN_PASSWORD || 'password123';
+          const hashedAdminPassword = await bcrypt.hash(defaultAdminPassword, 10);
+
+          await prisma.user.create({
+              data: {
+                  name: 'System Admin',
+                  email: defaultAdminEmail,
+                  password: hashedAdminPassword,
+                  role: 'ADMIN'
+              }
+          });
+      }
+
+      // 1. Buscar usuario por email
+      const user = await prisma.user.findUnique({
+          where: { email }
+      });
+
+      if (!user) {
+          return res.status(401).json({ message: 'Credenciales incorrectas' });
+      }
+
+      // 2. Verificar contraseña con bcrypt
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+
+      if (!isPasswordValid) {
+          return res.status(401).json({ message: 'Credenciales incorrectas' });
+      }
+
+      // 3. Generar JWT con Payload extendido
+      const token = jwt.sign(
+          {
+              userId: user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role
+          },
+          JWT_SECRET,
+          { expiresIn: '24h' }
+      );
+
+      return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+
+  } catch (error) {
+      console.error('Error during login:', error);
+      res.status(500).json({ message: 'Error interno del servidor' });
+  }
+});
+
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) return res.status(401).json({ error: "No token provided" });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: "Invalid token" });
+    req.user = user;
+    next();
+  });
+};
+
+// User Management Endpoints
+app.post('/api/users', authenticateToken, async (req, res) => {
+    // Only allow Admins to create users (optional but recommended)
+    if (req.user?.role !== 'ADMIN') {
+        return res.status(403).json({ message: 'No tienes permisos para crear usuarios' });
+    }
+
+    try {
+        const { name, email, password, role } = req.body;
+
+        if (!name || !email || !password) {
+            return res.status(400).json({ message: 'Nombre, email y contraseña son obligatorios' });
+        }
+
+        const existingUser = await prisma.user.findUnique({ where: { email } });
+        if (existingUser) {
+            return res.status(400).json({ message: 'El correo ya está registrado' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const newUser = await prisma.user.create({
+            data: {
+                name,
+                email,
+                password: hashedPassword,
+                role: role || 'EDITOR'
+            },
+            select: { id: true, name: true, email: true, role: true } // Don't return password
+        });
+
+        res.status(201).json(newUser);
+    } catch (error) {
+        console.error('Error creating user:', error);
+        res.status(500).json({ message: 'Error interno al crear usuario' });
+    }
+});
+
+// Protect core intelligence API endpoints
+app.use('/api/db', authenticateToken);
+app.use('/api/clients', authenticateToken);
+app.use('/api/tasks', authenticateToken);
+app.use('/api/team', authenticateToken);
+app.use('/api/global-announcements', authenticateToken);
+
+// --- MINUTES PROXY ROUTES ---
+const openaiApiKey = process.env.OPENAI_API_KEY;
+const firefliesApiKey = process.env.FIREFLIES_API_KEY;
+const geminiApiKey = process.env.GEMINI_API_KEY;
+
+app.use(
+  '/api/openai',
+  authenticateToken,
+  createProxyMiddleware({
+    target: 'https://api.openai.com',
+    changeOrigin: true,
+    secure: true,
+    pathRewrite: (path) => path.replace(/^\/api\/openai/, ''),
+    onProxyReq: (proxyReq) => {
+      proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
+      proxyReq.removeHeader('Authorization');
+      if (openaiApiKey) {
+        proxyReq.setHeader('Authorization', `Bearer ${openaiApiKey}`);
+      }
+    },
+    onProxyRes: (proxyRes) => {
+      if (proxyRes.statusCode === 401 || proxyRes.statusCode === 403) {
+        proxyRes.statusCode = 502;
+        console.error(`[Proxy] OpenAI API ${proxyRes.statusCode} - Converting to 502 to avoid frontend logout`);
+      }
+    },
+  })
+);
+
+app.use(
+  '/api/fireflies',
+  authenticateToken,
+  createProxyMiddleware({
+    target: 'https://api.fireflies.ai',
+    changeOrigin: true,
+    secure: true,
+    pathRewrite: (path) => path.replace(/^\/api\/fireflies/, ''),
+    onProxyReq: (proxyReq) => {
+      proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.removeHeader('Authorization');
+      if (firefliesApiKey) {
+        proxyReq.setHeader('Authorization', `Bearer ${firefliesApiKey}`);
+      }
+    },
+    onProxyRes: (proxyRes) => {
+      if (proxyRes.statusCode === 401 || proxyRes.statusCode === 403) {
+        proxyRes.statusCode = 502;
+      }
+    },
+  })
+);
+
+app.use(
+  '/api/gemini',
+  authenticateToken,
+  createProxyMiddleware({
+    target: 'https://generativelanguage.googleapis.com',
+    changeOrigin: true,
+    secure: true,
+    pathRewrite: (path) => path.replace(/^\/api\/gemini/, ''),
+    onProxyReq: (proxyReq) => {
+      proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
+      proxyReq.removeHeader('Authorization');
+      if (geminiApiKey) {
+        proxyReq.setHeader('x-goog-api-key', geminiApiKey);
+      }
+    }
+  })
+);
 
 // --- AUTHENTICATION SETUP ---
 let credentials;
