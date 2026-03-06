@@ -35,7 +35,11 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
       // Use the template from utils
       const prompt = SUMMARY_PROMPT_TEMPLATE.replace('{{CONTENT}}', combinedPrompt.substring(0, 25000));
 
-      const resultString = await frontendApiService.generateCompletion(prompt, "Eres un asistente administrativo experto que extrae hechos objetivos y responde siempre en JSON y en Español.");
+      const resultString = await frontendApiService.generateCompletion(
+         prompt,
+         "Eres un asistente administrativo experto que extrae hechos objetivos y responde siempre en JSON y en Español.",
+         (chunk, accumulated) => {}
+      );
       const result = JSON.parse(resultString);
       setSummaryData(result);
 

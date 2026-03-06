@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Sparkles, CheckSquare, FolderOpen, Users, UserCheck, User, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, Sparkles, CheckSquare, FileText, Users, UserCheck, User, Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
@@ -13,6 +13,7 @@ const Sidebar = () => {
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, path: '/' },
     { id: 'bria', label: 'Bria Intelligence', icon: Sparkles, path: '/bria' },
     { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/pendientes-nativo' },
+    { id: 'minutes', label: 'Minutas', icon: FileText, path: '/minutas' },
     { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes' },
     { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo' },
   ];
