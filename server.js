@@ -262,29 +262,51 @@ app.use(
   })
 );
 
-app.use(
-  '/api/fireflies',
-  authenticateToken,
-  createProxyMiddleware({
-    target: 'https://api.fireflies.ai',
-    changeOrigin: true,
-    secure: true,
-    pathRewrite: (path) => path.replace(/^\/api\/fireflies/, ''),
-    onProxyReq: (proxyReq) => {
-      proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
-      proxyReq.setHeader('Content-Type', 'application/json');
-      proxyReq.removeHeader('Authorization');
-      if (firefliesApiKey) {
-        proxyReq.setHeader('Authorization', `Bearer ${firefliesApiKey}`);
-      }
-    },
-    onProxyRes: (proxyRes) => {
-      if (proxyRes.statusCode === 401 || proxyRes.statusCode === 403) {
-        proxyRes.statusCode = 502;
-      }
-    },
-  })
-);
+// --- FIREFLIES GRAPHQL ROUTE (Direct Fetch instead of Proxy for better error handling) ---
+app.post('/api/fireflies/graphql', authenticateToken, async (req, res) => {
+    try {
+        const apiKey = process.env.FIREFLIES_API_KEY;
+
+        if (!apiKey) {
+            console.error("[Fireflies API] Missing FIREFLIES_API_KEY in environment");
+            return res.status(500).json({ error: "Missing Fireflies API Key configuration" });
+        }
+
+        console.log("[Fireflies API] Forwarding GraphQL request...");
+
+        const response = await fetch('https://api.fireflies.ai/graphql', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+                'User-Agent': 'BrainStudioIntelligence/2.0'
+            },
+            body: JSON.stringify(req.body)
+        });
+
+        const data = await response.text(); // Read as text first to handle non-JSON error pages safely
+
+        if (!response.ok) {
+            console.error(`[Fireflies API] HTTP Error ${response.status}:`, data);
+            return res.status(response.status).send(data);
+        }
+
+        try {
+            const jsonData = JSON.parse(data);
+            if (jsonData.errors) {
+                 console.error("[Fireflies API] GraphQL Errors returned:", JSON.stringify(jsonData.errors, null, 2));
+            }
+            res.json(jsonData);
+        } catch (parseError) {
+            console.error("[Fireflies API] Failed to parse response as JSON:", data);
+            res.status(502).json({ error: "Invalid JSON response from Fireflies", raw: data });
+        }
+
+    } catch (error) {
+        console.error("[Fireflies API] Critical Fetch Error:", error.message);
+        res.status(504).json({ error: "Failed to connect to Fireflies API", details: error.message });
+    }
+});
 
 app.use(
   '/api/gemini',
