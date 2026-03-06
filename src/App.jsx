@@ -12,6 +12,7 @@ import Login from './components/Login';
 import MinutesLayout from './components/modules/Minutes/MinutesLayout';
 import { ThemeProvider } from './context/ThemeContext';
 import { useState, useEffect } from 'react';
+import { Toaster } from 'react-hot-toast';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -87,6 +88,12 @@ function App() {
             {/* Fallback para rutas no encontradas - redirigir a inicio */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              className: 'dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-800 border',
+            }}
+          />
         </AppLayout>
       </Router>
     </ThemeProvider>
