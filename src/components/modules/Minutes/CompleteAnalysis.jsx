@@ -90,7 +90,7 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
       {!analysisData && !loading && (
         <Button
           onClick={handleGenerate}
-          className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-12 shadow-lg shadow-primary/20"
+          className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-medium h-12 shadow-sm"
         >
           <Brain className="w-4 h-4 mr-2" />
           Generar Análisis Completo (Unificado)
@@ -98,9 +98,9 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
       )}
 
       {loading && (
-        <div className="p-8 text-center bg-white dark:bg-zinc-900 rounded-lg border border-purple-900/30">
-          <Loader2 className="w-8 h-8 text-violet-400 animate-spin mx-auto mb-3" />
-          <p className="text-violet-200">Realizando análisis cruzado de fuentes...</p>
+        <div className="p-8 text-center bg-white dark:bg-zinc-900 rounded-lg border border-border">
+          <Loader2 className="w-8 h-8 text-muted-foreground animate-spin mx-auto mb-3" />
+          <p className="text-muted-foreground">Realizando análisis cruzado de fuentes...</p>
         </div>
       )}
 
@@ -116,10 +116,10 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
       )}
 
       {analysisData && !loading && (
-         <div className="bg-white dark:bg-zinc-900 rounded-lg p-6 border border-border/50 shadow-md space-y-4">
-          <div className="flex flex-col items-center gap-4 text-center pb-4 border-b border-indigo-800/30">
-            <div className="bg-primary/10 p-3 rounded-full">
-              <CheckCircle className="w-8 h-8 text-indigo-500" />
+         <div className="bg-white dark:bg-zinc-900 rounded-lg p-6 border border-border shadow-md space-y-4">
+          <div className="flex flex-col items-center gap-4 text-center pb-4 border-b border-border">
+            <div className="bg-muted/50 p-3 rounded-full">
+              <CheckCircle className="w-8 h-8 text-muted-foreground" />
             </div>
             <div>
               <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Análisis Estratégico Unificado</h3>
@@ -130,25 +130,13 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
                <Button
                 onClick={handleDownloadHTML}
                 disabled={htmlLoading}
-                className="flex-1 bg-primary/20 hover:bg-primary/30 text-primary-foreground border border-primary/30"
+                className="flex-1 bg-muted/50 hover:bg-primary/30 text-primary-foreground border border-border"
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
                 {htmlLoading ? 'Generando HTML...' : 'Descargar HTML'}
               </Button>
             </div>
           </div>
-
-          {htmlLoading && (
-            <div className="bg-background/50 backdrop-blur-xl border border-border/50 rounded-lg p-4">
-              <div className="flex items-center justify-between text-xs text-indigo-200 mb-2">
-                <span>Generando reporte con Gemini</span>
-                <span>Procesando...</span>
-              </div>
-              <div className="h-2 bg-primary/20 rounded-full overflow-hidden">
-                <div className="h-full w-full bg-primary animate-pulse" />
-              </div>
-            </div>
-          )}
 
           <div className="text-left text-sm text-gray-300 space-y-2">
              <p><strong className="text-primary">Insight:</strong> {analysisData.consulting_insights?.[0]?.substring(0, 100) || 'Análisis generado'}...</p>

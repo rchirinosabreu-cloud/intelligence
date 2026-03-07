@@ -8,7 +8,7 @@ const FileList = ({ files, onRemove }) => {
   if (!files || files.length === 0) return null;
 
   const getIcon = (type, title) => {
-    if (type === 'audio') return <Music className="w-4 h-4 text-pink-400" />;
+    if (type === 'audio') return <Music className="w-4 h-4 text-muted-foreground" />;
     if (title.endsWith('.pdf')) return <File className="w-4 h-4 text-red-400" />;
     if (title.endsWith('.csv')) return <FileSpreadsheet className="w-4 h-4 text-green-400" />;
     if (title.endsWith('.docx')) return <FileText className="w-4 h-4 text-blue-400" />;
@@ -28,10 +28,10 @@ const FileList = ({ files, onRemove }) => {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="group flex items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-purple-900/30 hover:border-purple-600/50 transition-colors"
+              className="group flex items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-border hover:border-border transition-colors"
             >
               <div className="flex items-center gap-3 overflow-hidden">
-                <div className="p-2 bg-purple-900/20 rounded-md">
+                <div className="p-2 bg-muted/50 rounded-md">
                    {getIcon(file.type, file.title)}
                 </div>
                 <div className="min-w-0">
