@@ -28,3 +28,8 @@ Este archivo contiene las reglas y el contexto inmutable del proyecto para evita
 
 ---
 *Nota para el agente: Si estás a punto de modificar `schema.prisma`, `server.js` (sección CORS), o archivos clave de UI, revisa primero estas reglas.*
+## 6. Reglas de Desarrollo y Testing (TDD Estratégico)
+
+1. **Backend y Lógica Crítica (TDD Obligatorio):** Para cualquier nueva ruta de API, integraciones con terceros (OpenAI, Fireflies), parseo de datos (JSON) o lógica de autenticación/base de datos, **DEBES utilizar un enfoque TDD**. Escribe primero las pruebas (usando Jest o la herramienta configurada), asegúrate de que fallen, y luego escribe el código para que pasen.
+2. **Manejo de Respuestas de IA:** Todas las funciones que procesen respuestas de LLMs (OpenAI, Gemini) deben incluir una prueba específica que simule la recepción del string envuelto en bloques de código markdown (ej. \`\`\`json ... \`\`\`) para garantizar que el sistema lo limpie y parsee correctamente sin lanzar `SyntaxError`.
+3. **Frontend Visual (Sin TDD):** Para ajustes puramente estéticos en React/Tailwind (colores, glassmorphism, flexbox, márgenes), omite el TDD para agilizar el desarrollo, pero asegúrate de siempre seguir la guía de estilos globales y variables del sistema.
