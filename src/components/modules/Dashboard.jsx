@@ -28,6 +28,34 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 
 const Dashboard = () => {
   const [metrics, setMetrics] = useState({ total: 0, completed: 0, pending: 0, percentage: 0 });
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    const user = sessionStorage.getItem('currentUser');
+    if (user) {
+      setCurrentUser(JSON.parse(user));
+    }
+  }, []);
+
+  const getDailyMessage = () => {
+    const day = new Date().getDay();
+    const messages = {
+      1: "Empezamos una nueva semana. ¡Vamos a darle con toda!",
+      2: "Vamos a mantener el ritmo. ¡A seguir sumando victorias!",
+      3: "¡Ya es mitad de semana! Ya pasamos la cima, ahora a cerrar con fuerza",
+      4: "Jueves con sabor a viernes... Ya casi",
+      5: "¡Ya llegó el viernes! Hoy celebramos los logro de la semana",
+      6: "¿Trabajando un sábado? Gracias por tu compromiso",
+      0: "Domingo chill. Día de recargar baterías, tómalo con mucha calma"
+    };
+    return messages[day] || "¡Bienvenido!";
+  };
+
+  const getFirstName = () => {
+    if (!currentUser || !currentUser.name) return 'Equipo Brain';
+    return currentUser.name.split(' ')[0];
+  };
+
   const [completedNativeTasks, setCompletedNativeTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingNative, setLoadingNative] = useState(true);
@@ -102,7 +130,9 @@ const Dashboard = () => {
         <Card className="bg-gradient-to-r from-white to-zinc-50 border-zinc-200/60 dark:from-zinc-900 dark:to-zinc-900/50 dark:border-zinc-800">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">¡Hola, Equipo Brain!</h2>
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">
+                ¡Hola, {getFirstName()}! {getDailyMessage()}
+              </h2>
               <p className="text-zinc-500 dark:text-zinc-400">Aquí está el resumen de progreso y logros del mes.</p>
             </div>
             <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-full dark:bg-indigo-500/10 dark:border-indigo-500/20">
