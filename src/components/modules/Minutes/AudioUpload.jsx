@@ -91,16 +91,16 @@ const AudioUpload = ({ onSelectAudio, selectedAudio }) => {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-2">
-        <Mic className="w-5 h-5 text-indigo-400" />
+        <Mic className="w-5 h-5 text-primary" />
         <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Subir Audios</h3>
       </div>
 
-      <div {...getRootProps()} className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all duration-200 h-48 flex flex-col justify-center items-center ${isDragActive ? 'border-indigo-500 bg-indigo-500/10' : 'border-indigo-900/30 bg-white dark:bg-zinc-900 hover:border-indigo-500/50 hover:bg-white dark:bg-zinc-900'}`}>
+      <div {...getRootProps()} className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all duration-200 h-48 flex flex-col justify-center items-center ${isDragActive ? 'border-indigo-500 bg-primary/10' : 'border-border/50 bg-white dark:bg-zinc-900 hover:border-primary/50 hover:bg-white dark:bg-zinc-900'}`}>
         <input {...getInputProps()} />
 
         {processing ? (
           <div className="flex flex-col items-center gap-3">
-            <Loader2 className="w-10 h-10 text-indigo-400 animate-spin" />
+            <Loader2 className="w-10 h-10 text-primary animate-spin" />
             <p className="text-zinc-900 dark:text-white font-medium">Procesando audios...</p>
           </div>
         ) : (
@@ -123,17 +123,17 @@ const AudioUpload = ({ onSelectAudio, selectedAudio }) => {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             onClick={() => onSelectAudio && onSelectAudio(audio)}
-            className={`p-4 rounded-lg border cursor-pointer transition-all duration-200 ${selectedAudio?.id === audio.id ? 'bg-indigo-900/30 border-indigo-500 shadow-lg shadow-indigo-500/20' : 'bg-white dark:bg-zinc-900 border-indigo-900/30 hover:border-indigo-500/50 hover:bg-white dark:bg-zinc-900'}`}
+            className={`p-4 rounded-lg border cursor-pointer transition-all duration-200 ${selectedAudio?.id === audio.id ? 'bg-primary/20 border-primary shadow-lg shadow-primary/20' : 'bg-white dark:bg-zinc-900 border-border/50 hover:border-primary/50 hover:bg-white dark:bg-zinc-900'}`}
         >
           <div className="flex items-center gap-3">
-            <FileAudio className="w-5 h-5 text-indigo-400" />
+            <FileAudio className="w-5 h-5 text-primary" />
             <div className="flex-1 min-w-0">
               <h4 className="font-medium text-zinc-900 dark:text-white truncate">{audio.title}</h4>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
                 {(audio.size / 1024 / 1024).toFixed(2)} MB • Transcrito
               </p>
             </div>
-            {selectedAudio?.id === audio.id && <CheckCircle2 className="w-5 h-5 text-indigo-400" />}
+            {selectedAudio?.id === audio.id && <CheckCircle2 className="w-5 h-5 text-primary" />}
           </div>
         </motion.div>
       ))}

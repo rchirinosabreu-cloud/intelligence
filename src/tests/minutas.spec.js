@@ -13,7 +13,7 @@ test('verify minutas ui', async ({ page }) => {
     }));
   });
 
-  await page.goto('http://localhost:3004/minutas');
+  await page.goto('http://localhost:3000/minutas');
   await page.waitForLoadState('networkidle');
   await page.waitForTimeout(3000); // Give time for UI and widgets to load
 
