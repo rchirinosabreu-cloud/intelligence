@@ -7,6 +7,7 @@ import { downloadHTML } from '../../../utils/downloadUtils';
 import { generateSummaryPDF } from '../../../utils/pdfExport';
 import { toast } from 'react-hot-toast';
 import { GEMINI_BENTO_PROMPT_TEMPLATE, SUMMARY_PROMPT_TEMPLATE } from '../../../utils/promptTemplates';
+import { parseJsonFromAiResponse } from '../../../utils/jsonParser';
 
 const GeneralSummary = ({ files, content, reportMeta }) => {
   const [summaryData, setSummaryData] = useState(null);
@@ -40,7 +41,7 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
          "Eres un asistente administrativo experto que extrae hechos objetivos y responde siempre en JSON y en Español.",
          (chunk, accumulated) => {}
       );
-      const result = JSON.parse(resultString);
+      const result = parseJsonFromAiResponse(resultString);
       setSummaryData(result);
 
       toast.success("✅ Resumen unificado listo");
