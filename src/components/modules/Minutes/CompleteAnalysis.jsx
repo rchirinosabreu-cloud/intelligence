@@ -7,6 +7,7 @@ import { downloadHTML } from '../../../utils/downloadUtils';
 import { generateAnalysisPDF } from '../../../utils/pdfExport';
 import { toast } from 'react-hot-toast';
 import { ANALYSIS_PROMPT_TEMPLATE, GEMINI_BENTO_PROMPT_TEMPLATE } from '../../../utils/promptTemplates';
+import { parseJsonFromAiResponse } from '../../../utils/jsonParser';
 
 const CompleteAnalysis = ({ files, content, reportMeta }) => {
   const [analysisData, setAnalysisData] = useState(null);
@@ -40,7 +41,7 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
             // to show progress, but since it's JSON, we must wait for completion to parse it.
         }
       );
-      const result = JSON.parse(resultString);
+      const result = parseJsonFromAiResponse(resultString);
       setAnalysisData(result);
 
       toast.success("✅ Análisis unificado listo");
@@ -89,7 +90,7 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
       {!analysisData && !loading && (
         <Button
           onClick={handleGenerate}
-          className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 h-12 shadow-lg shadow-indigo-900/20"
+          className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-12 shadow-lg shadow-primary/20"
         >
           <Brain className="w-4 h-4 mr-2" />
           Generar Análisis Completo (Unificado)
@@ -115,9 +116,9 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
       )}
 
       {analysisData && !loading && (
-         <div className="bg-white dark:bg-zinc-900 rounded-lg p-6 border border-indigo-900/30 shadow-md space-y-4">
+         <div className="bg-white dark:bg-zinc-900 rounded-lg p-6 border border-border/50 shadow-md space-y-4">
           <div className="flex flex-col items-center gap-4 text-center pb-4 border-b border-indigo-800/30">
-            <div className="bg-indigo-500/10 p-3 rounded-full">
+            <div className="bg-primary/10 p-3 rounded-full">
               <CheckCircle className="w-8 h-8 text-indigo-500" />
             </div>
             <div>
@@ -129,7 +130,7 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
                <Button
                 onClick={handleDownloadHTML}
                 disabled={htmlLoading}
-                className="flex-1 bg-indigo-900/50 hover:bg-indigo-800/50 text-indigo-100 border border-indigo-500/30"
+                className="flex-1 bg-primary/20 hover:bg-primary/30 text-primary-foreground border border-primary/30"
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
                 {htmlLoading ? 'Generando HTML...' : 'Descargar HTML'}
@@ -138,20 +139,20 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
           </div>
 
           {htmlLoading && (
-            <div className="bg-indigo-950/40 border border-indigo-800/40 rounded-lg p-4">
+            <div className="bg-background/50 backdrop-blur-xl border border-border/50 rounded-lg p-4">
               <div className="flex items-center justify-between text-xs text-indigo-200 mb-2">
                 <span>Generando reporte con Gemini</span>
                 <span>Procesando...</span>
               </div>
-              <div className="h-2 bg-indigo-900/60 rounded-full overflow-hidden">
-                <div className="h-full w-full bg-gradient-to-r from-indigo-500 to-violet-400 animate-pulse" />
+              <div className="h-2 bg-primary/20 rounded-full overflow-hidden">
+                <div className="h-full w-full bg-primary animate-pulse" />
               </div>
             </div>
           )}
 
           <div className="text-left text-sm text-gray-300 space-y-2">
-             <p><strong className="text-indigo-400">Insight:</strong> {analysisData.consulting_insights?.[0]?.substring(0, 100) || 'Análisis generado'}...</p>
-            <p><strong className="text-indigo-400">Recomendaciones:</strong> {analysisData.recommendations?.length} generadas</p>
+             <p><strong className="text-primary">Insight:</strong> {analysisData.consulting_insights?.[0]?.substring(0, 100) || 'Análisis generado'}...</p>
+            <p><strong className="text-primary">Recomendaciones:</strong> {analysisData.recommendations?.length} generadas</p>
           </div>
         </div>
       )}

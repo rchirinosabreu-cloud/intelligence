@@ -90,7 +90,7 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
       {!summaryData && !loading && (
         <Button
           onClick={handleGenerate}
-          className="w-full bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 h-12 shadow-lg shadow-purple-900/20"
+          className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-12 shadow-lg shadow-primary/20"
         >
           <FileText className="w-4 h-4 mr-2" />
           Generar Resumen General (Unificado)
@@ -144,8 +144,8 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
                 <span>Generando reporte con Gemini</span>
                 <span>Procesando...</span>
               </div>
-              <div className="h-2 bg-purple-900/60 rounded-full overflow-hidden">
-                <div className="h-full w-full bg-gradient-to-r from-purple-500 to-violet-400 animate-pulse" />
+              <div className="h-2 bg-primary/20 rounded-full overflow-hidden">
+                <div className="h-full w-full bg-primary animate-pulse" />
               </div>
             </div>
           )}

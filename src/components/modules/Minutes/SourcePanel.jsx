@@ -109,7 +109,7 @@ const SourcePanel = ({ onSelectSource, selectedSource, analysisReady, onStartAna
           <Button
             onClick={handleStartAnalysis}
             disabled={files.length === 0}
-            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-zinc-900 dark:text-white"
+            className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <PlayCircle className="w-4 h-4 mr-2" />
             Iniciar el análisis

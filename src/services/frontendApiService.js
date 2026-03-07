@@ -160,10 +160,17 @@ const frontendApiService = {
       if (!response.ok) throw new Error(`Gemini HTTP Error: ${response.status}`);
 
       const data = await response.json();
-      const text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text).join('')?.trim();
+      let text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text).join('')?.trim();
+
       if (!text) {
         throw new Error("Gemini response was empty.");
       }
+
+      // Clean up markdown wrapper from Gemini HTML if it exists
+      if (text.startsWith("```html")) {
+          text = text.replace(/^```html\n?/, "").replace(/\n?```$/, "");
+      }
+
       return text;
     } catch (error) {
       console.error("Gemini API Error:", error);
