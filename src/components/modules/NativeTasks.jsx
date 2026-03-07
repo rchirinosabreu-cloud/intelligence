@@ -141,6 +141,17 @@ const NativeTasks = () => {
   const [clientFilter, setClientFilter] = useState('Todos');
 
   const [tasks, setTasks] = useState([]);
+
+  // Set default responsible filter based on user role
+  useEffect(() => {
+    const user = sessionStorage.getItem('currentUser');
+    if (user) {
+      const parsedUser = JSON.parse(user);
+      if (parsedUser.role !== 'ADMIN' && parsedUser.name) {
+        setResponsibleFilter(parsedUser.name);
+      }
+    }
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { toast } = useToast();
