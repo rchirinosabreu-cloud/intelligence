@@ -32,7 +32,7 @@ const Dashboard = () => {
   const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-    const user = sessionStorage.getItem('currentUser');
+    const user = localStorage.getItem('currentUser');
     if (user) {
       setCurrentUser(JSON.parse(user));
     }
@@ -221,8 +221,8 @@ const Dashboard = () => {
         </div>
 
         {/* News/Updates Column (Right - 1/3 width) -> FEED DE LOGROS */}
-        <motion.div variants={item} className="md:col-span-1 h-full">
-          <Card className="h-full">
+        <motion.div variants={item} className="md:col-span-1 flex flex-col gap-6">
+          <Card className="flex-none">
             <div className="flex items-center gap-2 mb-6">
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
               <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Logros Recientes</h3>
@@ -279,12 +279,13 @@ const Dashboard = () => {
             </div>
           </Card>
 
-          <div className="mt-6">
+          <div className="flex-1 min-h-[500px]">
             <ChatWidget
               title="Chat General"
               description="Chat operativo de toda la agencia"
               apiEndpoint="/api/general-chat"
               isGlobal={true}
+              fullInterface={true}
             />
           </div>
         </motion.div>
