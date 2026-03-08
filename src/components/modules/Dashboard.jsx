@@ -3,9 +3,9 @@ import { Card } from '@/components/ui/Card';
 import { motion } from 'framer-motion';
 import { ArrowUpRight, ArrowDownRight, Zap, TrendingUp, Clock, CheckCircle2, Activity, Target, Bell, MessageSquare, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import StudioBroadcastWidget from './StudioBroadcastWidget';
 import MeetingWidget from './MeetingWidget';
 import HealthCheckWidget from './HealthCheckWidget';
+import AnnouncementWidget from './AnnouncementWidget';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
 const container = {
@@ -206,7 +206,7 @@ const Dashboard = () => {
         setIsGeneralChatModalOpen(true);
     } else if (notif.type === 'CAMPFIRE_MENTION') {
         // relatedId contains the clientId
-        navigate(`/cliente/${notif.relatedId}`);
+        navigate(`/cliente/${notif.relatedId}?openChat=true`);
     } else if (notif.type === 'TASK_RETURNED') {
         // Navigate to Native Tasks (Gestion) and show returned tasks
         navigate(`/gestion?showReturned=true&taskId=${notif.relatedId}`);
@@ -361,7 +361,7 @@ const Dashboard = () => {
 
            {/* WIDGET 3: BROADCAST WIDGET (Full Width) */}
            <motion.div variants={item} className="col-span-2">
-                <StudioBroadcastWidget />
+                <AnnouncementWidget scope="general" />
            </motion.div>
 
            {/* ROW: MEETING + HEALTH CHECK */}
