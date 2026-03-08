@@ -182,10 +182,10 @@ const ChatWidget = ({
     const groupedMessages = getGroupedMessages();
     const scrollRef = useRef(null);
     useEffect(() => {
-        if (isModalOpen && scrollRef.current) {
+        if ((isModalOpen || fullInterface) && scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-    }, [isModalOpen, messages]);
+    }, [isModalOpen, fullInterface, messages]);
 
     // --- MENTIONS UX LOGIC ---
     const handleFocus = async () => {
