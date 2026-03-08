@@ -18,6 +18,18 @@ export const createNotification = async (data) => {
     }
 };
 
+export const markAllNotificationsAsRead = async (userId) => {
+    try {
+        await prisma.notification.updateMany({
+            where: { userId, isRead: false },
+            data: { isRead: true }
+        });
+    } catch (error) {
+        console.error(`[${new Date().toISOString()}] [NotificationService] Error marking all as read:`, error?.message || error);
+        throw error;
+    }
+};
+
 export const getUnreadNotificationCount = async (userId) => {
     try {
         const count = await prisma.notification.count({

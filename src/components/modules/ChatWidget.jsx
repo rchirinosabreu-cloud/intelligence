@@ -2,7 +2,7 @@
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Send, Loader2, ArrowRight, MessageSquare } from 'lucide-react';
+import { Send, Loader2, ArrowRight, MessageSquare, Maximize2 } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import SlideOver from '@/components/ui/SlideOver';
 import { useAuth } from "@/context/AuthContext";
@@ -29,6 +29,7 @@ const ChatWidget = ({
     const [mentionQuery, setMentionQuery] = useState('');
     const [showMentionDropdown, setShowMentionDropdown] = useState(false);
     const [cursorPosition, setCursorPosition] = useState(0);
+    const [mentionMap, setMentionMap] = useState({}); // { "@Name": "ID" }
     const inputRef = useRef(null);
 
     // Fetch Team
@@ -69,19 +70,24 @@ const ChatWidget = ({
             setIsSubmitting(true);
             const baseUrl = getApiBaseUrl();
 
-            // Format content to replace human-readable mentions with data-mentions if needed?
-            // Actually, we'll send it as is and the backend will parse the @[Name](ID) format.
+            // Convert human-readable @Name to @[Name](ID)
+            let formattedContent = content;
+            Object.entries(mentionMap).forEach(([displayName, id]) => {
+                const regex = new RegExp(`${displayName}\\b`, 'g');
+                formattedContent = formattedContent.replace(regex, `@[${displayName.substring(1)}](${id})`);
+            });
 
             const res = await fetch(`${baseUrl}${apiEndpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content })
+                body: JSON.stringify({ content: formattedContent })
             });
 
             if (res.ok) {
                 const newMessage = await res.json();
                 setMessages(prev => [newMessage, ...prev]);
                 setContent('');
+                setMentionMap({}); // Clear map
             }
         } catch (error) {
             console.error("Error sending message:", error);
@@ -95,7 +101,7 @@ const ChatWidget = ({
     };
 
     // Link & Mention Parser Helper
-    const renderContentWithLinks = (text) => {
+    const renderContentWithLinks = (text, isOwnMessage = false) => {
         if (!text) return null;
 
         // Matches @[Name](ID)
@@ -126,7 +132,10 @@ const ChatWidget = ({
         return segments.map((segment, idx) => {
             if (segment.type === 'mention') {
                 return (
-                    <span key={idx} className="font-bold text-primary px-1 bg-primary/5 rounded">
+                    <span key={idx} className={cn(
+                        "font-bold px-1 rounded",
+                        isOwnMessage ? "text-white bg-white/20" : "text-primary bg-primary/5"
+                    )}>
                         @{segment.name}
                     </span>
                 );
@@ -179,6 +188,16 @@ const ChatWidget = ({
     }, [isModalOpen, messages]);
 
     // --- MENTIONS UX LOGIC ---
+    const handleFocus = async () => {
+        try {
+            const baseUrl = getApiBaseUrl();
+            await fetch(`${baseUrl}/api/notifications/read-all`, { method: 'POST' });
+            window.dispatchEvent(new Event('notifications-read'));
+        } catch (error) {
+            console.error("Error marking as read on focus:", error);
+        }
+    };
+
     const handleInputChange = (e) => {
         const value = e.target.value;
         const pos = e.target.selectionStart;
@@ -208,17 +227,18 @@ const ChatWidget = ({
         const textBeforeAt = content.substring(0, lastAt);
         const textAfterCursor = content.substring(cursorPosition);
 
-        // Format: @[Name](ID) - Backend will parse this
-        const newContent = `${textBeforeAt}@[${member.name}](${member.id}) ${textAfterCursor}`;
+        const displayName = `@${member.name}`;
+        const newContent = `${textBeforeAt}${displayName} ${textAfterCursor}`;
+
         setContent(newContent);
+        setMentionMap(prev => ({ ...prev, [displayName]: member.id }));
         setShowMentionDropdown(false);
 
         // Refocus and set cursor
         setTimeout(() => {
             if (inputRef.current) {
                 inputRef.current.focus();
-                // Cursor should be after the space we'll add or just after the closing )
-                const newPos = textBeforeAt.length + member.name.length + member.id.length + 5; // @[name](id)
+                const newPos = textBeforeAt.length + displayName.length + 1;
                 inputRef.current.setSelectionRange(newPos, newPos);
             }
         }, 10);
@@ -240,25 +260,32 @@ const ChatWidget = ({
                             </span>
                         </div>
                         <div className="space-y-6">
-                            {sortedGroups[dateKey].map((msg) => (
-                                <div key={msg.id} className="flex gap-4 group">
-                                    <TeamAvatar member={msg.author} className={cn("mt-1", isModal ? "w-10 h-10" : "w-8 h-8")} />
-                                    <div className={cn(
-                                        "flex-1 border p-3 rounded-2xl rounded-tl-none shadow-sm hover:shadow-md transition-shadow",
-                                        "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800"
-                                    )}>
-                                        <div className="flex items-center justify-between mb-1">
-                                            <span className="text-xs font-bold text-zinc-900 dark:text-white">{msg.author?.name}</span>
-                                            <span className="text-[10px] text-zinc-400 group-hover:text-zinc-500 transition-colors">
-                                                {formatTime(msg.createdAt)}
-                                            </span>
-                                        </div>
-                                        <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                                            {renderContentWithLinks(msg.content)}
+                            {sortedGroups[dateKey].map((msg) => {
+                                const isOwnMessage = msg.authorId === currentUser?.id || msg.author?.id === currentUser?.id || msg.author?.email === currentUser?.email;
+                                return (
+                                    <div key={msg.id} className={cn("flex gap-4 group", isOwnMessage ? "flex-row-reverse" : "flex-row")}>
+                                        <TeamAvatar member={msg.author} className={cn("mt-1 shrink-0", isModal ? "w-10 h-10" : "w-8 h-8")} />
+                                        <div className={cn(
+                                            "max-w-[85%] border p-3 rounded-2xl shadow-sm hover:shadow-md transition-shadow relative",
+                                            isOwnMessage
+                                                ? "bg-primary border-primary/20 text-white rounded-tr-none"
+                                                : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-tl-none"
+                                        )}>
+                                            <div className="flex items-center justify-between gap-4 mb-1">
+                                                <span className={cn("text-xs font-bold truncate", isOwnMessage ? "text-primary-foreground/90" : "text-zinc-900 dark:text-white")}>
+                                                    {isOwnMessage ? "Tú" : msg.author?.name}
+                                                </span>
+                                                <span className={cn("text-[10px] shrink-0", isOwnMessage ? "text-primary-foreground/70" : "text-zinc-400")}>
+                                                    {formatTime(msg.createdAt)}
+                                                </span>
+                                            </div>
+                                            <div className={cn("text-xs leading-relaxed whitespace-pre-wrap", isOwnMessage ? "text-white" : "text-zinc-700 dark:text-zinc-300")}>
+                                                {renderContentWithLinks(msg.content, isOwnMessage)}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 ))}
@@ -298,6 +325,7 @@ const ChatWidget = ({
                     ref={inputRef}
                     value={content}
                     onChange={handleInputChange}
+                            onFocus={handleFocus}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey && !showMentionDropdown) {
                             e.preventDefault();
@@ -329,11 +357,19 @@ const ChatWidget = ({
                         </div>
                         <h3 className="font-semibold text-zinc-900 dark:text-white">{title}</h3>
                     </div>
+
+                    <button
+                        onClick={() => setIsModalOpen(true)}
+                        className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                        title="Ver chat completo"
+                    >
+                        <Maximize2 className="w-4 h-4" />
+                    </button>
                 </div>
 
                 <div
                     ref={scrollRef}
-                    className="flex-1 overflow-y-auto mb-4 pr-2 h-[350px] scroll-smooth"
+                    className="flex-1 overflow-y-auto mb-4 pr-2 scroll-smooth"
                 >
                     {loading ? (
                         <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-400"/></div>
