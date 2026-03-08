@@ -1504,13 +1504,39 @@ app.get('/api/global-announcements', async (req, res) => {
     }
 });
 
-app.post('/api/global-announcements', async (req, res) => {
+app.post('/api/global-announcements', authenticateToken, async (req, res) => {
     const { content, type } = req.body;
     if (!content) return res.status(400).json({ error: "Missing content" });
 
     try {
         log('API', "Creating global announcement");
         const announcement = await createGlobalAnnouncement({ content, type });
+
+        // --- MENTIONS LOGIC ---
+        const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+        let match;
+        const mentionedUserIds = new Set();
+        while ((match = mentionRegex.exec(content)) !== null) {
+            mentionedUserIds.add(match[2]);
+        }
+
+        for (const mentionedId of mentionedUserIds) {
+            const targetTeamMember = await prisma.teamMember.findUnique({ where: { id: mentionedId } });
+            if (targetTeamMember && targetTeamMember.email) {
+                const targetUser = await prisma.user.findUnique({
+                    where: { email: targetTeamMember.email.trim().toLowerCase() }
+                });
+                if (targetUser && targetUser.id !== req.user.userId) {
+                    await createNotification({
+                        userId: targetUser.id,
+                        message: `${req.user.name} te mencionó en un anuncio global`,
+                        type: 'GENERAL_CHAT_MENTION', // Use chat mention type or create ANNOUNCEMENT_MENTION if needed
+                        relatedId: announcement.id
+                    });
+                }
+            }
+        }
+
         res.json(announcement);
     } catch (error) {
         logError('API', "Failed to create global announcement", error);
@@ -1544,7 +1570,7 @@ app.get('/api/clients/:clientId/announcements', async (req, res) => {
     }
 });
 
-app.post('/api/clients/:clientId/announcements', async (req, res) => {
+app.post('/api/clients/:clientId/announcements', authenticateToken, async (req, res) => {
     const { clientId } = req.params;
     const { content, type } = req.body;
 
@@ -1555,6 +1581,35 @@ app.post('/api/clients/:clientId/announcements', async (req, res) => {
     try {
         log('API', `Creating announcement for client: ${clientId}`);
         const announcement = await createClientAnnouncement({ clientId, content, type });
+
+        // --- MENTIONS LOGIC ---
+        const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+        let match;
+        const mentionedUserIds = new Set();
+        while ((match = mentionRegex.exec(content)) !== null) {
+            mentionedUserIds.add(match[2]);
+        }
+
+        for (const mentionedId of mentionedUserIds) {
+            const targetTeamMember = await prisma.teamMember.findUnique({ where: { id: mentionedId } });
+            if (targetTeamMember && targetTeamMember.email) {
+                const targetUser = await prisma.user.findUnique({
+                    where: { email: targetTeamMember.email.trim().toLowerCase() }
+                });
+                if (targetUser && targetUser.id !== req.user.userId) {
+                    const client = await prisma.client.findUnique({ where: { id: clientId } });
+                    const clientName = client ? client.name : "un cliente";
+
+                    await createNotification({
+                        userId: targetUser.id,
+                        message: `${req.user.name} te mencionó en un anuncio de ${clientName}`,
+                        type: 'CAMPFIRE_MENTION', // Opens client space
+                        relatedId: clientId
+                    });
+                }
+            }
+        }
+
         res.json(announcement);
     } catch (error) {
         logError('API', "Failed to create client announcement", error);

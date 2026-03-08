@@ -1,14 +1,30 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import StudioBroadcastWidget from './StudioBroadcastWidget';
 import CampfireWidget from './CampfireWidget';
 import DigitalIdentityWidget from './DigitalIdentityWidget';
 import DeliverablesWidget from './DeliverablesWidget';
 import ClientTasksWidget from './ClientTasksWidget';
 import KeyLinksWidget from './KeyLinksWidget';
-import ClientAnnouncementsWidget from './ClientAnnouncementsWidget';
+import AnnouncementWidget from './AnnouncementWidget';
 
 const ClientDetail = ({ client, onBack }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('openChat') === 'true') {
+        setIsChatOpen(true);
+        // Clean up URL parameter without refreshing
+        const newParams = new URLSearchParams(location.search);
+        newParams.delete('openChat');
+        const newSearch = newParams.toString();
+        navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}`, { replace: true });
+    }
+  }, [location, navigate]);
+
   if (!client) return <div>No se seleccionó cliente</div>;
 
   return (
@@ -32,14 +48,18 @@ const ClientDetail = ({ client, onBack }) => {
 
         {/* Left Column (Main Content) */}
         <div className="lg:col-span-2 flex flex-col gap-6">
-            <ClientAnnouncementsWidget clientId={client.id} />
+            <AnnouncementWidget scope="client" clientId={client.id} />
             <DeliverablesWidget />
             <ClientTasksWidget clientId={client.id} />
         </div>
 
         {/* Right Column (Sidebar) */}
         <div className="lg:col-span-1 flex flex-col gap-6">
-            <CampfireWidget clientId={client.id} />
+            <CampfireWidget
+                clientId={client.id}
+                externalOpen={isChatOpen}
+                onExternalOpenChange={setIsChatOpen}
+            />
             <DigitalIdentityWidget />
             <KeyLinksWidget clientId={client.id} />
         </div>
