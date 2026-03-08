@@ -12,7 +12,8 @@ const ChatWidget = ({
     description = "Chat operativo del equipo",
     apiEndpoint = "/api/general-chat",
     isGlobal = true,
-    clientId = null
+    clientId = null,
+    fullInterface = false
 }) => {
     const { currentUser } = useAuth();
     const [messages, setMessages] = useState([]);
@@ -227,6 +228,131 @@ const ChatWidget = ({
         m && m.name && m.name.toLowerCase().includes(mentionQuery.toLowerCase()) && m.isActive !== false
     );
 
+    const renderMessageList = (isModal = false) => {
+        const sortedGroups = getGroupedMessages();
+        return (
+            <div className="space-y-8 pb-4">
+                {Object.keys(sortedGroups).map(dateKey => (
+                    <div key={dateKey} className="relative">
+                        <div className={cn("sticky top-0 z-10 flex justify-center mb-6", isModal ? "" : "bg-white dark:bg-zinc-900 py-1")}>
+                            <span className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 text-[10px] font-bold px-3 py-1 rounded-full shadow-sm uppercase tracking-wider">
+                                {dateKey}
+                            </span>
+                        </div>
+                        <div className="space-y-6">
+                            {sortedGroups[dateKey].map((msg) => (
+                                <div key={msg.id} className="flex gap-4 group">
+                                    <TeamAvatar member={msg.author} className={cn("mt-1", isModal ? "w-10 h-10" : "w-8 h-8")} />
+                                    <div className={cn(
+                                        "flex-1 border p-3 rounded-2xl rounded-tl-none shadow-sm hover:shadow-md transition-shadow",
+                                        "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800"
+                                    )}>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-xs font-bold text-zinc-900 dark:text-white">{msg.author?.name}</span>
+                                            <span className="text-[10px] text-zinc-400 group-hover:text-zinc-500 transition-colors">
+                                                {formatTime(msg.createdAt)}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                                            {renderContentWithLinks(msg.content)}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
+    const renderInputArea = () => (
+        <div className="relative">
+            {/* Mentions Dropdown */}
+            {showMentionDropdown && filteredMembers.length > 0 && (
+                <div className="absolute bottom-full left-0 mb-2 w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden z-50">
+                    <div className="p-2 border-b border-zinc-100 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Mencionar a...</span>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                        {filteredMembers.map(member => (
+                            <button
+                                key={member.id}
+                                type="button"
+                                onClick={() => insertMention(member)}
+                                className="w-full flex items-center gap-3 p-3 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors text-left"
+                            >
+                                <TeamAvatar member={member} className="w-6 h-6" />
+                                <div>
+                                    <p className="text-xs font-bold text-zinc-900 dark:text-white">{member.name}</p>
+                                    <p className="text-[10px] text-zinc-500 truncate">{member.role}</p>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            <div className="relative">
+                <textarea
+                    ref={inputRef}
+                    value={content}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey && !showMentionDropdown) {
+                            e.preventDefault();
+                            handleSendMessage();
+                        }
+                        if (e.key === 'Escape') setShowMentionDropdown(false);
+                    }}
+                    placeholder="Escribe un mensaje..."
+                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl py-3 pl-4 pr-12 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none min-h-[50px]"
+                />
+                <button
+                    onClick={handleSendMessage}
+                    disabled={!content.trim() || isSubmitting}
+                    className="absolute right-2 bottom-2 p-1.5 bg-primary hover:bg-primary/90 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-lg text-primary-foreground transition-colors h-8 w-8 flex items-center justify-center shadow-sm"
+                >
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4" />}
+                </button>
+            </div>
+        </div>
+    );
+
+    if (fullInterface) {
+        return (
+            <Card className="w-full flex flex-col p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 h-full">
+                <div className="flex justify-between items-center mb-6">
+                    <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-primary/10 rounded-lg">
+                            <MessageSquare className="w-4 h-4 text-primary" />
+                        </div>
+                        <h3 className="font-semibold text-zinc-900 dark:text-white">{title}</h3>
+                    </div>
+                </div>
+
+                <div
+                    ref={scrollRef}
+                    className="flex-1 overflow-y-auto mb-4 pr-2 h-[350px] scroll-smooth"
+                >
+                    {loading ? (
+                        <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-400"/></div>
+                    ) : messages.length === 0 ? (
+                        <div className="text-center py-12 text-zinc-400 text-xs italic">
+                            No hay mensajes aún. ¡Sé el primero en hablar!
+                        </div>
+                    ) : (
+                        renderMessageList(false)
+                    )}
+                </div>
+
+                <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                    {renderInputArea()}
+                </div>
+            </Card>
+        );
+    }
+
     return (
         <>
             <Card className="w-full flex flex-col h-full min-h-[300px] p-6 relative group overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
@@ -289,86 +415,11 @@ const ChatWidget = ({
                 iconBgColor="bg-primary/10"
             >
                 <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 bg-zinc-50/50 dark:bg-zinc-900/20">
-                    <div className="space-y-8 pb-4">
-                        {Object.keys(groupedMessages).map(dateKey => (
-                            <div key={dateKey} className="relative">
-                                <div className="sticky top-0 z-10 flex justify-center mb-6">
-                                    <span className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 text-[10px] font-bold px-3 py-1 rounded-full shadow-sm uppercase tracking-wider">
-                                        {dateKey}
-                                    </span>
-                                </div>
-                                <div className="space-y-6">
-                                    {groupedMessages[dateKey].map((msg) => (
-                                        <div key={msg.id} className="flex gap-4 group">
-                                            <TeamAvatar member={msg.author} className="w-10 h-10 mt-1" />
-                                            <div className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-2xl rounded-tl-none shadow-sm hover:shadow-md transition-shadow">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <span className="text-sm font-bold text-zinc-900 dark:text-white">{msg.author?.name}</span>
-                                                    <span className="text-[10px] text-zinc-400 group-hover:text-zinc-500 transition-colors">
-                                                        {formatTime(msg.createdAt)}
-                                                    </span>
-                                                </div>
-                                                <div className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                                                    {renderContentWithLinks(msg.content)}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                    {renderMessageList(true)}
                 </div>
 
                 <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 mt-auto relative">
-    {/* Mentions Dropdown */}
-                    {showMentionDropdown && filteredMembers.length > 0 && (
-                        <div className="absolute bottom-full left-4 mb-2 w-64 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden z-50">
-                            <div className="p-2 border-b border-zinc-100 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50">
-                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Mencionar a...</span>
-                            </div>
-                            <div className="max-h-48 overflow-y-auto">
-                                {filteredMembers.map(member => (
-                                    <button
-                                        key={member.id}
-                        type="button"
-                                        onClick={() => insertMention(member)}
-                                        className="w-full flex items-center gap-3 p-3 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors text-left"
-                                    >
-                                        <TeamAvatar member={member} className="w-6 h-6" />
-                                        <div>
-                                            <p className="text-xs font-bold text-zinc-900 dark:text-white">{member.name}</p>
-                                            <p className="text-[10px] text-zinc-500 truncate">{member.role}</p>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="relative">
-                        <textarea
-                            ref={inputRef}
-                            value={content}
-                            onChange={handleInputChange}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey && !showMentionDropdown) {
-                                    e.preventDefault();
-                                    handleSendMessage();
-                                }
-                                if (e.key === 'Escape') setShowMentionDropdown(false);
-                            }}
-                            placeholder="Escribe un mensaje... (Usa @ para mencionar)"
-                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl py-3 pl-4 pr-12 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none min-h-[50px]"
-                        />
-                        <button
-                            onClick={handleSendMessage}
-                            disabled={!content.trim() || isSubmitting}
-                            className="absolute right-2 bottom-2 p-1.5 bg-primary hover:bg-primary/90 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-lg text-primary-foreground transition-colors h-8 w-8 flex items-center justify-center shadow-sm"
-                        >
-                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4" />}
-                        </button>
-                    </div>
+                    {renderInputArea()}
                 </div>
             </SlideOver>
         </>
