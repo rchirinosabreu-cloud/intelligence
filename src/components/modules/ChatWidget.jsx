@@ -14,13 +14,18 @@ const ChatWidget = ({
     apiEndpoint = "/api/general-chat",
     isGlobal = true,
     clientId = null,
-    fullInterface = false
+    fullInterface = false,
+    externalOpen = null,
+    onExternalOpenChange = null
 }) => {
     const { currentUser } = useAuth();
     const [messages, setMessages] = useState([]);
     const [teamMembers, setTeamMembers] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [internalModalOpen, setInternalModalOpen] = useState(false);
+
+    const isModalOpen = externalOpen !== null ? externalOpen : internalModalOpen;
+    const setIsModalOpen = onExternalOpenChange !== null ? onExternalOpenChange : setInternalModalOpen;
 
     // Form State
     const [content, setContent] = useState('');
@@ -439,9 +444,62 @@ const ChatWidget = ({
             </Card>
     );
 
+    const compactContent = (
+        <Card className="w-full flex flex-col h-full min-h-[300px] p-6 relative group overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+            <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-primary/10 rounded-lg">
+                        <MessageSquare className="w-4 h-4 text-primary" />
+                    </div>
+                    <h3 className="font-semibold text-zinc-900 dark:text-white">{title}</h3>
+                </div>
+            </div>
+
+            <div className="flex-1 space-y-4 overflow-hidden">
+                {loading ? (
+                    <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-zinc-400"/></div>
+                ) : messages.length === 0 ? (
+                    <div className="text-center py-8 text-zinc-400 text-xs">
+                        No hay mensajes aún. ¡Inicia la conversación!
+                    </div>
+                ) : (
+                    messages.slice(0, 2).map(msg => {
+                        const author = msg.author;
+                        return (
+                            <div key={msg.id} className="flex gap-3">
+                                <TeamAvatar member={author} className="w-6 h-6 mt-0.5" />
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex justify-between items-baseline">
+                                        <p className="text-xs font-bold text-zinc-900 dark:text-white mb-0.5 truncate">
+                                            {author?.name || 'Desconocido'}
+                                        </p>
+                                        <span className="text-[10px] text-zinc-400">{formatTime(msg.createdAt)}</span>
+                                    </div>
+                                    <p className="text-xs text-zinc-600 dark:text-zinc-300 line-clamp-2">
+                                        {msg.content.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, '@$1')}
+                                    </p>
+                                </div>
+                            </div>
+                        );
+                    })
+                )}
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="w-full py-2 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                    Abrir Chat
+                    <ArrowRight className="w-3 h-3" />
+                </button>
+            </div>
+        </Card>
+    );
+
     return (
         <>
-            {cardContent}
+            {fullInterface ? cardContent : compactContent}
 
             <SlideOver
                 open={isModalOpen}

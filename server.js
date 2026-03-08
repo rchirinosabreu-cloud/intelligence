@@ -1618,11 +1618,15 @@ app.post('/api/clients/:clientId/campfire', authenticateToken, async (req, res) 
                      // Skip self-mention (compare User IDs)
                      if (targetUser.id === req.user.userId) continue;
 
+                     // Fetch client name to avoid showing UUID in notification
+                     const client = await prisma.client.findUnique({ where: { id: clientId } });
+                     const clientDisplay = client ? client.name : "un cliente";
+
                      await createNotification({
                         userId: targetUser.id,
-                        message: `${req.user.name} te mencionó en el chat de ${clientId}`,
+                        message: `${req.user.name} te mencionó en el chat de ${clientDisplay}`,
                         type: 'CAMPFIRE_MENTION',
-                        relatedId: message.id
+                        relatedId: clientId // Store clientId for easier navigation in frontend
                     });
                 }
             }

@@ -27,6 +27,7 @@ import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import ChatWidget from './ChatWidget';
 import { useAuth } from '@/context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,10 +38,12 @@ import {
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
   const [metrics, setMetrics] = useState({ total: 0, completed: 0, pending: 0, percentage: 0 });
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [isGeneralChatModalOpen, setIsGeneralChatModalOpen] = useState(false);
 
   const getDailyMessage = () => {
     const day = new Date().getDay();
@@ -169,18 +172,37 @@ const Dashboard = () => {
   }, [completedNativeTasks]);
 
   const markAllAsRead = async () => {
+      if (unreadCount === 0) return;
       try {
           const res = await fetch(`${getApiBaseUrl()}/api/notifications/read-all`, {
               method: 'POST'
           });
           if (res.ok) {
               setUnreadCount(0);
-              // Dispatch event to sync other components if needed
               window.dispatchEvent(new Event('notifications-read'));
           }
       } catch (error) {
           console.error("Error marking as read:", error);
       }
+  };
+
+  const handleNotificationClick = async (notif) => {
+    // Mark as read first
+    try {
+        const baseUrl = getApiBaseUrl();
+        await fetch(`${baseUrl}/api/notifications/${notif.id}/read`, { method: 'PATCH' });
+        window.dispatchEvent(new Event('notifications-read'));
+    } catch (e) {
+        console.error("Error marking notification as read:", e);
+    }
+
+    // Navigate or Open Modal
+    if (notif.type === 'GENERAL_CHAT_MENTION') {
+        setIsGeneralChatModalOpen(true);
+    } else if (notif.type === 'CAMPFIRE_MENTION') {
+        // relatedId contains the clientId
+        navigate(`/cliente/${notif.relatedId}`);
+    }
   };
 
   return (
@@ -233,12 +255,16 @@ const Dashboard = () => {
                         </div>
                     ) : (
                         notifications.map((notif) => (
-                            <DropdownMenuItem key={notif.id} className="p-4 focus:bg-zinc-50 dark:focus:bg-zinc-800/50 cursor-pointer border-b border-zinc-50 dark:border-zinc-800/30 last:border-0">
-                                <div className="flex gap-3 items-start">
+                            <DropdownMenuItem
+                                key={notif.id}
+                                onClick={() => handleNotificationClick(notif)}
+                                className="p-4 focus:bg-zinc-50 dark:focus:bg-zinc-800/50 cursor-pointer border-b border-zinc-50 dark:border-zinc-800/30 last:border-0"
+                            >
+                                <div className="flex gap-3 items-start w-full">
                                     <div className="p-1.5 bg-primary/10 rounded-lg shrink-0 mt-0.5">
                                         <MessageSquare className="w-3.5 h-3.5 text-primary" />
                                     </div>
-                                    <div>
+                                    <div className="flex-1">
                                         <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">
                                             {notif.message}
                                         </p>
@@ -360,7 +386,7 @@ const Dashboard = () => {
                     <div key={idx} className="relative pl-6 pb-6 last:pb-0">
                       {/* Vertical line connecting points */}
                       {idx < completedFeed.length - 1 && (
-                        <div className="absolute left-[4px] top-4 w-px h-[calc(100%-10px)] bg-zinc-200 dark:bg-zinc-800" />
+                        <div className="absolute left-[4.5px] top-2 w-px h-full bg-zinc-200 dark:bg-zinc-800" />
                       )}
                       <div className="absolute left-0 top-1.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-200 dark:border-emerald-900 shadow-[0_0_8px_rgba(52,211,153,0.5)] z-10" />
                       <div className="group">
@@ -409,7 +435,9 @@ const Dashboard = () => {
               description="Chat operativo de toda la agencia"
               apiEndpoint="/api/general-chat"
               isGlobal={true}
-              fullInterface={true}
+              fullInterface={false}
+              externalOpen={isGeneralChatModalOpen}
+              onExternalOpenChange={setIsGeneralChatModalOpen}
             />
           </div>
         </motion.div>
