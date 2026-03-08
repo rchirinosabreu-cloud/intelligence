@@ -173,14 +173,19 @@ const Dashboard = () => {
 
   const markAllAsRead = async () => {
       if (unreadCount === 0) return;
+
+      // Optimistic update to prevent flicker/re-render cycles
+      setUnreadCount(0);
+
+      // Update local notifications state to mark them as read visually without a full refetch
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+
       try {
-          const res = await fetch(`${getApiBaseUrl()}/api/notifications/read-all`, {
+          await fetch(`${getApiBaseUrl()}/api/notifications/read-all`, {
               method: 'POST'
           });
-          if (res.ok) {
-              setUnreadCount(0);
-              window.dispatchEvent(new Event('notifications-read'));
-          }
+          // Notify other components if any, but avoid a full Dashboard re-render here
+          // window.dispatchEvent(new Event('notifications-read'));
       } catch (error) {
           console.error("Error marking as read:", error);
       }
@@ -207,7 +212,7 @@ const Dashboard = () => {
         navigate(`/gestion?showReturned=true&taskId=${notif.relatedId}`);
     } else if (notif.type === 'TASK_CORRECTED') {
         // Navigate to Native Tasks (Gestion) and focus the corrected task
-        navigate(`/gestion?showReturned=true&taskId=${notif.relatedId}`);
+        navigate(`/gestion?taskId=${notif.relatedId}`);
     }
   };
 

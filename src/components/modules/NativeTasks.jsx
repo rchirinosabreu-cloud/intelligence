@@ -850,9 +850,10 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn }) => {
                         className={cn(
                             "rounded-xl border bg-card text-card-foreground shadow-sm",
                             "group cursor-pointer relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm transition-shadow",
+                            "transition-all duration-700 ease-in-out",
                             // Border priority: Dragging > Highlight > Overdue > Priority > Normal
                             snapshot.isDragging ? "ring-2 ring-indigo-500 shadow-xl z-50 opacity-90 rotate-2 scale-105" : "",
-                            !snapshot.isDragging && isHighlighted ? "ring-2 ring-red-500 animate-pulse scale-[1.02] z-10" : "",
+                            !snapshot.isDragging && isHighlighted ? "ring-2 ring-red-500 scale-[1.02] z-10" : "ring-2 ring-transparent",
                             !snapshot.isDragging && !isHighlighted && overdue ? "border-red-500/50 ring-1 ring-red-500/20" : "",
                             !snapshot.isDragging && !isHighlighted && !overdue && task.es_prioritaria ? "border-l-4 border-l-red-500 border-zinc-200 dark:border-zinc-800" : "border-zinc-200 dark:border-zinc-800",
                             isReturned && !isHighlighted && "border-red-500/30 bg-red-50/20 dark:bg-red-900/10 shadow-[inset_0_0_12px_rgba(239,68,68,0.05)]"
