@@ -241,18 +241,18 @@ const NativeTasks = () => {
 
     if (showReturned) {
         setIsReturnedSidebarOpen(true);
+    }
 
-        // Auto-scroll to specific task if taskId is provided
-        if (taskId) {
-            // Wait for drawer animation and list render
-            setTimeout(() => {
-                const element = document.getElementById(`task-${taskId}`);
-                if (element) {
-                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    // Highlight effect (handled via class in TaskCard)
-                }
-            }, 600);
-        }
+    // Auto-scroll to specific task if taskId is provided
+    if (taskId) {
+        // Wait for potential animations and list render
+        setTimeout(() => {
+            const element = document.getElementById(`task-${taskId}`);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Highlight effect (handled via class in TaskCard)
+            }
+        }, showReturned ? 600 : 300);
     }
   }, [location, tasks]); // Add tasks to dependencies to re-run when loaded
 

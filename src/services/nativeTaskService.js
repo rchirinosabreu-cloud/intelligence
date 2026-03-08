@@ -159,6 +159,40 @@ export const updateTask = async (id, data) => {
         // Only evaluate if the payload actually attempts to change the 'status' (Edge Case B)
         if ('status' in updateData) {
             const newStatus = updateData.status;
+            const oldStatus = currentTask.status;
+
+            // --- Lógica de Cierre de Ciclo (Notificación de Corrección) ---
+            // Si el estado anterior era 'Devuelto' y el nuevo es 'Pendiente' o 'En proceso'
+            const isCorrected = oldStatus === 'Devuelto' && (newStatus === 'Pendiente' || newStatus === 'En proceso');
+
+            if (isCorrected) {
+                // Necesitamos el título de la tarea para el mensaje
+                const taskWithTitle = await prisma.task.findUnique({ where: { id }, select: { title: true, assigneeId: true } });
+
+                if (taskWithTitle && taskWithTitle.assigneeId) {
+                    // Buscar el Usuario asociado al TeamMember (assigneeId)
+                    const teamMember = await prisma.teamMember.findUnique({ where: { id: taskWithTitle.assigneeId } });
+
+                    if (teamMember && teamMember.email) {
+                        const targetUser = await prisma.user.findUnique({
+                            where: { email: teamMember.email.trim().toLowerCase() }
+                        });
+
+                        if (targetUser) {
+                            // Crear la notificación (importar dinámicamente para evitar circular dependency si existiera,
+                            // aunque aquí podemos usar prisma directamente)
+                            await prisma.notification.create({
+                                data: {
+                                    userId: targetUser.id,
+                                    message: `La tarea "${taskWithTitle.title}" que devolviste ha sido corregida y está lista para trabajarse.`,
+                                    type: 'TASK_CORRECTED',
+                                    relatedId: id
+                                }
+                            });
+                        }
+                    }
+                }
+            }
 
             if (newStatus === 'Realizado') {
                 // Edge Case A: Only set completedAt to NOW if it wasn't already 'Realizado' / completed.

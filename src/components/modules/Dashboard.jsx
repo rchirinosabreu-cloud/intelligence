@@ -205,6 +205,9 @@ const Dashboard = () => {
     } else if (notif.type === 'TASK_RETURNED') {
         // Navigate to Native Tasks (Gestion) and show returned tasks
         navigate(`/pendientes-nativo?showReturned=true&taskId=${notif.relatedId}`);
+    } else if (notif.type === 'TASK_CORRECTED') {
+        // Navigate to Native Tasks (Gestion) and focus the corrected task
+        navigate(`/pendientes-nativo?taskId=${notif.relatedId}`);
     }
   };
 
