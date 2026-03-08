@@ -12,25 +12,6 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 const Sidebar = ({ onLogout }) => {
   const { theme, toggleTheme } = useTheme();
   const { logout, currentUser } = useAuth();
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  useEffect(() => {
-    const fetchUnreadCount = async () => {
-        try {
-            const res = await fetch(`${getApiBaseUrl()}/api/notifications/unread-count`);
-            if (res.ok) {
-                const data = await res.json();
-                setUnreadCount(data.count);
-            }
-        } catch (error) {
-            console.error("Error fetching unread count:", error);
-        }
-    };
-
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 60000); // Poll every minute
-    return () => clearInterval(interval);
-  }, []);
 
   const menuItems = [
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, path: '/' },
