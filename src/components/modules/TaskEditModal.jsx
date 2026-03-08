@@ -57,6 +57,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 clientId: cId,
                 responsable_name: taskData.assigneeId || taskData.responsable_name || taskData.assignee || '',
                 estado: taskData.estado || taskData.status || 'Pendiente',
+                originalStatus: taskData.estado || taskData.status || 'Pendiente', // Store original to detect auto-resolve
                 fecha_entrega: formattedDate,
                 comentarios: taskData.comentarios || taskData.comments || '',
                 creatorName: taskData.creatorName || (taskData.creator ? taskData.creator.name : 'Sistema')
@@ -86,6 +87,13 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 isoDate = `${cleanDate}T12:00:00.000Z`;
             }
 
+            // Auto-resolve logic: If it was 'Devuelto' and state hasn't been changed to anything else (or even if it was left as Devuelto),
+            // we force it to 'Pendiente' to reintegrate it.
+            let finalStatus = editFormData.estado;
+            if (editFormData.originalStatus === 'Devuelto' && finalStatus === 'Devuelto') {
+                finalStatus = 'Pendiente';
+            }
+
             const res = await fetch(`${baseUrl}/api/tasks/${editFormData.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -95,7 +103,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                     assigneeId: editFormData.responsable_name || null,
                     dueDate: isoDate,
                     comments: editFormData.comentarios,
-                    status: editFormData.estado
+                    status: finalStatus
                 })
             });
 
@@ -185,6 +193,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                                 <option value="Pendiente">Pendiente</option>
                                 <option value="En proceso">En proceso</option>
                                 <option value="Realizado">Realizado</option>
+                                <option value="Devuelto">Devuelto</option>
                             </select>
                         </div>
                         <div>
@@ -228,10 +237,15 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
+                            className={cn(
+                                "px-6 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm",
+                                editFormData.originalStatus === 'Devuelto'
+                                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 border-none"
+                                    : "bg-primary hover:bg-primary/90 text-primary-foreground"
+                            )}
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                            Guardar Cambios
+                            {editFormData.originalStatus === 'Devuelto' ? 'Guardar y Reintegrar Tarea' : 'Guardar Cambios'}
                         </button>
                     </div>
                 </form>
