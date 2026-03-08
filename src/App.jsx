@@ -35,7 +35,7 @@ function AppContent() {
             <Route path="/inicio" element={<Navigate to="/" replace />} />
 
             <Route path="/bria" element={<Chat />} />
-            <Route path="/pendientes-nativo" element={<NativeTasks />} />
+            <Route path="/gestion" element={<NativeTasks />} />
             <Route path="/minutas" element={<MinutesLayout />} />
 
             <Route path="/clientes" element={<Clients />} />

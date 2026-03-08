@@ -16,7 +16,7 @@ const Sidebar = ({ onLogout }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, path: '/' },
     { id: 'bria', label: 'Bria Intelligence', icon: Sparkles, path: '/bria' },
-    { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/pendientes-nativo' },
+    { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/gestion' },
     { id: 'minutes', label: 'Minutas', icon: FileText, path: '/minutas' },
     { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes' },
     { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo' },

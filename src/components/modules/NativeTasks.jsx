@@ -158,6 +158,7 @@ const NativeTasks = () => {
   const [returnReason, setReturnReason] = useState('');
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
   const [isReturnedSidebarOpen, setIsReturnedSidebarOpen] = useState(false);
+  const [highlightedTaskId, setHighlightedTaskId] = useState(null);
 
   // Set default responsible filter based on user role
   useEffect(() => {
@@ -245,14 +246,22 @@ const NativeTasks = () => {
 
     // Auto-scroll to specific task if taskId is provided
     if (taskId) {
+        setHighlightedTaskId(taskId);
+
         // Wait for potential animations and list render
         setTimeout(() => {
             const element = document.getElementById(`task-${taskId}`);
             if (element) {
                 element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                // Highlight effect (handled via class in TaskCard)
             }
         }, showReturned ? 600 : 300);
+
+        // Turn off highlight after 3 seconds
+        const timer = setTimeout(() => {
+            setHighlightedTaskId(null);
+        }, 3000);
+
+        return () => clearTimeout(timer);
     }
   }, [location, tasks]); // Add tasks to dependencies to re-run when loaded
 
@@ -725,6 +734,7 @@ const NativeTasks = () => {
                                           key={String(task.id)}
                                           task={task}
                                           index={index}
+                                          highlightedTaskId={highlightedTaskId}
                                           onClick={(t) => setEditingTask(t)}
                                           onReturn={(t) => setReturningTask(t)}
                                       />
@@ -783,6 +793,7 @@ const NativeTasks = () => {
                                                 key={String(task.id)}
                                                 task={task}
                                                 index={index}
+                                                highlightedTaskId={highlightedTaskId}
                                                 onClick={(t) => setEditingTask(t)}
                                                 onReturn={(t) => setReturningTask(t)}
                                             />
@@ -806,10 +817,8 @@ const NativeTasks = () => {
   );
 };
 
-const TaskCard = ({ task, index, onClick, onReturn }) => {
-    const location = useLocation();
-    const taskIdFromUrl = new URLSearchParams(location.search).get('taskId');
-    const isHighlighted = taskIdFromUrl === String(task.id);
+const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn }) => {
+    const isHighlighted = highlightedTaskId === String(task.id);
 
     // Overdue Logic for Style
     const columnId = getColumnId(task.estado);
