@@ -294,8 +294,8 @@ const ChatWidget = ({
         );
     };
 
-    const renderInputArea = () => (
-        <div className="relative">
+    const renderInputArea = (isModal = false) => (
+        <div className={cn("relative", isModal ? "p-6 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900" : "")}>
             {/* Mentions Dropdown */}
             {showMentionDropdown && filteredMembers.length > 0 && (
                 <div className="absolute bottom-full left-0 mb-2 w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden z-50">
@@ -350,8 +350,8 @@ const ChatWidget = ({
 
     if (fullInterface) {
         return (
-            <Card className="w-full flex flex-col p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 h-full">
-                <div className="flex justify-between items-center mb-6">
+            <Card className="w-full flex flex-col border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 h-full overflow-hidden">
+                <div className="flex justify-between items-center p-6 shrink-0 border-b border-zinc-100 dark:border-zinc-800/50">
                     <div className="flex items-center gap-2">
                         <div className="p-1.5 bg-primary/10 rounded-lg">
                             <MessageSquare className="w-4 h-4 text-primary" />
@@ -370,7 +370,7 @@ const ChatWidget = ({
 
                 <div
                     ref={scrollRef}
-                    className="flex-1 overflow-y-auto mb-4 pr-2 scroll-smooth"
+                    className="flex-1 overflow-y-auto p-6 scroll-smooth"
                 >
                     {loading ? (
                         <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-400"/></div>
@@ -383,7 +383,7 @@ const ChatWidget = ({
                     )}
                 </div>
 
-                <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <div className="shrink-0 p-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/30">
                     {renderInputArea()}
                 </div>
             </Card>
@@ -455,8 +455,8 @@ const ChatWidget = ({
                     {renderMessageList(true)}
                 </div>
 
-                <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 mt-auto relative">
-                    {renderInputArea()}
+                <div className="mt-auto relative shrink-0">
+                    {renderInputArea(true)}
                 </div>
             </SlideOver>
         </>

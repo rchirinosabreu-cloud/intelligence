@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/Card';
 import { motion } from 'framer-motion';
-import { ArrowUpRight, ArrowDownRight, Zap, TrendingUp, Clock, CheckCircle2, Activity, Target, Bell } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Zap, TrendingUp, Clock, CheckCircle2, Activity, Target, Bell, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import StudioBroadcastWidget from './StudioBroadcastWidget';
 import MeetingWidget from './MeetingWidget';
@@ -27,11 +27,20 @@ import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import ChatWidget from './ChatWidget';
 import { useAuth } from '@/context/AuthContext';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const [metrics, setMetrics] = useState({ total: 0, completed: 0, pending: 0, percentage: 0 });
   const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
 
   const getDailyMessage = () => {
     const day = new Date().getDay();
@@ -104,13 +113,35 @@ const Dashboard = () => {
         }
     };
 
+    const fetchNotifications = async () => {
+        try {
+            setLoadingNotifications(true);
+            const res = await fetch(`${getApiBaseUrl()}/api/notifications`);
+            if (res.ok) {
+                const data = await res.json();
+                setNotifications(data);
+            }
+        } catch (error) {
+            console.error("Error fetching notifications:", error);
+        } finally {
+            setLoadingNotifications(false);
+        }
+    };
+
     fetchMetrics();
     fetchCompletedNativeTasks();
     fetchUnreadCount();
+    fetchNotifications();
 
-    const interval = setInterval(fetchUnreadCount, 60000);
+    const interval = setInterval(() => {
+        fetchUnreadCount();
+        fetchNotifications();
+    }, 60000);
 
-    window.addEventListener('notifications-read', fetchUnreadCount);
+    window.addEventListener('notifications-read', () => {
+        fetchUnreadCount();
+        fetchNotifications();
+    });
     return () => {
         clearInterval(interval);
         window.removeEventListener('notifications-read', fetchUnreadCount);
@@ -167,20 +198,62 @@ const Dashboard = () => {
               </h2>
               <p className="text-zinc-500 dark:text-zinc-400">Aquí está el resumen de progreso y logros del mes.</p>
             </div>
-            <div
-                onClick={markAllAsRead}
-                className="p-3 bg-indigo-50 border border-indigo-100 rounded-full dark:bg-indigo-500/10 dark:border-indigo-500/20 relative cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors"
-            >
-              <Bell className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-              {unreadCount > 0 && (
-                <div className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-5 w-5 bg-red-500 text-[10px] font-bold text-white items-center justify-center shadow-sm">
-                        {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
+            <DropdownMenu onOpenChange={(open) => open && markAllAsRead()}>
+              <DropdownMenuTrigger asChild>
+                <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-full dark:bg-indigo-500/10 dark:border-indigo-500/20 relative cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors">
+                  <Bell className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                  {unreadCount > 0 && (
+                    <div className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-5 w-5 bg-red-500 text-[10px] font-bold text-white items-center justify-center shadow-sm">
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden rounded-2xl border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl">
+                <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
+                    <h4 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                        <Bell className="w-4 h-4 text-primary" />
+                        Notificaciones
+                    </h4>
+                </div>
+                <div className="max-h-96 overflow-y-auto">
+                    {loadingNotifications ? (
+                        <div className="p-8 text-center"><Loader2 className="w-5 h-5 animate-spin text-zinc-400 mx-auto" /></div>
+                    ) : notifications.length === 0 ? (
+                        <div className="p-12 text-center">
+                            <div className="w-12 h-12 rounded-full bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-center mx-auto mb-3">
+                                <Bell className="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
+                            </div>
+                            <p className="text-xs text-zinc-400">No hay notificaciones nuevas</p>
+                        </div>
+                    ) : (
+                        notifications.map((notif) => (
+                            <DropdownMenuItem key={notif.id} className="p-4 focus:bg-zinc-50 dark:focus:bg-zinc-800/50 cursor-pointer border-b border-zinc-50 dark:border-zinc-800/30 last:border-0">
+                                <div className="flex gap-3 items-start">
+                                    <div className="p-1.5 bg-primary/10 rounded-lg shrink-0 mt-0.5">
+                                        <MessageSquare className="w-3.5 h-3.5 text-primary" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                                            {notif.message}
+                                        </p>
+                                        <span className="text-[10px] text-zinc-400 mt-1 block">
+                                            {new Date(notif.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                    {!notif.isRead && (
+                                        <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-2" />
+                                    )}
+                                </div>
+                            </DropdownMenuItem>
+                        ))
+                    )}
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </Card>
       </motion.div>
@@ -282,8 +355,12 @@ const Dashboard = () => {
                   </div>
               ) : (
                   completedFeed.map((task, idx) => (
-                    <div key={idx} className="relative pl-6 border-l border-zinc-200 dark:border-zinc-800 pb-2 last:pb-0">
-                      <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-200 dark:border-emerald-900 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+                    <div key={idx} className="relative pl-6 pb-6 last:pb-0">
+                      {/* Vertical line connecting points */}
+                      {idx < completedFeed.length - 1 && (
+                        <div className="absolute left-[4px] top-4 w-px h-[calc(100%-10px)] bg-zinc-200 dark:bg-zinc-800" />
+                      )}
+                      <div className="absolute left-0 top-1.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-200 dark:border-emerald-900 shadow-[0_0_8px_rgba(52,211,153,0.5)] z-10" />
                       <div className="group">
                         <div className="flex items-center gap-2 mb-1">
                           {task.assignee ? (
