@@ -2,6 +2,7 @@
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/Card';
+import { cn } from '@/lib/utils';
 import { Send, Loader2, ArrowRight, MessageSquare, Maximize2 } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import SlideOver from '@/components/ui/SlideOver';
