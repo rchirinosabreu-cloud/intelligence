@@ -3,9 +3,17 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { motion } from 'framer-motion';
-import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2, AlertTriangle, AlertOctagon, MessageSquare, Edit2, X } from 'lucide-react';
+import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2, AlertTriangle, AlertOctagon, MessageSquare, Edit2, X, RotateCcw, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/components/ui/dialog";
 import { useToast } from '@/components/ui/use-toast';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import TaskCreateModal from './TaskCreateModal';
@@ -130,6 +138,7 @@ const getColumnId = (status) => {
         .replace(/[̀-ͯ]/g, '')
         .trim();
 
+    if (['devuelto', 'returned', 'rejected'].includes(normalized)) return 'devuelto';
     if (['realizado', 'finalizado', 'hecho', 'done', 'completado', 'terminado'].includes(normalized)) return 'realizado';
     if (['en proceso', 'en curso', 'proceso', 'working', 'doing', 'in progress', 'en-proceso'].includes(normalized)) return 'en-proceso';
     return 'pendiente';
@@ -141,6 +150,9 @@ const NativeTasks = () => {
   const [clientFilter, setClientFilter] = useState('Todos');
 
   const [tasks, setTasks] = useState([]);
+  const [returningTask, setReturningTask] = useState(null);
+  const [returnReason, setReturnReason] = useState('');
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
 
   // Set default responsible filter based on user role
   useEffect(() => {
@@ -214,6 +226,51 @@ const NativeTasks = () => {
       fetchClients();
   }, []);
 
+  const handleReturnTask = async () => {
+      if (!returningTask || !returnReason.trim() || isSubmittingReturn) return;
+
+      try {
+          setIsSubmittingReturn(true);
+          const baseUrl = getApiBaseUrl();
+
+          // Construct new comments: Add the reason at the top
+          const newComment = `[DEVOLUCIÓN - ${new Date().toLocaleDateString()}]: ${returnReason}`;
+          const updatedComments = returningTask.comentarios
+              ? `${newComment}\n\n${returningTask.comentarios}`
+              : newComment;
+
+          const response = await fetch(`${baseUrl}/api/tasks/${returningTask.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  status: 'Devuelto',
+                  comments: updatedComments
+              })
+          });
+
+          if (response.ok) {
+              toast({
+                  title: "Tarea devuelta",
+                  description: "Se ha cambiado el estado a Devuelto y se añadió el comentario.",
+              });
+              setReturningTask(null);
+              setReturnReason('');
+              fetchTasks();
+          } else {
+              throw new Error("Failed to return task");
+          }
+      } catch (err) {
+          console.error("Error returning task:", err);
+          toast({
+              title: "Error",
+              description: "No se pudo devolver la tarea.",
+              variant: "destructive"
+          });
+      } finally {
+          setIsSubmittingReturn(false);
+      }
+  };
+
   // Extract unique responsibles (Names)
   const responsibles = useMemo(() => {
       const unique = [...new Set(tasks.map(t => t.responsable_name || "Desconocido"))].filter(Boolean).sort();
@@ -270,11 +327,25 @@ const NativeTasks = () => {
   }, [tasks, responsibleFilter, clientFilter, dateFilter]);
 
 
-  const columns = [
-      { id: 'pendiente', title: 'Pendiente', color: 'bg-zinc-100 dark:bg-zinc-800/50' },
-      { id: 'en-proceso', title: 'En proceso', color: 'bg-blue-50/50 dark:bg-blue-900/10' },
-      { id: 'realizado', title: 'Realizado', color: 'bg-emerald-50/50 dark:bg-emerald-900/10' }
-  ];
+  const columns = useMemo(() => {
+    const cols = [
+        { id: 'pendiente', title: 'Pendiente', color: 'bg-zinc-100 dark:bg-zinc-800/50' },
+        { id: 'en-proceso', title: 'En proceso', color: 'bg-blue-50/50 dark:bg-blue-900/10' },
+        { id: 'realizado', title: 'Realizado', color: 'bg-emerald-50/50 dark:bg-emerald-900/10' }
+    ];
+
+    // Conditional Ghost Column: Devuelto
+    const hasReturnedTasks = tasks.some(t => getColumnId(t.estado) === 'devuelto');
+    if (hasReturnedTasks) {
+        cols.unshift({
+            id: 'devuelto',
+            title: 'Pendientes Devueltos',
+            color: 'bg-red-50/30 dark:bg-red-900/5 border-red-200/50 dark:border-red-800/30'
+        });
+    }
+
+    return cols;
+  }, [tasks]);
 
   const onDragEnd = async (result) => {
       const { destination, source, draggableId } = result;
@@ -359,14 +430,11 @@ const NativeTasks = () => {
           return;
       }
 
-      const SHEET_STATUS_MAP = {
-          'pendiente': 'Pendiente',
-          'en-proceso': 'En Proceso',
-          'realizado': 'Realizado'
-      };
-
-      // Para nativo usamos los IDs de columna como estado: "Pendiente", "En proceso", "Realizado"
-        const newStatusForDB = destinationColumnId === 'pendiente' ? 'Pendiente' : destinationColumnId === 'en-proceso' ? 'En proceso' : 'Realizado';
+      // Para nativo usamos los IDs de columna como estado: "Pendiente", "En proceso", "Realizado", "Devuelto"
+        const newStatusForDB =
+            destinationColumnId === 'pendiente' ? 'Pendiente' :
+            destinationColumnId === 'en-proceso' ? 'En proceso' :
+            destinationColumnId === 'devuelto' ? 'Devuelto' : 'Realizado';
 
       try {
           const baseUrl = getApiBaseUrl();
@@ -517,9 +585,54 @@ const NativeTasks = () => {
           taskData={editingTask}
       />
 
+      {/* Return Reason Modal */}
+      <Dialog open={!!returningTask} onOpenChange={(open) => !open && setReturningTask(null)}>
+          <DialogContent className="sm:max-w-md dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
+              <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-red-600">
+                      <RotateCcw className="w-5 h-5" />
+                      Devolver Tarea
+                  </DialogTitle>
+                  <DialogDescription>
+                      Por favor, explica por qué estás devolviendo la tarea: <strong>{returningTask?.pendiente}</strong>
+                  </DialogDescription>
+              </DialogHeader>
+
+              <div className="py-4">
+                  <textarea
+                      value={returnReason}
+                      onChange={(e) => setReturnReason(e.target.value)}
+                      placeholder="Ej: Faltan los assets de diseño, el copy no es claro..."
+                      className="w-full min-h-[120px] bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none dark:text-white"
+                      autoFocus
+                  />
+              </div>
+
+              <DialogFooter className="flex sm:justify-between gap-3">
+                  <button
+                      onClick={() => setReturningTask(null)}
+                      className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                  >
+                      Cancelar
+                  </button>
+                  <button
+                      onClick={() => handleReturnTask()}
+                      disabled={!returnReason.trim() || isSubmittingReturn}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                  >
+                      {isSubmittingReturn ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      Devolver ahora
+                  </button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
+
       {/* Kanban Board */}
       <DragDropContext onDragEnd={onDragEnd}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 min-h-[500px]">
+          <div className={cn(
+              "grid grid-cols-1 gap-6 flex-1 min-h-[500px]",
+              columns.length === 4 ? "md:grid-cols-4" : "md:grid-cols-3"
+          )}>
               {columns.map((col) => {
                   const columnTasks = filteredTasks.filter(t => getColumnId(t.estado) === col.id);
 
@@ -554,6 +667,7 @@ const NativeTasks = () => {
                                             task={task}
                                             index={index}
                                             onClick={(t) => setEditingTask(t)}
+                                            onReturn={(t) => setReturningTask(t)}
                                         />
                                     ))}
                                     {provided.placeholder}
@@ -574,9 +688,11 @@ const NativeTasks = () => {
   );
 };
 
-const TaskCard = ({ task, index, onClick }) => {
+const TaskCard = ({ task, index, onClick, onReturn }) => {
     // Overdue Logic for Style
-    const isDone = getColumnId(task.estado) === 'realizado';
+    const columnId = getColumnId(task.estado);
+    const isDone = columnId === 'realizado';
+    const isReturned = columnId === 'devuelto';
     const overdue = !isDone && isOverdue(task.fecha_entrega);
     const daysOverdue = overdue ? getDaysOverdue(task.fecha_entrega) : 0;
 
@@ -605,25 +721,46 @@ const TaskCard = ({ task, index, onClick }) => {
                             // Border priority: Dragging > Overdue > Priority > Normal
                             snapshot.isDragging ? "ring-2 ring-indigo-500 shadow-xl z-50 opacity-90 rotate-2 scale-105" : "",
                             !snapshot.isDragging && overdue ? "border-red-500/50 ring-1 ring-red-500/20" : "",
-                            !snapshot.isDragging && !overdue && task.es_prioritaria ? "border-l-4 border-l-red-500 border-zinc-200 dark:border-zinc-800" : "border-zinc-200 dark:border-zinc-800"
+                            !snapshot.isDragging && !overdue && task.es_prioritaria ? "border-l-4 border-l-red-500 border-zinc-200 dark:border-zinc-800" : "border-zinc-200 dark:border-zinc-800",
+                            isReturned && "border-red-500/30 bg-red-50/20 dark:bg-red-900/10 shadow-[inset_0_0_12px_rgba(239,68,68,0.05)]"
                         )}
                     >
                         <div className="flex flex-col gap-3 p-4">
                                 {/* Header: Client Badge */}
                                 <div className="flex justify-between items-start">
-                                     <span className={cn("text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md border", clientColorClass)}>
-                                         {task.cliente}
-                                     </span>
+                                     <div className="flex items-center gap-2">
+                                        <span className={cn("text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md border", clientColorClass)}>
+                                            {task.cliente}
+                                        </span>
+                                        {isReturned && (
+                                            <span className="text-[9px] font-black text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 rounded flex items-center gap-1 uppercase tracking-tight">
+                                                <RotateCcw className="w-2.5 h-2.5" />
+                                                Devuelto
+                                            </span>
+                                        )}
+                                     </div>
 
                                      {/* Priority or Overdue Badge */}
                                      <div className="flex flex-col items-end gap-1">
+                                        {!isReturned && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onReturn(task);
+                                                }}
+                                                className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-500 rounded-lg transition-colors group/btn"
+                                                title="Devolver tarea"
+                                            >
+                                                <RotateCcw className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
                                         {overdue && (
                                             <span className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-900/30 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-800 flex items-center gap-1">
                                                 <AlertOctagon className="w-3 h-3" />
                                                 Vencido (+{daysOverdue}d)
                                             </span>
                                         )}
-                                        {task.es_prioritaria && !overdue && (
+                                        {task.es_prioritaria && !overdue && !isReturned && (
                                             <span className="text-[10px] font-bold text-red-500 flex items-center gap-1 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-900/30">
                                                 Prioritario
                                             </span>
