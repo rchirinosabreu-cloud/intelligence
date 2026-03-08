@@ -93,7 +93,7 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
           className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-medium h-12 shadow-sm"
         >
           <Brain className="w-4 h-4 mr-2" />
-          Generar Análisis Completo (Unificado)
+          Generar análisis completo (unificado)
         </Button>
       )}
 
@@ -122,7 +122,7 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
               <CheckCircle className="w-8 h-8 text-muted-foreground" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Análisis Estratégico Unificado</h3>
+              <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Análisis estratégico unificado</h3>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">Recomendaciones basadas en todas las fuentes.</p>
             </div>
 

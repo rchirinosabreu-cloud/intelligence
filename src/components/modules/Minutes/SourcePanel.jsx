@@ -80,7 +80,7 @@ const SourcePanel = ({ onSelectSource, selectedSource, analysisReady, onStartAna
       transition={{ duration: 0.5 }}
       className="h-full bg-card  rounded-2xl p-6 border border-border shadow-sm flex flex-col overflow-y-auto"
     >
-      <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-6">Fuentes de Datos</h2>
+      <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-6">Fuentes de datos</h2>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar space-y-8 pr-2">
 

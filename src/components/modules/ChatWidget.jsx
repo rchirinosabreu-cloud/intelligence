@@ -9,7 +9,7 @@ import SlideOver from '@/components/ui/SlideOver';
 import { useAuth } from "@/context/AuthContext";
 
 const ChatWidget = ({
-    title = "Chat de Equipo",
+    title = "Chat de equipo",
     description = "Chat operativo del equipo",
     apiEndpoint = "/api/general-chat",
     isGlobal = true,
@@ -437,7 +437,7 @@ const ChatWidget = ({
                         onClick={() => setIsModalOpen(true)}
                         className="w-full py-2 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2"
                     >
-                        Abrir Chat
+                        Abrir chat
                         <ArrowRight className="w-3 h-3" />
                     </button>
                 </div>
@@ -490,7 +490,7 @@ const ChatWidget = ({
                     onClick={() => setIsModalOpen(true)}
                     className="w-full py-2 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2"
                 >
-                    Abrir Chat
+                    Abrir chat
                     <ArrowRight className="w-3 h-3" />
                 </button>
             </div>

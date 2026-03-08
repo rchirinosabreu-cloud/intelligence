@@ -102,7 +102,7 @@ const Sidebar = ({ onLogout }) => {
               <User className="w-4 h-4 text-zinc-500 dark:text-zinc-400 group-hover:text-red-500 transition-colors" />
             </div>
             <div className="flex flex-col text-left">
-              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-200 group-hover:text-red-500 transition-colors">Cerrar Sesión</span>
+              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-200 group-hover:text-red-500 transition-colors">Cerrar sesión</span>
               <span className="text-xs text-zinc-500 dark:text-zinc-500 group-hover:text-red-400 transition-colors">
                 {currentUser?.name || 'Usuario'}
               </span>

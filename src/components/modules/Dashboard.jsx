@@ -308,7 +308,7 @@ const Dashboard = () => {
               <Card className="h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
                 <div className="flex justify-between items-start mb-4">
                   <span className="text-sm font-medium text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors">
-                      Pendientes del Mes
+                      Pendientes del mes
                   </span>
                   <div className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20">
                     <Target className="w-3 h-3" />
@@ -343,7 +343,7 @@ const Dashboard = () => {
               <Card className="h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
                 <div className="flex justify-between items-start mb-4">
                   <span className="text-sm font-medium text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors">
-                      Total Realizadas
+                      Total realizadas
                   </span>
                   <div className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
                     <TrendingUp className="w-3 h-3" />
@@ -380,7 +380,7 @@ const Dashboard = () => {
           <Card className="flex-1 flex flex-col min-h-[440px]">
             <div className="flex items-center gap-2 mb-6">
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-              <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Logros Recientes</h3>
+              <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Logros recientes</h3>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-6 pr-2 scroll-smooth">
@@ -442,7 +442,7 @@ const Dashboard = () => {
           {/* General Chat */}
           <div className="flex-1 min-h-[440px]">
             <ChatWidget
-              title="Chat General"
+              title="Chat general"
               description="Chat operativo de toda la agencia"
               apiEndpoint="/api/general-chat"
               isGlobal={true}

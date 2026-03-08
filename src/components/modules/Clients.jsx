@@ -172,7 +172,7 @@ const Clients = () => {
             <Dialog.Trigger asChild>
               <button className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0">
                 <Plus className="w-4 h-4" />
-                <span>Nuevo Cliente</span>
+                <span>Nuevo cliente</span>
               </button>
             </Dialog.Trigger>
 
@@ -180,14 +180,14 @@ const Clients = () => {
               <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
               <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 p-6 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95 duration-200">
                 <Dialog.Title className="text-xl font-semibold text-zinc-900 dark:text-white mb-4">
-                  Crear Nuevo Cliente
+                  Crear nuevo cliente
                 </Dialog.Title>
 
                 <form onSubmit={handleCreateClient} className="space-y-4">
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                        Nombre del Cliente
+                        Nombre del cliente
                       </label>
                       <input
                         type="text"
@@ -231,7 +231,7 @@ const Clients = () => {
                       disabled={isCreating || !newClientName.trim() || !newClientSlug.trim()}
                       className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-medium transition-colors shadow-lg shadow-primary/20 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
-                      {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear Espacio'}
+                      {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear espacio'}
                     </button>
                   </div>
                 </form>
@@ -247,14 +247,14 @@ const Clients = () => {
           <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
           <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 p-6 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95 duration-200">
             <Dialog.Title className="text-xl font-semibold text-zinc-900 dark:text-white mb-4">
-              Editar Cliente
+              Editar cliente
             </Dialog.Title>
 
             <form onSubmit={handleUpdateClient} className="space-y-4">
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                    Nombre del Cliente
+                    Nombre del cliente
                   </label>
                   <input
                     type="text"
@@ -298,7 +298,7 @@ const Clients = () => {
                   disabled={isUpdating || !editClientName.trim() || !editClientSlug.trim()}
                   className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-medium transition-colors shadow-lg shadow-primary/20 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Guardar Cambios'}
+                  {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Guardar cambios'}
                 </button>
               </div>
             </form>
@@ -419,7 +419,7 @@ const Clients = () => {
                               Space
                           </span>
                           {client._count?.files > 0 && (
-                              <span>• {client._count.files} Archivos</span>
+                              <span>• {client._count.files} archivos</span>
                           )}
                           {client._count?.links > 0 && (
                               <span>• {client._count.links} Links</span>
