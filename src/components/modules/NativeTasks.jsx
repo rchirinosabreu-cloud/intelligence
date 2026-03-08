@@ -1,8 +1,9 @@
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useMemo, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2, AlertTriangle, AlertOctagon, MessageSquare, Edit2, X, RotateCcw, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -147,6 +148,7 @@ const getColumnId = (status) => {
 
 const NativeTasks = () => {
   const { currentUser } = useAuth();
+  const location = useLocation();
   const [responsibleFilter, setResponsibleFilter] = useState('Todos');
   const [dateFilter, setDateFilter] = useState('Hoy + Vencidos');
   const [clientFilter, setClientFilter] = useState('Todos');
@@ -230,6 +232,14 @@ const NativeTasks = () => {
       fetchTasks();
       fetchClients();
   }, []);
+
+  // Deep linking logic: open returned tasks sidebar if ?showReturned=true
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('showReturned') === 'true') {
+        setIsReturnedSidebarOpen(true);
+    }
+  }, [location]);
 
   const handleReturnTask = async () => {
       if (!returningTask || !returnReason.trim() || isSubmittingReturn) return;
@@ -645,96 +655,99 @@ const NativeTasks = () => {
       <DragDropContext onDragEnd={onDragEnd}>
           <div className="flex gap-6 flex-1 min-h-[500px] relative">
 
-              {/* COLLAPSIBLE SIDEBAR FOR RETURNED TASKS */}
-              {returnedTasks.length > 0 && (
-                  <div className={cn(
-                      "absolute left-0 top-0 h-full z-40 transition-all duration-300 ease-in-out flex",
-                      isReturnedSidebarOpen ? "w-80" : "w-12"
-                  )}>
-                      {/* Vertical Tab / Trigger */}
-                      <div
-                        onClick={() => setIsReturnedSidebarOpen(!isReturnedSidebarOpen)}
-                        className={cn(
-                            "w-12 h-full flex flex-col items-center py-20 border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors z-50 shadow-xl",
-                            !isReturnedSidebarOpen && "rounded-r-2xl"
-                        )}
+              {/* OVERLAY / BACKDROP FOR RETURNED TASKS */}
+              <AnimatePresence>
+                {isReturnedSidebarOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsReturnedSidebarOpen(false)}
+                        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] transition-opacity"
+                    />
+                )}
+              </AnimatePresence>
+
+              {/* DRAWER PANEL FOR RETURNED TASKS */}
+              <div className={cn(
+                  "fixed right-0 top-0 h-full w-full max-w-sm sm:max-w-md bg-white dark:bg-zinc-950 z-[110] shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col border-l border-zinc-200 dark:border-zinc-800",
+                  isReturnedSidebarOpen ? "translate-x-0" : "translate-x-full"
+              )}>
+                  <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
+                      <div className="flex flex-col">
+                        <h3 className="text-lg font-bold text-red-600 flex items-center gap-2">
+                            <RotateCcw className="w-5 h-5" />
+                            Tareas Devueltas
+                        </h3>
+                        <p className="text-xs text-zinc-500 mt-1 font-medium">Estas tareas requieren tu atención inmediata.</p>
+                      </div>
+                      <button
+                        onClick={() => setIsReturnedSidebarOpen(false)}
+                        className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full text-zinc-400 transition-colors"
                       >
-                          <div className="relative">
-                            <RotateCcw className={cn("w-5 h-5 text-red-500 transition-transform duration-500", isReturnedSidebarOpen ? "rotate-180" : "")} />
-                            {!isReturnedSidebarOpen && (
-                                <span className="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm">
-                                    {returnedTasks.length}
-                                </span>
-                            )}
-                          </div>
-                          <span className="[writing-mode:vertical-lr] rotate-180 mt-8 text-[10px] font-black uppercase tracking-[0.2em] text-red-500 opacity-60">
-                              Pendientes Devueltos
-                          </span>
-                      </div>
-
-                      {/* Content Area */}
-                      <div className={cn(
-                          "flex-1 bg-zinc-50 dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden flex flex-col transition-all",
-                          isReturnedSidebarOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full pointer-events-none"
-                      )}>
-                          <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex justify-between items-center">
-                              <h3 className="text-sm font-bold text-red-600 flex items-center gap-2">
-                                  <RotateCcw className="w-4 h-4" />
-                                  Devueltos ({returnedTasks.length})
-                              </h3>
-                              <button
-                                onClick={() => setIsReturnedSidebarOpen(false)}
-                                className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-zinc-400"
-                              >
-                                  <X className="w-4 h-4" />
-                              </button>
-                          </div>
-
-                          <Droppable droppableId="devuelto">
-                              {(provided, snapshot) => (
-                                  <div
-                                      {...provided.droppableProps}
-                                      ref={provided.innerRef}
-                                      className={cn(
-                                          "flex-1 p-4 overflow-y-auto space-y-3",
-                                          snapshot.isDraggingOver && "bg-red-50/30 dark:bg-red-900/5"
-                                      )}
-                                  >
-                                      {returnedTasks.map((task, index) => (
-                                          <TaskCard
-                                              key={String(task.id)}
-                                              task={task}
-                                              index={index}
-                                              onClick={(t) => setEditingTask(t)}
-                                              onReturn={(t) => setReturningTask(t)}
-                                          />
-                                      ))}
-                                      {provided.placeholder}
-                                  </div>
-                              )}
-                          </Droppable>
-                      </div>
+                          <X className="w-5 h-5" />
+                      </button>
                   </div>
-              )}
+
+                  <Droppable droppableId="devuelto">
+                      {(provided, snapshot) => (
+                          <div
+                              {...provided.droppableProps}
+                              ref={provided.innerRef}
+                              className={cn(
+                                  "flex-1 p-6 overflow-y-auto space-y-4",
+                                  snapshot.isDraggingOver && "bg-red-50/20 dark:bg-red-900/5"
+                              )}
+                          >
+                              {returnedTasks.length === 0 ? (
+                                  <div className="h-40 flex flex-col items-center justify-center text-zinc-400 border-2 border-dashed border-zinc-100 dark:border-zinc-800 rounded-2xl">
+                                      <CheckCircle2 className="w-8 h-8 mb-2 opacity-20" />
+                                      <p className="text-sm">No hay tareas devueltas</p>
+                                  </div>
+                              ) : (
+                                  returnedTasks.map((task, index) => (
+                                      <TaskCard
+                                          key={String(task.id)}
+                                          task={task}
+                                          index={index}
+                                          onClick={(t) => setEditingTask(t)}
+                                          onReturn={(t) => setReturningTask(t)}
+                                      />
+                                  ))
+                              )}
+                              {provided.placeholder}
+                          </div>
+                      )}
+                  </Droppable>
+              </div>
 
               {/* Grid Column Layout Area */}
-              <div className={cn(
-                  "grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 transition-all duration-300",
-                  returnedTasks.length > 0 && "pl-12"
-              )}>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1">
                   {columns.map((col) => {
                       const columnTasks = filteredTasks.filter(t => getColumnId(t.estado) === col.id);
 
                       return (
                         <div key={col.id} className="flex flex-col gap-4">
                             {/* Column Header */}
-                            <div className="flex items-center justify-between px-1">
+                            <div className="flex items-center justify-between px-1 h-8">
                                 <div className="flex items-center gap-2">
                                     <h3 className="font-semibold text-zinc-700 dark:text-zinc-200 text-sm">{col.title}</h3>
                                     <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs px-2 py-0.5 rounded-full font-medium">
                                         {columnTasks.length}
                                     </span>
                                 </div>
+
+                                {col.id === 'pendiente' && returnedTasks.length > 0 && (
+                                    <button
+                                        onClick={() => setIsReturnedSidebarOpen(true)}
+                                        className="group/returned relative flex items-center gap-1.5 px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-all border border-red-100 dark:border-red-900/30 shadow-sm"
+                                    >
+                                        <RotateCcw className="w-3.5 h-3.5 animate-pulse" />
+                                        <span className="text-[10px] font-black uppercase tracking-tighter">
+                                            {returnedTasks.length} Devueltas
+                                        </span>
+                                    </button>
+                                )}
                             </div>
 
                             {/* Column Area */}
