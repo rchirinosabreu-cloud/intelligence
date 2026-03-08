@@ -204,7 +204,7 @@ const Dashboard = () => {
         navigate(`/cliente/${notif.relatedId}`);
     } else if (notif.type === 'TASK_RETURNED') {
         // Navigate to Native Tasks (Gestion) and show returned tasks
-        navigate(`/gestion?showReturned=true`);
+        navigate(`/pendientes-nativo?showReturned=true&taskId=${notif.relatedId}`);
     }
   };
 

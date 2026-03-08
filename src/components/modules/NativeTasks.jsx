@@ -236,10 +236,25 @@ const NativeTasks = () => {
   // Deep linking logic: open returned tasks sidebar if ?showReturned=true
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (params.get('showReturned') === 'true') {
+    const showReturned = params.get('showReturned') === 'true';
+    const taskId = params.get('taskId');
+
+    if (showReturned) {
         setIsReturnedSidebarOpen(true);
+
+        // Auto-scroll to specific task if taskId is provided
+        if (taskId) {
+            // Wait for drawer animation and list render
+            setTimeout(() => {
+                const element = document.getElementById(`task-${taskId}`);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Highlight effect (handled via class in TaskCard)
+                }
+            }, 600);
+        }
     }
-  }, [location]);
+  }, [location, tasks]); // Add tasks to dependencies to re-run when loaded
 
   const handleReturnTask = async () => {
       if (!returningTask || !returnReason.trim() || isSubmittingReturn) return;
@@ -368,8 +383,8 @@ const NativeTasks = () => {
   ];
 
   const returnedTasks = useMemo(() => {
-      return filteredTasks.filter(t => getColumnId(t.estado) === 'devuelto');
-  }, [filteredTasks]);
+      return tasks.filter(t => getColumnId(t.estado) === 'devuelto');
+  }, [tasks]);
 
   const onDragEnd = async (result) => {
       const { destination, source, draggableId } = result;
@@ -792,6 +807,10 @@ const NativeTasks = () => {
 };
 
 const TaskCard = ({ task, index, onClick, onReturn }) => {
+    const location = useLocation();
+    const taskIdFromUrl = new URLSearchParams(location.search).get('taskId');
+    const isHighlighted = taskIdFromUrl === String(task.id);
+
     // Overdue Logic for Style
     const columnId = getColumnId(task.estado);
     const isDone = columnId === 'realizado';
@@ -809,6 +828,7 @@ const TaskCard = ({ task, index, onClick, onReturn }) => {
         <Draggable draggableId={String(task.id)} index={index}>
             {(provided, snapshot) => (
                 <div
+                    id={`task-${task.id}`}
                     ref={provided.innerRef}
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
@@ -821,11 +841,12 @@ const TaskCard = ({ task, index, onClick, onReturn }) => {
                         className={cn(
                             "rounded-xl border bg-card text-card-foreground shadow-sm",
                             "group cursor-pointer relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm transition-shadow",
-                            // Border priority: Dragging > Overdue > Priority > Normal
+                            // Border priority: Dragging > Highlight > Overdue > Priority > Normal
                             snapshot.isDragging ? "ring-2 ring-indigo-500 shadow-xl z-50 opacity-90 rotate-2 scale-105" : "",
-                            !snapshot.isDragging && overdue ? "border-red-500/50 ring-1 ring-red-500/20" : "",
-                            !snapshot.isDragging && !overdue && task.es_prioritaria ? "border-l-4 border-l-red-500 border-zinc-200 dark:border-zinc-800" : "border-zinc-200 dark:border-zinc-800",
-                            isReturned && "border-red-500/30 bg-red-50/20 dark:bg-red-900/10 shadow-[inset_0_0_12px_rgba(239,68,68,0.05)]"
+                            !snapshot.isDragging && isHighlighted ? "ring-2 ring-red-500 animate-pulse scale-[1.02] z-10" : "",
+                            !snapshot.isDragging && !isHighlighted && overdue ? "border-red-500/50 ring-1 ring-red-500/20" : "",
+                            !snapshot.isDragging && !isHighlighted && !overdue && task.es_prioritaria ? "border-l-4 border-l-red-500 border-zinc-200 dark:border-zinc-800" : "border-zinc-200 dark:border-zinc-800",
+                            isReturned && !isHighlighted && "border-red-500/30 bg-red-50/20 dark:bg-red-900/10 shadow-[inset_0_0_12px_rgba(239,68,68,0.05)]"
                         )}
                     >
                         <div className="flex flex-col gap-3 p-4">
