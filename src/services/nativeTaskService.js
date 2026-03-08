@@ -75,7 +75,8 @@ export const createTask = async ({ title, dueDate, assigneeId, creatorId, commen
                 client: {
                     select: { name: true, logoUrl: true }
                 },
-                assignee: true
+                assignee: true,
+                creator: true
             }
         });
         return newTask;

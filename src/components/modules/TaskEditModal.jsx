@@ -58,7 +58,8 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 responsable_name: taskData.assigneeId || taskData.responsable_name || taskData.assignee || '',
                 estado: taskData.estado || taskData.status || 'Pendiente',
                 fecha_entrega: formattedDate,
-                comentarios: taskData.comentarios || taskData.comments || ''
+                comentarios: taskData.comentarios || taskData.comments || '',
+                creatorName: taskData.creatorName || (taskData.creator ? taskData.creator.name : 'Sistema')
             });
         }
     }, [isOpen, taskData, clientsList]);
@@ -124,8 +125,16 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 </DialogHeader>
 
                 <form onSubmit={handleEditTask} className="p-6 space-y-4 pt-4">
+                    <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Título de la tarea</label>
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-md border border-zinc-200 dark:border-zinc-700">
+                             <span className="text-[10px] text-zinc-500 font-medium">Creado por:</span>
+                             <span className="text-[10px] text-primary font-bold">{editFormData.creatorName}</span>
+                        </div>
+                    </div>
                     <div>
-                        <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Título de la tarea</label>
                         <input
                             type="text"
                             required
