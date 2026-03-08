@@ -28,7 +28,7 @@ const WorkspacePanel = ({ selectedSource, analysisReady }) => {
       className="h-full bg-card  rounded-2xl p-6 border border-border shadow-sm flex flex-col overflow-y-auto"
     >
       <div className="mb-6 border-b border-border pb-4">
-        <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">Espacio de Trabajo</h2>
+        <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">Espacio de trabajo</h2>
         <div className="flex items-center gap-2 text-muted-foreground h-6">
           {selectedSource ? (
             <>

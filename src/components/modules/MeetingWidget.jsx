@@ -74,7 +74,7 @@ const MeetingWidget = () => {
             <Card className="p-4 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl border-zinc-200/50 dark:border-zinc-800/50 h-full">
                 <div className="flex items-center gap-2 mb-3">
                     <Calendar className="w-5 h-5 text-zinc-400" />
-                    <h3 className="font-semibold text-zinc-700 dark:text-zinc-200 text-sm">Próximas Reuniones</h3>
+                    <h3 className="font-semibold text-zinc-700 dark:text-zinc-200 text-sm">Próximas reuniones</h3>
                 </div>
                 <div className="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 p-2 rounded">
                     No se pudo cargar el calendario.
@@ -88,7 +88,7 @@ const MeetingWidget = () => {
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                     <Calendar className="w-5 h-5 text-indigo-500" />
-                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-100 text-sm">Próximas Reuniones</h3>
+                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-100 text-sm">Próximas reuniones</h3>
                 </div>
                 <span className="text-[10px] text-zinc-400 font-medium px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-full">
                     Hoy

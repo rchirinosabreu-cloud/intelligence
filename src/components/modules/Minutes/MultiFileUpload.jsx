@@ -108,7 +108,7 @@ const MultiFileUpload = ({ onFilesAdded }) => {
                {isDragActive ? '¡Suelta los archivos aquí!' : 'Arrastra archivos o haz clic'}
              </h3>
              <p className="text-zinc-500 dark:text-zinc-400 text-sm max-w-xs mb-4">
-               Soporta Audio (MP3, WAV, M4A) y Documentos (PDF, DOCX, CSV)
+               Soporta audio (MP3, WAV, M4A) y documentos (PDF, DOCX, CSV)
              </p>
              <span className="inline-block px-3 py-1 bg-black/30 text-xs text-gray-500 rounded-full border border-white/10">
                Máx 25MB por archivo

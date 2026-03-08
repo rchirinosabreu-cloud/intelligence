@@ -552,7 +552,7 @@ const NativeTasks = () => {
                 onClick={() => setIsCreating(true)}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
             >
-                + Nueva Tarea
+                + Nueva tarea
             </button>
             {/* Responsible Filter */}
             <div className="relative group">
@@ -639,7 +639,7 @@ const NativeTasks = () => {
               <DialogHeader>
                   <DialogTitle className="flex items-center gap-2 text-red-600">
                       <RotateCcw className="w-5 h-5" />
-                      Devolver Tarea
+                      Devolver tarea
                   </DialogTitle>
                   <DialogDescription>
                       Por favor, explica por qué estás devolviendo la tarea: <strong>{returningTask?.pendiente}</strong>
@@ -701,7 +701,7 @@ const NativeTasks = () => {
                       <div className="flex flex-col">
                         <h3 className="text-lg font-bold text-red-600 flex items-center gap-2">
                             <RotateCcw className="w-5 h-5" />
-                            Tareas Devueltas
+                            Tareas devueltas
                         </h3>
                         <p className="text-xs text-zinc-500 mt-1 font-medium">Estas tareas requieren tu atención inmediata.</p>
                       </div>

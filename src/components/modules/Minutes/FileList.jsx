@@ -18,7 +18,7 @@ const FileList = ({ files, onRemove }) => {
   return (
     <div className="space-y-3 mt-6">
       <h4 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider pl-1">
-        Archivos Cargados ({files.length})
+        Archivos cargados ({files.length})
       </h4>
       <div className="space-y-2">
         <AnimatePresence>

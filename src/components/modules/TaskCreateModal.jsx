@@ -80,7 +80,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
 
             if (!res.ok) throw new Error("Failed to create task");
 
-            toast({ title: "Tarea Creada", description: "La tarea se ha guardado en la base de datos." });
+            toast({ title: "Tarea creada", description: "La tarea se ha guardado en la base de datos." });
             onSuccess();
             onClose();
         } catch (err) {
@@ -94,14 +94,14 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-md p-6 shadow-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
                 <DialogHeader className="mb-4">
-                    <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-white">Nueva Tarea</DialogTitle>
+                    <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-white">Nueva tarea</DialogTitle>
                     <DialogDescription className="sr-only">
                         Formulario para crear una nueva tarea en el sistema.
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleCreateTask} className="space-y-4">
                     <div>
-                        <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Título de la Tarea</label>
+                        <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Título de la tarea</label>
                         <input
                             type="text"
                             required
@@ -137,14 +137,14 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                                 onChange={e => setNewTaskData({...newTaskData, assigneeId: e.target.value})}
                                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                             >
-                                <option value="">Sin Asignar</option>
+                                <option value="">Sin asignar</option>
                                 {teamMembers.map(member => (
                                     <option key={member.id} value={member.id}>{member.name}</option>
                                 ))}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Fecha Límite</label>
+                            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Fecha límite</label>
                             <DatePicker
                                 selected={newTaskData.dueDate ? new Date(`${newTaskData.dueDate.split('T')[0]}T12:00:00.000Z`) : null}
                                 onChange={(date) => {
@@ -163,7 +163,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                         </div>
                     </div>
                     <div>
-                        <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Comentarios (Opcional)</label>
+                        <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Comentarios (opcional)</label>
                         <textarea
                             value={newTaskData.comments}
                             onChange={e => setNewTaskData({...newTaskData, comments: e.target.value})}
@@ -185,7 +185,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                             className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                            Crear Tarea
+                            Crear tarea
                         </button>
                     </div>
                 </form>

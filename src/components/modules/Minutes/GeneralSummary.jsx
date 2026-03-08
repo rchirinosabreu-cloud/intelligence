@@ -93,7 +93,7 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
           className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-medium h-12 shadow-sm"
         >
           <FileText className="w-4 h-4 mr-2" />
-          Generar Resumen General (Unificado)
+          Generar resumen general (unificado)
         </Button>
       )}
 
@@ -122,7 +122,7 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
               <CheckCircle className="w-8 h-8 text-green-500" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Resumen Unificado</h3>
+              <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Resumen unificado</h3>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">Datos integrados correctamente.</p>
             </div>
 

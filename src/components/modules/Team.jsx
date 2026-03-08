@@ -110,7 +110,7 @@ export default function Team() {
           className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm px-4 py-2 rounded-xl flex items-center transition-colors"
         >
           <Plus size={18} className="mr-2" />
-          Añadir Miembro
+          Añadir miembro
         </button>
       </div>
 
@@ -180,7 +180,7 @@ export default function Team() {
         <DialogContent className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-md p-6 shadow-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
           <DialogHeader className="mb-4">
             <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-white">
-              {editingMember ? 'Editar Miembro' : 'Añadir Miembro'}
+              {editingMember ? 'Editar miembro' : 'Añadir miembro'}
             </DialogTitle>
             <DialogDescription className="sr-only">
               Formulario para añadir o editar un miembro del equipo de la agencia.
@@ -189,7 +189,7 @@ export default function Team() {
 
           <form onSubmit={handleSave} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Nombre Completo</label>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Nombre completo</label>
               <input
                 type="text"
                 value={name}
@@ -212,7 +212,7 @@ export default function Team() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Correo Electrónico (Opcional)</label>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Correo electrónico (opcional)</label>
               <input
                 type="email"
                 value={email}
@@ -222,7 +222,7 @@ export default function Team() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">URL de Avatar (Opcional)</label>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">URL de avatar (opcional)</label>
               <input
                 type="url"
                 value={avatarUrl}

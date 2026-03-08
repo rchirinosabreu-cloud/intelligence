@@ -98,7 +98,7 @@ const HealthCheckWidget = () => {
              <Card className="p-4 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl border-zinc-200/50 dark:border-zinc-800/50 h-full min-h-[200px]">
                 <div className="flex items-center gap-2 mb-3">
                     <Activity className="w-5 h-5 text-zinc-400" />
-                    <h3 className="font-semibold text-zinc-700 dark:text-zinc-200 text-sm">Salud de Clientes</h3>
+                    <h3 className="font-semibold text-zinc-700 dark:text-zinc-200 text-sm">Salud de clientes</h3>
                 </div>
                 <div className="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-100 dark:border-red-900/30">
                     No se pudo cargar el estado de los clientes.
@@ -113,10 +113,10 @@ const HealthCheckWidget = () => {
             <div className="p-4 border-b border-zinc-100 dark:border-zinc-800/50 flex items-center justify-between bg-white/40 dark:bg-zinc-900/40 rounded-t-xl">
                 <div className="flex items-center gap-2">
                     <Activity className="w-5 h-5 text-indigo-500" />
-                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-100 text-sm">Salud de Clientes</h3>
+                    <h3 className="font-semibold text-zinc-800 dark:text-zinc-100 text-sm">Salud de clientes</h3>
                 </div>
                 <span className="text-[10px] text-zinc-500 font-medium px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-full">
-                    {clients.length} Clientes
+                    {clients.length} clientes
                 </span>
             </div>
 

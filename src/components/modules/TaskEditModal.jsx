@@ -125,7 +125,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
             <DialogContent className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-lg p-0 shadow-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden gap-0">
                 <DialogHeader className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/50">
                     <DialogTitle className="text-lg font-semibold text-zinc-900 dark:text-white m-0">
-                        Editar Tarea
+                        Editar tarea
                     </DialogTitle>
                     <DialogDescription className="sr-only">
                         Formulario para editar detalles de la tarea existente.
@@ -174,7 +174,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                                 onChange={e => setEditFormData({...editFormData, responsable_name: e.target.value})}
                                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                             >
-                                <option value="">Sin Asignar</option>
+                                <option value="">Sin asignar</option>
                                 {teamMembers.map(member => (
                                     <option key={member.id} value={member.id}>{member.name}</option>
                                 ))}
@@ -197,7 +197,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Fecha Límite</label>
+                            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Fecha límite</label>
                             <DatePicker
                                 selected={editFormData.fecha_entrega ? new Date(`${editFormData.fecha_entrega.split('T')[0]}T12:00:00.000Z`) : null}
                                 onChange={(date) => {
@@ -245,7 +245,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                             )}
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                            {editFormData.originalStatus === 'Devuelto' ? 'Guardar y Reintegrar Tarea' : 'Guardar Cambios'}
+                            {editFormData.originalStatus === 'Devuelto' ? 'Guardar y reintegrar tarea' : 'Guardar cambios'}
                         </button>
                     </div>
                 </form>

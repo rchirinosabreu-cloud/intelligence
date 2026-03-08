@@ -134,7 +134,7 @@ const ClientTasksWidget = ({ clientId }) => {
                 <button
                     onClick={() => setIsCreating(true)}
                     className="flex items-center justify-center w-8 h-8 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors"
-                    title="Nueva Tarea"
+                    title="Nueva tarea"
                 >
                     <Plus className="w-4 h-4" />
                 </button>
