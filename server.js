@@ -18,6 +18,8 @@ import { getClients, getClientByIdentifier, getClientGuidelines, createClient, g
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from './src/services/clientTaskService.js';
 import { getClientAnnouncements, createClientAnnouncement } from './src/services/clientAnnouncementService.js';
 import { getCampfireMessages, createCampfireMessage } from './src/services/campfireService.js';
+import { getGeneralChatMessages, createGeneralChatMessage } from './src/services/generalChatService.js';
+import { getUnreadNotificationCount, createNotification, getNotifications, markAsRead } from './src/services/notificationService.js';
 import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
 import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics } from './src/services/nativeTaskService.js';
 import teamRouter from './src/routes/api/team.js';
@@ -1559,7 +1561,7 @@ app.post('/api/clients/:clientId/announcements', async (req, res) => {
 
 // --- CAMPFIRE ENDPOINTS (Immutable Chat) ---
 
-app.get('/api/clients/:clientId/campfire', async (req, res) => {
+app.get('/api/clients/:clientId/campfire', authenticateToken, async (req, res) => {
     const { clientId } = req.params;
     try {
         log('API', `Fetching campfire messages for client: ${clientId}`);
@@ -1571,21 +1573,159 @@ app.get('/api/clients/:clientId/campfire', async (req, res) => {
     }
 });
 
-app.post('/api/clients/:clientId/campfire', async (req, res) => {
+app.post('/api/clients/:clientId/campfire', authenticateToken, async (req, res) => {
     const { clientId } = req.params;
-    const { content, authorId } = req.body;
+    const { content } = req.body;
+    const userEmail = req.user.email;
 
-    if (!content || !authorId) {
-        return res.status(400).json({ error: "Missing content or authorId" });
+    if (!content) {
+        return res.status(400).json({ error: "Missing content" });
     }
 
     try {
-        log('API', `Creating campfire message for client: ${clientId} by teamMember: ${authorId}`);
+        // Resolve authorId (TeamMember ID) from the logged-in user's email
+        const teamMember = await prisma.teamMember.findFirst({
+            where: { email: { equals: userEmail, mode: 'insensitive' } }
+        });
+
+        if (!teamMember) {
+            return res.status(403).json({ error: "Authenticated user is not a registered TeamMember" });
+        }
+
+        const authorId = teamMember.id;
+
+        log('API', `Creating campfire message for client: ${clientId} by teamMember: ${authorId} (${userEmail})`);
         const message = await createCampfireMessage({ clientId, content, authorId });
+
+        // --- MENTIONS LOGIC FOR CAMPFIRE ---
+        const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+        let match;
+        const mentionedUserIds = new Set();
+
+        while ((match = mentionRegex.exec(content)) !== null) {
+            mentionedUserIds.add(match[2]);
+        }
+
+        for (const mentionedId of mentionedUserIds) {
+            // Find the User associated with the mentioned TeamMember.
+            const targetTeamMember = await prisma.teamMember.findUnique({ where: { id: mentionedId } });
+            if (targetTeamMember && targetTeamMember.email) {
+                const targetUser = await prisma.user.findUnique({
+                    where: { email: targetTeamMember.email.trim().toLowerCase() }
+                });
+
+                if (targetUser) {
+                     // Skip self-mention (compare User IDs)
+                     if (targetUser.id === req.user.userId) continue;
+
+                     await createNotification({
+                        userId: targetUser.id,
+                        message: `${req.user.name} te mencionó en el chat de ${clientId}`,
+                        type: 'CAMPFIRE_MENTION',
+                        relatedId: message.id
+                    });
+                }
+            }
+        }
+
         res.json(message);
     } catch (error) {
         logError('API', "Failed to create campfire message", error);
         res.status(500).json({ error: "Failed to create message" });
+    }
+});
+
+// --- GENERAL CHAT ENDPOINTS ---
+
+app.get('/api/general-chat', authenticateToken, async (req, res) => {
+    try {
+        log('API', "Fetching general chat messages");
+        const messages = await getGeneralChatMessages();
+        res.json(messages);
+    } catch (error) {
+        logError('API', "Failed to fetch general chat messages", error);
+        res.status(500).json({ error: "Failed to fetch messages" });
+    }
+});
+
+app.post('/api/general-chat', authenticateToken, async (req, res) => {
+    const { content } = req.body;
+    const authorId = req.user.userId;
+
+    if (!content) {
+        return res.status(400).json({ error: "Missing content" });
+    }
+
+    try {
+        log('API', `Creating general chat message by user: ${authorId}`);
+        const message = await createGeneralChatMessage({ content, authorId });
+
+        // --- MENTIONS LOGIC ---
+        const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+        let match;
+        const mentionedUserIds = new Set();
+
+        while ((match = mentionRegex.exec(content)) !== null) {
+            mentionedUserIds.add(match[2]);
+        }
+
+        for (const mentionedId of mentionedUserIds) {
+            // Mentions in the UI always use TeamMember IDs for consistency.
+            // We must resolve each TeamMember ID to its corresponding User ID.
+            const targetTeamMember = await prisma.teamMember.findUnique({ where: { id: mentionedId } });
+
+            if (targetTeamMember && targetTeamMember.email) {
+                const targetUser = await prisma.user.findUnique({
+                    where: { email: targetTeamMember.email.trim().toLowerCase() }
+                });
+
+                if (targetUser) {
+                    // Skip self-mention (compare User IDs)
+                    if (targetUser.id === authorId) continue;
+
+                    await createNotification({
+                        userId: targetUser.id,
+                        message: `${req.user.name} te mencionó en el chat general`,
+                        type: 'GENERAL_CHAT_MENTION',
+                        relatedId: message.id
+                    });
+                }
+            }
+        }
+
+        res.json(message);
+    } catch (error) {
+        logError('API', "Failed to create general chat message", error);
+        res.status(500).json({ error: "Failed to create message" });
+    }
+});
+
+// --- NOTIFICATIONS ENDPOINTS ---
+
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+    try {
+        const notifications = await getNotifications(req.user.userId);
+        res.json(notifications);
+    } catch (error) {
+        res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+});
+
+app.get('/api/notifications/unread-count', authenticateToken, async (req, res) => {
+    try {
+        const count = await getUnreadNotificationCount(req.user.userId);
+        res.json({ count });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to fetch unread count" });
+    }
+});
+
+app.patch('/api/notifications/:id/read', authenticateToken, async (req, res) => {
+    try {
+        await markAsRead(req.params.id);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to mark as read" });
     }
 });
 

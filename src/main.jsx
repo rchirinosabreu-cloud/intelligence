@@ -16,7 +16,7 @@ window.fetch = async (...args) => {
     }
 
     // Inject token if present
-    const token = sessionStorage.getItem('authToken');
+    const token = localStorage.getItem('authToken');
     if (token) {
         if (config.headers instanceof Headers) {
             config.headers.set('Authorization', `Bearer ${token}`);
@@ -32,8 +32,8 @@ window.fetch = async (...args) => {
         const urlStr = typeof resource === 'string' ? resource : resource?.url;
         if (urlStr && !urlStr.includes('/api/login')) {
             console.warn(`[Auth] 401 Unauthorized on ${urlStr}. Triggering logout event.`);
-            sessionStorage.removeItem('authToken');
-            sessionStorage.removeItem('currentUser');
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('currentUser');
             window.dispatchEvent(new Event('auth-error'));
         }
     }

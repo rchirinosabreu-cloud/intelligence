@@ -11,67 +11,24 @@ import Team from './components/modules/Team';
 import Login from './components/Login';
 import MinutesLayout from './components/modules/Minutes/MinutesLayout';
 import { ThemeProvider } from './context/ThemeContext';
-import { useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from 'react-hot-toast';
 
-function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Check for token on mount
-    const token = sessionStorage.getItem('authToken');
-    const userStr = sessionStorage.getItem('currentUser');
-
-    if (token && userStr) {
-      setIsAuthenticated(true);
-      try {
-        setCurrentUser(JSON.parse(userStr));
-      } catch (e) {
-        console.error('Failed to parse user data');
-      }
-    }
-    setIsLoading(false);
-
-    // Listen for auth errors (401) from fetch interceptor
-    const handleAuthError = () => {
-      setIsAuthenticated(false);
-      setCurrentUser(null);
-      sessionStorage.removeItem('authToken');
-      sessionStorage.removeItem('currentUser');
-    };
-
-    window.addEventListener('auth-error', handleAuthError);
-    return () => window.removeEventListener('auth-error', handleAuthError);
-  }, []);
-
-  const handleLogin = (token, user) => {
-    sessionStorage.setItem('authToken', token);
-    sessionStorage.setItem('currentUser', JSON.stringify(user));
-    setCurrentUser(user);
-    setIsAuthenticated(true);
-  };
-
-  const handleLogout = () => {
-    sessionStorage.removeItem('authToken');
-    sessionStorage.removeItem('currentUser');
-    setCurrentUser(null);
-    setIsAuthenticated(false);
-  };
+function AppContent() {
+  const { isAuthenticated, isLoading, login, logout } = useAuth();
 
   if (isLoading) {
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center">Cargando...</div>;
   }
 
   if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLogin={login} />;
   }
 
   return (
     <ThemeProvider>
       <Router>
-        <AppLayout onLogout={handleLogout}>
+        <AppLayout onLogout={logout}>
           <Routes>
             {/* Rutas Principales */}
             <Route path="/" element={<Dashboard />} />
@@ -97,6 +54,14 @@ function App() {
         </AppLayout>
       </Router>
     </ThemeProvider>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

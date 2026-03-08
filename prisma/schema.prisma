@@ -14,19 +14,33 @@ model User {
   email     String   @unique
   password  String   // Hashed via bcrypt
   role      String   @default("EDITOR") // ADMIN, EDITOR
+  avatarUrl String?  // Para consistencia con el chat
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  notifications Notification[]
+  notifications       Notification[]
+  generalChatMessages GeneralChatMessage[]
 }
 
-// Sistema de Notificaciones (Preparación)
+// Sistema de Notificaciones
 model Notification {
   id        String   @id @default(uuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   message   String
   isRead    Boolean  @default(false)
+  type      String?  // e.g., 'MENTION'
+  relatedId String?  // ID del mensaje relacionado
+  createdAt DateTime @default(now())
+}
+
+// Chat General de la Agencia
+model GeneralChatMessage {
+  id        String   @id @default(uuid())
+  content   String
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
   createdAt DateTime @default(now())
 }
 

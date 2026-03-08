@@ -25,6 +25,7 @@ const item = {
 
 import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
 import TeamAvatar from '@/components/ui/TeamAvatar';
+import ChatWidget from './ChatWidget';
 
 const Dashboard = () => {
   const [metrics, setMetrics] = useState({ total: 0, completed: 0, pending: 0, percentage: 0 });
@@ -277,6 +278,15 @@ const Dashboard = () => {
                </button>
             </div>
           </Card>
+
+          <div className="mt-6">
+            <ChatWidget
+              title="Chat General"
+              description="Chat operativo de toda la agencia"
+              apiEndpoint="/api/general-chat"
+              isGlobal={true}
+            />
+          </div>
         </motion.div>
       </div>
 
