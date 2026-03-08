@@ -1,13 +1,36 @@
 
 import React from 'react';
-import { LayoutDashboard, Sparkles, CheckSquare, FileText, Users, UserCheck, User, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, Sparkles, CheckSquare, FileText, Users, UserCheck, User, Moon, Sun, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
 import { NavLink } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
-const Sidebar = () => {
+const Sidebar = ({ onLogout }) => {
   const { theme, toggleTheme } = useTheme();
+  const { logout } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+        try {
+            const res = await fetch(`${getApiBaseUrl()}/api/notifications/unread-count`);
+            if (res.ok) {
+                const data = await res.json();
+                setUnreadCount(data.count);
+            }
+        } catch (error) {
+            console.error("Error fetching unread count:", error);
+        }
+    };
+
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 60000); // Poll every minute
+    return () => clearInterval(interval);
+  }, []);
 
   const menuItems = [
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, path: '/' },
@@ -37,7 +60,7 @@ const Sidebar = () => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-2">
+      <nav className="flex-1 px-4 py-6 space-y-2 relative">
         {menuItems.map((item) => {
           const Icon = item.icon;
 
@@ -76,6 +99,14 @@ const Sidebar = () => {
                   {isActive && (
                     <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)] animate-pulse" />
                   )}
+                  {item.id === 'dashboard' && unreadCount > 0 && (
+                    <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                        <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></span>
+                        </span>
+                    </div>
+                  )}
                 </>
               )}
             </NavLink>
@@ -87,8 +118,8 @@ const Sidebar = () => {
       <div className="p-4 border-t border-zinc-200/50 dark:border-white/5 bg-white/30 dark:bg-zinc-900/30 backdrop-blur-md transition-colors">
         <div
           onClick={() => {
-              sessionStorage.removeItem('authToken');
-              sessionStorage.removeItem('currentUser');
+              logout();
+              if (onLogout) onLogout();
               window.location.reload();
           }}
           className="flex items-center justify-between p-3 rounded-xl bg-white/60 border border-zinc-200/50 shadow-sm hover:shadow-md hover:border-zinc-300/50 dark:bg-white/5 dark:border-white/5 dark:hover:bg-white/10 dark:hover:border-white/10 transition-all duration-300 cursor-pointer group backdrop-blur-sm"
@@ -102,7 +133,7 @@ const Sidebar = () => {
               <span className="text-xs text-zinc-500 dark:text-zinc-500 group-hover:text-red-400 transition-colors">
                 {(() => {
                     try {
-                        const user = JSON.parse(sessionStorage.getItem('currentUser'));
+                        const user = JSON.parse(localStorage.getItem('currentUser'));
                         return user ? user.name : 'Admin';
                     } catch(e) {
                         return 'Admin';
