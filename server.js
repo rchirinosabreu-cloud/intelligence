@@ -1317,10 +1317,13 @@ app.get('/api/tasks', async (req, res) => {
     }
 });
 
-app.post('/api/tasks', async (req, res) => {
+app.post('/api/tasks', authenticateToken, async (req, res) => {
     try {
         log('API', `Creating new native task`);
-        const taskData = req.body;
+        const taskData = {
+            ...req.body,
+            creatorId: req.user.userId
+        };
         if (!taskData.title || !taskData.clientId) {
             return res.status(400).json({ error: "Missing required fields (title, clientId)" });
         }
@@ -1721,6 +1724,18 @@ app.get('/api/notifications/unread-count', authenticateToken, async (req, res) =
         res.json({ count });
     } catch (error) {
         res.status(500).json({ error: "Failed to fetch unread count" });
+    }
+});
+
+app.post('/api/notifications', authenticateToken, async (req, res) => {
+    try {
+        const { userId, message, type, relatedId } = req.body;
+        if (!userId || !message) return res.status(400).json({ error: "Missing fields" });
+
+        const notification = await createNotification({ userId, message, type, relatedId });
+        res.json(notification);
+    } catch (error) {
+        res.status(500).json({ error: "Failed to create notification" });
     }
 });
 

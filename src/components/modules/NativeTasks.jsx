@@ -15,6 +15,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import TaskCreateModal from './TaskCreateModal';
 import TaskEditModal from './TaskEditModal';
@@ -145,6 +146,7 @@ const getColumnId = (status) => {
 };
 
 const NativeTasks = () => {
+  const { currentUser } = useAuth();
   const [responsibleFilter, setResponsibleFilter] = useState('Todos');
   const [dateFilter, setDateFilter] = useState('Hoy + Vencidos');
   const [clientFilter, setClientFilter] = useState('Todos');
@@ -189,6 +191,8 @@ const NativeTasks = () => {
               responsable_name: task.assignee?.name || 'Sin Asignar',
               assigneeId: task.assigneeId,
               assigneeAvatar: task.assignee?.avatarUrl || null,
+              creatorId: task.creatorId,
+              creatorName: task.creator?.name || 'Sistema',
               estado: task.status,
               // Parse the date explicitly avoiding browser local timezone shifts if it comes as an ISO string
               // Because we save it with T12:00:00.000Z, we can just safely slice it or convert it to a date that won't shift.
@@ -253,6 +257,25 @@ const NativeTasks = () => {
                   title: "Tarea devuelta",
                   description: "Se ha cambiado el estado a Devuelto y se añadió el comentario.",
               });
+
+              // --- NOTIFICATION LOGIC ---
+              if (returningTask.creatorId && returningTask.creatorId !== currentUser?.id) {
+                  try {
+                      await fetch(`${baseUrl}/api/notifications`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                              userId: returningTask.creatorId,
+                              message: `${currentUser?.name} devolvió tu tarea: ${returningTask.pendiente}`,
+                              type: 'TASK_RETURNED',
+                              relatedId: returningTask.id
+                          })
+                      });
+                  } catch (e) {
+                      console.error("Failed to notify creator:", e);
+                  }
+              }
+
               setReturningTask(null);
               setReturnReason('');
               fetchTasks();
