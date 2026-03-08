@@ -65,14 +65,14 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
     <div className="space-y-4">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-            <Video className="w-5 h-5 text-purple-400" />
+            <Video className="w-5 h-5 text-muted-foreground" />
             <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Reuniones Fireflies</h3>
         </div>
         <Button
             variant="ghost"
             size="sm"
             onClick={handleRetry}
-            className="h-8 w-8 p-0 text-purple-400 hover:text-purple-300 hover:bg-purple-900/20"
+            className="h-8 w-8 p-0 text-muted-foreground hover:text-muted-foreground hover:bg-muted/50"
         >
             <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </Button>
@@ -104,7 +104,7 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
       </AnimatePresence>
 
       {loading && !meetings.length ? (
-        <div className="flex flex-col items-center justify-center py-8 text-purple-300">
+        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
           <Loader2 className="w-6 h-6 animate-spin mb-2" />
           <p className="text-sm">Cargando...</p>
         </div>
@@ -124,21 +124,21 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
                 onClick={() => handleMeetingClick(meeting)}
                 className={`p-4 rounded-lg border cursor-pointer transition-all duration-200 group ${
                   selectedMeeting?.id === meeting.id
-                    ? 'bg-purple-900/40 border-purple-500 shadow-lg shadow-purple-500/20'
-                    : 'bg-white dark:bg-zinc-900 border-purple-900/30 hover:border-purple-500/50 hover:bg-white dark:bg-zinc-900'
+                    ? 'bg-muted/50 border-primary shadow-sm '
+                    : 'bg-white dark:bg-zinc-900 border-border hover:border-border hover:bg-white dark:bg-zinc-900'
                 }`}
               >
-                <h4 className="font-medium text-zinc-900 dark:text-white mb-2 line-clamp-1 group-hover:text-purple-300 transition-colors">
+                <h4 className="font-medium text-zinc-900 dark:text-white mb-2 line-clamp-1 group-hover:text-muted-foreground transition-colors">
                     {meeting.title || 'Sin título'}
                 </h4>
                 <div className="flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400">
                   <div className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-purple-400" />
+                    <Calendar className="w-3 h-3 text-muted-foreground" />
                     <span>{meeting.date ? new Date(meeting.date).toLocaleDateString('es-ES') : 'N/A'}</span>
                   </div>
                   {meeting.duration && (
                     <div className="flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-purple-400" />
+                      <Clock className="w-3 h-3 text-muted-foreground" />
                       <span>{Math.round(meeting.duration / 60)} min</span>
                     </div>
                   )}

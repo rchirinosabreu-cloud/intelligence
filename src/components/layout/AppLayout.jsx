@@ -18,7 +18,7 @@ const AppLayout = ({ children }) => {
 
           {/* Center Orb (Optional, smaller) - Fuchsia */}
            <div className="absolute top-[30%] left-[30%] w-[500px] h-[500px] rounded-full blur-[120px] opacity-20
-             bg-fuchsia-200/30 mix-blend-multiply dark:bg-fuchsia-500/5 dark:mix-blend-screen"
+             bg-zinc-200/30 mix-blend-multiply dark:bg-zinc-500/5 dark:mix-blend-screen"
            />
       </div>
 

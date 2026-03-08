@@ -90,7 +90,7 @@ const DocumentUpload = ({ onSelectDocument, selectedDocument }) => {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-2">
-        <Upload className="w-5 h-5 text-purple-400" />
+        <Upload className="w-5 h-5 text-muted-foreground" />
         <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Subir Documentos</h3>
       </div>
 
@@ -98,15 +98,15 @@ const DocumentUpload = ({ onSelectDocument, selectedDocument }) => {
         {...getRootProps()}
         className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all duration-200 ${
           isDragActive
-            ? 'border-purple-500 bg-purple-500/10'
-            : 'border-purple-900/30 bg-white dark:bg-zinc-900 hover:border-purple-500/50 hover:bg-white dark:bg-zinc-900'
+            ? 'border-primary bg-muted/50'
+            : 'border-border bg-white dark:bg-zinc-900 hover:border-border hover:bg-white dark:bg-zinc-900'
         }`}
       >
         <input {...getInputProps()} />
 
         {processing ? (
           <div className="flex flex-col items-center gap-3">
-            <Loader2 className="w-10 h-10 text-purple-400 animate-spin" />
+            <Loader2 className="w-10 h-10 text-muted-foreground animate-spin" />
             <p className="text-zinc-900 dark:text-white font-medium">Extrayendo texto...</p>
           </div>
         ) : (
@@ -131,8 +131,8 @@ const DocumentUpload = ({ onSelectDocument, selectedDocument }) => {
           onClick={() => onSelectDocument && onSelectDocument(doc)}
           className={`p-4 rounded-lg border cursor-pointer transition-all duration-200 ${
             selectedDocument?.id === doc.id
-              ? 'bg-purple-900/30 border-purple-500 shadow-lg shadow-purple-500/20'
-              : 'bg-white dark:bg-zinc-900 border-purple-900/30 hover:border-purple-500/50 hover:bg-white dark:bg-zinc-900'
+              ? 'bg-muted/50 border-primary shadow-sm '
+              : 'bg-white dark:bg-zinc-900 border-border hover:border-border hover:bg-white dark:bg-zinc-900'
           }`}
         >
           <div className="flex items-center gap-3">
@@ -144,7 +144,7 @@ const DocumentUpload = ({ onSelectDocument, selectedDocument }) => {
               </p>
             </div>
             {selectedDocument?.id === doc.id && (
-              <CheckCircle2 className="w-5 h-5 text-purple-400" />
+              <CheckCircle2 className="w-5 h-5 text-muted-foreground" />
             )}
           </div>
         </motion.div>

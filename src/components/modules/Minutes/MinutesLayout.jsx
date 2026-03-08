@@ -19,7 +19,7 @@ const MinutesLayout = () => {
           <p className="text-muted-foreground font-light">Genera reportes y analiza reuniones automáticamente.</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-12rem)] min-h-[600px]">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[600px] h-full pb-12">
           <SourcePanel
             selectedSource={selectedSource}
             onSelectSource={handleSelectSource}

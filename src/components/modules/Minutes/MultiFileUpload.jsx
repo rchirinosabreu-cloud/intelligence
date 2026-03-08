@@ -87,22 +87,22 @@ const MultiFileUpload = ({ onFilesAdded }) => {
           relative border-2 border-dashed rounded-xl p-8 transition-all duration-300
           flex flex-col items-center justify-center text-center cursor-pointer min-h-[200px]
           ${isDragActive
-            ? 'border-purple-400 bg-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
-            : 'border-purple-800/40 bg-white dark:bg-zinc-900 hover:border-purple-500/60 hover:bg-white dark:bg-zinc-900'}
+            ? 'border-primary/80 bg-muted/50 shadow-[0_0_15px_rgba(var(--primary),0.3)]'
+            : 'border-border bg-white dark:bg-zinc-900 hover:border-border hover:bg-white dark:bg-zinc-900'}
         `}
       >
         <input {...getInputProps()} />
 
         {isProcessing ? (
            <div className="flex flex-col items-center animate-pulse">
-             <Loader2 className="w-12 h-12 text-purple-400 animate-spin mb-4" />
+             <Loader2 className="w-12 h-12 text-muted-foreground animate-spin mb-4" />
              <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Procesando archivos...</h3>
-             <p className="text-purple-300 text-sm mt-2">Transcribiendo audio y extrayendo texto</p>
+             <p className="text-muted-foreground text-sm mt-2">Transcribiendo audio y extrayendo texto</p>
            </div>
         ) : (
            <>
-             <div className="bg-purple-900/30 p-4 rounded-full mb-4 group-hover:scale-110 transition-transform">
-               <UploadCloud className={`w-10 h-10 ${isDragActive ? 'text-zinc-900 dark:text-white' : 'text-purple-400'}`} />
+             <div className="bg-muted/50 p-4 rounded-full mb-4 group-hover:scale-110 transition-transform">
+               <UploadCloud className={`w-10 h-10 ${isDragActive ? 'text-zinc-900 dark:text-white' : 'text-muted-foreground'}`} />
              </div>
              <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-2">
                {isDragActive ? '¡Suelta los archivos aquí!' : 'Arrastra archivos o haz clic'}

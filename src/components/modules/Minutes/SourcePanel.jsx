@@ -78,7 +78,7 @@ const SourcePanel = ({ onSelectSource, selectedSource, analysisReady, onStartAna
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.5 }}
-      className="h-full bg-white dark:bg-zinc-900 bg-opacity-60 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20 shadow-xl flex flex-col overflow-hidden"
+      className="h-full bg-card  rounded-2xl p-6 border border-border shadow-sm flex flex-col overflow-y-auto"
     >
       <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-6">Fuentes de Datos</h2>
 
@@ -92,7 +92,7 @@ const SourcePanel = ({ onSelectSource, selectedSource, analysisReady, onStartAna
         {/* File List */}
         <FileList files={files} onRemove={handleRemoveFile} />
 
-        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-purple-900/30 p-4 space-y-3">
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-border p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-zinc-900 dark:text-white">Listo para analizar</p>
@@ -109,7 +109,7 @@ const SourcePanel = ({ onSelectSource, selectedSource, analysisReady, onStartAna
           <Button
             onClick={handleStartAnalysis}
             disabled={files.length === 0}
-            className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+            className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
           >
             <PlayCircle className="w-4 h-4 mr-2" />
             Iniciar el análisis
@@ -117,7 +117,7 @@ const SourcePanel = ({ onSelectSource, selectedSource, analysisReady, onStartAna
         </div>
 
         {/* Fireflies Integration */}
-        <div className="border-t border-purple-800/30 pt-8">
+        <div className="border-t border-border pt-8">
            <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 mb-4 uppercase tracking-wider">Integraciones</h3>
            <FirefliesPanel
              onSelectMeeting={handleSelectMeeting}

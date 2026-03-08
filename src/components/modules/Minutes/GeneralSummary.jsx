@@ -90,7 +90,7 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
       {!summaryData && !loading && (
         <Button
           onClick={handleGenerate}
-          className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-12 shadow-lg shadow-primary/20"
+          className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-medium h-12 shadow-sm"
         >
           <FileText className="w-4 h-4 mr-2" />
           Generar Resumen General (Unificado)
@@ -98,9 +98,9 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
       )}
 
       {loading && (
-        <div className="p-8 text-center bg-white dark:bg-zinc-900 rounded-lg border border-purple-900/30">
-          <Loader2 className="w-8 h-8 text-purple-400 animate-spin mx-auto mb-3" />
-          <p className="text-purple-200">Analizando múltiples fuentes...</p>
+        <div className="p-8 text-center bg-white dark:bg-zinc-900 rounded-lg border border-border">
+          <Loader2 className="w-8 h-8 text-muted-foreground animate-spin mx-auto mb-3" />
+          <p className="text-muted-foreground">Analizando múltiples fuentes...</p>
         </div>
       )}
 
@@ -116,8 +116,8 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
       )}
 
       {summaryData && !loading && (
-        <div className="bg-white dark:bg-zinc-900 rounded-lg p-6 border border-purple-900/30 shadow-md space-y-4">
-          <div className="flex flex-col items-center gap-4 text-center pb-4 border-b border-purple-800/30">
+        <div className="bg-white dark:bg-zinc-900 rounded-lg p-6 border border-border shadow-md space-y-4">
+          <div className="flex flex-col items-center gap-4 text-center pb-4 border-b border-border">
             <div className="bg-green-500/10 p-3 rounded-full">
               <CheckCircle className="w-8 h-8 text-green-500" />
             </div>
@@ -130,7 +130,7 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
                <Button
                 onClick={handleDownloadHTML}
                 disabled={htmlLoading}
-                className="flex-1 bg-purple-900/50 hover:bg-purple-800/50 text-purple-100 border border-purple-500/30"
+                className="flex-1 bg-muted hover:bg-muted/80 text-foreground border border-border"
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
                 {htmlLoading ? 'Generando HTML...' : 'Descargar HTML'}
@@ -138,28 +138,16 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
             </div>
           </div>
 
-          {htmlLoading && (
-            <div className="bg-purple-950/40 border border-purple-800/40 rounded-lg p-4">
-              <div className="flex items-center justify-between text-xs text-purple-200 mb-2">
-                <span>Generando reporte con Gemini</span>
-                <span>Procesando...</span>
-              </div>
-              <div className="h-2 bg-primary/20 rounded-full overflow-hidden">
-                <div className="h-full w-full bg-primary animate-pulse" />
-              </div>
-            </div>
-          )}
-
           <div className="text-left text-sm text-gray-300 space-y-2">
-            <p><strong className="text-purple-400">Temas:</strong> {summaryData.meeting_topics?.join(", ")}</p>
+            <p><strong className="text-muted-foreground">Temas:</strong> {summaryData.meeting_topics?.join(", ")}</p>
             {summaryData.participants?.length > 0 && (
-                 <p><strong className="text-purple-400">Participantes:</strong> {summaryData.participants.length}</p>
+                 <p><strong className="text-muted-foreground">Participantes:</strong> {summaryData.participants.length}</p>
             )}
             {summaryData.meeting_duration && (
-                 <p><strong className="text-purple-400">Duración:</strong> {summaryData.meeting_duration}</p>
+                 <p><strong className="text-muted-foreground">Duración:</strong> {summaryData.meeting_duration}</p>
             )}
             {summaryData.agreements?.length > 0 && (
-                 <p><strong className="text-purple-400">Acuerdos:</strong> {summaryData.agreements.length} identificados</p>
+                 <p><strong className="text-muted-foreground">Acuerdos:</strong> {summaryData.agreements.length} identificados</p>
             )}
           </div>
         </div>
