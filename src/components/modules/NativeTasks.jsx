@@ -15,6 +15,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import TaskCreateModal from './TaskCreateModal';
 import TaskEditModal from './TaskEditModal';
@@ -145,6 +146,7 @@ const getColumnId = (status) => {
 };
 
 const NativeTasks = () => {
+  const { currentUser } = useAuth();
   const [responsibleFilter, setResponsibleFilter] = useState('Todos');
   const [dateFilter, setDateFilter] = useState('Hoy + Vencidos');
   const [clientFilter, setClientFilter] = useState('Todos');
@@ -153,6 +155,7 @@ const NativeTasks = () => {
   const [returningTask, setReturningTask] = useState(null);
   const [returnReason, setReturnReason] = useState('');
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+  const [isReturnedSidebarOpen, setIsReturnedSidebarOpen] = useState(false);
 
   // Set default responsible filter based on user role
   useEffect(() => {
@@ -189,6 +192,8 @@ const NativeTasks = () => {
               responsable_name: task.assignee?.name || 'Sin Asignar',
               assigneeId: task.assigneeId,
               assigneeAvatar: task.assignee?.avatarUrl || null,
+              creatorId: task.creatorId,
+              creatorName: task.creator?.name || 'Sistema',
               estado: task.status,
               // Parse the date explicitly avoiding browser local timezone shifts if it comes as an ISO string
               // Because we save it with T12:00:00.000Z, we can just safely slice it or convert it to a date that won't shift.
@@ -253,6 +258,25 @@ const NativeTasks = () => {
                   title: "Tarea devuelta",
                   description: "Se ha cambiado el estado a Devuelto y se añadió el comentario.",
               });
+
+              // --- NOTIFICATION LOGIC ---
+              if (returningTask.creatorId && returningTask.creatorId !== currentUser?.id) {
+                  try {
+                      await fetch(`${baseUrl}/api/notifications`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                              userId: returningTask.creatorId,
+                              message: `${currentUser?.name} devolvió tu tarea: ${returningTask.pendiente}`,
+                              type: 'TASK_RETURNED',
+                              relatedId: returningTask.id
+                          })
+                      });
+                  } catch (e) {
+                      console.error("Failed to notify creator:", e);
+                  }
+              }
+
               setReturningTask(null);
               setReturnReason('');
               fetchTasks();
@@ -327,25 +351,15 @@ const NativeTasks = () => {
   }, [tasks, responsibleFilter, clientFilter, dateFilter]);
 
 
-  const columns = useMemo(() => {
-    const cols = [
-        { id: 'pendiente', title: 'Pendiente', color: 'bg-zinc-100 dark:bg-zinc-800/50' },
-        { id: 'en-proceso', title: 'En proceso', color: 'bg-blue-50/50 dark:bg-blue-900/10' },
-        { id: 'realizado', title: 'Realizado', color: 'bg-emerald-50/50 dark:bg-emerald-900/10' }
-    ];
+  const columns = [
+      { id: 'pendiente', title: 'Pendiente', color: 'bg-zinc-100 dark:bg-zinc-800/50' },
+      { id: 'en-proceso', title: 'En proceso', color: 'bg-blue-50/50 dark:bg-blue-900/10' },
+      { id: 'realizado', title: 'Realizado', color: 'bg-emerald-50/50 dark:bg-emerald-900/10' }
+  ];
 
-    // Conditional Ghost Column: Devuelto
-    const hasReturnedTasks = tasks.some(t => getColumnId(t.estado) === 'devuelto');
-    if (hasReturnedTasks) {
-        cols.unshift({
-            id: 'devuelto',
-            title: 'Pendientes Devueltos',
-            color: 'bg-red-50/30 dark:bg-red-900/5 border-red-200/50 dark:border-red-800/30'
-        });
-    }
-
-    return cols;
-  }, [tasks]);
+  const returnedTasks = useMemo(() => {
+      return filteredTasks.filter(t => getColumnId(t.estado) === 'devuelto');
+  }, [filteredTasks]);
 
   const onDragEnd = async (result) => {
       const { destination, source, draggableId } = result;
@@ -629,59 +643,135 @@ const NativeTasks = () => {
 
       {/* Kanban Board */}
       <DragDropContext onDragEnd={onDragEnd}>
-          <div className={cn(
-              "grid grid-cols-1 gap-6 flex-1 min-h-[500px]",
-              columns.length === 4 ? "md:grid-cols-4" : "md:grid-cols-3"
-          )}>
-              {columns.map((col) => {
-                  const columnTasks = filteredTasks.filter(t => getColumnId(t.estado) === col.id);
+          <div className="flex gap-6 flex-1 min-h-[500px] relative">
 
-                  return (
-                    <div key={col.id} className="flex flex-col gap-4">
-                        {/* Column Header */}
-                        <div className="flex items-center justify-between px-1">
-                            <div className="flex items-center gap-2">
-                                <h3 className="font-semibold text-zinc-700 dark:text-zinc-200 text-sm">{col.title}</h3>
-                                <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs px-2 py-0.5 rounded-full font-medium">
-                                    {columnTasks.length}
+              {/* COLLAPSIBLE SIDEBAR FOR RETURNED TASKS */}
+              {returnedTasks.length > 0 && (
+                  <div className={cn(
+                      "absolute left-0 top-0 h-full z-40 transition-all duration-300 ease-in-out flex",
+                      isReturnedSidebarOpen ? "w-80" : "w-12"
+                  )}>
+                      {/* Vertical Tab / Trigger */}
+                      <div
+                        onClick={() => setIsReturnedSidebarOpen(!isReturnedSidebarOpen)}
+                        className={cn(
+                            "w-12 h-full flex flex-col items-center py-20 border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors z-50 shadow-xl",
+                            !isReturnedSidebarOpen && "rounded-r-2xl"
+                        )}
+                      >
+                          <div className="relative">
+                            <RotateCcw className={cn("w-5 h-5 text-red-500 transition-transform duration-500", isReturnedSidebarOpen ? "rotate-180" : "")} />
+                            {!isReturnedSidebarOpen && (
+                                <span className="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm">
+                                    {returnedTasks.length}
                                 </span>
-                            </div>
-                        </div>
-
-                        {/* Column Area */}
-                        <Droppable droppableId={col.id}>
-                            {(provided, snapshot) => (
-                                <div
-                                    {...provided.droppableProps}
-                                    ref={provided.innerRef}
-                                    className={cn(
-                                        "flex-1 rounded-xl p-2 transition-colors space-y-3 min-h-[100px]",
-                                        col.color,
-                                        "bg-opacity-50 dark:bg-opacity-20 border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-700/50",
-                                        snapshot.isDraggingOver && "ring-2 ring-indigo-500/20"
-                                    )}
-                                >
-                                    {columnTasks.map((task, index) => (
-                                        <TaskCard
-                                            key={String(task.id)}
-                                            task={task}
-                                            index={index}
-                                            onClick={(t) => setEditingTask(t)}
-                                            onReturn={(t) => setReturningTask(t)}
-                                        />
-                                    ))}
-                                    {provided.placeholder}
-                                    {columnTasks.length === 0 && !snapshot.isDraggingOver && (
-                                        <div className="h-24 flex items-center justify-center text-zinc-400 dark:text-zinc-600 text-sm border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg">
-                                            Sin tareas
-                                        </div>
-                                    )}
-                                </div>
                             )}
-                        </Droppable>
-                    </div>
-                  );
-              })}
+                          </div>
+                          <span className="[writing-mode:vertical-lr] rotate-180 mt-8 text-[10px] font-black uppercase tracking-[0.2em] text-red-500 opacity-60">
+                              Pendientes Devueltos
+                          </span>
+                      </div>
+
+                      {/* Content Area */}
+                      <div className={cn(
+                          "flex-1 bg-zinc-50 dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden flex flex-col transition-all",
+                          isReturnedSidebarOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full pointer-events-none"
+                      )}>
+                          <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex justify-between items-center">
+                              <h3 className="text-sm font-bold text-red-600 flex items-center gap-2">
+                                  <RotateCcw className="w-4 h-4" />
+                                  Devueltos ({returnedTasks.length})
+                              </h3>
+                              <button
+                                onClick={() => setIsReturnedSidebarOpen(false)}
+                                className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-zinc-400"
+                              >
+                                  <X className="w-4 h-4" />
+                              </button>
+                          </div>
+
+                          <Droppable droppableId="devuelto">
+                              {(provided, snapshot) => (
+                                  <div
+                                      {...provided.droppableProps}
+                                      ref={provided.innerRef}
+                                      className={cn(
+                                          "flex-1 p-4 overflow-y-auto space-y-3",
+                                          snapshot.isDraggingOver && "bg-red-50/30 dark:bg-red-900/5"
+                                      )}
+                                  >
+                                      {returnedTasks.map((task, index) => (
+                                          <TaskCard
+                                              key={String(task.id)}
+                                              task={task}
+                                              index={index}
+                                              onClick={(t) => setEditingTask(t)}
+                                              onReturn={(t) => setReturningTask(t)}
+                                          />
+                                      ))}
+                                      {provided.placeholder}
+                                  </div>
+                              )}
+                          </Droppable>
+                      </div>
+                  </div>
+              )}
+
+              {/* Grid Column Layout Area */}
+              <div className={cn(
+                  "grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 transition-all duration-300",
+                  returnedTasks.length > 0 && "pl-12"
+              )}>
+                  {columns.map((col) => {
+                      const columnTasks = filteredTasks.filter(t => getColumnId(t.estado) === col.id);
+
+                      return (
+                        <div key={col.id} className="flex flex-col gap-4">
+                            {/* Column Header */}
+                            <div className="flex items-center justify-between px-1">
+                                <div className="flex items-center gap-2">
+                                    <h3 className="font-semibold text-zinc-700 dark:text-zinc-200 text-sm">{col.title}</h3>
+                                    <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs px-2 py-0.5 rounded-full font-medium">
+                                        {columnTasks.length}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Column Area */}
+                            <Droppable droppableId={col.id}>
+                                {(provided, snapshot) => (
+                                    <div
+                                        {...provided.droppableProps}
+                                        ref={provided.innerRef}
+                                        className={cn(
+                                            "flex-1 rounded-xl p-2 transition-colors space-y-3 min-h-[100px]",
+                                            col.color,
+                                            "bg-opacity-50 dark:bg-opacity-20 border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-700/50",
+                                            snapshot.isDraggingOver && "ring-2 ring-indigo-500/20"
+                                        )}
+                                    >
+                                        {columnTasks.map((task, index) => (
+                                            <TaskCard
+                                                key={String(task.id)}
+                                                task={task}
+                                                index={index}
+                                                onClick={(t) => setEditingTask(t)}
+                                                onReturn={(t) => setReturningTask(t)}
+                                            />
+                                        ))}
+                                        {provided.placeholder}
+                                        {columnTasks.length === 0 && !snapshot.isDraggingOver && (
+                                            <div className="h-24 flex items-center justify-center text-zinc-400 dark:text-zinc-600 text-sm border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg">
+                                                Sin tareas
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </Droppable>
+                        </div>
+                      );
+                  })}
+              </div>
           </div>
       </DragDropContext>
     </div>
@@ -769,9 +859,15 @@ const TaskCard = ({ task, index, onClick, onReturn }) => {
                                 </div>
 
                                 {/* Body: Task Title */}
-                                <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 leading-snug">
-                                    {task.pendiente}
-                                </h4>
+                                    <div>
+                                        <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 leading-snug mb-1">
+                                            {task.pendiente}
+                                        </h4>
+                                        <div className="flex items-center gap-1.5 opacity-60">
+                                            <span className="text-[9px] text-zinc-500 uppercase tracking-tighter font-semibold">Creado por</span>
+                                            <span className="text-[9px] text-primary font-bold uppercase tracking-tighter">{task.creatorName}</span>
+                                        </div>
+                                    </div>
 
                                 {/* Footer: Date & Avatar & Comments */}
                                 <div className="flex items-center justify-between mt-1 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">

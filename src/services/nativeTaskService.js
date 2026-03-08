@@ -45,7 +45,8 @@ export const getTasks = async (clientId) => {
                 client: {
                     select: { name: true, logoUrl: true }
                 },
-                assignee: true
+                assignee: true,
+                creator: true
             },
             orderBy: {
                 createdAt: 'asc' // Oldest first to match current kanban logic
@@ -58,13 +59,14 @@ export const getTasks = async (clientId) => {
     }
 };
 
-export const createTask = async ({ title, dueDate, assigneeId, comments, status, clientId }) => {
+export const createTask = async ({ title, dueDate, assigneeId, creatorId, comments, status, clientId }) => {
     try {
         const newTask = await prisma.task.create({
             data: {
                 title,
                 dueDate: dueDate ? new Date(dueDate) : null,
                 assigneeId,
+                creatorId,
                 comments,
                 status: status || 'Pendiente',
                 clientId
@@ -73,7 +75,8 @@ export const createTask = async ({ title, dueDate, assigneeId, comments, status,
                 client: {
                     select: { name: true, logoUrl: true }
                 },
-                assignee: true
+                assignee: true,
+                creator: true
             }
         });
         return newTask;
@@ -118,7 +121,8 @@ export const getCompletedTasks = async (dateString) => {
                 client: {
                     select: { name: true, logoUrl: true }
                 },
-                assignee: true
+                assignee: true,
+                creator: true
             },
             orderBy: {
                 completedAt: 'desc'
@@ -181,7 +185,8 @@ export const updateTask = async (id, data) => {
                 client: {
                     select: { name: true, logoUrl: true }
                 },
-                assignee: true
+                assignee: true,
+                creator: true
             }
         });
         return updatedTask;
