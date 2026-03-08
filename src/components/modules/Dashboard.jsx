@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/Card';
 import { motion } from 'framer-motion';
-import { ArrowUpRight, ArrowDownRight, Zap, TrendingUp, Clock, CheckCircle2, Activity, Target, Bell, MessageSquare } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Zap, TrendingUp, Clock, CheckCircle2, Activity, Target, Bell, MessageSquare, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import StudioBroadcastWidget from './StudioBroadcastWidget';
 import MeetingWidget from './MeetingWidget';
@@ -138,13 +138,15 @@ const Dashboard = () => {
         fetchNotifications();
     }, 60000);
 
-    window.addEventListener('notifications-read', () => {
+    const handleNotificationsRead = () => {
         fetchUnreadCount();
         fetchNotifications();
-    });
+    };
+
+    window.addEventListener('notifications-read', handleNotificationsRead);
     return () => {
         clearInterval(interval);
-        window.removeEventListener('notifications-read', fetchUnreadCount);
+        window.removeEventListener('notifications-read', handleNotificationsRead);
     };
   }, []);
 
