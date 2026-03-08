@@ -202,6 +202,9 @@ const Dashboard = () => {
     } else if (notif.type === 'CAMPFIRE_MENTION') {
         // relatedId contains the clientId
         navigate(`/cliente/${notif.relatedId}`);
+    } else if (notif.type === 'TASK_RETURNED') {
+        // Navigate to Native Tasks (Gestion) and show returned tasks
+        navigate(`/gestion?showReturned=true`);
     }
   };
 
