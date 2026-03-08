@@ -348,51 +348,46 @@ const ChatWidget = ({
         </div>
     );
 
-    if (fullInterface) {
-        return (
-            <Card className="w-full flex flex-col border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 h-full overflow-hidden">
-                <div className="flex justify-between items-center p-6 shrink-0 border-b border-zinc-100 dark:border-zinc-800/50">
-                    <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-primary/10 rounded-lg">
-                            <MessageSquare className="w-4 h-4 text-primary" />
-                        </div>
-                        <h3 className="font-semibold text-zinc-900 dark:text-white">{title}</h3>
+    const cardContent = fullInterface ? (
+        <Card className="w-full flex flex-col border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 h-full overflow-hidden">
+            <div className="flex justify-between items-center p-6 shrink-0 border-b border-zinc-100 dark:border-zinc-800/50">
+                <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-primary/10 rounded-lg">
+                        <MessageSquare className="w-4 h-4 text-primary" />
                     </div>
-
-                    <button
-                        onClick={() => setIsModalOpen(true)}
-                        className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                        title="Ver chat completo"
-                    >
-                        <Maximize2 className="w-4 h-4" />
-                    </button>
+                    <h3 className="font-semibold text-zinc-900 dark:text-white">{title}</h3>
                 </div>
 
-                <div
-                    ref={scrollRef}
-                    className="flex-1 overflow-y-auto p-6 scroll-smooth"
+                <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                    title="Ver chat completo"
                 >
-                    {loading ? (
-                        <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-400"/></div>
-                    ) : messages.length === 0 ? (
-                        <div className="text-center py-12 text-zinc-400 text-xs italic">
-                            No hay mensajes aún. ¡Sé el primero en hablar!
-                        </div>
-                    ) : (
-                        renderMessageList(false)
-                    )}
-                </div>
+                    <Maximize2 className="w-4 h-4" />
+                </button>
+            </div>
 
-                <div className="shrink-0 p-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/30">
-                    {renderInputArea()}
-                </div>
-            </Card>
-        );
-    }
+            <div
+                ref={scrollRef}
+                className="flex-1 overflow-y-auto p-6 scroll-smooth"
+            >
+                {loading ? (
+                    <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-zinc-400"/></div>
+                ) : messages.length === 0 ? (
+                    <div className="text-center py-12 text-zinc-400 text-xs italic">
+                        No hay mensajes aún. ¡Sé el primero en hablar!
+                    </div>
+                ) : (
+                    renderMessageList(false)
+                )}
+            </div>
 
-    return (
-        <>
-            <Card className="w-full flex flex-col h-full min-h-[300px] p-6 relative group overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+            <div className="shrink-0 p-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/30">
+                {renderInputArea()}
+            </div>
+        </Card>
+    ) : (
+        <Card className="w-full flex flex-col h-full min-h-[300px] p-6 relative group overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
                 <div className="flex justify-between items-center mb-4">
                     <div className="flex items-center gap-2">
                         <div className="p-1.5 bg-primary/10 rounded-lg">
@@ -442,6 +437,11 @@ const ChatWidget = ({
                     </button>
                 </div>
             </Card>
+    );
+
+    return (
+        <>
+            {cardContent}
 
             <SlideOver
                 open={isModalOpen}
