@@ -11,7 +11,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
 const Sidebar = ({ onLogout }) => {
   const { theme, toggleTheme } = useTheme();
-  const { logout } = useAuth();
+  const { logout, currentUser } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -99,14 +99,6 @@ const Sidebar = ({ onLogout }) => {
                   {isActive && (
                     <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)] animate-pulse" />
                   )}
-                  {item.id === 'dashboard' && unreadCount > 0 && (
-                    <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                        <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></span>
-                        </span>
-                    </div>
-                  )}
                 </>
               )}
             </NavLink>
@@ -131,14 +123,7 @@ const Sidebar = ({ onLogout }) => {
             <div className="flex flex-col text-left">
               <span className="text-sm font-medium text-zinc-900 dark:text-zinc-200 group-hover:text-red-500 transition-colors">Cerrar Sesión</span>
               <span className="text-xs text-zinc-500 dark:text-zinc-500 group-hover:text-red-400 transition-colors">
-                {(() => {
-                    try {
-                        const user = JSON.parse(localStorage.getItem('currentUser'));
-                        return user ? user.name : 'Admin';
-                    } catch(e) {
-                        return 'Admin';
-                    }
-                })()}
+                {currentUser?.name || 'Usuario'}
               </span>
             </div>
           </div>

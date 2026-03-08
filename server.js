@@ -19,7 +19,7 @@ import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskS
 import { getClientAnnouncements, createClientAnnouncement } from './src/services/clientAnnouncementService.js';
 import { getCampfireMessages, createCampfireMessage } from './src/services/campfireService.js';
 import { getGeneralChatMessages, createGeneralChatMessage } from './src/services/generalChatService.js';
-import { getUnreadNotificationCount, createNotification, getNotifications, markAsRead } from './src/services/notificationService.js';
+import { getUnreadNotificationCount, createNotification, getNotifications, markAsRead, markAllNotificationsAsRead } from './src/services/notificationService.js';
 import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
 import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics } from './src/services/nativeTaskService.js';
 import teamRouter from './src/routes/api/team.js';
@@ -1726,6 +1726,15 @@ app.patch('/api/notifications/:id/read', authenticateToken, async (req, res) => 
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: "Failed to mark as read" });
+    }
+});
+
+app.post('/api/notifications/read-all', authenticateToken, async (req, res) => {
+    try {
+        await markAllNotificationsAsRead(req.user.userId);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to mark all as read" });
     }
 });
 
