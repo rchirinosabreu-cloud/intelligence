@@ -138,7 +138,7 @@ const Dashboard = () => {
 
     const interval = setInterval(() => {
         fetchUnreadCount();
-        fetchNotifications();
+        // fetchNotifications(); // Only fetch count to save bandwidth, full list updates on bell open
     }, 60000);
 
     const handleNotificationsRead = () => {
@@ -146,10 +146,20 @@ const Dashboard = () => {
         fetchNotifications();
     };
 
+    const handleFocus = () => {
+        fetchUnreadCount();
+    };
+
     window.addEventListener('notifications-read', handleNotificationsRead);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') fetchUnreadCount();
+    });
+
     return () => {
         clearInterval(interval);
         window.removeEventListener('notifications-read', handleNotificationsRead);
+        window.removeEventListener('focus', handleFocus);
     };
   }, []);
 
