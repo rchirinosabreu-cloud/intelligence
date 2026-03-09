@@ -61,7 +61,7 @@ model Client {
   links       ClientLink[]
   tasks       ClientTask[]
   announcements ClientAnnouncement[]
-  campfireMessages CampfireMessage[]
+  flowMessages FlowMessage[]
   nativeTasks Task[]
 }
 
@@ -79,7 +79,7 @@ model TeamMember {
   // Relaciones
   nativeTasks     Task[]
   clientTasks     ClientTask[]
-  campfireMessages CampfireMessage[]
+  flowMessages    FlowMessage[]
 }
 
 // Fase 1: Migración del Kanban de Google Sheets a Prisma
@@ -154,8 +154,8 @@ model ClientAnnouncement {
   createdAt DateTime @default(now())
 }
 
-// Chat Campfire (Inmutable)
-model CampfireMessage {
+// Chat Flow (Inmutable)
+model FlowMessage {
   id        String   @id @default(uuid())
   clientId  String
   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)

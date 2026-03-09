@@ -1,12 +1,12 @@
 import React from 'react';
 import ChatWidget from './ChatWidget';
 
-const CampfireWidget = ({ clientId, externalOpen, onExternalOpenChange }) => {
+const FlowWidget = ({ clientId, externalOpen, onExternalOpenChange }) => {
     return (
         <ChatWidget
-            title="Chat Campfire"
+            title="Chat Flow"
             description="Chat operativo exclusivo para este cliente"
-            apiEndpoint={`/api/clients/${clientId}/campfire`}
+            apiEndpoint={`/api/clients/${clientId}/flow`}
             isGlobal={false}
             clientId={clientId}
             externalOpen={externalOpen}
@@ -15,4 +15,4 @@ const CampfireWidget = ({ clientId, externalOpen, onExternalOpenChange }) => {
     );
 };
 
-export default CampfireWidget;
+export default FlowWidget;

@@ -17,7 +17,7 @@ import { getUpcomingEvents } from './src/services/calendarService.js';
 import { getClients, getClientByIdentifier, getClientGuidelines, createClient, getClientLinks, addClientLink, removeClientLink } from './src/services/clientService.js';
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from './src/services/clientTaskService.js';
 import { getClientAnnouncements, createClientAnnouncement } from './src/services/clientAnnouncementService.js';
-import { getCampfireMessages, createCampfireMessage } from './src/services/campfireService.js';
+import { getFlowMessages, createFlowMessage } from './src/services/flowService.js';
 import { getGeneralChatMessages, createGeneralChatMessage } from './src/services/generalChatService.js';
 import { getUnreadNotificationCount, createNotification, getNotifications, markAsRead, markAllNotificationsAsRead } from './src/services/notificationService.js';
 import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
@@ -1617,21 +1617,21 @@ app.post('/api/clients/:clientId/announcements', authenticateToken, async (req, 
     }
 });
 
-// --- CAMPFIRE ENDPOINTS (Immutable Chat) ---
+// --- FLOW ENDPOINTS (Immutable Chat) ---
 
-app.get('/api/clients/:clientId/campfire', authenticateToken, async (req, res) => {
+app.get('/api/clients/:clientId/flow', authenticateToken, async (req, res) => {
     const { clientId } = req.params;
     try {
-        log('API', `Fetching campfire messages for client: ${clientId}`);
-        const messages = await getCampfireMessages(clientId);
+        log('API', `Fetching flow messages for client: ${clientId}`);
+        const messages = await getFlowMessages(clientId);
         res.json(messages);
     } catch (error) {
-        logError('API', "Failed to fetch campfire messages", error);
+        logError('API', "Failed to fetch flow messages", error);
         res.status(500).json({ error: "Failed to fetch messages" });
     }
 });
 
-app.post('/api/clients/:clientId/campfire', authenticateToken, async (req, res) => {
+app.post('/api/clients/:clientId/flow', authenticateToken, async (req, res) => {
     const { clientId } = req.params;
     const { content } = req.body;
     const userEmail = req.user.email;
@@ -1652,10 +1652,10 @@ app.post('/api/clients/:clientId/campfire', authenticateToken, async (req, res) 
 
         const authorId = teamMember.id;
 
-        log('API', `Creating campfire message for client: ${clientId} by teamMember: ${authorId} (${userEmail})`);
-        const message = await createCampfireMessage({ clientId, content, authorId });
+        log('API', `Creating flow message for client: ${clientId} by teamMember: ${authorId} (${userEmail})`);
+        const message = await createFlowMessage({ clientId, content, authorId });
 
-        // --- MENTIONS LOGIC FOR CAMPFIRE ---
+        // --- MENTIONS LOGIC FOR FLOW ---
         const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
         let match;
         const mentionedUserIds = new Set();
@@ -1683,7 +1683,7 @@ app.post('/api/clients/:clientId/campfire', authenticateToken, async (req, res) 
                      await createNotification({
                         userId: targetUser.id,
                         message: `${req.user.name} te mencionó en el chat de ${clientDisplay}`,
-                        type: 'CAMPFIRE_MENTION',
+                        type: 'CAMPFIRE_MENTION', // Maintain type for compatibility or rename to FLOW_MENTION
                         relatedId: clientId // Store clientId for easier navigation in frontend
                     });
                 }
@@ -1692,7 +1692,7 @@ app.post('/api/clients/:clientId/campfire', authenticateToken, async (req, res) 
 
         res.json(message);
     } catch (error) {
-        logError('API', "Failed to create campfire message", error);
+        logError('API', "Failed to create flow message", error);
         res.status(500).json({ error: "Failed to create message" });
     }
 });

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import CampfireWidget from './CampfireWidget';
+import FlowWidget from './FlowWidget';
 import DigitalIdentityWidget from './DigitalIdentityWidget';
 import DeliverablesWidget from './DeliverablesWidget';
 import ClientTasksWidget from './ClientTasksWidget';
@@ -55,7 +55,7 @@ const ClientDetail = ({ client, onBack }) => {
 
         {/* Right Column (Sidebar) */}
         <div className="lg:col-span-1 flex flex-col gap-6">
-            <CampfireWidget
+            <FlowWidget
                 clientId={client.id}
                 externalOpen={isChatOpen}
                 onExternalOpenChange={setIsChatOpen}
