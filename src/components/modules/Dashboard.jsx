@@ -173,15 +173,19 @@ const Dashboard = () => {
 
   // --- LOGIC: FEED DE LOGROS (Completed TODAY from Native Tasks) ---
   const completedFeed = useMemo(() => {
-      const today = new Date();
-      // Reset time to compare only dates (YYYY-MM-DD)
-      const todayStr = today.toISOString().split('T')[0];
+      // Robust "Today" in America/Bogota to match backend boundaries
+      const bogotaFormatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Bogota',
+          year: 'numeric', month: '2-digit', day: '2-digit'
+      });
+      const todayStr = bogotaFormatter.format(new Date()); // Returns YYYY-MM-DD in Bogota
 
       return completedNativeTasks.filter(t => {
           if (!t.completedAt) return false;
           try {
+              // Extract the date part using the same formatter to ensure we compare Bogota days
               const d = new Date(t.completedAt);
-              const dStr = d.toISOString().split('T')[0];
+              const dStr = bogotaFormatter.format(d);
               return dStr === todayStr;
           } catch (e) {
               return false;

@@ -11,8 +11,14 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Default to today's date in YYYY-MM-DD format based on local timezone
-  const todayStr = new Date().toLocaleDateString('en-CA'); // e.g. YYYY-MM-DD safely
+  // Default to today's date in YYYY-MM-DD format based on America/Bogota timezone
+  const todayStr = useMemo(() => {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Bogota',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
+  }, []);
+
   const [selectedDate, setSelectedDate] = useState(todayStr);
 
   useEffect(() => {
