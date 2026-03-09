@@ -190,7 +190,7 @@ const Dashboard = () => {
           } catch (e) {
               return false;
           }
-      }).slice(0, 5); // Limit to the 5 most recent
+      }).slice(0, 15); // Limit to the 15 most recent achievements
   }, [completedNativeTasks]);
 
   const markAllAsRead = async () => {
@@ -410,7 +410,7 @@ const Dashboard = () => {
               <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Logros recientes</h3>
             </div>
 
-            <div className="flex-1 overflow-y-auto min-h-0 space-y-6 pr-2 scroll-smooth custom-scrollbar">
+            <div className="max-h-[400px] overflow-y-auto space-y-6 pr-2 scroll-smooth custom-scrollbar">
               {loadingNative ? (
                   <p className="text-sm text-zinc-400 animate-pulse">Cargando feed...</p>
               ) : completedFeed.length === 0 ? (
