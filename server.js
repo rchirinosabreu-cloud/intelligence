@@ -1766,6 +1766,7 @@ app.post('/api/general-chat', authenticateToken, async (req, res) => {
 
 app.get('/api/notifications', authenticateToken, async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
         const notifications = await getNotifications(req.user.userId);
         res.json(notifications);
     } catch (error) {
@@ -1775,6 +1776,7 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
 
 app.get('/api/notifications/unread-count', authenticateToken, async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
         const count = await getUnreadNotificationCount(req.user.userId);
         res.json({ count });
     } catch (error) {
