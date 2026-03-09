@@ -74,7 +74,7 @@ const Dashboard = () => {
         try {
             setLoading(true);
             const baseUrl = getApiBaseUrl();
-            const response = await fetch(`${baseUrl}/api/metrics/tasks`);
+            const response = await fetch(`${baseUrl}/api/metrics/tasks`, { cache: 'no-store' });
             if (!response.ok) {
                 throw new Error(`Error ${response.status}: ${response.statusText}`);
             }
@@ -91,7 +91,7 @@ const Dashboard = () => {
         try {
             setLoadingNative(true);
             const baseUrl = getApiBaseUrl();
-            const response = await fetch(`${baseUrl}/api/tasks/completed`);
+            const response = await fetch(`${baseUrl}/api/tasks/completed`, { cache: 'no-store' });
             if (!response.ok) {
                 throw new Error(`Error ${response.status}: ${response.statusText}`);
             }
@@ -104,22 +104,10 @@ const Dashboard = () => {
         }
     };
 
-    const fetchUnreadCount = async () => {
-        try {
-            const res = await fetch(`${getApiBaseUrl()}/api/notifications/unread-count`);
-            if (res.ok) {
-                const data = await res.json();
-                setUnreadCount(data.count);
-            }
-        } catch (error) {
-            console.error("Error fetching unread count:", error);
-        }
-    };
-
     const fetchNotifications = async () => {
         try {
             setLoadingNotifications(true);
-            const res = await fetch(`${getApiBaseUrl()}/api/notifications`);
+            const res = await fetch(`${getApiBaseUrl()}/api/notifications`, { cache: 'no-store' });
             if (res.ok) {
                 const data = await res.json();
                 setNotifications(data);
@@ -128,6 +116,26 @@ const Dashboard = () => {
             console.error("Error fetching notifications:", error);
         } finally {
             setLoadingNotifications(false);
+        }
+    };
+
+    const fetchUnreadCount = async () => {
+        try {
+            const res = await fetch(`${getApiBaseUrl()}/api/notifications/unread-count`, { cache: 'no-store' });
+            if (res.ok) {
+                const data = await res.json();
+
+                // Use functional update to ensure we check against the latest state
+                // and trigger background list sync if new notifications arrived.
+                setUnreadCount(prev => {
+                    if (data.count > prev) {
+                        fetchNotifications();
+                    }
+                    return data.count;
+                });
+            }
+        } catch (error) {
+            console.error("Error fetching unread count:", error);
         }
     };
 
@@ -243,7 +251,12 @@ const Dashboard = () => {
               </h2>
               <p className="text-zinc-500 dark:text-zinc-400">Aquí está el resumen de progreso y logros del mes.</p>
             </div>
-            <DropdownMenu onOpenChange={(open) => open && markAllAsRead()}>
+            <DropdownMenu onOpenChange={async (open) => {
+                if (open) {
+                    await fetchNotifications();
+                    markAllAsRead();
+                }
+            }}>
               <DropdownMenuTrigger asChild>
                 <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-full dark:bg-indigo-500/10 dark:border-indigo-500/20 relative cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors">
                   <Bell className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
