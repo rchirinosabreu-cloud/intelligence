@@ -31,5 +31,9 @@ Este archivo contiene las reglas y el contexto inmutable del proyecto para evita
 ## 6. Reglas de Desarrollo y Testing (TDD Estratégico)
 
 1. **Backend y Lógica Crítica (TDD Obligatorio):** Para cualquier nueva ruta de API, integraciones con terceros (OpenAI, Fireflies), parseo de datos (JSON) o lógica de autenticación/base de datos, **DEBES utilizar un enfoque TDD**. Escribe primero las pruebas (usando Jest o la herramienta configurada), asegúrate de que fallen, y luego escribe el código para que pasen.
+
 2. **Manejo de Respuestas de IA:** Todas las funciones que procesen respuestas de LLMs (OpenAI, Gemini) deben incluir una prueba específica que simule la recepción del string envuelto en bloques de código markdown (ej. \`\`\`json ... \`\`\`) para garantizar que el sistema lo limpie y parsee correctamente sin lanzar `SyntaxError`.
-3. **Frontend Visual (Sin TDD):** Para ajustes puramente estéticos en React/Tailwind (colores, glassmorphism, flexbox, márgenes), omite el TDD para agilizar el desarrollo, pero asegúrate de siempre seguir la guía de estilos globales y variables del sistema.
+
+3. Test-Driven Development (TDD) Obligatorio en Frontend:** El enfoque TDD ya no es exclusivo del backend. Todo componente nuevo, lógica de estado o refactorización visual profunda debe tener sus pruebas escritas (ej. React Testing Library / Jest) ANTES de la implementación. Las pruebas deben pasar antes de considerar el código listo.
+
+4. **Verificación Visual Obligatoria (Screenshots):** NUNCA des por terminada una tarea de Frontend sin antes renderizarla. Por cada cambio visual, de layout o de componentes en el frontend, DEBES proporcionar obligatoriamente una captura de pantalla (screenshot) de la interfaz final para que el usuario valide que el diseño no se rompió en resoluciones estándar.
