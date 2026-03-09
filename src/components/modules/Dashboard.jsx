@@ -465,7 +465,7 @@ const Dashboard = () => {
           {/* General Chat */}
           <div className="flex-1 min-h-[440px]">
             <ChatWidget
-              title="Chat general"
+              title="Team Flow"
               description="Chat operativo de toda la agencia"
               apiEndpoint="/api/general-chat"
               isGlobal={true}
