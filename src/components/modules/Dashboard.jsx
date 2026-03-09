@@ -366,7 +366,7 @@ const Dashboard = () => {
               <Card className="h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
                 <div className="flex justify-between items-start mb-4">
                   <span className="text-sm font-medium text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors">
-                      Total realizadas
+                      Total realizados
                   </span>
                   <div className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
                     <TrendingUp className="w-3 h-3" />
@@ -377,7 +377,7 @@ const Dashboard = () => {
                   <span className="text-4xl font-bold text-zinc-900 dark:text-white tracking-tight">
                       {loading ? '...' : metrics.completed}
                   </span>
-                  <p className="text-xs text-zinc-400 mt-2">Tareas finalizadas en el historial</p>
+                  <p className="text-xs text-zinc-400 mt-2">Pendientes finalizados en el historial</p>
                 </div>
               </Card>
             </motion.div>
