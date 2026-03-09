@@ -410,7 +410,7 @@ const Dashboard = () => {
               <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Logros recientes</h3>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-6 pr-2 scroll-smooth custom-scrollbar">
+            <div className="flex-1 overflow-y-auto min-h-0 space-y-6 pr-2 scroll-smooth custom-scrollbar">
               {loadingNative ? (
                   <p className="text-sm text-zinc-400 animate-pulse">Cargando feed...</p>
               ) : completedFeed.length === 0 ? (
@@ -455,7 +455,7 @@ const Dashboard = () => {
               )}
             </div>
 
-            <div className="mt-auto pt-4 border-t border-zinc-100 dark:border-zinc-800 shrink-0">
+            <div className="mt-4 shrink-0 pt-4 border-t border-zinc-100 dark:border-zinc-800">
                <button
                   onClick={() => setShowHistoryModal(true)}
                   className="w-full py-2 text-xs font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-500 dark:hover:text-white transition-colors flex items-center justify-center gap-2"
