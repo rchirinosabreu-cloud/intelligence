@@ -402,15 +402,15 @@ const Dashboard = () => {
         </div>
 
         {/* News/Updates Column (Right - 1/3 width) -> FEED DE LOGROS */}
-        <motion.div variants={item} className="md:col-span-1 flex flex-col gap-6 min-h-[900px]">
+        <motion.div variants={item} className="md:col-span-1 flex flex-col gap-6 max-h-[950px]">
           {/* Recent Achievements */}
-          <Card className="flex-1 flex flex-col min-h-[440px]">
-            <div className="flex items-center gap-2 mb-6">
+          <Card className="flex-1 flex flex-col min-h-[400px] max-h-[460px] overflow-hidden">
+            <div className="flex items-center gap-2 mb-6 shrink-0">
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
               <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Logros recientes</h3>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-6 pr-2 scroll-smooth">
+            <div className="flex-1 overflow-y-auto space-y-6 pr-2 scroll-smooth custom-scrollbar">
               {loadingNative ? (
                   <p className="text-sm text-zinc-400 animate-pulse">Cargando feed...</p>
               ) : completedFeed.length === 0 ? (
@@ -455,7 +455,7 @@ const Dashboard = () => {
               )}
             </div>
 
-            <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+            <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 shrink-0">
                <button
                   onClick={() => setShowHistoryModal(true)}
                   className="w-full py-2 text-xs font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-500 dark:hover:text-white transition-colors flex items-center justify-center gap-2"
@@ -467,7 +467,7 @@ const Dashboard = () => {
           </Card>
 
           {/* General Chat */}
-          <div className="flex-1 min-h-[440px]">
+          <div className="flex-1 min-h-[400px] max-h-[460px]">
             <ChatWidget
               title="Chat general"
               description="Chat operativo de toda la agencia"
