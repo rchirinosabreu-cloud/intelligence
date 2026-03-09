@@ -47,24 +47,31 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
     }, []);
 
     // Fetch Announcements
-    const fetchAnnouncements = async () => {
+    const fetchAnnouncements = async (isPolling = false) => {
         if (scope === "client" && !clientId) return;
         try {
-            setLoading(true);
-            const res = await fetch(getEndpoint());
+            if (!isPolling) setLoading(true);
+            const res = await fetch(getEndpoint(), { cache: 'no-store' });
             if (res.ok) {
                 const data = await res.json();
                 setAnnouncements(data);
             }
         } catch (error) {
-            console.error("Error fetching announcements:", error);
+            if (!isPolling) console.error("Error fetching announcements:", error);
         } finally {
-            setLoading(false);
+            if (!isPolling) setLoading(false);
         }
     };
 
     useEffect(() => {
         fetchAnnouncements();
+
+        // Polling interval (15 seconds)
+        const intervalId = setInterval(() => {
+            fetchAnnouncements(true);
+        }, 15000);
+
+        return () => clearInterval(intervalId);
     }, [clientId, scope]);
 
     // Handle Create

@@ -47,25 +47,32 @@ const ChatWidget = ({
     }, []);
 
     // Fetch Messages
-    const fetchMessages = async () => {
+    const fetchMessages = async (isPolling = false) => {
         try {
-            setLoading(true);
+            if (!isPolling) setLoading(true);
             const baseUrl = getApiBaseUrl();
-            const res = await fetch(`${baseUrl}${apiEndpoint}`);
+            const res = await fetch(`${baseUrl}${apiEndpoint}`, { cache: 'no-store' });
             if (res.ok) {
                 const data = await res.json();
                 setMessages(data);
             }
         } catch (error) {
-            console.error("Error fetching chat messages:", error);
+            if (!isPolling) console.error("Error fetching chat messages:", error);
         } finally {
-            setLoading(false);
+            if (!isPolling) setLoading(false);
         }
     };
 
     useEffect(() => {
         if (isGlobal || clientId) {
             fetchMessages();
+
+            // Polling interval (3 seconds)
+            const intervalId = setInterval(() => {
+                fetchMessages(true);
+            }, 3000);
+
+            return () => clearInterval(intervalId);
         }
     }, [clientId, apiEndpoint]);
 
@@ -187,11 +194,30 @@ const ChatWidget = ({
 
     const groupedMessages = getGroupedMessages();
     const scrollRef = useRef(null);
+    const lastMessageId = useRef(null);
+
     useEffect(() => {
-        if ((isModalOpen || fullInterface) && scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        if ((isModalOpen || fullInterface) && scrollRef.current && messages.length > 0) {
+            const currentLastMsg = messages[0]; // Newest is at index 0
+
+            // If new messages arrived
+            if (currentLastMsg.id !== lastMessageId.current) {
+                const isOwn = currentLastMsg.authorId === currentUser?.id || currentLastMsg.author?.id === currentUser?.id || currentLastMsg.author?.email === currentUser?.email;
+
+                // Check if user is already at the bottom (within a 100px threshold)
+                const isAtBottom = scrollRef.current.scrollHeight - scrollRef.current.scrollTop <= scrollRef.current.clientHeight + 100;
+
+                if (isOwn || isAtBottom) {
+                    // Smooth scroll for better UX
+                    scrollRef.current.scrollTo({
+                        top: scrollRef.current.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                }
+                lastMessageId.current = currentLastMsg.id;
+            }
         }
-    }, [isModalOpen, fullInterface, messages]);
+    }, [isModalOpen, fullInterface, messages, currentUser]);
 
     // --- MENTIONS UX LOGIC ---
     const handleFocus = async () => {

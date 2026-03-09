@@ -1,7 +1,5 @@
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma.js';
 
 // Get announcements (limit to recent 5)
 export const getGlobalAnnouncements = async () => {
