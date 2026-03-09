@@ -2,24 +2,24 @@
 import prisma from '../lib/prisma.js';
 
 // GET all messages for a client
-export const getCampfireMessages = async (clientId) => {
+export const getFlowMessages = async (clientId) => {
     try {
-        const messages = await prisma.campfireMessage.findMany({
+        const messages = await prisma.flowMessage.findMany({
             where: { clientId },
             include: { author: true },
             orderBy: { createdAt: 'desc' }
         });
         return messages;
     } catch (error) {
-        console.error(`[${new Date().toISOString()}] [CampfireService] Error fetching messages:`, error?.message || error);
+        console.error(`[${new Date().toISOString()}] [FlowService] Error fetching messages:`, error?.message || error);
         throw error;
     }
 };
 
 // POST a new message (Immutable)
-export const createCampfireMessage = async (data) => {
+export const createFlowMessage = async (data) => {
     try {
-        const message = await prisma.campfireMessage.create({
+        const message = await prisma.flowMessage.create({
             data: {
                 clientId: data.clientId,
                 content: data.content,
@@ -29,7 +29,7 @@ export const createCampfireMessage = async (data) => {
         });
         return message;
     } catch (error) {
-        console.error(`[${new Date().toISOString()}] [CampfireService] Error creating message:`, error?.message || error);
+        console.error(`[${new Date().toISOString()}] [FlowService] Error creating message:`, error?.message || error);
         throw error;
     }
 };
