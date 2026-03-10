@@ -52,13 +52,14 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 } catch(e) {}
             }
 
+            const initialStatus = taskData.estado || taskData.status || 'Pendiente';
             setEditFormData({
                 id: taskData.id,
                 pendiente: taskData.pendiente || taskData.title || '',
                 clientId: cId,
                 responsable_name: taskData.assigneeId || taskData.responsable_name || taskData.assignee || '',
-                estado: taskData.estado || taskData.status || 'Pendiente',
-                originalStatus: taskData.estado || taskData.status || 'Pendiente', // Store original to detect auto-resolve
+                estado: initialStatus,
+                originalStatus: initialStatus, // Store original to detect auto-resolve and anti-spam confetti
                 fecha_entrega: formattedDate,
                 comentarios: taskData.comentarios || taskData.comments || '',
                 creatorName: taskData.creatorName || (taskData.creator ? taskData.creator.name : 'Sistema')

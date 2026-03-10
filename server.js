@@ -126,6 +126,7 @@ const PORT = process.env.PORT || 8080;
 
 // --- LOGIN & AUTHENTICATION MIDDLEWARE ---
 const JWT_SECRET = process.env.JWT_SECRET || 'brainstudio-secret-key-2025';
+console.log(`[Auth] JWT_SECRET ${process.env.JWT_SECRET ? 'configured from env' : 'using fallback secret'}.`);
 
 app.post('/api/login', async (req, res) => {
   try {
@@ -193,10 +194,16 @@ const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
-  if (!token) return res.status(401).json({ error: "No token provided" });
+  if (!token) {
+    console.warn(`[Auth] No token provided for ${req.method} ${req.url}`);
+    return res.status(401).json({ error: "No token provided" });
+  }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: "Invalid token" });
+    if (err) {
+        console.error(`[Auth] JWT Verification failed for ${req.method} ${req.url}:`, err.message);
+        return res.status(403).json({ error: "Invalid token", details: err.message });
+    }
     req.user = user;
     next();
   });
