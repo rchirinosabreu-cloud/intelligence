@@ -21,7 +21,7 @@ import { getFlowMessages, createFlowMessage } from './src/services/flowService.j
 import { getGeneralChatMessages, createGeneralChatMessage } from './src/services/generalChatService.js';
 import { getUnreadNotificationCount, createNotification, getNotifications, markAsRead, markAllNotificationsAsRead } from './src/services/notificationService.js';
 import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
-import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics } from './src/services/nativeTaskService.js';
+import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics, getQualityStreak } from './src/services/nativeTaskService.js';
 import teamRouter from './src/routes/api/team.js';
 
 dotenv.config();
@@ -1304,6 +1304,17 @@ app.get('/api/metrics/tasks', async (req, res) => {
     } catch (error) {
         logError('API', 'Failed to fetch dashboard metrics', error);
         res.status(500).json({ error: "Failed to fetch metrics" });
+    }
+});
+
+app.get('/api/metrics/quality-streak', async (req, res) => {
+    try {
+        log('API', 'Fetching quality streak metrics');
+        const streak = await getQualityStreak();
+        res.json(streak);
+    } catch (error) {
+        logError('API', 'Failed to fetch quality streak', error);
+        res.status(500).json({ error: "Failed to fetch quality streak" });
     }
 });
 
