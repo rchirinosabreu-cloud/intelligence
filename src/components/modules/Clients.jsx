@@ -71,7 +71,7 @@ const Clients = () => {
       const res = await fetch(`${baseUrl}/api/db/clients`);
       if (!res.ok) throw new Error('Error al cargar clientes');
       const data = await res.json();
-      setClients(data);
+      setClients(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.message);
     } finally {

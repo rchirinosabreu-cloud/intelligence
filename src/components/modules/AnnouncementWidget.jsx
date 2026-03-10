@@ -42,7 +42,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
     useEffect(() => {
         fetch(`${getApiBaseUrl()}/api/team`)
             .then(res => res.json())
-            .then(data => setTeamMembers(data))
+            .then(data => setTeamMembers(Array.isArray(data) ? data : []))
             .catch(err => console.error("Error fetching team:", err));
     }, []);
 
@@ -54,7 +54,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
             const res = await fetch(getEndpoint(), { cache: 'no-store' });
             if (res.ok) {
                 const data = await res.json();
-                setAnnouncements(data);
+                setAnnouncements(Array.isArray(data) ? data : []);
             }
         } catch (error) {
             if (!isPolling) console.error("Error fetching announcements:", error);

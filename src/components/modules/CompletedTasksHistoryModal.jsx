@@ -32,7 +32,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
         const response = await fetch(`${baseUrl}/api/tasks/completed?date=${selectedDate}`);
         if (!response.ok) throw new Error('Network response was not ok');
         const data = await response.json();
-        setTasks(data);
+        setTasks(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error('Error fetching completed tasks history:', error);
       } finally {

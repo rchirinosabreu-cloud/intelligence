@@ -42,7 +42,7 @@ const ChatWidget = ({
     useEffect(() => {
         fetch(`${getApiBaseUrl()}/api/team`)
             .then(res => res.json())
-            .then(data => setTeamMembers(data))
+            .then(data => setTeamMembers(Array.isArray(data) ? data : []))
             .catch(err => console.error("Error fetching team:", err));
     }, []);
 
@@ -54,7 +54,7 @@ const ChatWidget = ({
             const res = await fetch(`${baseUrl}${apiEndpoint}`, { cache: 'no-store' });
             if (res.ok) {
                 const data = await res.json();
-                setMessages(data);
+                setMessages(Array.isArray(data) ? data : []);
             }
         } catch (error) {
             if (!isPolling) console.error("Error fetching chat messages:", error);

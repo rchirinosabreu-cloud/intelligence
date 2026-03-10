@@ -24,7 +24,7 @@ export default function Team() {
       const response = await fetch(`${baseUrl}/api/team?includeInactive=true`);
       if (response.ok) {
         const data = await response.json();
-        setTeam(data);
+        setTeam(Array.isArray(data) ? data : []);
       }
     } catch (error) {
       console.error("Error fetching team:", error);

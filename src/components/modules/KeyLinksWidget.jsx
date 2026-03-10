@@ -21,7 +21,7 @@ const KeyLinksWidget = ({ clientId }) => {
             const res = await fetch(`${baseUrl}/api/db/clients/${clientId}/links`);
             if (res.ok) {
                 const data = await res.json();
-                setLinks(data);
+                setLinks(Array.isArray(data) ? data : []);
             }
         } catch (error) {
             console.error("Error loading links:", error);

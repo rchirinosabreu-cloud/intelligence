@@ -11,6 +11,10 @@ window.fetch = async (...args) => {
     if (!config) {
         config = {};
     }
+
+    // Ensure credentials are included for cross-subdomain/domain cookie/auth support
+    config.credentials = config.credentials || 'include';
+
     if (!config.headers) {
         config.headers = {};
     }

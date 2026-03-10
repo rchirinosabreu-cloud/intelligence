@@ -80,7 +80,7 @@ const Dashboard = () => {
                 throw new Error(`Error ${response.status}: ${response.statusText}`);
             }
             const data = await response.json();
-            setMetrics(data);
+            setMetrics(data || { total: 0, completed: 0, pending: 0, percentage: 0 });
         } catch (err) {
             console.error("Failed to fetch dashboard metrics:", err);
         } finally {
@@ -97,7 +97,7 @@ const Dashboard = () => {
                 throw new Error(`Error ${response.status}: ${response.statusText}`);
             }
             const data = await response.json();
-            setCompletedNativeTasks(data);
+            setCompletedNativeTasks(Array.isArray(data) ? data : []);
         } catch (err) {
             console.error("Failed to fetch completed native tasks:", err);
         } finally {
@@ -111,7 +111,7 @@ const Dashboard = () => {
             const res = await fetch(`${getApiBaseUrl()}/api/notifications`, { cache: 'no-store' });
             if (res.ok) {
                 const data = await res.json();
-                setNotifications(data);
+                setNotifications(Array.isArray(data) ? data : []);
             }
         } catch (error) {
             console.error("Error fetching notifications:", error);

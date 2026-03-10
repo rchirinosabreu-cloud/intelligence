@@ -30,7 +30,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
         if (isOpen) {
             fetch(`${getApiBaseUrl()}/api/team`)
                 .then(res => res.json())
-                .then(data => setTeamMembers(data))
+                .then(data => setTeamMembers(Array.isArray(data) ? data : []))
                 .catch(err => console.error("Error fetching team members:", err));
         }
     }, [isOpen]);
