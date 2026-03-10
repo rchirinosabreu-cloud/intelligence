@@ -8,6 +8,7 @@ import Chat from './components/modules/Chat';
 import Clients from './components/modules/Clients';
 import ClientDetailWrapper from './components/modules/ClientDetailWrapper';
 import Team from './components/modules/Team';
+import Profile from './components/modules/Profile';
 import Login from './components/Login';
 import MinutesLayout from './components/modules/Minutes/MinutesLayout';
 import { ThemeProvider } from './context/ThemeContext';
@@ -41,6 +42,7 @@ function AppContent() {
             <Route path="/clientes" element={<Clients />} />
             <Route path="/cliente/:clientId" element={<ClientDetailWrapper />} />
             <Route path="/equipo" element={<Team />} />
+            <Route path="/perfil" element={<Profile />} />
 
             {/* Fallback para rutas no encontradas - redirigir a inicio */}
             <Route path="*" element={<Navigate to="/" replace />} />

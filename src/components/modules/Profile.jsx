@@ -1,0 +1,496 @@
+
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { useToast } from '@/components/ui/use-toast';
+import TeamAvatar from '@/components/ui/TeamAvatar';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
+import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, Trash2, Edit2, X, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { AnimatePresence, motion } from 'framer-motion';
+
+const Card = ({ children, className }) => (
+    <div className={cn("bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden", className)}>
+        {children}
+    </div>
+);
+
+const CardHeader = ({ children, className }) => (
+    <div className={cn("px-6 py-4 border-b border-zinc-100 dark:border-zinc-800", className)}>
+        {children}
+    </div>
+);
+
+const CardTitle = ({ children, className }) => (
+    <h3 className={cn("text-lg font-bold text-zinc-900 dark:text-zinc-100", className)}>
+        {children}
+    </h3>
+);
+
+const CardDescription = ({ children, className }) => (
+    <p className={cn("text-sm text-zinc-500 dark:text-zinc-400", className)}>
+        {children}
+    </p>
+);
+
+const CardContent = ({ children, className }) => (
+    <div className={cn("p-6", className)}>
+        {children}
+    </div>
+);
+
+const Profile = () => {
+    const { currentUser } = useAuth();
+    const { toast } = useToast();
+    const [isLoading, setIsLoading] = useState(false);
+    const [profileData, setProfileData] = useState({ name: '', bio: '', email: '' });
+    const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    const [notes, setNotes] = useState([]);
+    const [isNotesLoading, setIsNotesLoading] = useState(false);
+    const [editingNote, setEditingNote] = useState(null);
+    const [isCreatingNote, setIsCreatingNote] = useState(false);
+    const [newNote, setNewNote] = useState({ title: '', content: '' });
+
+    // Fetch initial data
+    useEffect(() => {
+        fetchProfile();
+        fetchNotes();
+    }, []);
+
+    const fetchProfile = async () => {
+        try {
+            const res = await fetch(`${getApiBaseUrl()}/api/user/profile`);
+            if (res.ok) {
+                const data = await res.json();
+                setProfileData({
+                    name: data.name || '',
+                    bio: data.bio || '',
+                    email: data.email || ''
+                });
+            }
+        } catch (err) {
+            console.error("Error fetching profile:", err);
+        }
+    };
+
+    const fetchNotes = async () => {
+        setIsNotesLoading(true);
+        try {
+            const res = await fetch(`${getApiBaseUrl()}/api/user/notes`);
+            if (res.ok) {
+                const data = await res.json();
+                setNotes(Array.isArray(data) ? data : []);
+            }
+        } catch (err) {
+            console.error("Error fetching notes:", err);
+        } finally {
+            setIsNotesLoading(false);
+        }
+    };
+
+    const handleUpdateProfile = async (e) => {
+        e.preventDefault();
+        setIsLoading(true);
+        try {
+            const res = await fetch(`${getApiBaseUrl()}/api/user/profile`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: profileData.name, bio: profileData.bio })
+            });
+            if (res.ok) {
+                toast({ title: "Perfil actualizado", description: "Tus datos se han guardado correctamente." });
+            } else {
+                throw new Error("Error al actualizar");
+            }
+        } catch (err) {
+            toast({ title: "Error", description: err.message, variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleUpdatePassword = async (e) => {
+        e.preventDefault();
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+            toast({ title: "Error", description: "Las contraseñas no coinciden", variant: "destructive" });
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const res = await fetch(`${getApiBaseUrl()}/api/user/password`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    currentPassword: passwordData.currentPassword,
+                    newPassword: passwordData.newPassword
+                })
+            });
+            if (res.ok) {
+                toast({ title: "Contraseña actualizada", description: "Tu contraseña ha sido cambiada." });
+                setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+            } else {
+                const errData = await res.json();
+                throw new Error(errData.error || "Error al actualizar contraseña");
+            }
+        } catch (err) {
+            toast({ title: "Error", description: err.message, variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleCreateNote = async (e) => {
+        e.preventDefault();
+        if (!newNote.title || !newNote.content) return;
+        setIsLoading(true);
+        try {
+            const res = await fetch(`${getApiBaseUrl()}/api/user/notes`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newNote)
+            });
+            if (res.ok) {
+                toast({ title: "Nota creada", description: "Tu nota personal ha sido guardada." });
+                setNewNote({ title: '', content: '' });
+                setIsCreatingNote(false);
+                fetchNotes();
+            }
+        } catch (err) {
+            toast({ title: "Error", description: "No se pudo crear la nota", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleUpdateNote = async (e) => {
+        e.preventDefault();
+        setIsLoading(true);
+        try {
+            const res = await fetch(`${getApiBaseUrl()}/api/user/notes/${editingNote.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: editingNote.title, content: editingNote.content })
+            });
+            if (res.ok) {
+                toast({ title: "Nota actualizada" });
+                setEditingNote(null);
+                fetchNotes();
+            }
+        } catch (err) {
+            toast({ title: "Error", description: "No se pudo actualizar la nota", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDeleteNote = async (id) => {
+        if (!confirm("¿Estás seguro de que quieres eliminar esta nota?")) return;
+        try {
+            const res = await fetch(`${getApiBaseUrl()}/api/user/notes/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                toast({ title: "Nota eliminada" });
+                fetchNotes();
+            }
+        } catch (err) {
+            toast({ title: "Error", description: "No se pudo eliminar", variant: "destructive" });
+        }
+    };
+
+    return (
+        <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-zinc-200 dark:border-zinc-800">
+                <div className="flex items-center gap-6">
+                    <div className="relative group">
+                        <TeamAvatar
+                            member={{ name: currentUser?.name || 'Usuario', avatarUrl: currentUser?.avatarUrl }}
+                            className="w-24 h-24 text-3xl shadow-xl ring-4 ring-white dark:ring-zinc-900"
+                            size={96}
+                        />
+                        <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                            <Edit2 className="w-6 h-6 text-white" />
+                        </div>
+                    </div>
+                    <div>
+                        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">Mi Espacio</h1>
+                        <p className="text-zinc-500 dark:text-zinc-400 font-medium">Gestiona tu perfil personal, notas y desempeño laboral.</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 border border-emerald-200 dark:border-emerald-800">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        Online
+                    </div>
+                </div>
+            </div>
+
+            <Tabs defaultValue="general" className="w-full">
+                <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full h-auto p-1 bg-zinc-100 dark:bg-zinc-800/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 mb-8">
+                    <TabsTrigger value="general" className="rounded-xl py-3 flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-md transition-all">
+                        <User className="w-4 h-4" /> General
+                    </TabsTrigger>
+                    <TabsTrigger value="notes" className="rounded-xl py-3 flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-md transition-all">
+                        <StickyNote className="w-4 h-4" /> Mis Notas
+                    </TabsTrigger>
+                    <TabsTrigger value="hr" className="rounded-xl py-3 flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-md transition-all">
+                        <ClipboardList className="w-4 h-4" /> Solicitudes
+                    </TabsTrigger>
+                    <TabsTrigger value="performance" className="rounded-xl py-3 flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-md transition-all">
+                        <TrendingUp className="w-4 h-4" /> Mi Desempeño
+                    </TabsTrigger>
+                </TabsList>
+
+                {/* --- TAB: GENERAL --- */}
+                <TabsContent value="general" className="space-y-6 outline-none">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        {/* Profile Info Form */}
+                        <div className="lg:col-span-2 space-y-6">
+                            <Card className="bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl overflow-hidden">
+                                <CardHeader className="bg-zinc-50/50 dark:bg-zinc-800/20 border-b border-zinc-100 dark:border-zinc-800">
+                                    <CardTitle className="text-xl flex items-center gap-2">
+                                        <User className="w-5 h-5 text-primary" /> Información de Perfil
+                                    </CardTitle>
+                                    <CardDescription>Actualiza tu información pública y biografía.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="p-8">
+                                    <form onSubmit={handleUpdateProfile} className="space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Nombre Completo</label>
+                                                <input
+                                                    type="text"
+                                                    value={profileData.name}
+                                                    onChange={e => setProfileData({...profileData, name: e.target.value})}
+                                                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Email Corporativo</label>
+                                                <input
+                                                    type="email"
+                                                    value={profileData.email}
+                                                    disabled
+                                                    className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-400 cursor-not-allowed"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Biografía / Acerca de mí</label>
+                                            <textarea
+                                                rows={4}
+                                                value={profileData.bio}
+                                                onChange={e => setProfileData({...profileData, bio: e.target.value})}
+                                                placeholder="Cuéntanos un poco sobre ti, tu rol o tus intereses..."
+                                                className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white resize-none"
+                                            />
+                                        </div>
+                                        <div className="flex justify-end pt-4">
+                                            <button
+                                                type="submit"
+                                                disabled={isLoading}
+                                                className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary/20 flex items-center gap-2 disabled:opacity-50"
+                                            >
+                                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                                Guardar Cambios
+                                            </button>
+                                        </div>
+                                    </form>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Password Form */}
+                        <div className="space-y-6">
+                            <Card className="bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl overflow-hidden">
+                                <CardHeader className="bg-zinc-50/50 dark:bg-zinc-800/20 border-b border-zinc-100 dark:border-zinc-800">
+                                    <CardTitle className="text-xl flex items-center gap-2">
+                                        <Key className="w-5 h-5 text-amber-500" /> Seguridad
+                                    </CardTitle>
+                                    <CardDescription>Cambia tu contraseña de acceso.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="p-8">
+                                    <form onSubmit={handleUpdatePassword} className="space-y-5">
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Contraseña Actual</label>
+                                            <input
+                                                type="password"
+                                                required
+                                                value={passwordData.currentPassword}
+                                                onChange={e => setPasswordData({...passwordData, currentPassword: e.target.value})}
+                                                className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Nueva Contraseña</label>
+                                            <input
+                                                type="password"
+                                                required
+                                                value={passwordData.newPassword}
+                                                onChange={e => setPasswordData({...passwordData, newPassword: e.target.value})}
+                                                className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Confirmar Nueva Contraseña</label>
+                                            <input
+                                                type="password"
+                                                required
+                                                value={passwordData.confirmPassword}
+                                                onChange={e => setPasswordData({...passwordData, confirmPassword: e.target.value})}
+                                                className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
+                                            />
+                                        </div>
+                                        <button
+                                            type="submit"
+                                            disabled={isLoading}
+                                            className="w-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-3 rounded-xl font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 mt-2"
+                                        >
+                                            {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Actualizar Contraseña'}
+                                        </button>
+                                    </form>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+                </TabsContent>
+
+                {/* --- TAB: NOTES --- */}
+                <TabsContent value="notes" className="space-y-6 outline-none">
+                    <div className="flex justify-between items-center mb-6">
+                        <div className="flex flex-col">
+                            <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">Mis Notas</h2>
+                            <p className="text-sm text-zinc-500">Tus pensamientos e ideas privadas.</p>
+                        </div>
+                        <button
+                            onClick={() => setIsCreatingNote(true)}
+                            className="bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
+                        >
+                            <Plus className="w-4 h-4" /> Nueva Nota
+                        </button>
+                    </div>
+
+                    {isNotesLoading ? (
+                        <div className="h-64 flex items-center justify-center">
+                            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <AnimatePresence>
+                                {/* Create Form Card */}
+                                {isCreatingNote && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.95 }}
+                                    >
+                                        <Card className="border-2 border-dashed border-primary/30 bg-primary/5 dark:bg-primary/10 rounded-2xl overflow-hidden h-full">
+                                            <CardContent className="p-6 space-y-4">
+                                                <input
+                                                    placeholder="Título de la nota..."
+                                                    autoFocus
+                                                    value={newNote.title}
+                                                    onChange={e => setNewNote({...newNote, title: e.target.value})}
+                                                    className="w-full bg-transparent border-none text-lg font-bold focus:ring-0 placeholder:text-primary/40 dark:text-white"
+                                                />
+                                                <textarea
+                                                    placeholder="Escribe algo increíble..."
+                                                    rows={5}
+                                                    value={newNote.content}
+                                                    onChange={e => setNewNote({...newNote, content: e.target.value})}
+                                                    className="w-full bg-transparent border-none text-sm resize-none focus:ring-0 placeholder:text-primary/40 dark:text-white"
+                                                />
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={() => setIsCreatingNote(false)} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"><X className="w-4 h-4 text-zinc-500" /></button>
+                                                    <button onClick={handleCreateNote} className="bg-primary text-white p-2 rounded-lg shadow-md"><Check className="w-4 h-4" /></button>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    </motion.div>
+                                )}
+
+                                {notes.map(note => (
+                                    <motion.div
+                                        key={note.id}
+                                        layout
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                    >
+                                        <Card className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all rounded-2xl h-full flex flex-col group overflow-hidden">
+                                            {editingNote?.id === note.id ? (
+                                                <div className="p-6 space-y-4 h-full flex flex-col">
+                                                     <input
+                                                        value={editingNote.title}
+                                                        onChange={e => setEditingNote({...editingNote, title: e.target.value})}
+                                                        className="w-full bg-transparent border-none text-lg font-bold focus:ring-0 dark:text-white"
+                                                    />
+                                                    <textarea
+                                                        rows={5}
+                                                        value={editingNote.content}
+                                                        onChange={e => setEditingNote({...editingNote, content: e.target.value})}
+                                                        className="w-full bg-transparent border-none text-sm resize-none focus:ring-0 dark:text-white flex-1"
+                                                    />
+                                                    <div className="flex justify-end gap-2">
+                                                        <button onClick={() => setEditingNote(null)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg"><X className="w-4 h-4" /></button>
+                                                        <button onClick={handleUpdateNote} className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 p-2 rounded-lg"><Check className="w-4 h-4" /></button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <CardHeader className="pb-3">
+                                                        <div className="flex justify-between items-start">
+                                                            <CardTitle className="text-lg font-bold group-hover:text-primary transition-colors">{note.title}</CardTitle>
+                                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button onClick={() => setEditingNote(note)} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-primary transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
+                                                                <button onClick={() => handleDeleteNote(note.id)} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                            </div>
+                                                        </div>
+                                                        <CardDescription className="text-xs">{new Date(note.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</CardDescription>
+                                                    </CardHeader>
+                                                    <CardContent className="flex-1">
+                                                        <p className="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-6 whitespace-pre-wrap">{note.content}</p>
+                                                    </CardContent>
+                                                </>
+                                            )}
+                                        </Card>
+                                    </motion.div>
+                                ))}
+                            </AnimatePresence>
+
+                            {notes.length === 0 && !isCreatingNote && (
+                                <div className="col-span-full h-64 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl flex flex-col items-center justify-center text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/20">
+                                    <StickyNote className="w-12 h-12 mb-3 opacity-20" />
+                                    <p className="font-medium">No tienes notas personales aún.</p>
+                                    <button onClick={() => setIsCreatingNote(true)} className="mt-2 text-primary font-bold text-sm hover:underline">Crear mi primera nota</button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </TabsContent>
+
+                {/* --- TAB: PLACEHOLDERS --- */}
+                <TabsContent value="hr" className="outline-none">
+                    <Card className="h-96 border-dashed bg-transparent rounded-2xl flex flex-col items-center justify-center text-zinc-400 p-12 text-center">
+                        <div className="w-20 h-20 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-6">
+                            <ClipboardList className="w-10 h-10 opacity-30" />
+                        </div>
+                        <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">Próximamente: Gestión de Permisos</h3>
+                        <p className="max-w-sm">Aquí podrás gestionar solicitudes de vacaciones, permisos médicos y otros trámites de Recursos Humanos.</p>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="performance" className="outline-none">
+                     <Card className="h-96 border-dashed bg-transparent rounded-2xl flex flex-col items-center justify-center text-zinc-400 p-12 text-center">
+                        <div className="w-20 h-20 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-6">
+                            <TrendingUp className="w-10 h-10 opacity-30" />
+                        </div>
+                        <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">Próximamente: Mi Desempeño</h3>
+                        <p className="max-w-sm">Aquí podrás ver tu feedback, objetivos del trimestre y métricas de productividad.</p>
+                    </Card>
+                </TabsContent>
+            </Tabs>
+        </div>
+    );
+};
+
+export default Profile;
