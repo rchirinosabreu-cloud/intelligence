@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import { triggerConfetti } from '@/utils/confetti';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import {
@@ -92,6 +93,11 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
             let finalStatus = editFormData.estado;
             if (editFormData.originalStatus === 'Devuelto' && finalStatus === 'Devuelto') {
                 finalStatus = 'Pendiente';
+            }
+
+            // Trigger confetti if status is changing to 'Realizado' (Optimistic)
+            if (editFormData.originalStatus !== 'Realizado' && finalStatus === 'Realizado') {
+                triggerConfetti();
             }
 
             const res = await fetch(`${baseUrl}/api/tasks/${editFormData.id}`, {
