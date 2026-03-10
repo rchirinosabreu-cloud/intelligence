@@ -19,11 +19,6 @@ const container = {
   }
 };
 
-const item = {
-  hidden: { y: 20, opacity: 0 },
-  show: { y: 0, opacity: 1 }
-};
-
 import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import ChatWidget from './ChatWidget';
@@ -36,6 +31,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+
+const item = {
+  hidden: { y: 20, opacity: 0 },
+  show: { y: 0, opacity: 1 }
+};
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
