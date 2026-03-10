@@ -36,6 +36,40 @@ export const getDashboardMetrics = async () => {
     }
 };
 
+export const getQualityStreak = async () => {
+    try {
+        const lastReturnedTask = await prisma.task.findFirst({
+            where: { status: 'Devuelto' },
+            orderBy: { updatedAt: 'desc' },
+            select: { updatedAt: true }
+        });
+
+        const now = new Date();
+
+        if (!lastReturnedTask) {
+            // If no task has EVER been returned, we count since the first task was created
+            const firstTask = await prisma.task.findFirst({
+                orderBy: { createdAt: 'asc' },
+                select: { createdAt: true }
+            });
+
+            if (!firstTask) return { currentStreakDays: 0 };
+
+            const diffTime = Math.abs(now - firstTask.createdAt);
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            return { currentStreakDays: diffDays };
+        }
+
+        const diffTime = Math.abs(now - lastReturnedTask.updatedAt);
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        return { currentStreakDays: diffDays };
+    } catch (error) {
+        console.error("Error calculating quality streak:", error);
+        throw error;
+    }
+};
+
 export const getTasks = async (clientId) => {
     try {
         const whereClause = clientId ? { clientId } : {};

@@ -21,7 +21,7 @@ import { getFlowMessages, createFlowMessage } from './src/services/flowService.j
 import { getGeneralChatMessages, createGeneralChatMessage } from './src/services/generalChatService.js';
 import { getUnreadNotificationCount, createNotification, getNotifications, markAsRead, markAllNotificationsAsRead } from './src/services/notificationService.js';
 import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
-import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics } from './src/services/nativeTaskService.js';
+import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics, getQualityStreak } from './src/services/nativeTaskService.js';
 import teamRouter from './src/routes/api/team.js';
 
 dotenv.config();
@@ -103,7 +103,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -440,6 +441,8 @@ app.use(
     changeOrigin: true,
     secure: true,
     pathRewrite: (path) => path.replace(/^\/api\/gemini/, ''),
+    proxyTimeout: 300000, // 5 minutes
+    timeout: 300000,
     onProxyReq: (proxyReq) => {
       proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
       proxyReq.removeHeader('Authorization');
@@ -1301,6 +1304,17 @@ app.get('/api/metrics/tasks', async (req, res) => {
     } catch (error) {
         logError('API', 'Failed to fetch dashboard metrics', error);
         res.status(500).json({ error: "Failed to fetch metrics" });
+    }
+});
+
+app.get('/api/metrics/quality-streak', async (req, res) => {
+    try {
+        log('API', 'Fetching quality streak metrics');
+        const streak = await getQualityStreak();
+        res.json(streak);
+    } catch (error) {
+        logError('API', 'Failed to fetch quality streak', error);
+        res.status(500).json({ error: "Failed to fetch quality streak" });
     }
 });
 
@@ -2238,6 +2252,9 @@ app.get('*', (req, res) => {
     res.status(200).send("Backend is running. For frontend, use the Vite dev server or build output.");
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT} (Bound to 0.0.0.0)`);
 });
+
+// Aumentar el timeout global del servidor a 5 minutos para procesar análisis largos de IA
+server.timeout = 300000;

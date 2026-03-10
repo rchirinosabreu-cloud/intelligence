@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { updateTask } from '../services/nativeTaskService.js';
+import { updateTask, getQualityStreak } from '../services/nativeTaskService.js';
 import prisma from '../lib/prisma.js';
 
 // Mock prisma
@@ -8,6 +8,7 @@ vi.mock('../lib/prisma.js', () => ({
     task: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      findFirst: vi.fn(),
     },
     teamMember: {
       findUnique: vi.fn(),
@@ -87,6 +88,38 @@ describe('nativeTaskService - updateTask', () => {
 
         const updateCall = prisma.task.update.mock.calls[0][0];
         expect(updateCall.data.completedAt).toBeUndefined();
+    });
+
+    /**
+     * Lógica de Racha de Calidad (Quality Streak)
+     */
+    describe('getQualityStreak', () => {
+        it('debería calcular 0 días si no hay tareas devueltas ni creadas', async () => {
+            prisma.task.findFirst.mockResolvedValue(null);
+            const result = await getQualityStreak();
+            expect(result.currentStreakDays).toBe(0);
+        });
+
+        it('debería calcular la racha desde la última tarea devuelta', async () => {
+            const fiveDaysAgo = new Date();
+            fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+
+            prisma.task.findFirst.mockResolvedValueOnce({ updatedAt: fiveDaysAgo });
+            const result = await getQualityStreak();
+            expect(result.currentStreakDays).toBe(5);
+        });
+
+        it('debería calcular la racha desde la primera tarea si nunca hubo devoluciones', async () => {
+            const tenDaysAgo = new Date();
+            tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+
+            prisma.task.findFirst
+                .mockResolvedValueOnce(null) // no last returned
+                .mockResolvedValueOnce({ createdAt: tenDaysAgo }); // first task
+
+            const result = await getQualityStreak();
+            expect(result.currentStreakDays).toBe(10);
+        });
     });
 
     /**
