@@ -6,7 +6,6 @@ import { cn } from '@/lib/utils';
 import MeetingWidget from './MeetingWidget';
 import HealthCheckWidget from './HealthCheckWidget';
 import AnnouncementWidget from './AnnouncementWidget';
-import QualityStreakWidget from './QualityStreakWidget';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
 const container = {
@@ -246,11 +245,6 @@ const Dashboard = () => {
       animate="show"
       className="space-y-6"
     >
-      {/* Quality Streak Widget - NEW */}
-      <motion.div variants={item}>
-        <QualityStreakWidget />
-      </motion.div>
-
       {/* Welcome Widget - Full Width */}
       <motion.div variants={item}>
         <Card className="bg-gradient-to-r from-white to-zinc-50 border-zinc-200/60 dark:from-zinc-900 dark:to-zinc-900/50 dark:border-zinc-800">
