@@ -23,6 +23,7 @@ import { getUnreadNotificationCount, createNotification, getNotifications, markA
 import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
 import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics, getQualityStreak } from './src/services/nativeTaskService.js';
 import teamRouter from './src/routes/api/team.js';
+import userRouter from './src/routes/api/user.js';
 
 dotenv.config();
 
@@ -208,6 +209,9 @@ const authenticateToken = (req, res, next) => {
     next();
   });
 };
+
+// User Profile & Notes
+app.use('/api/user', authenticateToken, userRouter);
 
 // User Management Endpoints
 app.post('/api/users', authenticateToken, async (req, res) => {
