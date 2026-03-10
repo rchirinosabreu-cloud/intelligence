@@ -103,7 +103,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -440,6 +441,8 @@ app.use(
     changeOrigin: true,
     secure: true,
     pathRewrite: (path) => path.replace(/^\/api\/gemini/, ''),
+    proxyTimeout: 300000, // 5 minutes
+    timeout: 300000,
     onProxyReq: (proxyReq) => {
       proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
       proxyReq.removeHeader('Authorization');
@@ -2238,6 +2241,9 @@ app.get('*', (req, res) => {
     res.status(200).send("Backend is running. For frontend, use the Vite dev server or build output.");
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT} (Bound to 0.0.0.0)`);
 });
+
+// Aumentar el timeout global del servidor a 5 minutos para procesar análisis largos de IA
+server.timeout = 300000;
