@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { NavLink } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import ChaosMeter from './ChaosMeter';
 
 const Sidebar = ({ onLogout }) => {
   const { theme, toggleTheme } = useTheme();
@@ -88,7 +89,9 @@ const Sidebar = ({ onLogout }) => {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-zinc-200/50 dark:border-white/5 bg-white/30 dark:bg-zinc-900/30 backdrop-blur-md transition-colors">
+      <div className="p-4 border-t border-zinc-200/50 dark:border-white/5 bg-white/30 dark:bg-zinc-900/30 backdrop-blur-md transition-colors space-y-4">
+        <ChaosMeter />
+
         <div
           onClick={() => {
               logout();
