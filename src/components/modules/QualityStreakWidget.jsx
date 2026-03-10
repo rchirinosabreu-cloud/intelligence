@@ -30,39 +30,65 @@ const QualityStreakWidget = () => {
     const historicalRecord = 15; // Hardcoded as requested
 
     return (
-        <Card className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 p-4 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+        <Card className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 p-6 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors shadow-sm overflow-hidden relative">
+            {/* Background Decorative Element */}
+            <div className="absolute -right-8 -top-8 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="flex items-center justify-between relative z-10">
+                <div className="flex items-center gap-6">
+                    {/* Glowing Flame Icon */}
                     <div className={cn(
-                        "p-3 rounded-2xl transition-all duration-500",
+                        "p-4 rounded-2xl transition-all duration-700",
+                        loading ? "bg-zinc-100 dark:bg-zinc-800" :
                         streak > 0
-                            ? "bg-orange-100 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 animate-pulse-subtle"
-                            : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
+                            ? "bg-orange-50 dark:bg-orange-500/10"
+                            : "bg-zinc-100 dark:bg-zinc-800"
                     )}>
-                        <Flame className={cn("w-6 h-6", streak > 0 && "fill-current")} />
+                        {loading ? (
+                            <Loader2 className="w-8 h-8 animate-spin text-zinc-400" />
+                        ) : (
+                            <Flame
+                                className={cn(
+                                    "w-10 h-10 transition-all duration-700",
+                                    streak > 0
+                                        ? "text-orange-500 fill-orange-500 drop-shadow-[0_0_12px_rgba(249,115,22,0.9)] animate-pulse"
+                                        : "text-zinc-400"
+                                )}
+                            />
+                        )}
                     </div>
-                    <div>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-2xl font-bold text-zinc-900 dark:text-white">
-                                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : streak}
+
+                    {/* Protagonist: The Number */}
+                    <div className="flex flex-col">
+                        <div className="flex items-baseline gap-3">
+                            <span className="text-6xl font-black tracking-tighter text-zinc-900 dark:text-white leading-none">
+                                {loading ? '...' : streak ?? 0}
                             </span>
-                            <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                                días sin devoluciones
-                            </span>
+                            <div className="flex flex-col">
+                                <span className="text-xl font-bold text-zinc-900 dark:text-white leading-tight">
+                                    días
+                                </span>
+                                <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                                    sin devoluciones
+                                </span>
+                            </div>
                         </div>
-                        <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">
+                        <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 mt-2 uppercase tracking-widest">
                             Racha de calidad actual
                         </p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 px-4 py-2 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800/50">
-                    <Trophy className="w-4 h-4 text-amber-500" />
+                {/* Historical Record Badge */}
+                <div className="flex items-center gap-4 px-5 py-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl border border-zinc-100 dark:border-zinc-800/50 shadow-inner">
+                    <div className="p-2 bg-amber-100 dark:bg-amber-500/10 rounded-lg">
+                        <Trophy className="w-5 h-5 text-amber-600 dark:text-amber-500" />
+                    </div>
                     <div>
-                        <p className="text-[10px] uppercase tracking-wider font-bold text-zinc-400 dark:text-zinc-500">
+                        <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400 dark:text-zinc-500">
                             Récord
                         </p>
-                        <p className="text-sm font-bold text-zinc-700 dark:text-zinc-300">
+                        <p className="text-lg font-black text-zinc-900 dark:text-zinc-100 tracking-tight">
                             {historicalRecord} días
                         </p>
                     </div>
