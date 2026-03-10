@@ -44,6 +44,10 @@ export const getQualityStreak = async () => {
             select: { updatedAt: true }
         });
 
+        const currentReturnedTasksCount = await prisma.task.count({
+            where: { status: 'Devuelto' }
+        });
+
         const now = new Date();
 
         if (!lastReturnedTask) {
@@ -53,17 +57,17 @@ export const getQualityStreak = async () => {
                 select: { createdAt: true }
             });
 
-            if (!firstTask) return { currentStreakDays: 0 };
+            if (!firstTask) return { currentStreakDays: 0, currentReturnedTasksCount: 0 };
 
             const diffTime = Math.abs(now - firstTask.createdAt);
             const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-            return { currentStreakDays: diffDays };
+            return { currentStreakDays: diffDays, currentReturnedTasksCount };
         }
 
         const diffTime = Math.abs(now - lastReturnedTask.updatedAt);
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-        return { currentStreakDays: diffDays };
+        return { currentStreakDays: diffDays, currentReturnedTasksCount };
     } catch (error) {
         console.error("Error calculating quality streak:", error);
         throw error;

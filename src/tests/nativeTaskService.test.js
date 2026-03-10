@@ -9,6 +9,7 @@ vi.mock('../lib/prisma.js', () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
       findFirst: vi.fn(),
+      count: vi.fn(),
     },
     teamMember: {
       findUnique: vi.fn(),
@@ -96,8 +97,10 @@ describe('nativeTaskService - updateTask', () => {
     describe('getQualityStreak', () => {
         it('debería calcular 0 días si no hay tareas devueltas ni creadas', async () => {
             prisma.task.findFirst.mockResolvedValue(null);
+            prisma.task.count.mockResolvedValue(0);
             const result = await getQualityStreak();
             expect(result.currentStreakDays).toBe(0);
+            expect(result.currentReturnedTasksCount).toBe(0);
         });
 
         it('debería calcular la racha desde la última tarea devuelta', async () => {
@@ -105,8 +108,10 @@ describe('nativeTaskService - updateTask', () => {
             fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
 
             prisma.task.findFirst.mockResolvedValueOnce({ updatedAt: fiveDaysAgo });
+            prisma.task.count.mockResolvedValue(2);
             const result = await getQualityStreak();
             expect(result.currentStreakDays).toBe(5);
+            expect(result.currentReturnedTasksCount).toBe(2);
         });
 
         it('debería calcular la racha desde la primera tarea si nunca hubo devoluciones', async () => {
@@ -117,8 +122,11 @@ describe('nativeTaskService - updateTask', () => {
                 .mockResolvedValueOnce(null) // no last returned
                 .mockResolvedValueOnce({ createdAt: tenDaysAgo }); // first task
 
+            prisma.task.count.mockResolvedValue(0);
+
             const result = await getQualityStreak();
             expect(result.currentStreakDays).toBe(10);
+            expect(result.currentReturnedTasksCount).toBe(0);
         });
     });
 
