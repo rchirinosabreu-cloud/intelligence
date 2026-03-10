@@ -16,12 +16,25 @@ model User {
   role      String   @default("EDITOR") // ADMIN, EDITOR
   avatarUrl String?  // Para consistencia con el chat
   isActive  Boolean  @default(true)
+  bio       String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   notifications       Notification[]
   generalChatMessages GeneralChatMessage[]
   createdTasks        Task[]               @relation("CreatedTasks")
+  notes               UserNote[]
+}
+
+// Notas Personales del Usuario
+model UserNote {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Sistema de Notificaciones
