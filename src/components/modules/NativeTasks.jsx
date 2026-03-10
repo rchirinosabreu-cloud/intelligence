@@ -20,6 +20,7 @@ import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import TaskCreateModal from './TaskCreateModal';
 import TaskEditModal from './TaskEditModal';
+import { triggerConfetti } from '@/utils/confetti';
 
 // --- DATE HELPERS ---
 
@@ -476,6 +477,12 @@ const NativeTasks = () => {
       // 4. API Sync (Only if column changed)
       if (sourceColumnId === destinationColumnId) {
           return;
+      }
+
+      // Trigger confetti if moving to 'realizado' for the first time in this interaction
+      // Anti-spam: Only if it's a real status transition from another column
+      if (sourceColumnId !== 'realizado' && destinationColumnId === 'realizado') {
+          triggerConfetti();
       }
 
       // Para nativo usamos los IDs de columna como estado: "Pendiente", "En proceso", "Realizado", "Devuelto"
