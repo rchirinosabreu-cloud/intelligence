@@ -246,7 +246,6 @@ const Dashboard = () => {
       animate="show"
       className="space-y-6"
     >
-      {/* Welcome Widget - Full Width */}
       {/* Quality Streak Widget - NEW */}
       <motion.div variants={item}>
         <QualityStreakWidget />
