@@ -83,9 +83,20 @@ const corsOptions = {
     console.warn(`CORS warning: allowing unexpected origin ${origin}`);
     return callback(null, true);
   },
-  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-CSRF-Token",
+    "X-Requested-With",
+    "Accept",
+    "Accept-Version",
+    "Content-Length",
+    "Content-MD5",
+    "Date",
+    "X-Api-Version"
+  ],
 };
 
 // CORS configuration (allow all by default; restrict via CORS_ORIGINS env)
@@ -1827,10 +1838,6 @@ app.post('/api/chat', async (req, res) => {
         }
 
         // Explicitly set headers at the start to prevent CORB blocking errors
-        const origin = req.headers.origin;
-        if (isAllowedOrigin(origin)) {
-            res.setHeader('Access-Control-Allow-Origin', origin || '*');
-        }
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('X-Content-Type-Options', 'nosniff');
         // We will enable chunked encoding implicitly by writing to the stream,
