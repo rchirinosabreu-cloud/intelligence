@@ -26,7 +26,7 @@ const HealthCheckWidget = () => {
                 }
 
                 const data = await response.json();
-                setClients(data);
+                setClients(Array.isArray(data) ? data : []);
             } catch (err) {
                 console.error("Failed to fetch client health:", err);
                 setError(err.message);

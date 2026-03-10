@@ -35,7 +35,7 @@ const MeetingWidget = () => {
                 }
 
                 const data = await response.json();
-                setEvents(data);
+                setEvents(Array.isArray(data) ? data : []);
             } catch (err) {
                 console.error("Failed to fetch calendar events:", err);
                 setError(err.message);

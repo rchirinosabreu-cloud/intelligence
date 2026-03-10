@@ -188,8 +188,9 @@ const NativeTasks = () => {
               throw new Error(`Error ${response.status}: ${response.statusText}`);
           }
           const data = await response.json();
+          const safeData = Array.isArray(data) ? data : [];
           // Transform native task format to match kanban expectations if needed
-          const formattedTasks = data.map(task => ({
+          const formattedTasks = safeData.map(task => ({
               id: task.id,
               pendiente: task.title,
               cliente: task.client?.name || 'Sin Cliente',

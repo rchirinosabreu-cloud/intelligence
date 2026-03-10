@@ -49,7 +49,7 @@ const ClientTasksWidget = ({ clientId }) => {
             const res = await fetch(`${baseUrl}/api/tasks?clientId=${clientId}`);
             if (res.ok) {
                 const data = await res.json();
-                setTasks(data);
+                setTasks(Array.isArray(data) ? data : []);
             }
         } catch (error) {
             console.error("Error fetching tasks:", error);

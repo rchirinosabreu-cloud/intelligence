@@ -4,6 +4,18 @@ import axios from 'axios';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://minutes-production.up.railway.app';
 const WHISPER_API_URL = `${API_BASE_URL}/api/openai/v1/audio/transcriptions`;
 
+// Configure axios to include credentials and headers globally
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('authToken');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  config.withCredentials = true;
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
+
 export const processAudio = async (file) => {
   if (!file) {
     throw new Error('No audio file provided');
