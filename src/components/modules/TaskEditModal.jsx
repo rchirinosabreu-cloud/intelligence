@@ -130,7 +130,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 status: statusToSubmit
             };
 
-            console.log(`[TaskEditModal] Sending update to ${url}`, payload);
+            console.log(`[TaskEditModal] Sending update to ${url}`, JSON.stringify(payload, null, 2));
 
             const token = localStorage.getItem('authToken');
             const res = await fetch(url, {

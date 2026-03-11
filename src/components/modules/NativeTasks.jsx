@@ -146,10 +146,11 @@ const getColumnId = (status, comments = '') => {
     if (s === 'EN_CURSO' || s === 'EN PROCESO') return 'en-proceso';
 
     // Shielding Logic: DEVUELTA or (PENDIENTE with Return Tag)
-    if (s === 'DEVUELTA' || s === 'DEVUELTO' || (s === 'PENDIENTE' && hasReturnTag)) return 'devuelto';
+    // HOTFIX: Must be exactly uppercase for Enum matching
+    if (s === 'DEVUELTA' || (s === 'PENDIENTE' && hasReturnTag)) return 'devuelto';
 
     // ELIMINADA (Should be excluded from view, but handle just in case)
-    if (s === 'ELIMINADA' || s === 'ELIMINADO') return 'eliminada';
+    if (s === 'ELIMINADA') return 'eliminada';
 
     return 'pendiente';
 };
@@ -282,21 +283,31 @@ const NativeTasks = () => {
   const handleReturnTask = async () => {
       if (!returningTask || !returnReason.trim() || isSubmittingReturn) return;
 
+      // 1. Snapshot for Revert
+      const previousTasks = [...tasks];
+
       try {
           setIsSubmittingReturn(true);
           const baseUrl = getApiBaseUrl();
 
-          // Construct new comments: Add the reason at the top
-          const newComment = `[DEVOLUCIÓN - ${new Date().toLocaleDateString()}]: ${returnReason}`;
-          const updatedComments = returningTask.comentarios
-              ? `${newComment}\n\n${returningTask.comentarios}`
-              : newComment;
+          // 2. Local State Prep (Comments tag and Exact Status)
+          const returnTag = `[DEVOLUCIÓN - ${new Date().toLocaleDateString()}]: ${returnReason}`;
+          const updatedComments = (returningTask.comentarios || returningTask.comments)
+              ? `${returnTag}\n\n${returningTask.comentarios || returningTask.comments}`
+              : returnTag;
+
+          // 3. OPTIMISTIC UPDATE
+          setTasks(prev => prev.map(t =>
+            t.id === returningTask.id
+                ? { ...t, status: 'DEVUELTA', comments: updatedComments, comentarios: updatedComments }
+                : t
+          ));
 
           const response = await fetch(`${baseUrl}/api/tasks/${returningTask.id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                  status: 'Devuelto',
+                  status: 'DEVUELTA',
                   comments: updatedComments
               })
           });
@@ -333,6 +344,8 @@ const NativeTasks = () => {
           }
       } catch (err) {
           console.error("Error returning task:", err);
+          // 4. REVERT on failure
+          setTasks(previousTasks);
           toast({
               title: "Error",
               description: "No se pudo devolver la tarea.",
@@ -484,6 +497,15 @@ const NativeTasks = () => {
 
       movedTask.status = newStatusEnum;
 
+      // Tag Stripping Logic for Optimistic UI: If moving to Pendiente, strip return tag
+      if (newStatusEnum === 'PENDIENTE' && (movedTask.comments || movedTask.comentarios)) {
+          const currentText = movedTask.comments || movedTask.comentarios || '';
+          const cleanedText = currentText.replace(/^\s*\[DEVOLUCIÓN[^\]]*\]:[^\n]*(\n\n)?/i, '').trim();
+          movedTask.comments = cleanedText;
+          movedTask.comentarios = cleanedText;
+          console.log("[onDragEnd] Optimistic UI: Stripped return tag from comments.");
+      }
+
       // Calculate Insertion Position (handling filters and visibility)
       // Filter the *remaining* tasks to match what's visible in the destination column
       const visibleTasksInDestColumn = newTasks.filter(task => {
@@ -550,10 +572,27 @@ const NativeTasks = () => {
 
       try {
           const baseUrl = getApiBaseUrl();
+          const token = localStorage.getItem('authToken');
+
+          // Construct Payload
+          const payload = { status: newStatusForDB };
+
+          // If moving to Pendiente, also strip the tag in the DB update
+          if (newStatusForDB === 'PENDIENTE') {
+              const currentText = movedTask.comments || movedTask.comentarios || '';
+              const cleanedText = currentText.replace(/^\s*\[DEVOLUCIÓN[^\]]*\]:[^\n]*(\n\n)?/i, '').trim();
+              payload.comments = cleanedText;
+          }
+
+          console.log(`[onDragEnd] Syncing status to ${newStatusForDB}...`, payload);
+
           const response = await fetch(`${baseUrl}/api/tasks/${taskId}`, {
               method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: newStatusForDB })
+              headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': token ? `Bearer ${token}` : ''
+              },
+              body: JSON.stringify(payload)
           });
 
           if (!response.ok) {
