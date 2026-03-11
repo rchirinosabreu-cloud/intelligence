@@ -203,14 +203,15 @@ const NativeTasks = () => {
           // Transform native task format to match kanban expectations if needed
           const formattedTasks = safeData.map(task => ({
               id: task.id,
-              pendiente: task.title,
+              title: task.title,
+              pendiente: task.title, // Backward compatibility
               cliente: task.client?.name || 'Sin Cliente',
               responsable_name: task.assignee?.name || 'Sin Asignar',
               assigneeId: task.assigneeId,
               assigneeAvatar: task.assignee?.avatarUrl || null,
               creatorId: task.creatorId,
               creatorName: task.creator?.name || 'Sistema',
-              estado: task.status,
+              status: task.status,
               // Parse the date explicitly avoiding browser local timezone shifts if it comes as an ISO string
               // Because we save it with T12:00:00.000Z, we can just safely slice it or convert it to a date that won't shift.
               // We'll extract the YYYY-MM-DD from the raw ISO string directly.
@@ -444,7 +445,7 @@ const NativeTasks = () => {
   ];
 
   const returnedTasks = useMemo(() => {
-      return tasks.filter(t => getColumnId(t.estado, t.comentarios) === 'devuelto');
+      return tasks.filter(t => getColumnId(t.status, t.comentarios || t.comments) === 'devuelto');
   }, [tasks]);
 
   const onDragEnd = async (result) => {
@@ -481,13 +482,13 @@ const NativeTasks = () => {
           destinationColumnId === 'en-proceso' ? 'EN_CURSO' :
           destinationColumnId === 'devuelto' ? 'DEVUELTA' : 'REALIZADA';
 
-      movedTask.estado = newStatusEnum;
+      movedTask.status = newStatusEnum;
 
       // Calculate Insertion Position (handling filters and visibility)
       // Filter the *remaining* tasks to match what's visible in the destination column
       const visibleTasksInDestColumn = newTasks.filter(task => {
           // Match Column
-          if (getColumnId(task.estado, task.comentarios) !== destinationColumnId) return false;
+          if (getColumnId(task.status, task.comentarios || task.comments) !== destinationColumnId) return false;
 
           // Match Active Filters
           if (responsibleFilter !== 'Todos' && (task.responsable_name || "Desconocido") !== responsibleFilter) return false;
@@ -855,7 +856,7 @@ const NativeTasks = () => {
               {/* Grid Column Layout Area */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1">
                   {columns.map((col) => {
-                      const columnTasks = filteredTasks.filter(t => getColumnId(t.estado, t.comentarios) === col.id);
+                      const columnTasks = filteredTasks.filter(t => getColumnId(t.status, t.comentarios || t.comments) === col.id);
 
                       return (
                         <div key={col.id} className="flex flex-col gap-4">
@@ -928,7 +929,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
     const isHighlighted = highlightedTaskId === String(task.id);
 
     // Overdue Logic for Style
-    const columnId = getColumnId(task.estado, task.comentarios);
+    const columnId = getColumnId(task.status, task.comentarios || task.comments);
     const isDone = columnId === 'realizado';
     const isReturned = columnId === 'devuelto';
     const overdue = !isDone && isOverdue(task.fecha_entrega);
@@ -1024,7 +1025,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                 {/* Body: Task Title */}
                                     <div>
                                         <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 leading-snug mb-1">
-                                            {task.pendiente}
+                                            {task.title || task.pendiente}
                                         </h4>
                                         <div className="flex items-center gap-1.5 opacity-60">
                                             <span className="text-[9px] text-zinc-500 uppercase tracking-tighter font-semibold">Creado por</span>

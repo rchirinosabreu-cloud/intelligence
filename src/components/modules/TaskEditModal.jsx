@@ -52,16 +52,16 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 } catch(e) {}
             }
 
-            const initialStatus = taskData.estado || taskData.status || 'PENDIENTE';
+            const initialStatus = taskData.status || taskData.estado || 'PENDIENTE';
             setEditFormData({
                 id: taskData.id,
-                pendiente: taskData.pendiente || taskData.title || '',
+                title: taskData.title || taskData.pendiente || '',
                 clientId: cId,
                 responsable_name: taskData.assigneeId || taskData.responsable_name || taskData.assignee || '',
-                estado: initialStatus,
+                status: initialStatus,
                 originalStatus: initialStatus, // Store original to detect auto-resolve and anti-spam confetti
                 fecha_entrega: formattedDate,
-                comentarios: taskData.comentarios || taskData.comments || '',
+                comments: taskData.comments || taskData.comentarios || '',
                 creatorName: taskData.creatorName || (taskData.creator ? taskData.creator.name : 'Sistema')
             });
         }
@@ -89,11 +89,24 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 isoDate = `${cleanDate}T12:00:00.000Z`;
             }
 
-            // Auto-resolve logic: If it was 'Devuelto' and state hasn't been changed to anything else (or even if it was left as Devuelto),
-            // we force it to 'PENDIENTE' to reintegrate it.
-            let finalStatus = editFormData.estado;
-            if (editFormData.originalStatus === 'DEVUELTA' && finalStatus === 'DEVUELTA') {
+            // Auto-resolve logic: If it was visually 'Devuelto' (by status or by tag),
+            // and the user is using the "Reintegrar" action, we resolve it.
+            const currentComments = editFormData.comments || '';
+            const isVisuallyReturned = editFormData.originalStatus === 'DEVUELTA' ||
+                                      (editFormData.originalStatus === 'PENDIENTE' && currentComments.includes('[DEVOLUCIÓN'));
+
+            let finalStatus = editFormData.status;
+            let finalComments = currentComments;
+
+            if (isVisuallyReturned && finalStatus === editFormData.originalStatus) {
+                // Force PENDIENTE and strip the return tag to "blind" the hierarchy
                 finalStatus = 'PENDIENTE';
+
+                // Strip the most recent [DEVOLUCIÓN] block if it exists at the start
+                if (finalComments && finalComments.includes('[DEVOLUCIÓN')) {
+                    // Regex to match the [DEVOLUCIÓN - Date]: Reason pattern and the following double newline
+                    finalComments = finalComments.replace(/^\[DEVOLUCIÓN[^\]]*\]:[^\n]*(\n\n)?/, '').trim();
+                }
             }
 
             // Trigger confetti if status is changing to 'REALIZADA' (Optimistic)
@@ -105,11 +118,11 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    title: editFormData.pendiente,
+                    title: editFormData.title,
                     clientId: editFormData.clientId,
                     assigneeId: editFormData.responsable_name || null,
                     dueDate: isoDate,
-                    comments: editFormData.comentarios,
+                    comments: finalComments,
                     status: finalStatus
                 })
             });
@@ -153,8 +166,8 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                         <input
                             type="text"
                             required
-                            value={editFormData.pendiente || ''}
-                            onChange={e => setEditFormData({...editFormData, pendiente: e.target.value})}
+                            value={editFormData.title || ''}
+                            onChange={e => setEditFormData({...editFormData, title: e.target.value})}
                             className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                         />
                     </div>
@@ -193,8 +206,8 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                         <div>
                             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Estado</label>
                             <select
-                                value={editFormData.estado || 'Pendiente'}
-                                onChange={e => setEditFormData({...editFormData, estado: e.target.value})}
+                                value={editFormData.status || 'PENDIENTE'}
+                                onChange={e => setEditFormData({...editFormData, status: e.target.value})}
                                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                             >
                                 <option value="PENDIENTE">Pendiente</option>
@@ -226,8 +239,8 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                     <div>
                         <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Comentarios</label>
                         <textarea
-                            value={editFormData.comentarios || ''}
-                            onChange={e => setEditFormData({...editFormData, comentarios: e.target.value})}
+                            value={editFormData.comments || ''}
+                            onChange={e => setEditFormData({...editFormData, comments: e.target.value})}
                             className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white resize-none h-24"
                             placeholder="Detalles adicionales..."
                         />
@@ -246,13 +259,15 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                             disabled={isSubmitting}
                             className={cn(
                                 "px-6 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm",
-                                (editFormData.originalStatus === 'DEVUELTA')
+                                (editFormData.originalStatus === 'DEVUELTA' || (editFormData.originalStatus === 'PENDIENTE' && (editFormData.comments || '').includes('[DEVOLUCIÓN')))
                                     ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 border-none"
                                     : "bg-primary hover:bg-primary/90 text-primary-foreground"
                             )}
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                            {(editFormData.originalStatus === 'DEVUELTA') ? 'Guardar y reintegrar tarea' : 'Guardar cambios'}
+                            {(editFormData.originalStatus === 'DEVUELTA' || (editFormData.originalStatus === 'PENDIENTE' && (editFormData.comments || '').includes('[DEVOLUCIÓN')))
+                                ? 'Guardar y reintegrar tarea'
+                                : 'Guardar cambios'}
                         </button>
                     </div>
                 </form>
