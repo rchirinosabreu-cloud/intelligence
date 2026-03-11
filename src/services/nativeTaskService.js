@@ -226,6 +226,7 @@ export const updateTask = async (id, data) => {
 
         // Strict Task Lifecycle Logic (completedAt)
         // Only evaluate if the payload actually attempts to change the 'status' (Edge Case B)
+        let isCorrected = false;
         if ('status' in updateData) {
             updateData.status = statusMapper[updateData.status] || updateData.status;
             const newStatus = updateData.status;
@@ -237,37 +238,8 @@ export const updateTask = async (id, data) => {
             const wasVisuallyReturned = (oldStatus === 'DEVUELTA') ||
                                        (oldStatus === 'PENDIENTE' && (currentTask.comments || '').includes('[DEVOLUCIÓN'));
 
-            const isCorrected = wasVisuallyReturned &&
+            isCorrected = wasVisuallyReturned &&
                               (newStatus === 'PENDIENTE' || newStatus === 'EN_CURSO');
-
-            if (isCorrected) {
-                // Necesitamos el título de la tarea para el mensaje
-                const taskWithTitle = await prisma.task.findUnique({ where: { id }, select: { title: true, assigneeId: true } });
-
-                if (taskWithTitle && taskWithTitle.assigneeId) {
-                    // Buscar el Usuario asociado al TeamMember (assigneeId)
-                    const teamMember = await prisma.teamMember.findUnique({ where: { id: taskWithTitle.assigneeId } });
-
-                    if (teamMember && teamMember.email) {
-                        const targetUser = await prisma.user.findUnique({
-                            where: { email: teamMember.email.trim().toLowerCase() }
-                        });
-
-                        if (targetUser) {
-                            // Crear la notificación (importar dinámicamente para evitar circular dependency si existiera,
-                            // aunque aquí podemos usar prisma directamente)
-                            await prisma.notification.create({
-                                data: {
-                                    userId: targetUser.id,
-                                    message: `La tarea "${taskWithTitle.title}" que devolviste ha sido corregida y está lista para trabajarse.`,
-                                    type: 'TASK_CORRECTED',
-                                    relatedId: id
-                                }
-                            });
-                        }
-                    }
-                }
-            }
 
             if (newStatus === 'REALIZADA') {
                 // Edge Case A: Only set completedAt to NOW if it wasn't already 'Realizado' / completed.
@@ -287,6 +259,8 @@ export const updateTask = async (id, data) => {
             delete updateData.completedAt;
         }
 
+        console.log(`[nativeTaskService] Executing Prisma update for ${id}:`, JSON.stringify(updateData, null, 2));
+
         const updatedTask = await prisma.task.update({
             where: { id },
             data: updateData,
@@ -298,6 +272,39 @@ export const updateTask = async (id, data) => {
                 creator: true
             }
         });
+
+        // --- Cierre de Ciclo: Notificación de Corrección (Post-DB Success) ---
+        // Solo si la transición fue exitosa y cumplía los criterios de corrección
+        if (isCorrected) {
+            try {
+                // Usamos la info del objeto actualizado para la notificación
+                if (updatedTask.assigneeId) {
+                    const teamMember = await prisma.teamMember.findUnique({ where: { id: updatedTask.assigneeId } });
+
+                    if (teamMember && teamMember.email) {
+                        const targetUser = await prisma.user.findUnique({
+                            where: { email: teamMember.email.trim().toLowerCase() }
+                        });
+
+                        if (targetUser) {
+                            await prisma.notification.create({
+                                data: {
+                                    userId: targetUser.id,
+                                    message: `La tarea "${updatedTask.title}" que devolviste ha sido corregida y está lista para trabajarse.`,
+                                    type: 'TASK_CORRECTED',
+                                    relatedId: id
+                                }
+                            });
+                            console.log(`[nativeTaskService] Correction notification sent to ${targetUser.email}`);
+                        }
+                    }
+                }
+            } catch (notifyError) {
+                console.error("[nativeTaskService] Failed to send correction notification:", notifyError);
+                // No lanzamos error para no romper la respuesta del update exitoso
+            }
+        }
+
         return updatedTask;
     } catch (error) {
         console.error("Error updating native task:", error);

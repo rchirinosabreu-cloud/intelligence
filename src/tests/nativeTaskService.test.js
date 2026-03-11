@@ -134,18 +134,31 @@ describe('nativeTaskService - updateTask', () => {
      * Lógica de Cierre de Ciclo (Notificación de Corrección)
      */
     it('debería crear una notificación si una tarea pasa de "Devuelto" a "Pendiente"', async () => {
-        const taskId = 123;
-        prisma.task.findUnique
-            .mockResolvedValueOnce({ id: taskId, status: 'DEVUELTA', completedAt: null }) // first call in updateTask
-            .mockResolvedValueOnce({ id: taskId, title: 'Tarea Devuelta', assigneeId: 'member-1' }); // second call in notification logic
+        const taskId = "task-123";
+        // Setup initial state
+        prisma.task.findUnique.mockResolvedValue({
+            id: taskId,
+            status: 'DEVUELTA',
+            completedAt: null,
+            comments: 'Some comments'
+        });
+
+        // Mock update result (Must include fields needed for notification logic)
+        prisma.task.update.mockResolvedValue({
+            id: taskId,
+            status: 'PENDIENTE',
+            title: 'Tarea Corregida',
+            assigneeId: 'member-1'
+        });
 
         prisma.teamMember.findUnique.mockResolvedValue({ id: 'member-1', email: 'test@example.com' });
         prisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'test@example.com' });
-        prisma.task.update.mockResolvedValue({ id: taskId, status: 'PENDIENTE' });
 
         const payload = { status: 'PENDIENTE' };
         await updateTask(taskId, payload);
 
+        // Verification
+        expect(prisma.task.update).toHaveBeenCalled();
         expect(prisma.notification.create).toHaveBeenCalledWith(expect.objectContaining({
             data: expect.objectContaining({
                 type: 'TASK_CORRECTED',

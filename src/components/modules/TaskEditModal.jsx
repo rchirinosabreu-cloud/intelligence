@@ -99,13 +99,15 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
             let finalComments = currentComments;
 
             if (isVisuallyReturned && finalStatus === editFormData.originalStatus) {
+                console.log("[TaskEditModal] Auto-resolve triggered for visually returned task.");
                 // Force PENDIENTE and strip the return tag to "blind" the hierarchy
                 finalStatus = 'PENDIENTE';
 
                 // Strip the most recent [DEVOLUCIÓN] block if it exists at the start
-                if (finalComments && finalComments.includes('[DEVOLUCIÓN')) {
-                    // Regex to match the [DEVOLUCIÓN - Date]: Reason pattern and the following double newline
-                    finalComments = finalComments.replace(/^\[DEVOLUCIÓN[^\]]*\]:[^\n]*(\n\n)?/, '').trim();
+                // Refined regex: handles optional leading space/newline and different delimiters
+                if (finalComments.includes('[DEVOLUCIÓN')) {
+                    finalComments = finalComments.replace(/^\s*\[DEVOLUCIÓN[^\]]*\]:[^\n]*(\n\n)?/i, '').trim();
+                    console.log("[TaskEditModal] Stripped return tag from comments.");
                 }
             }
 
