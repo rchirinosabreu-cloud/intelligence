@@ -36,13 +36,29 @@ export const getDashboardMetrics = async () => {
 export const getQualityStreak = async () => {
     try {
         const lastReturnedTask = await prisma.task.findFirst({
-            where: { status: 'DEVUELTA' },
+            where: {
+                OR: [
+                    { status: 'DEVUELTA' },
+                    {
+                        status: 'PENDIENTE',
+                        comments: { contains: '[DEVOLUCIÓN' }
+                    }
+                ]
+            },
             orderBy: { updatedAt: 'desc' },
             select: { updatedAt: true }
         });
 
         const currentReturnedTasksCount = await prisma.task.count({
-            where: { status: 'DEVUELTA' }
+            where: {
+                OR: [
+                    { status: 'DEVUELTA' },
+                    {
+                        status: 'PENDIENTE',
+                        comments: { contains: '[DEVOLUCIÓN' }
+                    }
+                ]
+            }
         });
 
         const now = new Date();

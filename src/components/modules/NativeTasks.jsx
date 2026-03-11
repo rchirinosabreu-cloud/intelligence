@@ -133,14 +133,24 @@ const CLIENT_COLORS = {
 };
 
 // Note: Backend strictly returns Enum values: PENDIENTE, EN_CURSO, REALIZADA, DEVUELTA, ELIMINADA.
-const getColumnId = (status) => {
+// Hierarchical Blindness: REALIZADA > EN_CURSO > DEVUELTA (by status or by comment if PENDIENTE)
+const getColumnId = (status, comments = '') => {
     if (!status) return 'pendiente';
     const s = String(status).toUpperCase();
+    const hasReturnTag = (comments || '').includes('[DEVOLUCIÓN');
 
-    if (s === 'DEVUELTA' || s === 'DEVUELTO') return 'devuelto';
+    // High Priority: Always REALIZADA
     if (s === 'REALIZADA' || s === 'REALIZADO') return 'realizado';
+
+    // Medium Priority: EN_CURSO
     if (s === 'EN_CURSO' || s === 'EN PROCESO') return 'en-proceso';
+
+    // Shielding Logic: DEVUELTA or (PENDIENTE with Return Tag)
+    if (s === 'DEVUELTA' || s === 'DEVUELTO' || (s === 'PENDIENTE' && hasReturnTag)) return 'devuelto';
+
+    // ELIMINADA (Should be excluded from view, but handle just in case)
     if (s === 'ELIMINADA' || s === 'ELIMINADO') return 'eliminada';
+
     return 'pendiente';
 };
 
@@ -434,7 +444,7 @@ const NativeTasks = () => {
   ];
 
   const returnedTasks = useMemo(() => {
-      return tasks.filter(t => getColumnId(t.estado) === 'devuelto');
+      return tasks.filter(t => getColumnId(t.estado, t.comentarios) === 'devuelto');
   }, [tasks]);
 
   const onDragEnd = async (result) => {
@@ -477,7 +487,7 @@ const NativeTasks = () => {
       // Filter the *remaining* tasks to match what's visible in the destination column
       const visibleTasksInDestColumn = newTasks.filter(task => {
           // Match Column
-          if (getColumnId(task.estado) !== destinationColumnId) return false;
+          if (getColumnId(task.estado, task.comentarios) !== destinationColumnId) return false;
 
           // Match Active Filters
           if (responsibleFilter !== 'Todos' && (task.responsable_name || "Desconocido") !== responsibleFilter) return false;
@@ -845,7 +855,7 @@ const NativeTasks = () => {
               {/* Grid Column Layout Area */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1">
                   {columns.map((col) => {
-                      const columnTasks = filteredTasks.filter(t => getColumnId(t.estado) === col.id);
+                      const columnTasks = filteredTasks.filter(t => getColumnId(t.estado, t.comentarios) === col.id);
 
                       return (
                         <div key={col.id} className="flex flex-col gap-4">
@@ -918,7 +928,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
     const isHighlighted = highlightedTaskId === String(task.id);
 
     // Overdue Logic for Style
-    const columnId = getColumnId(task.estado);
+    const columnId = getColumnId(task.estado, task.comentarios);
     const isDone = columnId === 'realizado';
     const isReturned = columnId === 'devuelto';
     const overdue = !isDone && isOverdue(task.fecha_entrega);
