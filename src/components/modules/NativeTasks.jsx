@@ -132,7 +132,7 @@ const CLIENT_COLORS = {
     "Velvet Hotel": "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800",
 };
 
-// Note: Backend strictly returns Enum values: PENDIENTE, EN_CURSO, REALIZADA, DEVUELTA, ELIMINADA.
+// Note: Backend strictly returns Enum values: PENDIENTE, EN_CURSO, REALIZADA, DEVUELTA.
 // Hierarchical Blindness: REALIZADA > EN_CURSO > DEVUELTA (by status or by comment if PENDIENTE)
 const getColumnId = (status, comments = '') => {
     if (!status) return 'pendiente';
@@ -148,9 +148,6 @@ const getColumnId = (status, comments = '') => {
     // Shielding Logic: DEVUELTA or (PENDIENTE with Return Tag)
     // HOTFIX: Must be exactly uppercase for Enum matching
     if (s === 'DEVUELTA' || (s === 'PENDIENTE' && hasReturnTag)) return 'devuelto';
-
-    // ELIMINADA (Should be excluded from view, but handle just in case)
-    if (s === 'ELIMINADA') return 'eliminada';
 
     return 'pendiente';
 };
@@ -359,13 +356,21 @@ const NativeTasks = () => {
   const handleDeleteTask = async () => {
       if (!deletingTask || !deleteReason.trim() || isSubmittingDelete) return;
 
+      // Optimistic UI: Remove from local state
+      const previousTasks = [...tasks];
+      setTasks(prev => prev.filter(t => t.id !== deletingTask.id));
+
       try {
           setIsSubmittingDelete(true);
           const baseUrl = getApiBaseUrl();
+          const token = localStorage.getItem('authToken');
 
-          const response = await fetch(`${baseUrl}/api/tasks/${deletingTask.id}/soft-delete`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('authToken')}` },
+          const response = await fetch(`${baseUrl}/api/tasks/${deletingTask.id}`, {
+              method: 'DELETE',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': token ? `Bearer ${token}` : ''
+              },
               body: JSON.stringify({
                   reason: deleteReason
               })
@@ -385,6 +390,8 @@ const NativeTasks = () => {
           }
       } catch (err) {
           console.error("Error deleting task:", err);
+          // Revert on failure
+          setTasks(previousTasks);
           toast({
               title: "Error",
               description: "No se pudo eliminar la tarea.",
@@ -778,7 +785,7 @@ const NativeTasks = () => {
           </DialogContent>
       </Dialog>
 
-      {/* Soft Delete Reason Modal */}
+      {/* Hard Delete with Audit Log Modal */}
       <Dialog open={!!deletingTask} onOpenChange={(open) => !open && setDeletingTask(null)}>
           <DialogContent className="sm:max-w-md dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
               <DialogHeader>

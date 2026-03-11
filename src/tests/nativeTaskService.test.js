@@ -1,15 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { updateTask, getQualityStreak } from '../services/nativeTaskService.js';
+import { updateTask, getQualityStreak, auditAndDeleteTask } from '../services/nativeTaskService.js';
 import prisma from '../lib/prisma.js';
 
 // Mock prisma
-vi.mock('../lib/prisma.js', () => ({
-  default: {
+vi.mock('../lib/prisma.js', () => {
+  const mockPrisma = {
+    $transaction: vi.fn((cb) => cb(mockPrisma)),
     task: {
       findUnique: vi.fn(),
       update: vi.fn(),
       findFirst: vi.fn(),
       count: vi.fn(),
+      delete: vi.fn(),
+    },
+    deletedTaskLog: {
+      create: vi.fn(),
     },
     teamMember: {
       findUnique: vi.fn(),
@@ -20,8 +25,9 @@ vi.mock('../lib/prisma.js', () => ({
     notification: {
       create: vi.fn(),
     }
-  },
-}));
+  };
+  return { default: mockPrisma };
+});
 
 describe('nativeTaskService - updateTask', () => {
 
@@ -34,7 +40,7 @@ describe('nativeTaskService - updateTask', () => {
      */
     it('debería registrar completedAt con la fecha actual cuando cambia a estado "Realizado"', async () => {
         // Mock de tarea existente en estado Pendiente
-        prisma.task.findUnique.mockResolvedValue({ id: 1, status: 'PENDIENTE', completedAt: null });
+        prisma.task.findUnique.mockResolvedValue({ id: 1, status: 'PENDIENTE', completedAt: null, comments: '' });
         prisma.task.update.mockResolvedValue({ id: 1, status: 'REALIZADA', completedAt: new Date() });
 
         const payload = { status: 'REALIZADA' };
@@ -50,7 +56,7 @@ describe('nativeTaskService - updateTask', () => {
      */
     it('debería forzar completedAt a null si cambia de "Realizado" a "Pendiente"', async () => {
         // Mock de tarea existente en estado Realizado
-        prisma.task.findUnique.mockResolvedValue({ id: 1, status: 'REALIZADA', completedAt: new Date() });
+        prisma.task.findUnique.mockResolvedValue({ id: 1, status: 'REALIZADA', completedAt: new Date(), comments: '' });
         prisma.task.update.mockResolvedValue({ id: 1, status: 'PENDIENTE', completedAt: null });
 
         const payload = { status: 'PENDIENTE' };
@@ -66,7 +72,7 @@ describe('nativeTaskService - updateTask', () => {
      */
     it('no debería sobrescribir completedAt si la tarea ya era "Realizada" y solo se editó otro campo', async () => {
         const pastDate = new Date('2023-01-01');
-        prisma.task.findUnique.mockResolvedValue({ id: 1, status: 'REALIZADA', completedAt: pastDate });
+        prisma.task.findUnique.mockResolvedValue({ id: 1, status: 'REALIZADA', completedAt: pastDate, comments: '' });
         prisma.task.update.mockResolvedValue({ id: 1, status: 'REALIZADA', completedAt: pastDate, title: 'Nuevo Título' });
 
         const payload = { status: 'REALIZADA', title: 'Nuevo Título' }; // Mismo estado, cambia título
@@ -81,7 +87,7 @@ describe('nativeTaskService - updateTask', () => {
      * Caso Borde B (Payload sin campo de estado)
      */
     it('debería ignorar completedAt si no se incluye "status" en el payload de actualización', async () => {
-        prisma.task.findUnique.mockResolvedValue({ id: 1, status: 'PENDIENTE', completedAt: null });
+        prisma.task.findUnique.mockResolvedValue({ id: 1, status: 'PENDIENTE', completedAt: null, comments: '' });
         prisma.task.update.mockResolvedValue({ id: 1, status: 'PENDIENTE', completedAt: null, title: 'Solo Título' });
 
         const payload = { title: 'Solo Título' }; // Sin campo status
@@ -199,6 +205,42 @@ describe('nativeTaskService - updateTask', () => {
                 userId: 'user-tag'
             })
         }));
+    });
+
+    describe('auditAndDeleteTask', () => {
+        it('debería crear un registro de auditoría y eliminar la tarea en una transacción', async () => {
+            const taskId = "task-to-delete-123";
+            const reason = "Duplicada";
+            const userId = "user-admin";
+
+            prisma.task.findUnique.mockResolvedValue({
+                id: taskId,
+                title: "Tarea Duplicada",
+                clientId: "client-abc"
+            });
+
+            const result = await auditAndDeleteTask(taskId, reason, userId);
+
+            expect(prisma.$transaction).toHaveBeenCalled();
+            expect(prisma.deletedTaskLog.create).toHaveBeenCalledWith({
+                data: {
+                    originalTaskId: taskId,
+                    taskTitle: "Tarea Duplicada",
+                    clientId: "client-abc",
+                    reason: reason,
+                    deletedById: userId
+                }
+            });
+            expect(prisma.task.delete).toHaveBeenCalledWith({
+                where: { id: taskId }
+            });
+            expect(result.success).toBe(true);
+        });
+
+        it('debería fallar si la tarea no existe', async () => {
+            prisma.task.findUnique.mockResolvedValue(null);
+            await expect(auditAndDeleteTask("invalid-id", "reason")).rejects.toThrow();
+        });
     });
 
 });

@@ -21,7 +21,7 @@ import { getFlowMessages, createFlowMessage } from './src/services/flowService.j
 import { getGeneralChatMessages, createGeneralChatMessage } from './src/services/generalChatService.js';
 import { getUnreadNotificationCount, createNotification, getNotifications, markAsRead, markAllNotificationsAsRead } from './src/services/notificationService.js';
 import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
-import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics, getQualityStreak, softDeleteTask } from './src/services/nativeTaskService.js';
+import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics, getQualityStreak, auditAndDeleteTask } from './src/services/nativeTaskService.js';
 import teamRouter from './src/routes/api/team.js';
 import userRouter from './src/routes/api/user.js';
 
@@ -1355,7 +1355,7 @@ app.get('/api/tasks', async (req, res) => {
 
 app.get('/api/debug/task-status-count', async (req, res) => {
     try {
-        const statuses = ['PENDIENTE', 'EN_CURSO', 'REALIZADA', 'DEVUELTA', 'ELIMINADA'];
+        const statuses = ['PENDIENTE', 'EN_CURSO', 'REALIZADA', 'DEVUELTA'];
         const counts = {};
 
         for (const status of statuses) {
@@ -1400,31 +1400,22 @@ app.patch('/api/tasks/:taskId', async (req, res) => {
     }
 });
 
-app.delete('/api/tasks/:taskId', async (req, res) => {
+app.delete('/api/tasks/:taskId', authenticateToken, async (req, res) => {
     try {
         const { taskId } = req.params;
-        log('API', `Deleting native task: ${taskId}`);
-        await deleteNativeTask(taskId);
+        const { reason } = req.body; // Deletion reason now expected in body
+        const deletedById = req.user?.userId;
+
+        if (!reason) {
+            return res.status(400).json({ error: "Missing deletion reason" });
+        }
+
+        log('API', `Hard deleting native task with audit: ${taskId}`, { reason });
+        await auditAndDeleteTask(taskId, reason, deletedById);
         res.json({ success: true });
     } catch (error) {
         logError('API', `Failed to delete native task ${req.params.taskId}`, error);
         res.status(500).json({ error: "Failed to delete native task" });
-    }
-});
-
-app.patch('/api/tasks/:taskId/soft-delete', authenticateToken, async (req, res) => {
-    try {
-        const { taskId } = req.params;
-        const { reason } = req.body;
-        if (!reason) {
-            return res.status(400).json({ error: "Missing deletion reason" });
-        }
-        log('API', `Soft deleting native task: ${taskId}`);
-        const task = await softDeleteTask(taskId, reason);
-        res.json(task);
-    } catch (error) {
-        logError('API', `Failed to soft delete native task ${req.params.taskId}`, error);
-        res.status(500).json({ error: "Failed to soft delete native task" });
     }
 });
 

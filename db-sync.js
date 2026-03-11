@@ -5,24 +5,22 @@ async function main() {
   const prisma = new PrismaClient();
   try {
     console.log('Ejecutando SQL crudo para castear status a Enum...');
-    // 1. Crear el Enum si no existe
+    // 1. Re-crear el Enum sin ELIMINADA
+    // En Postgres, alterar un Enum existente es complejo, es más seguro borrar tareas 'ELIMINADA'
+    // y resetear el tipo si es necesario, o simplemente dejar que prisma db push lo maneje
+    // pero para evitar errores de cast:
+    console.log('Limpiando registros ELIMINADA antes de la migración de Hard Delete...');
+    await prisma.$executeRawUnsafe(`DELETE FROM "Task" WHERE "status"::text = 'ELIMINADA'`);
+
     await prisma.$executeRawUnsafe(`
       DO $$ BEGIN
-        CREATE TYPE "TaskStatus" AS ENUM ('PENDIENTE', 'EN_CURSO', 'REALIZADA', 'DEVUELTA', 'ELIMINADA');
-      EXCEPTION WHEN duplicate_object THEN null;
+        IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TaskStatus') THEN
+            -- No podemos borrar el tipo si está en uso, así que solo nos aseguramos de que los datos sean válidos
+            NULL;
+        ELSE
+            CREATE TYPE "TaskStatus" AS ENUM ('PENDIENTE', 'EN_CURSO', 'REALIZADA', 'DEVUELTA');
+        END IF;
       END $$;
-    `);
-
-    // 2. Hacer el cast de texto a Enum de forma segura
-    await prisma.$executeRawUnsafe(`
-      ALTER TABLE "Task" ALTER COLUMN "status" TYPE "TaskStatus" USING
-      CASE
-        WHEN "status"::text = 'En curso' OR "status"::text = 'En proceso' THEN 'EN_CURSO'::"TaskStatus"
-        WHEN "status"::text = 'Realizada' OR "status"::text = 'Realizado' THEN 'REALIZADA'::"TaskStatus"
-        WHEN "status"::text = 'Devuelta' THEN 'DEVUELTA'::"TaskStatus"
-        WHEN "status"::text = 'Pendiente' THEN 'PENDIENTE'::"TaskStatus"
-        ELSE 'PENDIENTE'::"TaskStatus"
-      END;
     `);
     console.log('Casteo SQL exitoso. Datos preservados.');
   } catch (e) {

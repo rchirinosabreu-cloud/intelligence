@@ -2,14 +2,14 @@ import prisma from '../lib/prisma.js';
 
 export const getDashboardMetrics = async () => {
     try {
-        // Total historical completed tasks (excluding ELIMINADA)
+        // Total historical completed tasks
         const totalCompleted = await prisma.task.count({
             where: {
                 status: 'REALIZADA'
             }
         });
 
-        // Pending tasks (excluding ELIMINADA)
+        // Pending tasks
         const pendingCount = await prisma.task.count({
             where: {
                 status: {
@@ -90,8 +90,6 @@ export const getQualityStreak = async () => {
 export const getTasks = async (clientId) => {
     try {
         const whereClause = clientId ? { clientId } : {};
-        // Strictly exclude ELIMINADA tasks from Kanban and general listings
-        whereClause.status = { not: 'ELIMINADA' };
 
         const tasks = await prisma.task.findMany({
             where: whereClause,
@@ -118,12 +116,10 @@ const statusMapper = {
     'En proceso': 'EN_CURSO',
     'Realizado': 'REALIZADA',
     'Devuelto': 'DEVUELTA',
-    'Eliminada': 'ELIMINADA',
     'PENDIENTE': 'PENDIENTE',
     'EN_CURSO': 'EN_CURSO',
     'REALIZADA': 'REALIZADA',
-    'DEVUELTA': 'DEVUELTA',
-    'ELIMINADA': 'ELIMINADA'
+    'DEVUELTA': 'DEVUELTA'
 };
 
 export const createTask = async ({ title, dueDate, assigneeId, creatorId, comments, status, clientId }) => {
@@ -313,19 +309,41 @@ export const updateTask = async (id, data) => {
     }
 };
 
-export const softDeleteTask = async (id, reason) => {
+export const auditAndDeleteTask = async (id, reason, deletedByUserId = null) => {
     try {
-        const updatedTask = await prisma.task.update({
-            where: { id },
-            data: {
-                status: 'ELIMINADA',
-                deletionReason: reason,
-                completedAt: null // Explicitly nullify if it was previously completed
+        // Use a transaction to ensure we log and delete atomically
+        return await prisma.$transaction(async (tx) => {
+            // 1. Get task data for the log
+            const task = await tx.task.findUnique({
+                where: { id },
+                select: { title: true, clientId: true }
+            });
+
+            if (!task) {
+                throw new Error(`Task with id ${id} not found for auditing`);
             }
+
+            // 2. Create Audit Log
+            await tx.deletedTaskLog.create({
+                data: {
+                    originalTaskId: id,
+                    taskTitle: task.title,
+                    clientId: task.clientId,
+                    reason: reason,
+                    deletedById: deletedByUserId
+                }
+            });
+
+            // 3. Perform Hard Delete
+            await tx.task.delete({
+                where: { id }
+            });
+
+            console.log(`[nativeTaskService] Task ${id} ("${task.title}") hard deleted with reason: ${reason}`);
+            return { success: true };
         });
-        return updatedTask;
     } catch (error) {
-        console.error("Error soft deleting native task:", error);
+        console.error("Error auditing and deleting native task:", error);
         throw error;
     }
 };
