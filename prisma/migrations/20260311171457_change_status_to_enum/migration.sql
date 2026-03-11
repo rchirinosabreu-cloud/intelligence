@@ -7,11 +7,11 @@ ALTER TABLE "Task" ADD COLUMN     "deletionReason" TEXT;
 -- Convert existing data and change column type
 ALTER TABLE "Task" ALTER COLUMN "status" TYPE "TaskStatus" USING (
   CASE
-    WHEN "status" = 'Pendiente' THEN 'PENDIENTE'::"TaskStatus"
-    WHEN "status" = 'En proceso' THEN 'EN_CURSO'::"TaskStatus"
-    WHEN "status" = 'Realizado' THEN 'REALIZADA'::"TaskStatus"
-    WHEN "status" = 'Devuelto' THEN 'DEVUELTA'::"TaskStatus"
-    WHEN "status" = 'Eliminada' THEN 'ELIMINADA'::"TaskStatus"
+    WHEN UPPER("status") = 'PENDIENTE' THEN 'PENDIENTE'::"TaskStatus"
+    WHEN UPPER("status") = 'EN PROCESO' OR UPPER("status") = 'EN_CURSO' THEN 'EN_CURSO'::"TaskStatus"
+    WHEN UPPER("status") = 'REALIZADO' OR UPPER("status") = 'REALIZADA' THEN 'REALIZADA'::"TaskStatus"
+    WHEN UPPER("status") = 'DEVUELTO' OR UPPER("status") = 'DEVUELTA' THEN 'DEVUELTA'::"TaskStatus"
+    WHEN UPPER("status") = 'ELIMINADA' OR UPPER("status") = 'ELIMINADO' THEN 'ELIMINADA'::"TaskStatus"
     ELSE 'PENDIENTE'::"TaskStatus"
   END
 );
