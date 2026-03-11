@@ -117,13 +117,17 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
             }
 
             const url = `${baseUrl}/api/tasks/${editFormData.id}`;
+
+            // HARDCODED STATUS CHECK: If auto-resolve was triggered, we force 'PENDIENTE' literally.
+            const statusToSubmit = (isVisuallyReturned && finalStatus === 'PENDIENTE') ? 'PENDIENTE' : finalStatus;
+
             const payload = {
                 title: editFormData.title,
                 clientId: editFormData.clientId,
                 assigneeId: editFormData.responsable_name || null,
                 dueDate: isoDate,
                 comments: finalComments,
-                status: finalStatus
+                status: statusToSubmit
             };
 
             console.log(`[TaskEditModal] Sending update to ${url}`, payload);
@@ -140,7 +144,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
 
             if (res.ok) {
                 const updatedTask = await res.json();
-                console.log(`[TaskEditModal] Update successful:`, updatedTask);
+                console.log(`[TaskEditModal] Update successful. ESTADO RETORNADO POR SERVIDOR:`, updatedTask.status);
                 toast({ title: 'Tarea actualizada', description: 'Los cambios se guardaron correctamente.' });
                 onSuccess();
                 onClose();

@@ -167,4 +167,38 @@ describe('nativeTaskService - updateTask', () => {
         }));
     });
 
+    it('debería crear una notificación si una tarea pasa de [DEVOLUCIÓN] en comentarios a estar limpia (ambas PENDIENTE)', async () => {
+        const taskId = "task-tag-123";
+        // Setup initial state: Visually returned by tag
+        prisma.task.findUnique.mockResolvedValue({
+            id: taskId,
+            status: 'PENDIENTE',
+            completedAt: null,
+            comments: '[DEVOLUCIÓN - 01/01]: Please fix this'
+        });
+
+        // Mock update result: Clean status
+        prisma.task.update.mockResolvedValue({
+            id: taskId,
+            status: 'PENDIENTE',
+            title: 'Tarea Corregida por Tag',
+            assigneeId: 'member-1'
+        });
+
+        prisma.teamMember.findUnique.mockResolvedValue({ id: 'member-1', email: 'tag@example.com' });
+        prisma.user.findUnique.mockResolvedValue({ id: 'user-tag', email: 'tag@example.com' });
+
+        const payload = { status: 'PENDIENTE', comments: 'Fixed and tag removed' };
+        await updateTask(taskId, payload);
+
+        // Verification
+        expect(prisma.task.update).toHaveBeenCalled();
+        expect(prisma.notification.create).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({
+                type: 'TASK_CORRECTED',
+                userId: 'user-tag'
+            })
+        }));
+    });
+
 });

@@ -259,7 +259,7 @@ export const updateTask = async (id, data) => {
             delete updateData.completedAt;
         }
 
-        console.log(`[nativeTaskService] Executing Prisma update for ${id}:`, JSON.stringify(updateData, null, 2));
+        console.log(`[nativeTaskService] FINAL updateData being sent to Prisma for ${id}:`, JSON.stringify(updateData, null, 2));
 
         const updatedTask = await prisma.task.update({
             where: { id },
@@ -276,6 +276,7 @@ export const updateTask = async (id, data) => {
         // --- Cierre de Ciclo: Notificación de Corrección (Post-DB Success) ---
         // Solo si la transición fue exitosa y cumplía los criterios de corrección
         if (isCorrected) {
+            console.log(`[nativeTaskService] Update SUCCESS for ${id}. Current status in DB: ${updatedTask.status}. Triggering notification...`);
             try {
                 // Usamos la info del objeto actualizado para la notificación
                 if (updatedTask.assigneeId) {
