@@ -154,11 +154,9 @@ describe('nativeTaskService - updateTask', () => {
             id: taskId,
             status: 'PENDIENTE',
             title: 'Tarea Corregida',
-            assigneeId: 'member-1'
+            assigneeId: 'member-1',
+            creatorId: 'user-creator'
         });
-
-        prisma.teamMember.findUnique.mockResolvedValue({ id: 'member-1', email: 'test@example.com' });
-        prisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'test@example.com' });
 
         const payload = { status: 'PENDIENTE' };
         await updateTask(taskId, payload);
@@ -168,7 +166,7 @@ describe('nativeTaskService - updateTask', () => {
         expect(prisma.notification.create).toHaveBeenCalledWith(expect.objectContaining({
             data: expect.objectContaining({
                 type: 'TASK_CORRECTED',
-                userId: 'user-1'
+                userId: 'user-creator'
             })
         }));
     });
@@ -188,11 +186,9 @@ describe('nativeTaskService - updateTask', () => {
             id: taskId,
             status: 'PENDIENTE',
             title: 'Tarea Corregida por Tag',
-            assigneeId: 'member-1'
+            assigneeId: 'member-1',
+            creatorId: 'user-tag-creator'
         });
-
-        prisma.teamMember.findUnique.mockResolvedValue({ id: 'member-1', email: 'tag@example.com' });
-        prisma.user.findUnique.mockResolvedValue({ id: 'user-tag', email: 'tag@example.com' });
 
         const payload = { status: 'PENDIENTE', comments: 'Fixed and tag removed' };
         await updateTask(taskId, payload);
@@ -202,7 +198,7 @@ describe('nativeTaskService - updateTask', () => {
         expect(prisma.notification.create).toHaveBeenCalledWith(expect.objectContaining({
             data: expect.objectContaining({
                 type: 'TASK_CORRECTED',
-                userId: 'user-tag'
+                userId: 'user-tag-creator'
             })
         }));
     });

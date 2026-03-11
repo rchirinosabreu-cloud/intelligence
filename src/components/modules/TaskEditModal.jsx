@@ -145,7 +145,12 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
             if (res.ok) {
                 const updatedTask = await res.json();
                 console.log(`[TaskEditModal] Update successful. ESTADO RETORNADO POR SERVIDOR:`, updatedTask.status);
-                toast({ title: 'Tarea actualizada', description: 'Los cambios se guardaron correctamente.' });
+
+                const successMsg = (isVisuallyReturned && statusToSubmit === 'PENDIENTE')
+                    ? 'Tarea corregida y reintegrada'
+                    : 'Los cambios se guardaron correctamente';
+
+                toast({ title: 'Tarea actualizada', description: successMsg });
                 onSuccess();
                 onClose();
             } else {
