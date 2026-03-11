@@ -210,7 +210,7 @@ export const updateTask = async (id, data) => {
         // 1. Fetch current task state to evaluate transitions (TDD Edge Cases)
         const currentTask = await prisma.task.findUnique({
             where: { id },
-            select: { status: true, completedAt: true }
+            select: { status: true, completedAt: true, comments: true }
         });
 
         if (!currentTask) {
@@ -232,9 +232,13 @@ export const updateTask = async (id, data) => {
             const oldStatus = currentTask.status;
 
             // --- Lógica de Cierre de Ciclo (Notificación de Corrección) ---
-            // Si el estado anterior era 'Devuelto' y el nuevo es 'Pendiente' o 'En proceso'
-        const isCorrected = (oldStatus === 'DEVUELTA') &&
-                          (newStatus === 'PENDIENTE' || newStatus === 'EN_CURSO');
+            // Si el estado anterior era visually returned y el nuevo es 'Pendiente' o 'En proceso'
+            // Consideramos visualmente devuelto si tiene el tag o el status DEVUELTA.
+            const wasVisuallyReturned = (oldStatus === 'DEVUELTA') ||
+                                       (oldStatus === 'PENDIENTE' && (currentTask.comments || '').includes('[DEVOLUCIÓN'));
+
+            const isCorrected = wasVisuallyReturned &&
+                              (newStatus === 'PENDIENTE' || newStatus === 'EN_CURSO');
 
             if (isCorrected) {
                 // Necesitamos el título de la tarea para el mensaje
