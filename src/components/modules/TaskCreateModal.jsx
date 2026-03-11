@@ -74,7 +74,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                     assigneeId: newTaskData.assigneeId || null,
                     dueDate: isoDate,
                     comments: newTaskData.comments,
-                    status: 'Pendiente'
+                    status: 'PENDIENTE'
                 })
             });
 

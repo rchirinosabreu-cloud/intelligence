@@ -2,21 +2,18 @@ import prisma from '../lib/prisma.js';
 
 export const getDashboardMetrics = async () => {
     try {
-        // Total historical completed tasks
+        // Total historical completed tasks (excluding ELIMINADA)
         const totalCompleted = await prisma.task.count({
             where: {
-                OR: [
-                    { status: 'Realizado' },
-                    { completedAt: { not: null } }
-                ]
+                status: 'REALIZADA'
             }
         });
 
-        // Pending tasks (anything not completed)
+        // Pending tasks (excluding ELIMINADA)
         const pendingCount = await prisma.task.count({
             where: {
                 status: {
-                    not: 'Realizado'
+                    in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA']
                 }
             }
         });
@@ -39,13 +36,13 @@ export const getDashboardMetrics = async () => {
 export const getQualityStreak = async () => {
     try {
         const lastReturnedTask = await prisma.task.findFirst({
-            where: { status: 'Devuelto' },
+            where: { status: 'DEVUELTA' },
             orderBy: { updatedAt: 'desc' },
             select: { updatedAt: true }
         });
 
         const currentReturnedTasksCount = await prisma.task.count({
-            where: { status: 'Devuelto' }
+            where: { status: 'DEVUELTA' }
         });
 
         const now = new Date();
@@ -77,6 +74,9 @@ export const getQualityStreak = async () => {
 export const getTasks = async (clientId) => {
     try {
         const whereClause = clientId ? { clientId } : {};
+        // Strictly exclude ELIMINADA tasks from Kanban and general listings
+        whereClause.status = { not: 'ELIMINADA' };
+
         const tasks = await prisma.task.findMany({
             where: whereClause,
             include: {
@@ -97,8 +97,23 @@ export const getTasks = async (clientId) => {
     }
 };
 
+const statusMapper = {
+    'Pendiente': 'PENDIENTE',
+    'En proceso': 'EN_CURSO',
+    'Realizado': 'REALIZADA',
+    'Devuelto': 'DEVUELTA',
+    'Eliminada': 'ELIMINADA',
+    'PENDIENTE': 'PENDIENTE',
+    'EN_CURSO': 'EN_CURSO',
+    'REALIZADA': 'REALIZADA',
+    'DEVUELTA': 'DEVUELTA',
+    'ELIMINADA': 'ELIMINADA'
+};
+
 export const createTask = async ({ title, dueDate, assigneeId, creatorId, comments, status, clientId }) => {
     try {
+        const mappedStatus = statusMapper[status] || 'PENDIENTE';
+
         const newTask = await prisma.task.create({
             data: {
                 title,
@@ -106,7 +121,7 @@ export const createTask = async ({ title, dueDate, assigneeId, creatorId, commen
                 assigneeId,
                 creatorId,
                 comments,
-                status: status || 'Pendiente',
+                status: mappedStatus,
                 clientId
             },
             include: {
@@ -148,7 +163,7 @@ export const getCompletedTasks = async (dateString) => {
 
         const tasks = await prisma.task.findMany({
             where: {
-                status: 'Realizado',
+                status: 'REALIZADA',
                 completedAt: {
                     not: null,
                     gte: startOfDay,
@@ -196,12 +211,14 @@ export const updateTask = async (id, data) => {
         // Strict Task Lifecycle Logic (completedAt)
         // Only evaluate if the payload actually attempts to change the 'status' (Edge Case B)
         if ('status' in updateData) {
+            updateData.status = statusMapper[updateData.status] || updateData.status;
             const newStatus = updateData.status;
             const oldStatus = currentTask.status;
 
             // --- Lógica de Cierre de Ciclo (Notificación de Corrección) ---
             // Si el estado anterior era 'Devuelto' y el nuevo es 'Pendiente' o 'En proceso'
-            const isCorrected = oldStatus === 'Devuelto' && (newStatus === 'Pendiente' || newStatus === 'En proceso');
+            const isCorrected = (oldStatus === 'DEVUELTA' || oldStatus === 'Devuelto') &&
+                              (newStatus === 'PENDIENTE' || newStatus === 'Pendiente' || newStatus === 'EN_CURSO' || newStatus === 'En proceso');
 
             if (isCorrected) {
                 // Necesitamos el título de la tarea para el mensaje
@@ -232,10 +249,10 @@ export const updateTask = async (id, data) => {
                 }
             }
 
-            if (newStatus === 'Realizado') {
+            if (newStatus === 'REALIZADA' || newStatus === 'Realizado') {
                 // Edge Case A: Only set completedAt to NOW if it wasn't already 'Realizado' / completed.
                 // If it already has a completedAt, preserve the history.
-                if (!currentTask.completedAt || currentTask.status !== 'Realizado') {
+                if (!currentTask.completedAt || (currentTask.status !== 'REALIZADA' && currentTask.status !== 'Realizado')) {
                     updateData.completedAt = new Date();
                 } else {
                     // Do not touch completedAt to preserve historical data
@@ -264,6 +281,23 @@ export const updateTask = async (id, data) => {
         return updatedTask;
     } catch (error) {
         console.error("Error updating native task:", error);
+        throw error;
+    }
+};
+
+export const softDeleteTask = async (id, reason) => {
+    try {
+        const updatedTask = await prisma.task.update({
+            where: { id },
+            data: {
+                status: 'ELIMINADA',
+                deletionReason: reason,
+                completedAt: null // Explicitly nullify if it was previously completed
+            }
+        });
+        return updatedTask;
+    } catch (error) {
+        console.error("Error soft deleting native task:", error);
         throw error;
     }
 };

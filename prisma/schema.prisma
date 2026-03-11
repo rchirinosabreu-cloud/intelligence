@@ -95,6 +95,14 @@ model TeamMember {
   flowMessages    FlowMessage[]
 }
 
+enum TaskStatus {
+  PENDIENTE
+  EN_CURSO
+  REALIZADA
+  DEVUELTA
+  ELIMINADA
+}
+
 // Fase 1: Migración del Kanban de Google Sheets a Prisma
 model Task {
   id        String   @id @default(uuid())
@@ -105,12 +113,13 @@ model Task {
   creatorId String?
   creator   User?       @relation("CreatedTasks", fields: [creatorId], references: [id], onDelete: SetNull)
   comments  String?
-  status    String   @default("Pendiente") // Pendiente, En proceso, Realizado, Devuelto
+  status    TaskStatus  @default(PENDIENTE)
   clientId  String
   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   completedAt DateTime?
+  deletionReason String?
 }
 
 // Activos de Marca (Colores, Fuentes)

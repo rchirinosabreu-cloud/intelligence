@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2, AlertTriangle, AlertOctagon, MessageSquare, Edit2, X, RotateCcw, Send } from 'lucide-react';
+import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2, AlertTriangle, AlertOctagon, MessageSquare, Edit2, X, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
@@ -136,14 +136,15 @@ const CLIENT_COLORS = {
 const getColumnId = (status) => {
     if (!status) return 'pendiente';
     const normalized = String(status)
-        .toLowerCase()
+        .toUpperCase()
         .normalize('NFD')
         .replace(/[̀-ͯ]/g, '')
         .trim();
 
-    if (['devuelto', 'returned', 'rejected'].includes(normalized)) return 'devuelto';
-    if (['realizado', 'finalizado', 'hecho', 'done', 'completado', 'terminado'].includes(normalized)) return 'realizado';
-    if (['en proceso', 'en curso', 'proceso', 'working', 'doing', 'in progress', 'en-proceso'].includes(normalized)) return 'en-proceso';
+    if (['DEVUELTO', 'DEVUELTA', 'RETURNED', 'REJECTED'].includes(normalized)) return 'devuelto';
+    if (['REALIZADO', 'REALIZADA', 'FINALIZADO', 'HECHO', 'DONE', 'COMPLETADO', 'TERMINADO'].includes(normalized)) return 'realizado';
+    if (['EN PROCESO', 'EN_CURSO', 'EN CURSO', 'PROCESO', 'WORKING', 'DOING', 'IN PROGRESS'].includes(normalized)) return 'en-proceso';
+    if (['ELIMINADA', 'ELIMINADO', 'DELETED'].includes(normalized)) return 'eliminada';
     return 'pendiente';
 };
 
@@ -158,6 +159,10 @@ const NativeTasks = () => {
   const [returningTask, setReturningTask] = useState(null);
   const [returnReason, setReturnReason] = useState('');
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+
+  const [deletingTask, setDeletingTask] = useState(null);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [isSubmittingDelete, setIsSubmittingDelete] = useState(false);
   const [isReturnedSidebarOpen, setIsReturnedSidebarOpen] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState(null);
 
@@ -331,6 +336,45 @@ const NativeTasks = () => {
       }
   };
 
+  const handleDeleteTask = async () => {
+      if (!deletingTask || !deleteReason.trim() || isSubmittingDelete) return;
+
+      try {
+          setIsSubmittingDelete(true);
+          const baseUrl = getApiBaseUrl();
+
+          const response = await fetch(`${baseUrl}/api/tasks/${deletingTask.id}/soft-delete`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionStorage.getItem('authToken')}` },
+              body: JSON.stringify({
+                  reason: deleteReason
+              })
+          });
+
+          if (response.ok) {
+              toast({
+                  title: "Tarea eliminada",
+                  description: "La tarea ha sido movida al registro de eliminadas.",
+              });
+
+              setDeletingTask(null);
+              setDeleteReason('');
+              fetchTasks();
+          } else {
+              throw new Error("Failed to delete task");
+          }
+      } catch (err) {
+          console.error("Error deleting task:", err);
+          toast({
+              title: "Error",
+              description: "No se pudo eliminar la tarea.",
+              variant: "destructive"
+          });
+      } finally {
+          setIsSubmittingDelete(false);
+      }
+  };
+
   // Extract unique responsibles (Names)
   const responsibles = useMemo(() => {
       const unique = [...new Set(tasks.map(t => t.responsable_name || "Desconocido"))].filter(Boolean).sort();
@@ -488,9 +532,9 @@ const NativeTasks = () => {
 
       // Para nativo usamos los IDs de columna como estado: "Pendiente", "En proceso", "Realizado", "Devuelto"
         const newStatusForDB =
-            destinationColumnId === 'pendiente' ? 'Pendiente' :
-            destinationColumnId === 'en-proceso' ? 'En proceso' :
-            destinationColumnId === 'devuelto' ? 'Devuelto' : 'Realizado';
+            destinationColumnId === 'pendiente' ? 'PENDIENTE' :
+            destinationColumnId === 'en-proceso' ? 'EN_CURSO' :
+            destinationColumnId === 'devuelto' ? 'DEVUELTA' : 'REALIZADA';
 
       try {
           const baseUrl = getApiBaseUrl();
@@ -683,6 +727,48 @@ const NativeTasks = () => {
           </DialogContent>
       </Dialog>
 
+      {/* Soft Delete Reason Modal */}
+      <Dialog open={!!deletingTask} onOpenChange={(open) => !open && setDeletingTask(null)}>
+          <DialogContent className="sm:max-w-md dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
+              <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
+                      ¿Por qué quieres eliminar esta tarea?
+                  </DialogTitle>
+                  <DialogDescription>
+                      La tarea <strong>{deletingTask?.pendiente}</strong> dejará de ser visible en el Kanban y en las métricas.
+                  </DialogDescription>
+              </DialogHeader>
+
+              <div className="py-4">
+                  <textarea
+                      value={deleteReason}
+                      onChange={(e) => setDeleteReason(e.target.value)}
+                      placeholder="Ej: Es un duplicado, el cliente canceló..."
+                      className="w-full min-h-[120px] bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none dark:text-white"
+                      autoFocus
+                      required
+                  />
+              </div>
+
+              <DialogFooter className="flex sm:justify-between gap-3">
+                  <button
+                      onClick={() => setDeletingTask(null)}
+                      className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                  >
+                      Cancelar
+                  </button>
+                  <button
+                      onClick={() => handleDeleteTask()}
+                      disabled={!deleteReason.trim() || isSubmittingDelete}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                  >
+                      {isSubmittingDelete ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                      Eliminar Tarea
+                  </button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
+
       {/* Kanban Board */}
       <DragDropContext onDragEnd={onDragEnd}>
           <div className="flex gap-6 flex-1 min-h-[500px] relative">
@@ -745,6 +831,7 @@ const NativeTasks = () => {
                                           highlightedTaskId={highlightedTaskId}
                                           onClick={(t) => setEditingTask(t)}
                                           onReturn={(t) => setReturningTask(t)}
+                                          onDelete={(t) => setDeletingTask(t)}
                                       />
                                   ))
                               )}
@@ -804,6 +891,7 @@ const NativeTasks = () => {
                                                 highlightedTaskId={highlightedTaskId}
                                                 onClick={(t) => setEditingTask(t)}
                                                 onReturn={(t) => setReturningTask(t)}
+                                                onDelete={(t) => setDeletingTask(t)}
                                             />
                                         ))}
                                         {provided.placeholder}
@@ -825,7 +913,7 @@ const NativeTasks = () => {
   );
 };
 
-const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn }) => {
+const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete }) => {
     const isHighlighted = highlightedTaskId === String(task.id);
 
     // Overdue Logic for Style
@@ -884,18 +972,30 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn }) => {
 
                                      {/* Priority or Overdue Badge */}
                                      <div className="flex flex-col items-end gap-1">
-                                        {!isReturned && (
+                                        <div className="flex items-center gap-1">
+                                            {!isReturned && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onReturn(task);
+                                                    }}
+                                                    className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-500 rounded-lg transition-colors group/btn"
+                                                    title="Devolver tarea"
+                                                >
+                                                    <RotateCcw className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    onReturn(task);
+                                                    onDelete(task);
                                                 }}
-                                                className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-500 rounded-lg transition-colors group/btn"
-                                                title="Devolver tarea"
+                                                className="p-1 text-slate-400 hover:text-red-500 rounded-lg transition-colors group/btn"
+                                                title="Eliminar tarea"
                                             >
-                                                <RotateCcw className="w-3.5 h-3.5" />
+                                                <Trash2 className="w-3.5 h-3.5" />
                                             </button>
-                                        )}
+                                        </div>
                                         {overdue && (
                                             <span className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-900/30 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-800 flex items-center gap-1">
                                                 <AlertOctagon className="w-3 h-3" />

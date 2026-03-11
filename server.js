@@ -21,7 +21,7 @@ import { getFlowMessages, createFlowMessage } from './src/services/flowService.j
 import { getGeneralChatMessages, createGeneralChatMessage } from './src/services/generalChatService.js';
 import { getUnreadNotificationCount, createNotification, getNotifications, markAsRead, markAllNotificationsAsRead } from './src/services/notificationService.js';
 import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
-import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics, getQualityStreak } from './src/services/nativeTaskService.js';
+import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics, getQualityStreak, softDeleteTask } from './src/services/nativeTaskService.js';
 import teamRouter from './src/routes/api/team.js';
 import userRouter from './src/routes/api/user.js';
 
@@ -1392,6 +1392,22 @@ app.delete('/api/tasks/:taskId', async (req, res) => {
     } catch (error) {
         logError('API', `Failed to delete native task ${req.params.taskId}`, error);
         res.status(500).json({ error: "Failed to delete native task" });
+    }
+});
+
+app.patch('/api/tasks/:taskId/soft-delete', authenticateToken, async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const { reason } = req.body;
+        if (!reason) {
+            return res.status(400).json({ error: "Missing deletion reason" });
+        }
+        log('API', `Soft deleting native task: ${taskId}`);
+        const task = await softDeleteTask(taskId, reason);
+        res.json(task);
+    } catch (error) {
+        logError('API', `Failed to soft delete native task ${req.params.taskId}`, error);
+        res.status(500).json({ error: "Failed to soft delete native task" });
     }
 });
 
