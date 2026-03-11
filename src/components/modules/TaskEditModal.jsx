@@ -114,26 +114,41 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 triggerConfetti();
             }
 
-            const res = await fetch(`${baseUrl}/api/tasks/${editFormData.id}`, {
+            const url = `${baseUrl}/api/tasks/${editFormData.id}`;
+            const payload = {
+                title: editFormData.title,
+                clientId: editFormData.clientId,
+                assigneeId: editFormData.responsable_name || null,
+                dueDate: isoDate,
+                comments: finalComments,
+                status: finalStatus
+            };
+
+            console.log(`[TaskEditModal] Sending update to ${url}`, payload);
+
+            const token = localStorage.getItem('authToken');
+            const res = await fetch(url, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title: editFormData.title,
-                    clientId: editFormData.clientId,
-                    assigneeId: editFormData.responsable_name || null,
-                    dueDate: isoDate,
-                    comments: finalComments,
-                    status: finalStatus
-                })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify(payload)
             });
 
             if (res.ok) {
+                const updatedTask = await res.json();
+                console.log(`[TaskEditModal] Update successful:`, updatedTask);
                 toast({ title: 'Tarea actualizada', description: 'Los cambios se guardaron correctamente.' });
                 onSuccess();
                 onClose();
-            } else { throw new Error('Error updating task'); }
+            } else {
+                const errorBody = await res.text();
+                console.error(`[TaskEditModal] Update failed (${res.status}):`, errorBody);
+                throw new Error(`Error updating task: ${res.status}`);
+            }
         } catch (err) {
-            console.error(err);
+            console.error("[TaskEditModal] Catch block error:", err);
             toast({ title: 'Error', description: 'No se pudo actualizar la tarea.', variant: 'destructive' });
         } finally {
             setIsSubmitting(false);
