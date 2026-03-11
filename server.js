@@ -1353,6 +1353,23 @@ app.get('/api/tasks', async (req, res) => {
     }
 });
 
+app.get('/api/debug/task-status-count', async (req, res) => {
+    try {
+        const statuses = ['PENDIENTE', 'EN_CURSO', 'REALIZADA', 'DEVUELTA', 'ELIMINADA'];
+        const counts = {};
+
+        for (const status of statuses) {
+            counts[status] = await prisma.task.count({ where: { status } });
+        }
+
+        console.log('[Audit] Task Status Counts:', JSON.stringify(counts, null, 2));
+        res.json(counts);
+    } catch (error) {
+        logError('API', "Debug status count failed", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.post('/api/tasks', authenticateToken, async (req, res) => {
     try {
         log('API', `Creating new native task`);

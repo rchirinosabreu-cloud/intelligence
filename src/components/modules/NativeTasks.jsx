@@ -132,19 +132,15 @@ const CLIENT_COLORS = {
     "Velvet Hotel": "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800",
 };
 
-// Note: Backend might return 'Realizado', 'Hecho', 'Finalizado'.
+// Note: Backend strictly returns Enum values: PENDIENTE, EN_CURSO, REALIZADA, DEVUELTA, ELIMINADA.
 const getColumnId = (status) => {
     if (!status) return 'pendiente';
-    const normalized = String(status)
-        .toUpperCase()
-        .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '')
-        .trim();
+    const s = String(status).toUpperCase();
 
-    if (['DEVUELTO', 'DEVUELTA', 'RETURNED', 'REJECTED'].includes(normalized)) return 'devuelto';
-    if (['REALIZADO', 'REALIZADA', 'FINALIZADO', 'HECHO', 'DONE', 'COMPLETADO', 'TERMINADO'].includes(normalized)) return 'realizado';
-    if (['EN PROCESO', 'EN_CURSO', 'EN CURSO', 'PROCESO', 'WORKING', 'DOING', 'IN PROGRESS'].includes(normalized)) return 'en-proceso';
-    if (['ELIMINADA', 'ELIMINADO', 'DELETED'].includes(normalized)) return 'eliminada';
+    if (s === 'DEVUELTA') return 'devuelto';
+    if (s === 'REALIZADA') return 'realizado';
+    if (s === 'EN_CURSO') return 'en-proceso';
+    if (s === 'ELIMINADA') return 'eliminada';
     return 'pendiente';
 };
 

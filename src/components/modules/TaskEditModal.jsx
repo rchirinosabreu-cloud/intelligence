@@ -52,7 +52,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 } catch(e) {}
             }
 
-            const initialStatus = taskData.estado || taskData.status || 'Pendiente';
+            const initialStatus = taskData.estado || taskData.status || 'PENDIENTE';
             setEditFormData({
                 id: taskData.id,
                 pendiente: taskData.pendiente || taskData.title || '',
@@ -90,16 +90,14 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
             }
 
             // Auto-resolve logic: If it was 'Devuelto' and state hasn't been changed to anything else (or even if it was left as Devuelto),
-            // we force it to 'Pendiente' to reintegrate it.
+            // we force it to 'PENDIENTE' to reintegrate it.
             let finalStatus = editFormData.estado;
-            if ((editFormData.originalStatus === 'DEVUELTA' || editFormData.originalStatus === 'Devuelto') &&
-                (finalStatus === 'DEVUELTA' || finalStatus === 'Devuelto')) {
+            if (editFormData.originalStatus === 'DEVUELTA' && finalStatus === 'DEVUELTA') {
                 finalStatus = 'PENDIENTE';
             }
 
-            // Trigger confetti if status is changing to 'Realizado' (Optimistic)
-            if ((editFormData.originalStatus !== 'REALIZADA' && editFormData.originalStatus !== 'Realizado') &&
-                (finalStatus === 'REALIZADA' || finalStatus === 'Realizado')) {
+            // Trigger confetti if status is changing to 'REALIZADA' (Optimistic)
+            if (editFormData.originalStatus !== 'REALIZADA' && finalStatus === 'REALIZADA') {
                 triggerConfetti();
             }
 
@@ -248,13 +246,13 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                             disabled={isSubmitting}
                             className={cn(
                                 "px-6 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm",
-                                (editFormData.originalStatus === 'DEVUELTA' || editFormData.originalStatus === 'Devuelto')
+                                (editFormData.originalStatus === 'DEVUELTA')
                                     ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 border-none"
                                     : "bg-primary hover:bg-primary/90 text-primary-foreground"
                             )}
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                            {(editFormData.originalStatus === 'DEVUELTA' || editFormData.originalStatus === 'Devuelto') ? 'Guardar y reintegrar tarea' : 'Guardar cambios'}
+                            {(editFormData.originalStatus === 'DEVUELTA') ? 'Guardar y reintegrar tarea' : 'Guardar cambios'}
                         </button>
                     </div>
                 </form>
