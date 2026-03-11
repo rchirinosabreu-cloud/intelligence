@@ -137,10 +137,10 @@ const getColumnId = (status) => {
     if (!status) return 'pendiente';
     const s = String(status).toUpperCase();
 
-    if (s === 'DEVUELTA') return 'devuelto';
-    if (s === 'REALIZADA') return 'realizado';
-    if (s === 'EN_CURSO') return 'en-proceso';
-    if (s === 'ELIMINADA') return 'eliminada';
+    if (s === 'DEVUELTA' || s === 'DEVUELTO') return 'devuelto';
+    if (s === 'REALIZADA' || s === 'REALIZADO') return 'realizado';
+    if (s === 'EN_CURSO' || s === 'EN PROCESO') return 'en-proceso';
+    if (s === 'ELIMINADA' || s === 'ELIMINADO') return 'eliminada';
     return 'pendiente';
 };
 
@@ -465,8 +465,13 @@ const NativeTasks = () => {
       const movedTask = { ...newTasks[taskIndex] };
       newTasks.splice(taskIndex, 1);
 
-      // Update internal status
-      movedTask.estado = destinationColumnId;
+      // Update internal status using the exact Enum values for visual consistency
+      const newStatusEnum =
+          destinationColumnId === 'pendiente' ? 'PENDIENTE' :
+          destinationColumnId === 'en-proceso' ? 'EN_CURSO' :
+          destinationColumnId === 'devuelto' ? 'DEVUELTA' : 'REALIZADA';
+
+      movedTask.estado = newStatusEnum;
 
       // Calculate Insertion Position (handling filters and visibility)
       // Filter the *remaining* tasks to match what's visible in the destination column
