@@ -139,8 +139,12 @@ describe('nativeTaskService - updateTask', () => {
     /**
      * Lógica de Cierre de Ciclo (Notificación de Corrección)
      */
-    it('debería crear una notificación si una tarea pasa de "Devuelto" a "Pendiente"', async () => {
+    it('debería notificar al responsable si el creador reintegra la tarea', async () => {
         const taskId = "task-123";
+        const creatorUserId = "user-creator";
+        const assigneeTMId = "tm-assignee";
+        const assigneeUserId = "user-assignee";
+
         // Setup initial state
         prisma.task.findUnique.mockResolvedValue({
             id: taskId,
@@ -149,56 +153,62 @@ describe('nativeTaskService - updateTask', () => {
             comments: 'Some comments'
         });
 
-        // Mock update result (Must include fields needed for notification logic)
+        // Mock update result
         prisma.task.update.mockResolvedValue({
             id: taskId,
             status: 'PENDIENTE',
             title: 'Tarea Corregida',
-            assigneeId: 'member-1',
-            creatorId: 'user-creator'
+            assigneeId: assigneeTMId,
+            creatorId: creatorUserId
         });
 
+        // Mocks para resolución de usuario
+        prisma.teamMember.findUnique.mockResolvedValue({ id: assigneeTMId, email: 'assignee@test.com' });
+        prisma.user.findUnique.mockResolvedValue({ id: assigneeUserId, email: 'assignee@test.com' });
+
         const payload = { status: 'PENDIENTE' };
-        await updateTask(taskId, payload);
+        // El creador es el que hace el update
+        await updateTask(taskId, payload, creatorUserId);
 
         // Verification
-        expect(prisma.task.update).toHaveBeenCalled();
         expect(prisma.notification.create).toHaveBeenCalledWith(expect.objectContaining({
             data: expect.objectContaining({
                 type: 'TASK_CORRECTED',
-                userId: 'user-creator'
+                userId: assigneeUserId,
+                message: expect.stringContaining("que devolviste ya ha sido corregida")
             })
         }));
     });
 
-    it('debería crear una notificación si una tarea pasa de [DEVOLUCIÓN] en comentarios a estar limpia (ambas PENDIENTE)', async () => {
-        const taskId = "task-tag-123";
-        // Setup initial state: Visually returned by tag
+    it('debería notificar al creador como fallback si el updater no es el creador', async () => {
+        const taskId = "task-123";
+        const creatorUserId = "user-creator";
+        const otherUserId = "user-other";
+
+        // Setup initial state
         prisma.task.findUnique.mockResolvedValue({
             id: taskId,
-            status: 'PENDIENTE',
+            status: 'DEVUELTA',
             completedAt: null,
-            comments: '[DEVOLUCIÓN - 01/01]: Please fix this'
+            comments: 'Some comments'
         });
 
-        // Mock update result: Clean status
         prisma.task.update.mockResolvedValue({
             id: taskId,
             status: 'PENDIENTE',
-            title: 'Tarea Corregida por Tag',
-            assigneeId: 'member-1',
-            creatorId: 'user-tag-creator'
+            title: 'Tarea Corregida',
+            creatorId: creatorUserId
         });
 
-        const payload = { status: 'PENDIENTE', comments: 'Fixed and tag removed' };
-        await updateTask(taskId, payload);
+        const payload = { status: 'PENDIENTE' };
+        await updateTask(taskId, payload, otherUserId);
 
-        // Verification
-        expect(prisma.task.update).toHaveBeenCalled();
+        // Verification: Notifica al creador (comportamiento legacy/fallback)
         expect(prisma.notification.create).toHaveBeenCalledWith(expect.objectContaining({
             data: expect.objectContaining({
                 type: 'TASK_CORRECTED',
-                userId: 'user-tag-creator'
+                userId: creatorUserId,
+                message: "La tarea \"Tarea Corregida\" ha sido corregida y reintegrada."
             })
         }));
     });

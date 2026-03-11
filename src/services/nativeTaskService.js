@@ -201,7 +201,7 @@ export const getCompletedTasks = async (dateString) => {
     }
 };
 
-export const updateTask = async (id, data) => {
+export const updateTask = async (id, data, updaterId = null) => {
     try {
         // 1. Fetch current task state to evaluate transitions (TDD Edge Cases)
         const currentTask = await prisma.task.findUnique({
@@ -274,21 +274,48 @@ export const updateTask = async (id, data) => {
         if (isCorrected) {
             console.log(`[nativeTaskService] Update SUCCESS for ${id}. Current status in DB: ${updatedTask.status}. Triggering notification...`);
             try {
-                // Notificar al Creador (quien usualmente devolvió la tarea)
-                if (updatedTask.creatorId) {
+                let targetUserId = null;
+                let notificationMessage = `La tarea "${updatedTask.title}" ha sido corregida y reintegrada.`;
+
+                // Destinatario Inteligente:
+                // Si el usuario que reintegra es el creador, notificamos al responsable (Asignado)
+                if (updaterId && updaterId === updatedTask.creatorId && updatedTask.assigneeId) {
+                    // Resolver el UserID a partir del TeamMember (assigneeId)
+                    const assigneeTeamMember = await prisma.teamMember.findUnique({
+                        where: { id: updatedTask.assigneeId },
+                        select: { email: true }
+                    });
+
+                    if (assigneeTeamMember && assigneeTeamMember.email) {
+                        const assigneeUser = await prisma.user.findUnique({
+                            where: { email: assigneeTeamMember.email.trim().toLowerCase() },
+                            select: { id: true }
+                        });
+
+                        if (assigneeUser) {
+                            targetUserId = assigneeUser.id;
+                            notificationMessage = `La tarea "${updatedTask.title}" que devolviste ya ha sido corregida y está lista en tus pendientes.`;
+                        }
+                    }
+                }
+
+                // Fallback: Si no se pudo determinar el asignado o el updater no es el creador,
+                // notificamos al creador (comportamiento anterior) para no dejar el ciclo abierto.
+                if (!targetUserId && updatedTask.creatorId) {
+                    targetUserId = updatedTask.creatorId;
+                }
+
+                if (targetUserId) {
                     await prisma.notification.create({
                         data: {
-                            userId: updatedTask.creatorId,
-                            message: `La tarea "${updatedTask.title}" ha sido corregida y reintegrada.`,
+                            userId: targetUserId,
+                            message: notificationMessage,
                             type: 'TASK_CORRECTED',
                             relatedId: id
                         }
                     });
-                    console.log(`[nativeTaskService] Reintegration notification sent to creator: ${updatedTask.creatorId}`);
+                    console.log(`[nativeTaskService] Reintegration notification sent to ${targetUserId}`);
                 }
-
-                // También notificar al Asignado si no fue él quien hizo el cambio (opcional, pero cerramos el ciclo)
-                // En este caso, el usuario pidió específicamente la trazabilidad de reintegración.
             } catch (notifyError) {
                 console.error("[nativeTaskService] Failed to send correction notification:", notifyError);
             }

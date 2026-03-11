@@ -1392,7 +1392,7 @@ app.patch('/api/tasks/:taskId', async (req, res) => {
     try {
         const { taskId } = req.params;
         log('API', `Updating native task: ${taskId}`, req.body);
-        const updatedTask = await updateTask(taskId, req.body);
+        const updatedTask = await updateTask(taskId, req.body, req.user?.userId);
         res.json(updatedTask);
     } catch (error) {
         logError('API', `Failed to update native task ${req.params.taskId}`, error);
