@@ -92,12 +92,14 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
             // Auto-resolve logic: If it was 'Devuelto' and state hasn't been changed to anything else (or even if it was left as Devuelto),
             // we force it to 'Pendiente' to reintegrate it.
             let finalStatus = editFormData.estado;
-            if (editFormData.originalStatus === 'Devuelto' && finalStatus === 'Devuelto') {
-                finalStatus = 'Pendiente';
+            if ((editFormData.originalStatus === 'DEVUELTA' || editFormData.originalStatus === 'Devuelto') &&
+                (finalStatus === 'DEVUELTA' || finalStatus === 'Devuelto')) {
+                finalStatus = 'PENDIENTE';
             }
 
             // Trigger confetti if status is changing to 'Realizado' (Optimistic)
-            if (editFormData.originalStatus !== 'Realizado' && finalStatus === 'Realizado') {
+            if ((editFormData.originalStatus !== 'REALIZADA' && editFormData.originalStatus !== 'Realizado') &&
+                (finalStatus === 'REALIZADA' || finalStatus === 'Realizado')) {
                 triggerConfetti();
             }
 
@@ -197,10 +199,10 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                                 onChange={e => setEditFormData({...editFormData, estado: e.target.value})}
                                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                             >
-                                <option value="Pendiente">Pendiente</option>
-                                <option value="En proceso">En proceso</option>
-                                <option value="Realizado">Realizado</option>
-                                <option value="Devuelto">Devuelto</option>
+                                <option value="PENDIENTE">Pendiente</option>
+                                <option value="EN_CURSO">En proceso</option>
+                                <option value="REALIZADA">Realizado</option>
+                                <option value="DEVUELTA">Devuelto</option>
                             </select>
                         </div>
                         <div>
@@ -246,13 +248,13 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                             disabled={isSubmitting}
                             className={cn(
                                 "px-6 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm",
-                                editFormData.originalStatus === 'Devuelto'
+                                (editFormData.originalStatus === 'DEVUELTA' || editFormData.originalStatus === 'Devuelto')
                                     ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 border-none"
                                     : "bg-primary hover:bg-primary/90 text-primary-foreground"
                             )}
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                            {editFormData.originalStatus === 'Devuelto' ? 'Guardar y reintegrar tarea' : 'Guardar cambios'}
+                            {(editFormData.originalStatus === 'DEVUELTA' || editFormData.originalStatus === 'Devuelto') ? 'Guardar y reintegrar tarea' : 'Guardar cambios'}
                         </button>
                     </div>
                 </form>
