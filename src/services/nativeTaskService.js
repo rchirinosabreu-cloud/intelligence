@@ -217,8 +217,8 @@ export const updateTask = async (id, data) => {
 
             // --- Lógica de Cierre de Ciclo (Notificación de Corrección) ---
             // Si el estado anterior era 'Devuelto' y el nuevo es 'Pendiente' o 'En proceso'
-            const isCorrected = (oldStatus === 'DEVUELTA' || oldStatus === 'Devuelto') &&
-                              (newStatus === 'PENDIENTE' || newStatus === 'Pendiente' || newStatus === 'EN_CURSO' || newStatus === 'En proceso');
+        const isCorrected = (oldStatus === 'DEVUELTA') &&
+                          (newStatus === 'PENDIENTE' || newStatus === 'EN_CURSO');
 
             if (isCorrected) {
                 // Necesitamos el título de la tarea para el mensaje
@@ -249,10 +249,10 @@ export const updateTask = async (id, data) => {
                 }
             }
 
-            if (newStatus === 'REALIZADA' || newStatus === 'Realizado') {
+            if (newStatus === 'REALIZADA') {
                 // Edge Case A: Only set completedAt to NOW if it wasn't already 'Realizado' / completed.
                 // If it already has a completedAt, preserve the history.
-                if (!currentTask.completedAt || (currentTask.status !== 'REALIZADA' && currentTask.status !== 'Realizado')) {
+                if (!currentTask.completedAt || currentTask.status !== 'REALIZADA') {
                     updateData.completedAt = new Date();
                 } else {
                     // Do not touch completedAt to preserve historical data
