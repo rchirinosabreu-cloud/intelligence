@@ -5,10 +5,11 @@ import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import ChaosMeter from './ChaosMeter';
+import TeamAvatar from '../ui/TeamAvatar';
 
 const Sidebar = ({ onLogout }) => {
   const { theme, toggleTheme } = useTheme();
@@ -92,33 +93,42 @@ const Sidebar = ({ onLogout }) => {
       <div className="p-4 border-t border-zinc-200/50 dark:border-white/5 bg-white/30 dark:bg-zinc-900/30 backdrop-blur-md transition-colors space-y-4">
         <ChaosMeter />
 
-        <div
-          onClick={() => {
-              logout();
-              if (onLogout) onLogout();
-              window.location.reload();
-          }}
-          className="flex items-center justify-between p-3 rounded-xl bg-white/60 border border-zinc-200/50 shadow-sm hover:shadow-md hover:border-zinc-300/50 dark:bg-white/5 dark:border-white/5 dark:hover:bg-white/10 dark:hover:border-white/10 transition-all duration-300 cursor-pointer group backdrop-blur-sm"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-zinc-100 border border-zinc-200 dark:bg-zinc-800/80 dark:border-white/10 flex items-center justify-center shadow-inner transition-colors group-hover:bg-red-50 dark:group-hover:bg-red-900/20">
-              <User className="w-4 h-4 text-zinc-500 dark:text-zinc-400 group-hover:text-red-500 transition-colors" />
-            </div>
-            <div className="flex flex-col text-left">
-              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-200 group-hover:text-red-500 transition-colors">Cerrar sesión</span>
-              <span className="text-xs text-zinc-500 dark:text-zinc-500 group-hover:text-red-400 transition-colors">
-                {currentUser?.name || 'Usuario'}
-              </span>
-            </div>
-          </div>
+        <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-white/60 border border-zinc-200/50 shadow-sm dark:bg-white/5 dark:border-white/5 backdrop-blur-sm">
+          {/* 1. Avatar (Left): Link to /perfil */}
+          <Link
+            to="/perfil"
+            className="shrink-0 p-1 rounded-xl transition-all duration-300 hover:bg-primary/10 hover:ring-2 hover:ring-primary/20 group/avatar"
+            title="Mi Perfil"
+          >
+            <TeamAvatar
+              member={{ name: currentUser?.name || 'Usuario', avatarUrl: currentUser?.avatarUrl }}
+              className="w-9 h-9 shadow-md transition-transform duration-300 group-hover/avatar:scale-105"
+            />
+          </Link>
 
-          {/* Theme Toggle */}
+          {/* 2. Text (Center): Logout button */}
+          <button
+            onClick={() => {
+                logout();
+                if (onLogout) onLogout();
+                window.location.reload();
+            }}
+            className="flex-1 flex flex-col text-left px-1.5 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors group/logout"
+          >
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 group-hover/logout:text-red-500 transition-colors">Cerrar sesión</span>
+            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-200 truncate max-w-[100px]">
+              {currentUser?.name || 'Usuario'}
+            </span>
+          </button>
+
+          {/* 3. Theme Toggle (Right) */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               toggleTheme();
             }}
-            className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-500 hover:text-primary dark:hover:bg-white/10 dark:text-zinc-500 dark:hover:text-zinc-300 transition-colors"
+            className="p-2 rounded-xl hover:bg-zinc-100 text-zinc-500 hover:text-primary dark:hover:bg-white/10 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors shrink-0"
+            title={theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
           >
              {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
