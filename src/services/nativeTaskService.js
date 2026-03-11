@@ -274,31 +274,23 @@ export const updateTask = async (id, data) => {
         if (isCorrected) {
             console.log(`[nativeTaskService] Update SUCCESS for ${id}. Current status in DB: ${updatedTask.status}. Triggering notification...`);
             try {
-                // Usamos la info del objeto actualizado para la notificación
-                if (updatedTask.assigneeId) {
-                    const teamMember = await prisma.teamMember.findUnique({ where: { id: updatedTask.assigneeId } });
-
-                    if (teamMember && teamMember.email) {
-                        const targetUser = await prisma.user.findUnique({
-                            where: { email: teamMember.email.trim().toLowerCase() }
-                        });
-
-                        if (targetUser) {
-                            await prisma.notification.create({
-                                data: {
-                                    userId: targetUser.id,
-                                    message: `La tarea "${updatedTask.title}" que devolviste ha sido corregida y está lista para trabajarse.`,
-                                    type: 'TASK_CORRECTED',
-                                    relatedId: id
-                                }
-                            });
-                            console.log(`[nativeTaskService] Correction notification sent to ${targetUser.email}`);
+                // Notificar al Creador (quien usualmente devolvió la tarea)
+                if (updatedTask.creatorId) {
+                    await prisma.notification.create({
+                        data: {
+                            userId: updatedTask.creatorId,
+                            message: `La tarea "${updatedTask.title}" ha sido corregida y reintegrada.`,
+                            type: 'TASK_CORRECTED',
+                            relatedId: id
                         }
-                    }
+                    });
+                    console.log(`[nativeTaskService] Reintegration notification sent to creator: ${updatedTask.creatorId}`);
                 }
+
+                // También notificar al Asignado si no fue él quien hizo el cambio (opcional, pero cerramos el ciclo)
+                // En este caso, el usuario pidió específicamente la trazabilidad de reintegración.
             } catch (notifyError) {
                 console.error("[nativeTaskService] Failed to send correction notification:", notifyError);
-                // No lanzamos error para no romper la respuesta del update exitoso
             }
         }
 
