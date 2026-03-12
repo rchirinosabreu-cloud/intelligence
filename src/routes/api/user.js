@@ -14,6 +14,22 @@ router.get('/profile', async (req, res) => {
     }
 });
 
+// Admin can fetch any user's profile
+router.get('/profile/:userId', async (req, res) => {
+    try {
+        if (req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Solo los administradores pueden ver otros perfiles' });
+        }
+        const profile = await getUserProfile(req.params.userId);
+        if (!profile) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+        res.json(profile);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 router.put('/profile', async (req, res) => {
     try {
         const { name, bio } = req.body;

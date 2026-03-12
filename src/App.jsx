@@ -43,6 +43,7 @@ function AppContent() {
             <Route path="/cliente/:clientId" element={<ClientDetailWrapper />} />
             <Route path="/equipo" element={<Team />} />
             <Route path="/perfil" element={<Profile />} />
+            <Route path="/perfil/:userId" element={<Profile />} />
 
             {/* Fallback para rutas no encontradas - redirigir a inicio */}
             <Route path="*" element={<Navigate to="/" replace />} />

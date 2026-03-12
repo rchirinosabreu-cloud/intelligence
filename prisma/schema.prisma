@@ -24,6 +24,8 @@ model User {
   generalChatMessages GeneralChatMessage[]
   createdTasks        Task[]               @relation("CreatedTasks")
   notes               UserNote[]
+  receivedFeedback    FeedbackRecord[]     @relation("ReceivedFeedback")
+  authoredFeedback    FeedbackRecord[]     @relation("AuthoredFeedback")
 }
 
 // Notas Personales del Usuario
@@ -100,6 +102,11 @@ enum TaskStatus {
   EN_CURSO
   REALIZADA
   DEVUELTA
+}
+
+enum FeedbackType {
+  ESCRITO
+  UNO_A_UNO
 }
 
 // Registro de Auditoría de Tareas Eliminadas (Hard Delete Strategy)
@@ -183,6 +190,24 @@ model ClientAnnouncement {
   content   String   // Sin límite de caracteres
   type      String   // 'urgent', 'win', 'info'
   createdAt DateTime @default(now())
+}
+
+// Fase 2: Módulo de Feedback y 1-on-1s
+model FeedbackRecord {
+  id               String       @id @default(uuid())
+  collaboratorId   String
+  collaborator     User         @relation("ReceivedFeedback", fields: [collaboratorId], references: [id], onDelete: Cascade)
+  authorId         String
+  author           User         @relation("AuthoredFeedback", fields: [authorId], references: [id], onDelete: Cascade)
+  type             FeedbackType @default(ESCRITO)
+  date             DateTime     @default(now())
+  strengths        String       @db.Text
+  improvementAreas String       @db.Text
+  actionItems      String       @db.Text
+  privateNote      String?      @db.Text
+  deletedAt        DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 }
 
 // Chat Flow (Inmutable)

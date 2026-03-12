@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useParams, useNavigate } from 'react-router-dom';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
-import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, Trash2, Edit2, X, Check } from 'lucide-react';
+import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, Trash2, Edit2, X, Check, Calendar, Target, Award, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -41,9 +42,11 @@ const CardContent = ({ children, className }) => (
 
 const Profile = () => {
     const { currentUser } = useAuth();
+    const { userId } = useParams();
+    const navigate = useNavigate();
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
-    const [profileData, setProfileData] = useState({ name: '', bio: '', email: '' });
+    const [profileData, setProfileData] = useState({ id: '', name: '', bio: '', email: '', role: '', avatarUrl: '' });
     const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
     const [notes, setNotes] = useState([]);
     const [isNotesLoading, setIsNotesLoading] = useState(false);
@@ -51,25 +54,115 @@ const Profile = () => {
     const [isCreatingNote, setIsCreatingNote] = useState(false);
     const [newNote, setNewNote] = useState({ title: '', content: '' });
 
+    // Performance / Feedback state
+    const [feedback, setFeedback] = useState([]);
+    const [isFeedbackLoading, setIsFeedbackLoading] = useState(false);
+    const [isCreatingFeedback, setIsCreatingFeedback] = useState(false);
+    const [newFeedback, setNewFeedback] = useState({
+        type: 'ESCRITO',
+        date: new Date().toISOString().split('T')[0],
+        strengths: '',
+        improvementAreas: '',
+        actionItems: '',
+        privateNote: ''
+    });
+
+    const isOwnProfile = !userId || userId === currentUser?.id;
+    const isAdmin = currentUser?.role === 'ADMIN';
+
     // Fetch initial data
     useEffect(() => {
         fetchProfile();
-        fetchNotes();
-    }, []);
+        if (isOwnProfile) {
+            fetchNotes();
+        }
+        fetchFeedback();
+    }, [userId]);
 
     const fetchProfile = async () => {
         try {
-            const res = await fetch(`${getApiBaseUrl()}/api/user/profile`);
+            const endpoint = userId ? `/api/user/profile/${userId}` : `/api/user/profile`;
+            const res = await fetch(`${getApiBaseUrl()}${endpoint}`);
             if (res.ok) {
                 const data = await res.json();
                 setProfileData({
+                    id: data.id || '',
                     name: data.name || '',
                     bio: data.bio || '',
-                    email: data.email || ''
+                    email: data.email || '',
+                    role: data.role || 'EDITOR',
+                    avatarUrl: data.avatarUrl || ''
                 });
+            } else if (res.status === 403) {
+                toast({ title: "Acceso denegado", description: "No tienes permiso para ver este perfil.", variant: "destructive" });
+                navigate('/perfil');
             }
         } catch (err) {
             console.error("Error fetching profile:", err);
+        }
+    };
+
+    const fetchFeedback = async () => {
+        setIsFeedbackLoading(true);
+        try {
+            const targetId = userId || currentUser?.id;
+            const res = await fetch(`${getApiBaseUrl()}/api/feedback/${targetId}`);
+            if (res.ok) {
+                const data = await res.json();
+                setFeedback(Array.isArray(data) ? data : []);
+            }
+        } catch (err) {
+            console.error("Error fetching feedback:", err);
+        } finally {
+            setIsFeedbackLoading(false);
+        }
+    };
+
+    const handleCreateFeedback = async (e) => {
+        e.preventDefault();
+        setIsLoading(true);
+        try {
+            const res = await fetch(`${getApiBaseUrl()}/api/feedback`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...newFeedback,
+                    collaboratorId: profileData.id
+                })
+            });
+            if (res.ok) {
+                toast({ title: "Feedback registrado", description: "El registro ha sido guardado exitosamente." });
+                setIsCreatingFeedback(false);
+                setNewFeedback({
+                    type: 'ESCRITO',
+                    date: new Date().toISOString().split('T')[0],
+                    strengths: '',
+                    improvementAreas: '',
+                    actionItems: '',
+                    privateNote: ''
+                });
+                fetchFeedback();
+            } else {
+                const err = await res.json();
+                throw new Error(err.error || "Error al registrar feedback");
+            }
+        } catch (err) {
+            toast({ title: "Error", description: err.message, variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDeleteFeedback = async (id) => {
+        if (!confirm("¿Estás seguro de que quieres eliminar este registro de feedback?")) return;
+        try {
+            const res = await fetch(`${getApiBaseUrl()}/api/feedback/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                toast({ title: "Registro eliminado" });
+                fetchFeedback();
+            }
+        } catch (err) {
+            toast({ title: "Error", description: "No se pudo eliminar el registro", variant: "destructive" });
         }
     };
 
@@ -203,17 +296,25 @@ const Profile = () => {
                 <div className="flex items-center gap-6">
                     <div className="relative group">
                         <TeamAvatar
-                            member={{ name: currentUser?.name || 'Usuario', avatarUrl: currentUser?.avatarUrl }}
+                            member={{ name: profileData.name || 'Usuario', avatarUrl: profileData.avatarUrl }}
                             className="w-24 h-24 text-3xl shadow-xl ring-4 ring-white dark:ring-zinc-900"
                             size={96}
                         />
-                        <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
-                            <Edit2 className="w-6 h-6 text-white" />
-                        </div>
+                        {isOwnProfile && (
+                            <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                                <Edit2 className="w-6 h-6 text-white" />
+                            </div>
+                        )}
                     </div>
                     <div>
-                        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">Mi Espacio</h1>
-                        <p className="text-zinc-500 dark:text-zinc-400 font-medium">Gestiona tu perfil personal, notas y desempeño laboral.</p>
+                        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+                            {isOwnProfile ? 'Mi Espacio' : `Perfil de ${profileData.name.split(' ')[0]}`}
+                        </h1>
+                        <p className="text-zinc-500 dark:text-zinc-400 font-medium">
+                            {isOwnProfile
+                                ? 'Gestiona tu perfil personal, notas y desempeño laboral.'
+                                : `Gestión de talento y seguimiento de desempeño para ${profileData.name}.`}
+                        </p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -224,19 +325,26 @@ const Profile = () => {
                 </div>
             </div>
 
-            <Tabs defaultValue="general" className="w-full">
-                <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full h-auto p-1 bg-zinc-100 dark:bg-zinc-800/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 mb-8">
+            <Tabs defaultValue={isOwnProfile ? "general" : "performance"} className="w-full">
+                <TabsList className={cn(
+                    "grid w-full h-auto p-1 bg-zinc-100 dark:bg-zinc-800/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 mb-8",
+                    isOwnProfile ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2"
+                )}>
                     <TabsTrigger value="general" className="rounded-xl py-3 flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-md transition-all">
-                        <User className="w-4 h-4" /> General
+                        <User className="w-4 h-4" /> {isOwnProfile ? 'General' : 'Info Pública'}
                     </TabsTrigger>
-                    <TabsTrigger value="notes" className="rounded-xl py-3 flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-md transition-all">
-                        <StickyNote className="w-4 h-4" /> Mis Notas
-                    </TabsTrigger>
-                    <TabsTrigger value="hr" className="rounded-xl py-3 flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-md transition-all">
-                        <ClipboardList className="w-4 h-4" /> Solicitudes
-                    </TabsTrigger>
+                    {isOwnProfile && (
+                        <TabsTrigger value="notes" className="rounded-xl py-3 flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-md transition-all">
+                            <StickyNote className="w-4 h-4" /> Mis Notas
+                        </TabsTrigger>
+                    )}
+                    {isOwnProfile && (
+                        <TabsTrigger value="hr" className="rounded-xl py-3 flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-md transition-all">
+                            <ClipboardList className="w-4 h-4" /> Solicitudes
+                        </TabsTrigger>
+                    )}
                     <TabsTrigger value="performance" className="rounded-xl py-3 flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-md transition-all">
-                        <TrendingUp className="w-4 h-4" /> Mi Desempeño
+                        <TrendingUp className="w-4 h-4" /> {isOwnProfile ? 'Mi Desempeño' : 'Desempeño'}
                     </TabsTrigger>
                 </TabsList>
 
@@ -259,9 +367,10 @@ const Profile = () => {
                                                 <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Nombre Completo</label>
                                                 <input
                                                     type="text"
+                                                    disabled={!isOwnProfile}
                                                     value={profileData.name}
                                                     onChange={e => setProfileData({...profileData, name: e.target.value})}
-                                                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
+                                                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white disabled:bg-zinc-100 dark:disabled:bg-zinc-900 disabled:text-zinc-500"
                                                 />
                                             </div>
                                             <div className="space-y-2">
@@ -278,78 +387,89 @@ const Profile = () => {
                                             <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Biografía / Acerca de mí</label>
                                             <textarea
                                                 rows={4}
+                                                disabled={!isOwnProfile}
                                                 value={profileData.bio}
                                                 onChange={e => setProfileData({...profileData, bio: e.target.value})}
-                                                placeholder="Cuéntanos un poco sobre ti, tu rol o tus intereses..."
-                                                className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white resize-none"
+                                                placeholder={isOwnProfile ? "Cuéntanos un poco sobre ti, tu rol o tus intereses..." : "Este usuario no ha escrito una biografía todavía."}
+                                                className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white resize-none disabled:bg-zinc-100 dark:disabled:bg-zinc-900 disabled:text-zinc-500"
                                             />
                                         </div>
-                                        <div className="flex justify-end pt-4">
-                                            <button
-                                                type="submit"
-                                                disabled={isLoading}
-                                                className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary/20 flex items-center gap-2 disabled:opacity-50"
-                                            >
-                                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                                Guardar Cambios
-                                            </button>
-                                        </div>
+                                        {isOwnProfile && (
+                                            <div className="flex justify-end pt-4">
+                                                <button
+                                                    type="submit"
+                                                    disabled={isLoading}
+                                                    className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary/20 flex items-center gap-2 disabled:opacity-50"
+                                                >
+                                                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                                    Guardar Cambios
+                                                </button>
+                                            </div>
+                                        )}
                                     </form>
                                 </CardContent>
                             </Card>
                         </div>
 
-                        {/* Password Form */}
+                        {/* Password Form (Only for own profile) */}
                         <div className="space-y-6">
-                            <Card className="bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl overflow-hidden">
-                                <CardHeader className="bg-zinc-50/50 dark:bg-zinc-800/20 border-b border-zinc-100 dark:border-zinc-800">
-                                    <CardTitle className="text-xl flex items-center gap-2">
-                                        <Key className="w-5 h-5 text-amber-500" /> Seguridad
-                                    </CardTitle>
-                                    <CardDescription>Cambia tu contraseña de acceso.</CardDescription>
-                                </CardHeader>
-                                <CardContent className="p-8">
-                                    <form onSubmit={handleUpdatePassword} className="space-y-5">
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Contraseña Actual</label>
-                                            <input
-                                                type="password"
-                                                required
-                                                value={passwordData.currentPassword}
-                                                onChange={e => setPasswordData({...passwordData, currentPassword: e.target.value})}
-                                                className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Nueva Contraseña</label>
-                                            <input
-                                                type="password"
-                                                required
-                                                value={passwordData.newPassword}
-                                                onChange={e => setPasswordData({...passwordData, newPassword: e.target.value})}
-                                                className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Confirmar Nueva Contraseña</label>
-                                            <input
-                                                type="password"
-                                                required
-                                                value={passwordData.confirmPassword}
-                                                onChange={e => setPasswordData({...passwordData, confirmPassword: e.target.value})}
-                                                className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
-                                            />
-                                        </div>
-                                        <button
-                                            type="submit"
-                                            disabled={isLoading}
-                                            className="w-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-3 rounded-xl font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 mt-2"
-                                        >
-                                            {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Actualizar Contraseña'}
-                                        </button>
-                                    </form>
-                                </CardContent>
-                            </Card>
+                            {isOwnProfile ? (
+                                <Card className="bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl overflow-hidden">
+                                    <CardHeader className="bg-zinc-50/50 dark:bg-zinc-800/20 border-b border-zinc-100 dark:border-zinc-800">
+                                        <CardTitle className="text-xl flex items-center gap-2">
+                                            <Key className="w-5 h-5 text-amber-500" /> Seguridad
+                                        </CardTitle>
+                                        <CardDescription>Cambia tu contraseña de acceso.</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="p-8">
+                                        <form onSubmit={handleUpdatePassword} className="space-y-5">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Contraseña Actual</label>
+                                                <input
+                                                    type="password"
+                                                    required
+                                                    value={passwordData.currentPassword}
+                                                    onChange={e => setPasswordData({...passwordData, currentPassword: e.target.value})}
+                                                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Nueva Contraseña</label>
+                                                <input
+                                                    type="password"
+                                                    required
+                                                    value={passwordData.newPassword}
+                                                    onChange={e => setPasswordData({...passwordData, newPassword: e.target.value})}
+                                                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Confirmar Nueva Contraseña</label>
+                                                <input
+                                                    type="password"
+                                                    required
+                                                    value={passwordData.confirmPassword}
+                                                    onChange={e => setPasswordData({...passwordData, confirmPassword: e.target.value})}
+                                                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
+                                                />
+                                            </div>
+                                            <button
+                                                type="submit"
+                                                disabled={isLoading}
+                                                className="w-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-3 rounded-xl font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 mt-2"
+                                            >
+                                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Actualizar Contraseña'}
+                                            </button>
+                                        </form>
+                                    </CardContent>
+                                </Card>
+                            ) : (
+                                <Card className="bg-primary/5 border-primary/20 rounded-2xl p-8 text-center">
+                                    <Info className="w-10 h-10 text-primary mx-auto mb-4 opacity-50" />
+                                    <h4 className="font-bold text-zinc-900 dark:text-white mb-2">Modo Administrador</h4>
+                                    <p className="text-sm text-zinc-500">Estás viendo el perfil de un colaborador. Puedes gestionar su desempeño en la pestaña correspondiente.</p>
+                                </Card>
+                            )}
                         </div>
                     </div>
                 </TabsContent>
@@ -479,14 +599,225 @@ const Profile = () => {
                     </Card>
                 </TabsContent>
 
-                <TabsContent value="performance" className="outline-none">
-                     <Card className="h-96 border-dashed bg-transparent rounded-2xl flex flex-col items-center justify-center text-zinc-400 p-12 text-center">
-                        <div className="w-20 h-20 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-6">
-                            <TrendingUp className="w-10 h-10 opacity-30" />
+                <TabsContent value="performance" className="space-y-8 outline-none">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div className="flex flex-col">
+                            <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">Historial de Feedback</h2>
+                            <p className="text-sm text-zinc-500">Seguimiento de crecimiento, fortalezas y áreas de mejora.</p>
                         </div>
-                        <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">Próximamente: Mi Desempeño</h3>
-                        <p className="max-w-sm">Aquí podrás ver tu feedback, objetivos del trimestre y métricas de productividad.</p>
-                    </Card>
+                        {isAdmin && (
+                            <button
+                                onClick={() => setIsCreatingFeedback(!isCreatingFeedback)}
+                                className="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
+                            >
+                                {isCreatingFeedback ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                                {isCreatingFeedback ? 'Cancelar' : 'Registrar Feedback'}
+                            </button>
+                        )}
+                    </div>
+
+                    <AnimatePresence>
+                        {isCreatingFeedback && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="overflow-hidden"
+                            >
+                                <Card className="border-2 border-primary/20 bg-primary/5 dark:bg-primary/10 rounded-2xl mb-8">
+                                    <CardContent className="p-8">
+                                        <form onSubmit={handleCreateFeedback} className="space-y-6">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">Tipo de Sesión</label>
+                                                    <select
+                                                        value={newFeedback.type}
+                                                        onChange={e => setNewFeedback({...newFeedback, type: e.target.value})}
+                                                        className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
+                                                    >
+                                                        <option value="ESCRITO">📝 Feedback Escrito</option>
+                                                        <option value="UNO_A_UNO">🤝 Sesión 1-on-1</option>
+                                                    </select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">Fecha de la Sesión</label>
+                                                    <input
+                                                        type="date"
+                                                        value={newFeedback.date}
+                                                        onChange={e => setNewFeedback({...newFeedback, date: e.target.value})}
+                                                        className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-2">
+                                                        <Award className="w-3.5 h-3.5 text-emerald-500" /> Fortalezas y Logros
+                                                    </label>
+                                                    <textarea
+                                                        rows={4}
+                                                        required
+                                                        value={newFeedback.strengths}
+                                                        onChange={e => setNewFeedback({...newFeedback, strengths: e.target.value})}
+                                                        placeholder="¿Qué hizo bien el colaborador este mes?"
+                                                        className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white resize-none"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-2">
+                                                        <TrendingUp className="w-3.5 h-3.5 text-amber-500" /> Áreas de Mejora
+                                                    </label>
+                                                    <textarea
+                                                        rows={4}
+                                                        required
+                                                        value={newFeedback.improvementAreas}
+                                                        onChange={e => setNewFeedback({...newFeedback, improvementAreas: e.target.value})}
+                                                        placeholder="¿En qué competencias debe enfocarse para crecer?"
+                                                        className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white resize-none"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-2">
+                                                    <Target className="w-3.5 h-3.5 text-primary" /> Acuerdos y Siguientes Pasos
+                                                </label>
+                                                <textarea
+                                                    rows={3}
+                                                    required
+                                                    value={newFeedback.actionItems}
+                                                    onChange={e => setNewFeedback({...newFeedback, actionItems: e.target.value})}
+                                                    placeholder="Compromisos concretos para el próximo periodo..."
+                                                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white resize-none"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-2">
+                                                    <Key className="w-3.5 h-3.5 text-zinc-400" /> Nota Privada (Solo Admins)
+                                                </label>
+                                                <textarea
+                                                    rows={2}
+                                                    value={newFeedback.privateNote}
+                                                    onChange={e => setNewFeedback({...newFeedback, privateNote: e.target.value})}
+                                                    placeholder="Notas internas que el colaborador no verá..."
+                                                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white resize-none"
+                                                />
+                                            </div>
+
+                                            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsCreatingFeedback(false)}
+                                                    className="px-6 py-3 rounded-xl font-bold text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
+                                                >
+                                                    Cancelar
+                                                </button>
+                                                <button
+                                                    type="submit"
+                                                    disabled={isLoading}
+                                                    className="bg-primary text-white px-8 py-3 rounded-xl font-bold text-sm shadow-lg shadow-primary/20 flex items-center gap-2"
+                                                >
+                                                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                                    Guardar Registro
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {isFeedbackLoading ? (
+                        <div className="h-64 flex items-center justify-center">
+                            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            {feedback.map(item => (
+                                <Card key={item.id} className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden group">
+                                    <CardHeader className="bg-zinc-50/50 dark:bg-zinc-800/20 py-4">
+                                        <div className="flex justify-between items-center">
+                                            <div className="flex items-center gap-4">
+                                                <div className={cn(
+                                                    "w-10 h-10 rounded-xl flex items-center justify-center",
+                                                    item.type === 'UNO_A_UNO' ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400" : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                                )}>
+                                                    {item.type === 'UNO_A_UNO' ? <User className="w-5 h-5" /> : <StickyNote className="w-5 h-5" />}
+                                                </div>
+                                                <div>
+                                                    <CardTitle className="text-base font-bold">
+                                                        {item.type === 'UNO_A_UNO' ? 'Sesión 1-on-1' : 'Feedback Mensual'}
+                                                    </CardTitle>
+                                                    <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                                                        <Calendar className="w-3 h-3" />
+                                                        {new Date(item.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                                        <span className="mx-1">•</span>
+                                                        <span>Escrito por {item.author?.name}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {isAdmin && (
+                                                <button
+                                                    onClick={() => handleDeleteFeedback(item.id)}
+                                                    className="p-2 opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded-lg transition-all"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="p-6 grid grid-cols-1 md:grid-cols-3 gap-8">
+                                        <div className="space-y-3">
+                                            <h4 className="text-xs font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                                                <Award className="w-3.5 h-3.5" /> Fortalezas
+                                            </h4>
+                                            <p className="text-sm text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
+                                                {item.strengths}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <h4 className="text-xs font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                                                <TrendingUp className="w-3.5 h-3.5" /> Oportunidades
+                                            </h4>
+                                            <p className="text-sm text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
+                                                {item.improvementAreas}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <h4 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
+                                                <Target className="w-3.5 h-3.5" /> Acuerdos
+                                            </h4>
+                                            <p className="text-sm text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
+                                                {item.actionItems}
+                                            </p>
+                                        </div>
+
+                                        {item.privateNote && isAdmin && (
+                                            <div className="col-span-full mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/10 -mx-6 px-6 -mb-6 pb-6">
+                                                <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2 mb-2">
+                                                    <Key className="w-3.5 h-3.5" /> Nota Privada Administrativa
+                                                </h4>
+                                                <p className="text-sm italic text-zinc-500 dark:text-zinc-400">
+                                                    {item.privateNote}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            ))}
+
+                            {feedback.length === 0 && (
+                                <div className="h-64 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl flex flex-col items-center justify-center text-zinc-400 bg-zinc-50/50 dark:bg-zinc-900/20 text-center px-8">
+                                    <TrendingUp className="w-12 h-12 mb-3 opacity-20" />
+                                    <p className="font-medium">No hay registros de desempeño disponibles aún.</p>
+                                    <p className="text-sm max-w-xs mt-1">El historial de feedback y sesiones 1-on-1 aparecerá aquí una vez que sean registradas.</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </TabsContent>
             </Tabs>
         </div>
