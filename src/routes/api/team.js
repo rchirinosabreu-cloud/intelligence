@@ -34,29 +34,19 @@ router.post('/', async (req, res) => {
 
     // Usamos una transacción para asegurar que ambas tablas se actualizan o ninguna
     const newMember = await prisma.$transaction(async (tx) => {
-        // 1. Crear el TeamMember visual
-        const member = await tx.teamMember.create({
-            data: {
-                name,
-                role,
-                email,
-                avatarUrl,
-                isActive: true
-            },
-        });
-
-        // 2. Crear la cuenta de User si tiene email y no existe previamente
+        // 1. Crear la cuenta de User si tiene email y no existe previamente
+        let associatedUserId = null;
         if (email && email.trim() !== '') {
             const normalizedEmail = email.trim().toLowerCase();
-            const existingUser = await tx.user.findUnique({
+            let user = await tx.user.findUnique({
                 where: { email: normalizedEmail }
             });
 
-            if (!existingUser) {
+            if (!user) {
                 const defaultPassword = 'Brainstudio2026';
                 const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
-                await tx.user.create({
+                user = await tx.user.create({
                     data: {
                         name,
                         email: normalizedEmail,
@@ -65,7 +55,20 @@ router.post('/', async (req, res) => {
                     }
                 });
             }
+            associatedUserId = user.id;
         }
+
+        // 2. Crear el TeamMember visual vinculado al userId
+        const member = await tx.teamMember.create({
+            data: {
+                name,
+                role,
+                email,
+                avatarUrl,
+                userId: associatedUserId,
+                isActive: true
+            },
+        });
 
         return member;
     });

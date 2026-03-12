@@ -132,9 +132,9 @@ export default function Team() {
             >
               {/* Dropdown Menu Toggle (Hover Actions for now to keep it simple without full Radix Dropdown) */}
               <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-2">
-                {member.email && (
+                {member.userId && (
                   <button
-                    onClick={() => navigate(`/perfil/${member.id}`)}
+                    onClick={() => navigate(`/perfil/${member.userId}`)}
                     className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
                     title="Ver Perfil y Desempeño"
                   >
@@ -159,15 +159,15 @@ export default function Team() {
 
               <div className="flex items-center space-x-4">
                 <div
-                  className={cn("cursor-pointer transition-transform hover:scale-105", !member.email && "cursor-default hover:scale-100")}
-                  onClick={() => member.email && navigate(`/perfil/${member.id}`)}
+                  className={cn("cursor-pointer transition-transform hover:scale-105", !member.userId && "cursor-default hover:scale-100")}
+                  onClick={() => member.userId && navigate(`/perfil/${member.userId}`)}
                 >
                   <TeamAvatar member={member} className="w-16 h-16 text-xl" />
                 </div>
                 <div>
                   <h3
-                    className={cn("text-lg font-semibold text-slate-900 dark:text-slate-50", member.email && "cursor-pointer hover:text-primary transition-colors")}
-                    onClick={() => member.email && navigate(`/perfil/${member.id}`)}
+                    className={cn("text-lg font-semibold text-slate-900 dark:text-slate-50", member.userId && "cursor-pointer hover:text-primary transition-colors")}
+                    onClick={() => member.userId && navigate(`/perfil/${member.userId}`)}
                   >
                     {member.name}
                   </h3>

@@ -281,25 +281,29 @@ app.get('/api/sync-users', async (req, res) => {
     for (const member of teamMembers) {
       const normalizedEmail = member.email.trim().toLowerCase();
 
-      const existingUser = await prisma.user.findUnique({
+      let user = await prisma.user.findUnique({
         where: { email: normalizedEmail }
       });
 
-      if (existingUser) {
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            name: member.name,
+            email: normalizedEmail,
+            password: hashedPassword,
+            role: 'EDITOR'
+          }
+        });
+        createdCount++;
+      } else {
         skippedCount++;
-        continue;
       }
 
-      await prisma.user.create({
-        data: {
-          name: member.name,
-          email: normalizedEmail,
-          password: hashedPassword,
-          role: 'EDITOR'
-        }
+      // Update TeamMember with userId link
+      await prisma.teamMember.update({
+        where: { id: member.id },
+        data: { userId: user.id }
       });
-
-      createdCount++;
     }
 
     res.json({
