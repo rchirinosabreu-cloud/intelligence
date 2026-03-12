@@ -37,3 +37,42 @@ Este archivo contiene las reglas y el contexto inmutable del proyecto para evita
 3. **Test-Driven Development (TDD) Obligatorio en Frontend:** El enfoque TDD ya no es exclusivo del backend. Todo componente nuevo, lógica de estado o refactorización visual profunda debe tener sus pruebas escritas (ej. React Testing Library / Jest) ANTES de la implementación. Las pruebas deben pasar antes de considerar el código listo.
 
 4. **Verificación Visual Obligatoria (Screenshots):** NUNCA des por terminada una tarea de Frontend sin antes renderizarla. Por cada cambio visual, de layout o de componentes en el frontend, DEBES proporcionar obligatoriamente una captura de pantalla (screenshot) de la interfaz final para que el usuario valide que el diseño no se rompió en resoluciones estándar.
+
+---
+
+Reglas Estrictas de Desarrollo y Prevención de Errores (Core Guidelines)
+1. La Regla de la Verdad (Server-First Notifications):
+
+NUNCA dispares una notificación de éxito en el Frontend (toast.success, alertas, etc.) basada únicamente en el clic de un botón.
+
+Las notificaciones de éxito y los cambios visuales en el UI (cerrar modales, mover tarjetas) SOLO deben ejecutarse dentro del bloque then (o después del await) una vez que el Backend (API/Base de datos) haya respondido con un status 200 OK o 201 Created.
+
+Si la base de datos falla, el usuario debe ver un error claro, no un falso éxito.
+
+2. Blindaje de Enums y Payloads:
+
+Al enviar datos que usan Enums de Prisma (ej. estados, roles), el Frontend debe enviar el valor EXACTAMENTE como está en el esquema (usualmente en MAYÚSCULAS).
+
+Antes de enviar un PATCH o POST, siempre verifica que el objeto payload contenga los campos requeridos para la acción que se está ejecutando. No recicles payloads de otras funciones sin revisarlos.
+
+3. La Cláusula "Anti Copy-Paste":
+
+Al duplicar un componente de UI (ej. copiar el Modal de "Devolver" para crear el de "Reintegrar"), es OBLIGATORIO revisar y renombrar:
+
+La función que se dispara en el onClick.
+
+El Endpoint de la API al que apunta.
+
+El mensaje de la notificación.
+
+Prohibido dejar "cables cruzados" entre componentes distintos.
+
+4. Migraciones de Base de Datos Seguras (Prisma):
+
+Antes de hacer un npx prisma db push o modificar un esquema existente (especialmente si cambias nombres de Enums o eliminas columnas), debes evaluar si hay datos existentes que se puedan romper o perder.
+
+Si un cambio puede afectar datos antiguos, debes proponer un script de migración o una estrategia para actualizar los registros huérfanos antes de hacer el despliegue a producción.
+
+5. Logs de Error Obligatorios:
+
+Todo bloque catch en llamadas a la API debe hacer un console.error del mensaje real que devuelve el servidor (error.response?.data), no solo un texto genérico. Esto nos permite debugear fallos de Railway o Prisma en segundos.
