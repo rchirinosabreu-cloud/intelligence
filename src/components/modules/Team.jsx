@@ -1,11 +1,13 @@
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useEffect } from 'react';
-import { Plus, MoreVertical, Edit2, UserX, UserCheck } from 'lucide-react';
+import { Plus, MoreVertical, Edit2, UserX, UserCheck, Eye } from 'lucide-react';
 import { getApiBaseUrl } from '../../lib/apiBaseUrl';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { cn } from '../../lib/utils';
 
 export default function Team() {
+  const navigate = useNavigate();
   const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -130,6 +132,15 @@ export default function Team() {
             >
               {/* Dropdown Menu Toggle (Hover Actions for now to keep it simple without full Radix Dropdown) */}
               <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-2">
+                {member.email && (
+                  <button
+                    onClick={() => navigate(`/perfil/${member.id}`)}
+                    className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
+                    title="Ver Perfil y Desempeño"
+                  >
+                    <Eye size={16} />
+                  </button>
+                )}
                 <button
                   onClick={() => handleOpenModal(member)}
                   className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
@@ -147,9 +158,19 @@ export default function Team() {
               </div>
 
               <div className="flex items-center space-x-4">
-                <TeamAvatar member={member} className="w-16 h-16 text-xl" />
+                <div
+                  className={cn("cursor-pointer transition-transform hover:scale-105", !member.email && "cursor-default hover:scale-100")}
+                  onClick={() => member.email && navigate(`/perfil/${member.id}`)}
+                >
+                  <TeamAvatar member={member} className="w-16 h-16 text-xl" />
+                </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50">{member.name}</h3>
+                  <h3
+                    className={cn("text-lg font-semibold text-slate-900 dark:text-slate-50", member.email && "cursor-pointer hover:text-primary transition-colors")}
+                    onClick={() => member.email && navigate(`/perfil/${member.id}`)}
+                  >
+                    {member.name}
+                  </h3>
                   <span className="text-sm px-2 py-0.5 bg-primary/10 text-primary rounded-full inline-block mt-1">
                     {member.role}
                   </span>

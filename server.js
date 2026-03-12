@@ -24,6 +24,7 @@ import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncem
 import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics, getQualityStreak, auditAndDeleteTask } from './src/services/nativeTaskService.js';
 import teamRouter from './src/routes/api/team.js';
 import userRouter from './src/routes/api/user.js';
+import feedbackRouter from './src/routes/api/feedback.js';
 
 dotenv.config();
 
@@ -212,6 +213,9 @@ const authenticateToken = (req, res, next) => {
 
 // User Profile & Notes
 app.use('/api/user', authenticateToken, userRouter);
+
+// Feedback & Performance
+app.use('/api/feedback', authenticateToken, feedbackRouter);
 
 // User Management Endpoints
 app.post('/api/users', authenticateToken, async (req, res) => {
