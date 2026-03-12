@@ -13,10 +13,22 @@ import Login from './components/Login';
 import MinutesLayout from './components/modules/Minutes/MinutesLayout';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, toast } from 'react-hot-toast';
 
 function AppContent() {
   const { isAuthenticated, isLoading, login, logout } = useAuth();
+
+  // Escuchar errores de permisos (403 Forbidden)
+  React.useEffect(() => {
+    const handleForbidden = () => {
+      toast.error('No tienes permisos para realizar esta acción', {
+        id: 'forbidden-error', // Prevenir duplicados
+      });
+    };
+
+    window.addEventListener('auth-forbidden', handleForbidden);
+    return () => window.removeEventListener('auth-forbidden', handleForbidden);
+  }, []);
 
   if (isLoading) {
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center">Cargando...</div>;

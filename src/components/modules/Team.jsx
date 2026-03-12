@@ -8,6 +8,9 @@ import { cn } from '../../lib/utils';
 
 export default function Team() {
   const navigate = useNavigate();
+  const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+  const isAdmin = currentUser.role === 'ADMIN';
+
   const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -105,15 +108,19 @@ export default function Team() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-zinc-950 dark:text-white mb-2 font-sans">Equipo</h1>
-          <p className="text-zinc-500 dark:text-zinc-400 font-light">Gestiona a los miembros de la agencia y sus roles.</p>
+          <p className="text-zinc-500 dark:text-zinc-400 font-light">
+            {isAdmin ? "Gestiona a los miembros de la agencia y sus roles." : "Directorio de los miembros de la agencia."}
+          </p>
         </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm px-4 py-2 rounded-xl flex items-center transition-colors"
-        >
-          <Plus size={18} className="mr-2" />
-          Añadir miembro
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => handleOpenModal()}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm px-4 py-2 rounded-xl flex items-center transition-colors"
+          >
+            <Plus size={18} className="mr-2" />
+            Añadir miembro
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -131,31 +138,33 @@ export default function Team() {
               )}
             >
               {/* Dropdown Menu Toggle (Hover Actions for now to keep it simple without full Radix Dropdown) */}
-              <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-2">
-                {member.userId && (
+              {isAdmin && (
+                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-2">
+                  {member.userId && (
+                    <button
+                      onClick={() => navigate(`/perfil/${member.userId}`)}
+                      className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
+                      title="Ver Perfil y Desempeño"
+                    >
+                      <Eye size={16} />
+                    </button>
+                  )}
                   <button
-                    onClick={() => navigate(`/perfil/${member.userId}`)}
+                    onClick={() => handleOpenModal(member)}
                     className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
-                    title="Ver Perfil y Desempeño"
+                    title="Editar"
                   >
-                    <Eye size={16} />
+                    <Edit2 size={16} />
                   </button>
-                )}
-                <button
-                  onClick={() => handleOpenModal(member)}
-                  className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
-                  title="Editar"
-                >
-                  <Edit2 size={16} />
-                </button>
-                <button
-                  onClick={() => handleToggleActive(member)}
-                  className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400"
-                  title={member.isActive ? "Desactivar" : "Reactivar"}
-                >
-                  {member.isActive ? <UserX size={16} className="text-red-400 hover:text-red-600 dark:hover:text-red-400" /> : <UserCheck size={16} className="text-green-400 hover:text-green-600 dark:hover:text-green-400" />}
-                </button>
-              </div>
+                  <button
+                    onClick={() => handleToggleActive(member)}
+                    className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400"
+                    title={member.isActive ? "Desactivar" : "Reactivar"}
+                  >
+                    {member.isActive ? <UserX size={16} className="text-red-400 hover:text-red-600 dark:hover:text-red-400" /> : <UserCheck size={16} className="text-green-400 hover:text-green-600 dark:hover:text-green-400" />}
+                  </button>
+                </div>
+              )}
 
               <div className="flex items-center space-x-4">
                 <div

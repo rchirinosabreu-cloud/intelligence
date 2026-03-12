@@ -48,10 +48,15 @@ window.fetch = async (...args) => {
     if (response.status === 401 || response.status === 403) {
         const urlStr = typeof resource === 'string' ? resource : resource?.url;
         if (urlStr && !urlStr.includes('/api/login')) {
-            console.warn(`[Auth] 401 Unauthorized on ${urlStr}. Triggering logout event.`);
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('currentUser');
-            window.dispatchEvent(new Event('auth-error'));
+            if (response.status === 401) {
+                console.warn(`[Auth] 401 Unauthorized on ${urlStr}. Triggering logout event.`);
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('currentUser');
+                window.dispatchEvent(new Event('auth-error'));
+            } else if (response.status === 403) {
+                console.warn(`[Auth] 403 Forbidden on ${urlStr}. Triggering toast event.`);
+                window.dispatchEvent(new Event('auth-forbidden'));
+            }
         }
     }
 
