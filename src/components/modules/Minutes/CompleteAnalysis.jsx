@@ -30,16 +30,13 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
        }
 
        // Use the template from utils
-       const prompt = ANALYSIS_PROMPT_TEMPLATE.replace('{{CONTENT}}', combinedPrompt.substring(0, 25000));
+       const prompt = ANALYSIS_PROMPT_TEMPLATE.replace('{{CONTENT}}', combinedPrompt);
 
-      // Use streaming to prevent 504 gateway timeouts on long requests
-      const resultString = await frontendApiService.generateCompletion(
+      console.log(`[CompleteAnalysis] Sending prompt to Gemini. Total length: ${prompt.length}`);
+
+      const resultString = await frontendApiService.generateGeminiCompletion(
         prompt,
-        "Eres un consultor de negocios senior experto que responde siempre en JSON y en Español.",
-        (chunk, accumulated) => {
-            // Optional: You could update a loading state here with accumulated length
-            // to show progress, but since it's JSON, we must wait for completion to parse it.
-        }
+        "Eres un consultor de negocios senior experto que responde siempre en JSON y en Español. Extrae tareas, acuerdos y responsables con precisión."
       );
       const result = parseJsonFromAiResponse(resultString);
       setAnalysisData(result);
