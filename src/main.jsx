@@ -47,7 +47,12 @@ window.fetch = async (...args) => {
     // Handle 401/403 Unauthorized globally
     if (response.status === 401 || response.status === 403) {
         const urlStr = typeof resource === 'string' ? resource : resource?.url;
-        if (urlStr && !urlStr.includes('/api/login')) {
+
+        // Skip global logout/error handling for specific routes (auth and external proxies like Gemini)
+        const isAuthRoute = urlStr?.includes('/api/login');
+        const isGeminiRoute = urlStr?.includes('/api/gemini');
+
+        if (urlStr && !isAuthRoute && !isGeminiRoute) {
             if (response.status === 401) {
                 console.warn(`[Auth] 401 Unauthorized on ${urlStr}. Triggering logout event.`);
                 localStorage.removeItem('authToken');
@@ -56,6 +61,11 @@ window.fetch = async (...args) => {
             } else if (response.status === 403) {
                 console.warn(`[Auth] 403 Forbidden on ${urlStr}. Triggering toast event.`);
                 window.dispatchEvent(new Event('auth-forbidden'));
+            }
+        } else if (isGeminiRoute) {
+            console.log(`[Auth] ${response.status} status on Gemini proxy ignored for global logout.`);
+            if (response.status >= 400) {
+                window.dispatchEvent(new Event('ai-error'));
             }
         }
     }

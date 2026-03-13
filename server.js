@@ -109,12 +109,17 @@ app.options("*", cors(corsOptions));
 const JWT_SECRET = process.env.JWT_SECRET || 'brainstudio-secret-key-2025';
 
 const authenticateToken = (req, res, next) => {
+  // Bypass authentication for OPTIONS requests (CORS pre-flight)
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
   if (!token) {
     console.warn(`[Auth] No token provided for ${req.method} ${req.url}`);
-    return res.status(401).json({ error: "No token provided" });
+    return res.status(401).json({ error: "No token provided", source: "internal_auth" });
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
@@ -128,12 +133,18 @@ const authenticateToken = (req, res, next) => {
 };
 
 // --- GEMINI PROXY (Mounted BEFORE express.json to avoid body consumption issues) ---
-const geminiApiKey = process.env.GEMINI_API_KEY;
+const geminiApiKey = process.env.GEMINI_API_KEY?.trim(); // Trim to avoid common env var issues
 
 if (!geminiApiKey) {
     console.warn("[Gemini Proxy] WARNING: GEMINI_API_KEY is not defined in environment variables.");
 } else {
-    console.log("[Gemini Proxy] API Key detected. Proxy configured correctly.");
+    const maskedKey = geminiApiKey.length > 8
+        ? `${geminiApiKey.substring(0, 4)}...${geminiApiKey.substring(geminiApiKey.length - 4)}`
+        : '***';
+    console.log(`[Gemini Proxy] API Key detected (${maskedKey}). Proxy configured correctly.`);
+    if (process.env.GEMINI_API_KEY !== geminiApiKey) {
+        console.warn("[Gemini Proxy] API Key had leading/trailing spaces and was trimmed.");
+    }
 }
 
 app.use(
@@ -146,24 +157,46 @@ app.use(
     pathRewrite: (path) => path.replace(/^\/api\/gemini/, ''),
     proxyTimeout: 300000, // 5 minutes
     timeout: 300000,
-    onProxyReq: (proxyReq) => {
-      proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
-      proxyReq.removeHeader('Authorization');
-      if (geminiApiKey) {
-        proxyReq.setHeader('x-goog-api-key', geminiApiKey);
-      }
-    },
-    onError: (err, req, res) => {
-      console.error('[Gemini Proxy] CRITICAL ERROR:', err);
-      // Ensure we send CORS headers even on error
-      res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
-      res.header("Access-Control-Allow-Credentials", "true");
+    on: {
+      proxyReq: (proxyReq, req, res) => {
+        proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
+        // Importante: No enviar nuestro propio JWT a Google
+        proxyReq.removeHeader('Authorization');
 
-      res.status(502).json({
-        error: 'Proxy Error (Gemini)',
-        message: 'No se pudo conectar con el servicio de Google Gemini.',
-        details: err.message
-      });
+        if (geminiApiKey) {
+          proxyReq.setHeader('x-goog-api-key', geminiApiKey);
+        } else {
+          console.error('[Gemini Proxy] CRITICAL: GEMINI_API_KEY is missing');
+        }
+      },
+      proxyRes: (proxyRes, req, res) => {
+        if (proxyRes.statusCode >= 400) {
+          console.error(`[Gemini Proxy] Target returned error status: ${proxyRes.statusCode}`);
+          if (proxyRes.statusCode === 401 || proxyRes.statusCode === 403) {
+            console.error(`[Gemini Proxy] Authentication error from Google. Verify GEMINI_API_KEY and Cloud Project status.`);
+          }
+        }
+      },
+      error: (err, req, res) => {
+        console.error('[Gemini Proxy] Connection Error:', err.message);
+
+        // Evitar crasheos por headers ya enviados
+        if (res.headersSent) {
+          if (!res.writableEnded) res.end();
+          return;
+        }
+
+        // Ensure we send CORS headers even on error
+        const origin = req.headers.origin || "*";
+        res.header("Access-Control-Allow-Origin", origin);
+        res.header("Access-Control-Allow-Credentials", "true");
+
+        res.status(502).json({
+          error: 'Proxy Error (Gemini)',
+          message: 'Error de comunicación con el servicio de Google.',
+          details: err.message
+        });
+      }
     }
   })
 );
