@@ -52,7 +52,7 @@ const Dashboard = () => {
       2: "Vamos a mantener el ritmo. ¡A seguir sumando victorias!",
       3: "¡Ya es mitad de semana! Ya pasamos la cima, ahora a cerrar con fuerza",
       4: "Jueves con sabor a viernes... Ya casi",
-      5: "¡Ya llegó el viernes! Hoy celebramos los logro de la semana",
+      5: "¡Ya llegó el viernes! Hoy celebramos los logros de la semana",
       6: "¿Trabajando un sábado? Gracias por tu compromiso",
       0: "Domingo chill. Día de recargar baterías, tómalo con mucha calma"
     };
