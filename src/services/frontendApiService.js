@@ -200,8 +200,8 @@ const frontendApiService = {
           }
         ],
         generationConfig: {
-          temperature: 0.2,
-          topP: 0.8,
+          temperature: 0.1, // Extreme precision
+          topP: 0.95,
           topK: 40
         }
       };

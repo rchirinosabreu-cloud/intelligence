@@ -48,6 +48,10 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
 
           let fullText = "";
 
+          if (transcriptData.summary?.keywords && transcriptData.summary.keywords.length > 0) {
+              fullText += `### PALABRAS CLAVE (FIREFLIES KEYWORDS) ###\n${transcriptData.summary.keywords.join(', ')}\n\n`;
+          }
+
           if (transcriptData.summary?.outline) {
               fullText += `### ESTRUCTURA DE LA REUNIÓN (FIREFLIES OUTLINE) ###\n${transcriptData.summary.outline}\n\n`;
           }
