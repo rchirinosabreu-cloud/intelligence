@@ -26,8 +26,18 @@ function AppContent() {
       });
     };
 
+    const handleAiError = () => {
+      toast.error('Error de IA: No se pudo procesar la solicitud', {
+        id: 'ai-service-error',
+      });
+    };
+
     window.addEventListener('auth-forbidden', handleForbidden);
-    return () => window.removeEventListener('auth-forbidden', handleForbidden);
+    window.addEventListener('ai-error', handleAiError);
+    return () => {
+      window.removeEventListener('auth-forbidden', handleForbidden);
+      window.removeEventListener('ai-error', handleAiError);
+    };
   }, []);
 
   if (isLoading) {
