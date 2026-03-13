@@ -34,12 +34,13 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
       }
 
       // Use the template from utils
-      const prompt = SUMMARY_PROMPT_TEMPLATE.replace('{{CONTENT}}', combinedPrompt.substring(0, 25000));
+      const prompt = SUMMARY_PROMPT_TEMPLATE.replace('{{CONTENT}}', combinedPrompt);
 
-      const resultString = await frontendApiService.generateCompletion(
+      console.log(`[GeneralSummary] Sending prompt to Gemini. Total length: ${prompt.length}`);
+
+      const resultString = await frontendApiService.generateGeminiCompletion(
          prompt,
-         "Eres un asistente administrativo experto que extrae hechos objetivos y responde siempre en JSON y en Español.",
-         (chunk, accumulated) => {}
+         "Eres un asistente administrativo experto que extrae hechos objetivos y responde siempre en JSON y en Español. Identifica acuerdos y responsables claramente."
       );
       const result = parseJsonFromAiResponse(resultString);
       setSummaryData(result);

@@ -132,8 +132,9 @@ const frontendApiService = {
 
     files.forEach((file, index) => {
       parts.push(`--- FUENTE ${index + 1}: ${file.title} (${file.type}) ---\n`);
-      parts.push(file.text.substring(0, 20000));
-      parts.push(' \n\n'); // Limit per file to avoid context window explosion
+      // No truncation for Gemini context window
+      parts.push(file.text);
+      parts.push(' \n\n');
     });
 
     return parts.join('');
@@ -184,6 +185,52 @@ const frontendApiService = {
         throw new Error("El proxy de Gemini no respondió correctamente (502). Verifica el backend o el API Key.");
       }
       throw new Error(error.response?.data?.error?.message || error.message || "Failed to generate HTML from Gemini");
+    }
+  },
+
+  generateGeminiCompletion: async (prompt, systemMessage = "You are a helpful assistant.") => {
+    try {
+      console.log(`[Gemini API] Preparing payload for completion. Prompt length: ${prompt.length}`);
+
+      const payload = {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: `${systemMessage}\n\n${prompt}` }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          topP: 0.8,
+          topK: 40
+        }
+      };
+
+      const response = await fetch(getGeminiUrl(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Gemini HTTP Error: ${response.status} - ${errorData.error?.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      const text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text).join('')?.trim();
+
+      if (!text) {
+        throw new Error("Gemini response was empty.");
+      }
+
+      return text;
+    } catch (error) {
+      console.error("Gemini API Error (Completion):", error);
+      if (error.message.includes('401') || error.message.includes('403')) {
+        throw new Error("Error de autenticación con la IA. Verifica la API Key.");
+      }
+      throw new Error(error.message || "Failed to generate completion from Gemini");
     }
   },
 
@@ -299,6 +346,12 @@ const frontendApiService = {
             speaker_name
             text
             start_time
+          }
+          summary {
+            keywords
+            action_items
+            outline
+            shorthand_bullet_notes
           }
         }
       }

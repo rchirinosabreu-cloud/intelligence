@@ -46,7 +46,14 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
           const details = await frontendApiService.getTranscriptDetails(meeting.id);
           const transcriptData = details.transcript;
 
-          const fullText = transcriptData.sentences
+          let fullText = "";
+
+          if (transcriptData.summary?.outline) {
+              fullText += `### ESTRUCTURA DE LA REUNIÓN (FIREFLIES OUTLINE) ###\n${transcriptData.summary.outline}\n\n`;
+          }
+
+          fullText += "### TRANSCRIPCIÓN COMPLETA ###\n";
+          fullText += transcriptData.sentences
               ? transcriptData.sentences.map(s => `[${s.speaker_name || 'Desconocido'}]: ${s.text}`).join('\n')
               : "No hay detalles disponibles.";
 
