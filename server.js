@@ -105,6 +105,69 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
+// --- AUTHENTICATION SETUP & MIDDLEWARE ---
+const JWT_SECRET = process.env.JWT_SECRET || 'brainstudio-secret-key-2025';
+
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    console.warn(`[Auth] No token provided for ${req.method} ${req.url}`);
+    return res.status(401).json({ error: "No token provided" });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+        console.error(`[Auth] JWT Verification failed for ${req.method} ${req.url}:`, err.message);
+        return res.status(403).json({ error: "Invalid token", details: err.message });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// --- GEMINI PROXY (Mounted BEFORE express.json to avoid body consumption issues) ---
+const geminiApiKey = process.env.GEMINI_API_KEY;
+
+if (!geminiApiKey) {
+    console.warn("[Gemini Proxy] WARNING: GEMINI_API_KEY is not defined in environment variables.");
+} else {
+    console.log("[Gemini Proxy] API Key detected. Proxy configured correctly.");
+}
+
+app.use(
+  '/api/gemini',
+  authenticateToken,
+  createProxyMiddleware({
+    target: 'https://generativelanguage.googleapis.com',
+    changeOrigin: true,
+    secure: true,
+    pathRewrite: (path) => path.replace(/^\/api\/gemini/, ''),
+    proxyTimeout: 300000, // 5 minutes
+    timeout: 300000,
+    onProxyReq: (proxyReq) => {
+      proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
+      proxyReq.removeHeader('Authorization');
+      if (geminiApiKey) {
+        proxyReq.setHeader('x-goog-api-key', geminiApiKey);
+      }
+    },
+    onError: (err, req, res) => {
+      console.error('[Gemini Proxy] CRITICAL ERROR:', err);
+      // Ensure we send CORS headers even on error
+      res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+      res.header("Access-Control-Allow-Credentials", "true");
+
+      res.status(502).json({
+        error: 'Proxy Error (Gemini)',
+        message: 'No se pudo conectar con el servicio de Google Gemini.',
+        details: err.message
+      });
+    }
+  })
+);
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -127,7 +190,6 @@ app.get('/api/health', (req, res) => {
 const PORT = process.env.PORT || 8080;
 
 // --- LOGIN & AUTHENTICATION MIDDLEWARE ---
-const JWT_SECRET = process.env.JWT_SECRET || 'brainstudio-secret-key-2025';
 console.log(`[Auth] JWT_SECRET ${process.env.JWT_SECRET ? 'configured from env' : 'using fallback secret'}.`);
 
 app.post('/api/login', async (req, res) => {
@@ -192,24 +254,6 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
-  if (!token) {
-    console.warn(`[Auth] No token provided for ${req.method} ${req.url}`);
-    return res.status(401).json({ error: "No token provided" });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-        console.error(`[Auth] JWT Verification failed for ${req.method} ${req.url}:`, err.message);
-        return res.status(403).json({ error: "Invalid token", details: err.message });
-    }
-    req.user = user;
-    next();
-  });
-};
 
 // User Profile & Notes
 app.use('/api/user', authenticateToken, userRouter);
@@ -329,7 +373,6 @@ app.use('/api/global-announcements', authenticateToken);
 // --- MINUTES PROXY ROUTES ---
 const openaiApiKey = process.env.OPENAI_API_KEY;
 const firefliesApiKey = process.env.FIREFLIES_API_KEY;
-const geminiApiKey = process.env.GEMINI_API_KEY;
 
 // --- OPENAI DIRECT STREAMING ROUTE ---
 app.post('/api/openai/v1/chat/completions', authenticateToken, async (req, res) => {
@@ -452,25 +495,6 @@ app.post('/api/fireflies/graphql', authenticateToken, async (req, res) => {
     }
 });
 
-app.use(
-  '/api/gemini',
-  authenticateToken,
-  createProxyMiddleware({
-    target: 'https://generativelanguage.googleapis.com',
-    changeOrigin: true,
-    secure: true,
-    pathRewrite: (path) => path.replace(/^\/api\/gemini/, ''),
-    proxyTimeout: 300000, // 5 minutes
-    timeout: 300000,
-    onProxyReq: (proxyReq) => {
-      proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
-      proxyReq.removeHeader('Authorization');
-      if (geminiApiKey) {
-        proxyReq.setHeader('x-goog-api-key', geminiApiKey);
-      }
-    }
-  })
-);
 
 // --- AUTHENTICATION SETUP ---
 let credentials;
