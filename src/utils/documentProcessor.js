@@ -2,11 +2,8 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
 
-// Configure PDF.js worker to use local build instead of CDN to avoid CORS issues
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+// Configure PDF.js worker to use local build from public folder to avoid MIME type and CORS issues
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
 export const processDocument = async (file) => {
   const fileType = file.type;
