@@ -357,15 +357,32 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                             <motion.div
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: 'auto' }}
+                                className="space-y-1"
                             >
                                 <input
                                     type="text"
                                     required
                                     value={editFormData.referenceUrl}
-                                    onChange={e => setEditFormData({...editFormData, referenceUrl: e.target.value})}
-                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                                    onChange={e => {
+                                        let val = e.target.value;
+                                        if (val.toLowerCase().startsWith('www.')) {
+                                            val = 'https://' + val;
+                                        }
+                                        setEditFormData({...editFormData, referenceUrl: val});
+                                    }}
+                                    className={cn(
+                                        "w-full bg-zinc-50 dark:bg-zinc-950 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 text-zinc-900 dark:text-white",
+                                        editFormData.referenceUrl && !validateUrl(editFormData.referenceUrl)
+                                            ? "border-red-500 focus:ring-red-500/50"
+                                            : "border-zinc-200 dark:border-zinc-800 focus:ring-primary/50"
+                                    )}
                                     placeholder="Coloca el link aquí (https://...)"
                                 />
+                                {editFormData.referenceUrl && !validateUrl(editFormData.referenceUrl) && (
+                                    <p className="text-[10px] text-red-500 font-medium ml-1">
+                                        El enlace debe comenzar con http:// o https://
+                                    </p>
+                                )}
                             </motion.div>
                         )}
                     </div>
