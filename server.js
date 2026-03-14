@@ -105,6 +105,10 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
+// Apply global body-parser limits BEFORE any routes or proxies as requested
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
 // --- AUTHENTICATION SETUP & MIDDLEWARE ---
 const JWT_SECRET = process.env.JWT_SECRET || 'brainstudio-secret-key-2025';
 
@@ -132,19 +136,11 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// --- GEMINI PROXY (Mounted BEFORE express.json to avoid body consumption issues) ---
-const geminiApiKey = process.env.GEMINI_API_KEY?.trim(); // Trim to avoid common env var issues
+// --- GEMINI PROXY (Now mounted AFTER express.json with restreaming) ---
+const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
 
 if (!geminiApiKey) {
-    console.warn("[Gemini Proxy] WARNING: GEMINI_API_KEY is not defined in environment variables.");
-} else {
-    const maskedKey = geminiApiKey.length > 8
-        ? `${geminiApiKey.substring(0, 4)}...${geminiApiKey.substring(geminiApiKey.length - 4)}`
-        : '***';
-    console.log(`[Gemini Proxy] API Key detected (${maskedKey}). Proxy configured correctly.`);
-    if (process.env.GEMINI_API_KEY !== geminiApiKey) {
-        console.warn("[Gemini Proxy] API Key had leading/trailing spaces and was trimmed.");
-    }
+    console.warn("[Gemini Proxy] WARNING: GEMINI_API_KEY is not defined.");
 }
 
 app.use(
@@ -155,54 +151,53 @@ app.use(
     changeOrigin: true,
     secure: true,
     pathRewrite: (path) => path.replace(/^\/api\/gemini/, ''),
-    proxyTimeout: 300000, // 5 minutes
+    proxyTimeout: 300000,
     timeout: 300000,
     on: {
       proxyReq: (proxyReq, req, res) => {
         proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
-        // Importante: No enviar nuestro propio JWT a Google
         proxyReq.removeHeader('Authorization');
 
         if (geminiApiKey) {
           proxyReq.setHeader('x-goog-api-key', geminiApiKey);
-        } else {
-          console.error('[Gemini Proxy] CRITICAL: GEMINI_API_KEY is missing');
+        }
+
+        // Restream the body if it was already parsed by express.json()
+        if (req.body) {
+          const bodyData = JSON.stringify(req.body);
+          proxyReq.setHeader('Content-Type', 'application/json');
+          proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+          proxyReq.write(bodyData);
         }
       },
       proxyRes: (proxyRes, req, res) => {
-        if (proxyRes.statusCode >= 400) {
-          console.error(`[Gemini Proxy] Target returned error status: ${proxyRes.statusCode}`);
-          if (proxyRes.statusCode === 401 || proxyRes.statusCode === 403) {
-            console.error(`[Gemini Proxy] Authentication error from Google. Verify GEMINI_API_KEY and Cloud Project status.`);
-          }
-        }
-      },
-      error: (err, req, res) => {
-        console.error('[Gemini Proxy] Connection Error:', err.message);
-
-        // Evitar crasheos por headers ya enviados
-        if (res.headersSent) {
-          if (!res.writableEnded) res.end();
-          return;
-        }
-
-        // Ensure we send CORS headers even on error
+        // Force CORS headers in every response, especially on errors (4xx, 5xx)
         const origin = req.headers.origin || "*";
         res.header("Access-Control-Allow-Origin", origin);
         res.header("Access-Control-Allow-Credentials", "true");
+        res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+        res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-        res.status(502).json({
-          error: 'Proxy Error (Gemini)',
-          message: 'Error de comunicación con el servicio de Google.',
-          details: err.message
-        });
+        if (proxyRes.statusCode >= 400) {
+          console.error(`[Gemini Proxy] Error ${proxyRes.statusCode} on ${req.method} ${req.url}`);
+        }
+      },
+      error: (err, req, res) => {
+        console.error('[Gemini Proxy] Fatal Proxy Error:', err.message);
+
+        if (!res.headersSent) {
+          const origin = req.headers.origin || "*";
+          res.header("Access-Control-Allow-Origin", origin);
+          res.header("Access-Control-Allow-Credentials", "true");
+          res.status(502).json({
+            error: 'Proxy Error (Gemini)',
+            details: err.message
+          });
+        }
       }
     }
   })
 );
-
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.get('/health', (req, res) => {
   res.status(200).json({
