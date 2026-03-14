@@ -40,13 +40,14 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
 
       const systemPrompt = `Actúa como un Secretario Ejecutivo de Alta Gerencia. Sintetiza la reunión con foco en ejecución.
 Es obligatorio responder en JSON siguiendo estrictamente la estructura solicitada, profundizando en:
-- Participantes: Nombres y roles.
-- Temas Tratados: Lista de puntos de la agenda.
-- Detalles de la Discusión: Puntos de dolor y debates clave (ej. falta de manual de marca o problemas con el equipo).
-- Acuerdos: Decisiones en firme.
-- Acciones: En el campo action_items, genera una tabla/lista con Tarea, Prioridad y Responsable.
 
-REGLA DE ORO: No resumas de forma perezosa. Si se discutieron ejemplos específicos o nombres de clientes previos, inclúyelos para dar contexto real. Responde SIEMPRE en Español.`;
+1. Participantes: Nombres y roles.
+2. Temas Tratados: Lista de puntos de la agenda.
+3. Detalles de la Discusión: Puntos de dolor y debates clave (ej. falta de manual de marca o problemas con el equipo).
+4. Acuerdos: Decisiones en firme.
+5. Acciones: En el campo action_items, genera una lista detallada con Tarea, Prioridad y Responsable.
+
+REGLA DE ORO: No resumas de forma perezosa. Si se discutieron ejemplos específicos (como el caso "dulce vs salado") o nombres de clientes previos, inclúyelos para dar contexto real. Responde SIEMPRE en Español.`;
 
       const resultString = await frontendApiService.generateGeminiCompletion(prompt, systemPrompt);
       const result = parseJsonFromAiResponse(resultString);
@@ -137,7 +138,7 @@ REGLA DE ORO: No resumas de forma perezosa. Si se discutieron ejemplos específi
             <div className="flex flex-col sm:flex-row gap-3 w-full mt-2">
                <Button
                 onClick={handleDownloadHTML}
-                disabled={htmlLoading}
+                disabled={htmlLoading || loading || !summaryData}
                 className="flex-1 bg-muted hover:bg-muted/80 text-foreground border border-border"
               >
                 <ExternalLink className="w-4 h-4 mr-2" />

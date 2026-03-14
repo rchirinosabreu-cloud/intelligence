@@ -36,14 +36,15 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
 
       const systemPrompt = `Actúa como un Consultor Estratégico Senior de Brainstudio. Transforma la transcripción en un Análisis Estratégico de alta fidelidad.
 Es obligatorio responder en JSON siguiendo estrictamente la estructura solicitada, profundizando en:
-- Temas Clave: Explica el dolor mencionado tras cada punto.
-- Insights Consultivos: Analiza raíces (estrategia vs. ejecución, sobrecarga del dueño, falta de procesos).
-- Observaciones: Detalles sobre la marca, el equipo y la comunicación.
-- Recomendaciones Tácticas: Por cada una (Marca, Operación, Contenido) incluye: Objetivo, Prioridad y Pasos Tácticos numerados.
-- Oportunidades: Qué ganará el negocio con estos cambios.
-- Matriz de Acciones: En el campo action_items, genera una tabla/lista con Tarea, Prioridad y Responsable.
 
-REGLA DE ORO: No resumas de forma perezosa. Si se discutieron ejemplos específicos o nombres de clientes previos, inclúyelos para dar contexto real. Responde SIEMPRE en Español.`;
+1. Temas Clave: Explica el dolor mencionado tras cada punto.
+2. Insights Consultivos: Analiza raíces (estrategia vs. ejecución, sobrecarga del dueño, falta de procesos).
+3. Observaciones: Detalles sobre la marca, el equipo y la comunicación.
+4. Recomendaciones Tácticas: Por cada una (Marca, Operación, Contenido) incluir: Objetivo, Prioridad y Pasos Tácticos numerados.
+5. Oportunidades: Qué ganará el negocio con estos cambios.
+6. Matriz de Acciones: En el campo action_items, genera una lista detallada con Tarea, Prioridad y Responsable.
+
+REGLA DE ORO: No resumas de forma perezosa. Si se discutieron ejemplos específicos (como el caso "dulce vs salado") o nombres de clientes previos, inclúyelos para dar contexto real. Responde SIEMPRE en Español.`;
 
       const resultString = await frontendApiService.generateGeminiCompletion(prompt, systemPrompt);
       const result = parseJsonFromAiResponse(resultString);
@@ -134,7 +135,7 @@ REGLA DE ORO: No resumas de forma perezosa. Si se discutieron ejemplos específi
             <div className="flex flex-col sm:flex-row gap-3 w-full mt-2">
                <Button
                 onClick={handleDownloadHTML}
-                disabled={htmlLoading}
+                disabled={htmlLoading || loading || !analysisData}
                 className="flex-1 bg-muted/50 hover:bg-primary/30 text-primary-foreground border border-border"
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
@@ -144,8 +145,13 @@ REGLA DE ORO: No resumas de forma perezosa. Si se discutieron ejemplos específi
           </div>
 
           <div className="text-left text-sm text-gray-300 space-y-2">
-             <p><strong className="text-primary">Insight:</strong> {analysisData.consulting_insights?.[0]?.substring(0, 100) || 'Análisis generado'}...</p>
-            <p><strong className="text-primary">Recomendaciones:</strong> {analysisData.recommendations?.length} generadas</p>
+             <p>
+               <strong className="text-primary">Insight:</strong>
+               {typeof analysisData?.consulting_insights?.[0] === 'string'
+                 ? analysisData.consulting_insights[0].substring(0, 100)
+                 : 'Análisis generado'}...
+             </p>
+            <p><strong className="text-primary">Recomendaciones:</strong> {analysisData?.recommendations?.length || 0} generadas</p>
           </div>
         </div>
       )}

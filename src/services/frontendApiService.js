@@ -336,12 +336,11 @@ const frontendApiService = {
 
   getTranscriptDetails: async (id) => {
     const query = `
-      query Transcript($id: String!) {
+      query GetTranscriptDetails($id: String!) {
         transcript(id: $id) {
           id
           title
           date
-          duration
           sentences {
             speaker_name
             text
