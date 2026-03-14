@@ -15,10 +15,7 @@ Estructura requerida:
   "meeting_topics": ["Tema tratado 1", "Tema tratado 2"],
   "discussion_details": ["Punto clave 1", "Punto clave 2"],
   "agreements": ["Acuerdo o compromiso 1", "Acuerdo o compromiso 2"],
-  "action_items": [
-    {"task": "Acción inmediata requerida", "priority": "Alta", "owner": "Nombre", "due_date": "Fecha si aplica"},
-    {"task": "Seguimiento posterior", "priority": "Media", "owner": "Nombre", "due_date": "Fecha si aplica"}
-  ]
+  "action_items": ["Tarea: Acción inmediata - Prioridad: Alta - Responsable: Nombre", "Tarea: Seguimiento - Prioridad: Media - Responsable: Nombre"]
 }
 
 {{CONTENT}}
@@ -34,13 +31,8 @@ Estructura requerida:
   "meeting_topics": ["Tema 1", "Tema 2"],
   "consulting_insights": ["Insight consultivo 1", "Insight consultivo 2"],
   "observations": ["Observación crítica 1", "Observación crítica 2"],
-  "recommendations": [
-     {"title": "Estrategia Recomendada", "description": "Pasos tácticos.", "priority": "Alta"},
-     {"title": "Estrategia Recomendada", "description": "Pasos tácticos.", "priority": "Media"}
-  ],
-  "opportunities": [
-     {"title": "Oportunidad Detectada", "description": "Descripción del potencial."}
-  ]
+  "recommendations": ["Título: Estrategia Recomendada - Descripción: Pasos tácticos - Prioridad: Alta"],
+  "opportunities": ["Título: Oportunidad Detectada - Descripción: Potencial detectado"]
 }
 
 INSTRUCCIONES DE GENERACIÓN:

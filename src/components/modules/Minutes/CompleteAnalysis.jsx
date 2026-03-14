@@ -44,7 +44,8 @@ Es obligatorio responder en JSON siguiendo estrictamente la estructura solicitad
 5. Oportunidades: Qué ganará el negocio con estos cambios.
 6. Matriz de Acciones: En el campo action_items, genera una lista detallada con Tarea, Prioridad y Responsable.
 
-REGLA DE ORO: No resumas de forma perezosa. Si se discutieron ejemplos específicos (como el caso "dulce vs salado") o nombres de clientes previos, inclúyelos para dar contexto real. Responde SIEMPRE en Español.`;
+REGLA DE ORO: No resumas de forma perezosa. Si se discutieron ejemplos específicos (como el caso "dulce vs salado") o nombres de clientes previos, inclúyelos para dar contexto real.
+IMPORTANTE: Todos los valores de los campos JSON deben ser Strings o Arrays de Strings. Prohibido usar objetos anidados dentro de los campos. Responde SIEMPRE en Español.`;
 
       const resultString = await frontendApiService.generateGeminiCompletion(prompt, systemPrompt);
       const result = parseJsonFromAiResponse(resultString);

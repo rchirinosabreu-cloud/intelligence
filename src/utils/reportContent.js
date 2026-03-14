@@ -40,15 +40,7 @@ export const buildSummaryReportContent = (data, reportMeta = {}) => {
   }
 
   if (Array.isArray(data.action_items) && data.action_items.length > 0) {
-    const actionLines = data.action_items.flatMap((item) => {
-      const details = [];
-      if (item.task) details.push(`- Tarea: ${item.task}`);
-      if (item.priority) details.push(`  - ${item.priority}`);
-      if (item.owner) details.push(`  - ${item.owner}`);
-      if (item.due_date) details.push(`  - Fecha límite: ${item.due_date}`);
-      return details;
-    });
-    appendSection(lines, 'Acciones:', actionLines);
+    appendSection(lines, 'Acciones:', formatBulletList(data.action_items).split('\n'));
   }
 
   return lines.join('\n').trim();
@@ -83,24 +75,11 @@ export const buildAnalysisReportContent = (data, reportMeta = {}) => {
   }
 
   if (Array.isArray(data.recommendations) && data.recommendations.length > 0) {
-    const recommendationLines = data.recommendations.flatMap((item) => {
-      const details = [];
-      if (item.title) details.push(`- Recomendación: ${item.title}`);
-      if (item.description) details.push(`  - Descripción: ${item.description}`);
-      if (item.priority) details.push(`  - Prioridad: ${item.priority}`);
-      return details;
-    });
-    appendSection(lines, 'Recomendaciones:', recommendationLines);
+    appendSection(lines, 'Recomendaciones:', formatBulletList(data.recommendations).split('\n'));
   }
 
   if (Array.isArray(data.opportunities) && data.opportunities.length > 0) {
-    const opportunityLines = data.opportunities.flatMap((item) => {
-      const details = [];
-      if (item.title) details.push(`- Oportunidad: ${item.title}`);
-      if (item.description) details.push(`  - Descripción: ${item.description}`);
-      return details;
-    });
-    appendSection(lines, 'Oportunidades:', opportunityLines);
+    appendSection(lines, 'Oportunidades:', formatBulletList(data.opportunities).split('\n'));
   }
 
   return lines.join('\n').trim();
