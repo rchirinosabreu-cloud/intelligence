@@ -340,15 +340,21 @@ const frontendApiService = {
         transcript(id: $id) {
           id
           title
-          date
-          sentences {
-            speaker_name
-            text
-            start_time
-          }
+          duration
           summary {
+            overview
+            outline
             keywords
-            outlines
+            action_items
+            notes
+          }
+          sentences {
+            text
+            speaker_name
+          }
+          sentence {
+            raw_text
+            speaker_name
           }
         }
       }
