@@ -48,12 +48,13 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
 
           let fullText = "";
 
+          // Data enrichment from Fireflies (Optional metadata)
           if (transcriptData.summary?.keywords && transcriptData.summary.keywords.length > 0) {
               fullText += `### PALABRAS CLAVE (FIREFLIES KEYWORDS) ###\n${transcriptData.summary.keywords.join(', ')}\n\n`;
           }
 
-          if (transcriptData.summary?.outline) {
-              fullText += `### ESTRUCTURA DE LA REUNIÓN (FIREFLIES OUTLINE) ###\n${transcriptData.summary.outline}\n\n`;
+          if (transcriptData.summary?.outlines && transcriptData.summary.outlines.length > 0) {
+              fullText += `### ESTRUCTURA DE LA REUNIÓN (FIREFLIES OUTLINES) ###\n${transcriptData.summary.outlines.join('\n')}\n\n`;
           }
 
           fullText += "### TRANSCRIPCIÓN COMPLETA ###\n";
