@@ -1,6 +1,6 @@
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useMemo, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -155,6 +155,7 @@ const getColumnId = (status, comments = '') => {
 const NativeTasks = () => {
   const { currentUser } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [responsibleFilter, setResponsibleFilter] = useState('Todos');
   const [dateFilter, setDateFilter] = useState('Hoy + Vencidos');
   const [clientFilter, setClientFilter] = useState('Todos');
@@ -248,7 +249,7 @@ const NativeTasks = () => {
       fetchClients();
   }, []);
 
-  // Deep linking logic: open returned tasks sidebar if ?showReturned=true
+  // Deep linking logic: open returned tasks sidebar and open specific task if taskId is provided
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const showReturned = params.get('showReturned') === 'true';
@@ -258,9 +259,15 @@ const NativeTasks = () => {
         setIsReturnedSidebarOpen(true);
     }
 
-    // Auto-scroll to specific task if taskId is provided
-    if (taskId) {
+    // Auto-scroll to specific task and open modal if taskId is provided
+    if (taskId && tasks.length > 0) {
         setHighlightedTaskId(taskId);
+
+        // Magic touch: find the task and open it in the modal automatically
+        const taskToOpen = tasks.find(t => String(t.id) === taskId);
+        if (taskToOpen && !editingTask) {
+            setEditingTask(taskToOpen);
+        }
 
         // Wait for potential animations and list render
         setTimeout(() => {
@@ -277,7 +284,7 @@ const NativeTasks = () => {
 
         return () => clearTimeout(timer);
     }
-  }, [location, tasks]); // Add tasks to dependencies to re-run when loaded
+  }, [location.search, tasks]); // Only trigger when URL params or tasks change
 
   const handleReturnTask = async () => {
       if (!returningTask || !returnReason.trim() || isSubmittingReturn) return;
@@ -738,7 +745,16 @@ const NativeTasks = () => {
       />
       <TaskEditModal
           isOpen={!!editingTask}
-          onClose={() => setEditingTask(null)}
+          onClose={() => {
+              setEditingTask(null);
+              // Clear taskId from URL to prevent auto-reopening if it was opened via deep link
+              const params = new URLSearchParams(location.search);
+              if (params.has('taskId')) {
+                  params.delete('taskId');
+                  const newSearch = params.toString();
+                  navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}`, { replace: true });
+              }
+          }}
           onSuccess={fetchTasks}
           clientsList={clientsList}
           taskData={editingTask}
