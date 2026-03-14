@@ -232,8 +232,8 @@ const Dashboard = () => {
     } else if (notif.type === 'TASK_RETURNED') {
         // Navigate to Native Tasks (Gestion) and show returned tasks
         navigate(`/gestion?showReturned=true&taskId=${notif.relatedId}`);
-    } else if (notif.type === 'TASK_CORRECTED' || notif.type === 'TASK_UPDATED') {
-        // Navigate to Native Tasks (Gestion) and focus the corrected/updated task
+    } else if (notif.type === 'TASK_CORRECTED' || notif.type === 'TASK_UPDATED' || notif.type === 'TASK_ASSIGNED') {
+        // Navigate to Native Tasks (Gestion) and focus the corrected/updated/assigned task
         navigate(`/gestion?taskId=${notif.relatedId}`);
     }
   };
