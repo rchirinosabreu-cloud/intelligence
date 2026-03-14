@@ -65,13 +65,13 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
 
           fullText += "### TRANSCRIPCIÓN COMPLETA ###\n";
 
-          // Handle both 'sentence' and 'sentences' schema variations
-          const sentences = transcriptData.sentence || transcriptData.sentences || [];
+          // Schema fix: Use plural 'sentences' as per verified GraphQL API
+          const sentences = transcriptData.sentences || [];
 
           if (sentences.length > 0) {
               fullText += sentences.map(s => {
                   const speaker = s.speaker_name || 'Desconocido';
-                  const text = s.raw_text || s.text || '';
+                  const text = s.text || s.raw_text || '';
                   return `[${speaker}]: ${text}`;
               }).join('\n');
           } else {

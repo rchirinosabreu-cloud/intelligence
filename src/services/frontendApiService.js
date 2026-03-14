@@ -352,10 +352,6 @@ const frontendApiService = {
             text
             speaker_name
           }
-          sentence {
-            raw_text
-            speaker_name
-          }
         }
       }
     `;
