@@ -4,7 +4,7 @@ const getBaseUrl = () => getApiBaseUrl();
 
 const getOpenAiUrl = () => `${getBaseUrl()}/api/openai/v1/chat/completions`;
 const getFirefliesUrl = () => `${getBaseUrl()}/api/fireflies/graphql`;
-const getGeminiUrl = () => `${getBaseUrl()}/api/gemini/v1beta/models/gemini-1.5-pro:generateContent`;
+const getGeminiUrl = () => `${getBaseUrl()}/api/gemini/v1beta/models/gemini-2.5-pro:generateContent`;
 
 // Helper for delay
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -336,12 +336,11 @@ const frontendApiService = {
 
   getTranscriptDetails: async (id) => {
     const query = `
-      query Transcript($id: String!) {
+      query GetTranscriptDetails($id: String!) {
         transcript(id: $id) {
           id
           title
           date
-          duration
           sentences {
             speaker_name
             text

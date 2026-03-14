@@ -48,7 +48,7 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
 
           let fullText = "";
 
-          // Data enrichment from Fireflies (Optional metadata)
+          // Data enrichment from Fireflies (Structured block for Gemini)
           if (transcriptData.summary?.keywords && transcriptData.summary.keywords.length > 0) {
               fullText += `### PALABRAS CLAVE (FIREFLIES KEYWORDS) ###\n${transcriptData.summary.keywords.join(', ')}\n\n`;
           }
