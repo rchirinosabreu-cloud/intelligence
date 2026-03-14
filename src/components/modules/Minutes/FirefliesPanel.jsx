@@ -48,23 +48,39 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
 
           let fullText = "";
 
-          // Data enrichment from Fireflies (Structured block for Gemini)
-          if (transcriptData.summary?.keywords && transcriptData.summary.keywords.length > 0) {
-              fullText += `### PALABRAS CLAVE (FIREFLIES KEYWORDS) ###\n${transcriptData.summary.keywords.join(', ')}\n\n`;
-          }
+          // Data enrichment from Fireflies (Official Schema Fields - Fixed Plurals)
+          if (transcriptData.summary) {
+              const { overview, outline, keywords, action_items, notes } = transcriptData.summary;
 
-          if (transcriptData.summary?.outlines && transcriptData.summary.outlines.length > 0) {
-              fullText += `### ESTRUCTURA DE LA REUNIÓN (FIREFLIES OUTLINES) ###\n${transcriptData.summary.outlines.join('\n')}\n\n`;
+              if (overview) fullText += `### PANORAMA (OVERVIEW) ###\n${overview}\n\n`;
+              if (outline) fullText += `### ESTRUCTURA (OUTLINE) ###\n${outline}\n\n`;
+              if (keywords && Array.isArray(keywords) && keywords.length > 0) {
+                  fullText += `### PALABRAS CLAVE ###\n${keywords.join(', ')}\n\n`;
+              }
+              if (action_items && Array.isArray(action_items) && action_items.length > 0) {
+                  fullText += `### ACCIONES DETECTADAS ###\n${action_items.join('\n')}\n\n`;
+              }
+              if (notes) fullText += `### NOTAS ADICIONALES ###\n${notes}\n\n`;
           }
 
           fullText += "### TRANSCRIPCIÓN COMPLETA ###\n";
-          fullText += transcriptData.sentences
-              ? transcriptData.sentences.map(s => `[${s.speaker_name || 'Desconocido'}]: ${s.text}`).join('\n')
-              : "No hay detalles disponibles.";
+
+          // Handle both 'sentence' and 'sentences' schema variations
+          const sentences = transcriptData.sentence || transcriptData.sentences || [];
+
+          if (sentences.length > 0) {
+              fullText += sentences.map(s => {
+                  const speaker = s.speaker_name || 'Desconocido';
+                  const text = s.raw_text || s.text || '';
+                  return `[${speaker}]: ${text}`;
+              }).join('\n');
+          } else {
+              fullText += "No hay detalles de la transcripción disponibles.";
+          }
 
           onSelectMeeting({
               ...meeting,
-              sentences: transcriptData.sentences,
+              sentences: sentences,
               text: fullText
           });
 
