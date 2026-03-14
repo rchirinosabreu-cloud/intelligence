@@ -38,10 +38,17 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
 
       console.log(`[GeneralSummary] Sending prompt to Gemini. Total length: ${prompt.length}`);
 
-      const resultString = await frontendApiService.generateGeminiCompletion(
-         prompt,
-         "Eres un asistente administrativo experto que extrae hechos objetivos y responde siempre en JSON y en Español. Identifica acuerdos y responsables claramente."
-      );
+      const systemPrompt = `Actúa como un Secretario Ejecutivo de Alta Gerencia. Sintetiza la reunión con foco en ejecución.
+Es obligatorio responder en JSON siguiendo estrictamente la estructura solicitada, profundizando en:
+- Participantes: Nombres y roles.
+- Temas Tratados: Lista de puntos de la agenda.
+- Detalles de la Discusión: Puntos de dolor y debates clave (ej. falta de manual de marca o problemas con el equipo).
+- Acuerdos: Decisiones en firme.
+- Acciones: En el campo action_items, genera una tabla/lista con Tarea, Prioridad y Responsable.
+
+REGLA DE ORO: No resumas de forma perezosa. Si se discutieron ejemplos específicos o nombres de clientes previos, inclúyelos para dar contexto real. Responde SIEMPRE en Español.`;
+
+      const resultString = await frontendApiService.generateGeminiCompletion(prompt, systemPrompt);
       const result = parseJsonFromAiResponse(resultString);
       setSummaryData(result);
 

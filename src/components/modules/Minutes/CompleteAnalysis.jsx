@@ -34,10 +34,18 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
 
       console.log(`[CompleteAnalysis] Sending prompt to Gemini. Total length: ${prompt.length}`);
 
-      const resultString = await frontendApiService.generateGeminiCompletion(
-        prompt,
-        "Eres un consultor de negocios senior experto que responde siempre en JSON y en Español. Extrae tareas, acuerdos y responsables con precisión."
-      );
+      const systemPrompt = `Actúa como un Consultor Estratégico Senior de Brainstudio. Transforma la transcripción en un Análisis Estratégico de alta fidelidad.
+Es obligatorio responder en JSON siguiendo estrictamente la estructura solicitada, profundizando en:
+- Temas Clave: Explica el dolor mencionado tras cada punto.
+- Insights Consultivos: Analiza raíces (estrategia vs. ejecución, sobrecarga del dueño, falta de procesos).
+- Observaciones: Detalles sobre la marca, el equipo y la comunicación.
+- Recomendaciones Tácticas: Por cada una (Marca, Operación, Contenido) incluye: Objetivo, Prioridad y Pasos Tácticos numerados.
+- Oportunidades: Qué ganará el negocio con estos cambios.
+- Matriz de Acciones: En el campo action_items, genera una tabla/lista con Tarea, Prioridad y Responsable.
+
+REGLA DE ORO: No resumas de forma perezosa. Si se discutieron ejemplos específicos o nombres de clientes previos, inclúyelos para dar contexto real. Responde SIEMPRE en Español.`;
+
+      const resultString = await frontendApiService.generateGeminiCompletion(prompt, systemPrompt);
       const result = parseJsonFromAiResponse(resultString);
       setAnalysisData(result);
 
