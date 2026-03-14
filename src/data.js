@@ -21,7 +21,7 @@ export const MOCK_DATA = {
       responsable: "https://i.pravatar.cc/150?u=a042581f4e29026024d",
       fecha_entrega: "19/02",
       estado: "En Proceso",
-      es_prioritaria: true
+      isPriority: true
     },
     {
       id: 2,
@@ -30,7 +30,7 @@ export const MOCK_DATA = {
       responsable: "https://i.pravatar.cc/150?u=a042581f4e29026704d",
       fecha_entrega: "20/02",
       estado: "Pendiente",
-      es_prioritaria: false
+      isPriority: false
     },
     {
       id: 3,
@@ -39,7 +39,7 @@ export const MOCK_DATA = {
       responsable: "https://i.pravatar.cc/150?u=a04258114e29026302d",
       fecha_entrega: "28/10",
       estado: "Realizado",
-      es_prioritaria: true
+      isPriority: true
     },
     {
       id: 4,
@@ -48,7 +48,7 @@ export const MOCK_DATA = {
       responsable: "https://i.pravatar.cc/150?u=a048581f4e29026701d",
       fecha_entrega: "01/11",
       estado: "Pendiente",
-      es_prioritaria: false
+      isPriority: false
     },
     {
       id: 5,
@@ -57,7 +57,7 @@ export const MOCK_DATA = {
       responsable: "https://i.pravatar.cc/150?u=a042581f4e29026024d",
       fecha_entrega: "02/11",
       estado: "En Proceso",
-      es_prioritaria: true
+      isPriority: true
     },
     {
       id: 6,
@@ -66,7 +66,7 @@ export const MOCK_DATA = {
       responsable: "https://i.pravatar.cc/150?u=a042581f4e29026704d",
       fecha_entrega: "20/10",
       estado: "Realizado",
-      es_prioritaria: false
+      isPriority: false
     },
     {
       id: 7,
@@ -75,7 +75,7 @@ export const MOCK_DATA = {
       responsable: "https://i.pravatar.cc/150?u=a042581f4e29026704d",
       fecha_entrega: "30/10",
       estado: "Pendiente",
-      es_prioritaria: true
+      isPriority: true
     },
     {
       id: 8,
@@ -84,7 +84,7 @@ export const MOCK_DATA = {
       responsable: "https://i.pravatar.cc/150?u=a04258114e29026302d",
       fecha_entrega: "25/10",
       estado: "Pendiente",
-      es_prioritaria: false
+      isPriority: false
     },
   ],
   chat: [

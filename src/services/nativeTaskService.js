@@ -122,7 +122,10 @@ const statusMapper = {
     'DEVUELTA': 'DEVUELTA'
 };
 
-export const createTask = async ({ title, dueDate, assigneeId, creatorId, comments, status, clientId }) => {
+export const createTask = async ({
+    title, dueDate, assigneeId, creatorId, comments, status, clientId,
+    isPriority = false, isSpecial = false, specialType = null, referenceUrl = null
+}) => {
     try {
         const mappedStatus = statusMapper[status] || 'PENDIENTE';
 
@@ -134,7 +137,11 @@ export const createTask = async ({ title, dueDate, assigneeId, creatorId, commen
                 creatorId,
                 comments,
                 status: mappedStatus,
-                clientId
+                clientId,
+                isPriority,
+                isSpecial,
+                specialType,
+                referenceUrl
             },
             include: {
                 client: {
@@ -206,7 +213,14 @@ export const updateTask = async (id, data, updaterId = null) => {
         // 1. Fetch current task state to evaluate transitions (TDD Edge Cases)
         const currentTask = await prisma.task.findUnique({
             where: { id },
-            select: { status: true, completedAt: true, comments: true }
+            select: {
+                status: true,
+                completedAt: true,
+                comments: true,
+                isPriority: true,
+                isSpecial: true,
+                assigneeId: true
+            }
         });
 
         if (!currentTask) {
@@ -268,6 +282,57 @@ export const updateTask = async (id, data, updaterId = null) => {
                 creator: true
             }
         });
+
+        // --- Notificaciones de Prioridad o Especial ---
+        if (updatedTask.assigneeId) {
+            const isPriority = updatedTask.isPriority;
+            const isSpecial = updatedTask.isSpecial;
+
+            const assigneeChanged = updatedTask.assigneeId !== currentTask.assigneeId;
+            const priorityMarked = isPriority && !currentTask.isPriority;
+            const specialMarked = isSpecial && !currentTask.isSpecial;
+
+            // Trigger if newly marked OR if reassigned while already being priority/special
+            if (priorityMarked || specialMarked || (assigneeChanged && (isPriority || isSpecial))) {
+                try {
+                    const assigneeTeamMember = await prisma.teamMember.findUnique({
+                        where: { id: updatedTask.assigneeId },
+                        select: { email: true }
+                    });
+
+                    if (assigneeTeamMember && assigneeTeamMember.email) {
+                        const assigneeUser = await prisma.user.findUnique({
+                            where: { email: assigneeTeamMember.email.trim().toLowerCase() },
+                            select: { id: true }
+                        });
+
+                        if (assigneeUser && assigneeUser.id !== updaterId) {
+                            let message = "";
+                            if (assigneeChanged && (isPriority || isSpecial)) {
+                                message = `Se te ha asignado una tarea ${isPriority ? 'PRIORITARIA' : ''}${isPriority && isSpecial ? ' y ' : ''}${isSpecial ? 'ESPECIAL' : ''}: ${updatedTask.title}`;
+                            } else if (priorityMarked && specialMarked) {
+                                message = `Se ha marcado como PRIORITARIA y ESPECIAL la tarea: ${updatedTask.title}`;
+                            } else if (priorityMarked) {
+                                message = `Se ha marcado como PRIORITARIA la tarea: ${updatedTask.title}`;
+                            } else {
+                                message = `Se ha marcado como ESPECIAL la tarea: ${updatedTask.title}`;
+                            }
+
+                            await prisma.notification.create({
+                                data: {
+                                    userId: assigneeUser.id,
+                                    message,
+                                    type: 'TASK_UPDATED',
+                                    relatedId: id
+                                }
+                            });
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error sending update notification:", err);
+                }
+            }
+        }
 
         // --- Cierre de Ciclo: Notificación de Corrección (Post-DB Success) ---
         // Solo si la transición fue exitosa y cumplía los criterios de corrección

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Zap, Star, Link as LinkIcon } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
@@ -22,7 +23,12 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
         clientId: defaultClientId || '',
         assigneeId: '',
         dueDate: '',
-        comments: ''
+        comments: '',
+        isPriority: false,
+        isSpecial: false,
+        specialType: '',
+        hasReference: false,
+        referenceUrl: ''
     });
 
     // Fetch team members
@@ -43,14 +49,40 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                 clientId: defaultClientId || '',
                 assigneeId: '',
                 dueDate: '',
-                comments: ''
+                comments: '',
+                isPriority: false,
+                isSpecial: false,
+                specialType: '',
+                hasReference: false,
+                referenceUrl: ''
             });
         }
     }, [isOpen, defaultClientId]);
 
+    const validateUrl = (url) => {
+        if (!url) return true;
+        return url.startsWith('http://') || url.startsWith('https://');
+    };
+
     const handleCreateTask = async (e) => {
         e.preventDefault();
         if (!newTaskData.title || !newTaskData.clientId) return;
+
+        // Validation logic
+        if (newTaskData.isSpecial && !newTaskData.specialType.trim()) {
+            toast({ variant: "destructive", title: "Campo obligatorio", description: "Por favor especifica el tipo de pendiente especial." });
+            return;
+        }
+
+        if (newTaskData.hasReference && !newTaskData.referenceUrl.trim()) {
+            toast({ variant: "destructive", title: "Campo obligatorio", description: "Por favor coloca el link de la referencia." });
+            return;
+        }
+
+        if (newTaskData.hasReference && !validateUrl(newTaskData.referenceUrl)) {
+            toast({ variant: "destructive", title: "URL inválida", description: "La referencia debe ser una URL válida (http:// o https://)." });
+            return;
+        }
 
         setIsSubmitting(true);
         try {
@@ -74,7 +106,11 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                     assigneeId: newTaskData.assigneeId || null,
                     dueDate: isoDate,
                     comments: newTaskData.comments,
-                    status: 'PENDIENTE'
+                    status: 'PENDIENTE',
+                    isPriority: newTaskData.isPriority,
+                    isSpecial: newTaskData.isSpecial,
+                    specialType: newTaskData.isSpecial ? newTaskData.specialType : null,
+                    referenceUrl: newTaskData.hasReference ? newTaskData.referenceUrl : null
                 })
             });
 
@@ -162,6 +198,82 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                             />
                         </div>
                     </div>
+                    <div className="grid grid-cols-2 gap-4 py-2 border-y border-zinc-100 dark:border-zinc-800">
+                        <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800">
+                            <div className="flex items-center gap-2">
+                                <Zap className={cn("w-4 h-4", newTaskData.isPriority ? "text-orange-500 fill-orange-500" : "text-zinc-400")} />
+                                <span className="text-xs font-bold dark:text-zinc-300">Prioritario</span>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={newTaskData.isPriority}
+                                onChange={e => setNewTaskData({...newTaskData, isPriority: e.target.checked})}
+                                className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                            />
+                        </div>
+                        <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800">
+                            <div className="flex items-center gap-2">
+                                <Star className={cn("w-4 h-4", newTaskData.isSpecial ? "text-purple-500 fill-purple-500" : "text-zinc-400")} />
+                                <span className="text-xs font-bold dark:text-zinc-300">Especial</span>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={newTaskData.isSpecial}
+                                onChange={e => setNewTaskData({...newTaskData, isSpecial: e.target.checked})}
+                                className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                            />
+                        </div>
+                    </div>
+
+                    {newTaskData.isSpecial && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="space-y-1"
+                        >
+                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300">Tipo de pendiente especial *</label>
+                            <input
+                                type="text"
+                                required
+                                value={newTaskData.specialType}
+                                onChange={e => setNewTaskData({...newTaskData, specialType: e.target.value})}
+                                className="w-full bg-purple-50/30 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 text-zinc-900 dark:text-white"
+                                placeholder="Ej: Manual de Marca, PPT de Ventas..."
+                            />
+                        </motion.div>
+                    )}
+
+                    <div className="space-y-2 py-2 border-b border-zinc-100 dark:border-zinc-800">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <LinkIcon className={cn("w-4 h-4", newTaskData.hasReference ? "text-primary" : "text-zinc-400")} />
+                                <span className="text-xs font-bold dark:text-zinc-300">¿Tiene referencia?</span>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={newTaskData.hasReference}
+                                onChange={e => setNewTaskData({...newTaskData, hasReference: e.target.checked})}
+                                className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                            />
+                        </div>
+
+                        {newTaskData.hasReference && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                            >
+                                <input
+                                    type="text"
+                                    required
+                                    value={newTaskData.referenceUrl}
+                                    onChange={e => setNewTaskData({...newTaskData, referenceUrl: e.target.value})}
+                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                                    placeholder="Coloca el link aquí (https://...)"
+                                />
+                            </motion.div>
+                        )}
+                    </div>
+
                     <div>
                         <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Comentarios (opcional)</label>
                         <textarea

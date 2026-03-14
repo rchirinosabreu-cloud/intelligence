@@ -137,6 +137,12 @@ model Task {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   completedAt DateTime?
+
+  // Phase 1: Reestructuración
+  isPriority   Boolean @default(false)
+  isSpecial    Boolean @default(false)
+  specialType  String?
+  referenceUrl String?
 }
 
 // Activos de Marca (Colores, Fuentes)

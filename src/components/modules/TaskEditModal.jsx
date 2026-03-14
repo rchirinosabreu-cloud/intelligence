@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Zap, Star, Link as LinkIcon } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
@@ -35,15 +36,15 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
         if (isOpen && taskData) {
             // Find client ID based on client name if we only have the name in the mapped task
             let cId = taskData.clientId || '';
-            if (!cId && taskData.cliente) {
-                 const clientMatch = clientsList.find(c => c.name === taskData.cliente);
+            if (!cId && taskData.clientName) {
+                 const clientMatch = clientsList.find(c => c.name === taskData.clientName);
                  if (clientMatch) cId = clientMatch.id;
             }
 
             // Ensure date format is YYYY-MM-DD for input type="date"
             let formattedDate = '';
-            if (taskData.fecha_entrega) {
-                const parts = taskData.fecha_entrega.split('-');
+            if (taskData.dueDateFormatted) {
+                const parts = taskData.dueDateFormatted.split('-');
                 if (parts.length === 3) formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
             } else if (taskData.dueDate) {
                 // Handle raw backend taskData
@@ -52,32 +53,59 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 } catch(e) {}
             }
 
-            const initialStatus = taskData.status || taskData.estado || 'PENDIENTE';
+            const initialStatus = taskData.status || 'PENDIENTE';
             setEditFormData({
                 id: taskData.id,
-                title: taskData.title || taskData.pendiente || '',
+                title: taskData.title || '',
                 clientId: cId,
-                responsable_name: taskData.assigneeId || taskData.responsable_name || taskData.assignee || '',
+                assigneeId: taskData.assigneeId || '',
                 status: initialStatus,
                 originalStatus: initialStatus, // Store original to detect auto-resolve and anti-spam confetti
-                fecha_entrega: formattedDate,
-                comments: taskData.comments || taskData.comentarios || '',
-                creatorName: taskData.creatorName || (taskData.creator ? taskData.creator.name : 'Sistema')
+                dueDate: formattedDate,
+                comments: taskData.comments || '',
+                creatorName: taskData.creatorName || 'Sistema',
+                isPriority: taskData.isPriority || false,
+                isSpecial: taskData.isSpecial || false,
+                specialType: taskData.specialType || '',
+                hasReference: !!taskData.referenceUrl,
+                referenceUrl: taskData.referenceUrl || ''
             });
         }
     }, [isOpen, taskData, clientsList]);
 
+    const validateUrl = (url) => {
+        if (!url) return true;
+        return url.startsWith('http://') || url.startsWith('https://');
+    };
+
     const handleEditTask = async (e) => {
         e.preventDefault();
+
+        // Validation logic
+        if (editFormData.isSpecial && !editFormData.specialType.trim()) {
+            toast({ variant: "destructive", title: "Campo obligatorio", description: "Por favor especifica el tipo de pendiente especial." });
+            return;
+        }
+
+        if (editFormData.hasReference && !editFormData.referenceUrl.trim()) {
+            toast({ variant: "destructive", title: "Campo obligatorio", description: "Por favor coloca el link de la referencia." });
+            return;
+        }
+
+        if (editFormData.hasReference && !validateUrl(editFormData.referenceUrl)) {
+            toast({ variant: "destructive", title: "URL inválida", description: "La referencia debe ser una URL válida (http:// o https://)." });
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             const baseUrl = getApiBaseUrl();
             let isoDate = null;
-            if (editFormData.fecha_entrega) {
+            if (editFormData.dueDate) {
                 // To avoid timezone offset issues (UTC midnight shifting to previous day in UTC-5),
                 // we explicitly set the time to 12:00:00 UTC. This guarantees that when the browser
                 // parses the date back in any timezone from UTC-12 to UTC+12, it lands on the same day.
-                let cleanDate = editFormData.fecha_entrega;
+                let cleanDate = editFormData.dueDate;
                 const parts = cleanDate.split('-');
                 if (parts.length === 3 && parts[0].length === 2 && parts[2].length === 4) {
                    // Convert DD-MM-YYYY to YYYY-MM-DD
@@ -124,10 +152,14 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
             const payload = {
                 title: editFormData.title,
                 clientId: editFormData.clientId,
-                assigneeId: editFormData.responsable_name || null,
+                assigneeId: editFormData.assigneeId || null,
                 dueDate: isoDate,
                 comments: finalComments,
-                status: statusToSubmit
+                status: statusToSubmit,
+                isPriority: editFormData.isPriority,
+                isSpecial: editFormData.isSpecial,
+                specialType: editFormData.isSpecial ? editFormData.specialType : null,
+                referenceUrl: editFormData.hasReference ? editFormData.referenceUrl : null
             };
 
             console.log(`[TaskEditModal] Sending update to ${url}`, JSON.stringify(payload, null, 2));
@@ -216,8 +248,8 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                         <div>
                             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Responsable</label>
                             <select
-                                value={editFormData.responsable_name || ''}
-                                onChange={e => setEditFormData({...editFormData, responsable_name: e.target.value})}
+                                value={editFormData.assigneeId || ''}
+                                onChange={e => setEditFormData({...editFormData, assigneeId: e.target.value})}
                                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                             >
                                 <option value="">Sin asignar</option>
@@ -245,13 +277,13 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                         <div>
                             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Fecha límite</label>
                             <DatePicker
-                                selected={editFormData.fecha_entrega ? new Date(`${editFormData.fecha_entrega.split('T')[0]}T12:00:00.000Z`) : null}
+                                selected={editFormData.dueDate ? new Date(`${editFormData.dueDate.split('T')[0]}T12:00:00.000Z`) : null}
                                 onChange={(date) => {
                                     if (date) {
                                         const dateStr = date.toISOString().split('T')[0];
-                                        setEditFormData({...editFormData, fecha_entrega: dateStr});
+                                        setEditFormData({...editFormData, dueDate: dateStr});
                                     } else {
-                                        setEditFormData({...editFormData, fecha_entrega: ''});
+                                        setEditFormData({...editFormData, dueDate: ''});
                                     }
                                 }}
                                 dateFormat="dd/MM/yyyy"
@@ -260,6 +292,82 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                                 isClearable
                             />
                         </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 py-2 border-y border-zinc-100 dark:border-zinc-800">
+                        <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800">
+                            <div className="flex items-center gap-2">
+                                <Zap className={cn("w-4 h-4", editFormData.isPriority ? "text-orange-500 fill-orange-500" : "text-zinc-400")} />
+                                <span className="text-xs font-bold dark:text-zinc-300">Prioritario</span>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={editFormData.isPriority}
+                                onChange={e => setEditFormData({...editFormData, isPriority: e.target.checked})}
+                                className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                            />
+                        </div>
+                        <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800">
+                            <div className="flex items-center gap-2">
+                                <Star className={cn("w-4 h-4", editFormData.isSpecial ? "text-purple-500 fill-purple-500" : "text-zinc-400")} />
+                                <span className="text-xs font-bold dark:text-zinc-300">Especial</span>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={editFormData.isSpecial}
+                                onChange={e => setEditFormData({...editFormData, isSpecial: e.target.checked})}
+                                className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                            />
+                        </div>
+                    </div>
+
+                    {editFormData.isSpecial && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="space-y-1"
+                        >
+                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300">Tipo de pendiente especial *</label>
+                            <input
+                                type="text"
+                                required
+                                value={editFormData.specialType}
+                                onChange={e => setEditFormData({...editFormData, specialType: e.target.value})}
+                                className="w-full bg-purple-50/30 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 text-zinc-900 dark:text-white"
+                                placeholder="Ej: Manual de Marca, PPT de Ventas..."
+                            />
+                        </motion.div>
+                    )}
+
+                    <div className="space-y-2 py-2 border-b border-zinc-100 dark:border-zinc-800">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <LinkIcon className={cn("w-4 h-4", editFormData.hasReference ? "text-primary" : "text-zinc-400")} />
+                                <span className="text-xs font-bold dark:text-zinc-300">¿Tiene referencia?</span>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={editFormData.hasReference}
+                                onChange={e => setEditFormData({...editFormData, hasReference: e.target.checked})}
+                                className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                            />
+                        </div>
+
+                        {editFormData.hasReference && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                            >
+                                <input
+                                    type="text"
+                                    required
+                                    value={editFormData.referenceUrl}
+                                    onChange={e => setEditFormData({...editFormData, referenceUrl: e.target.value})}
+                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                                    placeholder="Coloca el link aquí (https://...)"
+                                />
+                            </motion.div>
+                        )}
                     </div>
 
                     <div>
