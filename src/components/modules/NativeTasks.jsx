@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2, AlertTriangle, AlertOctagon, MessageSquare, Edit2, X, RotateCcw, Send, Trash2 } from 'lucide-react';
+import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2, AlertTriangle, AlertOctagon, MessageSquare, Edit2, X, RotateCcw, Send, Trash2, Zap, Star, Link as LinkIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
@@ -202,9 +202,8 @@ const NativeTasks = () => {
           const formattedTasks = safeData.map(task => ({
               id: task.id,
               title: task.title,
-              pendiente: task.title, // Backward compatibility
-              cliente: task.client?.name || 'Sin Cliente',
-              responsable_name: task.assignee?.name || 'Sin Asignar',
+              clientName: task.client?.name || 'Sin Cliente',
+              assigneeName: task.assignee?.name || 'Sin Asignar',
               assigneeId: task.assigneeId,
               assigneeAvatar: task.assignee?.avatarUrl || null,
               creatorId: task.creatorId,
@@ -213,9 +212,12 @@ const NativeTasks = () => {
               // Parse the date explicitly avoiding browser local timezone shifts if it comes as an ISO string
               // Because we save it with T12:00:00.000Z, we can just safely slice it or convert it to a date that won't shift.
               // We'll extract the YYYY-MM-DD from the raw ISO string directly.
-              fecha_entrega: task.dueDate ? task.dueDate.split('T')[0].split('-').reverse().join('-') : null,
-              comentarios: task.comments,
-              es_prioritaria: false, // Update logic later if needed
+              dueDateFormatted: task.dueDate ? task.dueDate.split('T')[0].split('-').reverse().join('-') : null,
+              comments: task.comments,
+              isPriority: task.isPriority || false,
+              isSpecial: task.isSpecial || false,
+              specialType: task.specialType,
+              referenceUrl: task.referenceUrl
           }));
           setTasks(formattedTasks);
       } catch (err) {
@@ -289,8 +291,8 @@ const NativeTasks = () => {
 
           // 2. Local State Prep (Comments tag and Exact Status)
           const returnTag = `[DEVOLUCIÓN - ${new Date().toLocaleDateString()}]: ${returnReason}`;
-          const updatedComments = (returningTask.comentarios || returningTask.comments)
-              ? `${returnTag}\n\n${returningTask.comentarios || returningTask.comments}`
+          const updatedComments = (returningTask.comments)
+              ? `${returnTag}\n\n${returningTask.comments}`
               : returnTag;
 
           // 3. OPTIMISTIC UPDATE
@@ -323,7 +325,7 @@ const NativeTasks = () => {
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                               userId: returningTask.creatorId,
-                              message: `${currentUser?.name} devolvió tu tarea: ${returningTask.pendiente}`,
+                              message: `${currentUser?.name} devolvió tu tarea: ${returningTask.title}`,
                               type: 'TASK_RETURNED',
                               relatedId: returningTask.id
                           })
@@ -404,23 +406,23 @@ const NativeTasks = () => {
 
   // Extract unique responsibles (Names)
   const responsibles = useMemo(() => {
-      const unique = [...new Set(tasks.map(t => t.responsable_name || "Desconocido"))].filter(Boolean).sort();
+      const unique = [...new Set(tasks.map(t => t.assigneeName || "Desconocido"))].filter(Boolean).sort();
       return ['Todos', ...unique];
   }, [tasks]);
 
   // Extract unique clients
   const clients = useMemo(() => {
-      const unique = [...new Set(tasks.map(t => t.cliente || "Desconocido"))].filter(Boolean).sort();
+      const unique = [...new Set(tasks.map(t => t.clientName || "Desconocido"))].filter(Boolean).sort();
       return ['Todos', ...unique];
   }, [tasks]);
 
   const filteredTasks = useMemo(() => {
       let filtered = tasks.filter(task => {
         // Filter by Responsible
-        if (responsibleFilter !== 'Todos' && (task.responsable_name || "Desconocido") !== responsibleFilter) return false;
+        if (responsibleFilter !== 'Todos' && (task.assigneeName || "Desconocido") !== responsibleFilter) return false;
 
         // Filter by Client
-        if (clientFilter !== 'Todos' && (task.cliente || "Desconocido") !== clientFilter) return false;
+        if (clientFilter !== 'Todos' && (task.clientName || "Desconocido") !== clientFilter) return false;
 
         // Filter by Date Logic
         // 'Hoy + Vencidos' (Default): Muestra fecha <= HOY.
@@ -433,15 +435,15 @@ const NativeTasks = () => {
         }
 
         if (dateFilter === 'Hoy + Vencidos') {
-             return isTodayOrOverdue(task.fecha_entrega);
+             return isTodayOrOverdue(task.dueDateFormatted);
         }
 
         if (dateFilter === 'Solo Vencidos') {
-            return isOverdue(task.fecha_entrega);
+            return isOverdue(task.dueDateFormatted);
         }
 
         if (dateFilter === 'Esta Semana') {
-            return isThisWeek(task.fecha_entrega);
+            return isThisWeek(task.dueDateFormatted);
         }
 
         return true;
@@ -449,8 +451,8 @@ const NativeTasks = () => {
 
       // 2. Sorting: Always by Date Ascending (Oldest First)
       filtered.sort((a, b) => {
-          const dateA = parseDate(a.fecha_entrega) || new Date(2100, 0, 1); // Future if null
-          const dateB = parseDate(b.fecha_entrega) || new Date(2100, 0, 1);
+          const dateA = parseDate(a.dueDateFormatted) || new Date(2100, 0, 1); // Future if null
+          const dateB = parseDate(b.dueDateFormatted) || new Date(2100, 0, 1);
           return dateA - dateB;
       });
 
@@ -465,7 +467,7 @@ const NativeTasks = () => {
   ];
 
   const returnedTasks = useMemo(() => {
-      return tasks.filter(t => getColumnId(t.status, t.comentarios || t.comments) === 'devuelto');
+      return tasks.filter(t => getColumnId(t.status, t.comments) === 'devuelto');
   }, [tasks]);
 
   const onDragEnd = async (result) => {
@@ -505,11 +507,10 @@ const NativeTasks = () => {
       movedTask.status = newStatusEnum;
 
       // Tag Stripping Logic for Optimistic UI: If moving to Pendiente, strip return tag
-      if (newStatusEnum === 'PENDIENTE' && (movedTask.comments || movedTask.comentarios)) {
-          const currentText = movedTask.comments || movedTask.comentarios || '';
+      if (newStatusEnum === 'PENDIENTE' && (movedTask.comments)) {
+          const currentText = movedTask.comments || '';
           const cleanedText = currentText.replace(/^\s*\[DEVOLUCIÓN[^\]]*\]:[^\n]*(\n\n)?/i, '').trim();
           movedTask.comments = cleanedText;
-          movedTask.comentarios = cleanedText;
           console.log("[onDragEnd] Optimistic UI: Stripped return tag from comments.");
       }
 
@@ -517,16 +518,16 @@ const NativeTasks = () => {
       // Filter the *remaining* tasks to match what's visible in the destination column
       const visibleTasksInDestColumn = newTasks.filter(task => {
           // Match Column
-          if (getColumnId(task.status, task.comentarios || task.comments) !== destinationColumnId) return false;
+          if (getColumnId(task.status, task.comments) !== destinationColumnId) return false;
 
           // Match Active Filters
-          if (responsibleFilter !== 'Todos' && (task.responsable_name || "Desconocido") !== responsibleFilter) return false;
-          if (clientFilter !== 'Todos' && (task.cliente || "Desconocido") !== clientFilter) return false;
+          if (responsibleFilter !== 'Todos' && (task.assigneeName || "Desconocido") !== responsibleFilter) return false;
+          if (clientFilter !== 'Todos' && (task.clientName || "Desconocido") !== clientFilter) return false;
 
           // Match Date Filter Logic
-          if (dateFilter === 'Hoy + Vencidos' && !isTodayOrOverdue(task.fecha_entrega)) return false;
-          if (dateFilter === 'Solo Vencidos' && !isOverdue(task.fecha_entrega)) return false;
-          if (dateFilter === 'Esta Semana' && !isThisWeek(task.fecha_entrega)) return false;
+          if (dateFilter === 'Hoy + Vencidos' && !isTodayOrOverdue(task.dueDateFormatted)) return false;
+          if (dateFilter === 'Solo Vencidos' && !isOverdue(task.dueDateFormatted)) return false;
+          if (dateFilter === 'Esta Semana' && !isThisWeek(task.dueDateFormatted)) return false;
           if (dateFilter === 'Todos') return true;
 
           return true;
@@ -586,7 +587,7 @@ const NativeTasks = () => {
 
           // If moving to Pendiente, also strip the tag in the DB update
           if (newStatusForDB === 'PENDIENTE') {
-              const currentText = movedTask.comments || movedTask.comentarios || '';
+              const currentText = movedTask.comments || '';
               const cleanedText = currentText.replace(/^\s*\[DEVOLUCIÓN[^\]]*\]:[^\n]*(\n\n)?/i, '').trim();
               payload.comments = cleanedText;
           }
@@ -752,7 +753,7 @@ const NativeTasks = () => {
                       Devolver tarea
                   </DialogTitle>
                   <DialogDescription>
-                      Por favor, explica por qué estás devolviendo la tarea: <strong>{returningTask?.pendiente}</strong>
+                      Por favor, explica por qué estás devolviendo la tarea: <strong>{returningTask?.title}</strong>
                   </DialogDescription>
               </DialogHeader>
 
@@ -793,7 +794,7 @@ const NativeTasks = () => {
                       ¿Por qué quieres eliminar esta tarea?
                   </DialogTitle>
                   <DialogDescription>
-                      La tarea <strong>{deletingTask?.pendiente}</strong> dejará de ser visible en el Kanban y en las métricas.
+                      La tarea <strong>{deletingTask?.title}</strong> dejará de ser visible en el Kanban y en las métricas.
                   </DialogDescription>
               </DialogHeader>
 
@@ -902,7 +903,7 @@ const NativeTasks = () => {
               {/* Grid Column Layout Area */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1">
                   {columns.map((col) => {
-                      const columnTasks = filteredTasks.filter(t => getColumnId(t.status, t.comentarios || t.comments) === col.id);
+                      const columnTasks = filteredTasks.filter(t => getColumnId(t.status, t.comments) === col.id);
 
                       return (
                         <div key={col.id} className="flex flex-col gap-4">
@@ -975,17 +976,17 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
     const isHighlighted = highlightedTaskId === String(task.id);
 
     // Overdue Logic for Style
-    const columnId = getColumnId(task.status, task.comentarios || task.comments);
+    const columnId = getColumnId(task.status, task.comments);
     const isDone = columnId === 'realizado';
     const isReturned = columnId === 'devuelto';
-    const overdue = !isDone && isOverdue(task.fecha_entrega);
-    const daysOverdue = overdue ? getDaysOverdue(task.fecha_entrega) : 0;
+    const overdue = !isDone && isOverdue(task.dueDateFormatted);
+    const daysOverdue = overdue ? getDaysOverdue(task.dueDateFormatted) : 0;
 
     // Check if we should highlight overdue items (visual indicator logic)
     // "Si selecciono 'Solo Vencidos', o si hay tareas vencidas en la vista 'Hoy', resáltalas"
     // Basically, if it is overdue, we style it.
 
-    const clientColorClass = CLIENT_COLORS[task.cliente] || "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
+    const clientColorClass = CLIENT_COLORS[task.clientName] || "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
 
     return (
         <Draggable draggableId={String(task.id)} index={index}>
@@ -1009,7 +1010,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                             snapshot.isDragging ? "ring-2 ring-indigo-500 shadow-xl z-50 opacity-90 rotate-2 scale-105" : "",
                             !snapshot.isDragging && isHighlighted ? "ring-2 ring-red-500 scale-[1.02] z-10" : "ring-2 ring-transparent",
                             !snapshot.isDragging && !isHighlighted && overdue ? "border-red-500/50 ring-1 ring-red-500/20" : "",
-                            !snapshot.isDragging && !isHighlighted && !overdue && task.es_prioritaria ? "border-l-4 border-l-red-500 border-zinc-200 dark:border-zinc-800" : "border-zinc-200 dark:border-zinc-800",
+                            !snapshot.isDragging && !isHighlighted && !overdue && task.isPriority ? "border-l-4 border-l-red-500 border-zinc-200 dark:border-zinc-800" : "border-zinc-200 dark:border-zinc-800",
                             isReturned && !isHighlighted && "border-red-500/30 bg-red-50/20 dark:bg-red-900/10 shadow-[inset_0_0_12px_rgba(239,68,68,0.05)]"
                         )}
                     >
@@ -1018,7 +1019,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                 <div className="flex justify-between items-start">
                                      <div className="flex items-center gap-2">
                                         <span className={cn("text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md border", clientColorClass)}>
-                                            {task.cliente}
+                                            {task.clientName}
                                         </span>
                                         {isReturned && (
                                             <span className="text-[9px] font-black text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 rounded flex items-center gap-1 uppercase tracking-tight">
@@ -1060,9 +1061,16 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                                 Vencido (+{daysOverdue}d)
                                             </span>
                                         )}
-                                        {task.es_prioritaria && !overdue && !isReturned && (
-                                            <span className="text-[10px] font-bold text-red-500 flex items-center gap-1 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-900/30">
-                                                Prioritario
+                                        {task.isPriority && !overdue && !isReturned && (
+                                            <span className="text-[10px] font-bold text-white flex items-center gap-1 bg-orange-600 px-1.5 py-0.5 rounded border border-orange-500 shadow-sm animate-pulse">
+                                                <Zap className="w-3 h-3 fill-current" />
+                                                PRIORITARIO
+                                            </span>
+                                        )}
+                                        {task.isSpecial && !isReturned && (
+                                            <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 bg-purple-50 dark:bg-purple-900/30 px-1.5 py-0.5 rounded border border-purple-100 dark:border-purple-800">
+                                                <Star className="w-3 h-3 fill-current" />
+                                                {task.specialType || 'Especial'}
                                             </span>
                                         )}
                                      </div>
@@ -1071,7 +1079,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                 {/* Body: Task Title */}
                                     <div>
                                         <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 leading-snug mb-1">
-                                            {task.title || task.pendiente}
+                                            {task.title}
                                         </h4>
                                         <div className="flex items-center gap-1.5 opacity-60">
                                             <span className="text-[9px] text-zinc-500 uppercase tracking-tighter font-semibold">Creado por</span>
@@ -1086,17 +1094,29 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                         overdue ? "text-red-600 font-bold animate-pulse" : "text-zinc-400 dark:text-zinc-500"
                                     )}>
                                         <Calendar className={cn("w-3.5 h-3.5", overdue && "text-red-600")} />
-                                        {task.fecha_entrega || "Sin fecha"}
+                                        {task.dueDateFormatted || "Sin fecha"}
                                     </div>
 
                                     <div className="flex items-center gap-2">
-                                        {task.comentarios && task.comentarios.trim() !== '' && (
+                                        {task.referenceUrl && (
+                                            <a
+                                                href={task.referenceUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="text-primary hover:text-primary/80 transition-colors p-1 bg-primary/10 rounded-full"
+                                                title="Ver Referencia"
+                                            >
+                                                <LinkIcon className="w-3.5 h-3.5" />
+                                            </a>
+                                        )}
+                                        {task.comments && task.comments.trim() !== '' && (
                                             <div className="text-zinc-400 dark:text-zinc-500 mr-1" title="Tiene comentarios">
                                                 <MessageSquare className="w-3.5 h-3.5" />
                                             </div>
                                         )}
                                         <TeamAvatar
-                                            member={{ name: task.responsable_name, avatarUrl: task.assigneeAvatar }}
+                                            member={{ name: task.assigneeName, avatarUrl: task.assigneeAvatar }}
                                             className="w-6 h-6 ring-2 ring-white dark:ring-zinc-900"
                                         />
                                     </div>

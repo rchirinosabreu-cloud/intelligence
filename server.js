@@ -1441,6 +1441,46 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: "Missing required fields (title, clientId)" });
         }
         const task = await createTask(taskData);
+
+        // --- Notificaciones iniciales de Prioridad o Especial ---
+        if (task.assigneeId && (task.isPriority || task.isSpecial)) {
+            try {
+                const assigneeTeamMember = await prisma.teamMember.findUnique({
+                    where: { id: task.assigneeId },
+                    select: { email: true }
+                });
+
+                if (assigneeTeamMember && assigneeTeamMember.email) {
+                    const assigneeUser = await prisma.user.findUnique({
+                        where: { email: assigneeTeamMember.email.trim().toLowerCase() },
+                        select: { id: true }
+                    });
+
+                    if (assigneeUser && assigneeUser.id !== req.user.userId) {
+                        let message = "";
+                        if (task.isPriority && task.isSpecial) {
+                            message = `Se te ha asignado una tarea PRIORITARIA y ESPECIAL: ${task.title}`;
+                        } else if (task.isPriority) {
+                            message = `Se te ha asignado una tarea PRIORITARIA: ${task.title}`;
+                        } else {
+                            message = `Se te ha asignado una tarea ESPECIAL: ${task.title}`;
+                        }
+
+                        await prisma.notification.create({
+                            data: {
+                                userId: assigneeUser.id,
+                                message,
+                                type: 'TASK_ASSIGNED',
+                                relatedId: task.id
+                            }
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error("Error sending initial task notification:", err);
+            }
+        }
+
         res.status(201).json(task);
     } catch (error) {
         logError('API', "Failed to create native task", error);
