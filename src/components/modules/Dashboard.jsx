@@ -69,6 +69,41 @@ const Dashboard = () => {
   const [loadingNative, setLoadingNative] = useState(true);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
+  const fetchNotifications = async () => {
+      try {
+          setLoadingNotifications(true);
+          const res = await fetch(`${getApiBaseUrl()}/api/notifications`, { cache: 'no-store' });
+          if (res.ok) {
+              const data = await res.json();
+              setNotifications(Array.isArray(data) ? data : []);
+          }
+      } catch (error) {
+          console.error("Error fetching notifications:", error);
+      } finally {
+          setLoadingNotifications(false);
+      }
+  };
+
+  const fetchUnreadCount = async () => {
+      try {
+          const res = await fetch(`${getApiBaseUrl()}/api/notifications/unread-count`, { cache: 'no-store' });
+          if (res.ok) {
+              const data = await res.json();
+
+              // Use functional update to ensure we check against the latest state
+              // and trigger background list sync if new notifications arrived.
+              setUnreadCount(prev => {
+                  if (data.count > prev) {
+                      fetchNotifications();
+                  }
+                  return data.count;
+              });
+          }
+      } catch (error) {
+          console.error("Error fetching unread count:", error);
+      }
+  };
+
   useEffect(() => {
     const fetchMetrics = async () => {
         try {
@@ -101,41 +136,6 @@ const Dashboard = () => {
             console.error("Failed to fetch completed native tasks:", err);
         } finally {
             setLoadingNative(false);
-        }
-    };
-
-    const fetchNotifications = async () => {
-        try {
-            setLoadingNotifications(true);
-            const res = await fetch(`${getApiBaseUrl()}/api/notifications`, { cache: 'no-store' });
-            if (res.ok) {
-                const data = await res.json();
-                setNotifications(Array.isArray(data) ? data : []);
-            }
-        } catch (error) {
-            console.error("Error fetching notifications:", error);
-        } finally {
-            setLoadingNotifications(false);
-        }
-    };
-
-    const fetchUnreadCount = async () => {
-        try {
-            const res = await fetch(`${getApiBaseUrl()}/api/notifications/unread-count`, { cache: 'no-store' });
-            if (res.ok) {
-                const data = await res.json();
-
-                // Use functional update to ensure we check against the latest state
-                // and trigger background list sync if new notifications arrived.
-                setUnreadCount(prev => {
-                    if (data.count > prev) {
-                        fetchNotifications();
-                    }
-                    return data.count;
-                });
-            }
-        } catch (error) {
-            console.error("Error fetching unread count:", error);
         }
     };
 
