@@ -25,6 +25,7 @@ import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCo
 import teamRouter from './src/routes/api/team.js';
 import userRouter from './src/routes/api/user.js';
 import feedbackRouter from './src/routes/api/feedback.js';
+import integrationsRouter from './src/routes/api/integrations.js';
 
 dotenv.config();
 
@@ -288,6 +289,9 @@ app.use('/api/user', authenticateToken, userRouter);
 
 // Feedback & Performance
 app.use('/api/feedback', authenticateToken, feedbackRouter);
+
+// Integrations (Meta, etc.)
+app.use('/api/integrations', authenticateToken, integrationsRouter);
 
 // User Management Endpoints
 app.post('/api/users', authenticateToken, async (req, res) => {

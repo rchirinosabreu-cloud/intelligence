@@ -78,6 +78,21 @@ model Client {
   announcements ClientAnnouncement[]
   flowMessages FlowMessage[]
   nativeTasks Task[]
+  integrations Integration[]
+}
+
+// Integraciones con plataformas externas (Fase BrainStudio Metrics)
+model Integration {
+  id             String   @id @default(uuid())
+  clientId       String
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  provider       String   // 'meta', 'google', etc.
+  encryptedToken String   @db.Text
+  metadata       Json?    // Para guardar Page ID, Ad Account ID, etc.
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([clientId, provider]) // Un cliente solo tiene una integración por proveedor (Fase 1)
 }
 
 // Miembros del Equipo de la Agencia

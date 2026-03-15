@@ -4,6 +4,26 @@ import App from '@/App';
 import '@/index.css';
 import axios from 'axios';
 
+// Initialize Meta SDK
+if (typeof window !== 'undefined') {
+  window.fbAsyncInit = function() {
+    window.FB.init({
+      appId      : import.meta.env.VITE_META_APP_ID || '', // App ID from Meta Dashboard
+      cookie     : true,
+      xfbml      : true,
+      version    : 'v21.0'
+    });
+  };
+
+  (function(d, s, id) {
+    var js, fjs = d.getElementsByTagName(s)[0];
+    if (d.getElementById(id)) return;
+    js = d.createElement(s); js.id = id;
+    js.src = "https://connect.facebook.net/es_LA/sdk.js";
+    fjs.parentNode.insertBefore(js, fjs);
+  }(document, 'script', 'facebook-jssdk'));
+}
+
 // Global Axios Interceptor
 axios.interceptors.request.use((config) => {
     const token = localStorage.getItem('authToken');

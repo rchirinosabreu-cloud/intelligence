@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Sparkles, CheckSquare, FileText, Users, UserCheck, User, Moon, Sun, Bell } from 'lucide-react';
+import { LayoutDashboard, Sparkles, CheckSquare, FileText, BarChart3, Users, UserCheck, User, Moon, Sun, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
@@ -20,6 +20,7 @@ const Sidebar = ({ onLogout }) => {
     { id: 'bria', label: 'Bria Intelligence', icon: Sparkles, path: '/bria' },
     { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/gestion' },
     { id: 'minutes', label: 'Minutas', icon: FileText, path: '/minutas' },
+    { id: 'metrics', label: 'Métricas', icon: BarChart3, path: '/metricas' },
     { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes' },
     { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo' },
   ];
