@@ -9,6 +9,7 @@ import Clients from './components/modules/Clients';
 import ClientDetailWrapper from './components/modules/ClientDetailWrapper';
 import Team from './components/modules/Team';
 import Profile from './components/modules/Profile';
+import Metrics from './components/modules/Metrics';
 import Login from './components/Login';
 import MinutesLayout from './components/modules/Minutes/MinutesLayout';
 import { ThemeProvider } from './context/ThemeContext';
@@ -60,6 +61,7 @@ function AppContent() {
             <Route path="/bria" element={<Chat />} />
             <Route path="/gestion" element={<NativeTasks />} />
             <Route path="/minutas" element={<MinutesLayout />} />
+            <Route path="/metricas" element={<Metrics />} />
 
             <Route path="/clientes" element={<Clients />} />
             <Route path="/cliente/:clientId" element={<ClientDetailWrapper />} />
