@@ -12,6 +12,19 @@ const Metrics = () => {
   const [loadingClients, setLoadingClients] = useState(true);
   const [integrationStatus, setIntegrationStatus] = useState(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
+  const [sdkLoaded, setSdkLoaded] = useState(false);
+
+  // Check for Meta SDK readiness
+  useEffect(() => {
+    const checkSDK = setInterval(() => {
+      if (window.FB) {
+        setSdkLoaded(true);
+        clearInterval(checkSDK);
+      }
+    }, 500);
+
+    return () => clearInterval(checkSDK);
+  }, []);
 
   // Load clients on mount
   useEffect(() => {
@@ -60,8 +73,8 @@ const Metrics = () => {
   }, [selectedClientId]);
 
   const handleMetaLogin = () => {
-    if (!window.FB) {
-      toast.error('El SDK de Facebook no está cargado. Por favor, recarga la página.');
+    if (!sdkLoaded || !window.FB) {
+      toast.error('El SDK de Meta no se ha cargado correctamente. Verifica el App ID.');
       return;
     }
 
