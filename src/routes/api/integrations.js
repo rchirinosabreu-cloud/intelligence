@@ -50,10 +50,16 @@ router.get('/:clientId/status', async (req, res) => {
 router.get('/meta/assets/:clientId', async (req, res) => {
     try {
         const { clientId } = req.params;
+        if (!clientId) return res.status(400).json({ error: 'clientId is required' });
+
         const assets = await getMetaAssets(clientId);
         res.json(assets);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error(`[Integration API] Error fetching assets for client ${req.params.clientId}:`, error.message);
+
+        // Use 400 for business logic errors, 500 for unexpected crashes
+        const status = error.message.includes('No se encontró') ? 400 : 500;
+        res.status(status).json({ error: error.message });
     }
 });
 

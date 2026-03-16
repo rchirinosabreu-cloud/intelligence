@@ -120,6 +120,8 @@ export async function getDecryptedToken(clientId, provider) {
  * Fetches Meta assets (Ad Accounts and Pages) for a specific client based on their businessId.
  */
 export async function getMetaAssets(clientId) {
+    if (!clientId) throw new Error('clientId es requerido');
+
     const token = await getDecryptedToken(clientId, 'meta');
     if (!token) throw new Error('No se encontró una conexión de Meta activa para este cliente.');
 
@@ -127,8 +129,13 @@ export async function getMetaAssets(clientId) {
         where: { clientId_provider: { clientId, provider: 'meta' } }
     });
 
+    if (!integration) throw new Error('Integración no encontrada en la base de datos');
+
     const businessId = integration.metadata?.businessId;
-    if (!businessId) throw new Error('No se encontró un ID de Negocio vinculado a esta integración.');
+    if (!businessId) {
+        console.warn(`[IntegrationService] Client ${clientId} lacks businessId in metadata:`, integration.metadata);
+        throw new Error('No se encontró un ID de Negocio vinculado a esta integración. Intenta reconectar la cuenta.');
+    }
 
     const assets = {
         adAccounts: [],
