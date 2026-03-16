@@ -1,5 +1,11 @@
 import express from 'express';
-import { saveMetaIntegration, getIntegrationStatus } from '../../services/integrationService.js';
+import {
+    saveMetaIntegration,
+    getIntegrationStatus,
+    getMetaAssets,
+    getInstagramAccount,
+    updateClientMapping
+} from '../../services/integrationService.js';
 
 const router = express.Router();
 
@@ -37,6 +43,50 @@ router.get('/:clientId/status', async (req, res) => {
     } catch (error) {
         console.error('[Integration API] Error al obtener status:', error.message);
         res.status(500).json({ error: 'Error al obtener el estado de las integraciones' });
+    }
+});
+
+// List Meta Assets (Ad Accounts & Pages)
+router.get('/meta/assets/:clientId', async (req, res) => {
+    try {
+        const { clientId } = req.params;
+        const assets = await getMetaAssets(clientId);
+        res.json(assets);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get Instagram account linked to a Page
+router.get('/meta/instagram/:clientId', async (req, res) => {
+    try {
+        const { clientId } = req.params;
+        const { pageId } = req.query;
+        if (!pageId) return res.status(400).json({ error: 'pageId is required' });
+
+        const igAccount = await getInstagramAccount(clientId, pageId);
+        res.json(igAccount);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Save Asset Mapping to Client
+router.patch('/meta/mapping/:clientId', async (req, res) => {
+    try {
+        const { clientId } = req.params;
+        const { facebookPageId, instagramBusinessId, adAccountId } = req.body;
+
+        await updateClientMapping(clientId, {
+            facebookPageId,
+            instagramBusinessId,
+            adAccountId
+        });
+
+        res.json({ success: true, message: 'Mapeo de activos guardado correctamente' });
+    } catch (error) {
+        console.error('[Integration API] Error guardando mapeo:', error.message);
+        res.status(500).json({ error: 'Error al guardar el mapeo de activos' });
     }
 });
 

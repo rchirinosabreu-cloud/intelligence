@@ -79,6 +79,11 @@ model Client {
   flowMessages FlowMessage[]
   nativeTasks Task[]
   integrations Integration[]
+
+  // BrainStudio Metrics Asset Mapping
+  facebookPageId      String?
+  instagramBusinessId String?
+  adAccountId         String?
 }
 
 // Integraciones con plataformas externas (Fase BrainStudio Metrics)
