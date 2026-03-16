@@ -168,11 +168,19 @@ export async function getMetaAssets(clientId) {
     }
 
     try {
-        // Fetch Ad Accounts
-        const adAccountsRes = await axios.get(`https://graph.facebook.com/v21.0/${businessId}/adaccounts?fields=name,account_id,id&access_token=${token}`);
-        assets.adAccounts = adAccountsRes.data.data;
+        // Fetch Ad Accounts (Combining owned and client accounts as per user request to avoid #100 error)
+        console.log(`[Meta API] Fetching ad accounts for business ${businessId}...`);
+        const adAccountsRes = await axios.get(`https://graph.facebook.com/v21.0/${businessId}?fields=client_ad_accounts{name,account_id,id},owned_ad_accounts{name,account_id,id}&access_token=${token}`);
+
+        const clientAds = adAccountsRes.data.client_ad_accounts?.data || [];
+        const ownedAds = adAccountsRes.data.owned_ad_accounts?.data || [];
+
+        // Merge and remove duplicates (by id)
+        const allAds = [...ownedAds, ...clientAds];
+        assets.adAccounts = Array.from(new Map(allAds.map(item => [item.id, item])).values());
 
         // Fetch Pages (Client pages through the business)
+        console.log(`[Meta API] Fetching pages for business ${businessId}...`);
         const pagesRes = await axios.get(`https://graph.facebook.com/v21.0/${businessId}/client_pages?fields=name,id,access_token&access_token=${token}`);
         assets.pages = pagesRes.data.data;
 
