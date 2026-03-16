@@ -85,6 +85,11 @@ window.fetch = async (...args) => {
                 localStorage.removeItem('authToken');
                 localStorage.removeItem('currentUser');
                 window.dispatchEvent(new Event('auth-error'));
+
+                // Optional: Redirect to login if on a protected route
+                if (!window.location.pathname.startsWith('/login')) {
+                    window.location.href = '/login';
+                }
             } else if (response.status === 403) {
                 console.warn(`[Auth] 403 Forbidden on ${urlStr}. Triggering toast event.`);
                 window.dispatchEvent(new Event('auth-forbidden'));

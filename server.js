@@ -273,7 +273,7 @@ app.post('/api/login', async (req, res) => {
               role: user.role
           },
           JWT_SECRET,
-          { expiresIn: '24h' }
+          { expiresIn: '30d' }
       );
 
       return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
