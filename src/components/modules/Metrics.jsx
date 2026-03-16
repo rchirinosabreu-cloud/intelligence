@@ -114,7 +114,12 @@ const Metrics = () => {
       if (response.ok) {
         toast.success('¡Cuenta de Meta vinculada correctamente!');
         // Refresh status
-        setIntegrationStatus({ provider: 'meta', updatedAt: new Date().toISOString() });
+        const statusResponse = await fetch(`${getApiBaseUrl()}/api/integrations/${selectedClientId}/status`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        const statusData = await statusResponse.json();
+        const meta = statusData.find(i => i.provider === 'meta');
+        setIntegrationStatus(meta || null);
       } else {
         throw new Error(data.details || data.error);
       }
@@ -206,9 +211,33 @@ const Metrics = () => {
                 </h4>
                 <div className="px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 text-[10px] font-bold uppercase">Activo</div>
               </div>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">
                  La conexión está establecida correctamente. Los datos de pauta y engagement están fluyendo.
               </p>
+
+              {integrationStatus.metadata && (
+                <div className="mb-6 space-y-2 bg-zinc-50 dark:bg-zinc-900/50 p-3 rounded-lg border border-zinc-100 dark:border-zinc-800">
+                   {integrationStatus.metadata.facebookUserName && (
+                     <div className="flex justify-between items-center text-xs">
+                        <span className="text-zinc-400">Usuario:</span>
+                        <span className="font-semibold">{integrationStatus.metadata.facebookUserName}</span>
+                     </div>
+                   )}
+                   {integrationStatus.metadata.businessName && (
+                     <div className="flex justify-between items-center text-xs">
+                        <span className="text-zinc-400">Business:</span>
+                        <span className="font-semibold">{integrationStatus.metadata.businessName}</span>
+                     </div>
+                   )}
+                   {integrationStatus.metadata.businessId && (
+                     <div className="flex justify-between items-center text-[10px]">
+                        <span className="text-zinc-400">ID:</span>
+                        <span className="font-mono">{integrationStatus.metadata.businessId}</span>
+                     </div>
+                   )}
+                </div>
+              )}
+
               <div className="text-[10px] text-zinc-400 uppercase tracking-wider mb-1">Última sincronización</div>
               <div className="text-xs font-mono">{new Date(integrationStatus.updatedAt).toLocaleString()}</div>
            </Card>

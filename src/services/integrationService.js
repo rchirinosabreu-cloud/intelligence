@@ -31,6 +31,33 @@ export async function saveMetaIntegration(clientId, shortLivedToken, metadata = 
     const longLivedToken = await exchangeMetaLongLivedToken(shortLivedToken);
     const encryptedToken = encrypt(longLivedToken);
 
+    // Fetch Meta Profile details to enrich metadata
+    let enrichedMetadata = { ...metadata };
+    try {
+        console.log('[Meta API] Fetching profile details for long-lived token...');
+        const profileResponse = await axios.get(`https://graph.facebook.com/v21.0/me?fields=id,name&access_token=${longLivedToken}`);
+
+        enrichedMetadata = {
+            ...enrichedMetadata,
+            facebookUserId: profileResponse.data.id,
+            facebookUserName: profileResponse.data.name
+        };
+
+        // Try to fetch business accounts if permission was granted
+        try {
+            const businessesResponse = await axios.get(`https://graph.facebook.com/v21.0/me/businesses?access_token=${longLivedToken}`);
+            if (businessesResponse.data?.data?.length > 0) {
+                // Store first business ID as primary businessId in metadata
+                enrichedMetadata.businessId = businessesResponse.data.data[0].id;
+                enrichedMetadata.businessName = businessesResponse.data.data[0].name;
+            }
+        } catch (bizError) {
+            console.warn('[Meta API] Could not fetch businesses:', bizError.message);
+        }
+    } catch (profileError) {
+        console.error('[Meta API] Error fetching profile details:', profileError.message);
+    }
+
     return await prisma.integration.upsert({
         where: {
             clientId_provider: {
@@ -40,14 +67,14 @@ export async function saveMetaIntegration(clientId, shortLivedToken, metadata = 
         },
         update: {
             encryptedToken,
-            metadata,
+            metadata: enrichedMetadata,
             updatedAt: new Date()
         },
         create: {
             clientId,
             provider: 'meta',
             encryptedToken,
-            metadata
+            metadata: enrichedMetadata
         }
     });
 }
