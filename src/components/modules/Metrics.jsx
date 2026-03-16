@@ -15,8 +15,9 @@ const Metrics = () => {
   const [sdkLoaded, setSdkLoaded] = useState(false);
 
   // Asset Mapping State
-  const [assets, setAssets] = useState({ adAccounts: [], pages: [] });
+  const [assets, setAssets] = useState({ adAccounts: [], pages: [], businesses: [], requiresBusinessSelection: false });
   const [loadingAssets, setLoadingAssets] = useState(false);
+  const [selectedBusiness, setSelectedBusiness] = useState('');
   const [selectedPage, setSelectedPage] = useState('');
   const [selectedAdAccount, setSelectedAdAccount] = useState('');
   const [instagramAccount, setInstagramAccount] = useState(null);
@@ -82,11 +83,11 @@ const Metrics = () => {
         if (clientData) {
            setSelectedPage(clientData.facebookPageId || '');
            setSelectedAdAccount(clientData.adAccountId || '');
-           // Instagram will be fetched via useEffect when selectedPage is set
         }
 
         // 3. If connected, fetch available assets
         if (meta) {
+           setSelectedBusiness(meta.metadata?.businessId || '');
            fetchAvailableAssets();
         }
 
@@ -101,13 +102,16 @@ const Metrics = () => {
   }, [selectedClientId]);
 
   const resetMappingState = () => {
-    setAssets({ adAccounts: [], pages: [] });
+    setAssets({ adAccounts: [], pages: [], businesses: [], requiresBusinessSelection: false });
+    setSelectedBusiness('');
     setSelectedPage('');
     setSelectedAdAccount('');
     setInstagramAccount(null);
   };
 
   const fetchAvailableAssets = async () => {
+    if (!selectedClientId) return;
+    console.log(`[Metrics UI] Fetching assets for Client ID: ${selectedClientId}`);
     setLoadingAssets(true);
     try {
       const res = await fetch(`${getApiBaseUrl()}/api/integrations/meta/assets/${selectedClientId}`, {
@@ -116,6 +120,9 @@ const Metrics = () => {
       const data = await res.json();
       if (res.ok) {
         setAssets(data);
+        if (!data.requiresBusinessSelection && data.businessId) {
+            setSelectedBusiness(data.businessId);
+        }
       } else {
         toast.error('No se pudieron cargar los activos de Meta');
       }
@@ -221,12 +228,15 @@ const Metrics = () => {
         body: JSON.stringify({
           facebookPageId: selectedPage,
           instagramBusinessId: instagramAccount?.id || null,
-          adAccountId: selectedAdAccount
+          adAccountId: selectedAdAccount,
+          businessId: selectedBusiness
         })
       });
 
       if (res.ok) {
         toast.success('Mapeo de activos guardado correctamente');
+        // Refresh mapping state
+        fetchAvailableAssets();
       } else {
         toast.error('Error al guardar el mapeo');
       }
@@ -377,7 +387,51 @@ const Metrics = () => {
                 </div>
              </div>
 
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+             <div className="space-y-6">
+                {/* Business Selector */}
+                <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border border-zinc-100 dark:border-zinc-800 space-y-3">
+                    <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+                       Meta Business Account
+                    </label>
+                    <select
+                        value={selectedBusiness}
+                        onChange={(e) => {
+                            setSelectedBusiness(e.target.value);
+                            // Clear assets when business changes to avoid mismatch
+                            setAssets(prev => ({ ...prev, adAccounts: [], pages: [] }));
+                        }}
+                        className="w-full h-10 px-3 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-sm focus:ring-2 focus:ring-primary outline-none transition-all"
+                    >
+                        <option value="">-- Seleccionar Business --</option>
+                        {assets.businesses?.map(biz => (
+                           <option key={biz.id} value={biz.id}>{biz.name}</option>
+                        ))}
+                        {/* If we already have a business name but it's not in the 'businesses' list yet */}
+                        {integrationStatus?.metadata?.businessId && !assets.businesses?.find(b => b.id === integrationStatus.metadata.businessId) && (
+                            <option value={integrationStatus.metadata.businessId}>
+                                {integrationStatus.metadata.businessName || 'Business Actual'}
+                            </option>
+                        )}
+                    </select>
+                    {assets.requiresBusinessSelection && (
+                        <p className="text-[10px] text-amber-600 font-medium animate-pulse">
+                           ⚠️ Debes seleccionar un Business Account para listar sus activos.
+                        </p>
+                    )}
+                    {selectedBusiness && selectedBusiness !== integrationStatus?.metadata?.businessId && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-[10px] h-7"
+                            onClick={handleSaveMapping}
+                            disabled={savingMapping}
+                        >
+                            Cargar Activos de este Business
+                        </Button>
+                    )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Facebook Page & Instagram */}
                 <div className="space-y-4">
                    <div className="space-y-2">
@@ -435,7 +489,7 @@ const Metrics = () => {
                    <div className="pt-6 flex justify-end">
                       <Button
                         onClick={handleSaveMapping}
-                        disabled={savingMapping || !selectedPage || !selectedAdAccount}
+                        disabled={savingMapping || !selectedPage || !selectedAdAccount || !selectedBusiness}
                         className="flex items-center gap-2"
                       >
                         {savingMapping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}

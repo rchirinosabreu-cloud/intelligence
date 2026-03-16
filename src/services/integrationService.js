@@ -132,15 +132,26 @@ export async function getMetaAssets(clientId) {
     if (!integration) throw new Error('Integración no encontrada en la base de datos');
 
     const businessId = integration.metadata?.businessId;
-    if (!businessId) {
-        console.warn(`[IntegrationService] Client ${clientId} lacks businessId in metadata:`, integration.metadata);
-        throw new Error('No se encontró un ID de Negocio vinculado a esta integración. Intenta reconectar la cuenta.');
-    }
+
+    console.log(`[IntegrationService] Fetching assets for Client: ${clientId}, Business: ${businessId || 'NONE'}`);
 
     const assets = {
         adAccounts: [],
-        pages: []
+        pages: [],
+        businesses: [], // Added to support selection if businessId is missing
+        requiresBusinessSelection: !businessId
     };
+
+    if (!businessId) {
+        console.log(`[IntegrationService] No businessId for client ${clientId}. Fetching available businesses...`);
+        try {
+            const bizRes = await axios.get(`https://graph.facebook.com/v21.0/me/businesses?access_token=${token}`);
+            assets.businesses = bizRes.data.data;
+        } catch (bizError) {
+            console.error('[Meta API] Error fetching businesses:', bizError.response?.data || bizError.message);
+        }
+        return assets;
+    }
 
     try {
         // Fetch Ad Accounts
@@ -176,12 +187,13 @@ export async function getInstagramAccount(clientId, pageId) {
 }
 
 /**
- * Updates the client's asset mapping.
+ * Updates the client's asset mapping and optionally the integration businessId.
  */
 export async function updateClientMapping(clientId, mapping) {
-    const { facebookPageId, instagramBusinessId, adAccountId } = mapping;
+    const { facebookPageId, instagramBusinessId, adAccountId, businessId } = mapping;
 
-    return await prisma.client.update({
+    // 1. Update Client Mapping
+    await prisma.client.update({
         where: { id: clientId },
         data: {
             facebookPageId,
@@ -189,4 +201,36 @@ export async function updateClientMapping(clientId, mapping) {
             adAccountId
         }
     });
+
+    // 2. If businessId is provided, update Integration metadata
+    if (businessId) {
+        const integration = await prisma.integration.findUnique({
+            where: { clientId_provider: { clientId, provider: 'meta' } }
+        });
+
+        if (integration) {
+            const newMetadata = {
+                ...(integration.metadata || {}),
+                businessId
+            };
+
+            // Try to find the business name to enrich metadata
+            try {
+                const token = decrypt(integration.encryptedToken);
+                const bizRes = await axios.get(`https://graph.facebook.com/v21.0/${businessId}?fields=name&access_token=${token}`);
+                if (bizRes.data?.name) {
+                    newMetadata.businessName = bizRes.data.name;
+                }
+            } catch (e) {
+                console.warn('[IntegrationService] Could not fetch business name for mapping update:', e.message);
+            }
+
+            await prisma.integration.update({
+                where: { id: integration.id },
+                data: { metadata: newMetadata }
+            });
+        }
+    }
+
+    return { success: true };
 }
