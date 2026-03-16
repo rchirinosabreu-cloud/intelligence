@@ -278,7 +278,7 @@ const Metrics = () => {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
       {/* Header */}
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-3">
@@ -315,7 +315,7 @@ const Metrics = () => {
 
       {/* Content Area */}
       {!selectedClientId ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 opacity-50">
+        <div className="flex flex-col items-center justify-center py-10 md:py-20 text-center space-y-4 opacity-50">
           <Users className="w-16 h-16 text-zinc-300" />
           <div>
             <h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Esperando Cliente</h3>
@@ -327,25 +327,25 @@ const Metrics = () => {
           <Loader2 className="w-10 h-10 animate-spin text-primary" />
         </div>
       ) : !integrationStatus ? (
-        <Card className="p-12 flex flex-col items-center justify-center text-center space-y-6 border-dashed">
-          <div className="w-20 h-20 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center">
-            <AlertTriangle className="w-10 h-10 text-amber-500" />
+        <Card className="p-6 md:p-12 flex flex-col items-center justify-center text-center space-y-6 border-dashed">
+          <div className="w-16 h-16 md:w-20 md:h-20 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center">
+            <AlertTriangle className="w-8 h-8 md:w-10 md:h-10 text-amber-500" />
           </div>
           <div className="space-y-2">
-            <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Esperando Datos</h3>
-            <p className="text-zinc-500 max-w-lg mx-auto">
+            <h3 className="text-xl md:text-2xl font-bold text-zinc-900 dark:text-zinc-100">Esperando Datos</h3>
+            <p className="text-xs md:text-sm text-zinc-500 max-w-lg mx-auto">
               Este cliente aún no tiene vinculada su cuenta de Meta Business. Conéctala para empezar a recibir datos de Facebook, Instagram y Meta Ads.
             </p>
           </div>
           <Button
             size="lg"
             onClick={handleMetaLogin}
-            className="bg-[#1877F2] hover:bg-[#166fe5] text-white px-8 h-12 rounded-full flex items-center gap-3 shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95"
+            className="w-full md:w-auto bg-[#1877F2] hover:bg-[#166fe5] text-white px-8 h-12 rounded-full flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95"
           >
             <Facebook className="w-6 h-6 fill-current" />
             Conectar cuenta de Meta Business
           </Button>
-          <p className="text-xs text-zinc-400">
+          <p className="text-[10px] md:text-xs text-zinc-400">
             Solicitaremos permisos de lectura para Páginas, Instagram e Insights de Anuncios.
           </p>
         </Card>
@@ -418,14 +418,14 @@ const Metrics = () => {
           </div>
 
           {/* Asset Mapping Section */}
-          <Card className="p-8 border-l-4 border-amber-500">
+          <Card className="p-4 md:p-8 border-l-4 border-amber-500">
              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg shrink-0">
                    <Settings2 className="w-5 h-5 text-amber-600" />
                 </div>
                 <div>
-                   <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Configuración de Activos</h3>
-                   <p className="text-xs text-zinc-500">Mapea los activos específicos de este cliente para la extracción de datos.</p>
+                   <h3 className="text-base md:text-lg font-bold text-zinc-900 dark:text-zinc-100">Configuración de Activos</h3>
+                   <p className="text-[10px] md:text-xs text-zinc-500">Mapea los activos específicos de este cliente para la extracción de datos.</p>
                 </div>
              </div>
 
@@ -508,7 +508,7 @@ const Metrics = () => {
                       <Button
                         onClick={handleSaveMapping}
                         disabled={savingMapping || !selectedPage || !selectedAdAccount}
-                        className="flex items-center gap-2"
+                        className="w-full md:w-auto flex items-center justify-center gap-2"
                       >
                         {savingMapping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                         Guardar Configuración
