@@ -173,7 +173,7 @@ const Metrics = () => {
         toast.error('Inicio de sesión cancelado.');
       }
     }, {
-      scope: 'pages_show_list,pages_read_engagement,pages_manage_engagement,instagram_basic,instagram_manage_insights,ads_read,ads_management',
+      scope: 'pages_show_list,pages_read_engagement,pages_manage_engagement,instagram_basic,instagram_manage_insights,ads_read,ads_management,business_management',
       return_scopes: true
     });
   };
