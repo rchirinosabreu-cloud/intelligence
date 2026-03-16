@@ -4,7 +4,8 @@ import {
     getIntegrationStatus,
     getMetaAssets,
     getInstagramAccount,
-    updateClientMapping
+    updateClientMapping,
+    deleteIntegration
 } from '../../services/integrationService.js';
 
 const router = express.Router();
@@ -94,6 +95,18 @@ router.patch('/meta/mapping/:clientId', async (req, res) => {
     } catch (error) {
         console.error('[Integration API] Error guardando mapeo:', error.message);
         res.status(500).json({ error: 'Error al guardar el mapeo de activos' });
+    }
+});
+
+// Delete integration
+router.delete('/:clientId/:provider', async (req, res) => {
+    try {
+        const { clientId, provider } = req.params;
+        await deleteIntegration(clientId, provider);
+        res.json({ success: true, message: 'Conexión eliminada correctamente' });
+    } catch (error) {
+        console.error('[Integration API] Error eliminando integración:', error.message);
+        res.status(500).json({ error: 'Error al eliminar la conexión' });
     }
 });
 
