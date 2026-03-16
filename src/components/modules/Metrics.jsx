@@ -19,6 +19,7 @@ const Metrics = () => {
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [selectedPage, setSelectedPage] = useState('');
   const [selectedAdAccount, setSelectedAdAccount] = useState('');
+  const [selectedBusiness, setSelectedBusiness] = useState('');
   const [instagramAccount, setInstagramAccount] = useState(null);
   const [loadingIG, setLoadingIG] = useState(false);
   const [savingMapping, setSavingMapping] = useState(false);
@@ -74,6 +75,10 @@ const Metrics = () => {
         const meta = statusData.find(i => i.provider === 'meta');
         setIntegrationStatus(meta || null);
 
+        if (meta?.metadata?.businessId) {
+            setSelectedBusiness(meta.metadata.businessId);
+        }
+
         // 2. Fetch current client mapping from Client DB
         const clientResponse = await fetch(`${getApiBaseUrl()}/api/db/clients/${selectedClientId}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
@@ -104,6 +109,7 @@ const Metrics = () => {
     setAssets({ adAccounts: [], pages: [], businesses: [] });
     setSelectedPage('');
     setSelectedAdAccount('');
+    setSelectedBusiness('');
     setInstagramAccount(null);
   };
 
@@ -248,12 +254,20 @@ const Metrics = () => {
         body: JSON.stringify({
           facebookPageId: selectedPage,
           instagramBusinessId: instagramAccount?.id || null,
-          adAccountId: selectedAdAccount
+          adAccountId: selectedAdAccount,
+          businessId: selectedBusiness
         })
       });
 
       if (res.ok) {
         toast.success('Mapeo de activos guardado correctamente');
+        // Refresh integration status to show updated business name in the card
+        const statusResponse = await fetch(`${getApiBaseUrl()}/api/integrations/${selectedClientId}/status`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        const statusData = await statusResponse.json();
+        const meta = statusData.find(i => i.provider === 'meta');
+        setIntegrationStatus(meta || null);
       } else {
         toast.error('Error al guardar el mapeo');
       }
@@ -421,6 +435,23 @@ const Metrics = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Facebook Page & Instagram */}
                 <div className="space-y-4">
+                   <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+                         <Users className="w-3 h-3" /> Meta Business Account
+                      </label>
+                      <select
+                        value={selectedBusiness}
+                        onChange={(e) => setSelectedBusiness(e.target.value)}
+                        disabled={loadingAssets}
+                        className="w-full h-10 px-3 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-sm focus:ring-2 focus:ring-primary outline-none transition-all"
+                      >
+                        <option value="">-- Seleccionar Business --</option>
+                        {assets.businesses.map(biz => (
+                           <option key={biz.id} value={biz.id}>{biz.name} ({biz.id})</option>
+                        ))}
+                      </select>
+                   </div>
+
                    <div className="space-y-2">
                       <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
                          <Facebook className="w-3 h-3" /> Página de Facebook
