@@ -115,3 +115,71 @@ export async function getDecryptedToken(clientId, provider) {
 
     return decrypt(integration.encryptedToken);
 }
+
+/**
+ * Fetches Meta assets (Ad Accounts and Pages) for a specific client based on their businessId.
+ */
+export async function getMetaAssets(clientId) {
+    const token = await getDecryptedToken(clientId, 'meta');
+    if (!token) throw new Error('No se encontró una conexión de Meta activa para este cliente.');
+
+    const integration = await prisma.integration.findUnique({
+        where: { clientId_provider: { clientId, provider: 'meta' } }
+    });
+
+    const businessId = integration.metadata?.businessId;
+    if (!businessId) throw new Error('No se encontró un ID de Negocio vinculado a esta integración.');
+
+    const assets = {
+        adAccounts: [],
+        pages: []
+    };
+
+    try {
+        // Fetch Ad Accounts
+        const adAccountsRes = await axios.get(`https://graph.facebook.com/v21.0/${businessId}/adaccounts?fields=name,account_id,id&access_token=${token}`);
+        assets.adAccounts = adAccountsRes.data.data;
+
+        // Fetch Pages (Client pages through the business)
+        const pagesRes = await axios.get(`https://graph.facebook.com/v21.0/${businessId}/client_pages?fields=name,id,access_token&access_token=${token}`);
+        assets.pages = pagesRes.data.data;
+
+    } catch (error) {
+        console.error('[Meta API] Error fetching assets:', error.response?.data || error.message);
+        throw new Error('Error al obtener activos de Meta: ' + (error.response?.data?.error?.message || error.message));
+    }
+
+    return assets;
+}
+
+/**
+ * Fetches the Instagram Business account linked to a specific Facebook Page.
+ */
+export async function getInstagramAccount(clientId, pageId) {
+    const token = await getDecryptedToken(clientId, 'meta');
+    if (!token) throw new Error('Token no encontrado');
+
+    try {
+        const response = await axios.get(`https://graph.facebook.com/v21.0/${pageId}?fields=instagram_business_account{id,username,name}&access_token=${token}`);
+        return response.data.instagram_business_account || null;
+    } catch (error) {
+        console.error('[Meta API] Error fetching Instagram account:', error.response?.data || error.message);
+        throw new Error('Error al obtener cuenta de Instagram: ' + (error.response?.data?.error?.message || error.message));
+    }
+}
+
+/**
+ * Updates the client's asset mapping.
+ */
+export async function updateClientMapping(clientId, mapping) {
+    const { facebookPageId, instagramBusinessId, adAccountId } = mapping;
+
+    return await prisma.client.update({
+        where: { id: clientId },
+        data: {
+            facebookPageId,
+            instagramBusinessId,
+            adAccountId
+        }
+    });
+}

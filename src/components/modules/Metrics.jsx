@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Users, Facebook, Instagram, Megaphone, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { BarChart3, Users, Facebook, Instagram, Megaphone, Loader2, AlertTriangle, CheckCircle2, Settings2, Save } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'react-hot-toast';
@@ -13,6 +13,15 @@ const Metrics = () => {
   const [integrationStatus, setIntegrationStatus] = useState(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [sdkLoaded, setSdkLoaded] = useState(false);
+
+  // Asset Mapping State
+  const [assets, setAssets] = useState({ adAccounts: [], pages: [] });
+  const [loadingAssets, setLoadingAssets] = useState(false);
+  const [selectedPage, setSelectedPage] = useState('');
+  const [selectedAdAccount, setSelectedAdAccount] = useState('');
+  const [instagramAccount, setInstagramAccount] = useState(null);
+  const [loadingIG, setLoadingIG] = useState(false);
+  const [savingMapping, setSavingMapping] = useState(false);
 
   // Check for Meta SDK readiness
   useEffect(() => {
@@ -49,19 +58,38 @@ const Metrics = () => {
   useEffect(() => {
     if (!selectedClientId) {
       setIntegrationStatus(null);
+      resetMappingState();
       return;
     }
 
     const fetchStatus = async () => {
       setLoadingStatus(true);
       try {
-        const response = await fetch(`${getApiBaseUrl()}/api/integrations/${selectedClientId}/status`, {
+        // 1. Fetch integration status
+        const statusResponse = await fetch(`${getApiBaseUrl()}/api/integrations/${selectedClientId}/status`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
         });
-        const data = await response.json();
-        // Look for 'meta' provider
-        const meta = data.find(i => i.provider === 'meta');
+        const statusData = await statusResponse.json();
+        const meta = statusData.find(i => i.provider === 'meta');
         setIntegrationStatus(meta || null);
+
+        // 2. Fetch current client mapping from Client DB
+        const clientResponse = await fetch(`${getApiBaseUrl()}/api/db/clients/${selectedClientId}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        const clientData = await clientResponse.json();
+
+        if (clientData) {
+           setSelectedPage(clientData.facebookPageId || '');
+           setSelectedAdAccount(clientData.adAccountId || '');
+           // Instagram will be fetched via useEffect when selectedPage is set
+        }
+
+        // 3. If connected, fetch available assets
+        if (meta) {
+           fetchAvailableAssets();
+        }
+
       } catch (error) {
         console.error('Error fetching status:', error);
       } finally {
@@ -71,6 +99,57 @@ const Metrics = () => {
 
     fetchStatus();
   }, [selectedClientId]);
+
+  const resetMappingState = () => {
+    setAssets({ adAccounts: [], pages: [] });
+    setSelectedPage('');
+    setSelectedAdAccount('');
+    setInstagramAccount(null);
+  };
+
+  const fetchAvailableAssets = async () => {
+    setLoadingAssets(true);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/integrations/meta/assets/${selectedClientId}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAssets(data);
+      } else {
+        toast.error('No se pudieron cargar los activos de Meta');
+      }
+    } catch (error) {
+      console.error('Error fetching assets:', error);
+    } finally {
+      setLoadingAssets(false);
+    }
+  };
+
+  // Fetch Instagram when Page changes
+  useEffect(() => {
+    if (!selectedPage || !selectedClientId) {
+      setInstagramAccount(null);
+      return;
+    }
+
+    const fetchIG = async () => {
+      setLoadingIG(true);
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/api/integrations/meta/instagram/${selectedClientId}?pageId=${selectedPage}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+        const data = await res.json();
+        setInstagramAccount(data);
+      } catch (error) {
+        console.error('Error fetching IG:', error);
+      } finally {
+        setLoadingIG(false);
+      }
+    };
+
+    fetchIG();
+  }, [selectedPage, selectedClientId]);
 
   const handleMetaLogin = () => {
     if (!sdkLoaded || !window.FB) {
@@ -113,19 +192,49 @@ const Metrics = () => {
 
       if (response.ok) {
         toast.success('¡Cuenta de Meta vinculada correctamente!');
-        // Refresh status
+        // Refresh everything
         const statusResponse = await fetch(`${getApiBaseUrl()}/api/integrations/${selectedClientId}/status`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
         });
         const statusData = await statusResponse.json();
         const meta = statusData.find(i => i.provider === 'meta');
         setIntegrationStatus(meta || null);
+        if (meta) fetchAvailableAssets();
       } else {
         throw new Error(data.details || data.error);
       }
     } catch (error) {
       console.error('Error exchanging token:', error);
       toast.error(`Error al vincular: ${error.message}`);
+    }
+  };
+
+  const handleSaveMapping = async () => {
+    setSavingMapping(true);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/integrations/meta/mapping/${selectedClientId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify({
+          facebookPageId: selectedPage,
+          instagramBusinessId: instagramAccount?.id || null,
+          adAccountId: selectedAdAccount
+        })
+      });
+
+      if (res.ok) {
+        toast.success('Mapeo de activos guardado correctamente');
+      } else {
+        toast.error('Error al guardar el mapeo');
+      }
+    } catch (error) {
+      console.error('Error saving mapping:', error);
+      toast.error('Error de red al guardar');
+    } finally {
+      setSavingMapping(false);
     }
   };
 
@@ -202,57 +311,140 @@ const Metrics = () => {
           </p>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-           <Card className="p-6 border-t-4 border-primary">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-bold flex items-center gap-2">
-                   <CheckCircle2 className="w-5 h-5 text-green-500" />
-                   Meta Connected
-                </h4>
-                <div className="px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 text-[10px] font-bold uppercase">Activo</div>
-              </div>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">
-                 La conexión está establecida correctamente. Los datos de pauta y engagement están fluyendo.
-              </p>
-
-              {integrationStatus.metadata && (
-                <div className="mb-6 space-y-2 bg-zinc-50 dark:bg-zinc-900/50 p-3 rounded-lg border border-zinc-100 dark:border-zinc-800">
-                   {integrationStatus.metadata.facebookUserName && (
-                     <div className="flex justify-between items-center text-xs">
-                        <span className="text-zinc-400">Usuario:</span>
-                        <span className="font-semibold">{integrationStatus.metadata.facebookUserName}</span>
-                     </div>
-                   )}
-                   {integrationStatus.metadata.businessName && (
-                     <div className="flex justify-between items-center text-xs">
-                        <span className="text-zinc-400">Business:</span>
-                        <span className="font-semibold">{integrationStatus.metadata.businessName}</span>
-                     </div>
-                   )}
-                   {integrationStatus.metadata.businessId && (
-                     <div className="flex justify-between items-center text-[10px]">
-                        <span className="text-zinc-400">ID:</span>
-                        <span className="font-mono">{integrationStatus.metadata.businessId}</span>
-                     </div>
-                   )}
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="p-6 border-t-4 border-primary">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-bold flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    Meta Connected
+                  </h4>
+                  <div className="px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 text-[10px] font-bold uppercase">Activo</div>
                 </div>
-              )}
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">
+                  La conexión está establecida correctamente. Los datos de pauta y engagement están fluyendo.
+                </p>
 
-              <div className="text-[10px] text-zinc-400 uppercase tracking-wider mb-1">Última sincronización</div>
-              <div className="text-xs font-mono">{new Date(integrationStatus.updatedAt).toLocaleString()}</div>
-           </Card>
+                {integrationStatus.metadata && (
+                  <div className="mb-6 space-y-2 bg-zinc-50 dark:bg-zinc-900/50 p-3 rounded-lg border border-zinc-100 dark:border-zinc-800">
+                    {integrationStatus.metadata.facebookUserName && (
+                      <div className="flex justify-between items-center text-xs">
+                          <span className="text-zinc-400">Usuario:</span>
+                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">{integrationStatus.metadata.facebookUserName}</span>
+                      </div>
+                    )}
+                    {integrationStatus.metadata.businessName && (
+                      <div className="flex justify-between items-center text-xs">
+                          <span className="text-zinc-400">Business:</span>
+                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">{integrationStatus.metadata.businessName}</span>
+                      </div>
+                    )}
+                    {integrationStatus.metadata.businessId && (
+                      <div className="flex justify-between items-center text-[10px]">
+                          <span className="text-zinc-400">ID:</span>
+                          <span className="font-mono text-zinc-800 dark:text-zinc-200">{integrationStatus.metadata.businessId}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-           <Card className="p-6 opacity-40 grayscale flex flex-col justify-center items-center border-dashed">
-              <BarChart3 className="w-8 h-8 mb-2" />
-              <div className="font-semibold text-sm">Próximamente</div>
-              <p className="text-[10px] text-center">Dashboard de visualización de datos de Meta.</p>
-           </Card>
+                <div className="text-[10px] text-zinc-400 uppercase tracking-wider mb-1">Última sincronización</div>
+                <div className="text-xs font-mono text-zinc-600 dark:text-zinc-400">{new Date(integrationStatus.updatedAt).toLocaleString()}</div>
+            </Card>
 
-           <Card className="p-6 opacity-40 grayscale flex flex-col justify-center items-center border-dashed">
-              <Megaphone className="w-8 h-8 mb-2" />
-              <div className="font-semibold text-sm">Google Analytics</div>
-              <p className="text-[10px] text-center">Disponible en la Fase 2.</p>
-           </Card>
+            <Card className="p-6 opacity-40 grayscale flex flex-col justify-center items-center border-dashed">
+                <BarChart3 className="w-8 h-8 mb-2" />
+                <div className="font-semibold text-sm">Próximamente</div>
+                <p className="text-[10px] text-center">Dashboard de visualización de datos de Meta.</p>
+            </Card>
+
+            <Card className="p-6 opacity-40 grayscale flex flex-col justify-center items-center border-dashed">
+                <Megaphone className="w-8 h-8 mb-2" />
+                <div className="font-semibold text-sm">Google Analytics</div>
+                <p className="text-[10px] text-center">Disponible en la Fase 2.</p>
+            </Card>
+          </div>
+
+          {/* Asset Mapping Section */}
+          <Card className="p-8 border-l-4 border-amber-500">
+             <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                   <Settings2 className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                   <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Configuración de Activos</h3>
+                   <p className="text-xs text-zinc-500">Mapea los activos específicos de este cliente para la extracción de datos.</p>
+                </div>
+             </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Facebook Page & Instagram */}
+                <div className="space-y-4">
+                   <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+                         <Facebook className="w-3 h-3" /> Página de Facebook
+                      </label>
+                      <select
+                        value={selectedPage}
+                        onChange={(e) => setSelectedPage(e.target.value)}
+                        disabled={loadingAssets}
+                        className="w-full h-10 px-3 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-sm focus:ring-2 focus:ring-primary outline-none transition-all"
+                      >
+                        <option value="">-- Seleccionar Página --</option>
+                        {assets.pages.map(page => (
+                           <option key={page.id} value={page.id}>{page.name}</option>
+                        ))}
+                      </select>
+                   </div>
+
+                   <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+                         <Instagram className="w-3 h-3" /> Cuenta de Instagram
+                      </label>
+                      <div className="h-10 px-3 rounded-md border border-zinc-100 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-900/30 flex items-center text-sm italic text-zinc-500">
+                         {loadingIG ? (
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                         ) : instagramAccount ? (
+                            <span className="text-zinc-900 dark:text-zinc-100 font-medium not-italic">@{instagramAccount.username} ({instagramAccount.name})</span>
+                         ) : (
+                            "Se detectará automáticamente al elegir la página"
+                         )}
+                      </div>
+                   </div>
+                </div>
+
+                {/* Ad Account */}
+                <div className="space-y-4">
+                   <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+                         <Megaphone className="w-3 h-3" /> Cuenta Publicitaria (Ads)
+                      </label>
+                      <select
+                        value={selectedAdAccount}
+                        onChange={(e) => setSelectedAdAccount(e.target.value)}
+                        disabled={loadingAssets}
+                        className="w-full h-10 px-3 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-sm focus:ring-2 focus:ring-primary outline-none transition-all"
+                      >
+                        <option value="">-- Seleccionar Cuenta de Ads --</option>
+                        {assets.adAccounts.map(acc => (
+                           <option key={acc.id} value={acc.id}>{acc.name} ({acc.account_id})</option>
+                        ))}
+                      </select>
+                   </div>
+
+                   <div className="pt-6 flex justify-end">
+                      <Button
+                        onClick={handleSaveMapping}
+                        disabled={savingMapping || !selectedPage || !selectedAdAccount}
+                        className="flex items-center gap-2"
+                      >
+                        {savingMapping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        Guardar Configuración
+                      </Button>
+                   </div>
+                </div>
+             </div>
+          </Card>
         </div>
       )}
     </div>
