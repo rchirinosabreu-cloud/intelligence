@@ -81,12 +81,13 @@ router.get('/meta/instagram/:clientId', async (req, res) => {
 router.patch('/meta/mapping/:clientId', async (req, res) => {
     try {
         const { clientId } = req.params;
-        const { facebookPageId, instagramBusinessId, adAccountId } = req.body;
+        const { facebookPageId, instagramBusinessId, adAccountId, businessId } = req.body;
 
         await updateClientMapping(clientId, {
             facebookPageId,
             instagramBusinessId,
-            adAccountId
+            adAccountId,
+            businessId
         });
 
         res.json({ success: true, message: 'Mapeo de activos guardado correctamente' });
