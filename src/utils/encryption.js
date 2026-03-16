@@ -10,10 +10,15 @@ function getEncryptionKey() {
     if (!key) {
         throw new Error('ENCRYPTION_KEY is not defined in environment variables.');
     }
-    if (key.length !== 32) {
-        throw new Error('ENCRYPTION_KEY must be exactly 32 characters long.');
+
+    // Support both 32-character strings and 64-character hexadecimal strings
+    if (key.length === 64) {
+        return Buffer.from(key, 'hex');
+    } else if (key.length === 32) {
+        return Buffer.from(key);
+    } else {
+        throw new Error('ENCRYPTION_KEY must be 32 characters or a 64-character hex string.');
     }
-    return key;
 }
 
 /**
@@ -22,9 +27,9 @@ function getEncryptionKey() {
  * @returns {string} - The encrypted string in format: iv:encryptedData
  */
 export function encrypt(text) {
-    const key = getEncryptionKey();
+    const keyBuffer = getEncryptionKey();
     const iv = crypto.randomBytes(IV_LENGTH);
-    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key), iv);
+    const cipher = crypto.createCipheriv('aes-256-cbc', keyBuffer, iv);
     let encrypted = cipher.update(text);
 
     encrypted = Buffer.concat([encrypted, cipher.final()]);
@@ -38,11 +43,11 @@ export function encrypt(text) {
  * @returns {string} - The decrypted text.
  */
 export function decrypt(text) {
-    const key = getEncryptionKey();
+    const keyBuffer = getEncryptionKey();
     const textParts = text.split(':');
     const iv = Buffer.from(textParts.shift(), 'hex');
     const encryptedText = Buffer.from(textParts.join(':'), 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key), iv);
+    const decipher = crypto.createDecipheriv('aes-256-cbc', keyBuffer, iv);
     let decrypted = decipher.update(encryptedText);
 
     decrypted = Buffer.concat([decrypted, decipher.final()]);
