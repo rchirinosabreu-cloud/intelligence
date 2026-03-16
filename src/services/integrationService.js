@@ -43,17 +43,6 @@ export async function saveMetaIntegration(clientId, shortLivedToken, metadata = 
             facebookUserName: profileResponse.data.name
         };
 
-        // Try to fetch business accounts if permission was granted
-        try {
-            const businessesResponse = await axios.get(`https://graph.facebook.com/v21.0/me/businesses?access_token=${longLivedToken}`);
-            if (businessesResponse.data?.data?.length > 0) {
-                // Store first business ID as primary businessId in metadata
-                enrichedMetadata.businessId = businessesResponse.data.data[0].id;
-                enrichedMetadata.businessName = businessesResponse.data.data[0].name;
-            }
-        } catch (bizError) {
-            console.warn('[Meta API] Could not fetch businesses:', bizError.message);
-        }
     } catch (profileError) {
         console.error('[Meta API] Error fetching profile details:', profileError.message);
     }
@@ -203,18 +192,19 @@ export async function updateClientMapping(clientId, mapping) {
         }
     });
 
-    // 2. If businessId is provided, update Integration metadata
-    if (businessId) {
-        const integration = await prisma.integration.findUnique({
-            where: { clientId_provider: { clientId, provider: 'meta' } }
-        });
+    // 2. Update Integration metadata with business info (can be null/empty)
+    const integration = await prisma.integration.findUnique({
+        where: { clientId_provider: { clientId, provider: 'meta' } }
+    });
 
-        if (integration) {
-            const newMetadata = {
-                ...(integration.metadata || {}),
-                businessId
-            };
+    if (integration) {
+        const newMetadata = {
+            ...(integration.metadata || {}),
+            businessId: businessId || null,
+            businessName: null // Reset by default, will fetch if businessId exists
+        };
 
+        if (businessId) {
             // Try to find the business name to enrich metadata
             try {
                 const token = decrypt(integration.encryptedToken);
@@ -225,12 +215,12 @@ export async function updateClientMapping(clientId, mapping) {
             } catch (e) {
                 console.warn('[IntegrationService] Could not fetch business name for mapping update:', e.message);
             }
-
-            await prisma.integration.update({
-                where: { id: integration.id },
-                data: { metadata: newMetadata }
-            });
         }
+
+        await prisma.integration.update({
+            where: { id: integration.id },
+            data: { metadata: newMetadata }
+        });
     }
 
     return { success: true };

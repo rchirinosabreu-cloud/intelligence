@@ -75,9 +75,7 @@ const Metrics = () => {
         const meta = statusData.find(i => i.provider === 'meta');
         setIntegrationStatus(meta || null);
 
-        if (meta?.metadata?.businessId) {
-            setSelectedBusiness(meta.metadata.businessId);
-        }
+        setSelectedBusiness(meta?.metadata?.businessId || '');
 
         // 2. Fetch current client mapping from Client DB
         const clientResponse = await fetch(`${getApiBaseUrl()}/api/db/clients/${selectedClientId}`, {
@@ -374,12 +372,12 @@ const Metrics = () => {
                           <span className="font-semibold text-zinc-800 dark:text-zinc-200">{integrationStatus.metadata.facebookUserName}</span>
                       </div>
                     )}
-                    {integrationStatus.metadata.businessName && (
-                      <div className="flex justify-between items-center text-xs">
-                          <span className="text-zinc-400">Business:</span>
-                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">{integrationStatus.metadata.businessName}</span>
-                      </div>
-                    )}
+                    <div className="flex justify-between items-center text-xs">
+                        <span className="text-zinc-400">Business:</span>
+                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                          {integrationStatus.metadata.businessName || "Cuenta Personal / Sin Business"}
+                        </span>
+                    </div>
                     {integrationStatus.metadata.businessId && (
                       <div className="flex justify-between items-center text-[10px]">
                           <span className="text-zinc-400">ID:</span>
