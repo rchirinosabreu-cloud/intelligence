@@ -117,6 +117,20 @@ export async function getDecryptedToken(clientId, provider) {
 }
 
 /**
+ * Deletes an integration for a client.
+ */
+export async function deleteIntegration(clientId, provider) {
+    return await prisma.integration.delete({
+        where: {
+            clientId_provider: {
+                clientId,
+                provider
+            }
+        }
+    });
+}
+
+/**
  * Fetches Meta assets (Ad Accounts and Pages) for a specific client based on their businessId.
  */
 export async function getMetaAssets(clientId) {

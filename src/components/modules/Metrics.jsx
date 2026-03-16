@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Users, Facebook, Instagram, Megaphone, Loader2, AlertTriangle, CheckCircle2, Settings2, Save } from 'lucide-react';
+import { BarChart3, Users, Facebook, Instagram, Megaphone, Loader2, AlertTriangle, CheckCircle2, Settings2, Save, Unplug } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'react-hot-toast';
@@ -23,6 +23,7 @@ const Metrics = () => {
   const [instagramAccount, setInstagramAccount] = useState(null);
   const [loadingIG, setLoadingIG] = useState(false);
   const [savingMapping, setSavingMapping] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   // Check for Meta SDK readiness
   useEffect(() => {
@@ -216,6 +217,31 @@ const Metrics = () => {
     }
   };
 
+  const handleDisconnect = async () => {
+    if (!window.confirm('¿Estás seguro de que deseas desconectar la cuenta de Meta? Perderás la configuración de activos.')) return;
+
+    setDisconnecting(true);
+    try {
+        const res = await fetch(`${getApiBaseUrl()}/api/integrations/${selectedClientId}/meta`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
+
+        if (res.ok) {
+            toast.success('Cuenta desconectada correctamente');
+            setIntegrationStatus(null);
+            resetMappingState();
+        } else {
+            toast.error('Error al desconectar');
+        }
+    } catch (error) {
+        console.error('Error disconnecting:', error);
+        toast.error('Error de red');
+    } finally {
+        setDisconnecting(false);
+    }
+  };
+
   const handleSaveMapping = async () => {
     setSavingMapping(true);
     try {
@@ -359,7 +385,20 @@ const Metrics = () => {
                 )}
 
                 <div className="text-[10px] text-zinc-400 uppercase tracking-wider mb-1">Última sincronización</div>
-                <div className="text-xs font-mono text-zinc-600 dark:text-zinc-400">{new Date(integrationStatus.updatedAt).toLocaleString()}</div>
+                <div className="text-xs font-mono text-zinc-600 dark:text-zinc-400 mb-6">{new Date(integrationStatus.updatedAt).toLocaleString()}</div>
+
+                <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center justify-center gap-2 text-[10px] uppercase font-bold"
+                        onClick={handleDisconnect}
+                        disabled={disconnecting}
+                    >
+                        {disconnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unplug className="w-3 h-3" />}
+                        Desconectar Cuenta
+                    </Button>
+                </div>
             </Card>
 
             <Card className="p-6 opacity-40 grayscale flex flex-col justify-center items-center border-dashed">
