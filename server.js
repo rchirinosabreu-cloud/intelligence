@@ -1313,32 +1313,6 @@ app.get('/api/calendar/upcoming', async (req, res) => {
     }
 });
 
-app.get('/api/db/clients/:identifier', async (req, res) => {
-    try {
-        const { identifier } = req.params;
-        console.log(`[API] /api/db/clients/${identifier} called`);
-        const client = await getClientByIdentifier(identifier);
-
-        if (!client) {
-            return res.status(404).json({ error: "Client not found" });
-        }
-        res.json(client);
-    } catch (error) {
-        console.error("[API] Error fetching client by identifier:", error);
-        res.status(500).json({ error: "Failed to fetch client", details: error.message });
-    }
-});
-
-app.get('/api/db/clients', async (req, res) => {
-    try {
-        console.log("[API] /api/db/clients called");
-        const clients = await getClients();
-        res.json(clients);
-    } catch (error) {
-        console.error("[API] /api/db/clients error:", error);
-        res.status(500).json({ error: "Failed to fetch clients", details: error.message });
-    }
-});
 
 app.post('/api/db/clients', async (req, res) => {
     try {
