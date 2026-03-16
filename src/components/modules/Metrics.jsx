@@ -498,10 +498,11 @@ const Metrics = () => {
                    </div>
                 </div>
              </div>
-          </Card>
-        </div>
-      )}
-    </div>
+          </div>
+        </Card>
+      </div>
+    )}
+  </div>
   );
 };
 
