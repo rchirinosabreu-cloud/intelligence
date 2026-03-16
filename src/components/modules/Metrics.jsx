@@ -447,6 +447,8 @@ const Metrics = () => {
                             <Loader2 className="w-4 h-4 animate-spin mr-2" />
                          ) : instagramAccount ? (
                             <span className="text-zinc-900 dark:text-zinc-100 font-medium not-italic">@{instagramAccount.username} ({instagramAccount.name})</span>
+                         ) : selectedPage ? (
+                            <span className="text-zinc-400">No se detectó cuenta de Instagram vinculada</span>
                          ) : (
                             "Se detectará automáticamente al elegir la página"
                          )}
