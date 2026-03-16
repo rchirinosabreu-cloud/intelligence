@@ -131,7 +131,8 @@ export async function deleteIntegration(clientId, provider) {
 }
 
 /**
- * Fetches Meta assets (Ad Accounts and Pages) for a specific client based on their businessId.
+ * Fetches Meta assets (Ad Accounts and Pages) accessible by the user token.
+ * This bypasses Business Manager restrictions by querying user-level endpoints.
  */
 export async function getMetaAssets(clientId) {
     if (!clientId) throw new Error('clientId es requerido');
@@ -139,50 +140,28 @@ export async function getMetaAssets(clientId) {
     const token = await getDecryptedToken(clientId, 'meta');
     if (!token) throw new Error('No se encontró una conexión de Meta activa para este cliente.');
 
-    const integration = await prisma.integration.findUnique({
-        where: { clientId_provider: { clientId, provider: 'meta' } }
-    });
-
-    if (!integration) throw new Error('Integración no encontrada en la base de datos');
-
-    const businessId = integration.metadata?.businessId;
-
-    console.log(`[IntegrationService] Fetching assets for Client: ${clientId}, Business: ${businessId || 'NONE'}`);
-
     const assets = {
         adAccounts: [],
         pages: [],
-        businesses: [], // Added to support selection if businessId is missing
-        requiresBusinessSelection: !businessId
+        businesses: []
     };
 
-    if (!businessId) {
-        console.log(`[IntegrationService] No businessId for client ${clientId}. Fetching available businesses...`);
-        try {
-            const bizRes = await axios.get(`https://graph.facebook.com/v21.0/me/businesses?access_token=${token}`);
-            assets.businesses = bizRes.data.data;
-        } catch (bizError) {
-            console.error('[Meta API] Error fetching businesses:', bizError.response?.data || bizError.message);
-        }
-        return assets;
-    }
-
     try {
-        // Fetch Ad Accounts (Combining owned and client accounts as per user request to avoid #100 error)
-        console.log(`[Meta API] Fetching ad accounts for business ${businessId}...`);
-        const adAccountsRes = await axios.get(`https://graph.facebook.com/v21.0/${businessId}?fields=client_ad_accounts{name,account_id,id},owned_ad_accounts{name,account_id,id}&access_token=${token}`);
+        console.log(`[Meta API] Fetching all accessible pages for token...`);
+        const pagesRes = await axios.get(`https://graph.facebook.com/v21.0/me/accounts?fields=name,id,access_token&limit=100&access_token=${token}`);
+        assets.pages = pagesRes.data.data || [];
 
-        const clientAds = adAccountsRes.data.client_ad_accounts?.data || [];
-        const ownedAds = adAccountsRes.data.owned_ad_accounts?.data || [];
+        console.log(`[Meta API] Fetching all accessible ad accounts for token...`);
+        const adAccountsRes = await axios.get(`https://graph.facebook.com/v21.0/me/adaccounts?fields=name,account_id,id&limit=100&access_token=${token}`);
+        assets.adAccounts = adAccountsRes.data.data || [];
 
-        // Merge and remove duplicates (by id)
-        const allAds = [...ownedAds, ...clientAds];
-        assets.adAccounts = Array.from(new Map(allAds.map(item => [item.id, item])).values());
-
-        // Fetch Pages (Client pages through the business)
-        console.log(`[Meta API] Fetching pages for business ${businessId}...`);
-        const pagesRes = await axios.get(`https://graph.facebook.com/v21.0/${businessId}/client_pages?fields=name,id,access_token&access_token=${token}`);
-        assets.pages = pagesRes.data.data;
+        // Optional: still fetch businesses for metadata reference if user wants to see them
+        try {
+            const bizRes = await axios.get(`https://graph.facebook.com/v21.0/me/businesses?fields=name,id&limit=100&access_token=${token}`);
+            assets.businesses = bizRes.data.data || [];
+        } catch (e) {
+            console.warn('[Meta API] Non-critical error fetching businesses:', e.message);
+        }
 
     } catch (error) {
         console.error('[Meta API] Error fetching assets:', error.response?.data || error.message);
