@@ -491,59 +491,6 @@ const Metrics = () => {
                     </div>
                 </Card>
            </div>
-
-           {/* Asset Mapping (Fase 1) */}
-           <Card className="p-8 border-l-4 border-indigo-500 bg-white dark:bg-zinc-950">
-                <div className="flex items-center gap-3 mb-8">
-                    <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg">
-                       <Settings2 className="w-5 h-5 text-indigo-600" />
-                    </div>
-                    <div>
-                       <h3 className="text-lg font-bold">Mapeo de Activos</h3>
-                       <p className="text-xs text-zinc-500">Víncula la página, instagram y cuenta de anuncios específica.</p>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                    <div className="space-y-6">
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Meta Business</label>
-                           <select value={selectedBusiness} onChange={(e) => setSelectedBusiness(e.target.value)} disabled={loadingAssets} className="w-full h-10 px-3 rounded-md border bg-white dark:bg-zinc-950 text-sm">
-                             <option value="">-- Seleccionar Business --</option>
-                             {assets.businesses.map(biz => <option key={biz.id} value={biz.id}>{biz.name}</option>)}
-                           </select>
-                        </div>
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Página de Facebook</label>
-                           <select value={selectedPage} onChange={(e) => setSelectedPage(e.target.value)} disabled={loadingAssets} className="w-full h-10 px-3 rounded-md border bg-white dark:bg-zinc-950 text-sm">
-                             <option value="">-- Seleccionar Página --</option>
-                             {assets.pages.map(page => <option key={page.id} value={page.id}>{page.name}</option>)}
-                           </select>
-                        </div>
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Cuenta de Instagram</label>
-                           <div className="h-10 px-3 rounded-md border bg-zinc-50 dark:bg-zinc-900/30 flex items-center text-sm italic text-zinc-500">
-                              {loadingIG ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : instagramAccount ? <span className="not-italic font-medium">@{instagramAccount.username}</span> : "Auto-detectado"}
-                           </div>
-                        </div>
-                    </div>
-                    <div className="space-y-6">
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Cuenta de Ads</label>
-                           <select value={selectedAdAccount} onChange={(e) => setSelectedAdAccount(e.target.value)} disabled={loadingAssets} className="w-full h-10 px-3 rounded-md border bg-white dark:bg-zinc-950 text-sm">
-                             <option value="">-- Seleccionar Cuenta de Ads --</option>
-                             {assets.adAccounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name} ({acc.account_id})</option>)}
-                           </select>
-                        </div>
-                        <div className="mt-8 pt-8 border-t border-zinc-100 dark:border-zinc-800 flex justify-end">
-                           <Button onClick={handleSaveMapping} disabled={savingMapping || !selectedPage || !selectedAdAccount} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 px-8">
-                             {savingMapping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                             Guardar Configuración
-                           </Button>
-                        </div>
-                    </div>
-                </div>
-           </Card>
         </div>
       ) : (
         <div className="space-y-12 animate-in fade-in slide-in-from-right-4 duration-500">
