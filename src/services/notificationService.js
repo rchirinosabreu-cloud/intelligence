@@ -8,7 +8,9 @@ export const createNotification = async (data) => {
                 userId: data.userId,
                 message: data.message,
                 type: data.type,
-                relatedId: data.relatedId
+                relatedId: data.relatedId,
+                resourceId: data.resourceId || data.relatedId,
+                url: data.url || null
             }
         });
         return notification;

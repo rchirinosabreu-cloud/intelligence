@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Button } from '@/components/ui/button';
 import TeamAvatar from '../ui/TeamAvatar';
 import { cn } from '@/lib/utils';
+import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
 const AppLayout = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -58,7 +59,7 @@ const AppLayout = ({ children }) => {
 
     const interval = setInterval(() => {
         fetchUnreadCount();
-    }, 60000);
+    }, 15000);
 
     const handleNotificationsRead = () => {
         fetchUnreadCount();
@@ -98,6 +99,10 @@ const AppLayout = ({ children }) => {
         window.dispatchEvent(new CustomEvent('open-general-chat'));
     } else if (notif.type === 'CAMPFIRE_MENTION') {
         navigate(`/cliente/${notif.relatedId}?openChat=true`);
+    } else if (notif.type === 'ANNOUNCEMENT_CLIENT') {
+        navigate(`/cliente/${notif.relatedId}`);
+    } else if (notif.type === 'ANNOUNCEMENT_GLOBAL') {
+        navigate(`/`);
     } else if (notif.type === 'TASK_RETURNED') {
         navigate(`/gestion?showReturned=true&taskId=${notif.relatedId}`);
     } else if (notif.type === 'TASK_CORRECTED' || notif.type === 'TASK_UPDATED' || notif.type === 'TASK_ASSIGNED') {
