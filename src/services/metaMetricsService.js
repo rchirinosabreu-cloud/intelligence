@@ -7,11 +7,12 @@ const BASE_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 
 /**
  * Helper to get dates for flexible periods.
+ * Uses local dates for string formatting and UTC for timestamps.
  * @param {string} range - 'last_30', 'this_month', 'last_month', 'q1', 'q2', 'q3', 'q4'
  */
 function getPeriodDates(range = 'last_30') {
-    // Standardize to Midnight for consistent ranges
     const now = new Date();
+    // Start of "today" in local time
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     let currentStart, currentEnd, previousStart, previousEnd;
@@ -19,10 +20,10 @@ function getPeriodDates(range = 'last_30') {
     if (range === 'this_month') {
         currentStart = new Date(today.getFullYear(), today.getMonth(), 1);
         currentEnd = new Date(today);
-        currentEnd.setDate(currentEnd.getDate() + 1); // Inclusive of today
+        currentEnd.setDate(currentEnd.getDate() + 1); // Until tomorrow (exclusive) = inclusive of today
         previousStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
         previousEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-        previousEnd.setDate(previousEnd.getDate() + 1); // Inclusive of last day of last month
+        previousEnd.setDate(previousEnd.getDate() + 1);
     } else if (range === 'last_month') {
         currentStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
         currentEnd = new Date(today.getFullYear(), today.getMonth(), 0);
@@ -37,32 +38,42 @@ function getPeriodDates(range = 'last_30') {
         currentEnd = new Date(year, quarter * 3, 0);
         currentEnd.setDate(currentEnd.getDate() + 1);
 
-        // Q-to-Q comparison
         previousStart = new Date(year, (quarter - 2) * 3, 1);
         previousEnd = new Date(year, (quarter - 1) * 3, 0);
         previousEnd.setDate(previousEnd.getDate() + 1);
     } else {
-        // Default last_30: Strict 30 days including today
-        // To make 'until' inclusive for the Graph API, we set it to the start of TOMORROW
+        // Default last_30
         currentEnd = new Date(today);
         currentEnd.setDate(today.getDate() + 1);
 
         currentStart = new Date(today);
-        currentStart.setDate(today.getDate() - 29); // 30 days total
+        currentStart.setDate(today.getDate() - 29);
 
         previousEnd = new Date(currentStart);
         previousStart = new Date(previousEnd);
         previousStart.setDate(previousStart.getDate() - 30);
     }
 
+    // Formatter for YYYY-MM-DD (Local)
+    const formatDate = (d) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
     return {
         current: {
             start: Math.floor(currentStart.getTime() / 1000),
-            end: Math.floor(currentEnd.getTime() / 1000)
+            end: Math.floor(currentEnd.getTime() / 1000),
+            since: formatDate(currentStart),
+            until: formatDate(currentEnd) // Until is exclusive in Meta Insights, so "tomorrow" midnight includes "today"
         },
         previous: {
             start: Math.floor(previousStart.getTime() / 1000),
-            end: Math.floor(previousEnd.getTime() / 1000)
+            end: Math.floor(previousEnd.getTime() / 1000),
+            since: formatDate(previousStart),
+            until: formatDate(previousEnd)
         }
     };
 }
@@ -79,52 +90,87 @@ async function fetchPeriodMetrics(client, token, period) {
     // Facebook
     if (client.facebookPageId) {
         try {
+            // Get Page Access Token specifically
             const pageTokenRes = await axios.get(`${BASE_URL}/${client.facebookPageId}?fields=access_token&access_token=${token}`);
             const pageToken = pageTokenRes.data.access_token;
 
+            console.log(`[Meta Metrics] Fetching FB Insights for ${client.facebookPageId} (${period.since} to ${period.until})`);
             const fbMetricsRes = await axios.get(`${BASE_URL}/${client.facebookPageId}/insights`, {
                 params: {
                     metric: 'page_impressions,page_post_engagements,page_posts_impressions_unique',
                     period: 'day',
-                    since: period.start,
-                    until: period.end,
+                    since: period.since,
+                    until: period.until,
                     access_token: pageToken
                 }
             });
 
             const fbData = fbMetricsRes.data.data;
-            data.facebook.impressions = fbData.find(m => m.name === 'page_impressions')?.values.reduce((acc, v) => acc + v.value, 0) || 0;
-            data.facebook.interactions = fbData.find(m => m.name === 'page_post_engagements')?.values.reduce((acc, v) => acc + v.value, 0) || 0;
-            data.facebook.reach = fbData.find(m => m.name === 'page_posts_impressions_unique')?.values.reduce((acc, v) => acc + v.value, 0) || 0;
+            if (fbData && fbData.length > 0) {
+                // Ensure we find the correct metric and sum all values in the range
+                const findAndSum = (name) => {
+                    const metric = fbData.find(m => m.name === name);
+                    if (!metric || !metric.values) return 0;
+                    return metric.values.reduce((sum, v) => sum + (Number(v.value) || 0), 0);
+                };
+
+                data.facebook.impressions = findAndSum('page_impressions');
+                data.facebook.interactions = findAndSum('page_post_engagements');
+                data.facebook.reach = findAndSum('page_posts_impressions_unique');
+
+                console.log(`[Meta Metrics] FB Summed (${period.since}-${period.until}) - Imp: ${data.facebook.impressions}, Int: ${data.facebook.interactions}, Reach: ${data.facebook.reach}`);
+            } else {
+                console.log('[Meta Metrics] FB Insights returned no data array for', period.since, 'to', period.until);
+            }
 
             const fansRes = await axios.get(`${BASE_URL}/${client.facebookPageId}?fields=fan_count&access_token=${pageToken}`);
             data.facebook.followers = fansRes.data.fan_count || 0;
         } catch (error) {
-            console.error('[Meta Metrics] FB Error:', error.message);
+            console.error('[Meta Metrics] FB Error:', error.response?.data || error.message);
         }
     }
 
     // Instagram
     if (client.instagramBusinessId) {
         try {
+            console.log(`[Meta Metrics] Fetching IG Insights for ${client.instagramBusinessId} (${period.since} to ${period.until})`);
+            // Note: Instagram doesn't have a direct 'interactions' metric at account level like FB.
+            // We use 'impressions' and 'reach' as primary metrics.
             const igMetricsRes = await axios.get(`${BASE_URL}/${client.instagramBusinessId}/insights`, {
                 params: {
                     metric: 'impressions,reach',
                     period: 'day',
-                    since: period.start,
-                    until: period.end,
+                    since: period.since,
+                    until: period.until,
                     access_token: token
                 }
             });
 
             const igData = igMetricsRes.data.data;
-            data.instagram.impressions = igData.find(m => m.name === 'impressions')?.values.reduce((acc, v) => acc + v.value, 0) || 0;
-            data.instagram.reach = igData.find(m => m.name === 'reach')?.values.reduce((acc, v) => acc + v.value, 0) || 0;
+            if (igData && igData.length > 0) {
+                const findAndSum = (name) => {
+                    const metric = igData.find(m => m.name === name);
+                    if (!metric || !metric.values) return 0;
+                    return metric.values.reduce((sum, v) => sum + (Number(v.value) || 0), 0);
+                };
+
+                data.instagram.impressions = findAndSum('impressions');
+                data.instagram.reach = findAndSum('reach');
+
+                // For Instagram interactions at account level, we can't get a daily sum easily without
+                // iterating all media. We'll rely on the 'engagement' from Top Content for specific wins,
+                // but for the summary, we'll keep it as 0 unless a specific metric is identified.
+                data.instagram.interactions = 0;
+
+                console.log(`[Meta Metrics] IG Summed (${period.since}-${period.until}) - Imp: ${data.instagram.impressions}, Reach: ${data.instagram.reach}`);
+            } else {
+                    console.log('[Meta Metrics] IG Insights returned no data array for', period.since, 'to', period.until);
+            }
 
             const igFollowersRes = await axios.get(`${BASE_URL}/${client.instagramBusinessId}?fields=followers_count&access_token=${token}`);
             data.instagram.followers = igFollowersRes.data.followers_count || 0;
         } catch (error) {
-            console.error('[Meta Metrics] IG Error:', error.message);
+            console.error('[Meta Metrics] IG Error:', error.response?.data || error.message);
         }
     }
 
@@ -231,8 +277,8 @@ export async function getReachTrend(clientId, range = 'last_30') {
                 params: {
                     metric: 'page_posts_impressions_unique',
                     period: 'day',
-                    since: current.start,
-                    until: current.end,
+                    since: current.since,
+                    until: current.until,
                     access_token: pageTokenRes.data.access_token
                 }
             });
@@ -244,8 +290,8 @@ export async function getReachTrend(clientId, range = 'last_30') {
                 params: {
                     metric: 'reach',
                     period: 'day',
-                    since: current.start,
-                    until: current.end,
+                    since: current.since,
+                    until: current.until,
                     access_token: token
                 }
             });
@@ -300,15 +346,18 @@ export async function getTopContent(clientId, range = 'last_30') {
              const pageTokenRes = await axios.get(`${BASE_URL}/${client.facebookPageId}?fields=access_token&access_token=${token}`);
              const pageToken = pageTokenRes.data.access_token;
 
+             console.log(`[Meta Metrics] Fetching FB Top Content for ${client.facebookPageId} (${current.since} to ${current.until})`);
              const fbPostsRes = await axios.get(`${BASE_URL}/${client.facebookPageId}/posts`, {
                 params: {
                     fields: 'id,message,created_time,full_picture,type,insights.metric(post_impressions_unique,post_engagements)',
-                    since: current.start,
-                    until: current.end,
+                    since: current.since,
+                    until: current.until,
                     limit: 100,
                     access_token: pageToken
                 }
              });
+             console.log(`[Meta Metrics] FB Posts Count: ${fbPostsRes.data?.data?.length || 0}`);
+
              const fbPosts = (fbPostsRes.data.data || []).map(p => {
                  const reach = p.insights?.data.find(i => i.name === 'post_impressions_unique')?.values[0]?.value || 0;
                  const engagement = p.insights?.data.find(i => i.name === 'post_engagements')?.values[0]?.value || 0;
@@ -327,15 +376,21 @@ export async function getTopContent(clientId, range = 'last_30') {
         }
 
         if (client.instagramBusinessId) {
+            console.log(`[Meta Metrics] Fetching IG Top Content for ${client.instagramBusinessId} (${current.since} to ${current.until})`);
             const igMediaRes = await axios.get(`${BASE_URL}/${client.instagramBusinessId}/media`, {
                 params: {
                     fields: 'id,caption,media_type,media_url,thumbnail_url,timestamp,insights.metric(impressions,reach,engagement)',
-                    since: current.start,
-                    until: current.end,
+                    since: current.since,
+                    until: current.until,
                     limit: 100,
                     access_token: token
                 }
             });
+            console.log(`[Meta Metrics] IG Media Count: ${igMediaRes.data?.data?.length || 0}`);
+            if (igMediaRes.data?.data?.length === 0) {
+                console.log('[Meta Metrics] IG Media is empty. Potential missing scope: instagram_manage_insights');
+            }
+
             const igMedia = (igMediaRes.data.data || []).map(m => {
                 const reach = m.insights?.data.find(i => i.name === 'reach')?.values[0]?.value || 0;
                 const engagement = m.insights?.data.find(i => i.name === 'engagement')?.values[0]?.value || 0;
@@ -368,31 +423,43 @@ export async function getTopContent(clientId, range = 'last_30') {
  * @param {Array|Object} data - Raw data from Meta API
  */
 export function processAdsData(data) {
-    const raw = Array.isArray(data) ? data[0] : data;
-    const insights = raw || { spend: 0, actions: [], reach: 0, impressions: 0 };
-
-    // Sum if it's an array (for custom aggregations) or take as is
-    const spend = Array.isArray(data) ? data.reduce((acc, d) => acc + parseFloat(d.spend || 0), 0) : parseFloat(insights.spend || 0);
-    const reach = Array.isArray(data) ? data.reduce((acc, d) => acc + parseInt(d.reach || 0), 0) : parseInt(insights.reach || 0);
-    const impressions = Array.isArray(data) ? data.reduce((acc, d) => acc + parseInt(d.impressions || 0), 0) : parseInt(insights.impressions || 0);
-
-    // Results mapping (Priority: Messaging > Conversions > Others)
-    const allActions = Array.isArray(data) ? data.flatMap(d => d.actions || []) : (insights.actions || []);
-    const messagingActions = allActions.filter(a =>
-        ['onsite_conversion.messaging_conversation_started_7d', 'messaging_conversation_started_7d'].includes(a.action_type)
-    );
-
-    let results = 0;
-    if (messagingActions.length > 0) {
-        results = messagingActions.reduce((acc, a) => acc + parseInt(a.value || 0), 0);
-    } else {
-        // Fallback to generic conversions if no messaging
-        results = allActions.find(a => a.action_type.includes('conversion'))?.value || 0;
+    // If no data, return empty metrics
+    if (!data || (Array.isArray(data) && data.length === 0)) {
+        return { spend: 0, results: 0, reach: 0, impressions: 0, costPerResult: 0 };
     }
 
+    const insightsList = Array.isArray(data) ? data : [data];
+
+    let spend = 0;
+    let reach = 0;
+    let impressions = 0;
+    let totalMessaging = 0;
+    let totalConversions = 0;
+
+    insightsList.forEach(insights => {
+        spend += parseFloat(insights.spend || 0);
+        reach += parseInt(insights.reach || 0);
+        impressions += parseInt(insights.impressions || 0);
+
+        const actions = insights.actions || [];
+        actions.forEach(a => {
+            // Count all variations of messaging starts
+            if (a.action_type.includes('messaging_conversation_started')) {
+                totalMessaging += parseInt(a.value || 0);
+            }
+            // Also track other conversions as fallback
+            if (a.action_type.includes('conversion') || a.action_type.includes('lead')) {
+                totalConversions += parseInt(a.value || 0);
+            }
+        });
+    });
+
+    // Priority to messaging, then general conversions
+    const results = totalMessaging > 0 ? totalMessaging : totalConversions;
+
     return {
-        spend: Math.round(spend),
-        results: parseInt(results),
+        spend: parseFloat(spend.toFixed(2)),
+        results: results,
         reach: reach,
         impressions: impressions,
         costPerResult: results > 0 ? parseFloat((spend / results).toFixed(2)) : 0
@@ -422,26 +489,30 @@ export async function getAdsInsights(clientId, range = 'last_30') {
 
     const { current, previous } = getPeriodDates(range);
 
-    const fetchAdsForRange = async (start, end) => {
+    const fetchAdsForRange = async (periodObj) => {
         const accountId = client.adAccountId.startsWith('act_') ? client.adAccountId : `act_${client.adAccountId}`;
+        console.log(`[Meta Metrics] Fetching Ads for ${accountId} (${periodObj.since} to ${periodObj.until})`);
+
         const res = await axios.get(`${BASE_URL}/${accountId}/insights`, {
             params: {
                 level: 'account',
                 fields: 'spend,actions,reach,impressions',
                 time_range: JSON.stringify({
-                    since: new Date(start * 1000).toISOString().split('T')[0],
-                    until: new Date(end * 1000).toISOString().split('T')[0]
+                    since: periodObj.since,
+                    until: periodObj.until
                 }),
                 access_token: token
             }
         });
 
-        return processAdsData(res.data.data);
+        const processed = processAdsData(res.data.data);
+        console.log(`[Meta Metrics] Ads Processed: Spend:${processed.spend}, Results:${processed.results}`);
+        return processed;
     };
 
     try {
-        const currentAds = await fetchAdsForRange(current.start, current.end);
-        const previousAds = await fetchAdsForRange(previous.start, previous.end);
+        const currentAds = await fetchAdsForRange(current);
+        const previousAds = await fetchAdsForRange(previous);
 
         return {
             current: {
