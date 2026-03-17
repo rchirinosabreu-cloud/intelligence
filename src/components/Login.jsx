@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { getApiBaseUrl } from '../lib/apiBaseUrl';
 
 const Login = ({ onLogin }) => {
@@ -96,6 +97,22 @@ const Login = ({ onLogin }) => {
             {loading ? 'Verificando...' : 'Acceder al Sistema'}
           </button>
         </form>
+      </div>
+
+      {/* Public Legal Links */}
+      <div className="mt-8 flex gap-6 relative z-10">
+        <Link
+          to="/privacidad"
+          className="text-[10px] uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors"
+        >
+          Privacidad
+        </Link>
+        <Link
+          to="/terminos"
+          className="text-[10px] uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors"
+        >
+          Términos
+        </Link>
       </div>
     </div>
   );

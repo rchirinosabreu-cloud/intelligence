@@ -11,6 +11,8 @@ import Team from './components/modules/Team';
 import Profile from './components/modules/Profile';
 import Metrics from './components/modules/Metrics';
 import Login from './components/Login';
+import PrivacyPolicy from './components/public/PrivacyPolicy';
+import TermsOfService from './components/public/TermsOfService';
 import MinutesLayout from './components/modules/Minutes/MinutesLayout';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -56,17 +58,25 @@ function AppContent() {
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center">Cargando...</div>;
   }
 
-  if (!isAuthenticated) {
-    return <Login onLogin={login} />;
-  }
-
   return (
     <ThemeProvider>
       <Router>
-        <AppLayout onLogout={logout}>
-          <Routes>
-            {/* Rutas Principales */}
-            <Route path="/" element={<Dashboard />} />
+        <Routes>
+          {/* Public Legal Routes */}
+          <Route path="/privacidad" element={<PrivacyPolicy />} />
+          <Route path="/terminos" element={<TermsOfService />} />
+
+          {/* Protected App Routes */}
+          {!isAuthenticated ? (
+            <Route path="*" element={<Login onLogin={login} />} />
+          ) : (
+            <Route
+              path="*"
+              element={
+                <AppLayout onLogout={logout}>
+                  <Routes>
+                    {/* Rutas Principales */}
+                    <Route path="/" element={<Dashboard />} />
             <Route path="/inicio" element={<Navigate to="/" replace />} />
 
             <Route path="/bria" element={<Chat />} />
@@ -80,16 +90,20 @@ function AppContent() {
             <Route path="/perfil" element={<Profile />} />
             <Route path="/perfil/:userId" element={<Profile />} />
 
-            {/* Fallback para rutas no encontradas - redirigir a inicio */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              className: 'dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-800 border',
-            }}
-          />
-        </AppLayout>
+                    {/* Fallback para rutas no encontradas - redirigir a inicio */}
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </AppLayout>
+              }
+            />
+          )}
+        </Routes>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            className: 'dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-800 border',
+          }}
+        />
       </Router>
     </ThemeProvider>
   );
