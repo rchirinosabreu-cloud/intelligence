@@ -1,0 +1,247 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Usuarios del Sistema (Login & Auth)
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String   // Hashed via bcrypt
+  role      String   @default("EDITOR") // ADMIN, EDITOR
+  avatarUrl String?  // Para consistencia con el chat
+  isActive  Boolean  @default(true)
+  bio       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notifications       Notification[]
+  generalChatMessages GeneralChatMessage[]
+  createdTasks        Task[]               @relation("CreatedTasks")
+  notes               UserNote[]
+  receivedFeedback    FeedbackRecord[]     @relation("ReceivedFeedback")
+  authoredFeedback    FeedbackRecord[]     @relation("AuthoredFeedback")
+}
+
+// Notas Personales del Usuario
+model UserNote {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Sistema de Notificaciones
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message    String
+  isRead     Boolean  @default(false)
+  type       String?  // e.g., 'MENTION'
+  relatedId  String?  // ID del mensaje/recurso relacionado
+  resourceId String?  // ID específico (Legacy compatibility)
+  url        String?  // URL directa (Legacy compatibility)
+  createdAt  DateTime @default(now())
+}
+
+// Chat General de la Agencia
+model GeneralChatMessage {
+  id        String   @id @default(uuid())
+  content   String
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// Cliente de la Agencia
+model Client {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique // Para urls tipo /sunpartners
+  status    String   @default("active") // active, paused, archived
+  logoUrl   String?
+  aiInstructions String?
+  createdAt DateTime @default(now())
+
+  // Relaciones
+  brandAssets BrandAsset[]
+  files       ClientFile[]
+  links       ClientLink[]
+  tasks       ClientTask[]
+  announcements ClientAnnouncement[]
+  flowMessages FlowMessage[]
+  nativeTasks Task[]
+  integrations Integration[]
+
+  // BrainStudio Metrics Asset Mapping
+  facebookPageId      String?
+  instagramBusinessId String?
+  adAccountId         String?
+}
+
+// Integraciones con plataformas externas (Fase BrainStudio Metrics)
+model Integration {
+  id             String   @id @default(uuid())
+  clientId       String
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  provider       String   // 'meta', 'google', etc.
+  encryptedToken String
+  metadata       String?    // SQLite doesn't support Json, using String as JSON string
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([clientId, provider]) // Un cliente solo tiene una integración por proveedor (Fase 1)
+}
+
+// Miembros del Equipo de la Agencia
+model TeamMember {
+  id        String   @id @default(uuid())
+  name      String
+  role      String   // "Director", "Project Manager", "Diseñador", "Copywriter", "Editor de Video", "Ejecutivo de Cuentas", "Otro"
+  email     String?
+  avatarUrl String?
+  isActive  Boolean  @default(true)
+  userId    String?  @unique // Vínculo con la cuenta de usuario (Auth)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  nativeTasks     Task[]
+  clientTasks     ClientTask[]
+  flowMessages    FlowMessage[]
+}
+
+// Registro de Auditoría de Tareas Eliminadas (Hard Delete Strategy)
+model DeletedTaskLog {
+  id             String   @id @default(uuid())
+  originalTaskId String
+  taskTitle      String
+  clientId       String?
+  deletedById    String?
+  reason         String
+  deletedAt      DateTime @default(now())
+}
+
+// Fase 1: Migración del Kanban de Google Sheets a Prisma
+model Task {
+  id        String   @id @default(uuid())
+  title     String
+  dueDate   DateTime?
+  assigneeId String?
+  assignee  TeamMember? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  creatorId String?
+  creator   User?       @relation("CreatedTasks", fields: [creatorId], references: [id], onDelete: SetNull)
+  comments  String?
+  status    String  @default("PENDIENTE") // SQLite workaround for Enum
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  completedAt DateTime?
+
+  // Phase 1: Reestructuración
+  isPriority   Boolean @default(false)
+  isSpecial    Boolean @default(false)
+  specialType  String?
+  referenceUrl String?
+}
+
+// Activos de Marca (Colores, Fuentes)
+model BrandAsset {
+  id        String  @id @default(uuid())
+  clientId  String
+  client    Client  @relation(fields: [clientId], references: [id])
+  type      String  // 'COLOR', 'TYPOGRAPHY', 'LINK'
+  name      String  // 'Color Primario', 'Fuente Web'
+  value     String  // '#FF0000', 'Montserrat'
+}
+
+// Archivos del Cliente (Bucket References)
+model ClientFile {
+  id          String   @id @default(uuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id])
+  name        String   // Nombre visible
+  bucketUrl   String   // URL del archivo en Railway/S3
+  category    String   // 'Legal', 'Deliverable', 'Asset'
+  createdAt   DateTime @default(now())
+}
+
+// Enlaces Clave del Cliente (Max 5 por cliente)
+model ClientLink {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  title     String
+  url       String
+  createdAt DateTime @default(now())
+}
+
+// Tareas del Cliente (Feature nueva)
+model ClientTask {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  text      String
+  completed Boolean  @default(false)
+  dueDate   DateTime?
+  assigneeId String?
+  assignee  TeamMember? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+}
+
+// Anuncios específicos por Cliente
+model ClientAnnouncement {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  content   String   // Sin límite de caracteres
+  type      String   // 'urgent', 'win', 'info'
+  createdAt DateTime @default(now())
+}
+
+// Fase 2: Módulo de Feedback y 1-on-1s
+model FeedbackRecord {
+  id               String       @id @default(uuid())
+  collaboratorId   String
+  collaborator     User         @relation("ReceivedFeedback", fields: [collaboratorId], references: [id], onDelete: Cascade)
+  authorId         String
+  author           User         @relation("AuthoredFeedback", fields: [authorId], references: [id], onDelete: Cascade)
+  type             String       @default("ESCRITO")
+  date             DateTime     @default(now())
+  strengths        String
+  improvementAreas String
+  actionItems      String
+  privateNote      String?
+  deletedAt        DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+// Chat Flow (Inmutable)
+model FlowMessage {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  content   String
+  authorId  String
+  author    TeamMember @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// Anuncios Globales del Dashboard (Feature nueva)
+model GlobalAnnouncement {
+  id        String   @id @default(uuid())
+  content   String   // Max 140
+  type      String   // 'urgent', 'win', 'info'
+  createdAt DateTime @default(now())
+}
