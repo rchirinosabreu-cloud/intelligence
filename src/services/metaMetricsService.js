@@ -97,7 +97,6 @@ async function fetchPeriodMetrics(client, token, period) {
 
             console.log(`[Meta Metrics] Fetching FB Insights for ${client.facebookPageId} (${period.since} to ${period.until})`);
             // Standard Page Insights for New Page Experience
-            // Note: Use page_engaged_users for interactions if page_post_engagements fails
             const fbMetricsRes = await axios.get(`${BASE_URL}/${client.facebookPageId}/insights`, {
                 params: {
                     metric: 'page_impressions,page_engaged_users,page_impressions_unique',
@@ -137,7 +136,7 @@ async function fetchPeriodMetrics(client, token, period) {
     if (client.instagramBusinessId) {
         try {
             console.log(`[Meta Metrics] Fetching IG Insights for ${client.instagramBusinessId} (${period.since} to ${period.until})`);
-            // Using user-requested metrics: reach, impressions, profile_views
+            // Using strictly requested metrics: reach, impressions, profile_views
             const igMetricsRes = await axios.get(`${BASE_URL}/${client.instagramBusinessId}/insights`, {
                 params: {
                     metric: 'reach,impressions,profile_views',
@@ -350,7 +349,7 @@ export async function getTopContent(clientId, range = 'last_30') {
              const pageToken = pageTokenRes.data.access_token;
 
              console.log(`[Meta Metrics] Fetching FB Top Content for ${client.facebookPageId} (${current.since} to ${current.until})`);
-             // New Page Experience compatible fields
+             // New Page Experience compatible fields - limited to avoid Error 400
              const fbPostsRes = await axios.get(`${BASE_URL}/${client.facebookPageId}/posts`, {
                 params: {
                     fields: 'id,message,created_time,full_picture,type,insights.metric(post_impressions_unique,post_engaged_users)',
@@ -381,11 +380,10 @@ export async function getTopContent(clientId, range = 'last_30') {
 
         if (client.instagramBusinessId) {
             console.log(`[Meta Metrics] Fetching IG Top Content for ${client.instagramBusinessId} (${current.since} to ${current.until})`);
-            // To avoid Error #400/100, we fetch basic media fields first and engagement from metadata (like_count, comments_count).
-            // Reels insights often fail in bulk edge queries.
+            // Limiting to id, media_type, media_url, permalink, like_count as requested to avoid Error 400
             const igMediaRes = await axios.get(`${BASE_URL}/${client.instagramBusinessId}/media`, {
                 params: {
-                    fields: 'id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count',
+                    fields: 'id,media_type,media_url,permalink,like_count,timestamp,caption,thumbnail_url',
                     since: current.since,
                     until: current.until,
                     limit: 50,
@@ -395,17 +393,14 @@ export async function getTopContent(clientId, range = 'last_30') {
             console.log(`[Meta Metrics] IG Media Count: ${igMediaRes.data?.data?.length || 0}`);
 
             const igMedia = (igMediaRes.data.data || []).map(m => {
-                // Approximate reach for IG if insights fail is hard.
-                // We'll prioritize the media engagement (Likes + Comments) as requested.
-                // If the user wants real reach, we'd need per-media insight calls which is slow.
-                const engagement = (m.like_count || 0) + (m.comments_count || 0);
+                const engagement = m.like_count || 0;
 
                 return {
                     id: m.id,
                     type: m.media_type,
                     content: m.caption || 'Sin caption',
                     thumbnail: m.media_type === 'VIDEO' ? m.thumbnail_url : m.media_url,
-                    reach: 0, // Placeholder as bulk reach insights often crash for mixed media types (Reels)
+                    reach: 0,
                     engagement,
                     platform: 'instagram',
                     date: m.timestamp
