@@ -5,8 +5,16 @@ import {
     getMetaAssets,
     getInstagramAccount,
     updateClientMapping,
-    deleteIntegration
+    deleteIntegration,
+    getDecryptedToken
 } from '../../services/integrationService.js';
+import {
+    getOrganicMetrics,
+    getReachTrend,
+    getTopContent,
+    getAdsInsights
+} from '../../services/metaMetricsService.js';
+import axios from 'axios';
 
 const router = express.Router();
 
@@ -95,6 +103,102 @@ router.patch('/meta/mapping/:clientId', async (req, res) => {
     } catch (error) {
         console.error('[Integration API] Error guardando mapeo:', error.message);
         res.status(500).json({ error: 'Error al guardar el mapeo de activos' });
+    }
+});
+
+// --- METRICS INSIGHTS ENDPOINTS ---
+
+router.get('/meta/metrics/organic/:clientId', async (req, res) => {
+    try {
+        const metrics = await getOrganicMetrics(req.params.clientId);
+        res.json(metrics);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/meta/metrics/trend/:clientId', async (req, res) => {
+    try {
+        const trend = await getReachTrend(req.params.clientId);
+        res.json(trend);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/meta/metrics/top-content/:clientId', async (req, res) => {
+    try {
+        const content = await getTopContent(req.params.clientId);
+        res.json(content);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/meta/metrics/ads/:clientId', async (req, res) => {
+    try {
+        const ads = await getAdsInsights(req.params.clientId);
+        res.json(ads);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// AI Generated Insights Proxy
+router.post('/meta/insights/generate', async (req, res) => {
+    try {
+        const { clientId, metrics } = req.body;
+        if (!clientId || !metrics) return res.status(400).json({ error: 'Missing clientId or metrics' });
+
+        // Forward to the internal /api/chat logic or a dedicated Gemini call
+        // For simplicity and to reuse the Bria persona, we'll construct a prompt and call Gemini proxy or direct
+        // Let's use the GEMINI_API_KEY directly from env to avoid complex proxying here if we want a specific prompt.
+
+        const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+        const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+
+        const prompt = `
+            Eres un Consultor Estratégico Senior de la agencia Brainstudio.
+            Analiza los siguientes datos de rendimiento de Meta (Organic & Ads) de los últimos 30 días para un cliente.
+
+            DATOS ORGÁNICOS:
+            ${JSON.stringify(metrics.organic, null, 2)}
+
+            DATOS DE ADS:
+            ${JSON.stringify(metrics.ads, null, 2)}
+
+            TOP CONTENT:
+            ${JSON.stringify(metrics.topContent, null, 2)}
+
+            TU TAREA:
+            Escribe un análisis profesional en Español con el siguiente tono: Analítico, Estratégico y Propositivo, pero con un toque Cercano/Humano.
+            No seas redundante. Ve al grano. No uses muros de texto.
+
+            FORMATO DE SALIDA:
+            ### 🚀 Logros y Avances
+            - (Punto clave analítico: por qué funcionó lo que funcionó)
+            - (Hallazgo basado en datos)
+
+            ### 💡 Recomendaciones Estratégicas
+            - (Acción concreta y creativa para el próximo mes)
+            - (Ajuste táctico basado en la eficiencia de pauta)
+
+            IMPORTANTE: No solo repitas los números. Explica el "POR QUÉ" estratégico detrás de ellos.
+        `;
+
+        const response = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+            {
+                contents: [{ parts: [{ text: prompt }] }]
+            }
+        );
+
+        const aiText = response.data.candidates[0].content.parts[0].text;
+        res.json({ insight: aiText });
+
+    } catch (error) {
+        console.error('[Insights API] Error generating insights:', error.response?.data || error.message);
+        res.status(500).json({ error: 'Error al generar insights con IA' });
     }
 });
 
