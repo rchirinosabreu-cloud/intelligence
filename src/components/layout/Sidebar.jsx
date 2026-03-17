@@ -27,12 +27,11 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   return (
     <aside className={cn(
-      "w-64 h-screen fixed left-0 top-0 z-50 flex flex-col transition-all duration-300 transform lg:translate-x-0 lg:static lg:h-full",
+      "w-64 h-screen fixed left-0 top-0 z-[60] flex flex-col transition-all duration-300 transform lg:translate-x-0 lg:static lg:h-full",
       isOpen ? "translate-x-0" : "-translate-x-full",
-      // Light Mode: Glassmorphism
-      "bg-white/70 border-r border-zinc-200/50 backdrop-blur-xl shadow-sm",
-      // Dark Mode: Glassmorphism
-      "dark:bg-zinc-900/60 dark:border-white/10 dark:backdrop-blur-xl dark:shadow-[4px_0_24px_-12px_rgba(0,0,0,0.5)]",
+      // Mobile Solid Background & desktop Glassmorphism
+      "bg-white lg:bg-white/70 border-r border-zinc-200/50 lg:backdrop-blur-xl shadow-sm",
+      "dark:bg-zinc-950 lg:dark:bg-zinc-900/60 dark:border-white/10 lg:dark:backdrop-blur-xl dark:shadow-[4px_0_24px_-12px_rgba(0,0,0,0.5)]",
       // Mobile positioning
       "fixed lg:fixed"
     )}>

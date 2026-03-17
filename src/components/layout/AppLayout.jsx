@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
-import { Menu, User, LogOut, Settings, Bell, Search, Sun, Moon } from 'lucide-react';
+import { Menu, User, LogOut, Settings, Bell, Search, Sun, Moon, MessageSquare, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Link, useNavigate } from 'react-router-dom';
@@ -14,6 +14,96 @@ const AppLayout = ({ children }) => {
   const { currentUser, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+
+  // Notification State
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+
+  const fetchNotifications = async () => {
+      try {
+          setLoadingNotifications(true);
+          const res = await fetch(`${getApiBaseUrl()}/api/notifications`, { cache: 'no-store' });
+          if (res.ok) {
+              const data = await res.json();
+              setNotifications(Array.isArray(data) ? data : []);
+          }
+      } catch (error) {
+          console.error("Error fetching notifications:", error);
+      } finally {
+          setLoadingNotifications(false);
+      }
+  };
+
+  const fetchUnreadCount = async () => {
+      try {
+          const res = await fetch(`${getApiBaseUrl()}/api/notifications/unread-count`, { cache: 'no-store' });
+          if (res.ok) {
+              const data = await res.json();
+              setUnreadCount(prev => {
+                  if (data.count > prev) {
+                      fetchNotifications();
+                  }
+                  return data.count;
+              });
+          }
+      } catch (error) {
+          console.error("Error fetching unread count:", error);
+      }
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+    fetchNotifications();
+
+    const interval = setInterval(() => {
+        fetchUnreadCount();
+    }, 60000);
+
+    const handleNotificationsRead = () => {
+        fetchUnreadCount();
+        fetchNotifications();
+    };
+
+    window.addEventListener('notifications-read', handleNotificationsRead);
+    window.addEventListener('focus', fetchUnreadCount);
+
+    return () => {
+        clearInterval(interval);
+        window.removeEventListener('notifications-read', handleNotificationsRead);
+        window.removeEventListener('focus', fetchUnreadCount);
+    };
+  }, []);
+
+  const markAllAsRead = async () => {
+      if (unreadCount === 0) return;
+      setUnreadCount(0);
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      try {
+          await fetch(`${getApiBaseUrl()}/api/notifications/read-all`, { method: 'POST' });
+      } catch (error) {
+          console.error("Error marking as read:", error);
+      }
+  };
+
+  const handleNotificationClick = async (notif) => {
+    try {
+        await fetch(`${getApiBaseUrl()}/api/notifications/${notif.id}/read`, { method: 'PATCH' });
+        window.dispatchEvent(new Event('notifications-read'));
+    } catch (e) {
+        console.error("Error marking notification as read:", e);
+    }
+
+    if (notif.type === 'GENERAL_CHAT_MENTION') {
+        window.dispatchEvent(new CustomEvent('open-general-chat'));
+    } else if (notif.type === 'CAMPFIRE_MENTION') {
+        navigate(`/cliente/${notif.relatedId}?openChat=true`);
+    } else if (notif.type === 'TASK_RETURNED') {
+        navigate(`/gestion?showReturned=true&taskId=${notif.relatedId}`);
+    } else if (notif.type === 'TASK_CORRECTED' || notif.type === 'TASK_UPDATED' || notif.type === 'TASK_ASSIGNED') {
+        navigate(`/gestion?taskId=${notif.relatedId}`);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -41,11 +131,11 @@ const AppLayout = ({ children }) => {
            />
       </div>
 
-      {/* Sidebar - z-50 */}
+      {/* Sidebar - z-[60] (Internal) */}
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-      {/* Header - z-[70] */}
-      <header className="h-16 lg:pl-64 fixed top-0 left-0 right-0 z-[70] bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 transition-all">
+      {/* Header - z-50 */}
+      <header className="h-16 lg:pl-64 fixed top-0 left-0 right-0 z-50 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 transition-all">
         <div className="h-full px-4 lg:px-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button
@@ -78,14 +168,70 @@ const AppLayout = ({ children }) => {
                 {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </Button>
 
-            <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-full relative"
-            >
-                <Bell className="w-4 h-4" />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-white dark:border-zinc-950" />
-            </Button>
+            <DropdownMenu onOpenChange={async (open) => {
+                if (open) {
+                    await fetchNotifications();
+                    markAllAsRead();
+                }
+            }}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full relative"
+                >
+                    <Bell className="w-4 h-4" />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-white dark:border-zinc-950" />
+                    )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden rounded-2xl border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl z-[80]">
+                <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
+                    <h4 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                        <Bell className="w-4 h-4 text-primary" />
+                        Notificaciones
+                    </h4>
+                </div>
+                <div className="max-h-96 overflow-y-auto">
+                    {loadingNotifications ? (
+                        <div className="p-8 text-center"><Loader2 className="w-5 h-5 animate-spin text-zinc-400 mx-auto" /></div>
+                    ) : notifications.length === 0 ? (
+                        <div className="p-12 text-center">
+                            <div className="w-12 h-12 rounded-full bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-center mx-auto mb-3">
+                                <Bell className="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
+                            </div>
+                            <p className="text-xs text-zinc-400">No hay notificaciones nuevas</p>
+                        </div>
+                    ) : (
+                        notifications.map((notif) => (
+                            <DropdownMenuItem
+                                key={notif.id}
+                                onClick={() => handleNotificationClick(notif)}
+                                className="p-4 focus:bg-zinc-50 dark:focus:bg-zinc-800/50 cursor-pointer border-b border-zinc-50 dark:border-zinc-800/30 last:border-0"
+                            >
+                                <div className="flex gap-3 items-start w-full">
+                                    <div className="p-1.5 bg-primary/10 rounded-lg shrink-0 mt-0.5">
+                                        <MessageSquare className="w-3.5 h-3.5 text-primary" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                                            {notif.message}
+                                        </p>
+                                        <span className="text-[10px] text-zinc-400 mt-1 block">
+                                            {new Date(notif.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                    {!notif.isRead && (
+                                        <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-2" />
+                                    )}
+                                </div>
+                            </DropdownMenuItem>
+                        ))
+                    )}
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -125,13 +271,13 @@ const AppLayout = ({ children }) => {
       {/* Overlay for mobile sidebar */}
       {isSidebarOpen && (
         <div
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden transition-all duration-300"
+            className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm lg:hidden transition-all duration-300"
             onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
       {/* Main Content Area - z-0 (above background) */}
-      <main className="lg:ml-64 pt-20 p-4 md:p-8 min-h-screen relative z-0 transition-all">
+      <main className="lg:ml-64 pt-20 px-4 pb-4 md:px-8 md:pb-8 min-h-screen relative z-0 transition-all">
         <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700">
           {children}
         </div>
