@@ -51,7 +51,7 @@ const InsightGenerator = ({ clientId, metrics }) => {
                 <Button
                     onClick={generateInsights}
                     disabled={loading || !metrics}
-                    className="bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white gap-2 transition-all"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 transition-all"
                 >
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                     {insight ? 'Refrescar Análisis' : 'Generar con IA'}

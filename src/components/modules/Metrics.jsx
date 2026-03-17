@@ -308,7 +308,7 @@ const Metrics = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pt-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
@@ -345,15 +345,20 @@ const Metrics = () => {
 
       {/* Main Content Area */}
       {!selectedClientId ? (
-        <Card className="p-20 text-center space-y-4 opacity-50 border-dashed">
-          <Users className="w-16 h-16 mx-auto text-zinc-300" />
-          <h3 className="text-xl font-semibold">Esperando Cliente</h3>
-          <p className="text-zinc-500 max-w-sm mx-auto">Selecciona una marca para ver sus integraciones y métricas.</p>
+        <Card className="p-20 text-center space-y-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+          <div className="w-20 h-20 bg-zinc-50 dark:bg-zinc-900 rounded-full flex items-center justify-center mx-auto border border-zinc-100 dark:border-zinc-800">
+            <Users className="w-8 h-8 text-zinc-400" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold">Selecciona una Marca</h3>
+            <p className="text-zinc-500 text-sm max-w-xs mx-auto">Elige un cliente para configurar sus activos de Meta y generar reportes.</p>
+          </div>
           <div className="max-w-xs mx-auto pt-4">
               <select
                 value={selectedClientId}
                 onChange={(e) => setSelectedClientId(e.target.value)}
-                className="w-full h-10 px-3 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-sm outline-none"
+                className="w-full h-11 px-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all appearance-none cursor-pointer"
+                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1rem' }}
               >
                 <option value="">-- Elige un cliente --</option>
                 {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
@@ -363,9 +368,9 @@ const Metrics = () => {
       ) : loadingStatus ? (
         <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>
       ) : !integrationStatus ? (
-        <Card className="p-12 flex flex-col items-center justify-center text-center space-y-6 border-dashed">
-          <div className="w-20 h-20 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center">
-            <AlertTriangle className="w-10 h-10 text-amber-500" />
+        <Card className="p-12 flex flex-col items-center justify-center text-center space-y-6 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
+          <div className="w-20 h-20 bg-amber-50 dark:bg-amber-500/10 rounded-full flex items-center justify-center border border-amber-100 dark:border-amber-500/20">
+            <AlertTriangle className="w-8 h-8 text-amber-500" />
           </div>
           <div className="space-y-2">
             <h3 className="text-2xl font-bold">Sin Conexión</h3>
@@ -376,7 +381,7 @@ const Metrics = () => {
           <Button
             size="lg"
             onClick={handleMetaLogin}
-            className="bg-[#1877F2] hover:bg-[#166fe5] text-white px-8 rounded-full flex items-center gap-3 shadow-lg transition-all"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 rounded-full flex items-center gap-3 transition-all"
           >
             <Facebook className="w-6 h-6 fill-current" />
             Conectar cuenta de Meta
@@ -385,61 +390,113 @@ const Metrics = () => {
       ) : view === 'config' ? (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
            {/* Connection Summary */}
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="p-6 border-t-4 border-green-500">
+           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <Card className="md:col-span-1 p-6 border-l-4 border-green-500 bg-white dark:bg-zinc-950">
                     <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-bold flex items-center gap-2">
-                        <CheckCircle2 className="w-5 h-5 text-green-500" />
+                      <h4 className="font-bold text-sm flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
                         Meta Connected
                       </h4>
-                      <Badge variant="success">Activo</Badge>
+                      <Badge variant="success" className="text-[9px] h-5">Activo</Badge>
                     </div>
-                    <div className="mb-6 space-y-2 bg-zinc-50 dark:bg-zinc-900/50 p-3 rounded-lg border">
+                    <div className="mb-4 space-y-2 bg-zinc-50 dark:bg-zinc-900/50 p-3 rounded-lg border border-zinc-100 dark:border-zinc-800">
                         <div className="flex justify-between items-center text-[10px]">
                             <span className="text-zinc-400">Business:</span>
                             <span className="font-semibold truncate ml-2">
                               {integrationStatus.metadata.businessName || "Cuenta Personal"}
                             </span>
                         </div>
+                        <div className="flex justify-between items-center text-[10px]">
+                            <span className="text-zinc-400">Sync:</span>
+                            <span className="text-zinc-500">{new Date(integrationStatus.updatedAt).toLocaleDateString()}</span>
+                        </div>
                     </div>
-                    <div className="text-[10px] text-zinc-400 uppercase tracking-wider mb-1">Sincronizado</div>
-                    <div className="text-[10px] font-mono text-zinc-600 dark:text-zinc-400 mb-6">{new Date(integrationStatus.updatedAt).toLocaleString()}</div>
-                    <Button
-                        variant="ghost"
+
+                    <div className="space-y-2">
+                      <Button
                         size="sm"
-                        className="w-full text-red-500 hover:bg-red-50 text-[10px] uppercase font-bold"
-                        onClick={handleDisconnect}
-                        disabled={disconnecting}
-                    >
-                        {disconnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unplug className="w-3 h-3" />}
-                        Desconectar Cuenta
-                    </Button>
+                        onClick={() => setView('report')}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white gap-2 h-9 text-xs"
+                      >
+                        <BarChart3 className="w-3.5 h-3.5" />
+                        Ver Dashboard
+                      </Button>
+                      <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full text-zinc-400 hover:text-red-500 hover:bg-red-50 text-[10px] uppercase font-bold h-8"
+                          onClick={handleDisconnect}
+                          disabled={disconnecting}
+                      >
+                          {disconnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unplug className="w-3 h-3" />}
+                          Desconectar
+                      </Button>
+                    </div>
                 </Card>
 
-                <Card className="md:col-span-2 p-10 flex flex-col items-center justify-center text-center space-y-4 bg-indigo-50/30 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30">
-                    <div className="p-4 bg-white dark:bg-zinc-900 rounded-2xl shadow-xl shadow-indigo-500/10">
-                        <BarChart3 className="w-12 h-12 text-indigo-600" />
+                {/* Asset Mapping (Fase 1) - Takes more space now */}
+                <Card className="md:col-span-3 p-8 border-l-4 border-indigo-500 bg-white dark:bg-zinc-950">
+                    <div className="flex items-center gap-3 mb-8">
+                        <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg">
+                          <Settings2 className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold">Mapeo de Activos</h3>
+                          <p className="text-xs text-zinc-500">Víncula la página, instagram y cuenta de anuncios específica.</p>
+                        </div>
                     </div>
-                    <div>
-                        <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">¿Listo para el reporte?</h3>
-                        <p className="text-zinc-500 max-w-sm">Si los activos ya están mapeados correctamente, puedes acceder al análisis real-time.</p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                        <div className="space-y-6">
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Meta Business</label>
+                              <select value={selectedBusiness} onChange={(e) => setSelectedBusiness(e.target.value)} disabled={loadingAssets} className="w-full h-10 px-3 rounded-md border bg-white dark:bg-zinc-950 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none">
+                                <option value="">-- Seleccionar Business --</option>
+                                {assets.businesses.map(biz => <option key={biz.id} value={biz.id}>{biz.name}</option>)}
+                              </select>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Página de Facebook</label>
+                              <select value={selectedPage} onChange={(e) => setSelectedPage(e.target.value)} disabled={loadingAssets} className="w-full h-10 px-3 rounded-md border bg-white dark:bg-zinc-950 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none">
+                                <option value="">-- Seleccionar Página --</option>
+                                {assets.pages.map(page => <option key={page.id} value={page.id}>{page.name}</option>)}
+                              </select>
+                            </div>
+                        </div>
+                        <div className="space-y-6">
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Cuenta de Ads</label>
+                              <select value={selectedAdAccount} onChange={(e) => setSelectedAdAccount(e.target.value)} disabled={loadingAssets} className="w-full h-10 px-3 rounded-md border bg-white dark:bg-zinc-950 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none">
+                                <option value="">-- Seleccionar Cuenta de Ads --</option>
+                                {assets.adAccounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name} ({acc.account_id})</option>)}
+                              </select>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Cuenta de Instagram</label>
+                              <div className="h-10 px-3 rounded-md border bg-zinc-50 dark:bg-zinc-900/30 flex items-center justify-between text-sm italic text-zinc-500">
+                                  <div className="flex items-center gap-2">
+                                    <Instagram className="w-4 h-4 text-zinc-400" />
+                                    {loadingIG ? <Loader2 className="w-4 h-4 animate-spin" /> : instagramAccount ? <span className="not-italic font-medium text-zinc-900 dark:text-zinc-100">@{instagramAccount.username}</span> : "Auto-detectado"}
+                                  </div>
+                                  {instagramAccount && <CheckCircle2 className="w-4 h-4 text-indigo-500" />}
+                              </div>
+                            </div>
+                        </div>
                     </div>
-                    <Button
-                      size="lg"
-                      onClick={() => setView('report')}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-xl hover:scale-105 transition-all h-12 px-8 rounded-full"
-                    >
-                      <BarChart3 className="w-5 h-5" />
-                      Ver Reporte Fase 2
-                    </Button>
+                    <div className="mt-8 pt-8 border-t border-zinc-100 dark:border-zinc-800 flex justify-end">
+                        <Button onClick={handleSaveMapping} disabled={savingMapping || !selectedPage || !selectedAdAccount} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 px-8">
+                          {savingMapping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          Guardar Configuración
+                        </Button>
+                    </div>
                 </Card>
            </div>
 
            {/* Asset Mapping (Fase 1) */}
-           <Card className="p-8 border-l-4 border-amber-500">
+           <Card className="p-8 border-l-4 border-indigo-500 bg-white dark:bg-zinc-950">
                 <div className="flex items-center gap-3 mb-8">
-                    <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-                       <Settings2 className="w-5 h-5 text-amber-600" />
+                    <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg">
+                       <Settings2 className="w-5 h-5 text-indigo-600" />
                     </div>
                     <div>
                        <h3 className="text-lg font-bold">Mapeo de Activos</h3>
@@ -478,8 +535,8 @@ const Metrics = () => {
                              {assets.adAccounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name} ({acc.account_id})</option>)}
                            </select>
                         </div>
-                        <div className="pt-8">
-                           <Button onClick={handleSaveMapping} disabled={savingMapping || !selectedPage || !selectedAdAccount} className="w-full gap-2">
+                        <div className="mt-8 pt-8 border-t border-zinc-100 dark:border-zinc-800 flex justify-end">
+                           <Button onClick={handleSaveMapping} disabled={savingMapping || !selectedPage || !selectedAdAccount} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 px-8">
                              {savingMapping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                              Guardar Configuración
                            </Button>
