@@ -110,7 +110,7 @@ const TopContentGrid = ({ content }) => {
                           <span>Alcance</span>
                       </div>
                       <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100">
-                        {item.reach > 1000 ? (item.reach / 1000).toFixed(1) + 'k' : item.reach}
+                        {item.reach > 0 ? (item.reach > 1000 ? (item.reach / 1000).toFixed(1) + 'k' : item.reach) : '--'}
                       </span>
                   </div>
                   <div className="flex items-center justify-between">

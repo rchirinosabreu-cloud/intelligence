@@ -93,11 +93,14 @@ async function fetchPeriodMetrics(client, token, period) {
             // Get Page Access Token specifically
             const pageTokenRes = await axios.get(`${BASE_URL}/${client.facebookPageId}?fields=access_token&access_token=${token}`);
             const pageToken = pageTokenRes.data.access_token;
+            if (!pageToken) throw new Error('Could not retrieve Page Access Token');
 
             console.log(`[Meta Metrics] Fetching FB Insights for ${client.facebookPageId} (${period.since} to ${period.until})`);
+            // Standard Page Insights for New Page Experience
+            // Note: Use page_engaged_users for interactions if page_post_engagements fails
             const fbMetricsRes = await axios.get(`${BASE_URL}/${client.facebookPageId}/insights`, {
                 params: {
-                    metric: 'page_impressions,page_post_engagements,page_posts_impressions_unique',
+                    metric: 'page_impressions,page_engaged_users,page_impressions_unique',
                     period: 'day',
                     since: period.since,
                     until: period.until,
@@ -115,8 +118,8 @@ async function fetchPeriodMetrics(client, token, period) {
                 };
 
                 data.facebook.impressions = findAndSum('page_impressions');
-                data.facebook.interactions = findAndSum('page_post_engagements');
-                data.facebook.reach = findAndSum('page_posts_impressions_unique');
+                data.facebook.interactions = findAndSum('page_engaged_users');
+                data.facebook.reach = findAndSum('page_impressions_unique');
 
                 console.log(`[Meta Metrics] FB Summed (${period.since}-${period.until}) - Imp: ${data.facebook.impressions}, Int: ${data.facebook.interactions}, Reach: ${data.facebook.reach}`);
             } else {
@@ -134,11 +137,10 @@ async function fetchPeriodMetrics(client, token, period) {
     if (client.instagramBusinessId) {
         try {
             console.log(`[Meta Metrics] Fetching IG Insights for ${client.instagramBusinessId} (${period.since} to ${period.until})`);
-            // Note: Instagram doesn't have a direct 'interactions' metric at account level like FB.
-            // We use 'impressions' and 'reach' as primary metrics.
+            // Using user-requested metrics: reach, impressions, profile_views
             const igMetricsRes = await axios.get(`${BASE_URL}/${client.instagramBusinessId}/insights`, {
                 params: {
-                    metric: 'impressions,reach',
+                    metric: 'reach,impressions,profile_views',
                     period: 'day',
                     since: period.since,
                     until: period.until,
@@ -157,9 +159,7 @@ async function fetchPeriodMetrics(client, token, period) {
                 data.instagram.impressions = findAndSum('impressions');
                 data.instagram.reach = findAndSum('reach');
 
-                // For Instagram interactions at account level, we can't get a daily sum easily without
-                // iterating all media. We'll rely on the 'engagement' from Top Content for specific wins,
-                // but for the summary, we'll keep it as 0 unless a specific metric is identified.
+                // Summing interactions is not supported directly at account level without media iteration.
                 data.instagram.interactions = 0;
 
                 console.log(`[Meta Metrics] IG Summed (${period.since}-${period.until}) - Imp: ${data.instagram.impressions}, Reach: ${data.instagram.reach}`);
@@ -273,13 +273,16 @@ export async function getReachTrend(clientId, range = 'last_30') {
 
         if (client.facebookPageId) {
             const pageTokenRes = await axios.get(`${BASE_URL}/${client.facebookPageId}?fields=access_token&access_token=${token}`);
+            const pageToken = pageTokenRes.data.access_token;
+            if (!pageToken) throw new Error('Could not retrieve Page Access Token for Trend');
+
             const fbRes = await axios.get(`${BASE_URL}/${client.facebookPageId}/insights`, {
                 params: {
-                    metric: 'page_posts_impressions_unique',
+                    metric: 'page_impressions_unique',
                     period: 'day',
                     since: current.since,
                     until: current.until,
-                    access_token: pageTokenRes.data.access_token
+                    access_token: pageToken
                 }
             });
             fbDaily = fbRes.data.data[0]?.values || [];
@@ -347,12 +350,13 @@ export async function getTopContent(clientId, range = 'last_30') {
              const pageToken = pageTokenRes.data.access_token;
 
              console.log(`[Meta Metrics] Fetching FB Top Content for ${client.facebookPageId} (${current.since} to ${current.until})`);
+             // New Page Experience compatible fields
              const fbPostsRes = await axios.get(`${BASE_URL}/${client.facebookPageId}/posts`, {
                 params: {
-                    fields: 'id,message,created_time,full_picture,type,insights.metric(post_impressions_unique,post_engagements)',
+                    fields: 'id,message,created_time,full_picture,type,insights.metric(post_impressions_unique,post_engaged_users)',
                     since: current.since,
                     until: current.until,
-                    limit: 100,
+                    limit: 50,
                     access_token: pageToken
                 }
              });
@@ -360,7 +364,7 @@ export async function getTopContent(clientId, range = 'last_30') {
 
              const fbPosts = (fbPostsRes.data.data || []).map(p => {
                  const reach = p.insights?.data.find(i => i.name === 'post_impressions_unique')?.values[0]?.value || 0;
-                 const engagement = p.insights?.data.find(i => i.name === 'post_engagements')?.values[0]?.value || 0;
+                 const engagement = p.insights?.data.find(i => i.name === 'post_engaged_users')?.values[0]?.value || 0;
                  return {
                      id: p.id,
                      type: p.type || 'Post',
@@ -377,29 +381,31 @@ export async function getTopContent(clientId, range = 'last_30') {
 
         if (client.instagramBusinessId) {
             console.log(`[Meta Metrics] Fetching IG Top Content for ${client.instagramBusinessId} (${current.since} to ${current.until})`);
+            // To avoid Error #400/100, we fetch basic media fields first and engagement from metadata (like_count, comments_count).
+            // Reels insights often fail in bulk edge queries.
             const igMediaRes = await axios.get(`${BASE_URL}/${client.instagramBusinessId}/media`, {
                 params: {
-                    fields: 'id,caption,media_type,media_url,thumbnail_url,timestamp,insights.metric(impressions,reach,engagement)',
+                    fields: 'id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count',
                     since: current.since,
                     until: current.until,
-                    limit: 100,
+                    limit: 50,
                     access_token: token
                 }
             });
             console.log(`[Meta Metrics] IG Media Count: ${igMediaRes.data?.data?.length || 0}`);
-            if (igMediaRes.data?.data?.length === 0) {
-                console.log('[Meta Metrics] IG Media is empty. Potential missing scope: instagram_manage_insights');
-            }
 
             const igMedia = (igMediaRes.data.data || []).map(m => {
-                const reach = m.insights?.data.find(i => i.name === 'reach')?.values[0]?.value || 0;
-                const engagement = m.insights?.data.find(i => i.name === 'engagement')?.values[0]?.value || 0;
+                // Approximate reach for IG if insights fail is hard.
+                // We'll prioritize the media engagement (Likes + Comments) as requested.
+                // If the user wants real reach, we'd need per-media insight calls which is slow.
+                const engagement = (m.like_count || 0) + (m.comments_count || 0);
+
                 return {
                     id: m.id,
                     type: m.media_type,
                     content: m.caption || 'Sin caption',
                     thumbnail: m.media_type === 'VIDEO' ? m.thumbnail_url : m.media_url,
-                    reach,
+                    reach: 0, // Placeholder as bulk reach insights often crash for mixed media types (Reels)
                     engagement,
                     platform: 'instagram',
                     date: m.timestamp
