@@ -1,6 +1,7 @@
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -156,11 +157,13 @@ const NativeTasks = () => {
   const { currentUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
   const [responsibleFilter, setResponsibleFilter] = useState('Todos');
   const [dateFilter, setDateFilter] = useState('Hoy + Vencidos');
   const [clientFilter, setClientFilter] = useState('Todos');
 
-  const [tasks, setTasks] = useState([]);
   const [returningTask, setReturningTask] = useState(null);
   const [returnReason, setReturnReason] = useState('');
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
@@ -171,6 +174,61 @@ const NativeTasks = () => {
   const [isReturnedSidebarOpen, setIsReturnedSidebarOpen] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState(null);
 
+  const [isCreating, setIsCreating] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+
+  // --- REACT QUERY: TASKS ---
+  const {
+    data: tasks = [],
+    isLoading: loadingTasks,
+    error: tasksError,
+    refetch: refetchTasks
+  } = useQuery({
+    queryKey: ['nativeTasks'],
+    queryFn: async () => {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetch(`${baseUrl}/api/tasks`);
+      if (!response.ok) {
+          throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json();
+      const safeData = Array.isArray(data) ? data : [];
+
+      return safeData.map(task => ({
+          id: task.id,
+          title: task.title,
+          clientName: task.client?.name || 'Sin Cliente',
+          assigneeName: task.assignee?.name || 'Sin Asignar',
+          assigneeId: task.assigneeId,
+          assigneeAvatar: task.assignee?.avatarUrl || null,
+          creatorId: task.creatorId,
+          creatorName: task.creator?.name || 'Sistema',
+          status: task.status,
+          dueDateFormatted: task.dueDate ? task.dueDate.split('T')[0].split('-').reverse().join('-') : null,
+          comments: task.comments,
+          isPriority: task.isPriority || false,
+          isSpecial: task.isSpecial || false,
+          specialType: task.specialType,
+          referenceUrl: task.referenceUrl
+      }));
+    },
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+  });
+
+  // --- REACT QUERY: CLIENTS ---
+  const { data: clientsList = [] } = useQuery({
+    queryKey: ['clientsDropdown'],
+    queryFn: async () => {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetch(`${baseUrl}/api/db/clients`);
+      if (!response.ok) throw new Error("Failed to fetch clients");
+      const data = await response.json();
+      return data.sort((a, b) => a.name.localeCompare(b.name));
+    },
+    staleTime: 600000, // 10 minutes
+  });
+
   // Set default responsible filter based on user role
   useEffect(() => {
     const user = sessionStorage.getItem('currentUser');
@@ -180,73 +238,6 @@ const NativeTasks = () => {
         setResponsibleFilter(parsedUser.name);
       }
     }
-  }, []);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const { toast } = useToast();
-
-  const [clientsList, setClientsList] = useState([]);
-  const [isCreating, setIsCreating] = useState(false);
-  const [editingTask, setEditingTask] = useState(null);
-
-  const fetchTasks = async () => {
-      try {
-          setLoading(true);
-          const baseUrl = getApiBaseUrl();
-          const response = await fetch(`${baseUrl}/api/tasks`);
-          if (!response.ok) {
-              throw new Error(`Error ${response.status}: ${response.statusText}`);
-          }
-          const data = await response.json();
-          const safeData = Array.isArray(data) ? data : [];
-          // Transform native task format to match kanban expectations if needed
-          const formattedTasks = safeData.map(task => ({
-              id: task.id,
-              title: task.title,
-              clientName: task.client?.name || 'Sin Cliente',
-              assigneeName: task.assignee?.name || 'Sin Asignar',
-              assigneeId: task.assigneeId,
-              assigneeAvatar: task.assignee?.avatarUrl || null,
-              creatorId: task.creatorId,
-              creatorName: task.creator?.name || 'Sistema',
-              status: task.status,
-              // Parse the date explicitly avoiding browser local timezone shifts if it comes as an ISO string
-              // Because we save it with T12:00:00.000Z, we can just safely slice it or convert it to a date that won't shift.
-              // We'll extract the YYYY-MM-DD from the raw ISO string directly.
-              dueDateFormatted: task.dueDate ? task.dueDate.split('T')[0].split('-').reverse().join('-') : null,
-              comments: task.comments,
-              isPriority: task.isPriority || false,
-              isSpecial: task.isSpecial || false,
-              specialType: task.specialType,
-              referenceUrl: task.referenceUrl
-          }));
-          setTasks(formattedTasks);
-      } catch (err) {
-          console.error("Error cargando tareas:", err);
-          setError(err.message);
-      } finally {
-          setLoading(false);
-      }
-  };
-
-  const fetchClients = async () => {
-      try {
-          const baseUrl = getApiBaseUrl();
-            const response = await fetch(`${baseUrl}/api/db/clients`);
-          if (response.ok) {
-              const data = await response.json();
-              // Sort clients alphabetically
-              const sorted = data.sort((a, b) => a.name.localeCompare(b.name));
-              setClientsList(sorted);
-          }
-      } catch (err) {
-          console.error("Error fetching clients for dropdown:", err);
-      }
-  };
-
-  useEffect(() => {
-      fetchTasks();
-      fetchClients();
   }, []);
 
   // Deep linking logic: open returned tasks sidebar and open specific task if taskId is provided
@@ -303,7 +294,7 @@ const NativeTasks = () => {
               : returnTag;
 
           // 3. OPTIMISTIC UPDATE
-          setTasks(prev => prev.map(t =>
+          queryClient.setQueryData(['nativeTasks'], prev => prev?.map(t =>
             t.id === returningTask.id
                 ? { ...t, status: 'DEVUELTA', comments: updatedComments, comentarios: updatedComments }
                 : t
@@ -324,22 +315,17 @@ const NativeTasks = () => {
                   description: "Se ha cambiado el estado a Devuelto y se añadió el comentario.",
               });
 
-              // Backend (nativeTaskService) now handles notification on PATCH status: 'DEVUELTA'
-              // but we need to ensure it's triggered correctly there if not already.
-              // Looking at nativeTaskService.updateTask, it triggers TASK_UPDATED for priority/special.
-              // It also triggers TASK_CORRECTED for reintegration.
-              // Let's check if it triggers TASK_RETURNED.
-
               setReturningTask(null);
               setReturnReason('');
-              fetchTasks();
+              queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+              queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
           } else {
               throw new Error("Failed to return task");
           }
       } catch (err) {
           console.error("Error returning task:", err);
           // 4. REVERT on failure
-          setTasks(previousTasks);
+          queryClient.setQueryData(['nativeTasks'], previousTasks);
           toast({
               title: "Error",
               description: "No se pudo devolver la tarea.",
@@ -355,7 +341,7 @@ const NativeTasks = () => {
 
       // Optimistic UI: Remove from local state
       const previousTasks = [...tasks];
-      setTasks(prev => prev.filter(t => t.id !== deletingTask.id));
+      queryClient.setQueryData(['nativeTasks'], prev => prev?.filter(t => t.id !== deletingTask.id));
 
       try {
           setIsSubmittingDelete(true);
@@ -381,14 +367,15 @@ const NativeTasks = () => {
 
               setDeletingTask(null);
               setDeleteReason('');
-              fetchTasks();
+              queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+              queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
           } else {
               throw new Error("Failed to delete task");
           }
       } catch (err) {
           console.error("Error deleting task:", err);
           // Revert on failure
-          setTasks(previousTasks);
+          queryClient.setQueryData(['nativeTasks'], previousTasks);
           toast({
               title: "Error",
               description: "No se pudo eliminar la tarea.",
@@ -554,7 +541,7 @@ const NativeTasks = () => {
       }
 
       // Apply Optimistic Update
-      setTasks(newTasks);
+      queryClient.setQueryData(['nativeTasks'], newTasks);
 
       // 4. API Sync (Only if column changed)
       if (sourceColumnId === destinationColumnId) {
@@ -601,18 +588,24 @@ const NativeTasks = () => {
           if (!response.ok) {
               throw new Error("Failed to update status in backend");
           }
+
+          queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
       } catch (err) {
           console.error("Drag and drop failed:", err);
-          setTasks(previousTasks);
+          // Manually reset local tasks to previous snapshot on query fail if needed,
+          // but React Query will usually handle re-sync on next interval.
+          // For immediate visual revert:
+          queryClient.setQueryData(['nativeTasks'], previousTasks);
+
           toast({
               title: "Error de sincronización",
-              description: "Se revirtió el movimiento porque no se pudo actualizar el estado en Google Sheets.",
+              description: "Se revirtió el movimiento porque no se pudo actualizar el estado.",
               variant: "destructive"
           });
       }
   };
 
-  if (loading && tasks.length === 0) {
+  if (loadingTasks && tasks.length === 0) {
       return (
           <div className="h-full flex flex-col items-center justify-center space-y-4">
               <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
@@ -621,7 +614,7 @@ const NativeTasks = () => {
       );
   }
 
-  if (error && tasks.length === 0) {
+  if (tasksError && tasks.length === 0) {
        return (
           <div className="h-full flex flex-col items-center justify-center space-y-4">
               <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
@@ -632,7 +625,7 @@ const NativeTasks = () => {
                   Hubo un problema al conectar con la base de datos.
               </p>
               <p className="text-xs text-zinc-400 font-mono bg-zinc-100 dark:bg-zinc-900 px-2 py-1 rounded">
-                  {error}
+                  {tasksError?.message}
               </p>
               <button
                 onClick={() => window.location.reload()}
@@ -728,7 +721,10 @@ const NativeTasks = () => {
       <TaskCreateModal
           isOpen={isCreating}
           onClose={() => setIsCreating(false)}
-          onSuccess={fetchTasks}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+          }}
           clientsList={clientsList}
       />
       <TaskEditModal
@@ -743,7 +739,10 @@ const NativeTasks = () => {
                   navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}`, { replace: true });
               }
           }}
-          onSuccess={fetchTasks}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+          }}
           clientsList={clientsList}
           taskData={editingTask}
       />

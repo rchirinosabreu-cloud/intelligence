@@ -4,6 +4,7 @@ import { Menu, User, LogOut, Settings, Bell, Search, Sun, Moon, MessageSquare, L
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import TeamAvatar from '../ui/TeamAvatar';
@@ -15,71 +16,61 @@ const AppLayout = ({ children }) => {
   const { currentUser, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  // Notification State
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [notifications, setNotifications] = useState([]);
-  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  // --- REACT QUERY: NOTIFICATIONS ---
+  const {
+    data: notifications = [],
+    isLoading: loadingNotifications,
+    refetch: refetchNotifications
+  } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const res = await fetch(`${getApiBaseUrl()}/api/notifications`, { cache: 'no-store' });
+      if (!res.ok) throw new Error("Failed to fetch notifications");
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+  });
 
-  const fetchNotifications = async () => {
-      try {
-          setLoadingNotifications(true);
-          const res = await fetch(`${getApiBaseUrl()}/api/notifications`, { cache: 'no-store' });
-          if (res.ok) {
-              const data = await res.json();
-              setNotifications(Array.isArray(data) ? data : []);
-          }
-      } catch (error) {
-          console.error("Error fetching notifications:", error);
-      } finally {
-          setLoadingNotifications(false);
-      }
-  };
+  // --- REACT QUERY: UNREAD COUNT ---
+  const {
+    data: unreadData = { count: 0 },
+    refetch: refetchUnreadCount
+  } = useQuery({
+    queryKey: ['unreadNotificationsCount'],
+    queryFn: async () => {
+      const res = await fetch(`${getApiBaseUrl()}/api/notifications/unread-count`, { cache: 'no-store' });
+      if (!res.ok) throw new Error("Failed to fetch unread count");
+      return await res.json();
+    },
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
+  });
 
-  const fetchUnreadCount = async () => {
-      try {
-          const res = await fetch(`${getApiBaseUrl()}/api/notifications/unread-count`, { cache: 'no-store' });
-          if (res.ok) {
-              const data = await res.json();
-              setUnreadCount(prev => {
-                  if (data.count > prev) {
-                      fetchNotifications();
-                  }
-                  return data.count;
-              });
-          }
-      } catch (error) {
-          console.error("Error fetching unread count:", error);
-      }
-  };
+  const unreadCount = unreadData?.count || 0;
 
   useEffect(() => {
-    fetchUnreadCount();
-    fetchNotifications();
-
-    const interval = setInterval(() => {
-        fetchUnreadCount();
-    }, 15000);
-
     const handleNotificationsRead = () => {
-        fetchUnreadCount();
-        fetchNotifications();
+        queryClient.invalidateQueries({ queryKey: ['unreadNotificationsCount'] });
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
     };
 
     window.addEventListener('notifications-read', handleNotificationsRead);
-    window.addEventListener('focus', fetchUnreadCount);
-
     return () => {
-        clearInterval(interval);
         window.removeEventListener('notifications-read', handleNotificationsRead);
-        window.removeEventListener('focus', fetchUnreadCount);
     };
-  }, []);
+  }, [queryClient]);
 
   const markAllAsRead = async () => {
       if (unreadCount === 0) return;
-      setUnreadCount(0);
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+
+      // Optimistic update
+      queryClient.setQueryData(['unreadNotificationsCount'], { count: 0 });
+      queryClient.setQueryData(['notifications'], (prev) => prev?.map(n => ({ ...n, isRead: true })));
+
       try {
           await fetch(`${getApiBaseUrl()}/api/notifications/read-all`, { method: 'POST' });
       } catch (error) {
@@ -175,7 +166,7 @@ const AppLayout = ({ children }) => {
 
             <DropdownMenu onOpenChange={async (open) => {
                 if (open) {
-                    await fetchNotifications();
+                    await refetchNotifications();
                     markAllAsRead();
                 }
             }}>
@@ -199,7 +190,7 @@ const AppLayout = ({ children }) => {
                     </h4>
                 </div>
                 <div className="max-h-96 overflow-y-auto">
-                    {loadingNotifications ? (
+                    {loadingNotifications && notifications.length === 0 ? (
                         <div className="p-8 text-center"><Loader2 className="w-5 h-5 animate-spin text-zinc-400 mx-auto" /></div>
                     ) : notifications.length === 0 ? (
                         <div className="p-12 text-center">
