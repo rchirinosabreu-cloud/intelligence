@@ -110,7 +110,8 @@ router.patch('/meta/mapping/:clientId', async (req, res) => {
 
 router.get('/meta/metrics/organic/:clientId', async (req, res) => {
     try {
-        const metrics = await getOrganicMetrics(req.params.clientId);
+        const { range } = req.query;
+        const metrics = await getOrganicMetrics(req.params.clientId, range);
         res.json(metrics);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -119,7 +120,8 @@ router.get('/meta/metrics/organic/:clientId', async (req, res) => {
 
 router.get('/meta/metrics/trend/:clientId', async (req, res) => {
     try {
-        const trend = await getReachTrend(req.params.clientId);
+        const { range } = req.query;
+        const trend = await getReachTrend(req.params.clientId, range);
         res.json(trend);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -128,7 +130,8 @@ router.get('/meta/metrics/trend/:clientId', async (req, res) => {
 
 router.get('/meta/metrics/top-content/:clientId', async (req, res) => {
     try {
-        const content = await getTopContent(req.params.clientId);
+        const { range } = req.query;
+        const content = await getTopContent(req.params.clientId, range);
         res.json(content);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -137,7 +140,8 @@ router.get('/meta/metrics/top-content/:clientId', async (req, res) => {
 
 router.get('/meta/metrics/ads/:clientId', async (req, res) => {
     try {
-        const ads = await getAdsInsights(req.params.clientId);
+        const { range } = req.query;
+        const ads = await getAdsInsights(req.params.clientId, range);
         res.json(ads);
     } catch (error) {
         res.status(500).json({ error: error.message });
