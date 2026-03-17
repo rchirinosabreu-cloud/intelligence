@@ -40,9 +40,6 @@ const Dashboard = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [metrics, setMetrics] = useState({ total: 0, completed: 0, pending: 0, percentage: 0 });
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [notifications, setNotifications] = useState([]);
-  const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [isGeneralChatModalOpen, setIsGeneralChatModalOpen] = useState(false);
 
   const getDailyMessage = () => {
@@ -68,41 +65,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [loadingNative, setLoadingNative] = useState(true);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-
-  const fetchNotifications = async () => {
-      try {
-          setLoadingNotifications(true);
-          const res = await fetch(`${getApiBaseUrl()}/api/notifications`, { cache: 'no-store' });
-          if (res.ok) {
-              const data = await res.json();
-              setNotifications(Array.isArray(data) ? data : []);
-          }
-      } catch (error) {
-          console.error("Error fetching notifications:", error);
-      } finally {
-          setLoadingNotifications(false);
-      }
-  };
-
-  const fetchUnreadCount = async () => {
-      try {
-          const res = await fetch(`${getApiBaseUrl()}/api/notifications/unread-count`, { cache: 'no-store' });
-          if (res.ok) {
-              const data = await res.json();
-
-              // Use functional update to ensure we check against the latest state
-              // and trigger background list sync if new notifications arrived.
-              setUnreadCount(prev => {
-                  if (data.count > prev) {
-                      fetchNotifications();
-                  }
-                  return data.count;
-              });
-          }
-      } catch (error) {
-          console.error("Error fetching unread count:", error);
-      }
-  };
 
   useEffect(() => {
     const fetchMetrics = async () => {
@@ -141,34 +103,6 @@ const Dashboard = () => {
 
     fetchMetrics();
     fetchCompletedNativeTasks();
-    fetchUnreadCount();
-    fetchNotifications();
-
-    const interval = setInterval(() => {
-        fetchUnreadCount();
-        // fetchNotifications(); // Only fetch count to save bandwidth, full list updates on bell open
-    }, 60000);
-
-    const handleNotificationsRead = () => {
-        fetchUnreadCount();
-        fetchNotifications();
-    };
-
-    const handleFocus = () => {
-        fetchUnreadCount();
-    };
-
-    window.addEventListener('notifications-read', handleNotificationsRead);
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') fetchUnreadCount();
-    });
-
-    return () => {
-        clearInterval(interval);
-        window.removeEventListener('notifications-read', handleNotificationsRead);
-        window.removeEventListener('focus', handleFocus);
-    };
   }, []);
 
   // --- LOGIC: FEED DE LOGROS (Completed TODAY from Native Tasks) ---
@@ -193,50 +127,6 @@ const Dashboard = () => {
       }).slice(0, 15); // Limit to the 15 most recent achievements
   }, [completedNativeTasks]);
 
-  const markAllAsRead = async () => {
-      if (unreadCount === 0) return;
-
-      // Optimistic update to prevent flicker/re-render cycles
-      setUnreadCount(0);
-
-      // Update local notifications state to mark them as read visually without a full refetch
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-
-      try {
-          await fetch(`${getApiBaseUrl()}/api/notifications/read-all`, {
-              method: 'POST'
-          });
-          // Notify other components if any, but avoid a full Dashboard re-render here
-          // window.dispatchEvent(new Event('notifications-read'));
-      } catch (error) {
-          console.error("Error marking as read:", error);
-      }
-  };
-
-  const handleNotificationClick = async (notif) => {
-    // Mark as read first
-    try {
-        const baseUrl = getApiBaseUrl();
-        await fetch(`${baseUrl}/api/notifications/${notif.id}/read`, { method: 'PATCH' });
-        window.dispatchEvent(new Event('notifications-read'));
-    } catch (e) {
-        console.error("Error marking notification as read:", e);
-    }
-
-    // Navigate or Open Modal
-    if (notif.type === 'GENERAL_CHAT_MENTION') {
-        setIsGeneralChatModalOpen(true);
-    } else if (notif.type === 'CAMPFIRE_MENTION') {
-        // relatedId contains the clientId
-        navigate(`/cliente/${notif.relatedId}?openChat=true`);
-    } else if (notif.type === 'TASK_RETURNED') {
-        // Navigate to Native Tasks (Gestion) and show returned tasks
-        navigate(`/gestion?showReturned=true&taskId=${notif.relatedId}`);
-    } else if (notif.type === 'TASK_CORRECTED' || notif.type === 'TASK_UPDATED' || notif.type === 'TASK_ASSIGNED') {
-        // Navigate to Native Tasks (Gestion) and focus the corrected/updated/assigned task
-        navigate(`/gestion?taskId=${notif.relatedId}`);
-    }
-  };
 
   return (
     <motion.div

@@ -72,9 +72,20 @@ const ChatWidget = ({
                 fetchMessages(true);
             }, 3000);
 
-            return () => clearInterval(intervalId);
+            const handleOpenGeneral = () => {
+                if (isGlobal && setIsModalOpen) {
+                    setIsModalOpen(true);
+                }
+            };
+
+            window.addEventListener('open-general-chat', handleOpenGeneral);
+
+            return () => {
+                clearInterval(intervalId);
+                window.removeEventListener('open-general-chat', handleOpenGeneral);
+            };
         }
-    }, [clientId, apiEndpoint]);
+    }, [clientId, apiEndpoint, isGlobal, setIsModalOpen]);
 
     const handleSendMessage = async () => {
         if (!content.trim() || isSubmitting) return;

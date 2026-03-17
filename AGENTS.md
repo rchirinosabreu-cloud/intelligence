@@ -28,6 +28,21 @@ Este archivo contiene las reglas y el contexto inmutable del proyecto para evita
 
 ---
 *Nota para el agente: Si estás a punto de modificar `schema.prisma`, `server.js` (sección CORS), o archivos clave de UI, revisa primero estas reglas.*
+
+## bitácora de Reflexión Visual (Responsive Audit)
+
+### 1. Auditoría de Capas (Z-Index)
+- **Sidebar Móvil:** `z-[60]` (Prioridad absoluta para navegación táctil).
+- **Overlay:** `z-55` (Bloqueo de interacción con el contenido).
+- **Header Fixed:** `z-50` (Permanece accesible en desktop, queda detrás del sidebar en móvil).
+
+### 2. Control de Márgenes (pt-20)
+- El contenedor `<main>` implementa `pt-20` forzoso. Esto garantiza que el saludo del usuario ("¡Hola, Rodny!") no quede asfixiado debajo del header de `h-16`. Los tests de Playwright validan un offset real de `80px`.
+
+### 3. Notificaciones Centralizadas
+- Se eliminó la campana del Dashboard para evitar redundancia y fatiga cognitiva.
+- La lógica de notificaciones (unread count, status fetching, background polling) se migró al componente `AppLayout.jsx`, reactivando la funcionalidad real en el Header.
+
 ## 6. Reglas de Desarrollo y Testing (TDD Estratégico)
 
 1. **Backend y Lógica Crítica (TDD Obligatorio):** Para cualquier nueva ruta de API, integraciones con terceros (OpenAI, Fireflies), parseo de datos (JSON) o lógica de autenticación/base de datos, **DEBES utilizar un enfoque TDD**. Escribe primero las pruebas (usando Jest o la herramienta configurada), asegúrate de que fallen, y luego escribe el código para que pasen.
