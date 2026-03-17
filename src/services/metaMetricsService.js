@@ -10,37 +10,41 @@ const BASE_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
  * @param {string} range - 'last_30', 'this_month', 'last_month', 'q1', 'q2', 'q3', 'q4'
  */
 function getPeriodDates(range = 'last_30') {
+    // Standardize to Midnight for consistent ranges
     const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
     let currentStart, currentEnd, previousStart, previousEnd;
 
-    currentEnd = new Date(now);
-
     if (range === 'this_month') {
-        currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        previousStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        previousEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+        currentStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        currentEnd = new Date(today);
+        previousStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        previousEnd = new Date(today.getFullYear(), today.getMonth(), 0);
     } else if (range === 'last_month') {
-        currentStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        currentEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-        previousStart = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-        previousEnd = new Date(now.getFullYear(), now.getMonth() - 1, 0);
+        currentStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        currentEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+        previousStart = new Date(today.getFullYear(), today.getMonth() - 2, 1);
+        previousEnd = new Date(today.getFullYear(), today.getMonth() - 1, 0);
     } else if (range.startsWith('q')) {
         const quarter = parseInt(range.substring(1));
-        const year = now.getFullYear();
+        const year = today.getFullYear();
         currentStart = new Date(year, (quarter - 1) * 3, 1);
         currentEnd = new Date(year, quarter * 3, 0);
-        // For previous, we use the previous year's same quarter or previous quarter?
-        // Usually reports compare vs same period previous year or previous quarter.
-        // Let's go with previous quarter for Q-to-Q comparison.
+
+        // Q-to-Q comparison
         previousStart = new Date(year, (quarter - 2) * 3, 1);
         previousEnd = new Date(year, (quarter - 1) * 3, 0);
     } else {
-        // Default last_30
-        currentStart = new Date(now);
-        currentStart.setDate(currentStart.getDate() - 30);
+        // Default last_30: Strict 30 days including today
+        currentEnd = new Date(today);
+        currentStart = new Date(today);
+        currentStart.setDate(today.getDate() - 29); // Today + 29 previous days = 30 days
+
         previousEnd = new Date(currentStart);
+        previousEnd.setDate(previousEnd.getDate() - 1);
         previousStart = new Date(previousEnd);
-        previousStart.setDate(previousStart.getDate() - 30);
+        previousStart.setDate(previousStart.getDate() - 29);
     }
 
     return {
@@ -251,7 +255,7 @@ export async function getTopContent(clientId, range = 'last_30') {
                     fields: 'id,message,created_time,full_picture,type,insights.metric(post_impressions_unique,post_engagements)',
                     since: current.start,
                     until: current.end,
-                    limit: 50,
+                    limit: 100,
                     access_token: pageToken
                 }
              });
@@ -278,7 +282,7 @@ export async function getTopContent(clientId, range = 'last_30') {
                     fields: 'id,caption,media_type,media_url,thumbnail_url,timestamp,insights.metric(impressions,reach,engagement)',
                     since: current.start,
                     until: current.end,
-                    limit: 50,
+                    limit: 100,
                     access_token: token
                 }
             });
@@ -310,6 +314,42 @@ export async function getTopContent(clientId, range = 'last_30') {
 }
 
 /**
+ * Pure function to process Meta Ads insight data.
+ * @param {Array|Object} data - Raw data from Meta API
+ */
+export function processAdsData(data) {
+    const raw = Array.isArray(data) ? data[0] : data;
+    const insights = raw || { spend: 0, actions: [], reach: 0, impressions: 0 };
+
+    // Sum if it's an array (for custom aggregations) or take as is
+    const spend = Array.isArray(data) ? data.reduce((acc, d) => acc + parseFloat(d.spend || 0), 0) : parseFloat(insights.spend || 0);
+    const reach = Array.isArray(data) ? data.reduce((acc, d) => acc + parseInt(d.reach || 0), 0) : parseInt(insights.reach || 0);
+    const impressions = Array.isArray(data) ? data.reduce((acc, d) => acc + parseInt(d.impressions || 0), 0) : parseInt(insights.impressions || 0);
+
+    // Results mapping (Priority: Messaging > Conversions > Others)
+    const allActions = Array.isArray(data) ? data.flatMap(d => d.actions || []) : (insights.actions || []);
+    const messagingActions = allActions.filter(a =>
+        ['onsite_conversion.messaging_conversation_started_7d', 'messaging_conversation_started_7d'].includes(a.action_type)
+    );
+
+    let results = 0;
+    if (messagingActions.length > 0) {
+        results = messagingActions.reduce((acc, a) => acc + parseInt(a.value || 0), 0);
+    } else {
+        // Fallback to generic conversions if no messaging
+        results = allActions.find(a => a.action_type.includes('conversion'))?.value || 0;
+    }
+
+    return {
+        spend: Math.round(spend),
+        results: parseInt(results),
+        reach: reach,
+        impressions: impressions,
+        costPerResult: results > 0 ? parseFloat((spend / results).toFixed(2)) : 0
+    };
+}
+
+/**
  * Fetches Ads performance.
  */
 export async function getAdsInsights(clientId, range = 'last_30') {
@@ -326,7 +366,8 @@ export async function getAdsInsights(clientId, range = 'last_30') {
     const { current, previous } = getPeriodDates(range);
 
     const fetchAdsForRange = async (start, end) => {
-        const res = await axios.get(`${BASE_URL}/${client.adAccountId}/insights`, {
+        const accountId = client.adAccountId.startsWith('act_') ? client.adAccountId : `act_${client.adAccountId}`;
+        const res = await axios.get(`${BASE_URL}/${accountId}/insights`, {
             params: {
                 level: 'account',
                 fields: 'spend,actions,reach,impressions',
@@ -337,20 +378,8 @@ export async function getAdsInsights(clientId, range = 'last_30') {
                 access_token: token
             }
         });
-        const data = res.data.data[0] || { spend: 0, actions: [], reach: 0, impressions: 0 };
 
-        // Fix: Results mapping for "Messaging conversations started"
-        // Meta field: onsite_conversion.messaging_conversation_started_7d
-        const results = data.actions?.find(a =>
-            ['onsite_conversion.messaging_conversation_started_7d', 'messaging_conversation_started_7d', 'offsite_conversion.fb_pixel_purchase', 'lead', 'onsite_conversion.messaging_first_reply', 'contact'].includes(a.action_type)
-        )?.value || data.actions?.reduce((acc, a) => acc + parseInt(a.value), 0) || 0;
-
-        return {
-            spend: parseFloat(data.spend || 0),
-            results: parseInt(results),
-            reach: parseInt(data.reach || 0),
-            impressions: parseInt(data.impressions || 0)
-        };
+        return processAdsData(res.data.data);
     };
 
     try {
@@ -360,11 +389,11 @@ export async function getAdsInsights(clientId, range = 'last_30') {
         return {
             current: {
                 ...currentAds,
-                efficiency: currentAds.spend > 0 ? (currentAds.spend / (currentAds.results || 1)).toFixed(2) : 0
+                efficiency: currentAds.costPerResult
             },
             previous: {
                 ...previousAds,
-                efficiency: previousAds.spend > 0 ? (previousAds.spend / (previousAds.results || 1)).toFixed(2) : 0
+                efficiency: previousAds.costPerResult
             }
         };
     } catch (e) {

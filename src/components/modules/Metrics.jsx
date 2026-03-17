@@ -308,16 +308,16 @@ const Metrics = () => {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-3">
-            <BarChart3 className="w-8 h-8 text-primary" />
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-3">
+            <BarChart3 className="w-6 h-6 text-primary" />
             BrainStudio Metrics
           </h1>
           <p className="text-zinc-500 dark:text-zinc-400 text-sm">
-            {view === 'config' ? 'Fase 1: Configuración de Activos' : 'Fase 2: Reporte Estratégico Real-time'}
+            {view === 'config' ? 'Configuración de Activos' : 'Reporte Estratégico Real-time'}
           </p>
         </div>
 
@@ -491,11 +491,10 @@ const Metrics = () => {
       ) : (
         <div className="space-y-12 animate-in fade-in slide-in-from-right-4 duration-500">
           {/* Report Toolbar */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-4 border-b border-zinc-100 dark:border-zinc-800">
              <div className="flex items-center gap-4">
-                <Badge variant="success" className="h-6">Fase 2: Live Report</Badge>
-                <span className="text-sm font-medium">
-                  Cliente: <span className="text-indigo-600 dark:text-indigo-400 font-bold">{clients.find(c => c.id === selectedClientId)?.name}</span>
+                <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                  Cliente: <span className="text-zinc-900 dark:text-zinc-100 font-bold">{clients.find(c => c.id === selectedClientId)?.name}</span>
                 </span>
              </div>
 
@@ -517,8 +516,8 @@ const Metrics = () => {
           <div className="space-y-6">
              <div className="flex items-center justify-between">
                <div className="space-y-1">
-                 <h3 className="text-xl font-bold flex items-center gap-2">
-                   <Users className="w-6 h-6 text-primary" />
+                 <h3 className="text-lg font-bold flex items-center gap-2">
+                   <Users className="w-5 h-5 text-zinc-400" />
                    Overview Orgánico
                  </h3>
                  <p className="text-xs text-zinc-500">Rendimiento general de las comunidades de Facebook e Instagram.</p>
@@ -546,13 +545,13 @@ const Metrics = () => {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <h3 className="text-xl font-bold flex items-center gap-2">
-                  <TrendingUp className="w-6 h-6 text-indigo-500" />
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-zinc-400" />
                   Top Content
                 </h3>
                 <p className="text-xs text-zinc-500">Publicaciones con mayor alcance y engagement orgánico.</p>
               </div>
-              <Badge variant="indigo" className="h-6">Mejor rendimiento</Badge>
+              <Badge variant="outline" className="h-6">Mejor rendimiento</Badge>
             </div>
             {loadingTopContent ? (
                <div className="h-48 flex items-center justify-center bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-dashed"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
@@ -564,11 +563,14 @@ const Metrics = () => {
           {/* Ads Control */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-xl font-bold flex items-center gap-2">
-                <Target className="w-6 h-6 text-emerald-500" />
-                Ads Control
-              </h3>
-              <Badge variant="success">Meta Ads Insight</Badge>
+               <div className="space-y-1">
+                 <h3 className="text-lg font-bold flex items-center gap-2">
+                   <Target className="w-5 h-5 text-zinc-400" />
+                   Ads Control
+                 </h3>
+                 <p className="text-xs text-zinc-500">Resumen de inversión y conversiones en Meta Ads.</p>
+               </div>
+               <Badge variant="outline" className="h-6">Meta Ads Insight</Badge>
             </div>
             <AdsControlPanel data={adsMetrics} />
           </div>

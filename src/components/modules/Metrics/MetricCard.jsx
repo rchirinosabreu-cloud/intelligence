@@ -9,25 +9,30 @@ const MetricCard = ({ title, current, previous, icon: Icon, color }) => {
     const isZero = diff === 0;
 
     return (
-        <Card className="p-4 md:p-6 hover:shadow-md transition-all border-l-4" style={{ borderLeftColor: color }}>
+        <Card className="h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
             <div className="flex justify-between items-start mb-4">
-                <div className={`p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400`}>
-                    <Icon className="w-5 h-5" />
-                </div>
+                <span className="text-sm font-medium text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors uppercase tracking-wider">
+                    {title}
+                </span>
                 {previous > 0 && (
-                    <div className={`flex items-center gap-1 text-xs font-bold ${isPositive ? 'text-emerald-500' : isZero ? 'text-zinc-400' : 'text-red-500'}`}>
+                    <div className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border ${
+                        isPositive ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                        isZero ? 'bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/20' :
+                        'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20'
+                    }`}>
                         {isPositive ? <ArrowUp className="w-3 h-3" /> : isZero ? <Minus className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
                         {Math.abs(percentage)}%
                     </div>
                 )}
             </div>
             <div>
-                <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">{title}</p>
-                <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
-                    {current.toLocaleString()}
-                </h3>
-                <p className="text-[10px] text-zinc-400 mt-1">
-                    vs. {previous.toLocaleString()} mes ant.
+                <div className="flex items-end gap-2 mb-2">
+                    <span className="text-4xl font-bold text-zinc-900 dark:text-white tracking-tight tabular-nums">
+                        {current.toLocaleString()}
+                    </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-2">
+                    vs. {previous.toLocaleString()} mes anterior
                 </p>
             </div>
         </Card>
