@@ -37,11 +37,11 @@ const InsightGenerator = ({ clientId, metrics }) => {
     };
 
     return (
-        <Card className="p-6 md:p-8 border-indigo-100 dark:border-indigo-900/30 bg-indigo-50/30 dark:bg-indigo-950/10">
+        <Card className="p-6 md:p-8 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/20">
-                        <Sparkles className="w-5 h-5 text-white" />
+                    <div className="p-2.5 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl">
+                        <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                     </div>
                     <div>
                         <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Generador de Insights con IA</h3>
@@ -51,7 +51,7 @@ const InsightGenerator = ({ clientId, metrics }) => {
                 <Button
                     onClick={generateInsights}
                     disabled={loading || !metrics}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-md hover:shadow-lg transition-all"
+                    className="bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white gap-2 transition-all"
                 >
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                     {insight ? 'Refrescar Análisis' : 'Generar con IA'}

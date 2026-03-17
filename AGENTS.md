@@ -53,6 +53,8 @@ Este archivo contiene las reglas y el contexto inmutable del proyecto para evita
 
 4. **Verificación Visual Obligatoria (Screenshots):** NUNCA des por terminada una tarea de Frontend sin antes renderizarla. Por cada cambio visual, de layout o de componentes en el frontend, DEBES proporcionar obligatoriamente una captura de pantalla (screenshot) de la interfaz final para que el usuario valide que el diseño no se rompió en resoluciones estándar.
 
+5.  **Regla de Oro de Consistencia Visual:** Prohibido introducir estilos visuales nuevos (bordes de colores, sombras excesivas o jerarquías de títulos diferentes) sin aprobación. Toda la app debe seguir el diseño limpio y neutro de la Fase 1.
+
 ---
 
 Reglas Estrictas de Desarrollo y Prevención de Errores (Core Guidelines)
