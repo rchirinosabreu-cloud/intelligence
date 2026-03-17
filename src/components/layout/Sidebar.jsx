@@ -61,6 +61,11 @@ const Sidebar = ({ isOpen, onClose }) => {
             <NavLink
               key={item.id}
               to={item.path}
+              onClick={() => {
+                if (window.innerWidth < 1024) {
+                  onClose();
+                }
+              }}
               className={({ isActive }) => cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group relative overflow-hidden border",
                 isActive
