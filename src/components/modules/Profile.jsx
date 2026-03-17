@@ -796,7 +796,7 @@ const Profile = () => {
                                         </div>
 
                                         {item.privateNote && isAdmin && (
-                                            <div className="col-span-full mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/10 -mx-6 px-6 -mb-6 pb-6">
+                                            <div className="col-span-full mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/10 -mx-6 px-6 mb-0 pb-6">
                                                 <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2 mb-2">
                                                     <Key className="w-3.5 h-3.5" /> Nota Privada Administrativa
                                                 </h4>

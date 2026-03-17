@@ -141,7 +141,7 @@ const HealthCheckWidget = () => {
                                 )}
                             >
                                 <span className={cn(
-                                    "text-sm font-medium transition-colors truncate max-w-[55%]",
+                                    "text-sm font-medium transition-colors truncate flex-1 mr-2",
                                     client.status === 'critical' ? "text-red-700 dark:text-red-400 font-bold" : "text-zinc-700 dark:text-zinc-300"
                                 )}>
                                     {client.name}

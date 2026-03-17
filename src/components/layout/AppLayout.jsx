@@ -44,14 +44,15 @@ const AppLayout = ({ children }) => {
       {/* Sidebar - z-50 */}
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-      {/* Header - z-40 */}
-      <header className="h-16 lg:pl-64 fixed top-0 left-0 right-0 z-40 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 transition-all">
+      {/* Header - z-[70] */}
+      <header className="h-16 lg:pl-64 fixed top-0 left-0 right-0 z-[70] bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 transition-all">
         <div className="h-full px-4 lg:px-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="icon"
               className="lg:hidden"
+              aria-label="Abrir menú"
               onClick={() => setIsSidebarOpen(true)}
             >
               <Menu className="w-5 h-5" />
@@ -124,13 +125,13 @@ const AppLayout = ({ children }) => {
       {/* Overlay for mobile sidebar */}
       {isSidebarOpen && (
         <div
-            className="fixed inset-0 z-[45] bg-black/50 backdrop-blur-sm lg:hidden transition-all duration-300"
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden transition-all duration-300"
             onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
-      {/* Main Content Area - z-10 (above background) */}
-      <main className="lg:ml-64 pt-16 p-4 md:p-8 min-h-screen relative z-10 transition-all">
+      {/* Main Content Area - z-0 (above background) */}
+      <main className="lg:ml-64 pt-20 p-4 md:p-8 min-h-screen relative z-0 transition-all">
         <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700">
           {children}
         </div>

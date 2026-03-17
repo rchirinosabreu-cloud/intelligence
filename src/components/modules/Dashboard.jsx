@@ -255,71 +255,6 @@ const Dashboard = () => {
               </h2>
               <p className="text-zinc-500 dark:text-zinc-400">Aquí está el resumen de progreso y logros del mes.</p>
             </div>
-            <DropdownMenu onOpenChange={async (open) => {
-                if (open) {
-                    await fetchNotifications();
-                    markAllAsRead();
-                }
-            }}>
-              <DropdownMenuTrigger asChild>
-                <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-full dark:bg-indigo-500/10 dark:border-indigo-500/20 relative cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors">
-                  <Bell className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-                  {unreadCount > 0 && (
-                    <div className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-5 w-5 bg-red-500 text-[10px] font-bold text-white items-center justify-center shadow-sm">
-                            {unreadCount > 9 ? '9+' : unreadCount}
-                        </span>
-                    </div>
-                  )}
-                </div>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden rounded-2xl border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl">
-                <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
-                    <h4 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                        <Bell className="w-4 h-4 text-primary" />
-                        Notificaciones
-                    </h4>
-                </div>
-                <div className="max-h-96 overflow-y-auto">
-                    {loadingNotifications ? (
-                        <div className="p-8 text-center"><Loader2 className="w-5 h-5 animate-spin text-zinc-400 mx-auto" /></div>
-                    ) : notifications.length === 0 ? (
-                        <div className="p-12 text-center">
-                            <div className="w-12 h-12 rounded-full bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-center mx-auto mb-3">
-                                <Bell className="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
-                            </div>
-                            <p className="text-xs text-zinc-400">No hay notificaciones nuevas</p>
-                        </div>
-                    ) : (
-                        notifications.map((notif) => (
-                            <DropdownMenuItem
-                                key={notif.id}
-                                onClick={() => handleNotificationClick(notif)}
-                                className="p-4 focus:bg-zinc-50 dark:focus:bg-zinc-800/50 cursor-pointer border-b border-zinc-50 dark:border-zinc-800/30 last:border-0"
-                            >
-                                <div className="flex gap-3 items-start w-full">
-                                    <div className="p-1.5 bg-primary/10 rounded-lg shrink-0 mt-0.5">
-                                        <MessageSquare className="w-3.5 h-3.5 text-primary" />
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">
-                                            {notif.message}
-                                        </p>
-                                        <span className="text-[10px] text-zinc-400 mt-1 block">
-                                            {new Date(notif.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                    </div>
-                                    {!notif.isRead && (
-                                        <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-2" />
-                                    )}
-                                </div>
-                            </DropdownMenuItem>
-                        ))
-                    )}
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </Card>
       </motion.div>
@@ -328,10 +263,10 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
         {/* Metrics Column (Left - 2/3 width) */}
-        <div className="md:col-span-2 grid grid-cols-2 gap-6">
+        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
 
             {/* WIDGET 1: PENDIENTES DEL MES (Counter + Progress) */}
-            <motion.div variants={item} className="col-span-1">
+            <motion.div variants={item} className="w-full">
               <Card className="h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
                 <div className="flex justify-between items-start mb-4">
                   <span className="text-sm font-medium text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors">
@@ -366,7 +301,7 @@ const Dashboard = () => {
             </motion.div>
 
              {/* WIDGET 2: COMPLETED (Counter) */}
-             <motion.div variants={item} className="col-span-1">
+             <motion.div variants={item} className="w-full">
               <Card className="h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
                 <div className="flex justify-between items-start mb-4">
                   <span className="text-sm font-medium text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors">
@@ -387,16 +322,16 @@ const Dashboard = () => {
             </motion.div>
 
            {/* WIDGET 3: BROADCAST WIDGET (Full Width) */}
-           <motion.div variants={item} className="col-span-2">
+           <motion.div variants={item} className="md:col-span-2">
                 <AnnouncementWidget scope="general" />
            </motion.div>
 
            {/* ROW: MEETING + HEALTH CHECK */}
-           <motion.div variants={item} className="col-span-1">
+           <motion.div variants={item} className="md:col-span-1">
                 <MeetingWidget />
            </motion.div>
 
-           <motion.div variants={item} className="col-span-1">
+           <motion.div variants={item} className="md:col-span-1">
                 <HealthCheckWidget />
            </motion.div>
         </div>
