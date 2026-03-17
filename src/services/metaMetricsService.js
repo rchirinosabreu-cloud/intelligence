@@ -6,17 +6,42 @@ const GRAPH_API_VERSION = 'v21.0';
 const BASE_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 
 /**
- * Helper to get dates for current and previous 30-day periods.
+ * Helper to get dates for flexible periods.
+ * @param {string} range - 'last_30', 'this_month', 'last_month', 'q1', 'q2', 'q3', 'q4'
  */
-function getPeriodDates() {
+function getPeriodDates(range = 'last_30') {
     const now = new Date();
-    const currentEnd = new Date(now);
-    const currentStart = new Date(now);
-    currentStart.setDate(currentStart.getDate() - 30);
+    let currentStart, currentEnd, previousStart, previousEnd;
 
-    const previousEnd = new Date(currentStart);
-    const previousStart = new Date(previousEnd);
-    previousStart.setDate(previousStart.getDate() - 30);
+    currentEnd = new Date(now);
+
+    if (range === 'this_month') {
+        currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        previousStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        previousEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    } else if (range === 'last_month') {
+        currentStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        currentEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+        previousStart = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        previousEnd = new Date(now.getFullYear(), now.getMonth() - 1, 0);
+    } else if (range.startsWith('q')) {
+        const quarter = parseInt(range.substring(1));
+        const year = now.getFullYear();
+        currentStart = new Date(year, (quarter - 1) * 3, 1);
+        currentEnd = new Date(year, quarter * 3, 0);
+        // For previous, we use the previous year's same quarter or previous quarter?
+        // Usually reports compare vs same period previous year or previous quarter.
+        // Let's go with previous quarter for Q-to-Q comparison.
+        previousStart = new Date(year, (quarter - 2) * 3, 1);
+        previousEnd = new Date(year, (quarter - 1) * 3, 0);
+    } else {
+        // Default last_30
+        currentStart = new Date(now);
+        currentStart.setDate(currentStart.getDate() - 30);
+        previousEnd = new Date(currentStart);
+        previousStart = new Date(previousEnd);
+        previousStart.setDate(previousStart.getDate() - 30);
+    }
 
     return {
         current: {
@@ -97,7 +122,7 @@ async function fetchPeriodMetrics(client, token, period) {
 /**
  * Fetches organic metrics for a client (Facebook & Instagram).
  */
-export async function getOrganicMetrics(clientId) {
+export async function getOrganicMetrics(clientId, range = 'last_30') {
     const client = await prisma.client.findUnique({
         where: { id: clientId },
         select: { facebookPageId: true, instagramBusinessId: true }
@@ -108,7 +133,7 @@ export async function getOrganicMetrics(clientId) {
     const token = await getDecryptedToken(clientId, 'meta');
     if (!token) throw new Error('No hay integración de Meta para este cliente');
 
-    const { current, previous } = getPeriodDates();
+    const { current, previous } = getPeriodDates(range);
 
     const currentData = await fetchPeriodMetrics(client, token, current);
     const previousData = await fetchPeriodMetrics(client, token, previous);
@@ -136,7 +161,7 @@ export async function getOrganicMetrics(clientId) {
 /**
  * Fetches reach trend for charts.
  */
-export async function getReachTrend(clientId) {
+export async function getReachTrend(clientId, range = 'last_30') {
     const client = await prisma.client.findUnique({
         where: { id: clientId },
         select: { facebookPageId: true, instagramBusinessId: true }
@@ -145,7 +170,7 @@ export async function getReachTrend(clientId) {
     const token = await getDecryptedToken(clientId, 'meta');
     if (!token) throw new Error('No token');
 
-    const { current } = getPeriodDates();
+    const { current } = getPeriodDates(range);
     const trend = [];
 
     // Simple daily trend mapping
@@ -203,7 +228,7 @@ export async function getReachTrend(clientId) {
 /**
  * Fetches top performing content.
  */
-export async function getTopContent(clientId) {
+export async function getTopContent(clientId, range = 'last_30') {
     const client = await prisma.client.findUnique({
         where: { id: clientId },
         select: { facebookPageId: true, instagramBusinessId: true }
@@ -212,6 +237,7 @@ export async function getTopContent(clientId) {
     const token = await getDecryptedToken(clientId, 'meta');
     if (!token) throw new Error('No token');
 
+    const { current } = getPeriodDates(range);
     let allPosts = [];
 
     try {
@@ -220,14 +246,23 @@ export async function getTopContent(clientId) {
              const pageTokenRes = await axios.get(`${BASE_URL}/${client.facebookPageId}?fields=access_token&access_token=${token}`);
              const pageToken = pageTokenRes.data.access_token;
 
-             const fbPostsRes = await axios.get(`${BASE_URL}/${client.facebookPageId}/posts?fields=id,message,created_time,full_picture,type,insights.metric(post_impressions_unique,post_engagements)&limit=10&access_token=${pageToken}`);
-             const fbPosts = fbPostsRes.data.data.map(p => {
+             const fbPostsRes = await axios.get(`${BASE_URL}/${client.facebookPageId}/posts`, {
+                params: {
+                    fields: 'id,message,created_time,full_picture,type,insights.metric(post_impressions_unique,post_engagements)',
+                    since: current.start,
+                    until: current.end,
+                    limit: 50,
+                    access_token: pageToken
+                }
+             });
+             const fbPosts = (fbPostsRes.data.data || []).map(p => {
                  const reach = p.insights?.data.find(i => i.name === 'post_impressions_unique')?.values[0]?.value || 0;
                  const engagement = p.insights?.data.find(i => i.name === 'post_engagements')?.values[0]?.value || 0;
                  return {
                      id: p.id,
                      type: p.type || 'Post',
                      content: p.message || 'Sin texto',
+                     thumbnail: p.full_picture,
                      reach,
                      engagement,
                      platform: 'facebook',
@@ -238,14 +273,23 @@ export async function getTopContent(clientId) {
         }
 
         if (client.instagramBusinessId) {
-            const igMediaRes = await axios.get(`${BASE_URL}/${client.instagramBusinessId}/media?fields=id,caption,media_type,timestamp,insights.metric(impressions,reach,engagement)&limit=10&access_token=${token}`);
-            const igMedia = igMediaRes.data.data.map(m => {
+            const igMediaRes = await axios.get(`${BASE_URL}/${client.instagramBusinessId}/media`, {
+                params: {
+                    fields: 'id,caption,media_type,media_url,thumbnail_url,timestamp,insights.metric(impressions,reach,engagement)',
+                    since: current.start,
+                    until: current.end,
+                    limit: 50,
+                    access_token: token
+                }
+            });
+            const igMedia = (igMediaRes.data.data || []).map(m => {
                 const reach = m.insights?.data.find(i => i.name === 'reach')?.values[0]?.value || 0;
                 const engagement = m.insights?.data.find(i => i.name === 'engagement')?.values[0]?.value || 0;
                 return {
                     id: m.id,
                     type: m.media_type,
                     content: m.caption || 'Sin caption',
+                    thumbnail: m.media_type === 'VIDEO' ? m.thumbnail_url : m.media_url,
                     reach,
                     engagement,
                     platform: 'instagram',
@@ -268,7 +312,7 @@ export async function getTopContent(clientId) {
 /**
  * Fetches Ads performance.
  */
-export async function getAdsInsights(clientId) {
+export async function getAdsInsights(clientId, range = 'last_30') {
     const client = await prisma.client.findUnique({
         where: { id: clientId },
         select: { adAccountId: true }
@@ -279,7 +323,7 @@ export async function getAdsInsights(clientId) {
     const token = await getDecryptedToken(clientId, 'meta');
     if (!token) throw new Error('No token');
 
-    const { current, previous } = getPeriodDates();
+    const { current, previous } = getPeriodDates(range);
 
     const fetchAdsForRange = async (start, end) => {
         const res = await axios.get(`${BASE_URL}/${client.adAccountId}/insights`, {
@@ -294,9 +338,11 @@ export async function getAdsInsights(clientId) {
             }
         });
         const data = res.data.data[0] || { spend: 0, actions: [], reach: 0, impressions: 0 };
-        // Priority for results: specific conversions, then total actions
+
+        // Fix: Results mapping for "Messaging conversations started"
+        // Meta field: onsite_conversion.messaging_conversation_started_7d
         const results = data.actions?.find(a =>
-            ['offsite_conversion.fb_pixel_purchase', 'lead', 'onsite_conversion.messaging_first_reply', 'contact'].includes(a.action_type)
+            ['onsite_conversion.messaging_conversation_started_7d', 'messaging_conversation_started_7d', 'offsite_conversion.fb_pixel_purchase', 'lead', 'onsite_conversion.messaging_first_reply', 'contact'].includes(a.action_type)
         )?.value || data.actions?.reduce((acc, a) => acc + parseInt(a.value), 0) || 0;
 
         return {
