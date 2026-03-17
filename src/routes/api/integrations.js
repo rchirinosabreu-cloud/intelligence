@@ -175,30 +175,31 @@ router.post('/meta/insights/generate', async (req, res) => {
             ${JSON.stringify(metrics.topContent, null, 2)}
 
             TU TAREA:
-            Escribe un análisis profesional en Español con el siguiente tono: Analítico, Estratégico y Propositivo, pero con un toque Cercano/Humano.
+            Escribe un análisis profesional en Español con el siguiente tono: Analítico, Estratégico y Propositivo.
             No seas redundante. Ve al grano. No uses muros de texto.
 
-            FORMATO DE SALIDA:
-            ### 🚀 Logros y Avances
-            - (Punto clave analítico: por qué funcionó lo que funcionó)
-            - (Hallazgo basado en datos)
-
-            ### 💡 Recomendaciones Estratégicas
-            - (Acción concreta y creativa para el próximo mes)
-            - (Ajuste táctico basado en la eficiencia de pauta)
+            FORMATO DE SALIDA (JSON ESTRICTO):
+            {
+              "logros": "Markdown con los logros y avances detectados",
+              "recomendaciones": "Markdown con las recomendaciones estratégicas"
+            }
 
             IMPORTANTE: No solo repitas los números. Explica el "POR QUÉ" estratégico detrás de ellos.
+            Responde ÚNICAMENTE con el objeto JSON.
         `;
 
         const response = await axios.post(
             `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`,
             {
-                contents: [{ parts: [{ text: prompt }] }]
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
             }
         );
 
-        const aiText = response.data.candidates[0].content.parts[0].text;
-        res.json({ insight: aiText });
+        const aiJson = JSON.parse(response.data.candidates[0].content.parts[0].text);
+        res.json({ insight: aiJson });
 
     } catch (error) {
         console.error('[Insights API] Error generating insights:', error.response?.data || error.message);

@@ -9,7 +9,7 @@ const MetricCard = ({ title, current, previous, icon: Icon, color }) => {
     const isZero = diff === 0;
 
     return (
-        <Card className="h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
+        <Card className="h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group shadow-none">
             <div className="flex justify-between items-start mb-4">
                 <span className="text-sm font-medium text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors uppercase tracking-wider">
                     {title}

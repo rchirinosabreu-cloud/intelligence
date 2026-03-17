@@ -135,6 +135,23 @@ async function fetchPeriodMetrics(client, token, period) {
  * Fetches organic metrics for a client (Facebook & Instagram).
  */
 export async function getOrganicMetrics(clientId, range = 'last_30') {
+    if (process.env.MOCK_METRICS === 'true') {
+        return {
+            current: {
+                facebook: { impressions: 12500, interactions: 850, reach: 9800, followers: 4500 },
+                instagram: { impressions: 18200, interactions: 2400, reach: 15600, followers: 8200 }
+            },
+            previous: {
+                facebook: { impressions: 11000, interactions: 780, reach: 8900, followers: 4420 },
+                instagram: { impressions: 15000, interactions: 1900, reach: 12000, followers: 7950 }
+            },
+            combined: {
+                current: { impressions: 30700, interactions: 3250, followers: 12700, reach: 25400 },
+                previous: { impressions: 26000, interactions: 2680, followers: 12370, reach: 20900 }
+            }
+        };
+    }
+
     const client = await prisma.client.findUnique({
         where: { id: clientId },
         select: { facebookPageId: true, instagramBusinessId: true }
@@ -174,6 +191,21 @@ export async function getOrganicMetrics(clientId, range = 'last_30') {
  * Fetches reach trend for charts.
  */
 export async function getReachTrend(clientId, range = 'last_30') {
+    if (process.env.MOCK_METRICS === 'true') {
+        const trend = [];
+        const now = new Date();
+        for (let i = 29; i >= 0; i--) {
+            const date = new Date(now);
+            date.setDate(now.getDate() - i);
+            trend.push({
+                date: date.toISOString().split('T')[0],
+                facebook: Math.floor(Math.random() * 500) + 200,
+                instagram: Math.floor(Math.random() * 800) + 400
+            });
+        }
+        return trend;
+    }
+
     const client = await prisma.client.findUnique({
         where: { id: clientId },
         select: { facebookPageId: true, instagramBusinessId: true }
@@ -241,6 +273,16 @@ export async function getReachTrend(clientId, range = 'last_30') {
  * Fetches top performing content.
  */
 export async function getTopContent(clientId, range = 'last_30') {
+    if (process.env.MOCK_METRICS === 'true') {
+        return [
+            { id: '1', type: 'IMAGE', content: 'Nueva colección Bonsai Verano 2025', thumbnail: 'https://images.unsplash.com/photo-1512428559087-560fa5ceab42?w=400', reach: 4500, engagement: 320, platform: 'instagram', date: new Date().toISOString() },
+            { id: '2', type: 'VIDEO', content: 'Behind the scenes: Shooting en Cartagena', thumbnail: 'https://images.unsplash.com/photo-1492691523567-6170f0295dbd?w=400', reach: 8900, engagement: 1250, platform: 'instagram', date: new Date().toISOString() },
+            { id: '3', type: 'CAROUSEL_ALBUM', content: '5 tips para cuidar tu Bonsai', thumbnail: 'https://images.unsplash.com/photo-1515446133109-60d0bc01a24d?w=400', reach: 3200, engagement: 450, platform: 'facebook', date: new Date().toISOString() },
+            { id: '4', type: 'REELS', content: 'Quick tip: Riego matutino', thumbnail: 'https://images.unsplash.com/photo-1416339306562-f3d12fefd36f?w=400', reach: 12000, engagement: 2100, platform: 'instagram', date: new Date().toISOString() },
+            { id: '5', type: 'IMAGE', content: 'Promoción 2x1 en macetas', thumbnail: 'https://images.unsplash.com/photo-1466781783364-391eaf89eb22?w=400', reach: 2100, engagement: 180, platform: 'facebook', date: new Date().toISOString() }
+        ];
+    }
+
     const client = await prisma.client.findUnique({
         where: { id: clientId },
         select: { facebookPageId: true, instagramBusinessId: true }
@@ -361,6 +403,13 @@ export function processAdsData(data) {
  * Fetches Ads performance.
  */
 export async function getAdsInsights(clientId, range = 'last_30') {
+    if (process.env.MOCK_METRICS === 'true') {
+        return {
+            current: { spend: 1250, results: 45, reach: 45000, impressions: 89000, costPerResult: 27.7, efficiency: 27.7 },
+            previous: { spend: 1100, results: 32, reach: 38000, impressions: 72000, costPerResult: 34.3, efficiency: 34.3 }
+        };
+    }
+
     const client = await prisma.client.findUnique({
         where: { id: clientId },
         select: { adAccountId: true }

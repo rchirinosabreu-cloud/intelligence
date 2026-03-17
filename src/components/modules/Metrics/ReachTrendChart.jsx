@@ -18,7 +18,7 @@ const ReachTrendChart = ({ data }) => {
     }));
 
     return (
-        <Card className="p-6 h-[400px]">
+        <Card className="p-6 h-[400px] shadow-none">
             <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-6 uppercase tracking-wider">
                 Tendencia de Alcance (Mes Actual)
             </h3>
@@ -44,7 +44,7 @@ const ReachTrendChart = ({ data }) => {
                                 border: '1px solid #e5e7eb',
                                 borderRadius: '8px',
                                 fontSize: '12px',
-                                boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                                boxShadow: 'none'
                             }}
                         />
                         <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', paddingTop: '20px' }} />
