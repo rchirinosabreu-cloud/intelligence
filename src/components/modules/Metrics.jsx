@@ -1,10 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Users, Facebook, Instagram, Megaphone, Loader2, AlertTriangle, CheckCircle2, Settings2, Save, Unplug } from 'lucide-react';
+import { BarChart3, Users, Facebook, Instagram, Megaphone, Loader2, AlertTriangle, CheckCircle2, Settings2, Save, Unplug, Eye, MousePointer2, TrendingUp, Target, Sparkles, RefreshCw } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'react-hot-toast';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { useQuery } from '@tanstack/react-query';
+import { Badge } from '@/components/ui/Badge';
+
+// New Components
+import MetricCard from './Metrics/MetricCard';
+import ReachTrendChart from './Metrics/ReachTrendChart';
+import TopContentTable from './Metrics/TopContentTable';
+import AdsControlPanel from './Metrics/AdsControlPanel';
+import InsightGenerator from './Metrics/InsightGenerator';
 
 const Metrics = () => {
   const [clients, setClients] = useState([]);
@@ -24,6 +33,51 @@ const Metrics = () => {
   const [loadingIG, setLoadingIG] = useState(false);
   const [savingMapping, setSavingMapping] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+
+  // Metrics Data Queries
+  const { data: organicMetrics, isLoading: loadingOrganic, refetch: refetchOrganic } = useQuery({
+    queryKey: ['metaOrganic', selectedClientId],
+    queryFn: async () => {
+      const res = await fetch(`${getApiBaseUrl()}/api/integrations/meta/metrics/organic/${selectedClientId}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      return res.json();
+    },
+    enabled: !!selectedClientId && !!integrationStatus
+  });
+
+  const { data: trendData, isLoading: loadingTrend } = useQuery({
+    queryKey: ['metaTrend', selectedClientId],
+    queryFn: async () => {
+      const res = await fetch(`${getApiBaseUrl()}/api/integrations/meta/metrics/trend/${selectedClientId}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      return res.json();
+    },
+    enabled: !!selectedClientId && !!integrationStatus
+  });
+
+  const { data: topContent, isLoading: loadingTopContent } = useQuery({
+    queryKey: ['metaTopContent', selectedClientId],
+    queryFn: async () => {
+      const res = await fetch(`${getApiBaseUrl()}/api/integrations/meta/metrics/top-content/${selectedClientId}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      return res.json();
+    },
+    enabled: !!selectedClientId && !!integrationStatus
+  });
+
+  const { data: adsMetrics, isLoading: loadingAds } = useQuery({
+    queryKey: ['metaAds', selectedClientId],
+    queryFn: async () => {
+      const res = await fetch(`${getApiBaseUrl()}/api/integrations/meta/metrics/ads/${selectedClientId}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      return res.json();
+    },
+    enabled: !!selectedClientId && !!integrationStatus
+  });
 
   // Check for Meta SDK readiness
   useEffect(() => {
@@ -350,71 +404,124 @@ const Metrics = () => {
           </p>
         </Card>
       ) : (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="p-6 border-t-4 border-primary">
+        <div className="space-y-12">
+          {/* Status and Connection Info */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <Card className="p-6 border-t-4 border-green-500 md:col-span-1">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-bold flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
                     <CheckCircle2 className="w-5 h-5 text-green-500" />
-                    Meta Connected
+                    Status
                   </h4>
                   <div className="px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 text-[10px] font-bold uppercase">Activo</div>
                 </div>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">
-                  La conexión está establecida correctamente. Los datos de pauta y engagement están fluyendo.
-                </p>
 
                 {integrationStatus.metadata && (
                   <div className="mb-6 space-y-2 bg-zinc-50 dark:bg-zinc-900/50 p-3 rounded-lg border border-zinc-100 dark:border-zinc-800">
-                    {integrationStatus.metadata.facebookUserName && (
-                      <div className="flex justify-between items-center text-xs">
-                          <span className="text-zinc-400">Usuario:</span>
-                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">{integrationStatus.metadata.facebookUserName}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-center text-xs">
+                    <div className="flex justify-between items-center text-[10px]">
                         <span className="text-zinc-400">Business:</span>
-                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                          {integrationStatus.metadata.businessName || "Cuenta Personal / Sin Business"}
+                        <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate ml-2">
+                          {integrationStatus.metadata.businessName || "Cuenta Personal"}
                         </span>
                     </div>
-                    {integrationStatus.metadata.businessId && (
-                      <div className="flex justify-between items-center text-[10px]">
-                          <span className="text-zinc-400">ID:</span>
-                          <span className="font-mono text-zinc-800 dark:text-zinc-200">{integrationStatus.metadata.businessId}</span>
-                      </div>
-                    )}
                   </div>
                 )}
 
-                <div className="text-[10px] text-zinc-400 uppercase tracking-wider mb-1">Última sincronización</div>
-                <div className="text-xs font-mono text-zinc-600 dark:text-zinc-400 mb-6">{new Date(integrationStatus.updatedAt).toLocaleString()}</div>
+                <div className="text-[10px] text-zinc-400 uppercase tracking-wider mb-1">Sincronizado</div>
+                <div className="text-[10px] font-mono text-zinc-600 dark:text-zinc-400 mb-6">{new Date(integrationStatus.updatedAt).toLocaleString()}</div>
 
-                <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center justify-center gap-2 text-[10px] uppercase font-bold"
-                        onClick={handleDisconnect}
-                        disabled={disconnecting}
-                    >
-                        {disconnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unplug className="w-3 h-3" />}
-                        Desconectar Cuenta
-                    </Button>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center justify-center gap-2 text-[10px] uppercase font-bold"
+                    onClick={handleDisconnect}
+                    disabled={disconnecting}
+                >
+                    {disconnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unplug className="w-3 h-3" />}
+                    Desconectar
+                </Button>
+            </Card>
+
+            <div className="md:col-span-3">
+              {loadingOrganic ? (
+                 <div className="h-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                 </div>
+              ) : organicMetrics ? (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <MetricCard
+                    title="Impresiones"
+                    current={organicMetrics.combined.current.impressions}
+                    previous={organicMetrics.combined.previous.impressions}
+                    icon={Eye}
+                    color="#1877F2"
+                  />
+                  <MetricCard
+                    title="Interacciones"
+                    current={organicMetrics.combined.current.interactions}
+                    previous={organicMetrics.combined.previous.interactions}
+                    icon={MousePointer2}
+                    color="#E1306C"
+                  />
+                  <MetricCard
+                    title="Seguidores"
+                    current={organicMetrics.combined.current.followers}
+                    previous={organicMetrics.combined.previous.followers}
+                    icon={Users}
+                    color="#8B5CF6"
+                  />
+                  <MetricCard
+                    title="Alcance Total"
+                    current={organicMetrics.combined.current.reach}
+                    previous={organicMetrics.combined.previous.reach}
+                    icon={TrendingUp}
+                    color="#10B981"
+                  />
                 </div>
-            </Card>
+              ) : (
+                <Card className="h-full flex flex-col items-center justify-center text-center p-6 border-dashed">
+                  <AlertTriangle className="w-8 h-8 text-amber-500 mb-2" />
+                  <p className="text-sm text-zinc-500">Mapea tus activos abajo para ver las métricas.</p>
+                </Card>
+              )}
+            </div>
+          </div>
 
-            <Card className="p-6 opacity-40 grayscale flex flex-col justify-center items-center border-dashed">
-                <BarChart3 className="w-8 h-8 mb-2" />
-                <div className="font-semibold text-sm">Próximamente</div>
-                <p className="text-[10px] text-center">Dashboard de visualización de datos de Meta.</p>
-            </Card>
+          {/* Charts and AI Insights */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <ReachTrendChart data={trendData} />
+            </div>
+            <div className="lg:col-span-1">
+              <InsightGenerator
+                clientId={selectedClientId}
+                metrics={{ organic: organicMetrics, ads: adsMetrics, topContent }}
+              />
+            </div>
+          </div>
 
-            <Card className="p-6 opacity-40 grayscale flex flex-col justify-center items-center border-dashed">
-                <Megaphone className="w-8 h-8 mb-2" />
-                <div className="font-semibold text-sm">Google Analytics</div>
-                <p className="text-[10px] text-center">Disponible en la Fase 2.</p>
-            </Card>
+          {/* Top Content */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <TrendingUp className="w-6 h-6 text-indigo-500" />
+                Top Content
+              </h3>
+              <Badge variant="indigo">Mejor rendimiento</Badge>
+            </div>
+            <TopContentTable content={topContent} />
+          </div>
+
+          {/* Ads Control */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Target className="w-6 h-6 text-emerald-500" />
+                Ads Control
+              </h3>
+              <Badge variant="success">Meta Ads Insight</Badge>
+            </div>
+            <AdsControlPanel data={adsMetrics} />
           </div>
 
           {/* Asset Mapping Section */}
