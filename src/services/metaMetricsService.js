@@ -19,32 +19,40 @@ function getPeriodDates(range = 'last_30') {
     if (range === 'this_month') {
         currentStart = new Date(today.getFullYear(), today.getMonth(), 1);
         currentEnd = new Date(today);
+        currentEnd.setDate(currentEnd.getDate() + 1); // Inclusive of today
         previousStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
         previousEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+        previousEnd.setDate(previousEnd.getDate() + 1); // Inclusive of last day of last month
     } else if (range === 'last_month') {
         currentStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
         currentEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+        currentEnd.setDate(currentEnd.getDate() + 1);
         previousStart = new Date(today.getFullYear(), today.getMonth() - 2, 1);
         previousEnd = new Date(today.getFullYear(), today.getMonth() - 1, 0);
+        previousEnd.setDate(previousEnd.getDate() + 1);
     } else if (range.startsWith('q')) {
         const quarter = parseInt(range.substring(1));
         const year = today.getFullYear();
         currentStart = new Date(year, (quarter - 1) * 3, 1);
         currentEnd = new Date(year, quarter * 3, 0);
+        currentEnd.setDate(currentEnd.getDate() + 1);
 
         // Q-to-Q comparison
         previousStart = new Date(year, (quarter - 2) * 3, 1);
         previousEnd = new Date(year, (quarter - 1) * 3, 0);
+        previousEnd.setDate(previousEnd.getDate() + 1);
     } else {
         // Default last_30: Strict 30 days including today
+        // To make 'until' inclusive for the Graph API, we set it to the start of TOMORROW
         currentEnd = new Date(today);
+        currentEnd.setDate(today.getDate() + 1);
+
         currentStart = new Date(today);
-        currentStart.setDate(today.getDate() - 29); // Today + 29 previous days = 30 days
+        currentStart.setDate(today.getDate() - 29); // 30 days total
 
         previousEnd = new Date(currentStart);
-        previousEnd.setDate(previousEnd.getDate() - 1);
         previousStart = new Date(previousEnd);
-        previousStart.setDate(previousStart.getDate() - 29);
+        previousStart.setDate(previousStart.getDate() - 30);
     }
 
     return {

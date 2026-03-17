@@ -28,7 +28,7 @@ const TopContentGrid = ({ content }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
       {content.map((item) => (
-        <Card key={item.id} className="group overflow-hidden border-zinc-200 dark:border-zinc-800 hover:border-indigo-500/50 transition-all hover:shadow-xl hover:shadow-indigo-500/5 bg-white dark:bg-zinc-950 flex flex-col">
+        <Card key={item.id} className="group overflow-hidden border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all bg-white dark:bg-zinc-950 flex flex-col">
           {/* Thumbnail Container */}
           <div className="relative aspect-square bg-zinc-100 dark:bg-zinc-900 overflow-hidden">
             {item.thumbnail ? (
@@ -45,7 +45,7 @@ const TopContentGrid = ({ content }) => {
 
             {/* Platform Badge */}
             <div className="absolute top-2 left-2">
-              <Badge className={`h-6 w-6 p-0 flex items-center justify-center rounded-full border-0 shadow-lg ${item.platform === 'facebook' ? 'bg-[#1877F2]' : 'bg-gradient-to-tr from-[#f09433] via-[#e1306c] to-[#bc1888]'}`}>
+              <Badge className={`h-6 w-6 p-0 flex items-center justify-center rounded-full border-0 ${item.platform === 'facebook' ? 'bg-[#1877F2]' : 'bg-gradient-to-tr from-[#f09433] via-[#e1306c] to-[#bc1888]'}`}>
                 {item.platform === 'facebook' ? <Facebook className="w-3.5 h-3.5 text-white" /> : <Instagram className="w-3.5 h-3.5 text-white" />}
               </Badge>
             </div>
