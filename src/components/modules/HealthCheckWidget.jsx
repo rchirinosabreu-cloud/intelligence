@@ -1,45 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
 import { Loader2, Activity, AlertTriangle, CheckCircle2, Wrench, FolderOpen, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
 const HealthCheckWidget = () => {
-    const [clients, setClients] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-
-    useEffect(() => {
-        const fetchHealth = async () => {
-            try {
-                // Use relative URL to leverage proxy or fallback to env var
-                const baseUrl = getApiBaseUrl();
-                // If running on same origin (dev/prod), relative path works best if proxy is set up,
-                // but here we likely need the full URL if VITE_API_URL is defined.
-                // Fallback logic in case VITE_API_URL is missing in dev:
-                const url = `${baseUrl}/api/clients`;
-
-                const response = await fetch(url);
-
-                if (!response.ok) {
-                    throw new Error(`Error ${response.status}: ${response.statusText}`);
-                }
-
-                const data = await response.json();
-                setClients(Array.isArray(data) ? data : []);
-            } catch (err) {
-                console.error("Failed to fetch client health:", err);
-                setError(err.message);
-            } finally {
-                setLoading(false);
+    // --- REACT QUERY: CLIENT HEALTH ---
+    const {
+        data: clients = [],
+        isLoading: loading,
+        error
+    } = useQuery({
+        queryKey: ['clientsHealth'],
+        queryFn: async () => {
+            const baseUrl = getApiBaseUrl();
+            const response = await fetch(`${baseUrl}/api/clients`, { cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
             }
-        };
-
-        fetchHealth();
-        // Refresh periodically (e.g., every 5 minutes)
-        const interval = setInterval(fetchHealth, 5 * 60 * 1000);
-        return () => clearInterval(interval);
-    }, []);
+            const data = await response.json();
+            return Array.isArray(data) ? data : [];
+        },
+        refetchInterval: 30000,
+        refetchOnWindowFocus: true,
+    });
 
     const getStatusConfig = (status) => {
         switch (status) {
@@ -47,7 +32,6 @@ const HealthCheckWidget = () => {
                 return {
                     label: 'Crítico',
                     Icon: AlertTriangle,
-                    // bg-red-100 text-red-800
                     badgeClass: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/50 dark:text-red-200 dark:border-red-800',
                     rowClass: 'bg-red-50/30 hover:bg-red-50/50 dark:bg-red-900/10 dark:hover:bg-red-900/20'
                 };
@@ -55,7 +39,6 @@ const HealthCheckWidget = () => {
                 return {
                     label: 'Al día',
                     Icon: CheckCircle2,
-                    // bg-green-100 text-green-800
                     badgeClass: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/50 dark:text-green-200 dark:border-green-800',
                     rowClass: 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
                 };
@@ -63,7 +46,6 @@ const HealthCheckWidget = () => {
                 return {
                     label: 'Servicios',
                     Icon: Wrench,
-                    // bg-yellow-100 text-yellow-800
                     badgeClass: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/50 dark:text-yellow-200 dark:border-yellow-800',
                     rowClass: 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
                 };
@@ -71,7 +53,6 @@ const HealthCheckWidget = () => {
                 return {
                     label: 'Sin parrilla',
                     Icon: FolderOpen,
-                    // bg-orange-100 text-orange-800
                     badgeClass: 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/50 dark:text-orange-200 dark:border-orange-800',
                     rowClass: 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
                 };
@@ -85,7 +66,7 @@ const HealthCheckWidget = () => {
         }
     };
 
-    if (loading) {
+    if (loading && clients.length === 0) {
         return (
              <Card className="p-4 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl border-zinc-200/50 dark:border-zinc-800/50 h-full flex items-center justify-center min-h-[200px]">
                 <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
@@ -93,7 +74,7 @@ const HealthCheckWidget = () => {
         );
     }
 
-    if (error) {
+    if (error && clients.length === 0) {
          return (
              <Card className="p-4 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl border-zinc-200/50 dark:border-zinc-800/50 h-full min-h-[200px]">
                 <div className="flex items-center gap-2 mb-3">

@@ -1,12 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
 import { motion } from 'framer-motion';
-import { ArrowUpRight, ArrowDownRight, Zap, TrendingUp, Clock, CheckCircle2, Activity, Target, Bell, MessageSquare, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { ArrowUpRight, Zap, TrendingUp, Clock, CheckCircle2, Target } from 'lucide-react';
 import MeetingWidget from './MeetingWidget';
 import HealthCheckWidget from './HealthCheckWidget';
 import AnnouncementWidget from './AnnouncementWidget';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
+import TeamAvatar from '@/components/ui/TeamAvatar';
+import ChatWidget from './ChatWidget';
+import { useAuth } from '@/context/AuthContext';
 
 const container = {
   hidden: { opacity: 0 },
@@ -18,19 +22,6 @@ const container = {
   }
 };
 
-import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
-import TeamAvatar from '@/components/ui/TeamAvatar';
-import ChatWidget from './ChatWidget';
-import { useAuth } from '@/context/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-
 const item = {
   hidden: { y: 20, opacity: 0 },
   show: { y: 0, opacity: 1 }
@@ -38,8 +29,6 @@ const item = {
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
-  const navigate = useNavigate();
-  const [metrics, setMetrics] = useState({ total: 0, completed: 0, pending: 0, percentage: 0 });
   const [isGeneralChatModalOpen, setIsGeneralChatModalOpen] = useState(false);
 
   const getDailyMessage = () => {
@@ -61,49 +50,40 @@ const Dashboard = () => {
     return currentUser.name.split(' ')[0];
   };
 
-  const [completedNativeTasks, setCompletedNativeTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingNative, setLoadingNative] = useState(true);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
-  useEffect(() => {
-    const fetchMetrics = async () => {
-        try {
-            setLoading(true);
-            const baseUrl = getApiBaseUrl();
-            const response = await fetch(`${baseUrl}/api/metrics/tasks`, { cache: 'no-store' });
-            if (!response.ok) {
-                throw new Error(`Error ${response.status}: ${response.statusText}`);
-            }
-            const data = await response.json();
-            setMetrics(data || { total: 0, completed: 0, pending: 0, percentage: 0 });
-        } catch (err) {
-            console.error("Failed to fetch dashboard metrics:", err);
-        } finally {
-            setLoading(false);
-        }
-    };
+  // --- REACT QUERY: METRICS ---
+  const {
+    data: metrics = { total: 0, completed: 0, pending: 0, percentage: 0 },
+    isLoading: loadingMetrics
+  } = useQuery({
+    queryKey: ['dashboardMetrics'],
+    queryFn: async () => {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetch(`${baseUrl}/api/metrics/tasks`, { cache: 'no-store' });
+      if (!response.ok) throw new Error("Failed to fetch metrics");
+      return await response.json();
+    },
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+  });
 
-    const fetchCompletedNativeTasks = async () => {
-        try {
-            setLoadingNative(true);
-            const baseUrl = getApiBaseUrl();
-            const response = await fetch(`${baseUrl}/api/tasks/completed`, { cache: 'no-store' });
-            if (!response.ok) {
-                throw new Error(`Error ${response.status}: ${response.statusText}`);
-            }
-            const data = await response.json();
-            setCompletedNativeTasks(Array.isArray(data) ? data : []);
-        } catch (err) {
-            console.error("Failed to fetch completed native tasks:", err);
-        } finally {
-            setLoadingNative(false);
-        }
-    };
-
-    fetchMetrics();
-    fetchCompletedNativeTasks();
-  }, []);
+  // --- REACT QUERY: COMPLETED TASKS (Feed) ---
+  const {
+    data: completedNativeTasks = [],
+    isLoading: loadingNative
+  } = useQuery({
+    queryKey: ['completedNativeTasks'],
+    queryFn: async () => {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetch(`${baseUrl}/api/tasks/completed`, { cache: 'no-store' });
+      if (!response.ok) throw new Error("Failed to fetch completed tasks");
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+  });
 
   // --- LOGIC: FEED DE LOGROS (Completed TODAY from Native Tasks) ---
   const completedFeed = useMemo(() => {
@@ -171,7 +151,7 @@ const Dashboard = () => {
                 <div>
                   <div className="flex items-end gap-2 mb-2">
                       <span className="text-4xl font-bold text-zinc-900 dark:text-white tracking-tight">
-                          {loading ? '...' : metrics.pending}
+                          {loadingMetrics ? '...' : metrics.pending}
                       </span>
                       <span className="text-sm text-zinc-400 mb-1.5">
                           / {metrics.total} total
@@ -204,7 +184,7 @@ const Dashboard = () => {
                 </div>
                 <div>
                   <span className="text-4xl font-bold text-zinc-900 dark:text-white tracking-tight">
-                      {loading ? '...' : metrics.completed}
+                      {loadingMetrics ? '...' : metrics.completed}
                   </span>
                   <p className="text-xs text-zinc-400 mt-2">Pendientes finalizados en el historial</p>
                 </div>
