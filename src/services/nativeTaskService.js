@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { createNotification } from './notificationService.js';
 
 export const getDashboardMetrics = async () => {
     try {
@@ -237,10 +238,13 @@ export const updateTask = async (id, data, updaterId = null) => {
         // Strict Task Lifecycle Logic (completedAt)
         // Only evaluate if the payload actually attempts to change the 'status' (Edge Case B)
         let isCorrected = false;
+        let isReturned = false;
         if ('status' in updateData) {
             updateData.status = statusMapper[updateData.status] || updateData.status;
             const newStatus = updateData.status;
             const oldStatus = currentTask.status;
+
+            isReturned = (newStatus === 'DEVUELTA' && oldStatus !== 'DEVUELTA');
 
             // --- Lógica de Cierre de Ciclo (Notificación de Corrección) ---
             // Si el estado anterior era visually returned y el nuevo es 'Pendiente' o 'En proceso'
@@ -318,13 +322,11 @@ export const updateTask = async (id, data, updaterId = null) => {
                                 message = `Se ha marcado como ESPECIAL la tarea: ${updatedTask.title}`;
                             }
 
-                            await prisma.notification.create({
-                                data: {
-                                    userId: assigneeUser.id,
-                                    message,
-                                    type: 'TASK_UPDATED',
-                                    relatedId: id
-                                }
+                            await createNotification({
+                                userId: assigneeUser.id,
+                                message,
+                                type: 'TASK_UPDATED',
+                                relatedId: id
                             });
                         }
                     }
@@ -332,6 +334,20 @@ export const updateTask = async (id, data, updaterId = null) => {
                     console.error("Error sending update notification:", err);
                 }
             }
+        }
+
+        // --- Notificación de Devolución ---
+        if (isReturned && updatedTask.creatorId && updatedTask.creatorId !== updaterId) {
+             try {
+                await createNotification({
+                    userId: updatedTask.creatorId,
+                    message: `Se ha devuelto tu tarea: ${updatedTask.title}`,
+                    type: 'TASK_RETURNED',
+                    relatedId: id
+                });
+             } catch (notifyError) {
+                console.error("[nativeTaskService] Failed to send return notification:", notifyError);
+             }
         }
 
         // --- Cierre de Ciclo: Notificación de Corrección (Post-DB Success) ---
@@ -371,13 +387,11 @@ export const updateTask = async (id, data, updaterId = null) => {
                 }
 
                 if (targetUserId) {
-                    await prisma.notification.create({
-                        data: {
-                            userId: targetUserId,
-                            message: notificationMessage,
-                            type: 'TASK_CORRECTED',
-                            relatedId: id
-                        }
+                    await createNotification({
+                        userId: targetUserId,
+                        message: notificationMessage,
+                        type: 'TASK_CORRECTED',
+                        relatedId: id
                     });
                     console.log(`[nativeTaskService] Reintegration notification sent to ${targetUserId}`);
                 }

@@ -324,23 +324,11 @@ const NativeTasks = () => {
                   description: "Se ha cambiado el estado a Devuelto y se añadió el comentario.",
               });
 
-              // --- NOTIFICATION LOGIC ---
-              if (returningTask.creatorId && returningTask.creatorId !== currentUser?.id) {
-                  try {
-                      await fetch(`${baseUrl}/api/notifications`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                              userId: returningTask.creatorId,
-                              message: `${currentUser?.name} devolvió tu tarea: ${returningTask.title}`,
-                              type: 'TASK_RETURNED',
-                              relatedId: returningTask.id
-                          })
-                      });
-                  } catch (e) {
-                      console.error("Failed to notify creator:", e);
-                  }
-              }
+              // Backend (nativeTaskService) now handles notification on PATCH status: 'DEVUELTA'
+              // but we need to ensure it's triggered correctly there if not already.
+              // Looking at nativeTaskService.updateTask, it triggers TASK_UPDATED for priority/special.
+              // It also triggers TASK_CORRECTED for reintegration.
+              // Let's check if it triggers TASK_RETURNED.
 
               setReturningTask(null);
               setReturnReason('');

@@ -1448,13 +1448,11 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
                             message = `Se te ha asignado una tarea ESPECIAL: ${task.title}`;
                         }
 
-                        await prisma.notification.create({
-                            data: {
-                                userId: assigneeUser.id,
-                                message,
-                                type: 'TASK_ASSIGNED',
-                                relatedId: task.id
-                            }
+                        await createNotification({
+                            userId: assigneeUser.id,
+                            message,
+                            type: 'TASK_ASSIGNED',
+                            relatedId: task.id
                         });
                     }
                 }
@@ -1672,7 +1670,7 @@ app.post('/api/global-announcements', authenticateToken, async (req, res) => {
                     await createNotification({
                         userId: targetUser.id,
                         message: `${req.user.name} te mencionó en un anuncio global`,
-                        type: 'GENERAL_CHAT_MENTION', // Use chat mention type or create ANNOUNCEMENT_MENTION if needed
+                        type: 'ANNOUNCEMENT_GLOBAL',
                         relatedId: announcement.id
                     });
                 }
@@ -1745,7 +1743,7 @@ app.post('/api/clients/:clientId/announcements', authenticateToken, async (req, 
                     await createNotification({
                         userId: targetUser.id,
                         message: `${req.user.name} te mencionó en un anuncio de ${clientName}`,
-                        type: 'CAMPFIRE_MENTION', // Opens client space
+                        type: 'ANNOUNCEMENT_CLIENT',
                         relatedId: clientId
                     });
                 }
