@@ -546,7 +546,7 @@ const Metrics = () => {
                 <div className="h-32 flex items-center justify-center bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-dashed"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
              ) : organicMetrics ? (
                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                 <MetricCard title="Impresiones" current={organicMetrics.combined.current.impressions} previous={organicMetrics.combined.previous.impressions} icon={Eye} color="#1877F2" />
+                 <MetricCard title="Impresiones Totales" current={organicMetrics.combined.current.impressions} previous={organicMetrics.combined.previous.impressions} icon={Eye} color="#1877F2" />
                  <MetricCard title="Interacciones" current={organicMetrics.combined.current.interactions} previous={organicMetrics.combined.previous.interactions} icon={MousePointer2} color="#E1306C" />
                  <MetricCard title="Seguidores" current={organicMetrics.combined.current.followers} previous={organicMetrics.combined.previous.followers} icon={Users} color="#8B5CF6" />
                  <MetricCard title="Alcance Total" current={organicMetrics.combined.current.reach} previous={organicMetrics.combined.previous.reach} icon={TrendingUp} color="#10B981" />

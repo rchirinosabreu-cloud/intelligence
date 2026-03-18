@@ -2,7 +2,7 @@ import axios from 'axios';
 import { getDecryptedToken } from './integrationService.js';
 import prisma from '../lib/prisma.js';
 
-const GRAPH_API_VERSION = 'v21.0';
+const GRAPH_API_VERSION = 'v25.0';
 const BASE_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 
 /**
@@ -96,10 +96,10 @@ async function fetchPeriodMetrics(client, token, period) {
             if (!pageToken) throw new Error('Could not retrieve Page Access Token');
 
             console.log(`[Meta Metrics] Fetching FB Insights for ${client.facebookPageId} (${period.since} to ${period.until})`);
-            // Standard Page Insights for New Page Experience
+            // Standard Page Insights for New Page Experience (Marzo 2026: page_post_engagements para interacciones)
             const fbMetricsRes = await axios.get(`${BASE_URL}/${client.facebookPageId}/insights`, {
                 params: {
-                    metric: 'page_impressions,page_engaged_users,page_impressions_unique',
+                    metric: 'page_impressions,page_post_engagements,page_impressions_unique',
                     period: 'day',
                     since: period.since,
                     until: period.until,
@@ -117,29 +117,37 @@ async function fetchPeriodMetrics(client, token, period) {
                 };
 
                 data.facebook.impressions = findAndSum('page_impressions');
-                data.facebook.interactions = findAndSum('page_engaged_users');
+                data.facebook.interactions = findAndSum('page_post_engagements');
                 data.facebook.reach = findAndSum('page_impressions_unique');
 
-                console.log(`[Meta Metrics] FB Summed (${period.since}-${period.until}) - Imp: ${data.facebook.impressions}, Int: ${data.facebook.interactions}, Reach: ${data.facebook.reach}`);
+                console.log(`[Meta Metrics] FB Summed (${period.since}-${period.until}) - Impressions: ${data.facebook.impressions}, Int: ${data.facebook.interactions}, Reach: ${data.facebook.reach}`);
             } else {
                 console.log('[Meta Metrics] FB Insights returned no data array for', period.since, 'to', period.until);
             }
 
+        } catch (error) {
+            console.error('[Meta Metrics] FB Insights Error:', error.response?.data || error.message);
+        }
+
+        // SEPARATE CALL FOR FB LIFETIME METRICS (Followers)
+        try {
+            const pageTokenRes = await axios.get(`${BASE_URL}/${client.facebookPageId}?fields=access_token&access_token=${token}`);
+            const pageToken = pageTokenRes.data.access_token;
             const fansRes = await axios.get(`${BASE_URL}/${client.facebookPageId}?fields=fan_count&access_token=${pageToken}`);
             data.facebook.followers = fansRes.data.fan_count || 0;
         } catch (error) {
-            console.error('[Meta Metrics] FB Error:', error.response?.data || error.message);
+            console.error('[Meta Metrics] FB Followers Error:', error.response?.data || error.message);
         }
     }
 
-    // Instagram
+    // Instagram (Marzo 2026: views mapped to impressions, total_interactions mapped to interactions)
     if (client.instagramBusinessId) {
         try {
             console.log(`[Meta Metrics] Fetching IG Insights for ${client.instagramBusinessId} (${period.since} to ${period.until})`);
-            // Using strictly requested metrics: reach, impressions, profile_views
+            // Using strictly requested metrics: reach, views, total_interactions
             const igMetricsRes = await axios.get(`${BASE_URL}/${client.instagramBusinessId}/insights`, {
                 params: {
-                    metric: 'reach,impressions,profile_views',
+                    metric: 'reach,views,total_interactions',
                     period: 'day',
                     since: period.since,
                     until: period.until,
@@ -155,21 +163,24 @@ async function fetchPeriodMetrics(client, token, period) {
                     return metric.values.reduce((sum, v) => sum + (Number(v.value) || 0), 0);
                 };
 
-                data.instagram.impressions = findAndSum('impressions');
                 data.instagram.reach = findAndSum('reach');
+                data.instagram.impressions = findAndSum('views'); // Adapter pattern: views -> impressions
+                data.instagram.interactions = findAndSum('total_interactions'); // Adapter pattern: total_interactions -> interactions
 
-                // Summing interactions is not supported directly at account level without media iteration.
-                data.instagram.interactions = 0;
-
-                console.log(`[Meta Metrics] IG Summed (${period.since}-${period.until}) - Imp: ${data.instagram.impressions}, Reach: ${data.instagram.reach}`);
+                console.log(`[Meta Metrics] IG Summed (${period.since}-${period.until}) - Views: ${data.instagram.impressions}, Int: ${data.instagram.interactions}, Reach: ${data.instagram.reach}`);
             } else {
-                    console.log('[Meta Metrics] IG Insights returned no data array for', period.since, 'to', period.until);
+                console.log('[Meta Metrics] IG Insights returned no data array for', period.since, 'to', period.until);
             }
+        } catch (error) {
+            console.error('[Meta Metrics] IG Insights Error:', error.response?.data || error.message);
+        }
 
+        // SEPARATE CALL FOR IG LIFETIME METRICS (Followers)
+        try {
             const igFollowersRes = await axios.get(`${BASE_URL}/${client.instagramBusinessId}?fields=followers_count&access_token=${token}`);
             data.instagram.followers = igFollowersRes.data.followers_count || 0;
         } catch (error) {
-            console.error('[Meta Metrics] IG Error:', error.response?.data || error.message);
+            console.error('[Meta Metrics] IG Followers Error:', error.response?.data || error.message);
         }
     }
 
@@ -277,27 +288,30 @@ export async function getReachTrend(clientId, range = 'last_30') {
 
             const fbRes = await axios.get(`${BASE_URL}/${client.facebookPageId}/insights`, {
                 params: {
-                    metric: 'page_impressions_unique',
+                    metric: 'page_impressions,page_post_engagements,page_impressions_unique',
                     period: 'day',
                     since: current.since,
                     until: current.until,
                     access_token: pageToken
                 }
             });
-            fbDaily = fbRes.data.data[0]?.values || [];
+            const reachMetric = fbRes.data.data.find(m => m.name === 'page_impressions_unique');
+            fbDaily = reachMetric?.values || [];
         }
 
         if (client.instagramBusinessId) {
+            // IG TREND: Usamos reach, views y total_interactions pero el gráfico solo mapeará reach.
             const igRes = await axios.get(`${BASE_URL}/${client.instagramBusinessId}/insights`, {
                 params: {
-                    metric: 'reach',
+                    metric: 'reach,views,total_interactions',
                     period: 'day',
                     since: current.since,
                     until: current.until,
                     access_token: token
                 }
             });
-            igDaily = igRes.data.data[0]?.values || [];
+            const reachMetric = igRes.data.data.find(m => m.name === 'reach');
+            igDaily = reachMetric?.values || [];
         }
 
         // Merge by date
