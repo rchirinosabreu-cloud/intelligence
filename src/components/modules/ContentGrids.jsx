@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { LayoutGrid, Plus, Calendar, Filter, Search, MoreHorizontal, ChevronRight, Loader2, Trash2, Eye, Edit } from 'lucide-react';
+import { LayoutGrid, Plus, Calendar, Filter, Search, MoreHorizontal, ChevronRight, Loader2, Trash2, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CreatePlanModal from './ContentGrids/CreatePlanModal';
 import {
@@ -74,6 +74,16 @@ const ContentGrids = () => {
       return clientName.includes(term) || period.includes(term);
     });
   }, [plans, searchTerm]);
+
+  const navigateToPlan = (plan) => {
+    if (plan.client?.slug) {
+      const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+      const monthName = months[plan.month - 1];
+      navigate(`/parrillas/${plan.client.slug}/${monthName}-${plan.year}`);
+    } else {
+      navigate(`/parrillas/${plan.id}`);
+    }
+  };
 
   const handleDelete = (id, clientName) => {
     if (window.confirm(`¿Estás seguro de que deseas eliminar la parrilla de ${clientName}? Esta acción ocultará la parrilla y sus ítems.`)) {
@@ -162,7 +172,7 @@ const ContentGrids = () => {
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       key={plan.id}
-                      onClick={() => navigate(`/parrillas/${plan.id}`)}
+                      onClick={() => navigateToPlan(plan)}
                       className="group hover:bg-zinc-100/30 dark:hover:bg-white/2 transition-colors cursor-pointer"
                     >
                       <td className="px-6 py-5">

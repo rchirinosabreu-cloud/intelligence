@@ -41,7 +41,13 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
       toast.success('Parrilla creada con éxito');
       onClose();
       // Redirección UX: Ir al detalle de la parrilla recién creada
-      navigate(`/parrillas/${data.id}`);
+      if (data.client?.slug) {
+        const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        const monthName = months[data.month - 1];
+        navigate(`/parrillas/${data.client.slug}/${monthName}-${data.year}`);
+      } else {
+        navigate(`/parrillas/${data.id}`);
+      }
     },
     onError: () => {
       toast.error('Error al crear la parrilla');
