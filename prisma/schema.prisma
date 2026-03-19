@@ -99,6 +99,11 @@ model ContentPlan {
   month     Int
   year      Int
   status    ContentPlanStatus @default(PLANIFICACION)
+
+  // Responsable General de la Parrilla
+  ownerId   String?
+  owner     TeamMember?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
 
@@ -157,6 +162,7 @@ model TeamMember {
   nativeTasks     Task[]
   clientTasks     ClientTask[]
   flowMessages    FlowMessage[]
+  contentPlans    ContentPlan[]
 }
 
 enum TaskStatus {

@@ -15,6 +15,7 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     clientId: '',
+    ownerId: '',
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear()
   });
@@ -23,6 +24,16 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
     queryKey: ['clients-list'],
     queryFn: async () => {
       const response = await axios.get(`${getApiBaseUrl()}/api/db/clients`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      return response.data;
+    }
+  });
+
+  const { data: team } = useQuery({
+    queryKey: ['team-list'],
+    queryFn: async () => {
+      const response = await axios.get(`${getApiBaseUrl()}/api/team`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
       return response.data;
@@ -97,6 +108,20 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
                 <option value="">Selecciona un cliente...</option>
                 {clients?.map((client) => (
                   <option key={client.id} value={client.id}>{client.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Responsable (Community Manager)</label>
+              <select
+                value={formData.ownerId}
+                onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
+                className="w-full h-12 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-medium"
+              >
+                <option value="">Selecciona un responsable...</option>
+                {team?.map((member) => (
+                  <option key={member.id} value={member.id}>{member.name}</option>
                 ))}
               </select>
             </div>

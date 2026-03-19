@@ -1,15 +1,25 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { LayoutGrid, Plus, Calendar, Filter, Search, MoreHorizontal, ChevronRight, Loader2 } from 'lucide-react';
+import { LayoutGrid, Plus, Calendar, Filter, Search, MoreHorizontal, ChevronRight, Loader2, Edit2, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import CreatePlanModal from './ContentGrids/CreatePlanModal';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { toast } from 'react-hot-toast';
 
 const ContentGrids = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
   const { data: plans, isLoading, error } = useQuery({
     queryKey: ['content-plans'],
     queryFn: async () => {
@@ -19,6 +29,25 @@ const ContentGrids = () => {
       return response.data;
     }
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id) => {
+      await axios.delete(`${getApiBaseUrl()}/api/content/plans/${id}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['content-plans']);
+      toast.success('Parrilla eliminada');
+    },
+    onError: () => {
+      toast.error('Error al eliminar la parrilla');
+    }
+  });
+
+  const filteredPlans = plans?.filter(plan =>
+    plan.client?.name?.toLowerCase().includes(searchQuery.toLowerCase())
+  ) || [];
 
   const getMonthName = (monthNumber) => {
     const date = new Date();
@@ -67,18 +96,20 @@ const ContentGrids = () => {
             </div>
             <div>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 uppercase font-bold tracking-wider">Total Planes</p>
-              <p className="text-xl font-bold text-zinc-900 dark:text-white">{plans?.length || 0}</p>
+              <p className="text-xl font-bold text-zinc-900 dark:text-white">{filteredPlans.length}</p>
             </div>
           </div>
         </div>
 
-        {/* Search & Filter Mockup */}
+        {/* Search & Filter */}
         <div className="md:col-span-2 p-4 rounded-2xl bg-white/50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/5 backdrop-blur-sm flex items-center gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
             <input
               type="text"
               placeholder="Buscar por cliente..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-zinc-100 dark:bg-white/5 border-transparent focus:border-indigo-500/50 focus:ring-0 rounded-xl text-sm transition-all"
             />
           </div>
@@ -95,7 +126,7 @@ const ContentGrids = () => {
             <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
             <p className="text-zinc-500 animate-pulse">Cargando planes de contenido...</p>
           </div>
-        ) : plans && plans.length > 0 ? (
+        ) : filteredPlans.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -107,7 +138,7 @@ const ContentGrids = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200/50 dark:divide-white/5">
-                {plans.map((plan) => (
+                {filteredPlans.map((plan) => (
                   <tr
                     key={plan.id}
                     onClick={() => navigate(`/parrillas/${plan.id}`)}
@@ -131,15 +162,36 @@ const ContentGrids = () => {
                     </td>
                     <td className="px-6 py-5 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Future: Action menu
-                          }}
-                          className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-lg transition-colors text-zinc-500"
-                        >
-                          <MoreHorizontal className="w-4 h-4" />
-                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              onClick={(e) => e.stopPropagation()}
+                              className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-lg transition-colors text-zinc-500"
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 w-32 shadow-xl">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/parrillas/${plan.id}`);
+                              }}
+                              className="gap-2 cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" /> Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm('¿Eliminar esta parrilla?')) deleteMutation.mutate(plan.id);
+                              }}
+                              className="gap-2 text-red-500 focus:text-red-500 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                         <ChevronRight className="w-4 h-4 text-zinc-300 dark:text-zinc-600" />
                       </div>
                     </td>

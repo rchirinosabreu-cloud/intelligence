@@ -27,6 +27,7 @@ export const getContentPlanById = async (id) => {
     where: { id },
     include: {
       client: true,
+      owner: true,
       items: {
         orderBy: { publishDate: 'asc' }
       }
@@ -35,12 +36,13 @@ export const getContentPlanById = async (id) => {
 };
 
 export const createContentPlan = async (data) => {
-  const { clientId, month, year, status } = data;
+  const { clientId, month, year, status, ownerId } = data;
   return await prisma.contentPlan.create({
     data: {
       clientId,
       month,
       year,
+      ownerId,
       status: status || 'PLANIFICACION'
     }
   });

@@ -164,10 +164,10 @@ const ContentPlanDetail = () => {
     }
   });
 
-  const { data: clients } = useQuery({
-    queryKey: ['clients-list'],
+  const { data: team } = useQuery({
+    queryKey: ['team-list'],
     queryFn: async () => {
-      const response = await axios.get(`${getApiBaseUrl()}/api/db/clients`, {
+      const response = await axios.get(`${getApiBaseUrl()}/api/team`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
       return response.data;
@@ -311,15 +311,20 @@ const ContentPlanDetail = () => {
             </div>
 
             <div className="flex items-center gap-2">
-               <select
-                 value={plan.clientId}
-                 onChange={(e) => updatePlanMutation.mutate({ clientId: e.target.value })}
-                 className="bg-transparent border-none text-zinc-500 dark:text-zinc-400 font-medium p-0 focus:ring-0 text-sm cursor-pointer hover:text-indigo-500 transition-colors"
-               >
-                 {clients?.map(c => (
-                   <option key={c.id} value={c.id}>{c.name}</option>
-                 ))}
-               </select>
+               <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-wider">
+                  <User className="w-3 h-3" />
+                  Responsable:
+                  <select
+                    value={plan.ownerId || ''}
+                    onChange={(e) => updatePlanMutation.mutate({ ownerId: e.target.value })}
+                    className="bg-transparent border-none text-indigo-500 font-bold p-0 focus:ring-0 text-xs cursor-pointer hover:underline transition-all"
+                  >
+                    <option value="">Sin asignar</option>
+                    {team?.map(member => (
+                      <option key={member.id} value={member.id}>{member.name}</option>
+                    ))}
+                  </select>
+               </div>
             </div>
           </div>
         </div>
@@ -374,8 +379,8 @@ const ContentPlanDetail = () => {
                     <div className="lg:col-span-3 space-y-6">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`p-2.5 rounded-xl ${isEditing ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-100 dark:bg-white/5 text-zinc-500'}`}>
-                            {item.format === 'Reel' || item.format === 'Video' ? <Video className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isEditing ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-100 dark:bg-white/5 text-zinc-500'}`}>
+                            {item.format === 'Reel' || item.format === 'Video' ? <Video className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
                           </div>
                           {isEditing ? (
                             <select
@@ -410,6 +415,27 @@ const ContentPlanDetail = () => {
                             />
                           ) : (
                             <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 leading-tight">{item.objective}</p>
+                          )}
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] block mb-1">Fecha Publicación</label>
+                          {isEditing ? (
+                            <input
+                              type="date"
+                              defaultValue={item.publishDate ? new Date(item.publishDate).toISOString().split('T')[0] : ''}
+                              onBlur={(e) => {
+                                if (e.target.value) {
+                                  updateItemMutation.mutate({ id: item.id, publishDate: new Date(e.target.value) });
+                                }
+                              }}
+                              className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                            />
+                          ) : (
+                            <div className="flex items-center gap-2 text-xs font-bold text-zinc-600 dark:text-zinc-300">
+                               <Calendar className="w-3 h-3 text-indigo-500" />
+                               {item.publishDate ? new Date(item.publishDate).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Sin fecha'}
+                            </div>
                           )}
                         </div>
 
@@ -558,7 +584,7 @@ const ContentPlanDetail = () => {
                             className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all font-black text-[10px] uppercase tracking-[0.1em] shadow-lg shadow-black/5"
                           >
                             <Send className="w-3 h-3" />
-                            Despachar a Kanban
+                            Enviar a pendientes
                           </button>
                         )}
                       </div>
