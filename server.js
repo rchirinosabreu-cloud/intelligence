@@ -129,7 +129,6 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ error: "No token provided", source: "internal_auth" });
   }
 
-
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
         console.error(`[Auth] JWT Verification failed for ${req.method} ${req.url}:`, err.message);

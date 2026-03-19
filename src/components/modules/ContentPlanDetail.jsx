@@ -615,7 +615,7 @@ const ContentPlanDetail = () => {
                               </span>
                             </div>
                             <button
-                              onClick={() => navigate('/gestion')}
+                              onClick={() => navigate(`/gestion?taskId=${item.taskId}`)}
                               className="text-[9px] font-bold text-zinc-500 hover:text-indigo-600 flex items-center gap-1 transition-colors"
                             >
                               Ver en Kanban <ExternalLink className="w-2 h-2" />
