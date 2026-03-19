@@ -99,7 +99,13 @@ export const getTasks = async (clientId) => {
                     select: { name: true, logoUrl: true }
                 },
                 assignee: true,
-                creator: true
+          creator: true,
+          contentItem: {
+              select: {
+                  id: true,
+                  planId: true
+              }
+          }
             },
             orderBy: {
                 createdAt: 'asc' // Oldest first to match current kanban logic
@@ -149,7 +155,10 @@ export const createTask = async ({
                     select: { name: true, logoUrl: true }
                 },
                 assignee: true,
-                creator: true
+                  creator: true,
+                  contentItem: {
+                      select: { id: true, planId: true }
+                  }
             }
         });
         return newTask;
@@ -264,6 +273,17 @@ export const updateTask = async (id, data, updaterId = null) => {
                     // Do not touch completedAt to preserve historical data
                     delete updateData.completedAt;
                 }
+
+                // --- Sincronización Bidireccional (Efecto Espejo) ---
+                // Si la tarea tiene un ContentItem vinculado, actualizar su estado a REALIZADO
+                try {
+                    await prisma.contentItem.updateMany({
+                        where: { taskId: id },
+                        data: { status: 'REALIZADO' }
+                    });
+                } catch (mirrorErr) {
+                    console.error("[nativeTaskService] Mirror Effect Failed:", mirrorErr);
+                }
             } else {
                 // Test 2: Transition from Realizado to anything else strictly nullifies completedAt
                 updateData.completedAt = null;
@@ -283,7 +303,10 @@ export const updateTask = async (id, data, updaterId = null) => {
                     select: { name: true, logoUrl: true }
                 },
                 assignee: true,
-                creator: true
+                creator: true,
+                contentItem: {
+                    select: { id: true, planId: true }
+                }
             }
         });
 

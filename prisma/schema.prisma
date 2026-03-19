@@ -114,8 +114,9 @@ model ContentItem {
   copyText    String            @db.Text
   captionText String            @db.Text
   publishDate DateTime
-  networks    String[]          // Array de plataformas (Instagram, TikTok, etc.)
-  mediaUrl    String?           // Enlace opcional (Drive/Dropbox)
+  mediaUrl    String?           // Enlace de Referencia
+  assetsLinks String?           @db.Text // Insumos (múltiples links)
+  comments    String?           @db.Text // Comentarios adicionales
   status      ContentItemStatus @default(BORRADOR)
 
   // Relación opcional con el Kanban
@@ -176,6 +177,7 @@ enum ContentItemStatus {
   BORRADOR
   EN_REVISION
   APROBADO
+  REALIZADO
   PUBLICADO
 }
 

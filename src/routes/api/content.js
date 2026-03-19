@@ -120,7 +120,8 @@ router.delete('/items/:id', async (req, res) => {
 router.post('/items/:id/send-to-kanban', async (req, res) => {
   try {
     const creatorId = req.user.userId;
-    const item = await sendItemToKanban(req.params.id, creatorId);
+    const executionData = req.body;
+    const item = await sendItemToKanban(req.params.id, creatorId, executionData);
     res.json(item);
   } catch (error) {
     console.error('[API] Error sending item to kanban:', error);

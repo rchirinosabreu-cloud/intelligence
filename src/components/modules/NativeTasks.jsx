@@ -209,7 +209,9 @@ const NativeTasks = () => {
           isPriority: task.isPriority || false,
           isSpecial: task.isSpecial || false,
           specialType: task.specialType,
-          referenceUrl: task.referenceUrl
+          referenceUrl: task.referenceUrl,
+          contentPlanId: task.contentItem?.planId,
+          contentItemId: task.contentItem?.id
       }));
     },
     refetchInterval: 30000,
@@ -1101,6 +1103,18 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                     </div>
 
                                     <div className="flex items-center gap-2">
+                                        {task.contentPlanId && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    navigate(`/parrillas/${task.contentPlanId}?itemId=${task.contentItemId}`);
+                                                }}
+                                                className="text-indigo-600 hover:text-indigo-800 transition-colors p-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-full"
+                                                title="Ir a la Parrilla de Contenido"
+                                            >
+                                                <LayoutGrid className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
                                         {task.referenceUrl && (
                                             <a
                                                 href={task.referenceUrl}
