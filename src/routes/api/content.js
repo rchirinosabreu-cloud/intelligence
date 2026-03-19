@@ -2,6 +2,7 @@ import express from 'express';
 import {
   getContentPlans,
   getContentPlanById,
+  getContentPlanBySlugAndPeriod,
   createContentPlan,
   updateContentPlan,
   deleteContentPlan,
@@ -35,6 +36,18 @@ router.get('/plans/:id', async (req, res) => {
     res.json(plan);
   } catch (error) {
     console.error('[API] Error fetching content plan:', error);
+    res.status(500).json({ error: 'Failed to fetch content plan' });
+  }
+});
+
+router.get('/plans/:clientSlug/:month-:year', async (req, res) => {
+  try {
+    const { clientSlug, month, year } = req.params;
+    const plan = await getContentPlanBySlugAndPeriod(clientSlug, month, year);
+    if (!plan) return res.status(404).json({ error: 'Content plan not found' });
+    res.json(plan);
+  } catch (error) {
+    console.error('[API] Error fetching content plan by slug:', error);
     res.status(500).json({ error: 'Failed to fetch content plan' });
   }
 });

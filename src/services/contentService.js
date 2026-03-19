@@ -42,6 +42,26 @@ export const getContentPlanById = async (id) => {
   return plan;
 };
 
+export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => {
+  const plan = await prisma.contentPlan.findFirst({
+    where: {
+      client: { slug: clientSlug },
+      month: parseInt(month),
+      year: parseInt(year),
+      deletedAt: null
+    },
+    include: {
+      client: true,
+      owner: true,
+      items: {
+        where: { deletedAt: null },
+        orderBy: { publishDate: 'asc' }
+      }
+    }
+  });
+  return plan;
+};
+
 export const createContentPlan = async (data) => {
   const { clientId, month, year, status } = data;
   return await prisma.contentPlan.create({
@@ -50,6 +70,9 @@ export const createContentPlan = async (data) => {
       month,
       year,
       status: status || 'PLANIFICACION'
+    },
+    include: {
+      client: true
     }
   });
 };

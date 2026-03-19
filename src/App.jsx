@@ -84,6 +84,7 @@ function AppContent() {
             <Route path="/bria" element={<Chat />} />
             <Route path="/gestion" element={<NativeTasks />} />
             <Route path="/parrillas" element={<ContentGrids />} />
+            <Route path="/parrillas/:clientSlug/:period" element={<ContentPlanDetail />} />
             <Route path="/parrillas/:planId" element={<ContentPlanDetail />} />
             <Route path="/minutas" element={<MinutesLayout />} />
             <Route path="/metricas" element={<Metrics />} />

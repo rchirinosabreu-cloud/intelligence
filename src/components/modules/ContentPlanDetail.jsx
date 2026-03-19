@@ -145,7 +145,7 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
 };
 
 const ContentPlanDetail = () => {
-  const { planId } = useParams();
+  const { planId, clientSlug, period } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -153,11 +153,27 @@ const ContentPlanDetail = () => {
   const [dispatchItemId, setDispatchItemId] = useState(null);
   const itemRefs = useRef({});
 
+  // Parse period (month-year)
+  const [monthName, year] = (period || '').split('-');
+
+  const getMonthNumber = (name) => {
+    const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const idx = months.indexOf(name.toLowerCase());
+    return idx !== -1 ? idx + 1 : null;
+  };
+
+  const month = getMonthNumber(monthName);
+
   // Queries
   const { data: plan, isLoading: planLoading } = useQuery({
-    queryKey: ['content-plan', planId],
+    queryKey: ['content-plan', planId || `${clientSlug}-${period}`],
     queryFn: async () => {
-      const response = await axios.get(`${getApiBaseUrl()}/api/content/plans/${planId}`, {
+      let url = `${getApiBaseUrl()}/api/content/plans/${planId}`;
+      if (clientSlug && month && year) {
+        url = `${getApiBaseUrl()}/api/content/plans/${clientSlug}/${month}-${year}`;
+      }
+
+      const response = await axios.get(url, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
       return response.data;
@@ -168,6 +184,16 @@ const ContentPlanDetail = () => {
     queryKey: ['clients-list'],
     queryFn: async () => {
       const response = await axios.get(`${getApiBaseUrl()}/api/db/clients`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      return response.data;
+    }
+  });
+
+  const { data: team } = useQuery({
+    queryKey: ['team-list'],
+    queryFn: async () => {
+      const response = await axios.get(`${getApiBaseUrl()}/api/team`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
       return response.data;
@@ -192,28 +218,30 @@ const ContentPlanDetail = () => {
     }
   }, [location.search, plan]);
 
+  const currentPlanId = plan?.id || planId;
+
   // Mutations
   const updatePlanMutation = useMutation({
     mutationFn: async (data) => {
-      await axios.patch(`${getApiBaseUrl()}/api/content/plans/${planId}`, data, {
+      await axios.patch(`${getApiBaseUrl()}/api/content/plans/${currentPlanId}`, data, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['content-plan', planId]);
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
       toast.success('Estado del plan actualizado');
     }
   });
 
   const createItemMutation = useMutation({
     mutationFn: async (data) => {
-      const response = await axios.post(`${getApiBaseUrl()}/api/content/items`, { ...data, planId }, {
+      const response = await axios.post(`${getApiBaseUrl()}/api/content/items`, { ...data, planId: currentPlanId }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
       return response.data;
     },
     onSuccess: (newItem) => {
-      queryClient.invalidateQueries(['content-plan', planId]);
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
       setEditingItemId(newItem.id);
       toast.success('Nueva pieza añadida');
     }
@@ -226,7 +254,7 @@ const ContentPlanDetail = () => {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['content-plan', planId]);
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
     }
   });
 
@@ -237,7 +265,7 @@ const ContentPlanDetail = () => {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['content-plan', planId]);
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
       toast.success('Pieza eliminada');
     }
   });
@@ -250,7 +278,7 @@ const ContentPlanDetail = () => {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['content-plan', planId]);
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
       setDispatchItemId(null);
       toast.success('¡Enviado a producción con éxito!');
     },
