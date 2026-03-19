@@ -265,8 +265,22 @@ const NativeTasks = () => {
 
         // Magic touch: find the task and open it in the modal automatically
         const taskToOpen = tasks.find(t => String(t.id) === taskId);
-        if (taskToOpen && !editingTask) {
+        if (taskToOpen) {
             setEditingTask(taskToOpen);
+
+            // If the task is in the 'devuelto' column, ensure the sidebar is open
+            if (getColumnId(taskToOpen.status, taskToOpen.comments) === 'devuelto') {
+                setIsReturnedSidebarOpen(true);
+            }
+        }
+
+        // Clean up URL parameters immediately via navigate to keep React Router state in sync
+        const paramsToClean = new URLSearchParams(location.search);
+        if (paramsToClean.has('taskId') || paramsToClean.has('showReturned')) {
+            paramsToClean.delete('taskId');
+            paramsToClean.delete('showReturned');
+            const newSearch = paramsToClean.toString();
+            navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}`, { replace: true });
         }
 
         // Wait for potential animations and list render
