@@ -86,6 +86,44 @@ model Client {
   facebookPageId      String?
   instagramBusinessId String?
   adAccountId         String?
+
+  // Relaciones de Contenido
+  contentPlans ContentPlan[]
+}
+
+// Modelos de Parrilla de Contenido (Content Grids)
+model ContentPlan {
+  id        String            @id @default(uuid())
+  clientId  String
+  client    Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  month     Int
+  year      Int
+  status    ContentPlanStatus @default(PLANIFICACION)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  items     ContentItem[]
+}
+
+model ContentItem {
+  id          String            @id @default(uuid())
+  planId      String
+  plan        ContentPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
+  objective   String
+  format      String            // Reel, Carrusel, etc.
+  copyText    String            @db.Text
+  captionText String            @db.Text
+  publishDate DateTime
+  networks    String[]          // Array de plataformas (Instagram, TikTok, etc.)
+  mediaUrl    String?           // Enlace opcional (Drive/Dropbox)
+  status      ContentItemStatus @default(BORRADOR)
+
+  // Relación opcional con el Kanban
+  taskId      String?           @unique
+  task        Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 }
 
 // Integraciones con plataformas externas (Fase BrainStudio Metrics)
@@ -127,6 +165,20 @@ enum TaskStatus {
   DEVUELTA
 }
 
+enum ContentPlanStatus {
+  PLANIFICACION
+  EN_APROBACION
+  ACTIVO
+  FINALIZADO
+}
+
+enum ContentItemStatus {
+  BORRADOR
+  EN_REVISION
+  APROBADO
+  PUBLICADO
+}
+
 enum FeedbackType {
   ESCRITO
   UNO_A_UNO
@@ -165,6 +217,9 @@ model Task {
   isSpecial    Boolean @default(false)
   specialType  String?
   referenceUrl String?
+
+  // Relación inversa con ContentItem
+  contentItem  ContentItem?
 }
 
 // Activos de Marca (Colores, Fuentes)

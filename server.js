@@ -26,6 +26,7 @@ import teamRouter from './src/routes/api/team.js';
 import userRouter from './src/routes/api/user.js';
 import feedbackRouter from './src/routes/api/feedback.js';
 import integrationsRouter from './src/routes/api/integrations.js';
+import contentRouter from './src/routes/api/content.js';
 import dbRouter from './src/routes/api/db.js';
 
 dotenv.config();
@@ -293,6 +294,9 @@ app.use('/api/feedback', authenticateToken, feedbackRouter);
 
 // Integrations (Meta, etc.)
 app.use('/api/integrations', authenticateToken, integrationsRouter);
+
+// Content & Grids Routes
+app.use('/api/content', authenticateToken, contentRouter);
 
 // DB Modular Routes
 app.use('/api/db', authenticateToken, dbRouter);
