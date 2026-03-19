@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { LayoutGrid, Plus, Calendar, Filter, Search, MoreHorizontal, ChevronRight, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import CreatePlanModal from './ContentGrids/CreatePlanModal';
 
 const ContentGrids = () => {
   const navigate = useNavigate();
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const { data: plans, isLoading, error } = useQuery({
     queryKey: ['content-plans'],
     queryFn: async () => {
@@ -47,7 +49,10 @@ const ContentGrids = () => {
           </p>
         </div>
 
-        <button className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all shadow-lg shadow-indigo-500/20 font-medium">
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all shadow-lg shadow-indigo-500/20 font-medium"
+        >
           <Plus className="w-4 h-4" />
           Nuevo Plan
         </button>
@@ -148,13 +153,21 @@ const ContentGrids = () => {
                 Inicia la migración creando tu primer plan para un cliente. Aquí aparecerán todos los grids de la agencia.
               </p>
             </div>
-            <button className="flex items-center gap-2 px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-2xl hover:scale-105 transition-all font-bold">
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-2xl hover:scale-105 transition-all font-bold"
+            >
               <Plus className="w-5 h-5" />
               Crear primer plan
             </button>
           </div>
         )}
       </div>
+
+      <CreatePlanModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
     </div>
   );
 };
