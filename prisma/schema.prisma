@@ -99,8 +99,14 @@ model ContentPlan {
   month     Int
   year      Int
   status    ContentPlanStatus @default(PLANIFICACION)
+
+  // Responsable (Community Manager)
+  ownerId   String?
+  owner     TeamMember?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
+  deletedAt DateTime?
 
   items     ContentItem[]
 }
@@ -125,6 +131,7 @@ model ContentItem {
 
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+  deletedAt   DateTime?
 }
 
 // Integraciones con plataformas externas (Fase BrainStudio Metrics)
@@ -157,6 +164,7 @@ model TeamMember {
   nativeTasks     Task[]
   clientTasks     ClientTask[]
   flowMessages    FlowMessage[]
+  contentPlans    ContentPlan[]
 }
 
 enum TaskStatus {
@@ -177,6 +185,8 @@ enum ContentItemStatus {
   BORRADOR
   EN_REVISION
   APROBADO
+  EN_PRODUCCION
+  DEVUELTO
   REALIZADO
   PUBLICADO
 }

@@ -99,8 +99,14 @@ model ContentPlan {
   month     Int
   year      Int
   status    String            @default("PLANIFICACION")
+
+  // Responsable de la Parrilla (Community Manager)
+  ownerId   String?
+  owner     TeamMember?       @relation(fields: [ownerId], references: [id])
+
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
+  deletedAt DateTime?
 
   items     ContentItem[]
 }
@@ -125,6 +131,7 @@ model ContentItem {
 
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+  deletedAt   DateTime?
 }
 
 // Integraciones con plataformas externas (Fase BrainStudio Metrics)
@@ -157,6 +164,7 @@ model TeamMember {
   nativeTasks     Task[]
   clientTasks     ClientTask[]
   flowMessages    FlowMessage[]
+  contentPlans    ContentPlan[]
 }
 
 // Registro de Auditoría de Tareas Eliminadas (Hard Delete Strategy)

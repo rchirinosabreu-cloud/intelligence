@@ -7,7 +7,7 @@ import {
   ChevronLeft, Plus, Send, ExternalLink, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
   Calendar, User, LayoutGrid, FileText, Instagram, Facebook, Video, Image as ImageIcon,
-  Edit2, Check, AlertCircle, Sparkles
+  Edit2, Check, AlertCircle, Sparkles, Users, UserCheck
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import {
@@ -310,16 +310,33 @@ const ContentPlanDetail = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-               <select
-                 value={plan.clientId}
-                 onChange={(e) => updatePlanMutation.mutate({ clientId: e.target.value })}
-                 className="bg-transparent border-none text-zinc-500 dark:text-zinc-400 font-medium p-0 focus:ring-0 text-sm cursor-pointer hover:text-indigo-500 transition-colors"
-               >
-                 {clients?.map(c => (
-                   <option key={c.id} value={c.id}>{c.name}</option>
-                 ))}
-               </select>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+               <div className="flex items-center gap-2">
+                 <Users className="w-3.5 h-3.5 text-zinc-400" />
+                 <select
+                   value={plan.clientId}
+                   onChange={(e) => updatePlanMutation.mutate({ clientId: e.target.value })}
+                   className="bg-transparent border-none text-zinc-500 dark:text-zinc-400 font-medium p-0 focus:ring-0 text-sm cursor-pointer hover:text-indigo-500 transition-colors"
+                 >
+                   {clients?.map(c => (
+                     <option key={c.id} value={c.id}>{c.name}</option>
+                   ))}
+                 </select>
+               </div>
+
+               <div className="flex items-center gap-2">
+                 <UserCheck className="w-3.5 h-3.5 text-zinc-400" />
+                 <select
+                   value={plan.ownerId || ''}
+                   onChange={(e) => updatePlanMutation.mutate({ ownerId: e.target.value || null })}
+                   className="bg-transparent border-none text-zinc-500 dark:text-zinc-400 font-medium p-0 focus:ring-0 text-sm cursor-pointer hover:text-indigo-500 transition-colors"
+                 >
+                   <option value="">Sin Responsable (CM)</option>
+                   {team?.map(member => (
+                     <option key={member.id} value={member.id}>{member.name}</option>
+                   ))}
+                 </select>
+               </div>
             </div>
           </div>
         </div>
@@ -351,6 +368,7 @@ const ContentPlanDetail = () => {
           plan.items.map((item) => {
             const isEditing = editingItemId === item.id;
             const isRealizado = item.status === 'REALIZADO' || item.status === 'PUBLICADO';
+            const isDevuelto = item.status === 'DEVUELTO';
 
             return (
               <div
@@ -365,7 +383,7 @@ const ContentPlanDetail = () => {
               >
                 {/* Mirror Effect Indicator */}
                 {item.taskId && (
-                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 shadow-[0_0_15px_rgba(99,102,241,0.3)] ${isRealizado ? 'bg-emerald-500' : 'bg-indigo-500'}`} />
+                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 shadow-[0_0_15px_rgba(99,102,241,0.3)] ${isRealizado ? 'bg-emerald-500' : isDevuelto ? 'bg-red-500' : 'bg-indigo-500'}`} />
                 )}
 
                 <div className="p-6 lg:p-8">
@@ -414,6 +432,23 @@ const ContentPlanDetail = () => {
                         </div>
 
                         <div className="space-y-1">
+                          <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] block mb-1">Fecha Publicación</label>
+                          {isEditing ? (
+                            <input
+                              type="date"
+                              value={item.publishDate ? new Date(item.publishDate).toISOString().split('T')[0] : ''}
+                              onChange={(e) => updateItemMutation.mutate({ id: item.id, publishDate: e.target.value })}
+                              className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                            />
+                          ) : (
+                            <div className="flex items-center gap-2 text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                              <Calendar className="w-4 h-4" />
+                              {item.publishDate ? new Date(item.publishDate).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Sin fecha'}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-1">
                           <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] block mb-1">Estado Pieza</label>
                           <select
                             value={item.status}
@@ -421,12 +456,16 @@ const ContentPlanDetail = () => {
                             className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border transition-all outline-none ${
                               isRealizado
                                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600'
+                                : isDevuelto
+                                ? 'bg-red-500/10 border-red-500/30 text-red-600'
                                 : 'bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/10 text-zinc-500'
                             }`}
                           >
                             <option value="BORRADOR">Borrador</option>
                             <option value="EN_REVISION">En Revisión</option>
                             <option value="APROBADO">Aprobado</option>
+                            <option value="EN_PRODUCCION">En Producción</option>
+                            <option value="DEVUELTO">Devuelto</option>
                             <option value="REALIZADO">Realizado</option>
                             <option value="PUBLICADO">Publicado</option>
                           </select>
@@ -537,12 +576,14 @@ const ContentPlanDetail = () => {
                           <div className={`flex flex-col gap-2 p-4 rounded-2xl border transition-all ${
                             isRealizado
                               ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600'
+                              : isDevuelto
+                              ? 'bg-red-500/5 border-red-500/20 text-red-600'
                               : 'bg-indigo-500/5 border-indigo-500/20 text-indigo-600'
                           }`}>
                             <div className="flex items-center gap-2">
-                              {isRealizado ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4 animate-pulse" />}
+                              {isRealizado ? <CheckCircle2 className="w-4 h-4" /> : isDevuelto ? <AlertCircle className="w-4 h-4" /> : <Clock className="w-4 h-4 animate-pulse" />}
                               <span className="text-[10px] font-black uppercase tracking-widest">
-                                {isRealizado ? 'Realizado' : 'En Producción'}
+                                {isRealizado ? 'Realizado' : isDevuelto ? 'Devuelto' : 'En Producción'}
                               </span>
                             </div>
                             <button

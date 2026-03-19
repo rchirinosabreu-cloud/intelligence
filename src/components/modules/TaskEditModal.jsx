@@ -128,15 +128,8 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
 
             if (isVisuallyReturned && finalStatus === editFormData.originalStatus) {
                 console.log("[TaskEditModal] Auto-resolve triggered for visually returned task.");
-                // Force PENDIENTE and strip the return tag to "blind" the hierarchy
+                // Force PENDIENTE. The backend will handle the [REINTEGRADA] tag.
                 finalStatus = 'PENDIENTE';
-
-                // Strip the most recent [DEVOLUCIÓN] block if it exists at the start
-                // Refined regex: handles optional leading space/newline and different delimiters
-                if (finalComments.includes('[DEVOLUCIÓN')) {
-                    finalComments = finalComments.replace(/^\s*\[DEVOLUCIÓN[^\]]*\]:[^\n]*(\n\n)?/i, '').trim();
-                    console.log("[TaskEditModal] Stripped return tag from comments.");
-                }
             }
 
             // Trigger confetti if status is changing to 'REALIZADA' (Optimistic)

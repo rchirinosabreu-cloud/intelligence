@@ -12,6 +12,11 @@ vi.mock('../lib/prisma.js', () => {
       findFirst: vi.fn(),
       count: vi.fn(),
       delete: vi.fn(),
+      create: vi.fn(),
+    },
+    contentItem: {
+      updateMany: vi.fn(),
+      findUnique: vi.fn(),
     },
     deletedTaskLog: {
       create: vi.fn(),
