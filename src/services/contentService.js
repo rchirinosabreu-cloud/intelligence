@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { createTask } from './nativeTaskService.js';
 
 /**
  * ContentPlan Services
@@ -55,6 +56,42 @@ export const updateContentPlan = async (id, data) => {
 export const deleteContentPlan = async (id) => {
   return await prisma.contentPlan.delete({
     where: { id }
+  });
+};
+
+/**
+ * Production / Kanban Link
+ */
+export const sendItemToKanban = async (itemId, creatorId) => {
+  const item = await prisma.contentItem.findUnique({
+    where: { id: itemId },
+    include: {
+      plan: {
+        include: { client: true }
+      }
+    }
+  });
+
+  if (!item) throw new Error('Content item not found');
+  if (item.taskId) throw new Error('Item already in production');
+
+  // Create Task
+  const task = await createTask({
+    title: `[${item.format}] ${item.objective} - ${item.plan.client.name}`,
+    dueDate: item.publishDate,
+    assigneeId: null, // Initial unassigned
+    creatorId,
+    comments: `Copy: ${item.copyText}\n\nCaption: ${item.captionText}\n\nMedia: ${item.mediaUrl || 'N/A'}`,
+    status: 'PENDIENTE',
+    clientId: item.plan.clientId,
+    referenceUrl: item.mediaUrl
+  });
+
+  // Link Task to ContentItem
+  return await prisma.contentItem.update({
+    where: { id: itemId },
+    data: { taskId: task.id },
+    include: { task: true }
   });
 };
 
