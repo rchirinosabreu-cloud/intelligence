@@ -62,7 +62,7 @@ export const deleteContentPlan = async (id) => {
 /**
  * Production / Kanban Link
  */
-export const sendItemToKanban = async (itemId, creatorId) => {
+export const sendItemToKanban = async (itemId, creatorId, executionData = {}) => {
   const item = await prisma.contentItem.findUnique({
     where: { id: itemId },
     include: {
@@ -75,16 +75,20 @@ export const sendItemToKanban = async (itemId, creatorId) => {
   if (!item) throw new Error('Content item not found');
   if (item.taskId) throw new Error('Item already in production');
 
+  const { assigneeId, dueDate, isPriority, isSpecial } = executionData;
+
   // Create Task
   const task = await createTask({
     title: `[${item.format}] ${item.objective} - ${item.plan.client.name}`,
-    dueDate: item.publishDate,
-    assigneeId: null, // Initial unassigned
+    dueDate: dueDate ? new Date(dueDate) : item.publishDate,
+    assigneeId: assigneeId || null,
     creatorId,
-    comments: `Copy: ${item.copyText}\n\nCaption: ${item.captionText}\n\nMedia: ${item.mediaUrl || 'N/A'}`,
+    comments: `Copy: ${item.copyText}\n\nCaption: ${item.captionText}\n\nReferencia: ${item.mediaUrl || 'N/A'}\n\nInsumos: ${item.assetsLinks || 'N/A'}\n\nComentarios: ${item.comments || 'N/A'}`,
     status: 'PENDIENTE',
     clientId: item.plan.clientId,
-    referenceUrl: item.mediaUrl
+    referenceUrl: item.mediaUrl,
+    isPriority: !!isPriority,
+    isSpecial: !!isSpecial
   });
 
   // Link Task to ContentItem
