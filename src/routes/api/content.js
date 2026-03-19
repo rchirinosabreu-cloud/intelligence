@@ -8,7 +8,8 @@ import {
   getContentItemsByPlan,
   createContentItem,
   updateContentItem,
-  deleteContentItem
+  deleteContentItem,
+  sendItemToKanban
 } from '../../services/contentService.js';
 
 const router = express.Router();
@@ -110,6 +111,20 @@ router.delete('/items/:id', async (req, res) => {
   } catch (error) {
     console.error('[API] Error deleting content item:', error);
     res.status(500).json({ error: 'Failed to delete content item' });
+  }
+});
+
+/**
+ * Kanban Integration
+ */
+router.post('/items/:id/send-to-kanban', async (req, res) => {
+  try {
+    const creatorId = req.user.userId;
+    const item = await sendItemToKanban(req.params.id, creatorId);
+    res.json(item);
+  } catch (error) {
+    console.error('[API] Error sending item to kanban:', error);
+    res.status(500).json({ error: error.message || 'Failed to send item to kanban' });
   }
 });
 

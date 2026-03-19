@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -6,6 +7,7 @@ import { LayoutGrid, Plus, Calendar, Filter, Search, MoreHorizontal, ChevronRigh
 import { motion } from 'framer-motion';
 
 const ContentGrids = () => {
+  const navigate = useNavigate();
   const { data: plans, isLoading, error } = useQuery({
     queryKey: ['content-plans'],
     queryFn: async () => {
@@ -37,10 +39,6 @@ const ContentGrids = () => {
       {/* Header Section */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
-          <div className="flex items-center gap-2 text-primary font-medium">
-            <LayoutGrid className="w-5 h-5" />
-            <span className="tracking-tight uppercase text-xs">Contenido</span>
-          </div>
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
             Parrillas de Contenido
           </h1>
@@ -105,7 +103,11 @@ const ContentGrids = () => {
               </thead>
               <tbody className="divide-y divide-zinc-200/50 dark:divide-white/5">
                 {plans.map((plan) => (
-                  <tr key={plan.id} className="group hover:bg-zinc-100/30 dark:hover:bg-white/2 transition-colors cursor-pointer">
+                  <tr
+                    key={plan.id}
+                    onClick={() => navigate(`/parrillas/${plan.id}`)}
+                    className="group hover:bg-zinc-100/30 dark:hover:bg-white/2 transition-colors cursor-pointer"
+                  >
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-600 font-bold text-xs uppercase">
