@@ -100,12 +100,13 @@ model ContentPlan {
   year      Int
   status    String            @default("PLANIFICACION")
 
-  // Responsable General de la Parrilla
+  // Responsable de la Parrilla (Community Manager)
   ownerId   String?
-  owner     TeamMember?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  owner     TeamMember?       @relation(fields: [ownerId], references: [id])
 
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
+  deletedAt DateTime?
 
   items     ContentItem[]
 }
@@ -130,6 +131,7 @@ model ContentItem {
 
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+  deletedAt   DateTime?
 }
 
 // Integraciones con plataformas externas (Fase BrainStudio Metrics)

@@ -138,7 +138,14 @@ const CLIENT_COLORS = {
 const getColumnId = (status, comments = '') => {
     if (!status) return 'pendiente';
     const s = String(status).toUpperCase();
-    const hasReturnTag = (comments || '').includes('[DEVOLUCIÓN');
+
+    // Total Reintegration Fix:
+    // If [REINTEGRADA] appears after the last [DEVOLUCIÓN], we trust the DB status.
+    const lastReturnIdx = (comments || '').lastIndexOf('[DEVOLUCIÓN');
+    const lastReintegratedIdx = (comments || '').lastIndexOf('[REINTEGRADA');
+    const isReintegrated = lastReintegratedIdx > lastReturnIdx;
+
+    const hasReturnTag = (comments || '').includes('[DEVOLUCIÓN') && !isReintegrated;
 
     // High Priority: Always REALIZADA
     if (s === 'REALIZADA' || s === 'REALIZADO') return 'realizado';
@@ -490,12 +497,12 @@ const NativeTasks = () => {
 
       movedTask.status = newStatusEnum;
 
-      // Tag Stripping Logic for Optimistic UI: If moving to Pendiente, strip return tag
-      if (newStatusEnum === 'PENDIENTE' && (movedTask.comments)) {
-          const currentText = movedTask.comments || '';
-          const cleanedText = currentText.replace(/^\s*\[DEVOLUCIÓN[^\]]*\]:[^\n]*(\n\n)?/i, '').trim();
-          movedTask.comments = cleanedText;
-          console.log("[onDragEnd] Optimistic UI: Stripped return tag from comments.");
+          // Reintegration Tag for Optimistic UI: If moving from Devuelto to Pendiente
+          if (newStatusEnum === 'PENDIENTE' && sourceColumnId === 'devuelto') {
+              const now = new Date().toLocaleString('es-CO');
+              const reintegratedTag = `[REINTEGRADA - ${now}]`;
+              movedTask.comments = `${reintegratedTag}\n${movedTask.comments || ''}`.trim();
+              console.log("[onDragEnd] Optimistic UI: Added reintegrated tag.");
       }
 
       // Calculate Insertion Position (handling filters and visibility)
@@ -569,12 +576,7 @@ const NativeTasks = () => {
           // Construct Payload
           const payload = { status: newStatusForDB };
 
-          // If moving to Pendiente, also strip the tag in the DB update
-          if (newStatusForDB === 'PENDIENTE') {
-              const currentText = movedTask.comments || '';
-              const cleanedText = currentText.replace(/^\s*\[DEVOLUCIÓN[^\]]*\]:[^\n]*(\n\n)?/i, '').trim();
-              payload.comments = cleanedText;
-          }
+          // If moving to Pendiente from Devuelto, the backend handles the [REINTEGRADA] tag.
 
           console.log(`[onDragEnd] Syncing status to ${newStatusForDB}...`, payload);
 

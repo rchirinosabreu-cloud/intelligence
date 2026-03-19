@@ -5,8 +5,11 @@ import { createTask } from './nativeTaskService.js';
  * ContentPlan Services
  */
 export const getContentPlans = async (clientId) => {
+  const where = { deletedAt: null };
+  if (clientId) where.clientId = clientId;
+
   return await prisma.contentPlan.findMany({
-    where: clientId ? { clientId } : {},
+    where,
     include: {
       client: {
         select: { id: true, name: true, slug: true }
@@ -23,26 +26,29 @@ export const getContentPlans = async (clientId) => {
 };
 
 export const getContentPlanById = async (id) => {
-  return await prisma.contentPlan.findUnique({
+  const plan = await prisma.contentPlan.findUnique({
     where: { id },
     include: {
       client: true,
       owner: true,
       items: {
+        where: { deletedAt: null },
         orderBy: { publishDate: 'asc' }
       }
     }
   });
+
+  if (plan && plan.deletedAt) return null;
+  return plan;
 };
 
 export const createContentPlan = async (data) => {
-  const { clientId, month, year, status, ownerId } = data;
+  const { clientId, month, year, status } = data;
   return await prisma.contentPlan.create({
     data: {
       clientId,
       month,
       year,
-      ownerId,
       status: status || 'PLANIFICACION'
     }
   });
@@ -56,8 +62,18 @@ export const updateContentPlan = async (id, data) => {
 };
 
 export const deleteContentPlan = async (id) => {
-  return await prisma.contentPlan.delete({
-    where: { id }
+  return await prisma.$transaction(async (tx) => {
+    const now = new Date();
+    // Soft delete items
+    await tx.contentItem.updateMany({
+      where: { planId: id },
+      data: { deletedAt: now }
+    });
+    // Soft delete plan
+    return await tx.contentPlan.update({
+      where: { id },
+      data: { deletedAt: now }
+    });
   });
 };
 
@@ -80,12 +96,15 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
   const { assigneeId, dueDate, isPriority, isSpecial } = executionData;
 
   // Create Task
+  // We include a clean comment for the creator to see deep links if needed
+  const commentText = `Pieza generada desde Parrilla. Referencia: ${item.mediaUrl || 'N/A'}`;
+
   const task = await createTask({
-    title: `[${item.format}] ${item.objective} - ${item.plan.client.name}`,
+    title: `[Producción] ${item.format}: ${item.objective}`,
     dueDate: dueDate ? new Date(dueDate) : item.publishDate,
     assigneeId: assigneeId || null,
     creatorId,
-    comments: `Copy: ${item.copyText}\n\nCaption: ${item.captionText}\n\nReferencia: ${item.mediaUrl || 'N/A'}\n\nInsumos: ${item.assetsLinks || 'N/A'}\n\nComentarios: ${item.comments || 'N/A'}`,
+    comments: commentText,
     status: 'PENDIENTE',
     clientId: item.plan.clientId,
     referenceUrl: item.mediaUrl,
@@ -93,10 +112,13 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
     isSpecial: !!isSpecial
   });
 
-  // Link Task to ContentItem
+  // Link Task to ContentItem and update status to EN_PRODUCCION
   return await prisma.contentItem.update({
     where: { id: itemId },
-    data: { taskId: task.id },
+    data: {
+      taskId: task.id,
+      status: 'EN_PRODUCCION'
+    },
     include: { task: true }
   });
 };
@@ -106,7 +128,10 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
  */
 export const getContentItemsByPlan = async (planId) => {
   return await prisma.contentItem.findMany({
-    where: { planId },
+    where: {
+      planId,
+      deletedAt: null
+    },
     include: {
       task: true
     },
@@ -128,7 +153,8 @@ export const updateContentItem = async (id, data) => {
 };
 
 export const deleteContentItem = async (id) => {
-  return await prisma.contentItem.delete({
-    where: { id }
+  return await prisma.contentItem.update({
+    where: { id },
+    data: { deletedAt: new Date() }
   });
 };

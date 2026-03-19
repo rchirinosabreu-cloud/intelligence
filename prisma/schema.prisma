@@ -100,12 +100,13 @@ model ContentPlan {
   year      Int
   status    ContentPlanStatus @default(PLANIFICACION)
 
-  // Responsable General de la Parrilla
+  // Responsable (Community Manager)
   ownerId   String?
   owner     TeamMember?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
 
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
+  deletedAt DateTime?
 
   items     ContentItem[]
 }
@@ -130,6 +131,7 @@ model ContentItem {
 
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+  deletedAt   DateTime?
 }
 
 // Integraciones con plataformas externas (Fase BrainStudio Metrics)
@@ -183,6 +185,8 @@ enum ContentItemStatus {
   BORRADOR
   EN_REVISION
   APROBADO
+  EN_PRODUCCION
+  DEVUELTO
   REALIZADO
   PUBLICADO
 }

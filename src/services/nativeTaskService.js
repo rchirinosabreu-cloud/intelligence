@@ -237,18 +237,6 @@ export const updateTask = async (id, data, updaterId = null) => {
             throw new Error(`Task with id ${id} not found`);
         }
 
-        // Fetch full data if needed for content automation (ownerId, publishDate)
-        const fullTaskData = await prisma.task.findUnique({
-            where: { id },
-            include: {
-                contentItem: {
-                    include: {
-                        plan: true
-                    }
-                }
-            }
-        });
-
         const updateData = { ...data };
 
         // Handle explicit incoming date parsing
@@ -276,49 +264,81 @@ export const updateTask = async (id, data, updaterId = null) => {
             isCorrected = wasVisuallyReturned &&
                               (newStatus === 'PENDIENTE' || newStatus === 'EN_CURSO');
 
+            // Fix Reintegration: Add [REINTEGRADA] tag
+            if (isCorrected) {
+                const now = new Intl.DateTimeFormat('es-CO', {
+                    timeZone: 'America/Bogota',
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit'
+                }).format(new Date());
+                const reintegratedTag = `[REINTEGRADA - ${now}]`;
+
+                // Add tag to comments if not already present after last DEVOLUCIÓN
+                const currentComments = updateData.comments || currentTask.comments || '';
+                updateData.comments = `${reintegratedTag}\n${currentComments}`.trim();
+            }
+
             if (newStatus === 'REALIZADA') {
                 // Edge Case A: Only set completedAt to NOW if it wasn't already 'Realizado' / completed.
                 // If it already has a completedAt, preserve the history.
                 if (!currentTask.completedAt || currentTask.status !== 'REALIZADA') {
                     updateData.completedAt = new Date();
+
+                    // --- AUTOMATION: HAND-OFF (Production to Publication) ---
+                    // Only trigger if this was a production task transition to 'REALIZADA'
+                    // and it hasn't already been handled.
+                    try {
+                        const linkedItem = await prisma.contentItem.findUnique({
+                            where: { taskId: id },
+                            include: {
+                                plan: {
+                                    include: { owner: true }
+                                }
+                            }
+                        });
+
+                        if (linkedItem && linkedItem.plan?.ownerId) {
+                            console.log(`[nativeTaskService] Production task completed. Creating Publication task for CM: ${linkedItem.plan.ownerId}`);
+
+                            await prisma.task.create({
+                                data: {
+                                    title: `[Publicar] ${linkedItem.format}: ${linkedItem.objective}`,
+                                    dueDate: linkedItem.publishDate,
+                                    assigneeId: linkedItem.plan.ownerId,
+                                    creatorId: updaterId || currentTask.creatorId,
+                                    status: 'PENDIENTE',
+                                    clientId: linkedItem.plan.clientId,
+                                    comments: `Pieza lista para publicar. Referencia: ${linkedItem.mediaUrl || 'N/A'}`
+                                }
+                            });
+                        }
+                    } catch (automationErr) {
+                        console.error("[nativeTaskService] Hand-off Automation Failed:", automationErr);
+                    }
                 } else {
                     // Do not touch completedAt to preserve historical data
                     delete updateData.completedAt;
                 }
-
-                // --- Sincronización Bidireccional (Efecto Espejo) ---
-                // Si la tarea tiene un ContentItem vinculado, actualizar su estado a REALIZADO
-                try {
-                    const contentItem = fullTaskData?.contentItem;
-                    if (contentItem) {
-                        await prisma.contentItem.update({
-                            where: { id: contentItem.id },
-                            data: { status: 'REALIZADO' }
-                        });
-
-                        // NUEVA LÓGICA: Hand-off de Producción a Publicación
-                        // Crear automáticamente una nueva Task "[Publicar] + Título"
-                        if (contentItem.plan?.ownerId) {
-                            await prisma.task.create({
-                                data: {
-                                    title: `[Publicar] ${contentItem.objective}`,
-                                    status: 'PENDIENTE',
-                                    clientId: fullTaskData.clientId,
-                                    assigneeId: contentItem.plan.ownerId,
-                                    dueDate: contentItem.publishDate,
-                                    comments: `Programación de pieza aprobada: ${contentItem.format}`,
-                                    isPriority: fullTaskData.isPriority // Heredar prioridad
-                                }
-                            });
-                            console.log(`[nativeTaskService] Hand-off automation: Created publish task for item ${contentItem.id}`);
-                        }
-                    }
-                } catch (mirrorErr) {
-                    console.error("[nativeTaskService] Mirror/Hand-off Effect Failed:", mirrorErr);
-                }
             } else {
                 // Test 2: Transition from Realizado to anything else strictly nullifies completedAt
                 updateData.completedAt = null;
+            }
+
+            // --- Sincronización Bidireccional (Efecto Espejo Total) ---
+            try {
+                let contentItemStatus = null;
+                if (newStatus === 'REALIZADA') contentItemStatus = 'REALIZADO';
+                else if (newStatus === 'DEVUELTA') contentItemStatus = 'DEVUELTO';
+                else if (newStatus === 'PENDIENTE' || newStatus === 'EN_CURSO') contentItemStatus = 'EN_PRODUCCION';
+
+                if (contentItemStatus) {
+                    await prisma.contentItem.updateMany({
+                        where: { taskId: id },
+                        data: { status: contentItemStatus }
+                    });
+                }
+            } catch (mirrorErr) {
+                console.error("[nativeTaskService] Mirror Effect Failed:", mirrorErr);
             }
         } else {
             // If status is not in payload, strictly do not modify completedAt
