@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2, AlertTriangle, AlertOctagon, MessageSquare, Edit2, X, RotateCcw, Send, Trash2, Zap, Star, Link as LinkIcon } from 'lucide-react';
+import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2, AlertTriangle, AlertOctagon, MessageSquare, Edit2, X, RotateCcw, Send, Trash2, Zap, Star, Link as LinkIcon, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {

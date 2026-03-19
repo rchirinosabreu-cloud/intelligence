@@ -14,8 +14,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from '@/components/ui/dialog';
 
-// Helper for auto-resize textarea
-const AutoResizeTextarea = ({ value, onChange, placeholder, disabled, onBlur, className }) => {
+// Helper for auto-resize textarea with internal state for performance (save on blur)
+const AutoResizeTextarea = ({ defaultValue, onBlur, placeholder, disabled, className }) => {
+  const [val, setVal] = useState(defaultValue || '');
   const textareaRef = useRef(null);
 
   useEffect(() => {
@@ -23,13 +24,18 @@ const AutoResizeTextarea = ({ value, onChange, placeholder, disabled, onBlur, cl
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
     }
-  }, [value]);
+  }, [val]);
+
+  // Sync internal value if defaultValue changes (e.g. from server)
+  useEffect(() => {
+    setVal(defaultValue || '');
+  }, [defaultValue]);
 
   return (
     <textarea
       ref={textareaRef}
-      value={value}
-      onChange={onChange}
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
       onBlur={onBlur}
       placeholder={placeholder}
       disabled={disabled}
@@ -395,7 +401,11 @@ const ContentPlanDetail = () => {
                             <input
                               type="text"
                               defaultValue={item.objective}
-                              onBlur={(e) => updateItemMutation.mutate({ id: item.id, objective: e.target.value })}
+                              onBlur={(e) => {
+                                if (e.target.value !== item.objective) {
+                                  updateItemMutation.mutate({ id: item.id, objective: e.target.value });
+                                }
+                              }}
                               className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none"
                             />
                           ) : (
@@ -434,8 +444,12 @@ const ContentPlanDetail = () => {
                         </div>
                         {isEditing ? (
                           <AutoResizeTextarea
-                            value={item.copyText}
-                            onChange={(e) => updateItemMutation.mutate({ id: item.id, copyText: e.target.value })}
+                            defaultValue={item.copyText}
+                            onBlur={(e) => {
+                              if (e.target.value !== item.copyText) {
+                                updateItemMutation.mutate({ id: item.id, copyText: e.target.value });
+                              }
+                            }}
                             placeholder="Escribe el copy visual o guion aquí..."
                             className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/30 transition-all outline-none"
                           />
@@ -452,8 +466,12 @@ const ContentPlanDetail = () => {
                         </label>
                         {isEditing ? (
                           <AutoResizeTextarea
-                            value={item.captionText}
-                            onChange={(e) => updateItemMutation.mutate({ id: item.id, captionText: e.target.value })}
+                            defaultValue={item.captionText}
+                            onBlur={(e) => {
+                              if (e.target.value !== item.captionText) {
+                                updateItemMutation.mutate({ id: item.id, captionText: e.target.value });
+                              }
+                            }}
                             placeholder="Escribe el pie de foto para redes..."
                             className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/30 transition-all outline-none"
                           />
@@ -477,7 +495,11 @@ const ContentPlanDetail = () => {
                               type="text"
                               defaultValue={item.mediaUrl}
                               placeholder="Link de Drive/Pinterest"
-                              onBlur={(e) => updateItemMutation.mutate({ id: item.id, mediaUrl: e.target.value })}
+                              onBlur={(e) => {
+                                if (e.target.value !== item.mediaUrl) {
+                                  updateItemMutation.mutate({ id: item.id, mediaUrl: e.target.value });
+                                }
+                              }}
                               className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
                             />
                           ) : (
@@ -495,8 +517,12 @@ const ContentPlanDetail = () => {
                           </label>
                           {isEditing ? (
                             <AutoResizeTextarea
-                              value={item.assetsLinks}
-                              onChange={(e) => updateItemMutation.mutate({ id: item.id, assetsLinks: e.target.value })}
+                              defaultValue={item.assetsLinks}
+                              onBlur={(e) => {
+                                if (e.target.value !== item.assetsLinks) {
+                                  updateItemMutation.mutate({ id: item.id, assetsLinks: e.target.value });
+                                }
+                              }}
                               placeholder="Links de fotos, logos, etc."
                               className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
                             />

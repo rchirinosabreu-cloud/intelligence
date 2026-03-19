@@ -131,7 +131,13 @@ const ContentGrids = () => {
                     </td>
                     <td className="px-6 py-5 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-lg transition-colors text-zinc-500">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Future: Action menu
+                          }}
+                          className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-lg transition-colors text-zinc-500"
+                        >
                           <MoreHorizontal className="w-4 h-4" />
                         </button>
                         <ChevronRight className="w-4 h-4 text-zinc-300 dark:text-zinc-600" />
