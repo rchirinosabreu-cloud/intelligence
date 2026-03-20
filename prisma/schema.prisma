@@ -125,9 +125,8 @@ model ContentItem {
   comments    String?           @db.Text // Comentarios adicionales
   status      ContentItemStatus @default(BORRADOR)
 
-  // Relación opcional con el Kanban
-  taskId      String?           @unique
-  task        Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  // Relación opcional con el Kanban (1-a-N para historial)
+  tasks       Task[]
 
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
@@ -230,8 +229,9 @@ model Task {
   specialType  String?
   referenceUrl String?
 
-  // Relación inversa con ContentItem
-  contentItem  ContentItem?
+  // Relación con ContentItem (Fase 1: Content Grids)
+  contentItemId String?
+  contentItem   ContentItem? @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
 }
 
 // Activos de Marca (Colores, Fuentes)

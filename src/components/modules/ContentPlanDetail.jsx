@@ -397,6 +397,8 @@ const ContentPlanDetail = () => {
             const isEditing = editingItemId === item.id;
             const isRealizado = item.status === 'REALIZADO' || item.status === 'PUBLICADO';
             const isDevuelto = item.status === 'DEVUELTO';
+            const latestTask = item.tasks?.[0];
+            const hasActiveTask = item.tasks?.some(t => t.status !== 'REALIZADA');
 
             return (
               <div
@@ -410,7 +412,7 @@ const ContentPlanDetail = () => {
                 }`}
               >
                 {/* Mirror Effect Indicator */}
-                {item.taskId && (
+                {latestTask && (
                   <div className={`absolute left-0 top-0 bottom-0 w-1.5 shadow-[0_0_15px_rgba(99,102,241,0.3)] ${isRealizado ? 'bg-emerald-500' : isDevuelto ? 'bg-red-500' : 'bg-indigo-500'}`} />
                 )}
 
@@ -600,7 +602,7 @@ const ContentPlanDetail = () => {
                           )}
                         </div>
 
-                        {item.taskId ? (
+                        {latestTask ? (
                           <div className={`flex flex-col gap-2 p-4 rounded-2xl border transition-all ${
                             isRealizado
                               ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600'
@@ -615,11 +617,14 @@ const ContentPlanDetail = () => {
                               </span>
                             </div>
                             <button
-                              onClick={() => navigate(`/gestion?taskId=${item.taskId}`)}
+                              onClick={() => navigate(`/gestion?taskId=${latestTask.id}`)}
                               className="text-[9px] font-bold text-zinc-500 hover:text-indigo-600 flex items-center gap-1 transition-colors"
                             >
-                              Ver en Kanban <ExternalLink className="w-2 h-2" />
+                              {latestTask.title.startsWith('[Publicar]') ? 'Ver Publicación' : 'Ver Producción'} <ExternalLink className="w-2 h-2" />
                             </button>
+                            {item.tasks.length > 1 && (
+                              <span className="text-[8px] text-zinc-400 font-medium">Historial: {item.tasks.length} tareas</span>
+                            )}
                           </div>
                         ) : (
                           <button

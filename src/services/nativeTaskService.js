@@ -99,13 +99,13 @@ export const getTasks = async (clientId) => {
                     select: { name: true, logoUrl: true }
                 },
                 assignee: true,
-          creator: true,
-          contentItem: {
-              select: {
-                  id: true,
-                  planId: true
-              }
-          }
+                creator: true,
+                contentItem: {
+                    select: {
+                        id: true,
+                        planId: true
+                    }
+                }
             },
             orderBy: {
                 createdAt: 'asc' // Oldest first to match current kanban logic
@@ -131,7 +131,8 @@ const statusMapper = {
 
 export const createTask = async ({
     title, dueDate, assigneeId, creatorId, comments, status, clientId,
-    isPriority = false, isSpecial = false, specialType = null, referenceUrl = null
+    isPriority = false, isSpecial = false, specialType = null, referenceUrl = null,
+    contentItemId = null
 }) => {
     try {
         const mappedStatus = statusMapper[status] || 'PENDIENTE';
@@ -148,17 +149,18 @@ export const createTask = async ({
                 isPriority,
                 isSpecial,
                 specialType,
-                referenceUrl
+                referenceUrl,
+                contentItemId
             },
             include: {
                 client: {
                     select: { name: true, logoUrl: true }
                 },
                 assignee: true,
-                  creator: true,
-                  contentItem: {
-                      select: { id: true, planId: true }
-                  }
+                creator: true,
+                contentItem: {
+                    select: { id: true, planId: true }
+                }
             }
         });
         return newTask;
@@ -224,12 +226,15 @@ export const updateTask = async (id, data, updaterId = null) => {
         const currentTask = await prisma.task.findUnique({
             where: { id },
             select: {
+                title: true,
                 status: true,
                 completedAt: true,
                 comments: true,
                 isPriority: true,
                 isSpecial: true,
-                assigneeId: true
+                assigneeId: true,
+                creatorId: true,
+                contentItemId: true
             }
         });
 
@@ -289,7 +294,7 @@ export const updateTask = async (id, data, updaterId = null) => {
                     // and it hasn't already been handled.
                     try {
                         const linkedItem = await prisma.contentItem.findUnique({
-                            where: { taskId: id },
+                            where: { id: currentTask.contentItemId || 'none' },
                             include: {
                                 plan: {
                                     include: { owner: true }
@@ -297,7 +302,10 @@ export const updateTask = async (id, data, updaterId = null) => {
                             }
                         });
 
-                        if (linkedItem && linkedItem.plan?.ownerId) {
+                        // Check if it's a production task (not a publication task)
+                        const isProductionTask = !currentTask.title.startsWith('[Publicar]');
+
+                        if (linkedItem && linkedItem.plan?.ownerId && isProductionTask) {
                             console.log(`[nativeTaskService] Production task completed. Creating Publication task for CM: ${linkedItem.plan.ownerId}`);
 
                             await prisma.task.create({
@@ -308,8 +316,18 @@ export const updateTask = async (id, data, updaterId = null) => {
                                     creatorId: updaterId || currentTask.creatorId,
                                     status: 'PENDIENTE',
                                     clientId: linkedItem.plan.clientId,
+                                    contentItemId: linkedItem.id, // Linked to the same item
                                     comments: `Pieza lista para publicar. Referencia: ${linkedItem.mediaUrl || 'N/A'}`
                                 }
+                            });
+                        }
+
+                        // --- CLOSURE TRIGGER: Publication Task -> PUBLICADO ---
+                        if (linkedItem && currentTask.title.startsWith('[Publicar]')) {
+                            console.log(`[nativeTaskService] Publication task completed. Marking ContentItem ${linkedItem.id} as PUBLICADO.`);
+                            await prisma.contentItem.update({
+                                where: { id: linkedItem.id },
+                                data: { status: 'PUBLICADO' }
                             });
                         }
                     } catch (automationErr) {
@@ -326,16 +344,24 @@ export const updateTask = async (id, data, updaterId = null) => {
 
             // --- Sincronización Bidireccional (Efecto Espejo Total) ---
             try {
-                let contentItemStatus = null;
-                if (newStatus === 'REALIZADA') contentItemStatus = 'REALIZADO';
-                else if (newStatus === 'DEVUELTA') contentItemStatus = 'DEVUELTO';
-                else if (newStatus === 'PENDIENTE' || newStatus === 'EN_CURSO') contentItemStatus = 'EN_PRODUCCION';
+                if (currentTask.contentItemId) {
+                    let contentItemStatus = null;
+                    const isPublicationTask = currentTask.title.startsWith('[Publicar]');
 
-                if (contentItemStatus) {
-                    await prisma.contentItem.updateMany({
-                        where: { taskId: id },
-                        data: { status: contentItemStatus }
-                    });
+                    if (newStatus === 'REALIZADA') {
+                        contentItemStatus = isPublicationTask ? 'PUBLICADO' : 'REALIZADO';
+                    } else if (newStatus === 'DEVUELTA') {
+                        contentItemStatus = 'DEVUELTO';
+                    } else if (newStatus === 'PENDIENTE' || newStatus === 'EN_CURSO') {
+                        contentItemStatus = 'EN_PRODUCCION';
+                    }
+
+                    if (contentItemStatus) {
+                        await prisma.contentItem.update({
+                            where: { id: currentTask.contentItemId },
+                            data: { status: contentItemStatus }
+                        });
+                    }
                 }
             } catch (mirrorErr) {
                 console.error("[nativeTaskService] Mirror Effect Failed:", mirrorErr);
