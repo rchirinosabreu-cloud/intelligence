@@ -33,6 +33,11 @@ export const getContentPlanById = async (id) => {
       owner: true,
       items: {
         where: { deletedAt: null },
+        include: {
+          tasks: {
+            orderBy: { createdAt: 'desc' }
+          }
+        },
         orderBy: { publishDate: 'asc' }
       }
     }
@@ -55,6 +60,11 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
       owner: true,
       items: {
         where: { deletedAt: null },
+        include: {
+          tasks: {
+            orderBy: { createdAt: 'desc' }
+          }
+        },
         orderBy: { publishDate: 'asc' }
       }
     }
@@ -109,12 +119,19 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
     include: {
       plan: {
         include: { client: true }
+      },
+      tasks: {
+        where: { status: { not: 'REALIZADA' } }
       }
     }
   });
 
   if (!item) throw new Error('Content item not found');
-  if (item.taskId) throw new Error('Item already in production');
+
+  // Check if there's already an active task
+  if (item.tasks.length > 0) {
+    throw new Error('Item already has an active task in Kanban');
+  }
 
   const { assigneeId, dueDate, isPriority, isSpecial } = executionData;
 
@@ -132,17 +149,21 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
     clientId: item.plan.clientId,
     referenceUrl: item.mediaUrl,
     isPriority: !!isPriority,
-    isSpecial: !!isSpecial
+    isSpecial: !!isSpecial,
+    contentItemId: itemId // Explicitly link it
   });
 
-  // Link Task to ContentItem and update status to EN_PRODUCCION
+  // Link Task to ContentItem via contentItemId and update status to EN_PRODUCCION
   return await prisma.contentItem.update({
     where: { id: itemId },
     data: {
-      taskId: task.id,
       status: 'EN_PRODUCCION'
     },
-    include: { task: true }
+    include: {
+      tasks: {
+        where: { id: task.id }
+      }
+    }
   });
 };
 
@@ -156,7 +177,9 @@ export const getContentItemsByPlan = async (planId) => {
       deletedAt: null
     },
     include: {
-      task: true
+      tasks: {
+        orderBy: { createdAt: 'desc' }
+      }
     },
     orderBy: { publishDate: 'asc' }
   });
