@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Download, CloudUpload, FileText, FileVideo, FileAudio, File, Loader2, Trash2, Search, Eye, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { Download, CloudUpload, FileText, FileVideo, FileAudio, File, Loader2, Trash2, Search, Eye, X, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -16,6 +16,7 @@ const DeliverablesWidget = ({ clientId }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [expandedMonths, setExpandedMonths] = useState({});
     const [previewFile, setPreviewFile] = useState(null);
+    const [isMaximized, setIsMaximized] = useState(false);
 
     // Fetch Files from Backend
     const fetchFiles = useCallback(async () => {
@@ -171,55 +172,77 @@ const DeliverablesWidget = ({ clientId }) => {
         setPreviewFile(file);
     };
 
-    return (
-        <Card className="w-full flex flex-col h-full min-h-[500px] p-6">
-            <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-emerald-500/10 rounded-lg">
-                        <Download className="w-4 h-4 text-emerald-500" />
+    const renderWidgetContent = (containerClass = "h-full") => (
+        <div className={`flex flex-col ${containerClass}`}>
+            <div className="sticky top-0 z-20 bg-white dark:bg-zinc-900 pb-4 pt-1">
+                <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-emerald-500/10 rounded-lg">
+                            <Download className="w-4 h-4 text-emerald-500" />
+                        </div>
+                        <h3 className="font-semibold text-zinc-900 dark:text-white">
+                            {isMaximized ? 'Gestión de Entregables' : 'Entregables'}
+                        </h3>
                     </div>
-                    <h3 className="font-semibold text-zinc-900 dark:text-white">Entregables</h3>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="relative">
-                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                        <input
-                            type="text"
-                            placeholder="Buscar archivo..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-8 pr-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 border-none rounded-lg text-xs focus:ring-1 focus:ring-emerald-500 w-40 transition-all outline-none"
-                        />
+                    <div className="flex items-center gap-3">
+                        <div className="relative">
+                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar archivo..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-8 pr-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 border-none rounded-lg text-xs focus:ring-1 focus:ring-emerald-500 w-40 transition-all outline-none"
+                            />
+                        </div>
+                        <span className="text-xs text-zinc-400 font-medium">
+                            {isLoading ? '...' : `${files.length} Archivos`}
+                        </span>
+                        {!isMaximized && (
+                            <button
+                                onClick={() => setIsMaximized(true)}
+                                className="p-1.5 text-zinc-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-all"
+                                title="Maximizar"
+                            >
+                                <Maximize2 className="w-4 h-4" />
+                            </button>
+                        )}
+                        {isMaximized && (
+                            <button
+                                onClick={() => setIsMaximized(false)}
+                                className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                                title="Cerrar"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
-                    <span className="text-xs text-zinc-400 font-medium">
-                        {isLoading ? '...' : `${files.length} Archivos`}
-                    </span>
                 </div>
-            </div>
 
-            {/* Dropzone */}
-            <div
-                {...getRootProps()}
-                className={`border-2 border-dashed rounded-xl p-8 mb-6 flex flex-col items-center justify-center text-center transition-all cursor-pointer group
-                    ${isDragActive ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10' : 'border-zinc-200 dark:border-zinc-800 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10'}
-                    ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-                <input {...getInputProps()} />
-                <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-full mb-3 group-hover:scale-110 transition-transform">
-                    {isUploading ? (
-                        <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
-                    ) : (
-                        <CloudUpload className={`w-6 h-6 ${isDragActive ? 'text-emerald-500' : 'text-zinc-400 group-hover:text-emerald-500'}`} />
-                    )}
+                {/* Dropzone */}
+                <div
+                    {...getRootProps()}
+                    className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all cursor-pointer group
+                        ${isDragActive ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10' : 'border-zinc-200 dark:border-zinc-800 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10'}
+                        ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                    <input {...getInputProps()} />
+                    <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                        {isUploading ? (
+                            <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
+                        ) : (
+                            <CloudUpload className={`w-6 h-6 ${isDragActive ? 'text-emerald-500' : 'text-zinc-400 group-hover:text-emerald-500'}`} />
+                        )}
+                    </div>
+                    <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                        {isUploading ? 'Procesando archivos...' : 'Arrastra entregables finales'}
+                    </p>
+                    <p className="text-xs text-zinc-400 mt-1">o haz clic para explorar</p>
                 </div>
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                    {isUploading ? 'Procesando archivos...' : 'Arrastra entregables finales'}
-                </p>
-                <p className="text-xs text-zinc-400 mt-1">o haz clic para explorar</p>
             </div>
 
             {/* File List grouped by month */}
-            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
+            <div className="flex-1 overflow-y-auto pr-1 space-y-4 pb-4 custom-scrollbar">
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-10 opacity-50">
                         <Loader2 className="w-6 h-6 animate-spin text-zinc-400" />
@@ -322,10 +345,10 @@ const DeliverablesWidget = ({ clientId }) => {
 
             {/* Quick Look Modal */}
             {previewFile && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-white/40 dark:bg-zinc-900/40 backdrop-blur-3xl p-4 animate-in fade-in duration-200">
                     <button
                         onClick={() => setPreviewFile(null)}
-                        className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all z-50"
+                        className="absolute top-6 right-6 p-2 bg-zinc-800/10 hover:bg-zinc-800/20 dark:bg-white/10 dark:hover:bg-white/20 rounded-full text-zinc-800 dark:text-white transition-all z-[70]"
                     >
                         <X className="w-6 h-6" />
                     </button>
@@ -349,15 +372,30 @@ const DeliverablesWidget = ({ clientId }) => {
                         {previewFile.mimeType === 'application/pdf' && (
                             <iframe
                                 src={`${previewFile.url}#toolbar=0`}
-                                className="w-full h-full rounded-lg bg-white"
+                                className="w-full h-full rounded-lg shadow-2xl bg-white border-none"
                                 title={previewFile.name}
                             />
                         )}
                     </div>
 
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/20 text-white text-sm">
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 bg-zinc-900/80 dark:bg-white/10 backdrop-blur-md rounded-full border border-white/20 text-white text-sm">
                         {previewFile.name}
                     </div>
+                </div>
+            )}
+        </div>
+    );
+
+    return (
+        <Card className="w-full flex flex-col h-full min-h-[500px] p-6 relative">
+            {renderWidgetContent()}
+
+            {/* Maximized View Modal */}
+            {isMaximized && (
+                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[50] flex items-center justify-center bg-zinc-900/40 backdrop-blur-xl p-4 md:p-8 animate-in fade-in duration-300">
+                    <Card className="w-full h-full max-w-7xl flex flex-col p-8 bg-white dark:bg-zinc-900 shadow-2xl border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                        {renderWidgetContent("flex-1")}
+                    </Card>
                 </div>
             )}
         </Card>
