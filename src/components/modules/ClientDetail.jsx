@@ -49,7 +49,7 @@ const ClientDetail = ({ client, onBack }) => {
         {/* Left Column (Main Content) */}
         <div className="lg:col-span-2 flex flex-col gap-6">
             <AnnouncementWidget scope="client" clientId={client.id} />
-            <DeliverablesWidget />
+            <DeliverablesWidget clientId={client.id} />
             <ClientTasksWidget clientId={client.id} />
         </div>
 

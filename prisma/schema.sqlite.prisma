@@ -223,6 +223,8 @@ model ClientFile {
   name        String   // Nombre visible
   bucketUrl   String   // URL del archivo en Railway/S3
   category    String   // 'Legal', 'Deliverable', 'Asset'
+  size        Int?     // Peso en bytes
+  mimeType    String?  // Tipo MIME (ej. 'application/pdf')
   createdAt   DateTime @default(now())
 }
 
