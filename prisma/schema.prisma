@@ -250,8 +250,10 @@ model ClientFile {
   clientId    String
   client      Client   @relation(fields: [clientId], references: [id])
   name        String   // Nombre visible
-  bucketUrl   String   // URL del archivo en Railway/S3
+  bucketUrl   String   // URL del archivo en Railway/S3 (GCS path)
   category    String   // 'Legal', 'Deliverable', 'Asset'
+  size        Int?     // Peso en bytes
+  mimeType    String?  // Tipo MIME (ej. 'application/pdf')
   createdAt   DateTime @default(now())
 }
 

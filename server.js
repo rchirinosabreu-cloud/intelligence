@@ -27,6 +27,7 @@ import userRouter from './src/routes/api/user.js';
 import feedbackRouter from './src/routes/api/feedback.js';
 import integrationsRouter from './src/routes/api/integrations.js';
 import contentRouter from './src/routes/api/content.js';
+import clientFilesRouter from './src/routes/api/clientFiles.js';
 import dbRouter from './src/routes/api/db.js';
 
 dotenv.config();
@@ -300,6 +301,9 @@ app.use('/api/content', authenticateToken, contentRouter);
 
 // DB Modular Routes
 app.use('/api/db', authenticateToken, dbRouter);
+
+// Client Files & Deliverables (GCS)
+app.use('/api/clients', authenticateToken, clientFilesRouter);
 
 // User Management Endpoints
 app.post('/api/users', authenticateToken, async (req, res) => {
