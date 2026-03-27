@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { uploadClientFile, getClientFilesWithUrls } from '../../services/storageService.js';
+import { uploadClientFile, getClientFilesWithUrls, deleteClientFile } from '../../services/storageService.js';
 
 const router = express.Router();
 const upload = multer({
@@ -41,6 +41,20 @@ router.post('/:clientId/files', upload.single('file'), async (req, res) => {
     } catch (error) {
         console.error("[API] Error uploading client file:", error);
         res.status(500).json({ error: "Failed to upload file" });
+    }
+});
+
+// DELETE /api/clients/:clientId/files/:fileId - Delete file from GCS and DB
+router.delete('/:clientId/files/:fileId', async (req, res) => {
+    try {
+        const { fileId } = req.params;
+        console.log(`[API] Deleting client file: ${fileId}`);
+
+        await deleteClientFile(fileId);
+        res.json({ success: true });
+    } catch (error) {
+        console.error("[API] Error deleting client file:", error);
+        res.status(500).json({ error: "Failed to delete file" });
     }
 });
 

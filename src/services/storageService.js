@@ -104,3 +104,42 @@ export async function getClientFilesWithUrls(clientId, category = 'Entregable') 
 
     return filesWithUrls;
 }
+
+/**
+ * Deletes a file from GCS and removes its record from Prisma.
+ */
+export async function deleteClientFile(fileId) {
+    // 1. Get record to find GCS path
+    const fileRecord = await prisma.clientFile.findUnique({
+        where: { id: fileId }
+    });
+
+    if (!fileRecord) throw new Error("File record not found in database");
+
+    // 2. Delete from GCS
+    if (storage) {
+        try {
+            const bucket = storage.bucket(bucketName);
+            const gcsFile = bucket.file(fileRecord.bucketUrl);
+
+            // Check if file exists before deleting to avoid crash
+            const [exists] = await gcsFile.exists();
+            if (exists) {
+                await gcsFile.delete();
+                console.log(`[StorageService] File deleted from GCS: ${fileRecord.bucketUrl}`);
+            } else {
+                console.warn(`[StorageService] File not found in GCS, skipping GCS delete: ${fileRecord.bucketUrl}`);
+            }
+        } catch (error) {
+            console.error(`[StorageService] GCS Delete Error for ${fileRecord.bucketUrl}:`, error);
+            // We continue to delete from Prisma even if GCS delete fails or file is missing
+        }
+    }
+
+    // 3. Delete from Prisma
+    await prisma.clientFile.delete({
+        where: { id: fileId }
+    });
+
+    return { success: true };
+}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Download, CloudUpload, FileText, FileVideo, FileAudio, File, Loader2 } from 'lucide-react';
+import { Download, CloudUpload, FileText, FileVideo, FileAudio, File, Loader2, Trash2 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -12,6 +12,7 @@ const DeliverablesWidget = ({ clientId }) => {
     const [files, setFiles] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isUploading, setIsUploading] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(null); // stores fileId being deleted
 
     // Fetch Files from Backend
     const fetchFiles = useCallback(async () => {
@@ -59,6 +60,30 @@ const DeliverablesWidget = ({ clientId }) => {
             setIsUploading(false);
         }
     }, [clientId, fetchFiles]);
+
+    const handleDelete = async (e, fileId) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!window.confirm("¿Estás seguro de que quieres eliminar este entregable? El archivo se borrará permanentemente de Google Cloud Storage.")) {
+            return;
+        }
+
+        setIsDeleting(fileId);
+        const deleteToast = toast.loading("Eliminando archivo...");
+
+        try {
+            const baseUrl = getApiBaseUrl();
+            await axios.delete(`${baseUrl}/api/clients/${clientId}/files/${fileId}`);
+            toast.success("Archivo eliminado", { id: deleteToast });
+            fetchFiles(); // Refresh list
+        } catch (error) {
+            console.error("Error deleting file:", error);
+            toast.error("No se pudo eliminar el archivo", { id: deleteToast });
+        } finally {
+            setIsDeleting(null);
+        }
+    };
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
@@ -158,7 +183,21 @@ const DeliverablesWidget = ({ clientId }) => {
                                         <span>{formatDate(file.createdAt)}</span>
                                     </div>
                                 </div>
-                                <Download className="w-4 h-4 text-zinc-300 group-hover:text-emerald-500 transition-colors" />
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={(e) => handleDelete(e, file.id)}
+                                        disabled={isDeleting === file.id}
+                                        className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                                        title="Eliminar permanentemente"
+                                    >
+                                        {isDeleting === file.id ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="w-4 h-4" />
+                                        )}
+                                    </button>
+                                    <Download className="w-4 h-4 text-zinc-300 group-hover:text-emerald-500 transition-colors" />
+                                </div>
                             </a>
                         );
                     })
