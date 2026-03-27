@@ -1,6 +1,5 @@
 import { Storage } from '@google-cloud/storage';
 import prisma from '../lib/prisma.js';
-import path from 'path';
 
 let storage;
 const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
