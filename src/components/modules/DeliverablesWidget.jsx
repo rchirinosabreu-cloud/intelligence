@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Download, CloudUpload, FileText, FileVideo, FileAudio, File, Loader2, Trash2, Search, Eye, X, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react';
+import { Download, CloudUpload, FileText, FileVideo, FileAudio, File, Loader2, Trash2, Search, Eye, X, ChevronDown, ChevronRight, Maximize2, ArrowRight } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import SlideOver from '@/components/ui/SlideOver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -172,77 +173,92 @@ const DeliverablesWidget = ({ clientId }) => {
         setPreviewFile(file);
     };
 
-    const renderWidgetContent = (containerClass = "h-full overflow-hidden") => (
-        <div className={`flex flex-col ${containerClass}`}>
-            <div className="sticky top-0 z-20 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm pb-4 pt-1">
-                <div className="flex items-center justify-between mb-5 px-1">
-                    <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-emerald-500/10 rounded-lg">
-                            <Download className="w-4 h-4 text-emerald-500" />
+    const forceDownload = async (e, url, filename) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const toastId = toast.loading("Iniciando descarga...");
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+            toast.success("Descarga completada", { id: toastId });
+        } catch (error) {
+            console.error("Error downloading file:", error);
+            toast.error("Error al descargar el archivo", { id: toastId });
+            // Fallback to opening in new tab if blob fetch fails (e.g. CORS)
+            window.open(url, '_blank');
+        }
+    };
+
+    const renderWidgetContent = (isPanel = false) => (
+        <div className="flex flex-col h-full overflow-hidden">
+            <div className={isPanel ? "sticky top-0 z-20 bg-white dark:bg-zinc-900 pb-4" : "sticky top-0 z-20 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm pb-4 pt-1"}>
+                {!isPanel && (
+                    <div className="flex items-center justify-between mb-5 px-1">
+                        <div className="flex items-center gap-2">
+                            <div className="p-1.5 bg-emerald-500/10 rounded-lg">
+                                <Download className="w-4 h-4 text-emerald-500" />
+                            </div>
+                            <h3 className="font-semibold text-zinc-900 dark:text-white text-sm">
+                                Entregables
+                            </h3>
                         </div>
-                        <h3 className="font-semibold text-zinc-900 dark:text-white">
-                            {isMaximized ? 'Gestión de Entregables' : 'Entregables'}
-                        </h3>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <div className="relative">
-                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                            <input
-                                type="text"
-                                placeholder="Buscar archivo..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-8 pr-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 border-none rounded-lg text-xs focus:ring-1 focus:ring-emerald-500 w-40 transition-all outline-none"
-                            />
+                        <div className="flex items-center gap-3">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                                {isLoading ? '...' : `${files.length} Archivos`}
+                            </span>
                         </div>
-                        <span className="text-xs text-zinc-400 font-medium">
-                            {isLoading ? '...' : `${files.length} Archivos`}
-                        </span>
-                        {!isMaximized && (
-                            <button
-                                onClick={() => setIsMaximized(true)}
-                                className="p-1.5 text-zinc-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-all"
-                                title="Maximizar"
-                            >
-                                <Maximize2 className="w-4 h-4" />
-                            </button>
-                        )}
-                        {isMaximized && (
-                            <button
-                                onClick={() => setIsMaximized(false)}
-                                className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
-                                title="Cerrar"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        )}
                     </div>
-                </div>
+                )}
 
                 {/* Dropzone */}
                 <div
                     {...getRootProps()}
-                    className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all cursor-pointer group
+                    className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-all cursor-pointer group
                         ${isDragActive ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10' : 'border-zinc-200 dark:border-zinc-800 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10'}
                         ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                     <input {...getInputProps()} />
-                    <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                    <div className="p-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-full mb-2 group-hover:scale-110 transition-transform">
                         {isUploading ? (
-                            <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
+                            <Loader2 className="w-5 h-5 text-emerald-500 animate-spin" />
                         ) : (
-                            <CloudUpload className={`w-6 h-6 ${isDragActive ? 'text-emerald-500' : 'text-zinc-400 group-hover:text-emerald-500'}`} />
+                            <CloudUpload className={`w-5 h-5 ${isDragActive ? 'text-emerald-500' : 'text-zinc-400 group-hover:text-emerald-500'}`} />
                         )}
                     </div>
-                    <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                    <p className="text-xs font-bold text-zinc-700 dark:text-zinc-200">
                         {isUploading ? 'Procesando archivos...' : 'Arrastra entregables finales'}
                     </p>
-                    <p className="text-xs text-zinc-400 mt-1">o haz clic para explorar</p>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">o haz clic para explorar</p>
                 </div>
+
+                {isPanel && (
+                    <div className="mt-6 flex items-center justify-between gap-4">
+                        <div className="relative flex-1">
+                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar entregable por nombre..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 bg-zinc-100 dark:bg-zinc-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 transition-all outline-none"
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* File List grouped by month */}
-            <div className="flex-1 overflow-y-auto pr-1 space-y-4 pb-4 custom-scrollbar">
+            <div className={isPanel ? "flex-1 overflow-y-auto pr-1 space-y-6 pb-6 custom-scrollbar" : "flex-1 overflow-y-auto pr-1 space-y-4 pb-2 max-h-[400px] custom-scrollbar"}>
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-10 opacity-50">
                         <Loader2 className="w-6 h-6 animate-spin text-zinc-400" />
@@ -326,7 +342,7 @@ const DeliverablesWidget = ({ clientId }) => {
                                                         )}
                                                     </button>
                                                     <button
-                                                        onClick={() => window.open(file.url, '_blank', 'noopener,noreferrer')}
+                                                        onClick={(e) => forceDownload(e, file.url, file.name)}
                                                         className="p-2 text-zinc-300 hover:text-emerald-500 transition-colors"
                                                         title="Descargar"
                                                     >
@@ -345,55 +361,70 @@ const DeliverablesWidget = ({ clientId }) => {
 
             {/* Quick Look Modal */}
             {previewFile && (
-                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/60 backdrop-blur-2xl p-4 md:p-10 animate-in fade-in duration-300">
+                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/80 backdrop-blur-xl p-4 md:p-10 animate-in fade-in duration-300">
                     <div className="absolute inset-0" onClick={() => setPreviewFile(null)} />
 
-                    <div className="absolute top-6 right-6 flex items-center gap-3 z-[70]">
-                        <button
-                            onClick={() => window.open(previewFile.url, '_blank')}
-                            className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all shadow-xl backdrop-blur-md border border-white/10"
-                            title="Descargar"
-                        >
-                            <Download className="w-5 h-5" />
-                        </button>
-                        <button
-                            onClick={() => setPreviewFile(null)}
-                            className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all shadow-xl backdrop-blur-md border border-white/10"
-                            title="Cerrar"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
-                    </div>
+                    <div className="w-full h-full max-w-6xl flex flex-col z-[65] relative animate-in zoom-in-95 duration-300">
+                        {/* Action Bar */}
+                        <div className="flex items-center justify-between mb-4 bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl">
+                            <div className="flex items-center gap-3 pl-2">
+                                <div className="p-2 bg-emerald-500/20 rounded-lg">
+                                    {React.createElement(getFileIcon(previewFile.mimeType), { className: "w-4 h-4 text-emerald-500" })}
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-bold text-white truncate max-w-[300px]">{previewFile.name}</span>
+                                    <span className="text-[10px] text-zinc-400 font-medium uppercase tracking-tighter">{formatSize(previewFile.size)} • {formatDate(previewFile.createdAt)}</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={(e) => forceDownload(e, previewFile.url, previewFile.name)}
+                                    className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-xl text-white text-xs font-bold transition-all shadow-lg"
+                                >
+                                    <Download className="w-3.5 h-3.5" />
+                                    DESCARGAR
+                                </button>
+                                <button
+                                    onClick={() => setPreviewFile(null)}
+                                    className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all border border-white/10"
+                                    title="Cerrar"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
 
-                    <div className="w-full h-full flex items-center justify-center max-w-6xl max-h-[85vh] z-[65] relative animate-in zoom-in-95 duration-300">
-                        {previewFile.mimeType.startsWith('image/') && (
-                            <img
-                                src={previewFile.url}
-                                alt={previewFile.name}
-                                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-                            />
-                        )}
-                        {previewFile.mimeType.startsWith('video/') && (
-                            <video
-                                src={previewFile.url}
-                                controls
-                                autoPlay
-                                className="max-w-full max-h-full rounded-lg shadow-2xl"
-                            />
-                        )}
-                        {previewFile.mimeType === 'application/pdf' && (
-                            <iframe
-                                src={`${previewFile.url}#toolbar=0`}
-                                className="w-full h-full rounded-lg shadow-2xl bg-white border-none"
-                                title={previewFile.name}
-                            />
-                        )}
-                    </div>
-
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-6 py-2.5 bg-zinc-900/90 dark:bg-white/10 backdrop-blur-xl rounded-full border border-white/10 text-white text-sm font-medium shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-500">
-                        <span className="opacity-70">{formatSize(previewFile.size)}</span>
-                        <div className="w-1 h-1 rounded-full bg-white/20" />
-                        <span>{previewFile.name}</span>
+                        {/* Content Area */}
+                        <div className="flex-1 bg-white/5 dark:bg-zinc-900/50 rounded-2xl border border-white/5 overflow-hidden shadow-2xl relative">
+                            {previewFile.mimeType.startsWith('image/') && (
+                                <div className="w-full h-full flex items-center justify-center p-4">
+                                    <img
+                                        src={previewFile.url}
+                                        alt={previewFile.name}
+                                        className="max-w-full max-h-full object-contain rounded-lg shadow-xl"
+                                    />
+                                </div>
+                            )}
+                            {previewFile.mimeType.startsWith('video/') && (
+                                <div className="w-full h-full flex items-center justify-center bg-black">
+                                    <video
+                                        src={previewFile.url}
+                                        controls
+                                        autoPlay
+                                        className="max-w-full max-h-full"
+                                    />
+                                </div>
+                            )}
+                            {previewFile.mimeType === 'application/pdf' && (
+                                <div className="w-full h-full bg-zinc-100 dark:bg-zinc-800 flex flex-col">
+                                    <iframe
+                                        src={`${previewFile.url}#toolbar=0&navpanes=0&scrollbar=0`}
+                                        className="w-full h-full border-none bg-white"
+                                        title={previewFile.name}
+                                    />
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
@@ -401,19 +432,34 @@ const DeliverablesWidget = ({ clientId }) => {
     );
 
     return (
-        <Card className="w-full flex flex-col h-full min-h-[600px] max-h-[800px] p-6 relative overflow-hidden">
-            {renderWidgetContent()}
+        <>
+            <Card className="w-full flex flex-col h-full max-h-[550px] p-6 relative overflow-hidden group border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl transition-all hover:border-zinc-300 dark:hover:border-zinc-700">
+                {renderWidgetContent(false)}
 
-            {/* Maximized View Modal */}
-            {isMaximized && (
-                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[50] flex items-center justify-center bg-zinc-900/40 backdrop-blur-2xl p-4 md:p-8 animate-in fade-in duration-500">
-                    <div className="absolute inset-0 bg-zinc-950/10" onClick={() => setIsMaximized(false)} />
-                    <Card className="w-full h-full max-w-[95vw] max-h-[90vh] flex flex-col p-8 bg-white/90 dark:bg-zinc-900/90 shadow-2xl border-white/20 dark:border-zinc-800/50 overflow-hidden relative backdrop-blur-3xl animate-in zoom-in-95 duration-500">
-                        {renderWidgetContent("flex-1 overflow-hidden")}
-                    </Card>
+                <div className="mt-4 border-t border-zinc-100 dark:border-zinc-800 pt-4 shrink-0">
+                    <button
+                        onClick={() => setIsMaximized(true)}
+                        className="w-full py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2"
+                    >
+                        Gestionar todos los entregables
+                        <ArrowRight className="w-3 h-3" />
+                    </button>
                 </div>
-            )}
-        </Card>
+            </Card>
+
+            <SlideOver
+                open={isMaximized}
+                onOpenChange={setIsMaximized}
+                title="Gestión de Entregables"
+                description="Historial de archivos y zona de carga"
+                icon={<Download className="w-5 h-5 text-emerald-500" />}
+                iconBgColor="bg-emerald-500/10"
+            >
+                <div className="flex-1 overflow-hidden p-6 bg-zinc-50/50 dark:bg-zinc-900/20">
+                    {renderWidgetContent(true)}
+                </div>
+            </SlideOver>
+        </>
     );
 };
 
