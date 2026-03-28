@@ -102,6 +102,11 @@ router.get('/files', async (req, res) => {
 router.delete('/files/:fileId', async (req, res) => {
     const { fileId } = req.params;
 
+    // Permissions check: Only ADMIN and EDITOR can delete files
+    if (req.user?.role !== 'ADMIN' && req.user?.role !== 'EDITOR') {
+        return res.status(403).json({ error: "No tienes permisos para eliminar archivos" });
+    }
+
     try {
         const file = await prisma.clientFile.findUnique({
             where: { id: fileId }
@@ -114,7 +119,7 @@ router.delete('/files/:fileId', async (req, res) => {
         // 1. Delete from GCS
         await deleteFileFromGCS(file.bucketUrl);
 
-        // 2. Delete from database (Soft delete for safety, hard delete requested)
+        // 2. Delete from database (Hard delete as requested)
         await prisma.clientFile.delete({
             where: { id: fileId }
         });

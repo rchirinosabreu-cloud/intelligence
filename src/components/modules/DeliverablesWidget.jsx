@@ -356,18 +356,20 @@ const DeliverablesWidget = ({ clientId }) => {
                                                             <Eye className="w-4 h-4" />
                                                         </button>
                                                     )}
-                                                    <button
-                                                        onClick={(e) => handleDelete(e, file.id)}
-                                                        disabled={isDeleting === file.id}
-                                                        className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
-                                                        title="Eliminar permanentemente"
-                                                    >
-                                                        {isDeleting === file.id ? (
-                                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                                        ) : (
-                                                            <Trash2 className="w-4 h-4" />
-                                                        )}
-                                                    </button>
+                                                    {(JSON.parse(localStorage.getItem('currentUser'))?.role === 'ADMIN' || JSON.parse(localStorage.getItem('currentUser'))?.role === 'EDITOR') && (
+                                                        <button
+                                                            onClick={(e) => handleDelete(e, file.id)}
+                                                            disabled={isDeleting === file.id}
+                                                            className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                                                            title="Eliminar permanentemente"
+                                                        >
+                                                            {isDeleting === file.id ? (
+                                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                            ) : (
+                                                                <Trash2 className="w-4 h-4" />
+                                                            )}
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={(e) => forceDownload(e, file.id, file.name)}
                                                         className="p-2 text-zinc-300 hover:text-emerald-500 transition-colors"
