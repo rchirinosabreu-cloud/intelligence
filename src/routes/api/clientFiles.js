@@ -2,7 +2,6 @@ import express from 'express';
 import multer from 'multer';
 import { PrismaClient } from '@prisma/client';
 import { uploadClientFile, getSignedUrl, deleteFileFromGCS, getClientFileStream } from '../../services/storageService.js';
-import { authenticateToken } from '../../middleware/auth.js';
 
 const router = express.Router({ mergeParams: true });
 const prisma = new PrismaClient();
@@ -17,7 +16,7 @@ const upload = multer({
  * Upload a file for a specific client.
  * POST /api/clients/:clientId/files
  */
-router.post('/files', authenticateToken, upload.single('file'), async (req, res) => {
+router.post('/files', upload.single('file'), async (req, res) => {
     const { clientId } = req.params;
     const { category = 'Entregable' } = req.body;
     const file = req.file;
@@ -66,7 +65,7 @@ router.post('/files', authenticateToken, upload.single('file'), async (req, res)
  * Get all files for a client.
  * GET /api/clients/:clientId/files?category=Entregable
  */
-router.get('/files', authenticateToken, async (req, res) => {
+router.get('/files', async (req, res) => {
     const { clientId } = req.params;
     const { category } = req.query;
 
@@ -100,7 +99,7 @@ router.get('/files', authenticateToken, async (req, res) => {
  * Delete a specific file.
  * DELETE /api/clients/:clientId/files/:fileId
  */
-router.delete('/files/:fileId', authenticateToken, async (req, res) => {
+router.delete('/files/:fileId', async (req, res) => {
     const { fileId } = req.params;
 
     try {
@@ -131,7 +130,7 @@ router.delete('/files/:fileId', authenticateToken, async (req, res) => {
  * Backend Proxy Download for forcing Save As behavior
  * GET /api/clients/:clientId/files/:fileId/download
  */
-router.get('/files/:fileId/download', authenticateToken, async (req, res) => {
+router.get('/files/:fileId/download', async (req, res) => {
     const { fileId } = req.params;
 
     try {
