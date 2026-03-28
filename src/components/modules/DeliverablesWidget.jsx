@@ -173,19 +173,29 @@ const DeliverablesWidget = ({ clientId }) => {
         setPreviewFile(file);
     };
 
-    const forceDownload = async (e, url, filename) => {
+    const forceDownload = async (e, fileId, filename) => {
         e.preventDefault();
         e.stopPropagation();
 
         const toastId = toast.loading("Iniciando descarga...");
         try {
-            const response = await fetch(url);
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+
+            const response = await fetch(`${baseUrl}/api/clients/${clientId}/files/${fileId}/download`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) throw new Error("Download failed");
+
             const blob = await response.blob();
             const blobUrl = window.URL.createObjectURL(blob);
 
             const link = document.createElement('a');
             link.href = blobUrl;
-            link.download = filename;
+            link.setAttribute('download', filename);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -194,8 +204,6 @@ const DeliverablesWidget = ({ clientId }) => {
         } catch (error) {
             console.error("Error downloading file:", error);
             toast.error("Error al descargar el archivo", { id: toastId });
-            // Fallback to opening in new tab if blob fetch fails (e.g. CORS)
-            window.open(url, '_blank');
         }
     };
 
@@ -216,6 +224,13 @@ const DeliverablesWidget = ({ clientId }) => {
                             <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
                                 {isLoading ? '...' : `${files.length} Archivos`}
                             </span>
+                            <button
+                                onClick={() => setIsMaximized(true)}
+                                className="p-1.5 text-zinc-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-all"
+                                title="Gestionar historial"
+                            >
+                                <Maximize2 className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
                 )}
@@ -258,7 +273,7 @@ const DeliverablesWidget = ({ clientId }) => {
             </div>
 
             {/* File List grouped by month */}
-            <div className={isPanel ? "flex-1 overflow-y-auto pr-1 space-y-6 pb-6 custom-scrollbar" : "flex-1 overflow-y-auto pr-1 space-y-4 pb-2 max-h-[400px] custom-scrollbar"}>
+            <div className={isPanel ? "flex-1 overflow-y-auto pr-1 space-y-6 pb-6 custom-scrollbar" : "flex-1 overflow-y-auto pr-1 space-y-4 pb-2 h-[400px] custom-scrollbar"}>
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-10 opacity-50">
                         <Loader2 className="w-6 h-6 animate-spin text-zinc-400" />
@@ -342,7 +357,7 @@ const DeliverablesWidget = ({ clientId }) => {
                                                         )}
                                                     </button>
                                                     <button
-                                                        onClick={(e) => forceDownload(e, file.url, file.name)}
+                                                        onClick={(e) => forceDownload(e, file.id, file.name)}
                                                         className="p-2 text-zinc-300 hover:text-emerald-500 transition-colors"
                                                         title="Descargar"
                                                     >
@@ -378,7 +393,7 @@ const DeliverablesWidget = ({ clientId }) => {
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
-                                    onClick={(e) => forceDownload(e, previewFile.url, previewFile.name)}
+                                    onClick={(e) => forceDownload(e, previewFile.id, previewFile.name)}
                                     className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-xl text-white text-xs font-bold transition-all shadow-lg"
                                 >
                                     <Download className="w-3.5 h-3.5" />
@@ -418,7 +433,7 @@ const DeliverablesWidget = ({ clientId }) => {
                             {previewFile.mimeType === 'application/pdf' && (
                                 <div className="w-full h-full bg-zinc-100 dark:bg-zinc-800 flex flex-col">
                                     <iframe
-                                        src={`${previewFile.url}#toolbar=0&navpanes=0&scrollbar=0`}
+                                        src={`${previewFile.url}#toolbar=0&navpanes=0&view=FitH`}
                                         className="w-full h-full border-none bg-white"
                                         title={previewFile.name}
                                     />
