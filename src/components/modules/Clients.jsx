@@ -418,8 +418,8 @@ const Clients = () => {
                               <ExternalLink className="w-3 h-3" />
                               Space
                           </span>
-                          {client._count?.files > 0 && (
-                              <span>• {client._count.files} archivos</span>
+                          {client._count?.clientFiles > 0 && (
+                              <span>• {client._count.clientFiles} archivos</span>
                           )}
                           {client._count?.links > 0 && (
                               <span>• {client._count.links} Links</span>
