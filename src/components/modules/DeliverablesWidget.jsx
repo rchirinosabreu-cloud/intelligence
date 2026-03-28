@@ -172,10 +172,10 @@ const DeliverablesWidget = ({ clientId }) => {
         setPreviewFile(file);
     };
 
-    const renderWidgetContent = (containerClass = "h-full") => (
+    const renderWidgetContent = (containerClass = "h-full overflow-hidden") => (
         <div className={`flex flex-col ${containerClass}`}>
-            <div className="sticky top-0 z-20 bg-white dark:bg-zinc-900 pb-4 pt-1">
-                <div className="flex items-center justify-between mb-5">
+            <div className="sticky top-0 z-20 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm pb-4 pt-1">
+                <div className="flex items-center justify-between mb-5 px-1">
                     <div className="flex items-center gap-2">
                         <div className="p-1.5 bg-emerald-500/10 rounded-lg">
                             <Download className="w-4 h-4 text-emerald-500" />
@@ -345,15 +345,27 @@ const DeliverablesWidget = ({ clientId }) => {
 
             {/* Quick Look Modal */}
             {previewFile && (
-                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-white/40 dark:bg-zinc-900/40 backdrop-blur-3xl p-4 animate-in fade-in duration-200">
-                    <button
-                        onClick={() => setPreviewFile(null)}
-                        className="absolute top-6 right-6 p-2 bg-zinc-800/10 hover:bg-zinc-800/20 dark:bg-white/10 dark:hover:bg-white/20 rounded-full text-zinc-800 dark:text-white transition-all z-[70]"
-                    >
-                        <X className="w-6 h-6" />
-                    </button>
+                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/60 backdrop-blur-2xl p-4 md:p-10 animate-in fade-in duration-300">
+                    <div className="absolute inset-0" onClick={() => setPreviewFile(null)} />
 
-                    <div className="w-full h-full flex items-center justify-center max-w-6xl max-h-[90vh]">
+                    <div className="absolute top-6 right-6 flex items-center gap-3 z-[70]">
+                        <button
+                            onClick={() => window.open(previewFile.url, '_blank')}
+                            className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all shadow-xl backdrop-blur-md border border-white/10"
+                            title="Descargar"
+                        >
+                            <Download className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={() => setPreviewFile(null)}
+                            className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all shadow-xl backdrop-blur-md border border-white/10"
+                            title="Cerrar"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    <div className="w-full h-full flex items-center justify-center max-w-6xl max-h-[85vh] z-[65] relative animate-in zoom-in-95 duration-300">
                         {previewFile.mimeType.startsWith('image/') && (
                             <img
                                 src={previewFile.url}
@@ -378,8 +390,10 @@ const DeliverablesWidget = ({ clientId }) => {
                         )}
                     </div>
 
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 bg-zinc-900/80 dark:bg-white/10 backdrop-blur-md rounded-full border border-white/20 text-white text-sm">
-                        {previewFile.name}
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-6 py-2.5 bg-zinc-900/90 dark:bg-white/10 backdrop-blur-xl rounded-full border border-white/10 text-white text-sm font-medium shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-500">
+                        <span className="opacity-70">{formatSize(previewFile.size)}</span>
+                        <div className="w-1 h-1 rounded-full bg-white/20" />
+                        <span>{previewFile.name}</span>
                     </div>
                 </div>
             )}
@@ -387,14 +401,15 @@ const DeliverablesWidget = ({ clientId }) => {
     );
 
     return (
-        <Card className="w-full flex flex-col h-full min-h-[500px] p-6 relative">
+        <Card className="w-full flex flex-col h-full min-h-[600px] max-h-[800px] p-6 relative overflow-hidden">
             {renderWidgetContent()}
 
             {/* Maximized View Modal */}
             {isMaximized && (
-                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[50] flex items-center justify-center bg-zinc-900/40 backdrop-blur-xl p-4 md:p-8 animate-in fade-in duration-300">
-                    <Card className="w-full h-full max-w-7xl flex flex-col p-8 bg-white dark:bg-zinc-900 shadow-2xl border-zinc-200 dark:border-zinc-800 overflow-hidden">
-                        {renderWidgetContent("flex-1")}
+                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[50] flex items-center justify-center bg-zinc-900/40 backdrop-blur-2xl p-4 md:p-8 animate-in fade-in duration-500">
+                    <div className="absolute inset-0 bg-zinc-950/10" onClick={() => setIsMaximized(false)} />
+                    <Card className="w-full h-full max-w-[95vw] max-h-[90vh] flex flex-col p-8 bg-white/90 dark:bg-zinc-900/90 shadow-2xl border-white/20 dark:border-zinc-800/50 overflow-hidden relative backdrop-blur-3xl animate-in zoom-in-95 duration-500">
+                        {renderWidgetContent("flex-1 overflow-hidden")}
                     </Card>
                 </div>
             )}
