@@ -249,7 +249,7 @@ const DeliverablesWidget = ({ clientId }) => {
                 <div
                     {...getRootProps()}
                     className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-all cursor-pointer group
-                        ${isDragActive ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10' : 'border-zinc-200 dark:border-zinc-800 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10'}
+                        ${isDragActive ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10' : 'border-zinc-200 dark:border-zinc-800 bg-transparent hover:border-emerald-500/50 hover:bg-zinc-50/30 dark:hover:bg-emerald-900/10'}
                         ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                     <input {...getInputProps()} />
@@ -284,7 +284,7 @@ const DeliverablesWidget = ({ clientId }) => {
 
             <div className={cn(
                 "flex-1 overflow-y-auto pr-1 space-y-4 custom-scrollbar overscroll-contain",
-                isPanel ? "space-y-6 pb-6" : "pb-2 h-[400px]"
+                isPanel ? "space-y-6 pb-6" : "pb-2 max-h-[300px]"
             )}>
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-10 opacity-50">

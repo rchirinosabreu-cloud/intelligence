@@ -92,7 +92,15 @@ export const getSignedUrl = async (gcsPath, expiresInMinutes = 60) => {
     if (!storageClient) return null;
 
     try {
-        const [url] = await storageClient.bucket(bucketName).file(gcsPath).getSignedUrl({
+        const file = storageClient.bucket(bucketName).file(gcsPath);
+
+        // Check if file exists to prevent "ghost" records
+        const [exists] = await file.exists();
+        if (!exists) {
+            return { error: 'NOT_FOUND' };
+        }
+
+        const [url] = await file.getSignedUrl({
             action: 'read',
             expires: Date.now() + 1000 * 60 * expiresInMinutes,
         });
