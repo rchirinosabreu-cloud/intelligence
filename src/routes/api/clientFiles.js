@@ -79,16 +79,27 @@ router.get('/files', async (req, res) => {
             orderBy: { createdAt: 'desc' }
         });
 
-        // Regenerate signed URLs for all files
-        const filesWithUrls = await Promise.all(files.map(async (file) => {
+        // Regenerate signed URLs for all files and filter out ghosts
+        const results = await Promise.all(files.map(async (file) => {
             const signedUrl = await getSignedUrl(file.bucketUrl);
+
+            // Auto-healing: If file is NOT_FOUND in GCS, delete record from database
+            if (signedUrl && typeof signedUrl === 'object' && signedUrl.error === 'NOT_FOUND') {
+                console.log(`Auto-healing: Deleting ghost file record ${file.id} (${file.name})`);
+                await prisma.clientFile.delete({ where: { id: file.id } });
+                return null;
+            }
+
             return {
                 ...file,
                 url: signedUrl
             };
         }));
 
-        res.json(filesWithUrls);
+        // Filter out null entries (deleted ghosts)
+        const validFiles = results.filter(f => f !== null);
+
+        res.json(validFiles);
     } catch (error) {
         console.error("Error fetching client files:", error);
         res.status(500).json({ error: "Error retrieving files" });
@@ -154,10 +165,19 @@ router.get('/files/:fileId/download', async (req, res) => {
         // Stream from GCS to response
         const gcsStream = getClientFileStream(file.bucketUrl);
 
-        gcsStream.on('error', (err) => {
+        gcsStream.on('error', async (err) => {
             console.error("Error streaming from GCS:", err);
+
+            // If the file is not found (404), auto-heal database
+            if (err.code === 404) {
+                console.log(`Auto-healing on download: Deleting ghost record ${file.id}`);
+                await prisma.clientFile.delete({ where: { id: file.id } }).catch(() => {});
+            }
+
             if (!res.headersSent) {
-                res.status(500).json({ error: "Error downloading file from storage" });
+                res.status(err.code === 404 ? 404 : 500).json({
+                    error: err.code === 404 ? "File no longer exists in storage" : "Error downloading file"
+                });
             }
         });
 
