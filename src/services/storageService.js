@@ -142,3 +142,27 @@ export async function deleteClientFile(fileId) {
 
     return { success: true };
 }
+
+/**
+ * Downloads a file from GCS as a stream.
+ */
+export async function getClientFileStream(fileId) {
+    const fileRecord = await prisma.clientFile.findUnique({
+        where: { id: fileId }
+    });
+
+    if (!fileRecord) throw new Error("File record not found");
+    if (!storage) throw new Error("Storage not initialized");
+
+    const bucket = storage.bucket(bucketName);
+    const gcsFile = bucket.file(fileRecord.bucketUrl);
+
+    const [exists] = await gcsFile.exists();
+    if (!exists) throw new Error("File not found in GCS");
+
+    return {
+        stream: gcsFile.createReadStream(),
+        name: fileRecord.name,
+        mimeType: fileRecord.mimeType
+    };
+}

@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { uploadClientFile, getClientFilesWithUrls, deleteClientFile } from '../../services/storageService.js';
+import { uploadClientFile, getClientFilesWithUrls, deleteClientFile, getClientFileStream } from '../../services/storageService.js';
 
 const router = express.Router();
 const upload = multer({
@@ -55,6 +55,22 @@ router.delete('/:clientId/files/:fileId', async (req, res) => {
     } catch (error) {
         console.error("[API] Error deleting client file:", error);
         res.status(500).json({ error: "Failed to delete file" });
+    }
+});
+
+// GET /api/clients/:clientId/files/:fileId/download - Proxy Download from GCS
+router.get('/:clientId/files/:fileId/download', async (req, res) => {
+    try {
+        const { fileId } = req.params;
+        const { stream, name, mimeType } = await getClientFileStream(fileId);
+
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(name)}"`);
+
+        stream.pipe(res);
+    } catch (error) {
+        console.error("[API] Error downloading client file:", error);
+        res.status(500).json({ error: "Failed to download file" });
     }
 });
 
