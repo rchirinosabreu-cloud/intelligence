@@ -41,7 +41,7 @@ export async function getClientByIdentifier(identifier) {
       include: {
         _count: {
             select: {
-              files: true,
+              clientFiles: true,
               links: true,
               tasks: true
             }
@@ -65,7 +65,7 @@ export async function getClients() {
       include: {
         _count: {
             select: {
-              files: true,
+              clientFiles: true,
               links: true,
               tasks: true
             }
