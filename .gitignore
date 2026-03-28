@@ -31,3 +31,7 @@ dist-ssr
 /src/generated/prisma
 prisma/dev.db
 prisma/dev.db-journal
+dev.db
+test-results/
+verification/
+screenshots/

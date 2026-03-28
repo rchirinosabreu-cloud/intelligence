@@ -1,168 +1,131 @@
 import { Storage } from '@google-cloud/storage';
-import prisma from '../lib/prisma.js';
+import path from 'path';
 
 let storage;
-const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
-
-try {
-    if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
-        const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
-        if (credentials.private_key) {
-            credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
-        }
-        storage = new Storage({
-            projectId: process.env.GOOGLE_CLOUD_PROJECT || credentials.project_id,
-            credentials
-        });
-        console.log(`[StorageService] GCS Client initialized for bucket: ${bucketName}`);
-    } else {
-        console.warn("[StorageService] GOOGLE_APPLICATION_CREDENTIALS_JSON is missing. Storage functionality will be limited.");
-    }
-} catch (error) {
-    console.error("[StorageService] Failed to initialize GCS client:", error);
-}
 
 /**
- * Uploads a file to GCS and saves metadata in Prisma.
+ * Initializes the GCS client.
+ * Requires GOOGLE_APPLICATION_CREDENTIALS_JSON, GOOGLE_CLOUD_PROJECT, and GCS_BUCKET_NAME.
  */
-export async function uploadClientFile(clientId, file, category = 'Entregable') {
-    if (!storage) throw new Error("Storage client not initialized");
+const getStorageClient = () => {
+    if (storage) return storage;
 
-    // 1. Get client name for virtual folder
-    const client = await prisma.client.findUnique({
-        where: { id: clientId },
-        select: { name: true }
-    });
+    const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT;
 
-    if (!client) throw new Error("Client not found");
+    if (!credentialsJson || !projectId) {
+        console.warn("GCS Credentials or Project ID missing. Storage service will fail.");
+        return null;
+    }
 
-    const bucket = storage.bucket(bucketName);
-    const gcsDestination = `${client.name}/${Date.now()}_${file.originalname}`;
-    const gcsFile = bucket.file(gcsDestination);
+    try {
+        const credentials = JSON.parse(credentialsJson);
+        storage = new Storage({
+            projectId,
+            credentials,
+        });
+        return storage;
+    } catch (error) {
+        console.error("Error initializing GCS Storage client:", error);
+        return null;
+    }
+};
 
-    // 2. Upload to GCS
-    await gcsFile.save(file.buffer, {
+/**
+ * Uploads a file to GCS into a virtual folder named after the client.
+ * @param {Object} file - The file object from multer (memoryStorage).
+ * @param {string} clientName - The name of the client to use as folder name.
+ * @returns {Promise<Object>} - The uploaded file details (url, name, size).
+ */
+export const uploadClientFile = async (file, clientName) => {
+    const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
+    const storageClient = getStorageClient();
+
+    if (!storageClient) {
+        throw new Error("Storage client not initialized");
+    }
+
+    const bucket = storageClient.bucket(bucketName);
+
+    // Create a clean folder name from client name
+    const folderName = clientName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const timestamp = Date.now();
+    const gcsFileName = `${folderName}/${timestamp}_${file.originalname}`;
+
+    const blob = bucket.file(gcsFileName);
+    const blobStream = blob.createWriteStream({
+        resumable: false,
         metadata: {
             contentType: file.mimetype,
         },
     });
 
-    console.log(`[StorageService] File uploaded to GCS: ${gcsDestination}`);
-
-    // 3. Save to Prisma
-    const clientFile = await prisma.clientFile.create({
-        data: {
-            clientId,
-            name: file.originalname,
-            bucketUrl: gcsDestination, // We store the GCS path/key
-            category,
-            size: file.size,
-            mimeType: file.mimetype
-        }
-    });
-
-    return clientFile;
-}
-
-/**
- * Lists files for a client and generates Signed URLs.
- */
-export async function getClientFilesWithUrls(clientId, category = 'Entregable') {
-    const files = await prisma.clientFile.findMany({
-        where: {
-            clientId,
-            category
-        },
-        orderBy: { createdAt: 'desc' }
-    });
-
-    if (!storage) {
-        return files.map(f => ({ ...f, url: '#' }));
-    }
-
-    const bucket = storage.bucket(bucketName);
-
-    // Generate signed URLs for each file
-    const filesWithUrls = await Promise.all(files.map(async (fileRecord) => {
-        try {
-            const gcsFile = bucket.file(fileRecord.bucketUrl);
-            const [url] = await gcsFile.getSignedUrl({
-                version: 'v4',
+    return new Promise((resolve, reject) => {
+        blobStream.on('error', (err) => reject(err));
+        blobStream.on('finish', async () => {
+            // Generate a signed URL for secure access (expires in 1 hour by default)
+            const [url] = await blob.getSignedUrl({
                 action: 'read',
-                expires: Date.now() + 60 * 60 * 1000, // 1 hour
+                expires: Date.now() + 1000 * 60 * 60, // 1 hour
             });
-            return {
-                ...fileRecord,
-                url
-            };
-        } catch (error) {
-            console.error(`[StorageService] Error signing URL for ${fileRecord.bucketUrl}:`, error);
-            return { ...fileRecord, url: null, error: 'Signed URL failed' };
-        }
-    }));
 
-    return filesWithUrls;
-}
+            resolve({
+                url,
+                gcsPath: gcsFileName,
+                name: file.originalname,
+                size: file.size,
+                mimeType: file.mimetype
+            });
+        });
+        blobStream.end(file.buffer);
+    });
+};
 
 /**
- * Deletes a file from GCS and removes its record from Prisma.
+ * Generates a fresh signed URL for an existing GCS path.
+ * @param {string} gcsPath - The virtual path in the bucket.
+ * @param {number} expiresInMinutes - Expiration time.
  */
-export async function deleteClientFile(fileId) {
-    // 1. Get record to find GCS path
-    const fileRecord = await prisma.clientFile.findUnique({
-        where: { id: fileId }
-    });
+export const getSignedUrl = async (gcsPath, expiresInMinutes = 60) => {
+    const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
+    const storageClient = getStorageClient();
+    if (!storageClient) return null;
 
-    if (!fileRecord) throw new Error("File record not found in database");
-
-    // 2. Delete from GCS
-    if (storage) {
-        try {
-            const bucket = storage.bucket(bucketName);
-            const gcsFile = bucket.file(fileRecord.bucketUrl);
-
-            // Check if file exists before deleting to avoid crash
-            const [exists] = await gcsFile.exists();
-            if (exists) {
-                await gcsFile.delete();
-                console.log(`[StorageService] File deleted from GCS: ${fileRecord.bucketUrl}`);
-            } else {
-                console.warn(`[StorageService] File not found in GCS, skipping GCS delete: ${fileRecord.bucketUrl}`);
-            }
-        } catch (error) {
-            console.error(`[StorageService] GCS Delete Error for ${fileRecord.bucketUrl}:`, error);
-            // We continue to delete from Prisma even if GCS delete fails or file is missing
-        }
+    try {
+        const [url] = await storageClient.bucket(bucketName).file(gcsPath).getSignedUrl({
+            action: 'read',
+            expires: Date.now() + 1000 * 60 * expiresInMinutes,
+        });
+        return url;
+    } catch (error) {
+        console.error("Error generating signed URL:", error);
+        return null;
     }
-
-    // 3. Delete from Prisma
-    await prisma.clientFile.delete({
-        where: { id: fileId }
-    });
-
-    return { success: true };
-}
+};
 
 /**
- * Downloads a file from GCS as a stream.
+ * Deletes a file from GCS.
  */
-export async function getClientFileStream(fileId) {
-    const fileRecord = await prisma.clientFile.findUnique({
-        where: { id: fileId }
-    });
+export const deleteFileFromGCS = async (gcsPath) => {
+    const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
+    const storageClient = getStorageClient();
+    if (!storageClient) return;
 
-    if (!fileRecord) throw new Error("File record not found");
-    if (!storage) throw new Error("Storage not initialized");
+    try {
+        await storageClient.bucket(bucketName).file(gcsPath).delete();
+    } catch (error) {
+        console.error(`Error deleting file ${gcsPath} from GCS:`, error);
+        // We don't throw here to allow database cleanup even if GCS delete fails (e.g. file already gone)
+    }
+};
 
-    const bucket = storage.bucket(bucketName);
-    const gcsFile = bucket.file(fileRecord.bucketUrl);
+/**
+ * Returns a readable stream for a GCS file.
+ */
+export const getClientFileStream = (gcsPath) => {
+    const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
+    const storageClient = getStorageClient();
+    if (!storageClient) throw new Error("Storage client not initialized");
 
-    const [exists] = await gcsFile.exists();
-    if (!exists) throw new Error("File not found in GCS");
-
-    return {
-        stream: gcsFile.createReadStream(),
-        name: fileRecord.name,
-        mimeType: fileRecord.mimeType
-    };
-}
+    return storageClient.bucket(bucketName).file(gcsPath).createReadStream();
+};

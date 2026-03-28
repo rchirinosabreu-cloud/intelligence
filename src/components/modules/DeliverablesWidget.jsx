@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Download, CloudUpload, FileText, FileVideo, FileAudio, File, Loader2, Trash2, Search, Eye, X, ChevronDown, ChevronRight, Maximize2, ArrowRight } from 'lucide-react';
+import { Download, CloudUpload, FileText, FileVideo, FileAudio, File, Loader2, Trash2, Search, Eye, X, ChevronDown, ChevronRight, Maximize2, ArrowRight, Image } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
+import { cn } from '@/lib/utils';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import SlideOver from '@/components/ui/SlideOver';
@@ -24,7 +25,10 @@ const DeliverablesWidget = ({ clientId }) => {
         if (!clientId) return;
         try {
             const baseUrl = getApiBaseUrl();
-            const response = await axios.get(`${baseUrl}/api/clients/${clientId}/files?category=Entregable`);
+            const token = localStorage.getItem('authToken');
+            const response = await axios.get(`${baseUrl}/api/clients/${clientId}/files?category=Entregable`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             setFiles(response.data);
         } catch (error) {
             console.error("Error fetching client files:", error);
@@ -47,13 +51,17 @@ const DeliverablesWidget = ({ clientId }) => {
 
         try {
             const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
             for (const file of acceptedFiles) {
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('category', 'Entregable');
 
                 await axios.post(`${baseUrl}/api/clients/${clientId}/files`, formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                        'Authorization': `Bearer ${token}`
+                    }
                 });
             }
             toast.success("Archivos subidos con éxito", { id: uploadToast });
@@ -79,7 +87,10 @@ const DeliverablesWidget = ({ clientId }) => {
 
         try {
             const baseUrl = getApiBaseUrl();
-            await axios.delete(`${baseUrl}/api/clients/${clientId}/files/${fileId}`);
+            const token = localStorage.getItem('authToken');
+            await axios.delete(`${baseUrl}/api/clients/${clientId}/files/${fileId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             toast.success("Archivo eliminado", { id: deleteToast });
             fetchFiles(); // Refresh list
         } catch (error) {
@@ -101,7 +112,7 @@ const DeliverablesWidget = ({ clientId }) => {
         if (mimeType.includes('pdf')) return FileText;
         if (mimeType.includes('video')) return FileVideo;
         if (mimeType.includes('audio')) return FileAudio;
-        if (mimeType.includes('image')) return File; // You could add an Image icon
+        if (mimeType.includes('image')) return Image;
         return File;
     };
 
@@ -124,29 +135,29 @@ const DeliverablesWidget = ({ clientId }) => {
     };
 
     // Filter and Group Logic
-    const filteredFiles = files.filter(file =>
-        file.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const filteredFiles = useMemo(() =>
+        files.filter(file => file.name.toLowerCase().includes(searchQuery.toLowerCase())),
+        [files, searchQuery]
     );
 
-    const groupedFiles = filteredFiles.reduce((acc, file) => {
-        const monthYear = formatMonthYear(file.createdAt);
-        if (!acc[monthYear]) acc[monthYear] = [];
-        acc[monthYear].push(file);
-        return acc;
-    }, {});
+    const groupedFiles = useMemo(() => {
+        return filteredFiles.reduce((acc, file) => {
+            const monthYear = formatMonthYear(file.createdAt);
+            if (!acc[monthYear]) acc[monthYear] = [];
+            acc[monthYear].push(file);
+            return acc;
+        }, {});
+    }, [filteredFiles]);
 
-    const sortedMonths = Object.keys(groupedFiles).sort((a, b) => {
-        // Simple string parsing for sorting months back to date is tricky in Spanish,
-        // better use the first file's createdAt in each group
-        return new Date(groupedFiles[b][0].createdAt) - new Date(groupedFiles[a][0].createdAt);
-    });
+    const sortedMonths = useMemo(() => {
+        return Object.keys(groupedFiles).sort((a, b) => {
+            return new Date(groupedFiles[b][0].createdAt) - new Date(groupedFiles[a][0].createdAt);
+        });
+    }, [groupedFiles]);
 
     useEffect(() => {
         if (files.length > 0) {
-            const currentMonth = formatMonthYear(new Date());
             const initialExpanded = {};
-
-            // Expand current month OR expand all if searching
             if (searchQuery.trim() !== '') {
                 sortedMonths.forEach(m => initialExpanded[m] = true);
             } else if (sortedMonths.length > 0) {
@@ -154,7 +165,7 @@ const DeliverablesWidget = ({ clientId }) => {
             }
             setExpandedMonths(initialExpanded);
         }
-    }, [files, searchQuery, sortedMonths.length]);
+    }, [files, searchQuery, sortedMonths]);
 
     const toggleMonth = (month) => {
         setExpandedMonths(prev => ({ ...prev, [month]: !prev[month] }));
@@ -235,7 +246,6 @@ const DeliverablesWidget = ({ clientId }) => {
                     </div>
                 )}
 
-                {/* Dropzone */}
                 <div
                     {...getRootProps()}
                     className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-all cursor-pointer group
@@ -272,8 +282,10 @@ const DeliverablesWidget = ({ clientId }) => {
                 )}
             </div>
 
-            {/* File List grouped by month */}
-            <div className={isPanel ? "flex-1 overflow-y-auto pr-1 space-y-6 pb-6 custom-scrollbar" : "flex-1 overflow-y-auto pr-1 space-y-4 pb-2 h-[400px] custom-scrollbar"}>
+            <div className={cn(
+                "flex-1 overflow-y-auto pr-1 space-y-4 custom-scrollbar overscroll-contain",
+                isPanel ? "space-y-6 pb-6" : "pb-2 h-[400px]"
+            )}>
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-10 opacity-50">
                         <Loader2 className="w-6 h-6 animate-spin text-zinc-400" />
@@ -374,13 +386,10 @@ const DeliverablesWidget = ({ clientId }) => {
                 )}
             </div>
 
-            {/* Quick Look Modal */}
             {previewFile && (
                 <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/80 backdrop-blur-xl p-4 md:p-10 animate-in fade-in duration-300">
                     <div className="absolute inset-0" onClick={() => setPreviewFile(null)} />
-
                     <div className="w-full h-full max-w-6xl flex flex-col z-[65] relative animate-in zoom-in-95 duration-300">
-                        {/* Action Bar */}
                         <div className="flex items-center justify-between mb-4 bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl">
                             <div className="flex items-center gap-3 pl-2">
                                 <div className="p-2 bg-emerald-500/20 rounded-lg">
@@ -409,7 +418,6 @@ const DeliverablesWidget = ({ clientId }) => {
                             </div>
                         </div>
 
-                        {/* Content Area */}
                         <div className="flex-1 bg-white/5 dark:bg-zinc-900/50 rounded-2xl border border-white/5 overflow-hidden shadow-2xl relative">
                             {previewFile.mimeType.startsWith('image/') && (
                                 <div className="w-full h-full flex items-center justify-center p-4">
@@ -450,7 +458,6 @@ const DeliverablesWidget = ({ clientId }) => {
         <>
             <Card className="w-full flex flex-col h-full max-h-[550px] p-6 relative overflow-hidden group border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl transition-all hover:border-zinc-300 dark:hover:border-zinc-700">
                 {renderWidgetContent(false)}
-
                 <div className="mt-4 border-t border-zinc-100 dark:border-zinc-800 pt-4 shrink-0">
                     <button
                         onClick={() => setIsMaximized(true)}

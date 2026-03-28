@@ -74,7 +74,7 @@ model Client {
 
   // Relaciones
   brandAssets BrandAsset[]
-  files       ClientFile[]
+  clientFiles ClientFile[]
   links       ClientLink[]
   tasks       ClientTask[]
   announcements ClientAnnouncement[]
@@ -108,7 +108,7 @@ model ContentPlan {
   updatedAt DateTime          @updatedAt
   deletedAt DateTime?
 
-  items     ContentItem[]
+  contentItems     ContentItem[]
 }
 
 model ContentItem {
@@ -248,13 +248,15 @@ model BrandAsset {
 model ClientFile {
   id          String   @id @default(uuid())
   clientId    String
-  client      Client   @relation(fields: [clientId], references: [id])
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   name        String   // Nombre visible
-  bucketUrl   String   // URL del archivo en Railway/S3 (GCS path)
-  category    String   // 'Legal', 'Deliverable', 'Asset'
-  size        Int?     // Peso en bytes
-  mimeType    String?  // Tipo MIME (ej. 'application/pdf')
+  bucketUrl   String   // URL del archivo en Railway/S3
+  category    String   @default("Entregable")
+  size        Int?     // in bytes
+  mimeType    String?
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
 }
 
 // Enlaces Clave del Cliente (Max 5 por cliente)
