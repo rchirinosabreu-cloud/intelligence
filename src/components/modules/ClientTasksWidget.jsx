@@ -1,9 +1,29 @@
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
-import { CheckSquare, Plus, CheckCircle2, Circle, Calendar, Loader2, Trash2, MessageSquare } from 'lucide-react';
+import {
+    CheckSquare,
+    Plus,
+    CheckCircle2,
+    Circle,
+    Calendar,
+    Loader2,
+    Trash2,
+    MessageSquare,
+    Send
+} from 'lucide-react';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/components/ui/dialog";
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { useToast } from '@/components/ui/use-toast';
 import TaskCreateModal from './TaskCreateModal';
 import TaskEditModal from './TaskEditModal';
 
@@ -19,90 +39,136 @@ const TEAM = [
 ];
 
 const ClientTasksWidget = ({ clientId }) => {
-    const [tasks, setTasks] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
+    const { toast } = useToast();
 
-    // Modal state
+    // Modal states
     const [isCreating, setIsCreating] = useState(false);
     const [editingTask, setEditingTask] = useState(null);
-    const [clientsList, setClientsList] = useState([]); // Needed for the modal dropdowns
+    const [deletingTask, setDeletingTask] = useState(null);
+    const [deleteReason, setDeleteReason] = useState('');
+    const [isSubmittingDelete, setIsSubmittingDelete] = useState(false);
 
-    // Fetch clients to pass to modals
-    const fetchClients = async () => {
-        try {
-            const baseUrl = getApiBaseUrl();
-            const response = await fetch(`${baseUrl}/api/db/clients`);
-            if (response.ok) {
-                const data = await response.json();
-                setClientsList(data);
-            }
-        } catch (err) {
-            console.error("Error fetching clients:", err);
-        }
-    };
-
-    const fetchTasks = async () => {
-        if (!clientId) return;
-        try {
-            setLoading(true);
+    // --- REACT QUERY: TASKS ---
+    const {
+        data: tasks = [],
+        isLoading: loadingTasks,
+        refetch: refetchTasks
+    } = useQuery({
+        queryKey: ['nativeTasks', clientId],
+        queryFn: async () => {
+            if (!clientId) return [];
             const baseUrl = getApiBaseUrl();
             const res = await fetch(`${baseUrl}/api/tasks?clientId=${clientId}`);
-            if (res.ok) {
-                const data = await res.json();
-                setTasks(Array.isArray(data) ? data : []);
-            }
-        } catch (error) {
-            console.error("Error fetching tasks:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
+            if (!res.ok) throw new Error("Failed to fetch tasks");
+            const data = await res.json();
+            return Array.isArray(data) ? data : [];
+        },
+        refetchInterval: 30000,
+        enabled: !!clientId
+    });
 
-    useEffect(() => {
-        fetchTasks();
-        fetchClients();
-    }, [clientId]);
+    // --- REACT QUERY: CLIENTS ---
+    const { data: clientsList = [] } = useQuery({
+        queryKey: ['clientsDropdown'],
+        queryFn: async () => {
+            const baseUrl = getApiBaseUrl();
+            const response = await fetch(`${baseUrl}/api/db/clients`);
+            if (!response.ok) throw new Error("Failed to fetch clients");
+            const data = await response.json();
+            return data.sort((a, b) => a.name.localeCompare(b.name));
+        },
+        staleTime: 600000,
+    });
 
     const handleToggleTask = async (e, task) => {
-        e.stopPropagation(); // Prevent opening edit modal
+        e.stopPropagation();
+
+        const isDone = task.status === 'REALIZADA';
+        const newStatus = isDone ? 'PENDIENTE' : 'REALIZADA';
+
+        // 1. Snapshot for Revert
+        const previousTasks = [...tasks];
+
         try {
-            // Optimistic update
-            setTasks(prev => prev.map(t =>
-                t.id === task.id ? { ...t, status: t.status === 'Realizado' ? 'Pendiente' : 'Realizado' } : t
+            // 2. OPTIMISTIC UPDATE
+            queryClient.setQueryData(['nativeTasks', clientId], prev => prev?.map(t =>
+                t.id === task.id ? { ...t, status: newStatus } : t
             ));
 
             const baseUrl = getApiBaseUrl();
-            await fetch(`${baseUrl}/api/tasks/${task.id}`, {
+            const token = localStorage.getItem('authToken');
+
+            const response = await fetch(`${baseUrl}/api/tasks/${task.id}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: task.status === 'Realizado' ? 'Pendiente' : 'Realizado' })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({ status: newStatus })
             });
+
+            if (!response.ok) throw new Error("Failed to update status");
+
+            queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
         } catch (error) {
             console.error("Error toggling task:", error);
-            fetchTasks(); // Revert on error
+            // 3. REVERT
+            queryClient.setQueryData(['nativeTasks', clientId], previousTasks);
+            toast({
+                title: "Error",
+                description: "No se pudo actualizar el estado de la tarea.",
+                variant: "destructive"
+            });
         }
     };
 
-    const handleDeleteTask = async (e, taskId) => {
-        e.stopPropagation();
-        if (!confirm("¿Eliminar tarea?")) return;
+    const handleDeleteTask = async () => {
+        if (!deletingTask || !deleteReason.trim() || isSubmittingDelete) return;
+
+        const previousTasks = [...tasks];
+        queryClient.setQueryData(['nativeTasks', clientId], prev => prev?.filter(t => t.id !== deletingTask.id));
+
         try {
-             const baseUrl = getApiBaseUrl();
-             const res = await fetch(`${baseUrl}/api/tasks/${taskId}`, {
-                 method: 'DELETE'
-             });
+            setIsSubmittingDelete(true);
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
 
-             if (res.ok) {
-                setTasks(prev => prev.filter(t => t.id !== taskId));
-             } else {
-                console.error("Failed to delete task:", await res.text());
-             }
-        } catch (error) {
-            console.error("Error deleting task:", error);
+            const response = await fetch(`${baseUrl}/api/tasks/${deletingTask.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({ reason: deleteReason })
+            });
+
+            if (response.ok) {
+                toast({
+                    title: "Tarea eliminada",
+                    description: "La tarea ha sido movida al registro de eliminadas.",
+                });
+                setDeletingTask(null);
+                setDeleteReason('');
+                queryClient.invalidateQueries({ queryKey: ['nativeTasks', clientId] });
+                queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+            } else {
+                throw new Error("Failed to delete task");
+            }
+        } catch (err) {
+            console.error("Error deleting task:", err);
+            queryClient.setQueryData(['nativeTasks', clientId], previousTasks);
+            toast({
+                title: "Error",
+                description: "No se pudo eliminar la tarea.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsSubmittingDelete(false);
         }
     };
 
-    const remaining = tasks.filter(t => t.status !== 'Realizado').length;
+    const remaining = tasks.filter(t => t.status !== 'REALIZADA').length;
 
     // Helper to check overdue
     const isOverdue = (dateStr) => {
@@ -116,8 +182,6 @@ const ClientTasksWidget = ({ clientId }) => {
     const formatDate = (dateStr) => {
         if (!dateStr) return '';
         const date = new Date(dateStr);
-        // Add one day to fix timezone offset usually happening with simple YYYY-MM-DD input
-        // Or just display UTC date. Simpler: use localized string
         return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', timeZone: 'UTC' });
     };
 
@@ -142,7 +206,7 @@ const ClientTasksWidget = ({ clientId }) => {
 
             {/* Task List */}
             <div className="space-y-2 overflow-y-auto max-h-[300px] pr-1">
-                {loading ? (
+                {loadingTasks ? (
                      <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-zinc-400"/></div>
                 ) : tasks.length === 0 ? (
                     <div className="text-center py-8 text-zinc-400 text-sm">
@@ -152,7 +216,8 @@ const ClientTasksWidget = ({ clientId }) => {
                     tasks.map((task) => {
                         const assigneeName = task.assignee?.name;
                         const assigneeAvatar = task.assignee?.avatarUrl;
-                        const overdue = task.status !== 'Realizado' && isOverdue(task.dueDate);
+                        const isDone = task.status === 'REALIZADA';
+                        const overdue = !isDone && isOverdue(task.dueDate);
 
                         return (
                             <div
@@ -160,7 +225,7 @@ const ClientTasksWidget = ({ clientId }) => {
                                 onClick={() => setEditingTask(task)}
                                 className={cn(
                                     "flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer group select-none relative",
-                                    task.status === 'Realizado'
+                                    isDone
                                         ? "bg-zinc-50/50 dark:bg-zinc-900/20 border-transparent opacity-60 hover:opacity-80"
                                         : "bg-white dark:bg-zinc-800/50 border-zinc-100 dark:border-zinc-800 hover:border-blue-200 dark:hover:border-blue-900/30 hover:shadow-sm"
                                 )}
@@ -168,17 +233,17 @@ const ClientTasksWidget = ({ clientId }) => {
                                 <div
                                     className={cn(
                                         "transition-colors mt-0.5 cursor-pointer",
-                                        task.status === 'Realizado' ? "text-blue-500" : "text-zinc-300 hover:text-blue-400"
+                                        isDone ? "text-blue-500" : "text-zinc-300 hover:text-blue-400"
                                     )}
                                     onClick={(e) => handleToggleTask(e, task)}
                                 >
-                                    {task.status === 'Realizado' ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
+                                    {isDone ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
                                 </div>
 
                                 <div className="flex-1 min-w-0">
                                     <span className={cn(
                                         "text-sm font-medium transition-all block mb-1.5",
-                                        task.status === 'Realizado' ? "text-zinc-400 line-through decoration-zinc-300" : "text-zinc-700 dark:text-zinc-200"
+                                        isDone ? "text-zinc-400 line-through decoration-zinc-300" : "text-zinc-700 dark:text-zinc-200"
                                     )}>
                                         {task.title}
                                     </span>
@@ -188,7 +253,7 @@ const ClientTasksWidget = ({ clientId }) => {
                                         {task.dueDate && (
                                             <div className={cn(
                                                 "flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded-md font-medium border",
-                                                task.status === 'Realizado'
+                                                isDone
                                                     ? "bg-zinc-100 text-zinc-400 border-zinc-200"
                                                     : overdue
                                                         ? "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:border-red-900/30 dark:text-red-400"
@@ -217,7 +282,10 @@ const ClientTasksWidget = ({ clientId }) => {
                                 </div>
 
                                 <button
-                                    onClick={(e) => handleDeleteTask(e, task.id)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeletingTask(task);
+                                    }}
                                     className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-400 hover:text-red-500 transition-all absolute top-2 right-2"
                                 >
                                     <Trash2 className="w-4 h-4" />
@@ -232,7 +300,10 @@ const ClientTasksWidget = ({ clientId }) => {
             <TaskCreateModal
                 isOpen={isCreating}
                 onClose={() => setIsCreating(false)}
-                onSuccess={fetchTasks}
+                onSuccess={() => {
+                    queryClient.invalidateQueries({ queryKey: ['nativeTasks', clientId] });
+                    queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+                }}
                 clientsList={clientsList}
                 defaultClientId={clientId}
             />
@@ -240,10 +311,55 @@ const ClientTasksWidget = ({ clientId }) => {
             <TaskEditModal
                 isOpen={!!editingTask}
                 onClose={() => setEditingTask(null)}
-                onSuccess={fetchTasks}
+                onSuccess={() => {
+                    queryClient.invalidateQueries({ queryKey: ['nativeTasks', clientId] });
+                    queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+                }}
                 clientsList={clientsList}
                 taskData={editingTask}
             />
+
+            {/* Hard Delete with Audit Log Modal */}
+            <Dialog open={!!deletingTask} onOpenChange={(open) => !open && setDeletingTask(null)}>
+                <DialogContent className="sm:max-w-md dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
+                            ¿Por qué quieres eliminar esta tarea?
+                        </DialogTitle>
+                        <DialogDescription>
+                            La tarea <strong>{deletingTask?.title}</strong> dejará de ser visible en el Kanban y en las métricas.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-4">
+                        <textarea
+                            value={deleteReason}
+                            onChange={(e) => setDeleteReason(e.target.value)}
+                            placeholder="Ej: Es un duplicado, el cliente canceló..."
+                            className="w-full min-h-[120px] bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none dark:text-white"
+                            autoFocus
+                            required
+                        />
+                    </div>
+
+                    <DialogFooter className="flex sm:justify-between gap-3">
+                        <button
+                            onClick={() => setDeletingTask(null)}
+                            className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={() => handleDeleteTask()}
+                            disabled={!deleteReason.trim() || isSubmittingDelete}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                        >
+                            {isSubmittingDelete ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            Eliminar Tarea
+                        </button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Card>
     );
 };
