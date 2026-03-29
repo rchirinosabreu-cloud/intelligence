@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma.js';
 import { createNotification } from './notificationService.js';
+import { classifyTaskWithAI } from './aiService.js';
 
 export const getDashboardMetrics = async () => {
     try {
@@ -137,6 +138,18 @@ export const createTask = async ({
     try {
         const mappedStatus = statusMapper[status] || 'PENDIENTE';
 
+        // AI Classification (Radar de Mérito Phase 2)
+        let aiCategory = null;
+        let aiComplexity = null;
+
+        try {
+            const classification = await classifyTaskWithAI(title, comments || "");
+            aiCategory = classification.category;
+            aiComplexity = classification.complexity;
+        } catch (aiErr) {
+            console.warn("[nativeTaskService] Task classification with AI failed or timed out. Skipping AI fields.", aiErr.message);
+        }
+
         const newTask = await prisma.task.create({
             data: {
                 title,
@@ -150,7 +163,9 @@ export const createTask = async ({
                 isSpecial,
                 specialType,
                 referenceUrl,
-                contentItemId
+                contentItemId,
+                aiCategory,
+                aiComplexity
             },
             include: {
                 client: {
