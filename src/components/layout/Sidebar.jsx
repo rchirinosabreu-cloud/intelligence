@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Sparkles, CheckSquare, LayoutGrid, FileText, BarChart3, Users, UserCheck, User, Moon, Sun, Bell, X } from 'lucide-react';
+import { LayoutDashboard, Sparkles, CheckSquare, LayoutGrid, FileText, BarChart3, Users, UserCheck, User, Moon, Sun, Bell, X, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
@@ -22,9 +22,15 @@ const Sidebar = ({ isOpen, onClose }) => {
     { id: 'content-grids', label: 'Parrillas', icon: LayoutGrid, path: '/parrillas' },
     { id: 'minutes', label: 'Minutas', icon: FileText, path: '/minutas' },
     { id: 'metrics', label: 'Métricas', icon: BarChart3, path: '/metricas' },
+    { id: 'radar', label: 'Radar de Mérito', icon: Zap, path: '/radar', roles: ['ADMIN', 'PM'] },
     { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes' },
     { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo' },
   ];
+
+  const filteredMenuItems = menuItems.filter(item => {
+    if (!item.roles) return true;
+    return item.roles.includes(currentUser?.role);
+  });
 
   return (
     <aside className={cn(
@@ -54,7 +60,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
       {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-2 relative">
-        {menuItems.map((item) => {
+        {filteredMenuItems.map((item) => {
           const Icon = item.icon;
 
           return (

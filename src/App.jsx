@@ -12,6 +12,7 @@ import Profile from './components/modules/Profile';
 import Metrics from './components/modules/Metrics';
 import ContentGrids from './components/modules/ContentGrids';
 import ContentPlanDetail from './components/modules/ContentPlanDetail';
+import TalentRadar from './components/modules/TalentRadar';
 import Login from './components/Login';
 import PrivacyPolicy from './components/public/PrivacyPolicy';
 import TermsOfService from './components/public/TermsOfService';
@@ -32,7 +33,7 @@ const queryClient = new QueryClient({
 });
 
 function AppContent() {
-  const { isAuthenticated, isLoading, login, logout } = useAuth();
+  const { isAuthenticated, isLoading, login, logout, currentUser } = useAuth();
 
   // Escuchar errores de permisos (403 Forbidden)
   React.useEffect(() => {
@@ -91,6 +92,7 @@ function AppContent() {
 
             <Route path="/clientes" element={<Clients />} />
             <Route path="/cliente/:clientId" element={<ClientDetailWrapper />} />
+            <Route path="/radar" element={(currentUser?.role === 'ADMIN' || currentUser?.role === 'PM') ? <TalentRadar /> : <Navigate to="/" replace />} />
             <Route path="/equipo" element={<Team />} />
             <Route path="/perfil" element={<Profile />} />
             <Route path="/perfil/:userId" element={<Profile />} />

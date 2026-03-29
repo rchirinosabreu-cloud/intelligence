@@ -29,6 +29,7 @@ import integrationsRouter from './src/routes/api/integrations.js';
 import contentRouter from './src/routes/api/content.js';
 import dbRouter from './src/routes/api/db.js';
 import clientFileRouter from './src/routes/api/clientFiles.js';
+import talentRadarRouter from './src/routes/api/talentRadar.js';
 
 dotenv.config();
 
@@ -305,6 +306,9 @@ app.use('/api/db', authenticateToken, dbRouter);
 // Client Files Routes (Deliverables)
 app.use('/api/clients/:clientId', authenticateToken, clientFileRouter);
 
+// Talent Radar Routes (IA Analytics)
+app.use('/api/talent-radar', authenticateToken, talentRadarRouter);
+
 // User Management Endpoints
 app.post('/api/users', authenticateToken, async (req, res) => {
     // Only allow Admins to create users (optional but recommended)
@@ -564,7 +568,7 @@ try {
 const PROJECT_ID = credentials?.project_id || 'brainstudio-intelligence';
 // Force 'global' location explicitly as requested
 const LOCATION = 'global';
-const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.5-pro";
+const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-1.5-pro";
 
 // Engine ID for the App (Brainstudio Intelligence)
 const ENGINE_ID = process.env.ENGINE_ID || process.env.DISCOVERY_ENGINE_ENGINE_ID || "brainstudio-intelligence-v_1769659564733";
@@ -1339,9 +1343,6 @@ app.patch('/api/clients/:id', async (req, res) => {
         const { id } = req.params;
         const { name, slug } = req.body;
         log('API', `/api/clients/${id} (PATCH) called`);
-
-        // Dynamic import since we're in top-level app logic
-        const { default: prisma } = await import('./src/lib/prisma.js');
 
         const updatedClient = await prisma.client.update({
             where: { id },
