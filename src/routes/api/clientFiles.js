@@ -1,10 +1,9 @@
 import express from 'express';
 import multer from 'multer';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../lib/prisma.js';
 import { uploadClientFile, getSignedUrl, deleteFileFromGCS, getClientFileStream } from '../../services/storageService.js';
 
 const router = express.Router({ mergeParams: true });
-const prisma = new PrismaClient();
 
 // Memory storage for multer - keeps file in RAM before GCS upload
 const upload = multer({
