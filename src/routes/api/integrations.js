@@ -159,7 +159,7 @@ router.post('/meta/insights/generate', async (req, res) => {
         // Let's use the GEMINI_API_KEY directly from env to avoid complex proxying here if we want a specific prompt.
 
         const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-        const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+        const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-pro';
 
         const prompt = `
             Eres un Consultor Estratégico Senior de la agencia Brainstudio.
