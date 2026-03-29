@@ -67,8 +67,8 @@ router.get('/summary', async (req, res) => {
             return acc;
         }, {});
 
-        // 3. Nine-Box Data: Velocity vs Quality
-        // X = Velocity (Avg time in hours), Y = Quality (Return Count)
+        // 3. Nine-Box Data: Complexity vs Quality
+        // X = Avg Complexity (1-3), Y = Quality (Avg Return Count)
         const teamPerformance = await prisma.teamMember.findMany({
             where: { isActive: true },
             select: {
@@ -76,31 +76,31 @@ router.get('/summary', async (req, res) => {
                 name: true,
                 nativeTasks: {
                     where: {
-                        completedAt: { gte: startDate, lte: endDate },
-                        startedAt: { not: null }
+                        completedAt: { gte: startDate, lte: endDate }
                     },
                     select: {
-                        startedAt: true,
-                        completedAt: true,
+                        aiComplexity: true,
                         returnCount: true
                     }
                 }
             }
         });
 
+        const complexityMap = { 'BAJA': 1, 'MEDIA': 2, 'ALTA': 3 };
+
         const nineBox = teamPerformance.map(member => {
             const completedCount = member.nativeTasks.length;
             if (completedCount === 0) return { id: member.id, name: member.name, x: 0, y: 0, count: 0 };
 
-            const totalTimeMs = member.nativeTasks.reduce((sum, t) => sum + (t.completedAt - t.startedAt), 0);
-            const avgHours = (totalTimeMs / (1000 * 60 * 60)) / completedCount;
+            const totalComplexity = member.nativeTasks.reduce((sum, t) => sum + (complexityMap[t.aiComplexity] || 1), 0);
+            const avgComplexity = totalComplexity / completedCount;
             const avgReturns = member.nativeTasks.reduce((sum, t) => sum + (t.returnCount || 0), 0) / completedCount;
 
             return {
                 id: member.id,
                 name: member.name,
-                x: avgHours, // Lower is faster (closer to Y axis)
-                y: avgReturns, // Lower is higher quality (closer to X axis)
+                x: avgComplexity, // complexity scale 1-3
+                y: avgReturns, // lower is better
                 count: completedCount
             };
         });
@@ -177,19 +177,20 @@ router.post('/member/:memberId/ai-insights', async (req, res) => {
         const startDate = new Date(targetYear, targetMonth - 1, 1);
         const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59);
 
-        // Fetch tasks with comments (specially returned ones)
-        const tasks = await prisma.task.findMany({
+        // Fetch ALL tasks for metrics and returned ones for comments
+        const allTasks = await prisma.task.findMany({
             where: {
                 assigneeId: memberId,
-                completedAt: { gte: startDate, lte: endDate },
-                comments: { contains: '[DEVOLUCIÓN' }
+                completedAt: { gte: startDate, lte: endDate }
             },
-            select: { title: true, comments: true, aiCategory: true, aiComplexity: true }
+            select: { title: true, comments: true, aiCategory: true, aiComplexity: true, returnCount: true }
         });
 
-        if (tasks.length === 0) {
-            return res.json({ insight: "Este miembro no ha tenido devoluciones este mes. ¡Excelente desempeño en calidad!" });
+        if (allTasks.length === 0) {
+            return res.json({ insight: "Este miembro no tiene actividad registrada para este periodo." });
         }
+
+        const returnedTasks = allTasks.filter(t => (t.returnCount || 0) > 0);
 
         // Initialize Vertex AI
         const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
@@ -205,15 +206,38 @@ router.post('/member/:memberId/ai-insights', async (req, res) => {
 
         const model = vertexAI.getGenerativeModel({ model: MODEL_NAME });
 
-        const historyContext = tasks.map(t => `- Tarea: ${t.title}\n  Comentario Devolución: ${t.comments}`).join('\n\n');
+        // Aggregate metrics for dynamic analysis
+        const categoryStats = allTasks.reduce((acc, t) => {
+            if (t.aiCategory) acc[t.aiCategory] = (acc[t.aiCategory] || 0) + 1;
+            return acc;
+        }, {});
+
+        const totalReturns = allTasks.reduce((sum, t) => sum + (t.returnCount || 0), 0);
+        const avgComplexity = allTasks.reduce((sum, t) => {
+            const map = { 'BAJA': 1, 'MEDIA': 2, 'ALTA': 3 };
+            return sum + (map[t.aiComplexity] || 1);
+        }, 0) / allTasks.length;
+
+        const historyContext = returnedTasks.map(t => `- Tarea: ${t.title}\n  Comentario Devolución: ${t.comments}`).join('\n\n');
 
         const prompt = `Actúa como el Director de Operaciones de Brainstudio.
-Analiza los siguientes comentarios de tareas devueltas para un miembro del equipo durante este mes.
+Analiza los siguientes datos de rendimiento y comentarios de tareas devueltas para un miembro del equipo durante este mes.
 Genera un párrafo de "Feedback Ejecutivo" (en español) conciso, propositivo y profesional para un 1-on-1.
-No seas genérico; encuentra patrones si los hay (ej: falta de atención al detalle, errores en copy, etc.).
 
-DATOS DE DEVOLUCIONES:
-${historyContext}
+MÉTRICAS DEL MIEMBRO:
+- Tareas Completadas: ${allTasks.length}
+- Distribución de Categorías: ${JSON.stringify(categoryStats)}
+- Complejidad Promedio: ${avgComplexity.toFixed(1)} / 3.0
+- Total de Devoluciones: ${totalReturns}
+
+DETALLE DE DEVOLUCIONES (Si existen):
+${historyContext || "No hubo devoluciones este mes."}
+
+INSTRUCCIONES:
+1. No seas genérico. Usa las métricas para dar contexto (ej: "A pesar de manejar alta complejidad...").
+2. Si hay devoluciones, encuentra patrones (ej: falta de atención al detalle, errores en copy, etc.).
+3. Si el desempeño es impecable, destaca la eficiencia y la consistencia.
+4. Tono: Directo, humano, analítico y propositivo.
 
 Responde directamente con el párrafo de feedback.`;
 
