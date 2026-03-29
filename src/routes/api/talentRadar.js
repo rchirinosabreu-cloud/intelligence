@@ -177,7 +177,15 @@ router.post('/member/:memberId/ai-insights', async (req, res) => {
         const startDate = new Date(targetYear, targetMonth - 1, 1);
         const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59);
 
-        // Fetch ALL tasks for metrics and returned ones for comments
+        // 0. Fetch member details
+        const member = await prisma.teamMember.findUnique({
+            where: { id: memberId },
+            select: { name: true }
+        });
+
+        if (!member) return res.status(404).json({ error: "Miembro no encontrado" });
+
+        // 1. Fetch ALL tasks for metrics and returned ones for comments (STRICTLY FILTERED)
         const allTasks = await prisma.task.findMany({
             where: {
                 assigneeId: memberId,
@@ -220,26 +228,27 @@ router.post('/member/:memberId/ai-insights', async (req, res) => {
 
         const historyContext = returnedTasks.map(t => `- Tarea: ${t.title}\n  Comentario Devolución: ${t.comments}`).join('\n\n');
 
-        const prompt = `Actúa como el Director de Operaciones de Brainstudio.
-Analiza los siguientes datos de rendimiento y comentarios de tareas devueltas para un miembro del equipo durante este mes.
-Genera un párrafo de "Feedback Ejecutivo" (en español) conciso, propositivo y profesional para un 1-on-1.
+        const prompt = `Rol: Director de Operaciones (COO) de Brainstudio.
+Contexto: Evaluación de desempeño mensual para un miembro del equipo.
+Objetivo: Generar feedback estratégico, humano y accionable para un 1-on-1.
 
-MÉTRICAS DEL MIEMBRO:
-- Tareas Completadas: ${allTasks.length}
-- Distribución de Categorías: ${JSON.stringify(categoryStats)}
-- Complejidad Promedio: ${avgComplexity.toFixed(1)} / 3.0
-- Total de Devoluciones: ${totalReturns}
+DATOS DE RENDIMIENTO REAL (FILTRADOS POR MIEMBRO):
+- Nombre del Colaborador: ${member?.name || 'Miembro del equipo'}
+- Tareas Finalizadas: ${allTasks.length}
+- Mix de Trabajo: ${JSON.stringify(categoryStats)}
+- Nivel de Complejidad Promedio: ${avgComplexity.toFixed(2)} / 3.00
+- Frecuencia de Devoluciones: ${totalReturns} totales (${((totalReturns / allTasks.length) * 100).toFixed(1)}% tasa de retrabajo)
 
-DETALLE DE DEVOLUCIONES (Si existen):
-${historyContext || "No hubo devoluciones este mes."}
+CONTEXTO DE DEVOLUCIONES:
+${historyContext || "Historial impecable: 0 devoluciones este mes."}
 
-INSTRUCCIONES:
-1. No seas genérico. Usa las métricas para dar contexto (ej: "A pesar de manejar alta complejidad...").
-2. Si hay devoluciones, encuentra patrones (ej: falta de atención al detalle, errores en copy, etc.).
-3. Si el desempeño es impecable, destaca la eficiencia y la consistencia.
-4. Tono: Directo, humano, analítico y propositivo.
+TAREA DE ANÁLISIS V2:
+1. IDENTIFICA PATRONES: No resumas los números. Analiza la relación entre la complejidad y la calidad. ¿Las devoluciones ocurren en tareas simples (descuido) o complejas (falta de formación/guía)?
+2. EVALUACIÓN ESTRATÉGICA: Clasifica el perfil actual según los datos (ej: Ejecutor Eficiente, Talento en Desarrollo, Consultor Estratégico, o Cuello de Botella).
+3. RECOMENDACIÓN DE DESARROLLO: Propón una acción concreta para el próximo mes (ej: "Delegar tareas administrativas para explotar su lado estratégico" o "Implementar checklist de autocrítica antes de entregar").
+4. TONO: Ejecutivo de alto nivel, pero cercano. Usa un lenguaje que empodere pero que sea crudo con la realidad de los datos.
 
-Responde directamente con el párrafo de feedback.`;
+Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introducciones como "Aquí tienes el análisis...".`;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
