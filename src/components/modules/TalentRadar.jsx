@@ -49,18 +49,21 @@ const TalentRadar = () => {
         }));
     }, [summary?.heatmap]);
 
-    // 3. Nine-Box Data Processing
+    // 3. Nine-Box Data Processing with Jitter
     const scatterData = useMemo(() => {
         if (!summary?.nineBox) return [];
+
+        // Use a simple seeded-style jitter based on member ID to keep positions consistent
+        const getJitter = (id) => {
+            const hash = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            return (hash % 10 - 5) / 40; // Small offset between -0.125 and 0.125
+        };
+
         return summary.nineBox.map(member => ({
             ...member,
-            // X-axis: Velocity (Lower hours is better, so we invert or just plot normally)
-            // Y-axis: Quality (Lower returns is better)
-            // We'll plot X=Hours, Y=Returns. Best performers are in Bottom-Left.
-            // OR: We can normalize to a 1-10 scale for a classic matrix feel.
-            x: member.x,
-            y: member.y,
-            z: member.count // Bubble size
+            x: member.x + getJitter(member.id),
+            y: member.y + getJitter(member.id + 'y'),
+            z: member.count
         }));
     }, [summary?.nineBox]);
 
@@ -246,7 +249,7 @@ const TalentRadar = () => {
                                     type="number"
                                     dataKey="x"
                                     name="Complejidad"
-                                    domain={[1, 3]}
+                                    domain={[0.5, 3.5]}
                                     ticks={[1, 2, 3]}
                                     label={{ value: 'Complejidad Promedio', position: 'insideBottom', offset: -10, fontSize: 9, fontWeight: 'bold', fill: '#94a3b8' }}
                                     fontSize={10}
@@ -256,6 +259,7 @@ const TalentRadar = () => {
                                     dataKey="y"
                                     name="Calidad"
                                     unit=" dev."
+                                    domain={[0, 'auto']}
                                     label={{ value: 'Prom. Devoluciones', angle: -90, position: 'insideLeft', fontSize: 9, fontWeight: 'bold', fill: '#94a3b8' }}
                                     fontSize={10}
                                 />
@@ -304,7 +308,14 @@ const TalentRadar = () => {
 
 const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
     const [isGenerating, setIsGenerating] = useState(false);
-    const [aiInsight, setAiInsight] = useState(null);
+    const [aiInsights, setAiInsights] = useState({}); // Isolate insights by member ID
+
+    // Reset generating state on close/change
+    useEffect(() => {
+        setIsGenerating(false);
+    }, [memberId]);
+
+    const aiInsight = memberId ? aiInsights[memberId] : null;
 
     const { data: member, isLoading } = useQuery({
         queryKey: ['member-radar-detail', memberId, month, year],
@@ -330,7 +341,7 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                 { month, year },
                 { headers: { 'Authorization': `Bearer ${token}` } }
             );
-            setAiInsight(res.data.insight);
+            setAiInsights(prev => ({ ...prev, [memberId]: res.data.insight }));
             toast.success("Análisis de IA completado");
         } catch (error) {
             console.error("AI Insight failed:", error);
