@@ -201,13 +201,13 @@ const TalentRadar = () => {
                                 </Pie>
                                 <Tooltip
                                     contentStyle={{
-                                        backgroundColor: 'rgba(24, 24, 27, 0.8)',
-                                        borderRadius: '12px',
-                                        border: 'none',
-                                        backdropBlur: '12px',
+                                        backgroundColor: '#fff',
+                                        borderRadius: '16px',
+                                        border: '1px solid #f4f4f5',
+                                        boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
                                         fontSize: '11px',
                                         fontWeight: 'bold',
-                                        color: '#fff'
+                                        color: '#18181b'
                                     }}
                                 />
                                 <Legend
@@ -245,9 +245,10 @@ const TalentRadar = () => {
                                 <XAxis
                                     type="number"
                                     dataKey="x"
-                                    name="Velocidad"
-                                    unit="h"
-                                    label={{ value: 'Horas Promedio', position: 'insideBottom', offset: -10, fontSize: 9, fontWeight: 'bold', fill: '#94a3b8' }}
+                                    name="Complejidad"
+                                    domain={[1, 3]}
+                                    ticks={[1, 2, 3]}
+                                    label={{ value: 'Complejidad Promedio', position: 'insideBottom', offset: -10, fontSize: 9, fontWeight: 'bold', fill: '#94a3b8' }}
                                     fontSize={10}
                                 />
                                 <YAxis
@@ -264,11 +265,13 @@ const TalentRadar = () => {
                                         if (active && payload && payload.length) {
                                             const data = payload[0].payload;
                                             return (
-                                                <div className="bg-zinc-900 border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md">
-                                                    <p className="text-xs font-bold text-white mb-1">{data.name}</p>
-                                                    <p className="text-[10px] text-zinc-400">Velocidad: {data.x.toFixed(1)}h</p>
-                                                    <p className="text-[10px] text-zinc-400">Calidad: {data.y.toFixed(1)} dev./tarea</p>
-                                                    <p className="text-[10px] text-indigo-400 font-bold mt-1">{data.count} tareas completadas</p>
+                                                <div className="bg-white border border-zinc-100 p-4 rounded-2xl shadow-2xl">
+                                                    <p className="text-sm font-bold text-zinc-900 mb-2">{data.name}</p>
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Complejidad: <span className="text-zinc-900">{data.x.toFixed(1)}</span></p>
+                                                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Calidad: <span className="text-zinc-900">{data.y.toFixed(1)} dev.</span></p>
+                                                        <p className="text-[10px] text-indigo-600 font-bold mt-2">{data.count} tareas completadas</p>
+                                                    </div>
                                                 </div>
                                             );
                                         }
@@ -337,15 +340,31 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
         }
     };
 
-    const heatmapData = useMemo(() => {
-        if (!member?.nativeTasks) return [];
+    const { heatmapData, topImpactTasks } = useMemo(() => {
+        if (!member?.nativeTasks) return { heatmapData: [], topImpactTasks: [] };
+
+        // 1. Heatmap Data
         const stats = member.nativeTasks.reduce((acc, t) => {
             if (t.aiCategory) acc[t.aiCategory] = (acc[t.aiCategory] || 0) + 1;
             return acc;
         }, {});
-        return Object.entries(stats).map(([name, value]) => ({
+
+        const heatmap = Object.entries(stats).map(([name, value]) => ({
             name, value, fill: CATEGORY_COLORS[name] || '#94a3b8'
         }));
+
+        // 2. Top 5 Impact Tasks (Sorted by Complexity then Returns)
+        const complexityOrder = { 'ALTA': 3, 'MEDIA': 2, 'BAJA': 1 };
+        const top5 = [...member.nativeTasks]
+            .sort((a, b) => {
+                const compA = complexityOrder[a.aiComplexity] || 0;
+                const compB = complexityOrder[b.aiComplexity] || 0;
+                if (compB !== compA) return compB - compA;
+                return (b.returnCount || 0) - (a.returnCount || 0);
+            })
+            .slice(0, 5);
+
+        return { heatmapData: heatmap, topImpactTasks: top5 };
     }, [member]);
 
     return (
@@ -398,7 +417,17 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                                 <Cell key={`cell-${index}`} fill={entry.fill} stroke="transparent" />
                                             ))}
                                         </Pie>
-                                        <Tooltip />
+                                        <Tooltip
+                                            contentStyle={{
+                                                backgroundColor: '#fff',
+                                                borderRadius: '12px',
+                                                border: '1px solid #f4f4f5',
+                                                boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                                                fontSize: '10px',
+                                                fontWeight: 'bold',
+                                                color: '#18181b'
+                                            }}
+                                        />
                                     </PieChart>
                                 </ResponsiveContainer>
                              </div>
@@ -442,15 +471,18 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                             )}
                         </div>
 
-                        {/* Task History List */}
+                        {/* Top 5 Impact Tasks */}
                         <div className="space-y-4">
-                            <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                                <FileText className="w-3.5 h-3.5" />
-                                Historial de Tareas
-                            </h4>
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                                    <FileText className="w-3.5 h-3.5" />
+                                    Top 5 Impacto del Mes
+                                </h4>
+                                <span className="text-[10px] font-bold text-zinc-400 italic">Ordenado por relevancia</span>
+                            </div>
                             <div className="space-y-3">
-                                {member?.nativeTasks?.map(task => (
-                                    <div key={task.id} className="p-3 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5">
+                                {topImpactTasks?.map(task => (
+                                    <div key={task.id} className="p-3 bg-white dark:bg-white/5 rounded-2xl border border-zinc-100 dark:border-white/5 shadow-sm">
                                         <div className="flex items-center justify-between mb-1">
                                             <span className="text-[10px] font-bold text-indigo-500">{task.client?.name}</span>
                                             {task.returnCount > 0 && (
@@ -461,9 +493,15 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                         </div>
                                         <p className="text-xs font-bold truncate">{task.title}</p>
                                         <div className="flex items-center gap-2 mt-2 text-[10px] text-zinc-500">
-                                            <span className="capitalize">{task.aiCategory || 'Sin clasificar'}</span>
-                                            <span className="w-1 h-1 rounded-full bg-zinc-300" />
-                                            <span>Complejidad: {task.aiComplexity || '--'}</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <div className={cn(
+                                                    "w-1.5 h-1.5 rounded-full",
+                                                    task.aiComplexity === 'ALTA' ? 'bg-amber-500' : task.aiComplexity === 'MEDIA' ? 'bg-indigo-500' : 'bg-emerald-500'
+                                                )} />
+                                                <span>{task.aiComplexity}</span>
+                                            </div>
+                                            <span className="w-1 h-1 rounded-full bg-zinc-200" />
+                                            <span className="capitalize">{task.aiCategory?.toLowerCase() || 'Sin clasificar'}</span>
                                         </div>
                                     </div>
                                 ))}
