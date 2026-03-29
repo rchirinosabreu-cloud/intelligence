@@ -229,6 +229,8 @@ export const updateTask = async (id, data, updaterId = null) => {
                 title: true,
                 status: true,
                 completedAt: true,
+                startedAt: true,
+                returnCount: true,
                 comments: true,
                 isPriority: true,
                 isSpecial: true,
@@ -260,6 +262,16 @@ export const updateTask = async (id, data, updaterId = null) => {
 
             isReturned = (newStatus === 'DEVUELTA' && oldStatus !== 'DEVUELTA');
 
+            // Radar de Mérito: Increment returnCount on transition to DEVUELTA
+            if (isReturned) {
+                updateData.returnCount = (currentTask.returnCount || 0) + 1;
+            }
+
+            // Radar de Mérito: Initial startedAt logic
+            if (newStatus === 'EN_CURSO' && !currentTask.startedAt) {
+                updateData.startedAt = new Date();
+            }
+
             // --- Lógica de Cierre de Ciclo (Notificación de Corrección) ---
             // Si el estado anterior era visually returned y el nuevo es 'Pendiente' o 'En proceso'
             // Consideramos visualmente devuelto si tiene el tag o el status DEVUELTA.
@@ -288,6 +300,11 @@ export const updateTask = async (id, data, updaterId = null) => {
                 // If it already has a completedAt, preserve the history.
                 if (!currentTask.completedAt || currentTask.status !== 'REALIZADA') {
                     updateData.completedAt = new Date();
+
+                    // Radar de Mérito: If startedAt is missing, set both started and completed
+                    if (!currentTask.startedAt && !updateData.startedAt) {
+                        updateData.startedAt = updateData.completedAt;
+                    }
 
                     // --- AUTOMATION: HAND-OFF (Production to Publication) ---
                     // Only trigger if this was a production task transition to 'REALIZADA'
