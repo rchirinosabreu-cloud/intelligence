@@ -50,13 +50,13 @@ router.post('/files', upload.single('file'), async (req, res) => {
             }
         });
 
-        res.status(201).json({
+        return res.status(201).json({
             ...clientFile,
             url: uploadResult.url // Send signed URL for immediate use
         });
     } catch (error) {
         console.error("Error in client file upload API:", error);
-        res.status(500).json({ error: "Internal server error during upload" });
+        return res.status(500).json({ error: "Internal server error during upload", details: error.message });
     }
 });
 
@@ -98,10 +98,10 @@ router.get('/files', async (req, res) => {
         // Filter out null entries (deleted ghosts)
         const validFiles = results.filter(f => f !== null);
 
-        res.json(validFiles);
+        return res.json(validFiles);
     } catch (error) {
         console.error("Error fetching client files:", error);
-        res.status(500).json({ error: "Error retrieving files" });
+        return res.status(500).json({ error: "Error retrieving files", details: error.message });
     }
 });
 
@@ -134,10 +134,10 @@ router.delete('/files/:fileId', async (req, res) => {
             where: { id: fileId }
         });
 
-        res.json({ message: "File deleted successfully" });
+        return res.json({ message: "File deleted successfully" });
     } catch (error) {
         console.error("Error deleting client file:", error);
-        res.status(500).json({ error: "Error deleting file" });
+        return res.status(500).json({ error: "Error deleting file", details: error.message });
     }
 });
 
@@ -183,7 +183,7 @@ router.get('/files/:fileId/download', async (req, res) => {
         gcsStream.pipe(res);
     } catch (error) {
         console.error("Error in download proxy:", error);
-        res.status(500).json({ error: "Download failed" });
+        return res.status(500).json({ error: "Download failed", details: error.message });
     }
 });
 
