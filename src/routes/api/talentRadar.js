@@ -270,11 +270,13 @@ Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introd
 /**
  * Radar de Talento: Update Member Avatar
  * PUT /api/talent-radar/member/:memberId/avatar
+ * RESTRICCIÓN: Solo ADMINS pueden realizar esta acción (Muro de Fuego).
  */
 router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res) => {
-    // RBAC Check: Only ADMIN as per Rodny's request
+    // 1. RBAC CHECK (Muro de Fuego)
     if (req.user?.role !== 'ADMIN') {
-        return res.status(403).json({ error: "No tienes permisos para cambiar el avatar de un miembro" });
+        console.warn(`[Security] Unauthorized avatar upload attempt by user ${req.user?.email} (${req.user?.role})`);
+        return res.status(403).json({ error: "Acceso denegado. Solo administradores pueden subir avatares." });
     }
 
     const { memberId } = req.params;
@@ -285,48 +287,86 @@ router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res)
     }
 
     try {
-        const member = await prisma.teamMember.findUnique({
+        console.log(`[TalentRadar] Processing avatar upload for ID: ${memberId} by Admin: ${req.user.email}`);
+
+        // 2. Resolve Profile: Check if memberId is a TeamMember or User ID
+        let teamMember = await prisma.teamMember.findUnique({
             where: { id: memberId },
             select: { id: true, avatarUrl: true, userId: true }
         });
 
-        if (!member) return res.status(404).json({ error: "Miembro no encontrado" });
+        let userProfile = null;
 
-        // 1. If old avatar exists in GCS, delete it (to save space)
-        if (member.avatarUrl && member.avatarUrl.includes('/avatar-image')) {
-            // Path extraction assuming /api/talent-radar/member/:id/avatar-image?gcsPath=...
-            const url = new URL(member.avatarUrl, 'http://localhost');
-            const oldGcsPath = url.searchParams.get('gcsPath');
-            if (oldGcsPath) {
-                await deleteFileFromGCS(oldGcsPath);
+        if (!teamMember) {
+            // Check if it's a User ID instead
+            userProfile = await prisma.user.findUnique({
+                where: { id: memberId },
+                select: { id: true, avatarUrl: true }
+            });
+
+            if (!userProfile) {
+                return res.status(404).json({ error: "No se encontró el perfil de equipo o usuario para este ID." });
             }
-        }
 
-        // 2. Upload to GCS
-        const uploadResult = await uploadAvatar(file, memberId);
-
-        // 3. Construct the proxy URL
-        const avatarUrl = `/api/talent-radar/member/${memberId}/avatar-image?gcsPath=${encodeURIComponent(uploadResult.gcsPath)}`;
-
-        // 4. Update TeamMember
-        await prisma.teamMember.update({
-            where: { id: memberId },
-            data: { avatarUrl }
-        });
-
-        // 5. Update linked User if applicable
-        if (member.userId) {
-            await prisma.user.update({
-                where: { id: member.userId },
-                data: { avatarUrl }
+            // Look for linked TeamMember via this user ID
+            teamMember = await prisma.teamMember.findFirst({
+                where: { userId: userProfile.id },
+                select: { id: true, avatarUrl: true, userId: true }
+            });
+        } else if (teamMember.userId) {
+            userProfile = await prisma.user.findUnique({
+                where: { id: teamMember.userId },
+                select: { id: true, avatarUrl: true }
             });
         }
 
+        const currentAvatarUrl = teamMember?.avatarUrl || userProfile?.avatarUrl;
+
+        // 3. GCS Hygiene: Delete old avatar if it exists in the /avatars folder
+        if (currentAvatarUrl && currentAvatarUrl.includes('gcsPath=avatars')) {
+            try {
+                // Extract gcsPath from the proxy URL query string
+                const gcsPath = currentAvatarUrl.split('gcsPath=')[1]?.split('&')[0];
+                if (gcsPath) {
+                    const decodedPath = decodeURIComponent(gcsPath);
+                    console.log(`[GCS Hygiene] Deleting old asset: ${decodedPath}`);
+                    await deleteFileFromGCS(decodedPath);
+                }
+            } catch (err) {
+                console.error("[GCS Hygiene] Non-critical error deleting old asset:", err.message);
+            }
+        }
+
+        // 4. Upload new file to GCS
+        // Use the TeamMember ID if available for folder consistency, otherwise User ID
+        const targetGcsId = teamMember?.id || userProfile?.id;
+        const uploadResult = await uploadAvatar(file, targetGcsId);
+
+        // 5. Construct the final proxy URL
+        const avatarUrl = `/api/talent-radar/member/${targetGcsId}/avatar-image?gcsPath=${encodeURIComponent(uploadResult.gcsPath)}`;
+
+        // 6. Synchronized Update in Database
+        await prisma.$transaction(async (tx) => {
+            if (teamMember) {
+                await tx.teamMember.update({
+                    where: { id: teamMember.id },
+                    data: { avatarUrl }
+                });
+            }
+            if (userProfile) {
+                await tx.user.update({
+                    where: { id: userProfile.id },
+                    data: { avatarUrl }
+                });
+            }
+        });
+
+        console.log(`[TalentRadar] Avatar updated successfully for ID: ${targetGcsId}`);
         res.json({ success: true, avatarUrl });
 
     } catch (error) {
         console.error("[TalentRadar] Avatar upload failed:", error);
-        res.status(500).json({ error: "Error al subir avatar" });
+        res.status(500).json({ error: "Error interno al procesar el avatar." });
     }
 });
 

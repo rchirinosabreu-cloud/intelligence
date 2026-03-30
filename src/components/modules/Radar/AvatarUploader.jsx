@@ -30,10 +30,10 @@ const AvatarUploader = ({ member, memberId, onUploadSuccess }) => {
                 }
             });
 
-            // Refetch both summary and detail to update UI
-            queryClient.invalidateQueries({ queryKey: ['talent-radar-summary'] });
-            queryClient.invalidateQueries({ queryKey: ['member-radar-detail', memberId] });
-            queryClient.invalidateQueries({ queryKey: ['user-profile', memberId] });
+            // Refetch all related data to update UI globally (Radar, Matrix, Profile)
+            await queryClient.invalidateQueries({ queryKey: ['talent-radar-summary'] });
+            await queryClient.invalidateQueries({ queryKey: ['member-radar-detail'] });
+            await queryClient.invalidateQueries({ queryKey: ['user-profile'] });
 
             toast.success("Foto de perfil actualizada");
             if (onUploadSuccess) onUploadSuccess();
