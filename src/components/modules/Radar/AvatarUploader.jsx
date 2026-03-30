@@ -13,7 +13,7 @@ const AvatarUploader = ({ member, memberId, onUploadSuccess }) => {
     const [isUploading, setIsUploading] = useState(false);
 
     const onDrop = useCallback(async (acceptedFiles) => {
-        if (acceptedFiles.length === 0) return;
+        if (acceptedFiles.length === 0 || !memberId) return;
 
         setIsUploading(true);
         const file = acceptedFiles[0];
@@ -23,6 +23,7 @@ const AvatarUploader = ({ member, memberId, onUploadSuccess }) => {
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
+            // Ensure the request target is always the specific memberId profile
             await axios.put(`${baseUrl}/api/talent-radar/member/${memberId}/avatar`, formData, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -34,6 +35,7 @@ const AvatarUploader = ({ member, memberId, onUploadSuccess }) => {
             await queryClient.invalidateQueries({ queryKey: ['talent-radar-summary'] });
             await queryClient.invalidateQueries({ queryKey: ['member-radar-detail'] });
             await queryClient.invalidateQueries({ queryKey: ['user-profile'] });
+            await queryClient.invalidateQueries({ queryKey: ['user-data'] }); // For AppLayout Header
 
             toast.success("Foto de perfil actualizada");
             if (onUploadSuccess) onUploadSuccess();
@@ -53,12 +55,12 @@ const AvatarUploader = ({ member, memberId, onUploadSuccess }) => {
     });
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col items-center gap-6">
-                <div className="relative group">
+        <div className="space-y-6 min-h-[400px] flex flex-col">
+            <div className="flex flex-col items-center gap-4 py-4">
+                <div className="relative group shrink-0">
                     <TeamAvatar
                         member={member}
-                        className="w-32 h-32 border-4 border-indigo-500/20 shadow-2xl"
+                        className="w-32 h-32 border-4 border-indigo-500/20 shadow-2xl bg-zinc-50 dark:bg-zinc-800"
                         size={128}
                     />
                     <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
@@ -66,9 +68,9 @@ const AvatarUploader = ({ member, memberId, onUploadSuccess }) => {
                     </div>
                 </div>
 
-                <div className="text-center">
-                    <h5 className="text-sm font-bold">{member?.name}</h5>
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest">{member?.role}</p>
+                <div className="text-center space-y-1">
+                    <h5 className="text-sm font-bold text-zinc-900 dark:text-white truncate max-w-[200px]">{member?.name || 'Usuario'}</h5>
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">{member?.role || 'Miembro de Equipo'}</p>
                 </div>
             </div>
 

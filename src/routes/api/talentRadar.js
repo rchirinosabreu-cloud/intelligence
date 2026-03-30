@@ -270,16 +270,18 @@ Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introd
 /**
  * Radar de Talento: Update Member Avatar
  * PUT /api/talent-radar/member/:memberId/avatar
- * RESTRICCIÓN: Solo ADMINS pueden realizar esta acción (Muro de Fuego).
+ * RESTRICCIÓN JERÁRQUICA:
+ * - ADMIN: Puede subir para CUALQUIER :memberId.
+ * - OTROS: Solo pueden subir para sí mismos (req.user.userId === :memberId o userId link).
  */
 router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res) => {
-    // 1. RBAC CHECK (Muro de Fuego)
-    if (req.user?.role !== 'ADMIN') {
-        console.warn(`[Security] Unauthorized avatar upload attempt by user ${req.user?.email} (${req.user?.role})`);
-        return res.status(403).json({ error: "Acceso denegado. Solo administradores pueden subir avatares." });
-    }
-
     const { memberId } = req.params;
+    const currentUserId = req.user?.userId;
+    const isAdmin = req.user?.role === 'ADMIN';
+
+    // 1. RBAC CHECK (Jerárquico)
+    // We check if the target is the user's own profile OR if the user is an Admin
+    let isAuthorized = isAdmin || currentUserId === memberId;
     const file = req.file;
 
     if (!file) {
@@ -287,8 +289,6 @@ router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res)
     }
 
     try {
-        console.log(`[TalentRadar] Processing avatar upload for ID: ${memberId} by Admin: ${req.user.email}`);
-
         // 2. Resolve Profile: Check if memberId is a TeamMember or User ID
         let teamMember = await prisma.teamMember.findUnique({
             where: { id: memberId },
@@ -298,17 +298,15 @@ router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res)
         let userProfile = null;
 
         if (!teamMember) {
-            // Check if it's a User ID instead
             userProfile = await prisma.user.findUnique({
                 where: { id: memberId },
                 select: { id: true, avatarUrl: true }
             });
 
             if (!userProfile) {
-                return res.status(404).json({ error: "No se encontró el perfil de equipo o usuario para este ID." });
+                return res.status(404).json({ error: "Perfil no encontrado." });
             }
 
-            // Look for linked TeamMember via this user ID
             teamMember = await prisma.teamMember.findFirst({
                 where: { userId: userProfile.id },
                 select: { id: true, avatarUrl: true, userId: true }
@@ -319,6 +317,21 @@ router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res)
                 select: { id: true, avatarUrl: true }
             });
         }
+
+        // Final Security check based on resolved IDs
+        if (!isAuthorized) {
+            // Re-verify if the user is attempting to edit their own linked user/team profile
+            if (userProfile?.id === currentUserId || teamMember?.userId === currentUserId) {
+                isAuthorized = true;
+            }
+        }
+
+        if (!isAuthorized) {
+            console.warn(`[Security] Forbidden avatar upload by ${req.user?.email} for target ${memberId}`);
+            return res.status(403).json({ error: "No tienes permisos para editar este avatar." });
+        }
+
+        console.log(`[TalentRadar] Processing avatar upload for target ${memberId} (Target ID consistent: ${teamMember?.id || userProfile?.id})`);
 
         const currentAvatarUrl = teamMember?.avatarUrl || userProfile?.avatarUrl;
 
@@ -382,20 +395,23 @@ router.get('/member/:memberId/avatar-image', async (req, res) => {
     }
 
     try {
-        const stream = getClientFileStream(gcsPath);
+        const decodedPath = decodeURIComponent(gcsPath);
+        const stream = getClientFileStream(decodedPath);
 
-        // Cache management
-        res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year cache
+        // No-cache for real-time updates visibility, or short cache
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
 
         stream.on('error', (err) => {
             console.error("[TalentRadar] Avatar proxy stream error:", err.message);
-            res.status(404).send("Imagen no encontrada");
+            if (!res.headersSent) res.status(404).send("Imagen no encontrada");
         });
 
         stream.pipe(res);
     } catch (error) {
         console.error("[TalentRadar] Avatar proxy error:", error);
-        res.status(500).send("Error al cargar imagen");
+        if (!res.headersSent) res.status(500).send("Error al cargar imagen");
     }
 });
 

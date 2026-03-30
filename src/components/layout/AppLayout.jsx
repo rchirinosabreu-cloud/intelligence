@@ -18,6 +18,21 @@ const AppLayout = ({ children }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  // --- REACT QUERY: USER DATA (To sync avatar globaly) ---
+  const { data: userData } = useQuery({
+    queryKey: ['user-data', currentUser?.id],
+    queryFn: async () => {
+      if (!currentUser?.id) return null;
+      const res = await fetch(`${getApiBaseUrl()}/api/user/profile`);
+      if (!res.ok) throw new Error("Failed to fetch user profile");
+      return await res.json();
+    },
+    enabled: !!currentUser?.id,
+    staleTime: 60000 // 1 minute
+  });
+
+  const displayUser = userData || currentUser;
+
   // --- REACT QUERY: NOTIFICATIONS ---
   const {
     data: notifications = [],
@@ -233,12 +248,12 @@ const AppLayout = ({ children }) => {
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-white/5 transition-all outline-none">
                   <TeamAvatar
-                    member={{ name: currentUser?.name, avatarUrl: currentUser?.avatarUrl }}
+                    member={{ name: displayUser?.name, avatarUrl: displayUser?.avatarUrl }}
                     className="w-8 h-8"
                   />
                   <div className="hidden sm:flex flex-col text-left mr-2">
-                    <span className="text-xs font-bold leading-none">{currentUser?.name}</span>
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{currentUser?.role}</span>
+                    <span className="text-xs font-bold leading-none">{displayUser?.name}</span>
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{displayUser?.role}</span>
                   </div>
                 </button>
               </DropdownMenuTrigger>
