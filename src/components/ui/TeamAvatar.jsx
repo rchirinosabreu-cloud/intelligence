@@ -54,19 +54,37 @@ export default function TeamAvatar({ member, className, size = 32 }) {
     );
   }
 
-  // Fallback with initials (Max 2 letters) inside the boring-avatar style
-  // We use the boring-avatar as the base and overlay the initials for clarity
+  // Fallback with initials (Max 2 letters) - Exclusive logic
   const initials = name
     .split(' ')
+    .filter(Boolean)
     .map(n => n[0])
     .join('')
     .substring(0, 2)
     .toUpperCase();
 
+  if (initials && initials.length > 0) {
+    return (
+      <div
+        className={cn(
+          "rounded-full shrink-0 shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center bg-indigo-500",
+          "w-8 h-8", // Default sizing
+          className
+        )}
+        title={name}
+      >
+        <span className="text-[10px] font-black text-white tracking-tighter">
+          {initials}
+        </span>
+      </div>
+    );
+  }
+
+  // Final fallback to clean boring-avatar (no text)
   return (
     <div
       className={cn(
-        "rounded-full shrink-0 shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center bg-white relative",
+        "rounded-full shrink-0 shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center bg-white",
         "w-8 h-8", // Default sizing
         className
       )}
@@ -78,11 +96,6 @@ export default function TeamAvatar({ member, className, size = 32 }) {
         variant="beam"
         colors={brainstudioColors}
       />
-      <div className="absolute inset-0 flex items-center justify-center bg-black/10">
-        <span className="text-[10px] font-black text-white drop-shadow-md tracking-tighter">
-          {initials}
-        </span>
-      </div>
     </div>
   );
 }
