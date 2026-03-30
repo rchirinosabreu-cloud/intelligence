@@ -320,11 +320,12 @@ router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res)
         // 2. RBAC CHECK (Jerárquico)
         // - ADMIN: Full power for ANY memberId.
         // - USER: ONLY their own profile (match by User ID).
-        const targetUserId = userProfile?.id || teamMember?.userId;
-        const isAuthorized = isAdmin || (currentUserId && currentUserId === targetUserId);
+        // Note: memberId from params is used as the target.
+        const isTargetSelf = currentUserId && (currentUserId === memberId || currentUserId === (userProfile?.id || teamMember?.userId));
+        const isAuthorized = isAdmin || isTargetSelf;
 
         if (!isAuthorized) {
-            console.warn(`[Security] Forbidden avatar upload by ${req.user?.email} (ID: ${currentUserId}) for target ${memberId} (Target UID: ${targetUserId})`);
+            console.warn(`[Security] Forbidden avatar upload by ${req.user?.email} (ID: ${currentUserId}) for target ${memberId}`);
             return res.status(403).json({ error: "No tienes permisos para realizar esta acción." });
         }
 
@@ -350,6 +351,8 @@ router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res)
         // 4. Upload new file to GCS
         // Use the TeamMember ID if available for folder consistency, otherwise User ID
         const targetGcsId = teamMember?.id || userProfile?.id;
+        // Use the multer provided mimetype to ensure correct GCS contentType
+        // This is explicitly passed down to storageService.js for metadata header
         const uploadResult = await uploadAvatar(file, targetGcsId);
 
         // 5. Construct the final proxy URL
@@ -405,8 +408,9 @@ router.get('/member/:memberId/avatar-image', async (req, res) => {
         const file = storage.bucket(bucketName).file(decodedPath);
         const [metadata] = await file.getMetadata();
 
-        // Set Headers
-        res.setHeader('Content-Type', metadata.contentType || 'image/jpeg');
+        // Set Headers (Ensuring correct Content-Type from metadata)
+        const contentType = metadata.contentType || 'image/jpeg';
+        res.setHeader('Content-Type', contentType);
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('Pragma', 'no-cache');
         res.setHeader('Expires', '0');
