@@ -145,8 +145,16 @@ const authenticateToken = (req, res, next) => {
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-        console.error(`[Auth] JWT Verification failed for ${req.method} ${req.url}:`, err.message);
-        return res.status(403).json({ error: "Invalid token", details: err.message });
+        console.error(`[Auth] JWT Verification failed for ${req.method} ${req.path}:`, {
+          message: err.message,
+          name: err.name,
+          expiredAt: err.expiredAt
+        });
+        return res.status(403).json({
+          error: "Invalid token",
+          details: err.message,
+          code: err.name === 'TokenExpiredError' ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID'
+        });
     }
     req.user = user;
     next();
@@ -2355,6 +2363,34 @@ app.use(
   })
 );
 
+// --- GLOBAL ERROR HANDLER ---
+app.use((err, req, res, next) => {
+  console.error(`[Global Error] Unhandled error on ${req.method} ${req.path}:`, {
+    message: err.message,
+    stack: process.env.NODE_ENV === 'production' ? 'REDACTED' : err.stack
+  });
+
+  if (req.path.startsWith('/api')) {
+    return res.status(500).json({
+      error: "Internal Server Error",
+      details: err.message,
+      path: req.path
+    });
+  }
+  next(err);
+});
+
+// --- API 404 GUARD ---
+// If we reach here and it's an /api path, it means no route matched
+app.use('/api', (req, res) => {
+  console.warn(`[404] API endpoint not found: ${req.method} ${req.path}`);
+  res.status(404).json({
+    error: "API endpoint not found",
+    method: req.method,
+    path: req.path
+  });
+});
+
 // --- STATIC FILES & SPA ROUTING ---
 
 // Serve static files from the 'dist' directory
@@ -2376,8 +2412,24 @@ app.get('*', (req, res) => {
     res.status(200).send("Brainstudio Intelligence Backend is running. (Frontend build not found)");
 });
 
-const server = app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on port ${PORT} (Bound to 0.0.0.0)`);
+
+    // Prisma Connection Diagnostic
+    try {
+      console.log("[Diagnostic] Testing Prisma database connection...");
+      await prisma.$connect();
+      console.log("[Diagnostic] Database connection successful.");
+
+      const userCount = await prisma.user.count();
+      console.log(`[Diagnostic] Database is accessible. Found ${userCount} users.`);
+    } catch (dbError) {
+      console.error("[Diagnostic] CRITICAL: Database connection failed!", {
+        message: dbError.message,
+        code: dbError.code,
+        meta: dbError.meta
+      });
+    }
 });
 
 // Aumentar el timeout global del servidor a 5 minutos para procesar análisis largos de IA
