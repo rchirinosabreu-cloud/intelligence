@@ -137,3 +137,42 @@ export const getClientFileStream = (gcsPath) => {
 
     return storageClient.bucket(bucketName).file(gcsPath).createReadStream();
 };
+
+/**
+ * Uploads a team member avatar to GCS.
+ * Path: avatars/{memberId}_{timestamp}_{filename}
+ * @param {Object} file - Multer file object.
+ * @param {string} memberId - ID of the team member.
+ * @returns {Promise<Object>} - GCS path and other metadata.
+ */
+export const uploadAvatar = async (file, memberId) => {
+    const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
+    const storageClient = getStorageClient();
+
+    if (!storageClient) {
+        throw new Error("Storage client not initialized");
+    }
+
+    const bucket = storageClient.bucket(bucketName);
+    const timestamp = Date.now();
+    const gcsFileName = `avatars/${memberId}_${timestamp}_${file.originalname}`;
+
+    const blob = bucket.file(gcsFileName);
+    const blobStream = blob.createWriteStream({
+        resumable: false,
+        metadata: {
+            contentType: file.mimetype,
+        },
+    });
+
+    return new Promise((resolve, reject) => {
+        blobStream.on('error', (err) => reject(err));
+        blobStream.on('finish', () => {
+            resolve({
+                gcsPath: gcsFileName,
+                mimeType: file.mimetype
+            });
+        });
+        blobStream.end(file.buffer);
+    });
+};

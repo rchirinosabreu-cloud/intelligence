@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Card } from '@/components/ui/Card';
-import { Users, Activity, Target, Zap, TrendingUp, AlertCircle, ChevronRight, X, Loader2, Sparkles, Filter, Calendar, BarChart3, LayoutGrid, FileText } from 'lucide-react';
+import { Users, Activity, Target, Zap, TrendingUp, AlertCircle, ChevronRight, X, Loader2, Sparkles, Filter, Calendar, BarChart3, LayoutGrid, FileText, Camera, Upload } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ScatterChart, Scatter, ZAxis, LabelList } from 'recharts';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,8 @@ import { format, differenceInMinutes, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import SlideOver from '@/components/ui/SlideOver';
+import { useAuth } from '@/context/AuthContext';
+import { useDropzone } from 'react-dropzone';
 
 const CATEGORY_COLORS = {
     'CREATIVO': '#6366f1', // Indigo
@@ -350,12 +352,16 @@ const TalentRadar = () => {
 };
 
 const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
+    const { currentUser } = useAuth();
+    const isAdmin = currentUser?.role === 'ADMIN';
+    const [activeTab, setActiveTab] = useState('performance');
     const [isGenerating, setIsGenerating] = useState(false);
     const [aiInsights, setAiInsights] = useState({}); // Isolate insights by member ID
 
-    // Reset generating state on close/change
+    // Reset state on close/change
     useEffect(() => {
         setIsGenerating(false);
+        setActiveTab('performance');
     }, [memberId]);
 
     const aiInsight = memberId ? aiInsights[memberId] : null;
@@ -376,7 +382,6 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
 
     const generateInsight = async () => {
         setIsGenerating(true);
-        // Clear previous insight for THIS member
         setAiInsights(prev => ({ ...prev, [memberId]: null }));
 
         try {
@@ -399,7 +404,6 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
     const { heatmapData, topImpactTasks } = useMemo(() => {
         if (!member?.nativeTasks) return { heatmapData: [], topImpactTasks: [] };
 
-        // 1. Heatmap Data
         const stats = member.nativeTasks.reduce((acc, t) => {
             if (t.aiCategory) acc[t.aiCategory] = (acc[t.aiCategory] || 0) + 1;
             return acc;
@@ -409,7 +413,6 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
             name, value, fill: CATEGORY_COLORS[name] || '#94a3b8'
         }));
 
-        // 2. Top 5 Impact Tasks (Sorted by Complexity then Returns)
         const complexityOrder = { 'ALTA': 3, 'MEDIA': 2, 'BAJA': 1 };
         const top5 = [...member.nativeTasks]
             .sort((a, b) => {
@@ -428,145 +431,272 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
             open={!!memberId}
             onOpenChange={(open) => !open && onClose()}
             title={member?.name || 'Cargando...'}
-            description={member?.role || 'Perfil de Desempeño'}
+            description={member?.role || 'Perfil de Talento'}
             icon={<Users className="w-5 h-5 text-indigo-500" />}
             iconBgColor="bg-indigo-500/10"
         >
-            <div className="flex-1 p-6 space-y-8 overflow-y-auto custom-scrollbar">
-                {isLoading ? (
-                    <div className="flex items-center justify-center py-20">
-                        <Loader2 className="w-6 h-6 animate-spin text-zinc-400" />
-                    </div>
-                ) : (
-                    <>
-                        {/* Member Stats Overview */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <Card className="p-4 bg-zinc-50 dark:bg-white/5 border-none">
-                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Tareas Completadas</span>
-                                <p className="text-2xl font-bold mt-1">{member?.nativeTasks?.length || 0}</p>
-                            </Card>
-                            <Card className="p-4 bg-zinc-50 dark:bg-white/5 border-none">
-                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Retrabajo Acumulado</span>
-                                <p className="text-2xl font-bold mt-1 text-red-500">
-                                    {member?.nativeTasks?.reduce((sum, t) => sum + (t.returnCount || 0), 0) || 0}
-                                </p>
-                            </Card>
-                        </div>
-
-                        {/* Personal Capacity Chart */}
-                        <div className="space-y-4">
-                             <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                                <LayoutGrid className="w-3.5 h-3.5" />
-                                Mapa de Carga Personal
-                             </h4>
-                             <div className="h-[200px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={heatmapData}
-                                            innerRadius={50}
-                                            outerRadius={70}
-                                            paddingAngle={4}
-                                            dataKey="value"
-                                        >
-                                            {heatmapData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.fill} stroke="transparent" />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip
-                                            contentStyle={{
-                                                backgroundColor: '#fff',
-                                                borderRadius: '12px',
-                                                border: '1px solid #f4f4f5',
-                                                boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                                                fontSize: '10px',
-                                                fontWeight: 'bold',
-                                                color: '#18181b'
-                                            }}
-                                        />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                             </div>
-                        </div>
-
-                        {/* AI INSIGHT SECTION */}
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                                    <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                                    Insights Ejecutivos (IA)
-                                </h4>
-                                <button
-                                    onClick={generateInsight}
-                                    disabled={isGenerating}
-                                    className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 rounded-lg text-white text-[10px] font-bold transition-all shadow-lg flex items-center gap-2"
-                                >
-                                    {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-                                    GENERAR ANÁLISIS
-                                </button>
-                            </div>
-
-                            {aiInsight ? (
-                                <div className="p-5 bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl relative overflow-hidden group">
-                                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                                        <Sparkles className="w-12 h-12 text-indigo-500" />
-                                    </div>
-                                    <p className="text-sm text-indigo-900 dark:text-indigo-200 leading-relaxed italic">
-                                        "{aiInsight}"
-                                    </p>
-                                    <div className="mt-4 flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-[10px] text-white font-bold">B</div>
-                                        <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-tighter">Bria Ops Director</span>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="p-10 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl flex flex-col items-center justify-center text-center opacity-50">
-                                    <Sparkles className="w-8 h-8 text-zinc-300 mb-3" />
-                                    <p className="text-[10px] max-w-[200px]">Haz clic en Generar para que Gemini analice las devoluciones del mes.</p>
-                                </div>
+            <div className="flex flex-col h-full overflow-hidden">
+                {/* Tabs Header */}
+                {isAdmin && (
+                    <div className="flex items-center px-6 border-b border-zinc-100 dark:border-white/5">
+                        <button
+                            onClick={() => setActiveTab('performance')}
+                            className={cn(
+                                "py-3 px-4 text-[10px] font-bold uppercase tracking-widest transition-all border-b-2",
+                                activeTab === 'performance' ? "text-indigo-500 border-indigo-500" : "text-zinc-400 border-transparent hover:text-zinc-600"
                             )}
-                        </div>
+                        >
+                            Desempeño
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('profile')}
+                            className={cn(
+                                "py-3 px-4 text-[10px] font-bold uppercase tracking-widest transition-all border-b-2",
+                                activeTab === 'profile' ? "text-indigo-500 border-indigo-500" : "text-zinc-400 border-transparent hover:text-zinc-600"
+                            )}
+                        >
+                            Perfil
+                        </button>
+                    </div>
+                )}
 
-                        {/* Top 5 Impact Tasks */}
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                                    <FileText className="w-3.5 h-3.5" />
-                                    Top 5 Impacto del Mes
-                                </h4>
-                                <span className="text-[10px] font-bold text-zinc-400 italic">Ordenado por relevancia</span>
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
+                    {isLoading ? (
+                        <div className="flex items-center justify-center py-20">
+                            <Loader2 className="w-6 h-6 animate-spin text-zinc-400" />
+                        </div>
+                    ) : activeTab === 'performance' ? (
+                        <>
+                            {/* Member Stats Overview */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <Card className="p-4 bg-zinc-50 dark:bg-white/5 border-none">
+                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Tareas Completadas</span>
+                                    <p className="text-2xl font-bold mt-1">{member?.nativeTasks?.length || 0}</p>
+                                </Card>
+                                <Card className="p-4 bg-zinc-50 dark:bg-white/5 border-none">
+                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Retrabajo Acumulado</span>
+                                    <p className="text-2xl font-bold mt-1 text-red-500">
+                                        {member?.nativeTasks?.reduce((sum, t) => sum + (t.returnCount || 0), 0) || 0}
+                                    </p>
+                                </Card>
                             </div>
-                            <div className="space-y-3">
-                                {topImpactTasks?.map(task => (
-                                    <div key={task.id} className="p-3 bg-white dark:bg-white/5 rounded-2xl border border-zinc-100 dark:border-white/5 shadow-sm">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <span className="text-[10px] font-bold text-indigo-500">{task.client?.name}</span>
-                                            {task.returnCount > 0 && (
-                                                <span className="text-[9px] px-1.5 py-0.5 bg-red-500/10 text-red-500 rounded-full font-bold">
-                                                    {task.returnCount} DEVOLUCIONES
-                                                </span>
-                                            )}
+
+                            {/* Personal Capacity Chart */}
+                            <div className="space-y-4">
+                                <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                                    <LayoutGrid className="w-3.5 h-3.5" />
+                                    Mapa de Carga Personal
+                                </h4>
+                                <div className="h-[200px] w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={heatmapData}
+                                                innerRadius={50}
+                                                outerRadius={70}
+                                                paddingAngle={4}
+                                                dataKey="value"
+                                            >
+                                                {heatmapData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.fill} stroke="transparent" />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip
+                                                contentStyle={{
+                                                    backgroundColor: '#fff',
+                                                    borderRadius: '12px',
+                                                    border: '1px solid #f4f4f5',
+                                                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                                                    fontSize: '10px',
+                                                    fontWeight: 'bold',
+                                                    color: '#18181b'
+                                                }}
+                                            />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            {/* AI INSIGHT SECTION */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                                        <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                                        Insights Ejecutivos (IA)
+                                    </h4>
+                                    <button
+                                        onClick={generateInsight}
+                                        disabled={isGenerating}
+                                        className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 rounded-lg text-white text-[10px] font-bold transition-all shadow-lg flex items-center gap-2"
+                                    >
+                                        {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                                        GENERAR ANÁLISIS
+                                    </button>
+                                </div>
+
+                                {aiInsight ? (
+                                    <div className="p-5 bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl relative overflow-hidden group">
+                                        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                                            <Sparkles className="w-12 h-12 text-indigo-500" />
                                         </div>
-                                        <p className="text-xs font-bold truncate">{task.title}</p>
-                                        <div className="flex items-center gap-2 mt-2 text-[10px] text-zinc-500">
-                                            <div className="flex items-center gap-1.5">
-                                                <div className={cn(
-                                                    "w-1.5 h-1.5 rounded-full",
-                                                    task.aiComplexity === 'ALTA' ? 'bg-amber-500' : task.aiComplexity === 'MEDIA' ? 'bg-indigo-500' : 'bg-emerald-500'
-                                                )} />
-                                                <span>{task.aiComplexity}</span>
-                                            </div>
-                                            <span className="w-1 h-1 rounded-full bg-zinc-200" />
-                                            <span className="capitalize">{task.aiCategory?.toLowerCase() || 'Sin clasificar'}</span>
+                                        <p className="text-sm text-indigo-900 dark:text-indigo-200 leading-relaxed italic">
+                                            "{aiInsight}"
+                                        </p>
+                                        <div className="mt-4 flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-[10px] text-white font-bold">B</div>
+                                            <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-tighter">Bria Ops Director</span>
                                         </div>
                                     </div>
-                                ))}
+                                ) : (
+                                    <div className="p-10 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl flex flex-col items-center justify-center text-center opacity-50">
+                                        <Sparkles className="w-8 h-8 text-zinc-300 mb-3" />
+                                        <p className="text-[10px] max-w-[200px]">Haz clic en Generar para que Gemini analice las devoluciones del mes.</p>
+                                    </div>
+                                )}
                             </div>
+
+                            {/* Top 5 Impact Tasks */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                                        <FileText className="w-3.5 h-3.5" />
+                                        Top 5 Impacto del Mes
+                                    </h4>
+                                    <span className="text-[10px] font-bold text-zinc-400 italic">Ordenado por relevancia</span>
+                                </div>
+                                <div className="space-y-3">
+                                    {topImpactTasks?.map(task => (
+                                        <div key={task.id} className="p-3 bg-white dark:bg-white/5 rounded-2xl border border-zinc-100 dark:border-white/5 shadow-sm">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-[10px] font-bold text-indigo-500">{task.client?.name}</span>
+                                                {task.returnCount > 0 && (
+                                                    <span className="text-[9px] px-1.5 py-0.5 bg-red-500/10 text-red-500 rounded-full font-bold">
+                                                        {task.returnCount} DEVOLUCIONES
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-xs font-bold truncate">{task.title}</p>
+                                            <div className="flex items-center gap-2 mt-2 text-[10px] text-zinc-500">
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className={cn(
+                                                        "w-1.5 h-1.5 rounded-full",
+                                                        task.aiComplexity === 'ALTA' ? 'bg-amber-500' : task.aiComplexity === 'MEDIA' ? 'bg-indigo-500' : 'bg-emerald-500'
+                                                    )} />
+                                                    <span>{task.aiComplexity}</span>
+                                                </div>
+                                                <span className="w-1 h-1 rounded-full bg-zinc-200" />
+                                                <span className="capitalize">{task.aiCategory?.toLowerCase() || 'Sin clasificar'}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+                            <AvatarUploader member={member} memberId={memberId} />
                         </div>
-                    </>
-                )}
+                    )}
+                </div>
             </div>
         </SlideOver>
+    );
+};
+
+const AvatarUploader = ({ member, memberId }) => {
+    const queryClient = useQueryClient();
+    const [isUploading, setIsUploading] = useState(false);
+
+    const onDrop = useCallback(async (acceptedFiles) => {
+        if (acceptedFiles.length === 0) return;
+
+        setIsUploading(true);
+        const file = acceptedFiles[0];
+        const formData = new FormData();
+        formData.append('avatar', file);
+
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            await axios.put(`${baseUrl}/api/talent-radar/member/${memberId}/avatar`, formData, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+
+            // Refetch both summary and detail to update UI
+            queryClient.invalidateQueries({ queryKey: ['talent-radar-summary'] });
+            queryClient.invalidateQueries({ queryKey: ['member-radar-detail', memberId] });
+
+            toast.success("Foto de perfil actualizada");
+        } catch (error) {
+            console.error("Avatar upload failed:", error);
+            toast.error("Error al subir la imagen");
+        } finally {
+            setIsUploading(false);
+        }
+    }, [memberId, queryClient]);
+
+    const { getRootProps, getInputProps, isDragActive } = useDropzone({
+        onDrop,
+        accept: { 'image/*': ['.jpeg', '.jpg', '.png', '.webp'] },
+        maxFiles: 1,
+        disabled: isUploading
+    });
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-col items-center gap-6">
+                <div className="relative group">
+                    <TeamAvatar
+                        member={member}
+                        className="w-32 h-32 border-4 border-indigo-500/20 shadow-2xl"
+                        size={128}
+                    />
+                    <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                        <Camera className="w-8 h-8 text-white" />
+                    </div>
+                </div>
+
+                <div className="text-center">
+                    <h5 className="text-sm font-bold">{member?.name}</h5>
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest">{member?.role}</p>
+                </div>
+            </div>
+
+            <div
+                {...getRootProps()}
+                className={cn(
+                    "p-8 border-2 border-dashed rounded-3xl transition-all cursor-pointer flex flex-col items-center justify-center text-center gap-3",
+                    isDragActive ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/10 scale-[0.98]" : "border-zinc-200 dark:border-white/5 hover:border-indigo-500/50",
+                    isUploading && "opacity-50 cursor-not-allowed"
+                )}
+            >
+                <input {...getInputProps()} />
+                <div className="p-4 bg-indigo-500/10 rounded-2xl">
+                    {isUploading ? (
+                        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+                    ) : (
+                        <Upload className="w-8 h-8 text-indigo-500" />
+                    )}
+                </div>
+                <div>
+                    <p className="text-xs font-bold text-zinc-900 dark:text-white">
+                        {isUploading ? "Subiendo..." : "Arrastra o selecciona una foto"}
+                    </p>
+                    <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-tighter">
+                        JPG, PNG o WEBP (Máx 5MB)
+                    </p>
+                </div>
+            </div>
+
+            <div className="p-4 bg-amber-500/10 rounded-2xl border border-amber-500/20">
+                <p className="text-[10px] text-amber-700 dark:text-amber-400 font-medium leading-relaxed">
+                    <span className="font-bold">Aviso:</span> Como administrador, estás subiendo la foto oficial que será visible para todo el equipo en el Radar de Talento. Asegúrate de que siga los estándares visuales de la agencia.
+                </p>
+            </div>
+        </div>
     );
 };
 
