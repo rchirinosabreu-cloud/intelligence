@@ -38,8 +38,8 @@ export default function TeamAvatar({ member, className, size = 32 }) {
   const name = typeof member === 'string' ? member : member.name || 'Desconocido';
   const avatarUrl = typeof member === 'string' ? null : member.avatarUrl;
 
-  // Use the image if provided
-  if (avatarUrl) {
+  // Use the image if provided AND not empty string
+  if (avatarUrl && avatarUrl.trim() !== '') {
     return (
       <img
         src={avatarUrl}
