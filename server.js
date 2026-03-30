@@ -50,6 +50,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// Trust proxy for Railway environment to get correct protocol (x-forwarded-proto)
+app.set('trust proxy', 1);
+
 const normalizeOrigin = (origin = '') => String(origin).trim().replace(/\/$/, '');
 
 const allowedOrigins = new Set([
@@ -118,11 +121,15 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // --- LOGGING MIDDLEWARE ---
 app.use((req, res, next) => {
   const proto = req.headers['x-forwarded-proto'] || req.protocol;
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} (${proto})`);
+  const method = req.method;
+  const url = req.originalUrl;
+
+  console.log(`[${new Date().toISOString()}] ${method} ${url} (Proto: ${proto}, Secure: ${req.secure})`);
 
   // Fase 1: Detectar transformación de POST a GET por redirección HTTPS (Railway)
-  if (req.method === 'GET' && req.originalUrl === '/api/login') {
-    console.warn(`[WARNING] Recibido GET en ruta de Login. Posible redirección HTTP -> HTTPS transformando el método.`);
+  if (method === 'GET' && url.includes('/api/login')) {
+    console.warn(`[CRITICAL AUDIT] Received GET on Login route! This suggests a POST-to-GET transformation due to HTTP->HTTPS redirect.`);
+    console.warn(`[DEBUG HEADERS] ${JSON.stringify(req.headers)}`);
   }
 
   next();
@@ -166,7 +173,7 @@ const authenticateToken = (req, res, next) => {
           error: "Forbidden",
           message: "Invalid or expired token",
           details: err.message,
-          code: err.name === 'TokenExpiredError' ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID'
+          code: err.name === 'TokenExpiredError' ? 'TokenExpiredError' : 'TOKEN_INVALID'
         });
     }
     req.user = user;
@@ -197,15 +204,10 @@ const PORT = process.env.PORT || 8080;
 console.log(`[Auth] JWT_SECRET ${process.env.JWT_SECRET ? 'configured from env' : 'using fallback secret'}.`);
 
 app.post('/api/login', async (req, res) => {
-  // --- FASE 1: TEST DE SHORT-CIRCUIT ---
-  // El hecho de que el Login devuelva un 200 OK con HTML confirma que la petición
-  // no está entrando a la función de Login, sino que se está "resbalando".
-  // Esta línea debe disparar un JSON. Si el servidor sigue enviando HTML,
-  // el problema es 100% de orden de middleware o redirección de red.
-  if (process.env.DEBUG_LOGIN === 'true') {
-     console.log(`[DEBUG] Short-circuit hit in /api/login POST request from ${req.ip}`);
-     return res.json({ test: 'ok', reached: true, method: req.method, protocol: req.protocol, headers: req.headers });
-  }
+  // --- FASE 1: TEST DE SHORT-CIRCUIT (PRIORIDAD CRÍTICA) ---
+  // Si esta ruta devuelve HTML en producción, el problema es de ruteo o redirección.
+  // Insertamos este res.json() en la PRIMERA LÍNEA para diagnóstico absoluto.
+  return res.json({ test: 'ok', reached: true, method: req.method, protocol: req.headers['x-forwarded-proto'] || req.protocol });
 
   try {
       const { email, password } = req.body;
