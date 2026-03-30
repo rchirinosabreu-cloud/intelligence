@@ -7,163 +7,263 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Usuarios del Sistema (Login & Auth)
 model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String   // Hashed via bcrypt
-  role      String   @default("EDITOR") // ADMIN, EDITOR
-  avatarUrl String?  // Para consistencia con el chat
-  isActive  Boolean  @default(true)
-  bio       String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  notifications       Notification[]
+  id                  String               @id @default(uuid())
+  name                String
+  email               String               @unique
+  password            String
+  role                String               @default("EDITOR")
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  avatarUrl           String?
+  isActive            Boolean              @default(true)
+  bio                 String?
+  authoredFeedback    FeedbackRecord[]     @relation("AuthoredFeedback")
+  receivedFeedback    FeedbackRecord[]     @relation("ReceivedFeedback")
   generalChatMessages GeneralChatMessage[]
+  notifications       Notification[]
   createdTasks        Task[]               @relation("CreatedTasks")
   notes               UserNote[]
-  receivedFeedback    FeedbackRecord[]     @relation("ReceivedFeedback")
-  authoredFeedback    FeedbackRecord[]     @relation("AuthoredFeedback")
 }
 
-// Notas Personales del Usuario
 model UserNote {
   id        String   @id @default(uuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String
-  content   String   @db.Text
+  content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// Sistema de Notificaciones
 model Notification {
   id         String   @id @default(uuid())
   userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   message    String
   isRead     Boolean  @default(false)
-  type       String?  // e.g., 'MENTION'
-  relatedId  String?  // ID del mensaje/recurso relacionado
-  resourceId String?  // ID específico (Legacy compatibility)
-  url        String?  // URL directa (Legacy compatibility)
   createdAt  DateTime @default(now())
+  relatedId  String?
+  type       String?
+  resourceId String?
+  url        String?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// Chat General de la Agencia
 model GeneralChatMessage {
   id        String   @id @default(uuid())
   content   String
   authorId  String
-  author    User     @relation(fields: [authorId], references: [id])
   createdAt DateTime @default(now())
+  author    User     @relation(fields: [authorId], references: [id])
 }
 
-// Cliente de la Agencia
 model Client {
-  id        String   @id @default(uuid())
-  name      String
-  slug      String   @unique // Para urls tipo /sunpartners
-  status    String   @default("active") // active, paused, archived
-  logoUrl   String?
-  aiInstructions String? @db.Text // Contexto específico para el agente Bria
-  createdAt DateTime @default(now())
-
-  // Relaciones
-  brandAssets BrandAsset[]
-  clientFiles ClientFile[]
-  links       ClientLink[]
-  tasks       ClientTask[]
-  announcements ClientAnnouncement[]
-  flowMessages FlowMessage[]
-  nativeTasks Task[]
-  integrations Integration[]
-
-  // BrainStudio Metrics Asset Mapping
+  id                  String               @id @default(uuid())
+  name                String
+  slug                String               @unique
+  status              String               @default("active")
+  logoUrl             String?
+  createdAt           DateTime             @default(now())
+  aiInstructions      String?
+  adAccountId         String?
   facebookPageId      String?
   instagramBusinessId String?
-  adAccountId         String?
-
-  // Relaciones de Contenido
-  contentPlans ContentPlan[]
+  brandAssets         BrandAsset[]
+  announcements       ClientAnnouncement[]
+  clientFiles         ClientFile[]
+  links               ClientLink[]
+  tasks               ClientTask[]
+  contentPlans        ContentPlan[]
+  flowMessages        FlowMessage[]
+  integrations        Integration[]
+  nativeTasks         Task[]
 }
 
-// Modelos de Parrilla de Contenido (Content Grids)
 model ContentPlan {
-  id        String            @id @default(uuid())
-  clientId  String
-  client    Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  month     Int
-  year      Int
-  status    ContentPlanStatus @default(PLANIFICACION)
-
-  // Responsable (Community Manager)
-  ownerId   String?
-  owner     TeamMember?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
-
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-  deletedAt DateTime?
-
-  contentItems     ContentItem[]
+  id           String            @id @default(uuid())
+  clientId     String
+  month        Int
+  year         Int
+  status       ContentPlanStatus @default(PLANIFICACION)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  deletedAt    DateTime?
+  ownerId      String?
+  contentItems ContentItem[]
+  client       Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  owner        TeamMember?       @relation(fields: [ownerId], references: [id])
 }
 
 model ContentItem {
   id          String            @id @default(uuid())
   planId      String
-  plan        ContentPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
   objective   String
-  format      String            // Reel, Carrusel, etc.
-  copyText    String            @db.Text
-  captionText String            @db.Text
+  format      String
+  copyText    String
+  captionText String
   publishDate DateTime
-  mediaUrl    String?           // Enlace de Referencia
-  assetsLinks String?           @db.Text // Insumos (múltiples links)
-  comments    String?           @db.Text // Comentarios adicionales
+  mediaUrl    String?
   status      ContentItemStatus @default(BORRADOR)
-
-  // Relación opcional con el Kanban (1-a-N para historial)
-  tasks       Task[]
-
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+  assetsLinks String?
+  comments    String?
   deletedAt   DateTime?
+  plan        ContentPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
+  tasks       Task[]
 }
 
-// Integraciones con plataformas externas (Fase BrainStudio Metrics)
 model Integration {
   id             String   @id @default(uuid())
   clientId       String
-  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  provider       String   // 'meta', 'google', etc.
-  encryptedToken String   @db.Text
-  metadata       Json?    // Para guardar Page ID, Ad Account ID, etc.
+  provider       String
+  encryptedToken String
+  metadata       Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  @@unique([clientId, provider]) // Un cliente solo tiene una integración por proveedor (Fase 1)
+  @@unique([clientId, provider])
 }
 
-// Miembros del Equipo de la Agencia
 model TeamMember {
-  id        String   @id @default(uuid())
-  name      String
-  role      String   // "Director", "Project Manager", "Diseñador", "Copywriter", "Editor de Video", "Ejecutivo de Cuentas", "Otro"
-  email     String?
-  avatarUrl String?
-  isActive  Boolean  @default(true)
-  userId    String?  @unique // Vínculo con la cuenta de usuario (Auth)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String        @id @default(uuid())
+  name         String
+  role         String
+  email        String?
+  avatarUrl    String?
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  userId       String?       @unique
+  clientTasks  ClientTask[]
+  contentPlans ContentPlan[]
+  flowMessages FlowMessage[]
+  nativeTasks  Task[]
+}
 
-  // Relaciones
-  nativeTasks     Task[]
-  clientTasks     ClientTask[]
-  flowMessages    FlowMessage[]
-  contentPlans    ContentPlan[]
+model DeletedTaskLog {
+  id             String   @id @default(uuid())
+  originalTaskId String
+  taskTitle      String
+  clientId       String?
+  deletedById    String?
+  reason         String
+  deletedAt      DateTime @default(now())
+}
+
+model Task {
+  id            String       @id @default(uuid())
+  title         String
+  dueDate       DateTime?
+  assigneeId    String?
+  comments      String?
+  clientId      String
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  completedAt   DateTime?
+  creatorId     String?
+  status        TaskStatus   @default(PENDIENTE)
+  isPriority    Boolean      @default(false)
+  isSpecial     Boolean      @default(false)
+  referenceUrl  String?
+  specialType   String?
+  contentItemId String?
+  aiCategory    String?
+  aiComplexity  String?
+  returnCount   Int          @default(0)
+  startedAt     DateTime?
+  assignee      TeamMember?  @relation(fields: [assigneeId], references: [id])
+  client        Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contentItem   ContentItem? @relation(fields: [contentItemId], references: [id])
+  creator       User?        @relation("CreatedTasks", fields: [creatorId], references: [id])
+}
+
+model BrandAsset {
+  id       String @id @default(uuid())
+  clientId String
+  type     String
+  name     String
+  value    String
+  client   Client @relation(fields: [clientId], references: [id])
+}
+
+model ClientFile {
+  id        String    @id @default(uuid())
+  clientId  String
+  name      String
+  bucketUrl String
+  category  String    @default("Entregable")
+  createdAt DateTime  @default(now())
+  mimeType  String?
+  size      Int?
+  deletedAt DateTime?
+  updatedAt DateTime  @default(now()) @updatedAt
+  client    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model ClientLink {
+  id        String   @id @default(uuid())
+  clientId  String
+  title     String
+  url       String
+  createdAt DateTime @default(now())
+  client    Client   @relation(fields: [clientId], references: [id])
+}
+
+model ClientTask {
+  id         String      @id @default(uuid())
+  clientId   String
+  text       String
+  completed  Boolean     @default(false)
+  dueDate    DateTime?
+  assigneeId String?
+  createdAt  DateTime    @default(now())
+  assignee   TeamMember? @relation(fields: [assigneeId], references: [id])
+  client     Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model ClientAnnouncement {
+  id        String   @id @default(uuid())
+  clientId  String
+  content   String
+  type      String
+  createdAt DateTime @default(now())
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model FeedbackRecord {
+  id               String       @id @default(uuid())
+  collaboratorId   String
+  authorId         String
+  type             FeedbackType @default(ESCRITO)
+  date             DateTime     @default(now())
+  strengths        String
+  improvementAreas String
+  actionItems      String
+  privateNote      String?
+  deletedAt        DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  author           User         @relation("AuthoredFeedback", fields: [authorId], references: [id], onDelete: Cascade)
+  collaborator     User         @relation("ReceivedFeedback", fields: [collaboratorId], references: [id], onDelete: Cascade)
+}
+
+model FlowMessage {
+  id        String     @id @default(uuid())
+  clientId  String
+  content   String
+  authorId  String
+  createdAt DateTime   @default(now())
+  author    TeamMember @relation(fields: [authorId], references: [id])
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model GlobalAnnouncement {
+  id        String   @id @default(uuid())
+  content   String
+  type      String
+  createdAt DateTime @default(now())
 }
 
 enum TaskStatus {
@@ -184,153 +284,13 @@ enum ContentItemStatus {
   BORRADOR
   EN_REVISION
   APROBADO
+  PUBLICADO
+  REALIZADO
   EN_PRODUCCION
   DEVUELTO
-  REALIZADO
-  PUBLICADO
 }
 
 enum FeedbackType {
   ESCRITO
   UNO_A_UNO
-}
-
-// Registro de Auditoría de Tareas Eliminadas (Hard Delete Strategy)
-model DeletedTaskLog {
-  id             String   @id @default(uuid())
-  originalTaskId String
-  taskTitle      String
-  clientId       String?
-  deletedById    String?
-  reason         String
-  deletedAt      DateTime @default(now())
-}
-
-// Fase 1: Migración del Kanban de Google Sheets a Prisma
-model Task {
-  id        String   @id @default(uuid())
-  title     String
-  dueDate   DateTime?
-  assigneeId String?
-  assignee  TeamMember? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
-  creatorId String?
-  creator   User?       @relation("CreatedTasks", fields: [creatorId], references: [id], onDelete: SetNull)
-  comments  String?
-  status    TaskStatus  @default(PENDIENTE)
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  completedAt DateTime?
-  startedAt   DateTime?
-
-  // Radar de Mérito (IA Analytics)
-  aiCategory   String?
-  aiComplexity String?
-  returnCount  Int      @default(0)
-
-  // Phase 1: Reestructuración
-  isPriority   Boolean @default(false)
-  isSpecial    Boolean @default(false)
-  specialType  String?
-  referenceUrl String?
-
-  // Relación con ContentItem (Fase 1: Content Grids)
-  contentItemId String?
-  contentItem   ContentItem? @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
-}
-
-// Activos de Marca (Colores, Fuentes)
-model BrandAsset {
-  id        String  @id @default(uuid())
-  clientId  String
-  client    Client  @relation(fields: [clientId], references: [id])
-  type      String  // 'COLOR', 'TYPOGRAPHY', 'LINK'
-  name      String  // 'Color Primario', 'Fuente Web'
-  value     String  // '#FF0000', 'Montserrat'
-}
-
-// Archivos del Cliente (Bucket References)
-model ClientFile {
-  id          String   @id @default(uuid())
-  clientId    String
-  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  name        String   // Nombre visible
-  bucketUrl   String   // URL del archivo en Railway/S3
-  category    String   @default("Entregable")
-  size        Int?     // in bytes
-  mimeType    String?
-  createdAt   DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-  deletedAt   DateTime?
-}
-
-// Enlaces Clave del Cliente (Max 5 por cliente)
-model ClientLink {
-  id        String   @id @default(uuid())
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id])
-  title     String
-  url       String
-  createdAt DateTime @default(now())
-}
-
-// Tareas del Cliente (Feature nueva)
-model ClientTask {
-  id        String   @id @default(uuid())
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  text      String
-  completed Boolean  @default(false)
-  dueDate   DateTime?
-  assigneeId String?
-  assignee  TeamMember? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
-  createdAt DateTime @default(now())
-}
-
-// Anuncios específicos por Cliente
-model ClientAnnouncement {
-  id        String   @id @default(uuid())
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  content   String   // Sin límite de caracteres
-  type      String   // 'urgent', 'win', 'info'
-  createdAt DateTime @default(now())
-}
-
-// Fase 2: Módulo de Feedback y 1-on-1s
-model FeedbackRecord {
-  id               String       @id @default(uuid())
-  collaboratorId   String
-  collaborator     User         @relation("ReceivedFeedback", fields: [collaboratorId], references: [id], onDelete: Cascade)
-  authorId         String
-  author           User         @relation("AuthoredFeedback", fields: [authorId], references: [id], onDelete: Cascade)
-  type             FeedbackType @default(ESCRITO)
-  date             DateTime     @default(now())
-  strengths        String       @db.Text
-  improvementAreas String       @db.Text
-  actionItems      String       @db.Text
-  privateNote      String?      @db.Text
-  deletedAt        DateTime?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-}
-
-// Chat Flow (Inmutable)
-model FlowMessage {
-  id        String   @id @default(uuid())
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  content   String
-  authorId  String
-  author    TeamMember @relation(fields: [authorId], references: [id])
-  createdAt DateTime @default(now())
-}
-
-// Anuncios Globales del Dashboard (Feature nueva)
-model GlobalAnnouncement {
-  id        String   @id @default(uuid())
-  content   String   // Max 140
-  type      String   // 'urgent', 'win', 'info'
-  createdAt DateTime @default(now())
 }

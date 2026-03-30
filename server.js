@@ -117,7 +117,14 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // --- LOGGING MIDDLEWARE ---
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} (${proto})`);
+
+  // Fase 1: Detectar transformación de POST a GET por redirección HTTPS (Railway)
+  if (req.method === 'GET' && req.originalUrl === '/api/login') {
+    console.warn(`[WARNING] Recibido GET en ruta de Login. Posible redirección HTTP -> HTTPS transformando el método.`);
+  }
+
   next();
 });
 
@@ -140,15 +147,11 @@ const authenticateToken = (req, res, next) => {
 
   if (!token) {
     console.warn(`[Auth] No token provided for ${req.method} ${req.originalUrl}`);
-    // If it's an API request, return JSON. Otherwise, let it fall through or handle normally.
-    if (req.originalUrl.startsWith('/api')) {
-      return res.status(401).json({
-        error: "Unauthorized",
-        message: "No bearer token provided in Authorization header",
-        path: req.originalUrl
-      });
-    }
-    return res.status(401).send("Unauthorized");
+    return res.status(401).json({
+      error: "Unauthorized",
+      message: "No bearer token provided in Authorization header",
+      path: req.originalUrl
+    });
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
@@ -159,15 +162,12 @@ const authenticateToken = (req, res, next) => {
           expiredAt: err.expiredAt
         });
 
-        if (req.originalUrl.startsWith('/api')) {
-          return res.status(403).json({
-            error: "Forbidden",
-            message: "Invalid or expired token",
-            details: err.message,
-            code: err.name === 'TokenExpiredError' ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID'
-          });
-        }
-        return res.status(403).send("Forbidden");
+        return res.status(403).json({
+          error: "Forbidden",
+          message: "Invalid or expired token",
+          details: err.message,
+          code: err.name === 'TokenExpiredError' ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID'
+        });
     }
     req.user = user;
     next();
@@ -197,6 +197,16 @@ const PORT = process.env.PORT || 8080;
 console.log(`[Auth] JWT_SECRET ${process.env.JWT_SECRET ? 'configured from env' : 'using fallback secret'}.`);
 
 app.post('/api/login', async (req, res) => {
+  // --- FASE 1: TEST DE SHORT-CIRCUIT ---
+  // El hecho de que el Login devuelva un 200 OK con HTML confirma que la petición
+  // no está entrando a la función de Login, sino que se está "resbalando".
+  // Esta línea debe disparar un JSON. Si el servidor sigue enviando HTML,
+  // el problema es 100% de orden de middleware o redirección de red.
+  if (process.env.DEBUG_LOGIN === 'true') {
+     console.log(`[DEBUG] Short-circuit hit in /api/login POST request from ${req.ip}`);
+     return res.json({ test: 'ok', reached: true, method: req.method, protocol: req.protocol, headers: req.headers });
+  }
+
   try {
       const { email, password } = req.body;
 
