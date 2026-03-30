@@ -296,6 +296,9 @@ app.post('/api/login', async (req, res) => {
 // User Profile & Notes
 app.use('/api/user', authenticateToken, userRouter);
 
+// Team & Management
+app.use('/api/team', authenticateToken, teamRouter);
+
 // Feedback & Performance
 app.use('/api/feedback', authenticateToken, feedbackRouter);
 
@@ -1626,8 +1629,6 @@ const handleClientsHealthRequest = async (req, res, routeLabel) => {
     }
 };
 
-// --- Team Management Endpoints ---
-app.use('/api/team', teamRouter);
 
 // Handle GET /api/clients (Health Indicators)
 app.get('/api/clients', async (req, res) => handleClientsHealthRequest(req, res, '/api/clients'));
