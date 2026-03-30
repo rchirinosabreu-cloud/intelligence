@@ -69,7 +69,9 @@ const AvatarUploader = ({ member, memberId, onUploadSuccess }) => {
                 </div>
 
                 <div className="text-center space-y-1">
-                    <h5 className="text-sm font-bold text-zinc-900 dark:text-white truncate max-w-[200px]">{member?.name || 'Usuario'}</h5>
+                    <h5 className="text-sm font-bold text-zinc-900 dark:text-white truncate max-w-[200px]">
+                        {member?.avatarUrl ? (member?.name || 'Usuario') : 'Usuario'}
+                    </h5>
                     <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">{member?.role || 'Miembro de Equipo'}</p>
                 </div>
             </div>
