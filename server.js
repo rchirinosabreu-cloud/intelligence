@@ -123,6 +123,11 @@ const authenticateToken = (req, res, next) => {
     return next();
   }
 
+  // Bypass authentication for public avatar images (used in <img> tags)
+  if (req.path.includes('/avatar-image')) {
+    return next();
+  }
+
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 

@@ -1,12 +1,15 @@
 import express from 'express';
 import prisma from '../../lib/prisma.js';
 import { classifyTaskWithAI } from '../../services/aiService.js';
+import { uploadAvatar, deleteFileFromGCS, getClientFileStream } from '../../services/storageService.js';
+import multer from 'multer';
 import { VertexAI } from '@google-cloud/vertexai';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'brainstudio-intelligence';
 const LOCATION = 'global';
@@ -261,6 +264,98 @@ Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introd
     } catch (error) {
         console.error("[TalentRadar] AI Insight failed:", error);
         res.status(500).json({ error: "Error generando insights con IA" });
+    }
+});
+
+/**
+ * Radar de Talento: Update Member Avatar
+ * PUT /api/talent-radar/member/:memberId/avatar
+ */
+router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res) => {
+    // RBAC Check: Only ADMIN as per Rodny's request
+    if (req.user?.role !== 'ADMIN') {
+        return res.status(403).json({ error: "No tienes permisos para cambiar el avatar de un miembro" });
+    }
+
+    const { memberId } = req.params;
+    const file = req.file;
+
+    if (!file) {
+        return res.status(400).json({ error: "No se proporcionó ningún archivo de imagen" });
+    }
+
+    try {
+        const member = await prisma.teamMember.findUnique({
+            where: { id: memberId },
+            select: { id: true, avatarUrl: true, userId: true }
+        });
+
+        if (!member) return res.status(404).json({ error: "Miembro no encontrado" });
+
+        // 1. If old avatar exists in GCS, delete it (to save space)
+        if (member.avatarUrl && member.avatarUrl.includes('/avatar-image')) {
+            // Path extraction assuming /api/talent-radar/member/:id/avatar-image?gcsPath=...
+            const url = new URL(member.avatarUrl, 'http://localhost');
+            const oldGcsPath = url.searchParams.get('gcsPath');
+            if (oldGcsPath) {
+                await deleteFileFromGCS(oldGcsPath);
+            }
+        }
+
+        // 2. Upload to GCS
+        const uploadResult = await uploadAvatar(file, memberId);
+
+        // 3. Construct the proxy URL
+        const avatarUrl = `/api/talent-radar/member/${memberId}/avatar-image?gcsPath=${encodeURIComponent(uploadResult.gcsPath)}`;
+
+        // 4. Update TeamMember
+        await prisma.teamMember.update({
+            where: { id: memberId },
+            data: { avatarUrl }
+        });
+
+        // 5. Update linked User if applicable
+        if (member.userId) {
+            await prisma.user.update({
+                where: { id: member.userId },
+                data: { avatarUrl }
+            });
+        }
+
+        res.json({ success: true, avatarUrl });
+
+    } catch (error) {
+        console.error("[TalentRadar] Avatar upload failed:", error);
+        res.status(500).json({ error: "Error al subir avatar" });
+    }
+});
+
+/**
+ * Radar de Talento: Proxy for Avatar Image
+ * GET /api/talent-radar/member/:memberId/avatar-image
+ */
+router.get('/member/:memberId/avatar-image', async (req, res) => {
+    const { gcsPath } = req.query;
+
+    if (!gcsPath) {
+        return res.status(400).send("Falta gcsPath");
+    }
+
+    try {
+        const stream = getClientFileStream(gcsPath);
+
+        // Cache management
+        res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year cache
+
+        stream.on('error', (err) => {
+            console.error("[TalentRadar] Avatar proxy stream error:", err.message);
+            res.status(404).send("Imagen no encontrada");
+        });
+
+        stream.pipe(res);
+    } catch (error) {
+        console.error("[TalentRadar] Avatar proxy error:", error);
+        res.status(500).send("Error al cargar imagen");
     }
 });
 
