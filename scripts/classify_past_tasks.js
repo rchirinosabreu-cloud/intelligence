@@ -1,5 +1,8 @@
-import prisma from './src/lib/prisma.js';
-import { classifyTaskWithAI } from './src/services/aiService.js';
+import prisma from '../src/lib/prisma.js';
+import { classifyTaskWithAI } from '../src/services/aiService.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 async function classifyPastTasks() {
     console.log("--- INICIANDO CLASIFICACIÓN RETROACTIVA ---");

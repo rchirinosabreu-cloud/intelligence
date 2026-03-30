@@ -1,5 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import { execSync } from 'child_process';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 async function main() {
   const prisma = new PrismaClient();
