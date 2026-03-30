@@ -5,8 +5,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
+import AvatarUploader from './Radar/AvatarUploader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
-import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, Trash2, Edit2, X, Check, Calendar, Target, Award, Info } from 'lucide-react';
+import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, Trash2, Edit2, X, Check, Calendar, Target, Award, Info, Camera } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -47,6 +48,7 @@ const Profile = () => {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [profileData, setProfileData] = useState({ id: '', name: '', bio: '', email: '', role: '', avatarUrl: '' });
+    const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
     const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
     const [notes, setNotes] = useState([]);
     const [isNotesLoading, setIsNotesLoading] = useState(false);
@@ -301,9 +303,12 @@ const Profile = () => {
                             size={96}
                         />
                         {isOwnProfile && (
-                            <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
-                                <Edit2 className="w-6 h-6 text-white" />
-                            </div>
+                            <button
+                                onClick={() => setIsAvatarModalOpen(true)}
+                                className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer border-none"
+                            >
+                                <Camera className="w-6 h-6 text-white" />
+                            </button>
                         )}
                     </div>
                     <div>
@@ -820,6 +825,44 @@ const Profile = () => {
                     )}
                 </TabsContent>
             </Tabs>
+
+            {/* Avatar Upload Modal */}
+            <AnimatePresence>
+                {isAvatarModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsAvatarModalOpen(false)}
+                            className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="relative w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl overflow-hidden border border-zinc-200 dark:border-white/5"
+                        >
+                            <div className="p-6 border-b border-zinc-100 dark:border-white/5 flex justify-between items-center">
+                                <h3 className="font-bold">Actualizar Foto</h3>
+                                <button onClick={() => setIsAvatarModalOpen(false)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div className="p-8">
+                                <AvatarUploader
+                                    member={{ ...profileData, avatarUrl: profileData.avatarUrl }}
+                                    memberId={profileData.id}
+                                    onUploadSuccess={() => {
+                                        setIsAvatarModalOpen(false);
+                                        fetchProfile();
+                                    }}
+                                />
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };
