@@ -117,7 +117,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // --- LOGGING MIDDLEWARE ---
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
   next();
 });
 
@@ -131,7 +131,7 @@ const authenticateToken = (req, res, next) => {
   }
 
   // Bypass authentication for public avatar images (used in <img> tags)
-  if (req.path.includes('/avatar-image')) {
+  if (req.originalUrl.includes('/avatar-image')) {
     return next();
   }
 
@@ -139,22 +139,35 @@ const authenticateToken = (req, res, next) => {
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
   if (!token) {
-    console.warn(`[Auth] No token provided for ${req.method} ${req.url}`);
-    return res.status(401).json({ error: "No token provided", source: "internal_auth" });
+    console.warn(`[Auth] No token provided for ${req.method} ${req.originalUrl}`);
+    // If it's an API request, return JSON. Otherwise, let it fall through or handle normally.
+    if (req.originalUrl.startsWith('/api')) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        message: "No bearer token provided in Authorization header",
+        path: req.originalUrl
+      });
+    }
+    return res.status(401).send("Unauthorized");
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-        console.error(`[Auth] JWT Verification failed for ${req.method} ${req.path}:`, {
+        console.error(`[Auth] JWT Verification failed for ${req.method} ${req.originalUrl}:`, {
           message: err.message,
           name: err.name,
           expiredAt: err.expiredAt
         });
-        return res.status(403).json({
-          error: "Invalid token",
-          details: err.message,
-          code: err.name === 'TokenExpiredError' ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID'
-        });
+
+        if (req.originalUrl.startsWith('/api')) {
+          return res.status(403).json({
+            error: "Forbidden",
+            message: "Invalid or expired token",
+            details: err.message,
+            code: err.name === 'TokenExpiredError' ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID'
+          });
+        }
+        return res.status(403).send("Forbidden");
     }
     req.user = user;
     next();
@@ -2365,16 +2378,22 @@ app.use(
 
 // --- GLOBAL ERROR HANDLER ---
 app.use((err, req, res, next) => {
-  console.error(`[Global Error] Unhandled error on ${req.method} ${req.path}:`, {
+  const isPrismaError = err.code && (err.code.startsWith('P') || err.message?.includes('Prisma'));
+
+  console.error(`[Global Error] Unhandled error on ${req.method} ${req.originalUrl}:`, {
     message: err.message,
+    code: err.code,
+    meta: err.meta,
+    isPrismaError,
     stack: process.env.NODE_ENV === 'production' ? 'REDACTED' : err.stack
   });
 
-  if (req.path.startsWith('/api')) {
+  if (req.originalUrl.startsWith('/api')) {
     return res.status(500).json({
-      error: "Internal Server Error",
-      details: err.message,
-      path: req.path
+      error: isPrismaError ? "Database Error" : "Internal Server Error",
+      message: err.message,
+      code: err.code,
+      path: req.originalUrl
     });
   }
   next(err);
@@ -2383,11 +2402,11 @@ app.use((err, req, res, next) => {
 // --- API 404 GUARD ---
 // If we reach here and it's an /api path, it means no route matched
 app.use('/api', (req, res) => {
-  console.warn(`[404] API endpoint not found: ${req.method} ${req.path}`);
+  console.warn(`[404] API endpoint not found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     error: "API endpoint not found",
     method: req.method,
-    path: req.path
+    path: req.originalUrl
   });
 });
 
@@ -2399,7 +2418,7 @@ app.use(express.static(path.join(__dirname, 'dist')));
 // Catch-all route to serve React app for any unknown path
 app.get('*', (req, res) => {
     // Only if not starting with /api
-    if (req.path.startsWith('/api')) {
+    if (req.originalUrl.startsWith('/api')) {
         return res.status(404).json({ error: "API endpoint not found" });
     }
 
@@ -2418,6 +2437,15 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
     // Prisma Connection Diagnostic
     try {
       console.log("[Diagnostic] Testing Prisma database connection...");
+      // Check if DATABASE_URL is set
+      if (!process.env.DATABASE_URL) {
+        console.error("[Diagnostic] ERROR: DATABASE_URL environment variable is MISSING!");
+      } else {
+        const urlParts = process.env.DATABASE_URL.split('@');
+        const hostInfo = urlParts.length > 1 ? urlParts[1] : 'unknown host';
+        console.log(`[Diagnostic] DATABASE_URL host info: ${hostInfo.split('/')[0]}`);
+      }
+
       await prisma.$connect();
       console.log("[Diagnostic] Database connection successful.");
 
@@ -2427,7 +2455,8 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
       console.error("[Diagnostic] CRITICAL: Database connection failed!", {
         message: dbError.message,
         code: dbError.code,
-        meta: dbError.meta
+        meta: dbError.meta,
+        env_node_env: process.env.NODE_ENV
       });
     }
 });
