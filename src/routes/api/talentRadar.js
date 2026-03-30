@@ -118,7 +118,7 @@ router.get('/summary', async (req, res) => {
 
     } catch (error) {
         console.error("[TalentRadar] Summary failed:", error);
-        res.status(500).json({ error: "Internal server error" });
+        return res.status(500).json({ error: "Internal server error", details: error.message });
     }
 });
 
@@ -160,7 +160,7 @@ router.get('/member/:memberId', async (req, res) => {
         res.json(member);
     } catch (error) {
         console.error("[TalentRadar] Member details failed:", error);
-        res.status(500).json({ error: "Internal server error" });
+        return res.status(500).json({ error: "Internal server error", details: error.message });
     }
 });
 
@@ -263,7 +263,7 @@ Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introd
 
     } catch (error) {
         console.error("[TalentRadar] AI Insight failed:", error);
-        res.status(500).json({ error: "Error generando insights con IA" });
+        return res.status(500).json({ error: "Error generando insights con IA", details: error.message });
     }
 });
 
@@ -375,11 +375,11 @@ router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res)
         });
 
         console.log(`[TalentRadar] Avatar updated successfully for ID: ${targetGcsId}`);
-        res.json({ success: true, avatarUrl });
+        return res.json({ success: true, avatarUrl });
 
     } catch (error) {
         console.error("[TalentRadar] Avatar upload failed:", error);
-        res.status(500).json({ error: "Error interno al procesar el avatar." });
+        return res.status(500).json({ error: "Error interno al procesar el avatar.", details: error.message });
     }
 });
 

@@ -288,7 +288,7 @@ app.post('/api/login', async (req, res) => {
 
   } catch (error) {
       console.error('Error during login:', error);
-      res.status(500).json({ message: 'Error interno del servidor' });
+      return res.status(500).json({ message: 'Error interno del servidor', details: error.message });
   }
 });
 
@@ -348,10 +348,10 @@ app.post('/api/users', authenticateToken, async (req, res) => {
             select: { id: true, name: true, email: true, role: true } // Don't return password
         });
 
-        res.status(201).json(newUser);
+        return res.status(201).json(newUser);
     } catch (error) {
         console.error('Error creating user:', error);
-        res.status(500).json({ message: 'Error interno al crear usuario' });
+        return res.status(500).json({ message: 'Error interno al crear usuario', details: error.message });
     }
 });
 
@@ -406,7 +406,7 @@ app.get('/api/sync-users', async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
         success: true,
         message: "Sincronización completada",
         sincronizados: createdCount,
@@ -415,7 +415,7 @@ app.get('/api/sync-users', async (req, res) => {
 
   } catch (error) {
     console.error("[Sync] Error durante la sincronización:", error);
-    res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -539,7 +539,7 @@ app.post('/api/fireflies/graphql', authenticateToken, async (req, res) => {
             if (jsonData.errors) {
                  console.error("[Fireflies API] GraphQL Errors returned:", JSON.stringify(jsonData.errors, null, 2));
             }
-            res.json(jsonData);
+            return res.json(jsonData);
         } catch (parseError) {
             console.error("[Fireflies API] Failed to parse response as JSON:", data);
             res.status(502).json({ error: "Invalid JSON response from Fireflies", raw: data });
@@ -1323,7 +1323,7 @@ app.get('/api/calendar/upcoming', async (req, res) => {
     try {
         console.log("[API] /api/calendar/upcoming called");
         const events = await getUpcomingEvents();
-        res.json(events);
+        return res.json(events);
     } catch (error) {
         console.error("[API] /api/calendar/upcoming error:", error);
         res.status(500).json({
@@ -1338,7 +1338,7 @@ app.post('/api/db/clients', async (req, res) => {
     try {
         console.log("[API] /api/db/clients (POST) called");
         const client = await createClient(req.body);
-        res.json(client);
+        return res.json(client);
     } catch (error) {
         console.error("[API] /api/db/clients (POST) error:", error);
         res.status(500).json({ error: "Failed to create client", details: error.message });
@@ -1357,10 +1357,10 @@ app.patch('/api/clients/:id', async (req, res) => {
             data: { name, slug }
         });
 
-        res.json(updatedClient);
+        return res.json(updatedClient);
     } catch (error) {
         logError('API', `/api/clients/${req.params.id} (PATCH) error`, error);
-        res.status(500).json({ error: "Failed to update client" });
+        return res.status(500).json({ error: "Failed to update client", details: error.message });
     }
 });
 
@@ -1370,10 +1370,10 @@ app.get('/api/metrics/tasks', async (req, res) => {
     try {
         log('API', 'Fetching dashboard task metrics');
         const metrics = await getDashboardMetrics();
-        res.json(metrics);
+        return res.json(metrics);
     } catch (error) {
         logError('API', 'Failed to fetch dashboard metrics', error);
-        res.status(500).json({ error: "Failed to fetch metrics" });
+        return res.status(500).json({ error: "Failed to fetch metrics", details: error.message });
     }
 });
 
@@ -1381,10 +1381,10 @@ app.get('/api/metrics/quality-streak', async (req, res) => {
     try {
         log('API', 'Fetching quality streak metrics');
         const streak = await getQualityStreak();
-        res.json(streak);
+        return res.json(streak);
     } catch (error) {
         logError('API', 'Failed to fetch quality streak', error);
-        res.status(500).json({ error: "Failed to fetch quality streak" });
+        return res.status(500).json({ error: "Failed to fetch quality streak", details: error.message });
     }
 });
 
@@ -1393,10 +1393,10 @@ app.get('/api/tasks/completed', async (req, res) => {
         const { date } = req.query;
         log('API', `Fetching completed native tasks for date: ${date || 'today'}`);
         const tasks = await getCompletedTasks(date);
-        res.json(tasks);
+        return res.json(tasks);
     } catch (error) {
         logError('API', 'Failed to fetch completed native tasks', error);
-        res.status(500).json({ error: "Failed to fetch completed tasks" });
+        return res.status(500).json({ error: "Failed to fetch completed tasks", details: error.message });
     }
 });
 
@@ -1405,10 +1405,10 @@ app.get('/api/tasks', async (req, res) => {
         const { clientId } = req.query;
         log('API', `Fetching native tasks ${clientId ? `for client: ${clientId}` : 'globally'}`);
         const tasks = await getTasks(clientId);
-        res.json(tasks);
+        return res.json(tasks);
     } catch (error) {
         logError('API', "Failed to fetch native tasks", error);
-        res.status(500).json({ error: "Failed to fetch native tasks" });
+        return res.status(500).json({ error: "Failed to fetch native tasks", details: error.message });
     }
 });
 
@@ -1422,10 +1422,10 @@ app.get('/api/debug/task-status-count', async (req, res) => {
         }
 
         console.log('[Audit] Task Status Counts:', JSON.stringify(counts, null, 2));
-        res.json(counts);
+        return res.json(counts);
     } catch (error) {
         logError('API', "Debug status count failed", error);
-        res.status(500).json({ error: error.message });
+        return res.status(500).json({ error: error.message });
     }
 });
 
@@ -1478,10 +1478,10 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
             }
         }
 
-        res.status(201).json(task);
+        return res.status(201).json(task);
     } catch (error) {
         logError('API', "Failed to create native task", error);
-        res.status(500).json({ error: "Failed to create native task" });
+        return res.status(500).json({ error: "Failed to create native task", details: error.message });
     }
 });
 
@@ -1490,10 +1490,10 @@ app.patch('/api/tasks/:taskId', async (req, res) => {
         const { taskId } = req.params;
         log('API', `Updating native task: ${taskId}`, req.body);
         const updatedTask = await updateTask(taskId, req.body, req.user?.userId);
-        res.json(updatedTask);
+        return res.json(updatedTask);
     } catch (error) {
         logError('API', `Failed to update native task ${req.params.taskId}`, error);
-        res.status(500).json({ error: "Failed to update native task" });
+        return res.status(500).json({ error: "Failed to update native task", details: error.message });
     }
 });
 
@@ -1509,10 +1509,10 @@ app.delete('/api/tasks/:taskId', authenticateToken, async (req, res) => {
 
         log('API', `Hard deleting native task with audit: ${taskId}`, { reason });
         await auditAndDeleteTask(taskId, reason, deletedById);
-        res.json({ success: true });
+        return res.json({ success: true });
     } catch (error) {
         logError('API', `Failed to delete native task ${req.params.taskId}`, error);
-        res.status(500).json({ error: "Failed to delete native task" });
+        return res.status(500).json({ error: "Failed to delete native task", details: error.message });
     }
 });
 
@@ -1523,10 +1523,10 @@ app.get('/api/db/clients/:clientId/tasks', async (req, res) => {
         const { clientId } = req.params;
         console.log(`[API] Fetching tasks for client: ${clientId}`);
         const tasks = await getClientTasks(clientId);
-        res.json(tasks);
+        return res.json(tasks);
     } catch (error) {
         console.error("Error fetching tasks:", error);
-        res.status(500).json({ error: "Failed to fetch tasks" });
+        return res.status(500).json({ error: "Failed to fetch tasks", details: error.message });
     }
 });
 
@@ -1538,10 +1538,10 @@ app.post('/api/db/clients/:clientId/tasks', async (req, res) => {
         if (!text) return res.status(400).json({ error: "Missing text" });
 
         const task = await createClientTask({ clientId, text, dueDate, assigneeId });
-        res.json(task);
+        return res.json(task);
     } catch (error) {
         console.error("Error creating task:", error);
-        res.status(500).json({ error: "Failed to create task" });
+        return res.status(500).json({ error: "Failed to create task", details: error.message });
     }
 });
 
@@ -1550,10 +1550,10 @@ app.patch('/api/db/tasks/:taskId', async (req, res) => {
         const { taskId } = req.params;
         // Pass the entire body to support updating multiple fields (completed, dueDate, assigneeId)
         const task = await updateClientTaskStatus(taskId, req.body);
-        res.json(task);
+        return res.json(task);
     } catch (error) {
         console.error("Error updating task:", error);
-        res.status(500).json({ error: "Failed to update task" });
+        return res.status(500).json({ error: "Failed to update task", details: error.message });
     }
 });
 
@@ -1561,10 +1561,10 @@ app.delete('/api/db/tasks/:taskId', async (req, res) => {
     try {
         const { taskId } = req.params;
         await deleteTask(taskId);
-        res.json({ success: true });
+        return res.json({ success: true });
     } catch (error) {
         console.error("Error deleting task:", error);
-        res.status(500).json({ error: "Failed to delete task" });
+        return res.status(500).json({ error: "Failed to delete task", details: error.message });
     }
 });
 
@@ -1575,7 +1575,7 @@ app.get('/api/db/clients/:clientId/links', async (req, res) => {
     try {
         console.log(`[API] Fetching links for client: ${clientId}`);
         const links = await getClientLinks(clientId);
-        res.json(links);
+        return res.json(links);
     } catch (error) {
         console.error("[API] Failed to fetch links:", error);
         res.status(500).json({ error: "Error al obtener enlaces" });
@@ -1593,7 +1593,7 @@ app.post('/api/db/clients/:clientId/links', async (req, res) => {
     try {
         console.log(`[API] Adding link for client: ${clientId}`);
         const link = await addClientLink(clientId, title, url);
-        res.json(link);
+        return res.json(link);
     } catch (error) {
         console.error("[API] Failed to add link:", error);
         if (error.message === "MAX_LINKS_REACHED") {
@@ -1608,7 +1608,7 @@ app.delete('/api/db/links/:linkId', async (req, res) => {
     try {
         console.log(`[API] Deleting link: ${linkId}`);
         await removeClientLink(linkId);
-        res.json({ success: true });
+        return res.json({ success: true });
     } catch (error) {
         console.error("[API] Failed to delete link:", error);
         res.status(500).json({ error: "Error al eliminar enlace" });
@@ -1619,10 +1619,10 @@ const handleClientsHealthRequest = async (req, res, routeLabel) => {
     try {
         console.log(`[API] ${routeLabel} called`);
         const clients = await fetchClientHealth();
-        res.json(clients);
+        return res.json(clients);
     } catch (error) {
         console.error(`[API] ${routeLabel} error:`, error);
-        res.status(500).json({
+        return res.status(500).json({
             error: "Failed to fetch client health indicators",
             details: error.message
         });
@@ -1639,10 +1639,10 @@ app.post('/api/clients', async (req, res) => {
     try {
         log('API', "/api/clients (POST) called");
         const client = await createClient(req.body);
-        res.json(client);
+        return res.json(client);
     } catch (error) {
         logError('API', "/api/clients (POST) error", error);
-        res.status(500).json({ error: "Failed to create client", details: error.message });
+        return res.status(500).json({ error: "Failed to create client", details: error.message });
     }
 });
 
@@ -1652,10 +1652,10 @@ app.get('/api/global-announcements', async (req, res) => {
     try {
         log('API', "Fetching global announcements");
         const announcements = await getGlobalAnnouncements();
-        res.json(announcements);
+        return res.json(announcements);
     } catch (error) {
         logError('API', "Failed to fetch global announcements", error);
-        res.status(500).json({ error: "Failed to fetch global announcements" });
+        return res.status(500).json({ error: "Failed to fetch global announcements", details: error.message });
     }
 });
 
@@ -1692,10 +1692,10 @@ app.post('/api/global-announcements', authenticateToken, async (req, res) => {
             }
         }
 
-        res.json(announcement);
+        return res.json(announcement);
     } catch (error) {
         logError('API', "Failed to create global announcement", error);
-        res.status(500).json({ error: "Failed to create global announcement" });
+        return res.status(500).json({ error: "Failed to create global announcement", details: error.message });
     }
 });
 
@@ -1704,10 +1704,10 @@ app.delete('/api/global-announcements/:id', async (req, res) => {
     try {
         log('API', `Deleting global announcement: ${id}`);
         await deleteGlobalAnnouncement(id);
-        res.json({ success: true });
+        return res.json({ success: true });
     } catch (error) {
         logError('API', "Failed to delete global announcement", error);
-        res.status(500).json({ error: "Failed to delete global announcement" });
+        return res.status(500).json({ error: "Failed to delete global announcement", details: error.message });
     }
 });
 
@@ -1718,10 +1718,10 @@ app.get('/api/clients/:clientId/announcements', async (req, res) => {
     try {
         log('API', `Fetching announcements for client: ${clientId}`);
         const announcements = await getClientAnnouncements(clientId);
-        res.json(announcements);
+        return res.json(announcements);
     } catch (error) {
         logError('API', "Failed to fetch client announcements", error);
-        res.status(500).json({ error: "Failed to fetch announcements" });
+        return res.status(500).json({ error: "Failed to fetch announcements", details: error.message });
     }
 });
 
@@ -1765,10 +1765,10 @@ app.post('/api/clients/:clientId/announcements', authenticateToken, async (req, 
             }
         }
 
-        res.json(announcement);
+        return res.json(announcement);
     } catch (error) {
         logError('API', "Failed to create client announcement", error);
-        res.status(500).json({ error: "Failed to create announcement" });
+        return res.status(500).json({ error: "Failed to create announcement", details: error.message });
     }
 });
 
@@ -1779,10 +1779,10 @@ app.get('/api/clients/:clientId/flow', authenticateToken, async (req, res) => {
     try {
         log('API', `Fetching flow messages for client: ${clientId}`);
         const messages = await getFlowMessages(clientId);
-        res.json(messages);
+        return res.json(messages);
     } catch (error) {
         logError('API', "Failed to fetch flow messages", error);
-        res.status(500).json({ error: "Failed to fetch messages" });
+        return res.status(500).json({ error: "Failed to fetch messages", details: error.message });
     }
 });
 
@@ -1845,10 +1845,10 @@ app.post('/api/clients/:clientId/flow', authenticateToken, async (req, res) => {
             }
         }
 
-        res.json(message);
+        return res.json(message);
     } catch (error) {
         logError('API', "Failed to create flow message", error);
-        res.status(500).json({ error: "Failed to create message" });
+        return res.status(500).json({ error: "Failed to create message", details: error.message });
     }
 });
 
@@ -1858,10 +1858,10 @@ app.get('/api/general-chat', authenticateToken, async (req, res) => {
     try {
         log('API', "Fetching general chat messages");
         const messages = await getGeneralChatMessages();
-        res.json(messages);
+        return res.json(messages);
     } catch (error) {
         logError('API', "Failed to fetch general chat messages", error);
-        res.status(500).json({ error: "Failed to fetch messages" });
+        return res.status(500).json({ error: "Failed to fetch messages", details: error.message });
     }
 });
 
@@ -1910,10 +1910,10 @@ app.post('/api/general-chat', authenticateToken, async (req, res) => {
             }
         }
 
-        res.json(message);
+        return res.json(message);
     } catch (error) {
         logError('API', "Failed to create general chat message", error);
-        res.status(500).json({ error: "Failed to create message" });
+        return res.status(500).json({ error: "Failed to create message", details: error.message });
     }
 });
 
@@ -1923,9 +1923,9 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
     try {
         res.setHeader('Cache-Control', 'no-store, max-age=0');
         const notifications = await getNotifications(req.user.userId);
-        res.json(notifications);
+        return res.json(notifications);
     } catch (error) {
-        res.status(500).json({ error: "Failed to fetch notifications" });
+        return res.status(500).json({ error: "Failed to fetch notifications", details: error.message });
     }
 });
 
@@ -1933,9 +1933,9 @@ app.get('/api/notifications/unread-count', authenticateToken, async (req, res) =
     try {
         res.setHeader('Cache-Control', 'no-store, max-age=0');
         const count = await getUnreadNotificationCount(req.user.userId);
-        res.json({ count });
+        return res.json({ count });
     } catch (error) {
-        res.status(500).json({ error: "Failed to fetch unread count" });
+        return res.status(500).json({ error: "Failed to fetch unread count", details: error.message });
     }
 });
 
@@ -1945,27 +1945,27 @@ app.post('/api/notifications', authenticateToken, async (req, res) => {
         if (!userId || !message) return res.status(400).json({ error: "Missing fields" });
 
         const notification = await createNotification({ userId, message, type, relatedId });
-        res.json(notification);
+        return res.json(notification);
     } catch (error) {
-        res.status(500).json({ error: "Failed to create notification" });
+        return res.status(500).json({ error: "Failed to create notification", details: error.message });
     }
 });
 
 app.patch('/api/notifications/:id/read', authenticateToken, async (req, res) => {
     try {
         await markAsRead(req.params.id);
-        res.json({ success: true });
+        return res.json({ success: true });
     } catch (error) {
-        res.status(500).json({ error: "Failed to mark as read" });
+        return res.status(500).json({ error: "Failed to mark as read", details: error.message });
     }
 });
 
 app.post('/api/notifications/read-all', authenticateToken, async (req, res) => {
     try {
         await markAllNotificationsAsRead(req.user.userId);
-        res.json({ success: true });
+        return res.json({ success: true });
     } catch (error) {
-        res.status(500).json({ error: "Failed to mark all as read" });
+        return res.status(500).json({ error: "Failed to mark all as read", details: error.message });
     }
 });
 

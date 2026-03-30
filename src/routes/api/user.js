@@ -8,9 +8,9 @@ const router = express.Router();
 router.get('/profile', async (req, res) => {
     try {
         const profile = await getUserProfile(req.user.userId);
-        res.json(profile);
+        return res.json(profile);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return res.status(500).json({ error: error.message });
     }
 });
 
@@ -24,9 +24,9 @@ router.get('/profile/:userId', async (req, res) => {
         if (!profile) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
-        res.json(profile);
+        return res.json(profile);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return res.status(500).json({ error: error.message });
     }
 });
 
@@ -34,9 +34,9 @@ router.put('/profile', async (req, res) => {
     try {
         const { name, bio } = req.body;
         const updatedProfile = await updateUserProfile(req.user.userId, { name, bio });
-        res.json(updatedProfile);
+        return res.json(updatedProfile);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return res.status(500).json({ error: error.message });
     }
 });
 
@@ -47,10 +47,10 @@ router.put('/password', async (req, res) => {
             return res.status(400).json({ error: 'Contraseña actual y nueva son requeridas' });
         }
         await updateUserPassword(req.user.userId, currentPassword, newPassword);
-        res.json({ message: 'Contraseña actualizada correctamente' });
+        return res.json({ message: 'Contraseña actualizada correctamente' });
     } catch (error) {
         const status = error.message === 'Contraseña actual incorrecta' ? 400 : 500;
-        res.status(status).json({ error: error.message });
+        return res.status(status).json({ error: error.message });
     }
 });
 
@@ -58,9 +58,9 @@ router.put('/password', async (req, res) => {
 router.get('/notes', async (req, res) => {
     try {
         const notes = await getUserNotes(req.user.userId);
-        res.json(notes);
+        return res.json(notes);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return res.status(500).json({ error: error.message });
     }
 });
 
@@ -71,9 +71,9 @@ router.post('/notes', async (req, res) => {
             return res.status(400).json({ error: 'Título y contenido son requeridos' });
         }
         const note = await createUserNote(req.user.userId, { title, content });
-        res.status(201).json(note);
+        return res.status(201).json(note);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return res.status(500).json({ error: error.message });
     }
 });
 
@@ -81,20 +81,20 @@ router.put('/notes/:id', async (req, res) => {
     try {
         const { title, content } = req.body;
         const note = await updateUserNote(req.user.userId, req.params.id, { title, content });
-        res.json(note);
+        return res.json(note);
     } catch (error) {
         const status = error.message.includes('permiso') ? 403 : 404;
-        res.status(status).json({ error: error.message });
+        return res.status(status).json({ error: error.message });
     }
 });
 
 router.delete('/notes/:id', async (req, res) => {
     try {
         await deleteUserNote(req.user.userId, req.params.id);
-        res.json({ message: 'Nota eliminada correctamente' });
+        return res.json({ message: 'Nota eliminada correctamente' });
     } catch (error) {
         const status = error.message.includes('permiso') ? 403 : 404;
-        res.status(status).json({ error: error.message });
+        return res.status(status).json({ error: error.message });
     }
 });
 

@@ -16,10 +16,10 @@ router.get('/', async (req, res) => {
       orderBy: { name: 'asc' },
     });
 
-    res.json(teamMembers);
+    return res.json(teamMembers);
   } catch (error) {
     console.error('Error fetching team members:', error);
-    res.status(500).json({ error: 'Failed to fetch team members' });
+    return res.status(500).json({ error: 'Failed to fetch team members', details: error.message });
   }
 });
 
@@ -73,10 +73,10 @@ router.post('/', async (req, res) => {
         return member;
     });
 
-    res.status(201).json(newMember);
+    return res.status(201).json(newMember);
   } catch (error) {
     console.error('Error creating team member and user:', error);
-    res.status(500).json({ error: 'Failed to create team member and auto-provision user account.' });
+    return res.status(500).json({ error: 'Failed to create team member and auto-provision user account.', details: error.message });
   }
 });
 
@@ -97,10 +97,10 @@ router.put('/:id', async (req, res) => {
       },
     });
 
-    res.json(updatedMember);
+    return res.json(updatedMember);
   } catch (error) {
     console.error('Error updating team member:', error);
-    res.status(500).json({ error: 'Failed to update team member' });
+    return res.status(500).json({ error: 'Failed to update team member', details: error.message });
   }
 });
 
@@ -115,10 +115,10 @@ router.delete('/:id', async (req, res) => {
       data: { isActive: false },
     });
 
-    res.json(deactivatedMember);
+    return res.json(deactivatedMember);
   } catch (error) {
     console.error('Error deactivating team member:', error);
-    res.status(500).json({ error: 'Failed to deactivate team member' });
+    return res.status(500).json({ error: 'Failed to deactivate team member', details: error.message });
   }
 });
 

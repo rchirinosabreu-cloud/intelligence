@@ -31,10 +31,10 @@ router.get('/:collaboratorId', async (req, res) => {
         }
 
         const feedback = await getFeedbackForCollaborator(collaboratorId, requesterRole === 'ADMIN');
-        res.json(feedback);
+        return res.json(feedback);
     } catch (error) {
         console.error('[Feedback API] Error fetching feedback:', error);
-        res.status(500).json({ error: 'Error al obtener el historial de feedback' });
+        return res.status(500).json({ error: 'Error al obtener el historial de feedback', details: error.message });
     }
 });
 
@@ -59,10 +59,10 @@ router.post('/', isAdmin, async (req, res) => {
             privateNote
         });
 
-        res.status(201).json(newRecord);
+        return res.status(201).json(newRecord);
     } catch (error) {
         console.error('[Feedback API] Error creating feedback:', error);
-        res.status(500).json({ error: 'Error al crear el registro de feedback' });
+        return res.status(500).json({ error: 'Error al crear el registro de feedback', details: error.message });
     }
 });
 
@@ -81,10 +81,10 @@ router.patch('/:id', isAdmin, async (req, res) => {
             privateNote
         });
 
-        res.json(updatedRecord);
+        return res.json(updatedRecord);
     } catch (error) {
         console.error('[Feedback API] Error updating feedback:', error);
-        res.status(500).json({ error: 'Error al actualizar el registro de feedback' });
+        return res.status(500).json({ error: 'Error al actualizar el registro de feedback', details: error.message });
     }
 });
 
@@ -93,10 +93,10 @@ router.delete('/:id', isAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         await softDeleteFeedbackRecord(id);
-        res.json({ success: true, message: 'Registro eliminado (soft-delete) correctamente' });
+        return res.json({ success: true, message: 'Registro eliminado (soft-delete) correctamente' });
     } catch (error) {
         console.error('[Feedback API] Error deleting feedback:', error);
-        res.status(500).json({ error: 'Error al eliminar el registro de feedback' });
+        return res.status(500).json({ error: 'Error al eliminar el registro de feedback', details: error.message });
     }
 });
 
