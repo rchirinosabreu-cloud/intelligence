@@ -55,6 +55,7 @@ const normalizeOrigin = (origin = '') => String(origin).trim().replace(/\/$/, ''
 const allowedOrigins = new Set([
   "https://intelligence.brainstudioagencia.com",
   "https://intelligence.brainstudioagencia.com/",
+  "https://api.brainstudioagencia.com",
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:4173",
@@ -114,6 +115,12 @@ app.options("*", cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// --- LOGGING MIDDLEWARE ---
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
+
 // --- AUTHENTICATION SETUP & MIDDLEWARE ---
 const JWT_SECRET = process.env.JWT_SECRET || 'brainstudio-secret-key-2025';
 
@@ -146,68 +153,6 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// --- GEMINI PROXY (Now mounted AFTER express.json with restreaming) ---
-const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
-
-if (!geminiApiKey) {
-    console.warn("[Gemini Proxy] WARNING: GEMINI_API_KEY is not defined.");
-}
-
-app.use(
-  '/api/gemini',
-  authenticateToken,
-  createProxyMiddleware({
-    target: 'https://generativelanguage.googleapis.com',
-    changeOrigin: true,
-    secure: true,
-    pathRewrite: (path) => path.replace(/^\/api\/gemini/, ''),
-    proxyTimeout: 300000,
-    timeout: 300000,
-    on: {
-      proxyReq: (proxyReq, req, res) => {
-        proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
-        proxyReq.removeHeader('Authorization');
-
-        if (geminiApiKey) {
-          proxyReq.setHeader('x-goog-api-key', geminiApiKey);
-        }
-
-        // Restream the body if it was already parsed by express.json()
-        if (req.body) {
-          const bodyData = JSON.stringify(req.body);
-          proxyReq.setHeader('Content-Type', 'application/json');
-          proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
-          proxyReq.write(bodyData);
-        }
-      },
-      proxyRes: (proxyRes, req, res) => {
-        // Force CORS headers in every response, especially on errors (4xx, 5xx)
-        const origin = req.headers.origin || "*";
-        res.header("Access-Control-Allow-Origin", origin);
-        res.header("Access-Control-Allow-Credentials", "true");
-        res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-        res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-        if (proxyRes.statusCode >= 400) {
-          console.error(`[Gemini Proxy] Error ${proxyRes.statusCode} on ${req.method} ${req.url}`);
-        }
-      },
-      error: (err, req, res) => {
-        console.error('[Gemini Proxy] Fatal Proxy Error:', err.message);
-
-        if (!res.headersSent) {
-          const origin = req.headers.origin || "*";
-          res.header("Access-Control-Allow-Origin", origin);
-          res.header("Access-Control-Allow-Credentials", "true");
-          res.status(502).json({
-            error: 'Proxy Error (Gemini)',
-            details: err.message
-          });
-        }
-      }
-    }
-  })
-);
 
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -420,11 +365,7 @@ app.get('/api/sync-users', async (req, res) => {
 });
 
 // Protect core intelligence API endpoints
-app.use('/api/db', authenticateToken);
-app.use('/api/clients', authenticateToken);
-app.use('/api/tasks', authenticateToken);
-app.use('/api/team', authenticateToken);
-app.use('/api/global-announcements', authenticateToken);
+app.use('/api', authenticateToken);
 
 // --- MINUTES PROXY ROUTES ---
 const openaiApiKey = process.env.OPENAI_API_KEY;
@@ -1312,11 +1253,6 @@ function createThinkingFilter() {
         return output;
     };
 }
-
-
-app.get('/', (req, res) => {
-    res.status(200).send('Brainstudio Intelligence API is running (v6-stable-deploy).');
-});
 
 
 app.get('/api/calendar/upcoming', async (req, res) => {
@@ -2356,30 +2292,88 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
+// --- GEMINI PROXY (Now mounted AFTER API routes) ---
+const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
+
+if (!geminiApiKey) {
+    console.warn("[Gemini Proxy] WARNING: GEMINI_API_KEY is not defined.");
+}
+
+app.use(
+  '/api/gemini',
+  authenticateToken,
+  createProxyMiddleware({
+    target: 'https://generativelanguage.googleapis.com',
+    changeOrigin: true,
+    secure: true,
+    pathRewrite: (path) => path.replace(/^\/api\/gemini/, ''),
+    proxyTimeout: 300000,
+    timeout: 300000,
+    on: {
+      proxyReq: (proxyReq, req, res) => {
+        proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
+        proxyReq.removeHeader('Authorization');
+
+        if (geminiApiKey) {
+          proxyReq.setHeader('x-goog-api-key', geminiApiKey);
+        }
+
+        // Restream the body if it was already parsed by express.json()
+        if (req.body) {
+          const bodyData = JSON.stringify(req.body);
+          proxyReq.setHeader('Content-Type', 'application/json');
+          proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+          proxyReq.write(bodyData);
+        }
+      },
+      proxyRes: (proxyRes, req, res) => {
+        // Force CORS headers in every response, especially on errors (4xx, 5xx)
+        const origin = req.headers.origin || "*";
+        res.header("Access-Control-Allow-Origin", origin);
+        res.header("Access-Control-Allow-Credentials", "true");
+        res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+        res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+        if (proxyRes.statusCode >= 400) {
+          console.error(`[Gemini Proxy] Error ${proxyRes.statusCode} on ${req.method} ${req.url}`);
+        }
+      },
+      error: (err, req, res) => {
+        console.error('[Gemini Proxy] Fatal Proxy Error:', err.message);
+
+        if (!res.headersSent) {
+          const origin = req.headers.origin || "*";
+          res.header("Access-Control-Allow-Origin", origin);
+          res.header("Access-Control-Allow-Credentials", "true");
+          res.status(502).json({
+            error: 'Proxy Error (Gemini)',
+            details: err.message
+          });
+        }
+      }
+    }
+  })
+);
+
+// --- STATIC FILES & SPA ROUTING ---
+
+// Serve static files from the 'dist' directory
+app.use(express.static(path.join(__dirname, 'dist')));
+
 // Catch-all route to serve React app for any unknown path
-// This is essential for client-side routing (Refresh support)
 app.get('*', (req, res) => {
     // Only if not starting with /api
     if (req.path.startsWith('/api')) {
         return res.status(404).json({ error: "API endpoint not found" });
     }
 
-    // In production/build, we serve index.html
-    // In this dev environment with Vite running separately, we typically don't serve static files from here
-    // BUT the request was "Asegúrate de que si el usuario... recarga... la aplicación cargue correctamente"
-    // Since we are running `node server.js` alongside Vite, Vite handles the frontend dev server routing.
-    // If this backend is serving production build:
-    // app.use(express.static(path.join(__dirname, 'dist')));
-    // res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+    // Serve index.html for SPA routing
+    const indexPath = path.join(__dirname, 'dist', 'index.html');
+    if (fs.existsSync(indexPath)) {
+        return res.sendFile(indexPath);
+    }
 
-    // However, if the user hits the Express server directly with a non-API route, we should tell them
-    // or redirect if we were serving static.
-    // Given the setup description, usually Vite dev server (port 3000) handles frontend routing.
-    // Express (port 8080) handles API.
-    // The user's browser is on port 3000. So reloading /cliente/123 on port 3000 is handled by Vite.
-    // Vite needs historyApiFallback (which it has by default).
-    // If the user meant the production deployment where Express might serve frontend:
-    res.status(200).send("Backend is running. For frontend, use the Vite dev server or build output.");
+    res.status(200).send("Brainstudio Intelligence Backend is running. (Frontend build not found)");
 });
 
 const server = app.listen(PORT, '0.0.0.0', () => {
