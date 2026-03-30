@@ -1,8 +1,16 @@
 const normalizeBaseUrl = (url) => String(url || '').replace(/\/$/, '');
 
 export function getApiBaseUrl() {
+  // FINAL CLEANUP: Ensure strict plain text URL for production to avoid build-time hydration issues.
+  const FINAL_PROD_URL = 'https://api.brainstudioagencia.com';
+
   const configured = normalizeBaseUrl(import.meta.env.VITE_API_URL);
-  if (configured) return configured;
+  if (configured && !configured.includes('${')) return configured;
+
+  // If we are in a production-like hostname, force the clean domain.
+  if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+      return FINAL_PROD_URL;
+  }
 
   if (typeof window !== 'undefined') {
     const { protocol, hostname, port } = window.location;
