@@ -596,7 +596,7 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                     ))}
                                 </div>
                             </div>
-                        </>
+                        </div>
                     )}
                 </div>
             </div>
