@@ -321,7 +321,7 @@ router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res)
         // - ADMIN: Full power for ANY memberId.
         // - USER: ONLY their own profile (match by User ID).
         // Note: memberId from params is used as the target.
-        const isTargetSelf = currentUserId && (currentUserId === memberId || currentUserId === (userProfile?.id || teamMember?.userId));
+        const isTargetSelf = currentUserId && (currentUserId === memberId || currentUserId === userProfile?.id || currentUserId === teamMember?.userId);
         const isAuthorized = isAdmin || isTargetSelf;
 
         if (!isAuthorized) {
@@ -410,6 +410,7 @@ router.get('/member/:memberId/avatar-image', async (req, res) => {
 
         // Set Headers (Ensuring correct Content-Type from metadata)
         const contentType = metadata.contentType || 'image/jpeg';
+        console.log(`[TalentRadar] Proxying avatar with Content-Type: ${contentType}`);
         res.setHeader('Content-Type', contentType);
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('Pragma', 'no-cache');
