@@ -1,4 +1,7 @@
-import prisma from './src/lib/prisma.js';
+import prisma from '../src/lib/prisma.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 async function seed() {
   console.log('Seeding initial data for verification...');

@@ -5,7 +5,7 @@
   "private": true,
   "description": "Brainstudio Intelligence - Minimal ChatGPT-style conversational assistant",
   "scripts": {
-    "start": "npx prisma generate && node db-sync.js && node deep-recover.js && node recover-returned.js && node server.js",
+    "start": "npx prisma generate && node scripts/db-sync.js && node scripts/deep-recover.js && node scripts/recover-returned.js && node server.js",
     "dev": "vite --host :: --port 3000",
     "build": "vite build",
     "postinstall": "prisma generate",

@@ -74,6 +74,7 @@ router.get('/summary', async (req, res) => {
             select: {
                 id: true,
                 name: true,
+                avatarUrl: true,
                 nativeTasks: {
                     where: {
                         completedAt: { gte: startDate, lte: endDate }
@@ -99,6 +100,7 @@ router.get('/summary', async (req, res) => {
             return {
                 id: member.id,
                 name: member.name,
+                avatarUrl: member.avatarUrl,
                 x: avgComplexity, // complexity scale 1-3
                 y: avgReturns, // lower is better
                 count: completedCount

@@ -239,8 +239,10 @@ const TalentRadar = () => {
 
                     <div className="h-[280px] w-full relative">
                         {/* Matrix Labels */}
-                        <div className="absolute top-0 left-0 text-[9px] font-bold text-zinc-400 opacity-50 uppercase tracking-widest">Estrellas</div>
-                        <div className="absolute bottom-10 right-0 text-[9px] font-bold text-zinc-400 opacity-50 uppercase tracking-widest">En Mejora</div>
+                        <div className="absolute top-2 right-4 text-[8px] font-black text-indigo-500/40 uppercase tracking-[0.2em]">Súper Estrellas</div>
+                        <div className="absolute top-2 left-4 text-[8px] font-black text-zinc-400/40 uppercase tracking-[0.2em]">Promesas</div>
+                        <div className="absolute bottom-12 right-4 text-[8px] font-black text-zinc-400/40 uppercase tracking-[0.2em]">Ejecutores</div>
+                        <div className="absolute bottom-12 left-4 text-[8px] font-black text-red-500/30 uppercase tracking-[0.2em]">En Riesgo</div>
 
                         <ResponsiveContainer width="100%" height="100%">
                             <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 10 }}>
@@ -282,11 +284,52 @@ const TalentRadar = () => {
                                         return null;
                                     }}
                                 />
-                                <Scatter name="Equipo" data={scatterData}>
-                                    {scatterData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill="#6366f1" />
-                                    ))}
-                                    <LabelList dataKey="name" position="top" style={{ fontSize: 9, fill: '#6366f1', fontWeight: 'bold' }} />
+                                {/* Custom Grid Lines for 3x3 */}
+                                <line x1="33.3%" y1="0" x2="33.3%" y2="100%" stroke="rgba(0,0,0,0.05)" strokeDasharray="3 3" />
+                                <line x1="66.6%" y1="0" x2="66.6%" y2="100%" stroke="rgba(0,0,0,0.05)" strokeDasharray="3 3" />
+                                <line x1="0" y1="33.3%" x2="100%" y2="33.3%" stroke="rgba(0,0,0,0.05)" strokeDasharray="3 3" />
+                                <line x1="0" y1="66.6%" x2="100%" y2="66.6%" stroke="rgba(0,0,0,0.05)" strokeDasharray="3 3" />
+
+                                <Scatter
+                                    name="Equipo"
+                                    data={scatterData}
+                                    shape={(props) => {
+                                        const { cx, cy, payload } = props;
+                                        return (
+                                            <g transform={`translate(${cx-15},${cy-15})`}>
+                                                <defs>
+                                                    <clipPath id={`clip-${payload.id}`}>
+                                                        <circle cx="15" cy="15" r="15" />
+                                                    </clipPath>
+                                                </defs>
+                                                <circle cx="15" cy="15" r="16" fill="#fff" stroke="#6366f1" strokeWidth="2" />
+                                                {payload.avatarUrl ? (
+                                                    <image
+                                                        xlinkHref={payload.avatarUrl}
+                                                        width="30"
+                                                        height="30"
+                                                        clipPath={`url(#clip-${payload.id})`}
+                                                        preserveAspectRatio="xMidYMid slice"
+                                                    />
+                                                ) : (
+                                                    <circle cx="15" cy="15" r="15" fill="#6366f1" />
+                                                )}
+                                                <text
+                                                    x="15" y="15"
+                                                    textAnchor="middle"
+                                                    dominantBaseline="central"
+                                                    fill="#fff"
+                                                    fontSize="8"
+                                                    fontWeight="bold"
+                                                    style={{ display: payload.avatarUrl ? 'none' : 'block' }}
+                                                >
+                                                    {payload.name?.substring(0, 2).toUpperCase()}
+                                                </text>
+                                            </g>
+                                        );
+                                    }}
+                                >
+                                    <LabelList dataKey="name" position="bottom" offset={10} style={{ fontSize: 9, fill: '#6366f1', fontWeight: 'bold' }} />
                                 </Scatter>
                             </ScatterChart>
                         </ResponsiveContainer>
@@ -333,7 +376,9 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
 
     const generateInsight = async () => {
         setIsGenerating(true);
-        setAiInsight(null);
+        // Clear previous insight for THIS member
+        setAiInsights(prev => ({ ...prev, [memberId]: null }));
+
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
