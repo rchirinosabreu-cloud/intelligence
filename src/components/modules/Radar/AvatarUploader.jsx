@@ -36,6 +36,8 @@ const AvatarUploader = ({ member, memberId, onUploadSuccess }) => {
             await queryClient.invalidateQueries({ queryKey: ['member-radar-detail'] });
             await queryClient.invalidateQueries({ queryKey: ['user-profile'] });
             await queryClient.invalidateQueries({ queryKey: ['user-data'] }); // For AppLayout Header
+            await queryClient.invalidateQueries({ queryKey: ['team-members'] }); // For Team lists
+            await queryClient.invalidateQueries({ queryKey: ['user'] }); // For Generic User Lists
 
             toast.success("Foto de perfil actualizada");
             if (onUploadSuccess) onUploadSuccess();
@@ -70,7 +72,7 @@ const AvatarUploader = ({ member, memberId, onUploadSuccess }) => {
 
                 <div className="text-center space-y-1">
                     <h5 className="text-sm font-bold text-zinc-900 dark:text-white truncate max-w-[200px]">
-                        {member?.avatarUrl ? (member?.name || 'Usuario') : 'Usuario'}
+                        {member?.avatarUrl ? member?.name : 'Usuario'}
                     </h5>
                     <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">{member?.role || 'Miembro de Equipo'}</p>
                 </div>

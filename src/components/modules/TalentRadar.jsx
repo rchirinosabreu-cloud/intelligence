@@ -314,19 +314,20 @@ const TalentRadar = () => {
                                                         preserveAspectRatio="xMidYMid slice"
                                                     />
                                                 ) : (
-                                                    <circle cx="15" cy="15" r="15" fill="#6366f1" />
+                                                    <>
+                                                        <circle cx="15" cy="15" r="15" fill="#6366f1" />
+                                                        <text
+                                                            x="15" y="15"
+                                                            textAnchor="middle"
+                                                            dominantBaseline="central"
+                                                            fill="#fff"
+                                                            fontSize="8"
+                                                            fontWeight="bold"
+                                                        >
+                                                            {payload.name?.substring(0, 2).toUpperCase()}
+                                                        </text>
+                                                    </>
                                                 )}
-                                                <text
-                                                    x="15" y="15"
-                                                    textAnchor="middle"
-                                                    dominantBaseline="central"
-                                                    fill="#fff"
-                                                    fontSize="8"
-                                                    fontWeight="bold"
-                                                    style={{ display: payload.avatarUrl ? 'none' : 'block' }}
-                                                >
-                                                    {payload.name?.substring(0, 2).toUpperCase()}
-                                                </text>
                                             </g>
                                         );
                                     }}
@@ -354,14 +355,14 @@ const TalentRadar = () => {
 const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
     const { currentUser } = useAuth();
     const isAdmin = currentUser?.role === 'ADMIN';
-    const [activeTab, setActiveTab] = useState('info');
+    const [activeTab, setActiveTab] = useState('profile');
     const [isGenerating, setIsGenerating] = useState(false);
     const [aiInsights, setAiInsights] = useState({}); // Isolate insights by member ID
 
     // Reset state on close/change
     useEffect(() => {
         setIsGenerating(false);
-        setActiveTab('info');
+        setActiveTab('profile');
     }, [memberId]);
 
     const aiInsight = memberId ? aiInsights[memberId] : null;
@@ -440,10 +441,10 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                 {isAdmin && (
                     <div className="flex items-center px-6 border-b border-zinc-100 dark:border-white/5">
                         <button
-                            onClick={() => setActiveTab('info')}
+                            onClick={() => setActiveTab('profile')}
                             className={cn(
                                 "py-3 px-4 text-[10px] font-bold uppercase tracking-widest transition-all border-b-2",
-                                activeTab === 'info' ? "text-indigo-500 border-indigo-500" : "text-zinc-400 border-transparent hover:text-zinc-600"
+                                activeTab === 'profile' ? "text-indigo-500 border-indigo-500" : "text-zinc-400 border-transparent hover:text-zinc-600"
                             )}
                         >
                             Info Pública
@@ -465,12 +466,12 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                         <div className="flex items-center justify-center py-20">
                             <Loader2 className="w-6 h-6 animate-spin text-zinc-400" />
                         </div>
-                    ) : activeTab === 'info' ? (
+                    ) : activeTab === 'profile' ? (
                         <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
                             <AvatarUploader member={member} memberId={memberId} />
                         </div>
                     ) : (
-                        <>
+                        <div className="space-y-8 animate-in slide-in-from-left-4 duration-300">
                             {/* Member Stats Overview */}
                             <div className="grid grid-cols-2 gap-4">
                                 <Card className="p-4 bg-zinc-50 dark:bg-white/5 border-none">

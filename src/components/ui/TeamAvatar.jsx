@@ -39,7 +39,7 @@ export default function TeamAvatar({ member, className, size = 32 }) {
   const avatarUrl = typeof member === 'string' ? null : member.avatarUrl;
 
   // Use the image if provided AND not empty string
-  if (avatarUrl && avatarUrl.trim() !== '') {
+  if (avatarUrl && avatarUrl.trim() !== '' && !avatarUrl.includes('null')) {
     return (
       <img
         src={avatarUrl}
@@ -54,11 +54,19 @@ export default function TeamAvatar({ member, className, size = 32 }) {
     );
   }
 
-  // Fallback to boring-avatars
+  // Fallback with initials (Max 2 letters) inside the boring-avatar style
+  // We use the boring-avatar as the base and overlay the initials for clarity
+  const initials = name
+    .split(' ')
+    .map(n => n[0])
+    .join('')
+    .substring(0, 2)
+    .toUpperCase();
+
   return (
     <div
       className={cn(
-        "rounded-full shrink-0 shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center bg-white",
+        "rounded-full shrink-0 shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center bg-white relative",
         "w-8 h-8", // Default sizing
         className
       )}
@@ -70,6 +78,11 @@ export default function TeamAvatar({ member, className, size = 32 }) {
         variant="beam"
         colors={brainstudioColors}
       />
+      <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+        <span className="text-[10px] font-black text-white drop-shadow-md tracking-tighter">
+          {initials}
+        </span>
+      </div>
     </div>
   );
 }
