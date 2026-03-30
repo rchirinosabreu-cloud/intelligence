@@ -204,11 +204,6 @@ const PORT = process.env.PORT || 8080;
 console.log(`[Auth] JWT_SECRET ${process.env.JWT_SECRET ? 'configured from env' : 'using fallback secret'}.`);
 
 app.post('/api/login', async (req, res) => {
-  // --- FASE 1: TEST DE SHORT-CIRCUIT (PRIORIDAD CRÍTICA) ---
-  // Si esta ruta devuelve HTML en producción, el problema es de ruteo o redirección.
-  // Insertamos este res.json() en la PRIMERA LÍNEA para diagnóstico absoluto.
-  return res.json({ test: 'ok', reached: true, method: req.method, protocol: req.headers['x-forwarded-proto'] || req.protocol });
-
   try {
       const { email, password } = req.body;
 
