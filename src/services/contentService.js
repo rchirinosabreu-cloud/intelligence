@@ -28,7 +28,15 @@ export const getContentPlans = async (clientId) => {
     });
 
     console.log(`[Service] getContentPlans: Found ${plans.length} plans`);
-    return plans;
+
+    // Map for frontend compatibility: contentItems -> items
+    return plans.map(plan => ({
+      ...plan,
+      _count: {
+        ...plan._count,
+        items: plan._count?.contentItems || 0
+      }
+    }));
   } catch (error) {
     console.error(`[Service] Error in getContentPlans (clientId: ${clientId}):`, error);
     throw error;
@@ -54,6 +62,15 @@ export const getContentPlanById = async (id) => {
   });
 
   if (plan && plan.deletedAt) return null;
+
+  // Frontend Compatibility: items -> contentItems
+  if (plan) {
+    return {
+      ...plan,
+      items: plan.contentItems || []
+    };
+  }
+
   return plan;
 };
 
@@ -87,6 +104,15 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
       }
     }
   });
+
+  // Frontend Compatibility: items -> contentItems
+  if (plan) {
+    return {
+      ...plan,
+      items: plan.contentItems || []
+    };
+  }
+
   return plan;
 };
 
