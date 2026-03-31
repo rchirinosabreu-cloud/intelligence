@@ -218,7 +218,8 @@ const NativeTasks = () => {
           specialType: task.specialType,
           referenceUrl: task.referenceUrl,
           contentPlanId: task.contentItem?.planId,
-          contentItemId: task.contentItem?.id
+          contentItemId: task.contentItem?.id,
+          plan: task.plan // Contains slug, month, year
       }));
     },
     refetchInterval: 30000,
@@ -994,6 +995,7 @@ const NativeTasks = () => {
 };
 
 const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete }) => {
+    const navigate = useNavigate();
     const isHighlighted = highlightedTaskId === String(task.id);
 
     // Overdue Logic for Style
@@ -1119,11 +1121,16 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                     </div>
 
                                     <div className="flex items-center gap-2">
-                                        {task.contentPlanId && (
+                                        {(task.contentPlanId || task.plan) && (
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    navigate(`/parrillas/${task.contentPlanId}?itemId=${task.contentItemId}`);
+                                                    if (task.plan && task.plan.slug) {
+                                                        const monthStr = String(task.plan.month).padStart(2, '0');
+                                                        navigate(`/parrillas/${task.plan.slug}/${monthStr}-${task.plan.year}?itemId=${task.contentItemId}`);
+                                                    } else {
+                                                        navigate(`/parrillas/${task.contentPlanId}?itemId=${task.contentItemId}`);
+                                                    }
                                                 }}
                                                 className="text-indigo-600 hover:text-indigo-800 transition-colors p-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-full"
                                                 title="Ir a la Parrilla de Contenido"
