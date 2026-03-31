@@ -33,14 +33,14 @@ describe('contentService', () => {
 
   describe('getContentPlans', () => {
     it('should fetch all content plans when no clientId is provided', async () => {
-      prisma.contentPlan.findMany.mockResolvedValue([{ id: '1' }]);
+      prisma.contentPlan.findMany.mockResolvedValue([{ id: '1', _count: { contentItems: 0 } }]);
       const result = await contentService.getContentPlans();
       expect(prisma.contentPlan.findMany).toHaveBeenCalledWith({
         where: { deletedAt: null },
         include: expect.any(Object),
         orderBy: expect.any(Array),
       });
-      expect(result).toEqual([{ id: '1' }]);
+      expect(result).toEqual([{ id: '1', _count: { contentItems: 0, items: 0 } }]);
     });
 
     it('should filter by clientId when provided', async () => {
