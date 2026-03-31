@@ -287,6 +287,54 @@ app.use('/api/db', authenticateToken, dbRouter);
 // Client Files Routes (Deliverables)
 app.use('/api/clients/:clientId', authenticateToken, clientFileRouter);
 
+// Proxy for Client Logos (Cached & Immutable)
+app.get('/api/clients/:clientId/logo-image', async (req, res) => {
+    const { clientId } = req.params;
+    try {
+        const client = await prisma.client.findUnique({
+            where: { id: clientId },
+            select: { logoUrl: true }
+        });
+
+        if (!client || !client.logoUrl) {
+            return res.status(404).send("Logo no encontrado");
+        }
+
+        // If it's already a full URL (external), we can redirect or fetch/pipe
+        // But the requirement is to apply immutable cache logic.
+        // For UI-Avatars or external, redirect is fine, but for GCS we should pipe.
+        if (client.logoUrl.includes('gcsPath=')) {
+            const gcsPath = client.logoUrl.split('gcsPath=')[1]?.split('&')[0];
+            if (gcsPath) {
+                const decodedPath = decodeURIComponent(gcsPath);
+                const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
+                const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+                const projectId = process.env.GOOGLE_CLOUD_PROJECT;
+                const { Storage } = await import('@google-cloud/storage');
+                const storage = new Storage({ projectId, credentials: JSON.parse(credentialsJson) });
+
+                const file = storage.bucket(bucketName).file(decodedPath);
+                const [metadata] = await file.getMetadata();
+
+                res.setHeader('Content-Type', metadata.contentType || 'image/png');
+                res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+                if (metadata.etag) res.setHeader('ETag', metadata.etag);
+
+                return file.createReadStream().pipe(res);
+            }
+        }
+
+        // Fallback: Redirect to original logoUrl (likely ui-avatars)
+        // Note: Redirects aren't easily "immutable" cached by browsers like direct streams,
+        // but we'll respect the external source.
+        res.redirect(client.logoUrl);
+
+    } catch (error) {
+        console.error("[ClientLogo] Proxy error:", error);
+        res.status(500).send("Error al cargar logo");
+    }
+});
+
 // Talent Radar Routes (IA Analytics)
 app.use('/api/talent-radar', authenticateToken, talentRadarRouter);
 

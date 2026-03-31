@@ -62,11 +62,13 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
     filteredTasks.forEach(task => {
         const userId = task.assigneeId || 'unassigned';
         const userName = task.assignee ? task.assignee.name : 'Equipo (Sin asignar)';
+        const userAvatar = task.assignee ? task.assignee.avatarUrl : null;
 
         if (!groupedByUser[userId]) {
             groupedByUser[userId] = {
                 name: userName,
                 id: userId,
+                avatarUrl: userAvatar,
                 items: []
             };
         }
@@ -186,7 +188,13 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                     <div key={userGroup.id} className="space-y-4">
                         {/* User Header */}
                         <div className="flex items-center gap-3 pb-2 border-b border-zinc-100 dark:border-zinc-800/50">
-                            <TeamAvatar member={userGroup.id !== 'unassigned' ? { name: userGroup.name } : null} className="w-8 h-8" />
+                            <TeamAvatar
+                                member={userGroup.id !== 'unassigned' ? {
+                                    name: userGroup.name,
+                                    avatarUrl: userGroup.avatarUrl
+                                } : null}
+                                className="w-8 h-8"
+                            />
                             <h3 className="font-semibold text-zinc-900 dark:text-white text-lg">{userGroup.name}</h3>
                         </div>
 

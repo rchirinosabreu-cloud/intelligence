@@ -113,20 +113,6 @@ const Sidebar = ({ isOpen, onClose }) => {
       {/* Footer */}
       <div className="p-4 border-t border-zinc-200/50 dark:border-white/5 bg-white/30 dark:bg-zinc-900/30 backdrop-blur-md transition-colors space-y-4">
         <ChaosMeter />
-
-        {/* Simple User Indicator for Sidebar */}
-        <div className="px-4 py-3 rounded-2xl bg-white/40 dark:bg-white/5 border border-zinc-200/50 dark:border-white/5 backdrop-blur-sm">
-            <div className="flex items-center gap-3">
-                <TeamAvatar
-                    member={{ name: currentUser?.name, avatarUrl: currentUser?.avatarUrl }}
-                    className="w-8 h-8"
-                />
-                <div className="flex flex-col">
-                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{currentUser?.name}</span>
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Conectado</span>
-                </div>
-            </div>
-        </div>
       </div>
     </aside>
   );
