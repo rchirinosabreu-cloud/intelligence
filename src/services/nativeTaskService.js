@@ -122,8 +122,11 @@ export const getTasks = async (clientId) => {
                 return {
                     ...task,
                     plan: {
-                        ...task.contentItem.plan,
-                        slug: task.contentItem.plan.client?.slug || task.client?.slug
+                        id: task.contentItem.plan.id,
+                        slug: task.contentItem.plan.client?.slug || task.client?.slug,
+                        month: task.contentItem.plan.month,
+                        year: task.contentItem.plan.year,
+                        status: task.contentItem.plan.status
                     }
                 };
             }
@@ -206,8 +209,11 @@ export const createTask = async ({
             return {
                 ...newTask,
                 plan: {
-                    ...newTask.contentItem.plan,
-                    slug: newTask.contentItem.plan.client?.slug || newTask.client?.slug
+                    id: newTask.contentItem.plan.id,
+                    slug: newTask.contentItem.plan.client?.slug || newTask.client?.slug,
+                    month: newTask.contentItem.plan.month,
+                    year: newTask.contentItem.plan.year,
+                    status: newTask.contentItem.plan.status
                 }
             };
         }
@@ -465,8 +471,11 @@ export const updateTask = async (id, data, updaterId = null) => {
             return {
                 ...updatedTask,
                 plan: {
-                    ...updatedTask.contentItem.plan,
-                    slug: updatedTask.contentItem.plan.client?.slug || updatedTask.client?.slug
+                    id: updatedTask.contentItem.plan.id,
+                    slug: updatedTask.contentItem.plan.client?.slug || updatedTask.client?.slug,
+                    month: updatedTask.contentItem.plan.month,
+                    year: updatedTask.contentItem.plan.year,
+                    status: updatedTask.contentItem.plan.status
                 }
             };
         }
