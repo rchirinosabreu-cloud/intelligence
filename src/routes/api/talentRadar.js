@@ -412,9 +412,14 @@ router.get('/member/:memberId/avatar-image', async (req, res) => {
         const contentType = metadata.contentType || 'image/jpeg';
         console.log(`[TalentRadar] Proxying avatar with Content-Type: ${contentType}`);
         res.setHeader('Content-Type', contentType);
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
+
+        // Performance Optimization: Cache-Control for static assets
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        // ETag support is handled automatically by Express when sending file streams if configured,
+        // but we can also use the GCS generation/md5Hash as ETag.
+        if (metadata.etag) {
+            res.setHeader('ETag', metadata.etag);
+        }
 
         const stream = file.createReadStream();
         stream.on('error', (err) => {
