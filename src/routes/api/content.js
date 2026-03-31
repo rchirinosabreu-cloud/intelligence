@@ -21,11 +21,22 @@ const router = express.Router();
 router.get('/plans', async (req, res) => {
   try {
     const { clientId } = req.query;
+    console.log(`[API] Fetching content plans for clientId: ${clientId || 'ALL'}`);
     const plans = await getContentPlans(clientId);
     return res.json(plans);
   } catch (error) {
-    console.error('[API] Error fetching content plans:', error);
-    return res.status(500).json({ error: 'Failed to fetch content plans', details: error.message });
+    const isPrismaError = error.code && (error.code.startsWith('P') || error.message?.includes('Prisma'));
+    console.error('[API] Error fetching content plans:', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta,
+      stack: error.stack
+    });
+    return res.status(500).json({
+      error: isPrismaError ? 'Database Error' : 'Failed to fetch content plans',
+      details: error.message,
+      code: error.code
+    });
   }
 });
 

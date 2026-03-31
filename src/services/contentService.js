@@ -5,24 +5,34 @@ import { createTask } from './nativeTaskService.js';
  * ContentPlan Services
  */
 export const getContentPlans = async (clientId) => {
-  const where = { deletedAt: null };
-  if (clientId) where.clientId = clientId;
+  try {
+    const where = { deletedAt: null };
+    if (clientId) where.clientId = clientId;
 
-  return await prisma.contentPlan.findMany({
-    where,
-    include: {
-      client: {
-        select: { id: true, name: true, slug: true }
+    console.log(`[Service] getContentPlans: Fetching plans for clientId=${clientId || 'ALL'}`);
+
+    const plans = await prisma.contentPlan.findMany({
+      where,
+      include: {
+        client: {
+          select: { id: true, name: true, slug: true }
+        },
+        _count: {
+          select: { contentItems: true }
+        }
       },
-      _count: {
-        select: { items: true }
-      }
-    },
-    orderBy: [
-      { year: 'desc' },
-      { month: 'desc' }
-    ]
-  });
+      orderBy: [
+        { year: 'desc' },
+        { month: 'desc' }
+      ]
+    });
+
+    console.log(`[Service] getContentPlans: Found ${plans.length} plans`);
+    return plans;
+  } catch (error) {
+    console.error(`[Service] Error in getContentPlans (clientId: ${clientId}):`, error);
+    throw error;
+  }
 };
 
 export const getContentPlanById = async (id) => {
@@ -31,7 +41,7 @@ export const getContentPlanById = async (id) => {
     include: {
       client: true,
       owner: true,
-      items: {
+      contentItems: {
         where: { deletedAt: null },
         include: {
           tasks: {
@@ -48,17 +58,25 @@ export const getContentPlanById = async (id) => {
 };
 
 export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => {
+  const parsedMonth = parseInt(month);
+  const parsedYear = parseInt(year);
+
+  if (isNaN(parsedMonth) || isNaN(parsedYear)) {
+    console.error(`[Service] Invalid period for getContentPlanBySlugAndPeriod: month=${month}, year=${year}`);
+    return null;
+  }
+
   const plan = await prisma.contentPlan.findFirst({
     where: {
       client: { slug: clientSlug },
-      month: parseInt(month),
-      year: parseInt(year),
+      month: parsedMonth,
+      year: parsedYear,
       deletedAt: null
     },
     include: {
       client: true,
       owner: true,
-      items: {
+      contentItems: {
         where: { deletedAt: null },
         include: {
           tasks: {
