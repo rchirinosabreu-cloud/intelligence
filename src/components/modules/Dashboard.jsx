@@ -236,7 +236,11 @@ const Dashboard = () => {
                         <div className="flex items-center gap-2 mb-1">
                           {task.assignee ? (
                               <TeamAvatar member={task.assignee} className="w-4 h-4" />
-                          ) : null}
+                          ) : (
+                              <div className="w-4 h-4 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              </div>
+                          )}
                           <span className="text-xs text-emerald-600 dark:text-emerald-400 block font-medium">
                               {task.assignee ? task.assignee.name : "Equipo"} completó:
                           </span>

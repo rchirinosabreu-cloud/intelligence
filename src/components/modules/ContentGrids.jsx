@@ -177,9 +177,19 @@ const ContentGrids = () => {
                     >
                       <td className="px-6 py-5">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-600 font-bold text-xs uppercase">
-                            {plan.client?.name?.substring(0, 2)}
-                          </div>
+                          {plan.client?.logoUrl ? (
+                            <img
+                              src={plan.client.logoUrl.includes('ui-avatars.com')
+                                ? plan.client.logoUrl
+                                : `/api/clients/${plan.client.id}/logo-image`}
+                              alt={plan.client.name}
+                              className="w-8 h-8 rounded-lg object-cover border border-zinc-200 dark:border-white/10"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-600 font-bold text-xs uppercase">
+                              {plan.client?.name?.substring(0, 2)}
+                            </div>
+                          )}
                           <span className="font-semibold text-zinc-900 dark:text-zinc-100">{plan.client?.name}</span>
                         </div>
                       </td>
