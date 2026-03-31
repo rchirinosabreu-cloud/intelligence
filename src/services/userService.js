@@ -17,19 +17,52 @@ export const getUserProfile = async (userId) => {
     return user;
 };
 
-export const updateUserProfile = async (userId, { name, bio }) => {
-    const updatedUser = await prisma.user.update({
-        where: { id: userId },
-        data: { name, bio },
-        select: {
-            id: true,
-            name: true,
-            email: true,
-            bio: true,
-            avatarUrl: true,
-            role: true
+export const updateUserProfile = async (userId, data) => {
+    // Basic fields that ANY user can update on their own profile
+    // Or that an ADMIN can update for anyone.
+    const { name, bio, avatarUrl, role, isActive } = data;
+
+    const updatedUser = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.update({
+            where: { id: userId },
+            data: {
+                name,
+                bio,
+                avatarUrl,
+                role,
+                isActive
+            },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                bio: true,
+                avatarUrl: true,
+                role: true,
+                isActive: true
+            }
+        });
+
+        // Synchronize with TeamMember if it exists
+        // We only sync 'name' and 'avatarUrl' for now
+        const teamMember = await tx.teamMember.findUnique({
+            where: { userId: user.id }
+        });
+
+        if (teamMember) {
+            await tx.teamMember.update({
+                where: { id: teamMember.id },
+                data: {
+                    name: name !== undefined ? name : undefined,
+                    avatarUrl: avatarUrl !== undefined ? avatarUrl : undefined,
+                    isActive: isActive !== undefined ? isActive : undefined
+                }
+            });
         }
+
+        return user;
     });
+
     return updatedUser;
 };
 

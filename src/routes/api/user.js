@@ -32,8 +32,31 @@ router.get('/profile/:userId', async (req, res) => {
 
 router.put('/profile', async (req, res) => {
     try {
-        const { name, bio } = req.body;
-        const updatedProfile = await updateUserProfile(req.user.userId, { name, bio });
+        const { name, bio, avatarUrl } = req.body;
+        // Basic users can only update name, bio, and avatarUrl of their own profile
+        const updatedProfile = await updateUserProfile(req.user.userId, { name, bio, avatarUrl });
+        return res.json(updatedProfile);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+// Admin can update any user's profile
+router.put('/profile/:userId', async (req, res) => {
+    try {
+        if (req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Solo los administradores pueden actualizar otros perfiles' });
+        }
+
+        const { name, bio, avatarUrl, role, isActive } = req.body;
+        const updatedProfile = await updateUserProfile(req.params.userId, {
+            name,
+            bio,
+            avatarUrl,
+            role,
+            isActive
+        });
+
         return res.json(updatedProfile);
     } catch (error) {
         return res.status(500).json({ error: error.message });

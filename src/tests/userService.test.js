@@ -4,14 +4,21 @@ import prisma from '../lib/prisma.js';
 import bcrypt from 'bcryptjs';
 
 // Mock prisma
-vi.mock('../lib/prisma.js', () => ({
-  default: {
+vi.mock('../lib/prisma.js', () => {
+  const mockP = {
+    $transaction: vi.fn(),
     user: {
       findUnique: vi.fn(),
       update: vi.fn(),
     },
-  },
-}));
+    teamMember: {
+        findUnique: vi.fn(),
+        update: vi.fn(),
+    }
+  };
+  mockP.$transaction.mockImplementation((callback) => callback(mockP));
+  return { default: mockP };
+});
 
 // Mock bcrypt
 vi.mock('bcryptjs', () => ({
@@ -47,9 +54,22 @@ describe('userService', () => {
 
             expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
                 where: { id: 'u1' },
-                data: { name: 'Jules Updated', bio: 'Senior Dev' }
+                data: expect.objectContaining({ name: 'Jules Updated', bio: 'Senior Dev' })
             }));
             expect(result).toEqual(mockUpdatedUser);
+        });
+
+        it('debería sincronizar con TeamMember si existe', async () => {
+            const mockUser = { id: 'u1', name: 'Admin', avatarUrl: 'new_url' };
+            prisma.user.update.mockResolvedValue(mockUser);
+            prisma.teamMember.findUnique.mockResolvedValue({ id: 'tm1', userId: 'u1' });
+
+            await updateUserProfile('u1', { name: 'Admin', avatarUrl: 'new_url' });
+
+            expect(prisma.teamMember.update).toHaveBeenCalledWith({
+                where: { id: 'tm1' },
+                data: { name: 'Admin', avatarUrl: 'new_url', isActive: undefined }
+            });
         });
     });
 
