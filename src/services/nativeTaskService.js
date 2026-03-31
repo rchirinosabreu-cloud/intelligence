@@ -97,14 +97,17 @@ export const getTasks = async (clientId) => {
             where: whereClause,
             include: {
                 client: {
-                    select: { name: true, logoUrl: true }
+                    select: { name: true, logoUrl: true, slug: true }
                 },
                 assignee: true,
                 creator: true,
                 contentItem: {
-                    select: {
-                        id: true,
-                        planId: true
+                    include: {
+                        plan: {
+                            include: {
+                                client: { select: { slug: true } }
+                            }
+                        }
                     }
                 }
             },
@@ -112,7 +115,20 @@ export const getTasks = async (clientId) => {
                 createdAt: 'asc' // Oldest first to match current kanban logic
             }
         });
-        return tasks;
+
+        // Map for frontend compatibility: task.plan -> task.contentItem.plan
+        return tasks.map(task => {
+            if (task.contentItem && task.contentItem.plan) {
+                return {
+                    ...task,
+                    plan: {
+                        ...task.contentItem.plan,
+                        slug: task.contentItem.plan.client?.slug || task.client?.slug
+                    }
+                };
+            }
+            return task;
+        });
     } catch (error) {
         console.error("Error fetching native tasks:", error);
         throw error;
@@ -169,15 +185,33 @@ export const createTask = async ({
             },
             include: {
                 client: {
-                    select: { name: true, logoUrl: true }
+                    select: { name: true, logoUrl: true, slug: true }
                 },
                 assignee: true,
                 creator: true,
                 contentItem: {
-                    select: { id: true, planId: true }
+                    include: {
+                        plan: {
+                            include: {
+                                client: { select: { slug: true } }
+                            }
+                        }
+                    }
                 }
             }
         });
+
+        // Map for frontend compatibility
+        if (newTask.contentItem && newTask.contentItem.plan) {
+            return {
+                ...newTask,
+                plan: {
+                    ...newTask.contentItem.plan,
+                    slug: newTask.contentItem.plan.client?.slug || newTask.client?.slug
+                }
+            };
+        }
+
         return newTask;
     } catch (error) {
         console.error("Error creating native task:", error);
@@ -410,15 +444,32 @@ export const updateTask = async (id, data, updaterId = null) => {
             data: updateData,
             include: {
                 client: {
-                    select: { name: true, logoUrl: true }
+                    select: { name: true, logoUrl: true, slug: true }
                 },
                 assignee: true,
                 creator: true,
                 contentItem: {
-                    select: { id: true, planId: true }
+                    include: {
+                        plan: {
+                            include: {
+                                client: { select: { slug: true } }
+                            }
+                        }
+                    }
                 }
             }
         });
+
+        // Map for frontend compatibility
+        if (updatedTask.contentItem && updatedTask.contentItem.plan) {
+            return {
+                ...updatedTask,
+                plan: {
+                    ...updatedTask.contentItem.plan,
+                    slug: updatedTask.contentItem.plan.client?.slug || updatedTask.client?.slug
+                }
+            };
+        }
 
         // --- Notificaciones de Prioridad o Especial ---
         if (updatedTask.assigneeId) {
