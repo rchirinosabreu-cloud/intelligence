@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import SlideOver from '@/components/ui/SlideOver';
 import { useAuth } from '@/context/AuthContext';
 import AvatarUploader from './Radar/AvatarUploader';
+import ClientLogo from '@/components/ui/ClientLogo';
 
 const CATEGORY_COLORS = {
     'CREATIVO': '#6366f1', // Indigo
@@ -25,6 +26,7 @@ const TalentRadar = () => {
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [selectedMember, setSelectedMember] = useState(null);
+    const [hoveredMemberId, setHoveredMemberId] = useState(null);
     const queryClient = useQueryClient();
 
     // 1. Fetch Summary Data
@@ -273,12 +275,25 @@ const TalentRadar = () => {
                                         if (active && payload && payload.length) {
                                             const data = payload[0].payload;
                                             return (
-                                                <div className="bg-white border border-zinc-100 p-4 rounded-2xl shadow-2xl">
-                                                    <p className="text-sm font-bold text-zinc-900 mb-2">{data.name}</p>
-                                                    <div className="space-y-1">
-                                                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Complejidad: <span className="text-zinc-900">{data.x.toFixed(1)}</span></p>
-                                                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Calidad: <span className="text-zinc-900">{data.y.toFixed(1)} dev.</span></p>
-                                                        <p className="text-[10px] text-indigo-600 font-bold mt-2">{data.count} tareas completadas</p>
+                                                <div className="bg-white/95 backdrop-blur-md border border-zinc-100 dark:border-white/10 p-4 rounded-2xl shadow-2xl">
+                                                    <div className="flex items-center gap-3 mb-3">
+                                                        <TeamAvatar member={data} className="w-8 h-8" />
+                                                        <p className="text-sm font-bold text-zinc-900 dark:text-white">{data.name}</p>
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex justify-between gap-4">
+                                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Nivel de Desafío</span>
+                                                            <span className="text-[10px] text-zinc-900 dark:text-zinc-100 font-black">{data.x.toFixed(1)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between gap-4">
+                                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Índice de Precisión</span>
+                                                            <span className="text-[10px] text-zinc-900 dark:text-zinc-100 font-black">{data.y.toFixed(1)} dev.</span>
+                                                        </div>
+                                                        <div className="pt-2 border-t border-zinc-100 dark:border-white/5 mt-2">
+                                                            <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">
+                                                                {data.count} tareas completadas este periodo
+                                                            </p>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             );
@@ -295,16 +310,38 @@ const TalentRadar = () => {
                                 <Scatter
                                     name="Equipo"
                                     data={scatterData}
+                                    onMouseEnter={(data) => setHoveredMemberId(data.id)}
+                                    onMouseLeave={() => setHoveredMemberId(null)}
                                     shape={(props) => {
                                         const { cx, cy, payload } = props;
+                                        const isHovered = hoveredMemberId === payload.id;
+
+                                        // Determine quadrant for glow color
+                                        // x: 0.5-3.5 (mid 2.0), y: returns (mid depends on data, let's say 1.0)
+                                        let glowColor = "rgba(99, 102, 241, 0.5)"; // Default Indigo
+                                        if (payload.x > 2.0 && payload.y < 0.5) glowColor = "rgba(16, 185, 129, 0.6)"; // Super Star (Green)
+                                        if (payload.y > 1.5) glowColor = "rgba(239, 68, 68, 0.5)"; // At Risk (Red)
+
                                         return (
-                                            <g transform={`translate(${cx-15},${cy-15})`}>
+                                            <g
+                                                transform={`translate(${cx},${cy}) scale(${isHovered ? 1.2 : 1}) translate(-15,-15)`}
+                                                style={{
+                                                    transition: 'all 0.2s ease-out',
+                                                    cursor: 'pointer',
+                                                    filter: isHovered ? `drop-shadow(0 0 8px ${glowColor})` : 'none'
+                                                }}
+                                            >
                                                 <defs>
                                                     <clipPath id={`clip-${payload.id}`}>
                                                         <circle cx="15" cy="15" r="15" />
                                                     </clipPath>
                                                 </defs>
-                                                <circle cx="15" cy="15" r="16" fill="#fff" stroke="#6366f1" strokeWidth="2" />
+                                                <circle
+                                                    cx="15" cy="15" r="16"
+                                                    fill="#fff"
+                                                    stroke={isHovered ? glowColor.replace('0.5', '1').replace('0.6', '1') : "#6366f1"}
+                                                    strokeWidth={isHovered ? "3" : "2"}
+                                                />
                                                 {payload.avatarUrl ? (
                                                     <image
                                                         xlinkHref={payload.avatarUrl}
@@ -331,9 +368,7 @@ const TalentRadar = () => {
                                             </g>
                                         );
                                     }}
-                                >
-                                    <LabelList dataKey="name" position="bottom" offset={10} style={{ fontSize: 9, fill: '#6366f1', fontWeight: 'bold' }} />
-                                </Scatter>
+                                />
                             </ScatterChart>
                         </ResponsiveContainer>
                     </div>
@@ -573,7 +608,10 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                     {topImpactTasks?.map(task => (
                                         <div key={task.id} className="p-3 bg-white dark:bg-white/5 rounded-2xl border border-zinc-100 dark:border-white/5 shadow-sm">
                                             <div className="flex items-center justify-between mb-1">
-                                                <span className="text-[10px] font-bold text-indigo-500">{task.client?.name}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <ClientLogo client={task.client} className="w-4 h-4 rounded" />
+                                                    <span className="text-[10px] font-bold text-indigo-500">{task.client?.name}</span>
+                                                </div>
                                                 {task.returnCount > 0 && (
                                                     <span className="text-[9px] px-1.5 py-0.5 bg-red-500/10 text-red-500 rounded-full font-bold">
                                                         {task.returnCount} DEVOLUCIONES

@@ -27,6 +27,19 @@ router.get('/summary', async (req, res) => {
 
     try {
         const { month, year } = req.query;
+
+        // ETag Generation for Summary (Based on Month/Year and last task completion)
+        const lastTask = await prisma.task.findFirst({
+            orderBy: { updatedAt: 'desc' },
+            select: { updatedAt: true }
+        });
+        const etag = `W/"radar-summary-${month}-${year}-${lastTask?.updatedAt?.getTime() || 0}"`;
+
+        if (req.headers['if-none-match'] === etag) {
+            return res.status(304).end();
+        }
+        res.setHeader('ETag', etag);
+        res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
         const targetMonth = month ? parseInt(month) : new Date().getMonth() + 1;
         const targetYear = year ? parseInt(year) : new Date().getFullYear();
 
@@ -137,6 +150,20 @@ router.get('/member/:memberId', async (req, res) => {
     const targetYear = year ? parseInt(year) : new Date().getFullYear();
 
     try {
+        // ETag Generation for Member Detail
+        const lastMemberUpdate = await prisma.task.findFirst({
+            where: { assigneeId: memberId },
+            orderBy: { updatedAt: 'desc' },
+            select: { updatedAt: true }
+        });
+        const etag = `W/"radar-member-${memberId}-${month}-${year}-${lastMemberUpdate?.updatedAt?.getTime() || 0}"`;
+
+        if (req.headers['if-none-match'] === etag) {
+            return res.status(304).end();
+        }
+        res.setHeader('ETag', etag);
+        res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+
         const startDate = new Date(targetYear, targetMonth - 1, 1);
         const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59);
 
