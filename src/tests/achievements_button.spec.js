@@ -30,6 +30,9 @@ test('verify Recent Achievements history button visibility with many achievement
     });
   });
 
+  // Set viewport to a typical desktop size
+  await page.setViewportSize({ width: 1280, height: 2000 });
+
   // Navigate to Dashboard
   await page.goto('http://localhost:3000/');
 
@@ -46,15 +49,18 @@ test('verify Recent Achievements history button visibility with many achievement
   // Ensure it's clickable
   await expect(historyButton).toBeEnabled();
 
+  // Take a screenshot for visual verification with a full list
+  await page.screenshot({ path: 'tests/screenshots/recent_achievements_button_full_list.png', fullPage: false });
+
   // Additional check: Ensure it's within the viewport bounds
   const box = await historyButton.boundingBox();
   const viewport = page.viewportSize();
+
+  console.log(`Button Box: ${JSON.stringify(box)}`);
+  console.log(`Viewport: ${JSON.stringify(viewport)}`);
 
   if (box && viewport) {
     // Check if the bottom of the button is within the viewport
     expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
   }
-
-  // Take a screenshot for visual verification with a full list
-  await page.screenshot({ path: 'tests/screenshots/recent_achievements_button_full_list.png', fullPage: false });
 });
