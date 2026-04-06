@@ -208,15 +208,15 @@ const Dashboard = () => {
         </div>
 
         {/* News/Updates Column (Right - 1/3 width) -> FEED DE LOGROS */}
-        <motion.div variants={item} className="md:col-span-1 flex flex-col gap-6 min-h-0">
+        <motion.div variants={item} className="md:col-span-1 flex flex-col gap-6">
           {/* Recent Achievements */}
-          <Card className="flex-1 flex flex-col h-full overflow-hidden min-h-0">
+          <Card className="flex flex-col max-h-[450px] overflow-hidden group/card">
             <div className="flex items-center gap-2 mb-6 shrink-0">
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
               <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Logros recientes</h3>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-6 pr-2 scroll-smooth custom-scrollbar">
+            <div className="flex-1 overflow-y-auto space-y-6 pr-2 scroll-smooth custom-scrollbar min-h-0">
               {loadingNative ? (
                   <p className="text-sm text-zinc-400 animate-pulse">Cargando feed...</p>
               ) : completedFeed.length === 0 ? (
@@ -279,7 +279,7 @@ const Dashboard = () => {
           </Card>
 
           {/* General Chat */}
-          <div className="flex-1 min-h-[400px] h-full">
+          <div>
             <ChatWidget
               title="Team Flow"
               description="Chat operativo de toda la agencia"
