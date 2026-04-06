@@ -25,17 +25,7 @@ export const Card = ({ children, className, ...props }) => {
       {/* Subtle Gradient Overlay for Depth (Dark Mode Only) */}
       <div className="absolute inset-0 pointer-events-none opacity-0 dark:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-white/[0.02] to-transparent" />
 
-      {/* Content z-index fix - ensures children can fill space in flex layouts */}
-      <div className={cn(
-        "relative z-10",
-        className?.includes('flex') && "flex",
-        className?.includes('flex-col') && "flex-col",
-        className?.includes('flex-row') && "flex-row",
-        (className?.includes('h-full') || className?.includes('flex-1')) && "h-full",
-        className?.includes('w-full') && "w-full"
-      )}>
-          {children}
-      </div>
+      {children}
     </div>
   );
 };
