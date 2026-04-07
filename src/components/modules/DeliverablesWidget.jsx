@@ -65,42 +65,54 @@ const DeliverablesWidget = ({ clientId }) => {
             const token = localStorage.getItem('authToken');
 
             for (const file of acceptedFiles) {
-                // Step 1: Request Signed URL
-                const { data: signedData } = await axios.get(
-                    `${baseUrl}/api/clients/${clientId}/storage/signed-url`,
-                    {
-                        params: { fileName: file.name, fileType: file.type || 'application/octet-stream' },
-                        headers: { 'Authorization': `Bearer ${token}` }
+                try {
+                    // Step 1: Request Signed URL
+                    const { data: signedData } = await axios.get(
+                        `${baseUrl}/api/clients/${clientId}/storage/signed-url`,
+                        {
+                            params: { fileName: file.name, fileType: file.type || 'application/octet-stream' },
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        }
+                    );
+
+                    const { url, gcsPath } = signedData;
+
+                    // Step 2: Upload directly to GCS via PUT
+                    // We catch GCS specific errors (like CORS) to prevent fallbacks to proxy
+                    try {
+                        await axios.put(url, file, {
+                            headers: { 'Content-Type': file.type || 'application/octet-stream' }
+                        });
+                    } catch (gcsError) {
+                        console.error("GCS Direct Upload Failed (CORS or Network):", gcsError);
+                        throw new Error(`Error de conexión con Google Storage. Verifica la configuración de CORS.`);
                     }
-                );
 
-                const { url, gcsPath } = signedData;
-
-                // Step 2: Upload directly to GCS via PUT
-                await axios.put(url, file, {
-                    headers: { 'Content-Type': file.type || 'application/octet-stream' }
-                });
-
-                // Step 3: Register in Database
-                await axios.post(
-                    `${baseUrl}/api/clients/${clientId}/files`,
-                    {
-                        category: 'Entregable',
-                        isDirectUpload: true,
-                        gcsPath,
-                        name: file.name,
-                        size: file.size,
-                        mimeType: file.type || 'application/octet-stream'
-                    },
-                    { headers: { 'Authorization': `Bearer ${token}` } }
-                );
+                    // Step 3: Register in Database
+                    await axios.post(
+                        `${baseUrl}/api/clients/${clientId}/files`,
+                        {
+                            category: 'Entregable',
+                            isDirectUpload: true,
+                            gcsPath,
+                            name: file.name,
+                            size: file.size,
+                            mimeType: file.type || 'application/octet-stream'
+                        },
+                        { headers: { 'Authorization': `Bearer ${token}` } }
+                    );
+                } catch (fileError) {
+                    console.error(`Error processing file ${file.name}:`, fileError);
+                    throw fileError; // Stop the loop and show error to user
+                }
             }
 
             toast.success("Archivos subidos con éxito", { id: uploadToast });
             fetchFiles(); // Refresh list
         } catch (error) {
-            console.error("Error uploading files:", error);
-            toast.error("Error al subir uno o más archivos", { id: uploadToast });
+            console.error("Fatal upload error:", error);
+            const errorMessage = error.response?.data?.error || error.message || "Error al subir archivos";
+            toast.error(errorMessage, { id: uploadToast });
         } finally {
             setIsUploading(false);
         }

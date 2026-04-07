@@ -34,7 +34,7 @@ test('verify Recent Achievements history button visibility with many achievement
   await page.setViewportSize({ width: 1280, height: 2000 });
 
   // Navigate to Dashboard
-  await page.goto('http://localhost:3000/');
+  await page.goto('http://localhost:8080/');
 
   // Wait for the dashboard to load and tasks to render
   await page.waitForSelector('text=Logros recientes', { timeout: 10000 });

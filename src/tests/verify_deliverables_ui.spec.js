@@ -12,7 +12,7 @@ test('Verify Deliverables UI Polish', async ({ page }) => {
   });
 
   const clientId = '89b57ba6-60fd-498d-9a4a-539d28e3c5c1';
-  await page.goto(`http://localhost:3000/cliente/${clientId}`);
+  await page.goto(`http://localhost:8080/cliente/${clientId}`);
 
   // Wait for the client data to load
   await page.waitForSelector('text=Bonsai CTG', { timeout: 15000 });
