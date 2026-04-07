@@ -210,7 +210,7 @@ const Dashboard = () => {
         {/* News/Updates Column (Right - 1/3 width) -> FEED DE LOGROS */}
         <motion.div variants={item} className="md:col-span-1 flex flex-col gap-6">
           {/* Recent Achievements */}
-          <Card className="flex flex-col h-fit max-h-[480px] group/card">
+          <Card className="flex flex-col min-h-[450px] h-[450px] max-h-[450px] group/card">
             <div className="flex items-center gap-2 mb-6 shrink-0">
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
               <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Logros recientes</h3>
@@ -279,7 +279,7 @@ const Dashboard = () => {
           </Card>
 
           {/* General Chat */}
-          <div>
+          <div className="flex flex-col min-h-[450px] h-[450px]">
             <ChatWidget
               title="Team Flow"
               description="Chat operativo de toda la agencia"

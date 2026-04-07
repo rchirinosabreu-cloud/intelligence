@@ -47,7 +47,10 @@ const DeliverablesWidget = ({ clientId }) => {
         if (!clientId || acceptedFiles.length === 0) return;
 
         // Security check: Block executable files
-        const forbiddenExtensions = ['.exe', '.js', '.sh', '.php', '.bat', '.cmd'];
+        const forbiddenExtensions = [
+            '.exe', '.js', '.sh', '.php', '.bat', '.cmd', '.msi', '.vbs', '.scr', '.com',
+            '.ps1', '.vbe', '.jse', '.reg', '.wsf', '.pif', '.hta', '.jar'
+        ];
         const hasForbidden = acceptedFiles.some(file =>
             forbiddenExtensions.some(ext => file.name.toLowerCase().endsWith(ext))
         );
@@ -78,9 +81,11 @@ const DeliverablesWidget = ({ clientId }) => {
                     const { url, gcsPath } = signedData;
 
                     // Step 2: Upload directly to GCS via PUT
-                    // We catch GCS specific errors (like CORS) to prevent fallbacks to proxy
+                    // We use a clean axios instance to avoid global interceptors/headers (like Authorization)
+                    // which GCS might reject via CORS.
                     try {
-                        await axios.put(url, file, {
+                        const gcsAxios = axios.create();
+                        await gcsAxios.put(url, file, {
                             headers: { 'Content-Type': file.type || 'application/octet-stream' },
                             withCredentials: false
                         });
