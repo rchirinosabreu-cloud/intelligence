@@ -70,7 +70,10 @@ router.post('/files', async (req, res, next) => {
 
     try {
         // Security check: Block executable files
-        const forbiddenExtensions = ['.exe', '.js', '.sh', '.php', '.bat', '.cmd'];
+        const forbiddenExtensions = [
+            '.exe', '.js', '.sh', '.php', '.bat', '.cmd', '.msi', '.vbs', '.scr', '.com',
+            '.ps1', '.vbe', '.jse', '.reg', '.wsf', '.pif', '.hta', '.jar'
+        ];
         const fileNameToCheck = (isDirectUpload === 'true' || isDirectUpload === true) ? name : req.file?.originalname;
 
         if (fileNameToCheck && forbiddenExtensions.some(ext => fileNameToCheck.toLowerCase().endsWith(ext))) {
