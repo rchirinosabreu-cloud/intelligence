@@ -138,7 +138,7 @@ const Dashboard = () => {
 
             {/* WIDGET 1: PENDIENTES DEL MES (Counter + Progress) */}
             <motion.div variants={item} className="w-full">
-              <Card className="h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
+              <Card className="h-fit flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
                 <div className="flex justify-between items-start mb-4">
                   <span className="text-sm font-medium text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors">
                       Pendientes del mes
@@ -173,7 +173,7 @@ const Dashboard = () => {
 
              {/* WIDGET 2: COMPLETED (Counter) */}
              <motion.div variants={item} className="w-full">
-              <Card className="h-full flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
+              <Card className="h-fit flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
                 <div className="flex justify-between items-start mb-4">
                   <span className="text-sm font-medium text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors">
                       Total realizados
@@ -210,13 +210,13 @@ const Dashboard = () => {
         {/* News/Updates Column (Right - 1/3 width) -> FEED DE LOGROS */}
         <motion.div variants={item} className="md:col-span-1 flex flex-col gap-6">
           {/* Recent Achievements */}
-          <Card className="flex flex-col h-fit max-h-[450px] overflow-hidden group/card">
+          <Card className="flex flex-col h-fit max-h-[500px] group/card">
             <div className="flex items-center gap-2 mb-6 shrink-0">
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
               <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Logros recientes</h3>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-6 pr-2 scroll-smooth custom-scrollbar min-h-0">
+            <div className="flex-1 overflow-y-auto space-y-6 pr-2 scroll-smooth custom-scrollbar min-h-0 pb-2">
               {loadingNative ? (
                   <p className="text-sm text-zinc-400 animate-pulse">Cargando feed...</p>
               ) : completedFeed.length === 0 ? (

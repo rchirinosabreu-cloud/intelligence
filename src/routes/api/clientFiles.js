@@ -46,7 +46,18 @@ router.get('/storage/signed-url', async (req, res) => {
  * POST /api/clients/:clientId/files
  * Supports both direct proxy upload (multer) AND registration of pre-uploaded GCS files.
  */
-router.post('/files', upload.single('file'), async (req, res) => {
+router.post('/files', async (req, res, next) => {
+    // Check if it's a JSON request (Direct Upload Registration)
+    const isJson = req.headers['content-type']?.includes('application/json');
+
+    // If it's JSON, we skip Multer to avoid it processing the body and hitting size limits
+    if (isJson) {
+        return next();
+    }
+
+    // For Multipart, we use Multer
+    upload.single('file')(req, res, next);
+}, async (req, res) => {
     const { clientId } = req.params;
     const {
         category = 'Entregable',
