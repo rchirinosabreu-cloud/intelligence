@@ -81,7 +81,8 @@ const DeliverablesWidget = ({ clientId }) => {
                     // We catch GCS specific errors (like CORS) to prevent fallbacks to proxy
                     try {
                         await axios.put(url, file, {
-                            headers: { 'Content-Type': file.type || 'application/octet-stream' }
+                            headers: { 'Content-Type': file.type || 'application/octet-stream' },
+                            withCredentials: false
                         });
                     } catch (gcsError) {
                         console.error("GCS Direct Upload Failed (CORS or Network):", gcsError);
