@@ -482,7 +482,7 @@ const ChatWidget = ({
     );
 
     const compactContent = (
-        <Card className="w-full flex flex-col max-h-[500px] p-6 relative group overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+        <Card className="w-full flex flex-col max-h-[480px] p-6 relative group overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
             <div className="flex justify-between items-center mb-4 shrink-0">
                 <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-primary/10 rounded-lg">
