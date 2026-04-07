@@ -46,24 +46,56 @@ const DeliverablesWidget = ({ clientId }) => {
     const onDrop = useCallback(async (acceptedFiles) => {
         if (!clientId || acceptedFiles.length === 0) return;
 
+        // Security check: Block executable files
+        const forbiddenExtensions = ['.exe', '.js', '.sh', '.php', '.bat', '.cmd'];
+        const hasForbidden = acceptedFiles.some(file =>
+            forbiddenExtensions.some(ext => file.name.toLowerCase().endsWith(ext))
+        );
+
+        if (hasForbidden) {
+            toast.error("Por seguridad, no se permiten archivos ejecutables (.exe, .js, .sh, etc.)");
+            return;
+        }
+
         setIsUploading(true);
         const uploadToast = toast.loading(`Subiendo ${acceptedFiles.length} archivo(s)...`);
 
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
-            for (const file of acceptedFiles) {
-                const formData = new FormData();
-                formData.append('file', file);
-                formData.append('category', 'Entregable');
 
-                await axios.post(`${baseUrl}/api/clients/${clientId}/files`, formData, {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                        'Authorization': `Bearer ${token}`
+            for (const file of acceptedFiles) {
+                // Step 1: Request Signed URL
+                const { data: signedData } = await axios.get(
+                    `${baseUrl}/api/clients/${clientId}/storage/signed-url`,
+                    {
+                        params: { fileName: file.name, fileType: file.type || 'application/octet-stream' },
+                        headers: { 'Authorization': `Bearer ${token}` }
                     }
+                );
+
+                const { url, gcsPath } = signedData;
+
+                // Step 2: Upload directly to GCS via PUT
+                await axios.put(url, file, {
+                    headers: { 'Content-Type': file.type || 'application/octet-stream' }
                 });
+
+                // Step 3: Register in Database
+                await axios.post(
+                    `${baseUrl}/api/clients/${clientId}/files`,
+                    {
+                        category: 'Entregable',
+                        isDirectUpload: true,
+                        gcsPath,
+                        name: file.name,
+                        size: file.size,
+                        mimeType: file.type || 'application/octet-stream'
+                    },
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
             }
+
             toast.success("Archivos subidos con éxito", { id: uploadToast });
             fetchFiles(); // Refresh list
         } catch (error) {
