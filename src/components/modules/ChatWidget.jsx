@@ -482,8 +482,8 @@ const ChatWidget = ({
     );
 
     const compactContent = (
-        <Card className="w-full flex flex-col p-6 relative group overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-            <div className="flex justify-between items-center mb-4">
+        <Card className="w-full flex flex-col max-h-[500px] p-6 relative group overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+            <div className="flex justify-between items-center mb-4 shrink-0">
                 <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-primary/10 rounded-lg">
                         <MessageSquare className="w-4 h-4 text-primary" />
@@ -492,7 +492,7 @@ const ChatWidget = ({
                 </div>
             </div>
 
-            <div className="flex-1 space-y-4 overflow-hidden">
+            <div className="flex-1 space-y-4 overflow-y-auto pr-1 custom-scrollbar">
                 {loading ? (
                     <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-zinc-400"/></div>
                 ) : messages.length === 0 ? (
@@ -500,7 +500,7 @@ const ChatWidget = ({
                         No hay mensajes aún. ¡Inicia la conversación!
                     </div>
                 ) : (
-                    messages.slice(0, 2).map(msg => {
+                    messages.slice(0, 10).map(msg => {
                         const author = msg.author;
                         return (
                             <div key={msg.id} className="flex gap-3">

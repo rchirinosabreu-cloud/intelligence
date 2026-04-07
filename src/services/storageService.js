@@ -82,6 +82,41 @@ export const uploadClientFile = async (file, clientName) => {
 };
 
 /**
+ * Generates a V4 Signed URL for uploading a file directly to GCS.
+ * @param {string} clientName - For folder prefix.
+ * @param {string} fileName - Original filename.
+ * @param {string} contentType - MIME type.
+ * @returns {Promise<Object>} - Signed URL and gcsPath.
+ */
+export const getUploadSignedUrl = async (clientName, fileName, contentType) => {
+    const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
+    const storageClient = getStorageClient();
+
+    if (!storageClient) {
+        throw new Error("Storage client not initialized");
+    }
+
+    const folderName = clientName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const timestamp = Date.now();
+    const gcsFileName = `${folderName}/${timestamp}_${fileName}`;
+
+    const bucket = storageClient.bucket(bucketName);
+    const file = bucket.file(gcsFileName);
+
+    const [url] = await file.getSignedUrl({
+        version: 'v4',
+        action: 'write',
+        expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+        contentType,
+    });
+
+    return {
+        url,
+        gcsPath: gcsFileName
+    };
+};
+
+/**
  * Generates a fresh signed URL for an existing GCS path.
  * @param {string} gcsPath - The virtual path in the bucket.
  * @param {number} expiresInMinutes - Expiration time.

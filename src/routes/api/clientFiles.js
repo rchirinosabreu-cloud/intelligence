@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import prisma from '../../lib/prisma.js';
-import { uploadClientFile, getSignedUrl, deleteFileFromGCS, getClientFileStream } from '../../services/storageService.js';
+import { uploadClientFile, getSignedUrl, deleteFileFromGCS, getClientFileStream, getUploadSignedUrl } from '../../services/storageService.js';
 
 const router = express.Router({ mergeParams: true });
 
@@ -12,20 +12,18 @@ const upload = multer({
 });
 
 /**
- * Upload a file for a specific client.
- * POST /api/clients/:clientId/files
+ * Generate a Signed URL for direct upload to GCS.
+ * GET /api/clients/:clientId/storage/signed-url
  */
-router.post('/files', upload.single('file'), async (req, res) => {
+router.get('/storage/signed-url', async (req, res) => {
     const { clientId } = req.params;
-    const { category = 'Entregable' } = req.body;
-    const file = req.file;
+    const { fileName, fileType } = req.query;
 
-    if (!file) {
-        return res.status(400).json({ error: "No file uploaded" });
+    if (!fileName || !fileType) {
+        return res.status(400).json({ error: "fileName and fileType are required" });
     }
 
     try {
-        // 1. Get client details for folder naming
         const client = await prisma.client.findUnique({
             where: { id: clientId },
             select: { name: true }
@@ -35,28 +33,94 @@ router.post('/files', upload.single('file'), async (req, res) => {
             return res.status(404).json({ error: "Client not found" });
         }
 
-        // 2. Upload to GCS
-        const uploadResult = await uploadClientFile(file, client.name);
+        const result = await getUploadSignedUrl(client.name, fileName, fileType);
+        return res.json(result);
+    } catch (error) {
+        console.error("Error generating signed upload URL:", error);
+        return res.status(500).json({ error: "Error generating upload URL", details: error.message });
+    }
+});
 
-        // 3. Save to database
+/**
+ * Upload or Register a file for a specific client.
+ * POST /api/clients/:clientId/files
+ * Supports both direct proxy upload (multer) AND registration of pre-uploaded GCS files.
+ */
+router.post('/files', upload.single('file'), async (req, res) => {
+    const { clientId } = req.params;
+    const {
+        category = 'Entregable',
+        isDirectUpload = false,
+        gcsPath,
+        name,
+        size,
+        mimeType
+    } = req.body;
+
+    try {
+        // Security check: Block executable files
+        const forbiddenExtensions = ['.exe', '.js', '.sh', '.php', '.bat', '.cmd'];
+        const fileNameToCheck = (isDirectUpload === 'true' || isDirectUpload === true) ? name : req.file?.originalname;
+
+        if (fileNameToCheck && forbiddenExtensions.some(ext => fileNameToCheck.toLowerCase().endsWith(ext))) {
+            return res.status(403).json({ error: "Por seguridad, no se permiten archivos ejecutables" });
+        }
+
+        let registrationData = {};
+
+        if (isDirectUpload === 'true' || isDirectUpload === true) {
+            // Case A: File was already uploaded directly to GCS via Signed URL
+            if (!gcsPath || !name || !size || !mimeType) {
+                return res.status(400).json({ error: "Missing metadata for direct upload registration" });
+            }
+            registrationData = {
+                name,
+                bucketUrl: gcsPath,
+                size: parseInt(size),
+                mimeType
+            };
+        } else {
+            // Case B: Proxy upload (legacy/small files)
+            const file = req.file;
+            if (!file) {
+                return res.status(400).json({ error: "No file uploaded" });
+            }
+
+            const client = await prisma.client.findUnique({
+                where: { id: clientId },
+                select: { name: true }
+            });
+
+            if (!client) return res.status(404).json({ error: "Client not found" });
+
+            const uploadResult = await uploadClientFile(file, client.name);
+            registrationData = {
+                name: uploadResult.name,
+                bucketUrl: uploadResult.gcsPath,
+                size: uploadResult.size,
+                mimeType: uploadResult.mimeType
+            };
+        }
+
+        // Save to database
         const clientFile = await prisma.clientFile.create({
             data: {
                 clientId,
-                name: uploadResult.name,
-                bucketUrl: uploadResult.gcsPath, // Store path instead of signed URL for durability
-                size: uploadResult.size,
-                mimeType: uploadResult.mimeType,
+                ...registrationData,
                 category
             }
         });
 
+        // Generate a read URL for immediate response
+        const readUrl = await getSignedUrl(clientFile.bucketUrl);
+
         return res.status(201).json({
             ...clientFile,
-            url: uploadResult.url // Send signed URL for immediate use
+            url: readUrl
         });
     } catch (error) {
-        console.error("Error in client file upload API:", error);
-        return res.status(500).json({ error: "Internal server error during upload", details: error.message });
+        console.error("Error in client file registration API:", error);
+        return res.status(500).json({ error: "Internal server error during registration", details: error.message });
     }
 });
 
