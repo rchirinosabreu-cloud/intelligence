@@ -47,26 +47,35 @@ const SharedContentPlan = () => {
     try {
       const response = await axios.post(`${getApiBaseUrl()}/api/public/items/${itemId}/comment`, { comment: clientComment });
 
-      // First, clear input and close form
-      setCommentingItemId(null);
+      // First, just clear text to avoid DOM jumps while React processes
       setClientComment('');
 
       toast.success('Comentario enviado');
 
-      // Update local state directly to avoid white screen/race conditions
-      if (response.data) {
-        setPlan(prev => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            items: prev.items.map(item =>
-              item.id === itemId ? { ...item, ...response.data } : item
-            )
-          };
-        });
-      } else {
-        await fetchPlan();
-      }
+      // Wrap state updates in setTimeout to allow current render cycle to finish
+      // and prevent "Failed to execute 'insertBefore' on 'Node'"
+      setTimeout(() => {
+        try {
+          if (response.data) {
+            setPlan(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                items: prev.items.map(item =>
+                  item.id === itemId ? { ...item, ...response.data } : item
+                )
+              };
+            });
+          } else {
+            fetchPlan();
+          }
+          // Close form after data is synced
+          setCommentingItemId(null);
+        } catch (innerError) {
+          console.error('[Emergency Fix] Error updating plan state:', innerError);
+        }
+      }, 0);
+
     } catch (error) {
       console.error('Comment error:', error);
       toast.error('Error al enviar el comentario');
@@ -243,10 +252,14 @@ const SharedContentPlan = () => {
                       {item.comments && (
                         <div className="mt-6 space-y-2">
                            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Historial de Feedback</label>
-                           <div className="max-h-48 overflow-y-auto space-y-3 pr-2">
+                           <div
+                             id={`feedback-list-container-${item.id}`}
+                             key={`feedback-list-${item.id}`}
+                             className="max-h-48 overflow-y-auto space-y-3 pr-2"
+                           >
                              {item.comments.split('\n\n').filter(Boolean).map((comment, i) => (
                                <div
-                                 key={`${item.id}-comment-${i}`}
+                                 key={`${item.id}-comment-block-${i}`}
                                  className="text-[11px] text-zinc-500 dark:text-zinc-400 italic bg-zinc-50 dark:bg-white/2 p-3 rounded-xl border border-zinc-100 dark:border-white/5 leading-relaxed"
                                >
                                  {comment}
@@ -260,7 +273,11 @@ const SharedContentPlan = () => {
 
                   {/* Comment Input Overlay */}
                   {commentingItemId === item.id && (
-                    <div className="mt-8 pt-8 border-t border-zinc-100 dark:border-white/5">
+                    <div
+                      id={`comment-form-container-${item.id}`}
+                      key={`comment-form-${item.id}`}
+                      className="mt-8 pt-8 border-t border-zinc-100 dark:border-white/5"
+                    >
                       <div className="flex flex-col gap-4">
                         <div className="flex items-center justify-between">
                           <label className="text-sm font-bold text-zinc-900 dark:text-white">Dinos qué debemos ajustar:</label>
