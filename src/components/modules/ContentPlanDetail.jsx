@@ -131,10 +131,10 @@ const FeedbackHistory = ({ comments, isEditing, onUpdate }) => {
   return (
     <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-500">
       <div className="flex items-center gap-2">
-        <div className="p-1.5 bg-red-500/10 text-red-500 rounded-lg">
+        <div className="p-1.5 bg-slate-100 dark:bg-white/5 text-slate-500 rounded-lg">
           <MessageSquare className="w-3.5 h-3.5" />
         </div>
-        <label className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em]">
+        <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em]">
           Feedback del Cliente
         </label>
       </div>
@@ -148,11 +148,11 @@ const FeedbackHistory = ({ comments, isEditing, onUpdate }) => {
             }
           }}
           placeholder="Escribe o edita el feedback del cliente aquí..."
-          className="w-full bg-red-50/50 dark:bg-red-500/5 border border-red-200 dark:border-red-500/20 rounded-2xl p-4 text-sm font-medium text-red-700 dark:text-red-300 focus:ring-4 focus:ring-red-500/10 outline-none transition-all"
+          className="w-full bg-slate-50 dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-2xl p-4 text-sm font-medium text-slate-700 dark:text-slate-300 focus:ring-4 focus:ring-slate-500/10 outline-none transition-all"
         />
       ) : (
-        <div className="bg-red-50/50 dark:bg-red-500/5 border border-red-100 dark:border-red-500/10 p-5 rounded-[2rem] text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap leading-relaxed italic">
-          {comments || <span className="text-red-300 dark:text-red-900/40">Esperando feedback...</span>}
+        <div className="bg-slate-50 dark:bg-white/2 border border-slate-100 dark:border-white/5 p-5 rounded-[2rem] text-sm text-slate-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed italic">
+          {comments || <span className="text-slate-400 dark:text-slate-600">Esperando feedback...</span>}
         </div>
       )}
     </div>
@@ -638,6 +638,7 @@ const ContentPlanDetail = () => {
                           <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] block mb-1">Fecha Publicación</label>
                           {isEditing ? (
                             <input
+                              key={`${item.id}-${item.publishDate}`}
                               type="date"
                               defaultValue={item.publishDate ? new Date(item.publishDate).toISOString().split('T')[0] : ''}
                               onBlur={(e) => {
