@@ -7,12 +7,91 @@ import {
   ChevronLeft, Plus, Send, ExternalLink, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
   Calendar, User, LayoutGrid, FileText, Instagram, Facebook, Video, Image as ImageIcon,
-  Edit2, Check, AlertCircle, Sparkles, Users, UserCheck
+  Edit2, Check, AlertCircle, Sparkles, Users, UserCheck, StickyNote, ChevronUp, Share2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from '@/components/ui/dialog';
+
+const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }) => {
+  const [links, setLinks] = useState(Array.isArray(values) ? values : (values ? [values] : []));
+
+  useEffect(() => {
+    setLinks(Array.isArray(values) ? values : (values ? [values] : []));
+  }, [values]);
+
+  const handleAddLink = () => {
+    const newLinks = [...links, ''];
+    setLinks(newLinks);
+  };
+
+  const handleUpdateLink = (index, value) => {
+    const newLinks = [...links];
+    newLinks[index] = value;
+    setLinks(newLinks);
+  };
+
+  const handleBlur = () => {
+    const filtered = links.filter(l => l.trim() !== '');
+    onChange(filtered);
+  };
+
+  const handleRemoveLink = (index) => {
+    const newLinks = links.filter((_, i) => i !== index);
+    setLinks(newLinks);
+    onChange(newLinks);
+  };
+
+  if (!isEditing) {
+    if (links.length === 0) return <span className="text-[10px] text-zinc-400 italic">No asignado</span>;
+    return (
+      <div className="flex flex-wrap gap-2">
+        {links.map((link, i) => (
+          <a
+            key={i}
+            href={link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 hover:text-indigo-700 font-bold text-[10px] rounded-lg transition-colors max-w-full truncate"
+          >
+            <ExternalLink className="w-2.5 h-2.5" />
+            {links.length > 1 ? `Link ${i + 1}` : 'Ver Link'}
+          </a>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {links.map((link, i) => (
+        <div key={i} className="flex gap-2">
+          <input
+            type="text"
+            value={link}
+            onChange={(e) => handleUpdateLink(i, e.target.value)}
+            onBlur={handleBlur}
+            placeholder={placeholder}
+            className="flex-1 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+          />
+          <button
+            onClick={() => handleRemoveLink(i)}
+            className="p-2 text-zinc-400 hover:text-red-500 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ))}
+      <button
+        onClick={handleAddLink}
+        className="flex items-center gap-1 text-[10px] font-bold text-indigo-500 hover:text-indigo-600 transition-colors px-1"
+      >
+        <Plus className="w-3 h-3" /> Añadir Link
+      </button>
+    </div>
+  );
+};
 
 // Helper for auto-resize textarea with internal state for performance (save on blur)
 const AutoResizeTextarea = ({ defaultValue, onBlur, placeholder, disabled, className }) => {
@@ -151,6 +230,7 @@ const ContentPlanDetail = () => {
   const queryClient = useQueryClient();
   const [editingItemId, setEditingItemId] = useState(null);
   const [dispatchItemId, setDispatchItemId] = useState(null);
+  const [showInternalNotes, setShowInternalNotes] = useState(false);
   const itemRefs = useRef({});
 
   // Parse period (month-year)
@@ -230,6 +310,21 @@ const ContentPlanDetail = () => {
     onSuccess: () => {
       queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
       toast.success('Estado del plan actualizado');
+    }
+  });
+
+  const generateShareTokenMutation = useMutation({
+    mutationFn: async () => {
+      const response = await axios.post(`${getApiBaseUrl()}/api/content/plans/${currentPlanId}/share-token`, {}, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+      const url = `${window.location.origin}/compartir/${data.shareToken}`;
+      navigator.clipboard.writeText(url);
+      toast.success('¡Link compartido generado y copiado al portapapeles!');
     }
   });
 
@@ -380,6 +475,17 @@ const ContentPlanDetail = () => {
             <option value="ACTIVO">Activo</option>
             <option value="FINALIZADO">Finalizado</option>
           </select>
+
+          <button
+            onClick={() => generateShareTokenMutation.mutate()}
+            disabled={generateShareTokenMutation.isPending}
+            className="flex items-center gap-2 px-4 py-2.5 text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-all font-bold text-xs"
+            title={plan.shareToken ? 'Actualizar link compartido' : 'Generar link compartido'}
+          >
+            {generateShareTokenMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+            {plan.shareToken ? 'Link de Cliente' : 'Compartir'}
+          </button>
+
           <button
             onClick={handleAddItem}
             className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all shadow-lg shadow-indigo-500/20 font-bold text-sm"
@@ -390,10 +496,44 @@ const ContentPlanDetail = () => {
         </div>
       </header>
 
+      {/* Internal Notes Panel */}
+      <div className="bg-white/40 dark:bg-zinc-900/30 border border-zinc-200/60 dark:border-white/5 rounded-3xl overflow-hidden">
+        <button
+          onClick={() => setShowInternalNotes(!showInternalNotes)}
+          className="w-full flex items-center justify-between p-6 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-500/10 text-indigo-600 rounded-lg">
+              <StickyNote className="w-5 h-5" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider">Notas Internas / Cerebro del Proyecto</h3>
+              <p className="text-[10px] text-zinc-500 font-medium">Solo visible para el equipo interno</p>
+            </div>
+          </div>
+          {showInternalNotes ? <ChevronUp className="w-5 h-5 text-zinc-400" /> : <Plus className="w-5 h-5 text-zinc-400" />}
+        </button>
+
+        {showInternalNotes && (
+          <div className="px-6 pb-6 animate-in slide-in-from-top-2 duration-300">
+            <AutoResizeTextarea
+              defaultValue={plan.internalNotes}
+              onBlur={(e) => {
+                if (e.target.value !== plan.internalNotes) {
+                  updatePlanMutation.mutate({ internalNotes: e.target.value });
+                }
+              }}
+              placeholder="Escribe aquí las instrucciones generales, insights del cliente o notas estratégicas..."
+              className="w-full bg-zinc-50/50 dark:bg-white/2 border border-zinc-200/60 dark:border-white/5 rounded-2xl p-6 text-sm text-zinc-700 dark:text-zinc-300 min-h-[120px] focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
+            />
+          </div>
+        )}
+      </div>
+
       {/* Items List */}
       <div className="space-y-6">
         {plan.items?.length > 0 ? (
-          plan.items.map((item) => {
+          plan.items.map((item, index) => {
             const isEditing = editingItemId === item.id;
             const isRealizado = item.status === 'REALIZADO' || item.status === 'PUBLICADO';
             const isDevuelto = item.status === 'DEVUELTO';
@@ -405,10 +545,10 @@ const ContentPlanDetail = () => {
                 key={item.id}
                 ref={el => itemRefs.current[item.id] = el}
                 id={`item-${item.id}`}
-                className={`group relative bg-white/40 dark:bg-zinc-900/30 border transition-all duration-300 rounded-3xl overflow-hidden shadow-sm ${
+                className={`group relative bg-white dark:bg-zinc-900 transition-all duration-300 rounded-3xl overflow-hidden shadow-sm ${
                   isEditing
-                    ? 'border-indigo-500/50 ring-4 ring-indigo-500/5'
-                    : 'border-zinc-200/60 dark:border-white/5 hover:border-zinc-300 dark:hover:border-white/10'
+                    ? 'ring-4 ring-indigo-500/5'
+                    : 'hover:shadow-md'
                 }`}
               >
                 {/* Mirror Effect Indicator */}
@@ -422,6 +562,9 @@ const ContentPlanDetail = () => {
                     <div className="lg:col-span-3 space-y-6">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
+                          <span className="text-xs font-black text-indigo-500/40 font-mono tracking-tighter">
+                            #{String(index + 1).padStart(2, '0')}
+                          </span>
                           <div className={`p-2.5 rounded-xl ${isEditing ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-100 dark:bg-white/5 text-zinc-500'}`}>
                             {item.format === 'Reel' || item.format === 'Video' ? <Video className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
                           </div>
@@ -466,8 +609,12 @@ const ContentPlanDetail = () => {
                           {isEditing ? (
                             <input
                               type="date"
-                              value={item.publishDate ? new Date(item.publishDate).toISOString().split('T')[0] : ''}
-                              onChange={(e) => updateItemMutation.mutate({ id: item.id, publishDate: e.target.value })}
+                              defaultValue={item.publishDate ? new Date(item.publishDate).toISOString().split('T')[0] : ''}
+                              onBlur={(e) => {
+                                if (e.target.value && e.target.value !== (item.publishDate ? new Date(item.publishDate).toISOString().split('T')[0] : '')) {
+                                  updateItemMutation.mutate({ id: item.id, publishDate: e.target.value });
+                                }
+                              }}
                               className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none"
                             />
                           ) : (
@@ -557,49 +704,26 @@ const ContentPlanDetail = () => {
                       <div className="space-y-5">
                         <div className="space-y-1.5">
                           <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
-                            <ExternalLink className="w-3.5 h-3.5 text-indigo-500" /> Referencia (Link)
+                            <ExternalLink className="w-3.5 h-3.5 text-indigo-500" /> Referencias (Links)
                           </label>
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              defaultValue={item.mediaUrl}
-                              placeholder="Link de Drive/Pinterest"
-                              onBlur={(e) => {
-                                if (e.target.value !== item.mediaUrl) {
-                                  updateItemMutation.mutate({ id: item.id, mediaUrl: e.target.value });
-                                }
-                              }}
-                              className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
-                            />
-                          ) : (
-                            item.mediaUrl ? (
-                              <a href={item.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-bold text-xs truncate transition-colors">
-                                <ExternalLink className="w-3 h-3" /> Ver Referencia
-                              </a>
-                            ) : <span className="text-[10px] text-zinc-400 italic">No asignado</span>
-                          )}
+                          <MultiLinkInput
+                            values={item.mediaUrl}
+                            isEditing={isEditing}
+                            placeholder="Link de Drive/Pinterest"
+                            onChange={(links) => updateItemMutation.mutate({ id: item.id, mediaUrl: links })}
+                          />
                         </div>
 
                         <div className="space-y-1.5">
                           <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
                             <Sparkles className="w-3.5 h-3.5 text-indigo-500" /> Insumos (Links)
                           </label>
-                          {isEditing ? (
-                            <AutoResizeTextarea
-                              defaultValue={item.assetsLinks}
-                              onBlur={(e) => {
-                                if (e.target.value !== item.assetsLinks) {
-                                  updateItemMutation.mutate({ id: item.id, assetsLinks: e.target.value });
-                                }
-                              }}
-                              placeholder="Links de fotos, logos, etc."
-                              className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
-                            />
-                          ) : (
-                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-                              {item.assetsLinks || <span className="italic text-zinc-400">Sin insumos...</span>}
-                            </p>
-                          )}
+                          <MultiLinkInput
+                            values={item.assetsLinks}
+                            isEditing={isEditing}
+                            placeholder="Links de fotos, logos, etc."
+                            onChange={(links) => updateItemMutation.mutate({ id: item.id, assetsLinks: links })}
+                          />
                         </div>
 
                         {latestTask ? (

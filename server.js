@@ -22,6 +22,7 @@ import { getGeneralChatMessages, createGeneralChatMessage } from './src/services
 import { getUnreadNotificationCount, createNotification, getNotifications, markAsRead, markAllNotificationsAsRead } from './src/services/notificationService.js';
 import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
 import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics, getQualityStreak, auditAndDeleteTask } from './src/services/nativeTaskService.js';
+import { getContentPlanByToken, updateContentItem, addClientComment } from './src/services/contentService.js';
 import teamRouter from './src/routes/api/team.js';
 import userRouter from './src/routes/api/user.js';
 import feedbackRouter from './src/routes/api/feedback.js';
@@ -196,6 +197,63 @@ app.get('/api/health', (req, res) => {
     service: 'brainstudio-intelligence-api',
     timestamp: new Date().toISOString()
   });
+});
+
+// --- PUBLIC SHARED CONTENT PLAN ENDPOINT ---
+app.get('/api/public/parrilla/:token', async (req, res) => {
+  try {
+    const plan = await getContentPlanByToken(req.params.token);
+    if (!plan) return res.status(404).json({ error: 'Parrilla no encontrada' });
+
+    // Sanitize for public view: remove internal fields
+    const sanitizedPlan = {
+      id: plan.id,
+      month: plan.month,
+      year: plan.year,
+      client: {
+        name: plan.client.name,
+        logoUrl: plan.client.logoUrl
+      },
+      items: plan.items.map(item => ({
+        id: item.id,
+        objective: item.objective,
+        format: item.format,
+        copyText: item.copyText,
+        captionText: item.captionText,
+        publishDate: item.publishDate,
+        status: item.status,
+        comments: item.comments
+      }))
+    };
+
+    return res.json(sanitizedPlan);
+  } catch (error) {
+    console.error('[API] Public plan error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- PUBLIC APPROVAL ENDPOINT ---
+app.post('/api/public/items/:id/approve', async (req, res) => {
+  try {
+    const item = await updateContentItem(req.params.id, { status: 'APROBADO' });
+    return res.json(item);
+  } catch (error) {
+    console.error('[API] Public approval error:', error);
+    return res.status(500).json({ error: 'Failed to approve item' });
+  }
+});
+
+// --- PUBLIC COMMENT ENDPOINT ---
+app.post('/api/public/items/:id/comment', async (req, res) => {
+  try {
+    const { comment } = req.body;
+    const updatedItem = await addClientComment(req.params.id, comment);
+    return res.json(updatedItem);
+  } catch (error) {
+    console.error('[API] Public comment error:', error);
+    return res.status(500).json({ error: 'Failed to add comment' });
+  }
 });
 
 const PORT = process.env.PORT || 8080;
