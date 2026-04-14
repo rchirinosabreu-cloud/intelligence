@@ -1,3 +1,4 @@
+import prisma from './src/lib/prisma.js';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -6,7 +7,6 @@ import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import prisma from './src/lib/prisma.js';
 import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai';
 import { SearchServiceClient } from '@google-cloud/discoveryengine';
 import { JWT } from 'google-auth-library';
