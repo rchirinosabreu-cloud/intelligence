@@ -291,9 +291,15 @@ export const createContentItem = async (data) => {
 };
 
 export const updateContentItem = async (id, data) => {
-  // Ensure publishDate is a Date object if present
+  // Ensure publishDate is handled correctly
   if (data.publishDate) {
-    data.publishDate = new Date(data.publishDate);
+    // If it's already a string in YYYY-MM-DD format, we convert it to a UTC Date object
+    // to prevent Prisma/Postgres from applying local timezone offsets.
+    if (typeof data.publishDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.publishDate)) {
+      data.publishDate = new Date(`${data.publishDate}T00:00:00Z`);
+    } else {
+      data.publishDate = new Date(data.publishDate);
+    }
   }
 
   return await prisma.contentItem.update({
