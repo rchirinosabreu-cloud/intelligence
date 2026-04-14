@@ -291,6 +291,11 @@ export const createContentItem = async (data) => {
 };
 
 export const updateContentItem = async (id, data) => {
+  // Ensure publishDate is a Date object if present
+  if (data.publishDate) {
+    data.publishDate = new Date(data.publishDate);
+  }
+
   return await prisma.contentItem.update({
     where: { id },
     data
