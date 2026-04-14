@@ -80,18 +80,20 @@ model Client {
 }
 
 model ContentPlan {
-  id           String            @id @default(uuid())
-  clientId     String
-  month        Int
-  year         Int
-  status       ContentPlanStatus @default(PLANIFICACION)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  deletedAt    DateTime?
-  ownerId      String?
-  contentItems ContentItem[]
-  client       Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  owner        TeamMember?       @relation(fields: [ownerId], references: [id])
+  id            String            @id @default(uuid())
+  clientId      String
+  month         Int
+  year          Int
+  status        ContentPlanStatus @default(PLANIFICACION)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  deletedAt     DateTime?
+  ownerId       String?
+  internalNotes String?
+  shareToken    String?           @unique
+  contentItems  ContentItem[]
+  client        Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  owner         TeamMember?       @relation(fields: [ownerId], references: [id])
 }
 
 model ContentItem {
@@ -102,11 +104,11 @@ model ContentItem {
   copyText    String
   captionText String
   publishDate DateTime
-  mediaUrl    String?
+  mediaUrl    String[]          @default([])
   status      ContentItemStatus @default(BORRADOR)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
-  assetsLinks String?
+  assetsLinks String[]          @default([])
   comments    String?
   deletedAt   DateTime?
   plan        ContentPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)

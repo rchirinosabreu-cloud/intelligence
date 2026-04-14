@@ -138,6 +138,38 @@ export const updateContentPlan = async (id, data) => {
   });
 };
 
+export const generateShareToken = async (id) => {
+  const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  return await prisma.contentPlan.update({
+    where: { id },
+    data: { shareToken: token }
+  });
+};
+
+export const getContentPlanByToken = async (token) => {
+  const plan = await prisma.contentPlan.findUnique({
+    where: { shareToken: token },
+    include: {
+      client: true,
+      contentItems: {
+        where: { deletedAt: null },
+        orderBy: { publishDate: 'asc' }
+      }
+    }
+  });
+
+  if (plan && plan.deletedAt) return null;
+
+  if (plan) {
+    return {
+      ...plan,
+      items: plan.contentItems || []
+    };
+  }
+
+  return plan;
+};
+
 export const deleteContentPlan = async (id) => {
   return await prisma.$transaction(async (tx) => {
     const now = new Date();
@@ -191,24 +223,47 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
     comments: commentText,
     status: 'PENDIENTE',
     clientId: item.plan.clientId,
-    referenceUrl: item.mediaUrl,
+    referenceUrl: Array.isArray(item.mediaUrl) ? item.mediaUrl[0] : item.mediaUrl,
     isPriority: !!isPriority,
     isSpecial: !!isSpecial,
     contentItemId: itemId // Explicitly link it
   });
 
   // Link Task to ContentItem via contentItemId and update status to EN_PRODUCCION
-  return await prisma.contentItem.update({
+  const updatedItem = await prisma.contentItem.update({
     where: { id: itemId },
     data: {
       status: 'EN_PRODUCCION'
     },
     include: {
+      plan: {
+        select: { id: true, month: true, year: true, client: { select: { slug: true } } }
+      },
       tasks: {
-        where: { id: task.id }
+        where: { id: task.id },
+        include: {
+          assignee: true,
+          creator: true
+        }
       }
     }
   });
+
+  // Map for frontend compatibility to ensure plan info is present at task level
+  if (updatedItem.tasks?.[0]) {
+    const t = updatedItem.tasks[0];
+    updatedItem.tasks[0] = {
+      ...t,
+      plan: {
+        id: updatedItem.plan.id,
+        slug: updatedItem.plan.client.slug,
+        month: updatedItem.plan.month,
+        year: updatedItem.plan.year
+      }
+    };
+  }
+
+  return updatedItem;
 };
 
 /**
@@ -246,5 +301,27 @@ export const deleteContentItem = async (id) => {
   return await prisma.contentItem.update({
     where: { id },
     data: { deletedAt: new Date() }
+  });
+};
+
+export const addClientComment = async (itemId, comment) => {
+  const item = await prisma.contentItem.findUnique({ where: { id: itemId } });
+  if (!item) throw new Error('Content item not found');
+
+  const now = new Intl.DateTimeFormat('es-CO', {
+    timeZone: 'America/Bogota',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+
+  const updatedComments = item.comments
+    ? `${item.comments}\n\n[Cliente - ${now}]: ${comment}`
+    : `[Cliente - ${now}]: ${comment}`;
+
+  return await prisma.contentItem.update({
+    where: { id: itemId },
+    data: {
+      comments: updatedComments,
+      status: 'DEVUELTO'
+    }
   });
 };

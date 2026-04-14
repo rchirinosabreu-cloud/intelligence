@@ -16,6 +16,7 @@ import TalentRadar from './components/modules/TalentRadar';
 import Login from './components/Login';
 import PrivacyPolicy from './components/public/PrivacyPolicy';
 import TermsOfService from './components/public/TermsOfService';
+import SharedContentPlan from './components/public/SharedContentPlan';
 import MinutesLayout from './components/modules/Minutes/MinutesLayout';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -68,6 +69,7 @@ function AppContent() {
           {/* Public Legal Routes */}
           <Route path="/privacidad" element={<PrivacyPolicy />} />
           <Route path="/terminos" element={<TermsOfService />} />
+          <Route path="/compartir/:token" element={<SharedContentPlan />} />
 
           {/* Protected App Routes */}
           {!isAuthenticated ? (

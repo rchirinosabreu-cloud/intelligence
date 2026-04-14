@@ -83,6 +83,16 @@ router.patch('/plans/:id', async (req, res) => {
   }
 });
 
+router.post('/plans/:id/share-token', async (req, res) => {
+  try {
+    const plan = await generateShareToken(req.params.id);
+    return res.json({ shareToken: plan.shareToken });
+  } catch (error) {
+    console.error('[API] Error generating share token:', error);
+    return res.status(500).json({ error: 'Failed to generate share token' });
+  }
+});
+
 router.delete('/plans/:id', async (req, res) => {
   try {
     await deleteContentPlan(req.params.id);
