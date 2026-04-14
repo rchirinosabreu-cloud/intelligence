@@ -1,9 +1,9 @@
+import 'dotenv/config';
 import prisma from './src/lib/prisma.js';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { createProxyMiddleware } from 'http-proxy-middleware';
@@ -32,7 +32,7 @@ import dbRouter from './src/routes/api/db.js';
 import clientFileRouter from './src/routes/api/clientFiles.js';
 import talentRadarRouter from './src/routes/api/talentRadar.js';
 
-dotenv.config();
+console.log("[Boot] Imports loaded successfully.");
 
 // Global Crash Handler
 process.on('uncaughtException', (err) => {
@@ -2544,34 +2544,22 @@ app.get('*', (req, res) => {
     res.status(200).send("Brainstudio Intelligence Backend is running. (Frontend build not found)");
 });
 
-const server = app.listen(PORT, '0.0.0.0', async () => {
-    console.log(`Server running on port ${PORT} (Bound to 0.0.0.0)`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on port ${PORT} (Bound to 0.0.0.0)`);
 
-    // Prisma Connection Diagnostic
-    try {
-      console.log("[Diagnostic] Testing Prisma database connection...");
-      // Check if DATABASE_URL is set
-      if (!process.env.DATABASE_URL) {
-        console.error("[Diagnostic] ERROR: DATABASE_URL environment variable is MISSING!");
-      } else {
-        const urlParts = process.env.DATABASE_URL.split('@');
-        const hostInfo = urlParts.length > 1 ? urlParts[1] : 'unknown host';
-        console.log(`[Diagnostic] DATABASE_URL host info: ${hostInfo.split('/')[0]}`);
-      }
-
-      await prisma.$connect();
-      console.log("[Diagnostic] Database connection successful.");
-
-      const userCount = await prisma.user.count();
-      console.log(`[Diagnostic] Database is accessible. Found ${userCount} users.`);
-    } catch (dbError) {
-      console.error("[Diagnostic] CRITICAL: Database connection failed!", {
-        message: dbError.message,
-        code: dbError.code,
-        meta: dbError.meta,
-        env_node_env: process.env.NODE_ENV
-      });
-    }
+    // Run connection test in background so we don't block the event loop
+    (async () => {
+        try {
+            console.log("[Diagnostic] Testing Prisma database connection in background...");
+            if (!process.env.DATABASE_URL) {
+                console.error("[Diagnostic] ERROR: DATABASE_URL environment variable is MISSING!");
+            }
+            await prisma.$connect();
+            console.log("[Diagnostic] Database connection successful.");
+        } catch (dbError) {
+            console.error("[Diagnostic] CRITICAL: Database connection failed!", dbError.message);
+        }
+    })();
 });
 
 // Aumentar el timeout global del servidor a 5 minutos para procesar análisis largos de IA
