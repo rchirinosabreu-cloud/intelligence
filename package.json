@@ -11,7 +11,8 @@
     "postinstall": "prisma generate",
     "preview": "vite preview --host :: --port 3000",
     "lint": "eslint . --quiet",
-    "lint:warn": "eslint ."
+    "lint:warn": "eslint .",
+    "db:fix": "node scripts/fix_content_arrays.js"
   },
   "dependencies": {
     "@google-cloud/discoveryengine": "^2.5.2",
