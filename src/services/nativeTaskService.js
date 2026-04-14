@@ -121,6 +121,7 @@ export const getTasks = async (clientId) => {
             if (task.contentItem && task.contentItem.plan) {
                 return {
                     ...task,
+                    contentPlanId: task.contentItem.plan.id, // Ensure ID is at root
                     plan: {
                         id: task.contentItem.plan.id,
                         slug: task.contentItem.plan.client?.slug || task.client?.slug,
@@ -208,6 +209,7 @@ export const createTask = async ({
         if (newTask.contentItem && newTask.contentItem.plan) {
             return {
                 ...newTask,
+                contentPlanId: newTask.contentItem.plan.id, // Ensure ID is at root
                 plan: {
                     id: newTask.contentItem.plan.id,
                     slug: newTask.contentItem.plan.client?.slug || newTask.client?.slug,
@@ -470,6 +472,7 @@ export const updateTask = async (id, data, updaterId = null) => {
         if (updatedTask.contentItem && updatedTask.contentItem.plan) {
             return {
                 ...updatedTask,
+                contentPlanId: updatedTask.contentItem.plan.id, // Ensure ID is at root
                 plan: {
                     id: updatedTask.contentItem.plan.id,
                     slug: updatedTask.contentItem.plan.client?.slug || updatedTask.client?.slug,
