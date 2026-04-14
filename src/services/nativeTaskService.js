@@ -382,6 +382,10 @@ export const updateTask = async (id, data, updaterId = null) => {
                         if (linkedItem && linkedItem.plan?.ownerId && isProductionTask) {
                             console.log(`[nativeTaskService] Production task completed. Creating Publication task for CM: ${linkedItem.plan.ownerId}`);
 
+                            const referenceText = Array.isArray(linkedItem.mediaUrl)
+                                ? linkedItem.mediaUrl.join(', ')
+                                : (linkedItem.mediaUrl || 'N/A');
+
                             await prisma.task.create({
                                 data: {
                                     title: `[Publicar] ${linkedItem.format}: ${linkedItem.objective}`,
@@ -391,7 +395,7 @@ export const updateTask = async (id, data, updaterId = null) => {
                                     status: 'PENDIENTE',
                                     clientId: linkedItem.plan.clientId,
                                     contentItemId: linkedItem.id, // Linked to the same item
-                                    comments: `Pieza lista para publicar. Referencia: ${linkedItem.mediaUrl || 'N/A'}`
+                                    comments: `Pieza lista para publicar. Referencia: ${referenceText}`
                                 }
                             });
                         }
