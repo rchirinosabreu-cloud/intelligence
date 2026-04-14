@@ -283,7 +283,7 @@ const ContentPlanDetail = () => {
   // Highlight & Scroll Effect
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const highlightId = params.get('itemId');
+    const highlightId = params.get('item') || params.get('itemId');
     if (highlightId && plan?.items) {
       setTimeout(() => {
         const element = itemRefs.current[highlightId];
@@ -551,11 +551,6 @@ const ContentPlanDetail = () => {
                     : 'hover:shadow-md'
                 }`}
               >
-                {/* Mirror Effect Indicator */}
-                {latestTask && (
-                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 shadow-[0_0_15px_rgba(99,102,241,0.3)] ${isRealizado ? 'bg-emerald-500' : isDevuelto ? 'bg-red-500' : 'bg-indigo-500'}`} />
-                )}
-
                 <div className="p-6 lg:p-8">
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     {/* Column 1: Format & Status */}
@@ -647,6 +642,28 @@ const ContentPlanDetail = () => {
                             <option value="PUBLICADO">Publicado</option>
                           </select>
                         </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-zinc-100 dark:border-white/5">
+                        <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-2">
+                          <StickyNote className="w-3 h-3 text-indigo-500" /> Nota Interna
+                        </label>
+                        {isEditing ? (
+                          <AutoResizeTextarea
+                            defaultValue={item.internalNotes}
+                            onBlur={(e) => {
+                              if (e.target.value !== item.internalNotes) {
+                                updateItemMutation.mutate({ id: item.id, internalNotes: e.target.value });
+                              }
+                            }}
+                            placeholder="Instrucciones para el equipo..."
+                            className="w-full bg-zinc-50/50 dark:bg-white/2 border border-zinc-200/60 dark:border-white/5 rounded-xl p-3 text-[11px] font-medium focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all"
+                          />
+                        ) : (
+                          <div className="bg-zinc-50/30 dark:bg-white/2 p-3 rounded-xl text-[11px] text-zinc-500 dark:text-zinc-400 italic leading-relaxed">
+                            {item.internalNotes || <span className="text-zinc-300 dark:text-zinc-600">Sin notas internas...</span>}
+                          </div>
+                        )}
                       </div>
                     </div>
 

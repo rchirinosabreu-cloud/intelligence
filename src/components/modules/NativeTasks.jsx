@@ -1125,11 +1125,12 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    if (task.plan && task.plan.slug) {
+                                                    // High-priority: uses the root contentPlanId if available for direct deep linking
+                                                    if (task.contentPlanId) {
+                                                        navigate(`/parrillas/${task.contentPlanId}?item=${task.contentItemId}`);
+                                                    } else if (task.plan && task.plan.slug) {
                                                         const monthStr = String(task.plan.month).padStart(2, '0');
                                                         navigate(`/parrillas/${task.plan.slug}/${monthStr}-${task.plan.year}?itemId=${task.contentItemId}`);
-                                                    } else {
-                                                        navigate(`/parrillas/${task.contentPlanId}?itemId=${task.contentItemId}`);
                                                     }
                                                 }}
                                                 className="text-indigo-600 hover:text-indigo-800 transition-colors p-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-full"

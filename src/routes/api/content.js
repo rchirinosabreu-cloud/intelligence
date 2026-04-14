@@ -10,7 +10,8 @@ import {
   createContentItem,
   updateContentItem,
   deleteContentItem,
-  sendItemToKanban
+  sendItemToKanban,
+  generateShareToken
 } from '../../services/contentService.js';
 
 const router = express.Router();

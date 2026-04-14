@@ -15,6 +15,7 @@ async function migrate() {
         console.log('intentando vía SQL crudo como fallback...');
         await prisma.$executeRaw`ALTER TABLE "ContentPlan" ADD COLUMN IF NOT EXISTS "internalNotes" TEXT`;
         await prisma.$executeRaw`ALTER TABLE "ContentPlan" ADD COLUMN IF NOT EXISTS "shareToken" TEXT`;
+        await prisma.$executeRaw`ALTER TABLE "ContentItem" ADD COLUMN IF NOT EXISTS "internalNotes" TEXT`;
         await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "ContentPlan_shareToken_key" ON "ContentPlan"("shareToken")`;
     }
 
