@@ -7,7 +7,8 @@ import {
   ChevronLeft, Plus, Send, ExternalLink, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
   Calendar, User, LayoutGrid, FileText, Instagram, Facebook, Video, Image as ImageIcon,
-  Edit2, Check, AlertCircle, Sparkles, Users, UserCheck, StickyNote, ChevronUp, Share2
+  Edit2, Check, AlertCircle, Sparkles, Users, UserCheck, StickyNote, ChevronUp, Share2,
+  MessageSquare
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import {
@@ -121,6 +122,40 @@ const AutoResizeTextarea = ({ defaultValue, onBlur, placeholder, disabled, class
       className={className}
       rows={1}
     />
+  );
+};
+
+const FeedbackHistory = ({ comments, isEditing, onUpdate }) => {
+  if (!comments && !isEditing) return null;
+
+  return (
+    <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-500">
+      <div className="flex items-center gap-2">
+        <div className="p-1.5 bg-red-500/10 text-red-500 rounded-lg">
+          <MessageSquare className="w-3.5 h-3.5" />
+        </div>
+        <label className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em]">
+          Feedback del Cliente
+        </label>
+      </div>
+
+      {isEditing ? (
+        <AutoResizeTextarea
+          defaultValue={comments}
+          onBlur={(e) => {
+            if (e.target.value !== comments) {
+              onUpdate(e.target.value);
+            }
+          }}
+          placeholder="Escribe o edita el feedback del cliente aquí..."
+          className="w-full bg-red-50/50 dark:bg-red-500/5 border border-red-200 dark:border-red-500/20 rounded-2xl p-4 text-sm font-medium text-red-700 dark:text-red-300 focus:ring-4 focus:ring-red-500/10 outline-none transition-all"
+        />
+      ) : (
+        <div className="bg-red-50/50 dark:bg-red-500/5 border border-red-100 dark:border-red-500/10 p-5 rounded-[2rem] text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap leading-relaxed italic">
+          {comments || <span className="text-red-300 dark:text-red-900/40">Esperando feedback...</span>}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -665,6 +700,12 @@ const ContentPlanDetail = () => {
                           </div>
                         )}
                       </div>
+
+                      <FeedbackHistory
+                        comments={item.comments}
+                        isEditing={isEditing}
+                        onUpdate={(val) => updateItemMutation.mutate({ id: item.id, comments: val })}
+                      />
                     </div>
 
                     {/* Column 2: Copy & Caption */}
