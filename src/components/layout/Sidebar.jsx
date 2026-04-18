@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Sparkles, CheckSquare, LayoutGrid, FileText, BarChart3, Users, UserCheck, User, Moon, Sun, Bell, X, Zap } from 'lucide-react';
+import { LayoutDashboard, Sparkles, CheckSquare, LayoutGrid, FileText, BarChart3, Users, UserCheck, User, Moon, Sun, Bell, X, Zap, Rocket } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
@@ -16,6 +16,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const { currentUser } = useAuth();
 
   const menuItems = [
+    { id: 'mission-control', label: 'Mission Control', icon: Rocket, path: '/mission-control', isFeatured: true },
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, path: '/' },
     { id: 'bria', label: 'Bria Intelligence', icon: Sparkles, path: '/bria' },
     { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/gestion' },
@@ -62,6 +63,32 @@ const Sidebar = ({ isOpen, onClose }) => {
       <nav className="flex-1 px-4 py-6 space-y-2 relative">
         {filteredMenuItems.map((item) => {
           const Icon = item.icon;
+
+          if (item.isFeatured) {
+            return (
+              <NavLink
+                key={item.id}
+                to={item.path}
+                onClick={() => {
+                  if (window.innerWidth < 1024) {
+                    onClose();
+                  }
+                }}
+                className={({ isActive }) => cn(
+                  "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-black transition-all duration-500 group relative overflow-hidden border-2 mb-4",
+                  "bg-gradient-to-r from-orange-500 to-red-600 text-white border-orange-400 shadow-[0_0_20px_rgba(249,115,22,0.3)] hover:shadow-[0_0_30px_rgba(249,115,22,0.5)]",
+                  "animate-pulse-subtle",
+                  isActive ? "ring-2 ring-orange-300 ring-offset-2 dark:ring-offset-zinc-950" : ""
+                )}
+              >
+                <span className="relative z-10 flex items-center gap-3 w-full">
+                  <Icon className="w-5 h-5 text-white drop-shadow-md" />
+                  <span className="tracking-tight uppercase">Mission Control</span>
+                </span>
+                <div className="absolute inset-0 bg-white/10 group-hover:bg-white/20 transition-colors" />
+              </NavLink>
+            );
+          }
 
           return (
             <NavLink
