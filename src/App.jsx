@@ -10,6 +10,7 @@ import ClientDetailWrapper from './components/modules/ClientDetailWrapper';
 import Team from './components/modules/Team';
 import Profile from './components/modules/Profile';
 import Metrics from './components/modules/Metrics';
+import MissionControl from './components/modules/MissionControl/MissionControl';
 import ContentGrids from './components/modules/ContentGrids';
 import ContentPlanDetail from './components/modules/ContentPlanDetail';
 import TalentRadar from './components/modules/TalentRadar';
@@ -89,6 +90,7 @@ function AppContent() {
             <Route path="/parrillas" element={<ContentGrids />} />
             <Route path="/parrillas/:clientSlug/:period" element={<ContentPlanDetail />} />
             <Route path="/parrillas/:planId" element={<ContentPlanDetail />} />
+            <Route path="/mission-control" element={<MissionControl />} />
             <Route path="/minutas" element={<MinutesLayout />} />
             <Route path="/metricas" element={<Metrics />} />
 

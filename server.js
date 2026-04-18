@@ -14,6 +14,7 @@ import fs from 'fs';
 import * as cheerio from 'cheerio';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { getUpcomingEvents } from './src/services/calendarService.js';
+import { getMissionControlStatus } from './src/services/missionControlService.js';
 import { getClients, getClientByIdentifier, getClientGuidelines, createClient, getClientLinks, addClientLink, removeClientLink } from './src/services/clientService.js';
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from './src/services/clientTaskService.js';
 import { getClientAnnouncements, createClientAnnouncement } from './src/services/clientAnnouncementService.js';
@@ -1400,6 +1401,16 @@ app.get('/api/calendar/upcoming', async (req, res) => {
             error: "Failed to fetch calendar events",
             details: error.message
         });
+    }
+});
+
+app.get('/api/mission-control/status', authenticateToken, async (req, res) => {
+    try {
+        const status = await getMissionControlStatus();
+        res.json(status);
+    } catch (error) {
+        console.error("Mission Control API Error:", error);
+        res.status(500).json({ error: 'Failed to fetch mission control status' });
     }
 });
 

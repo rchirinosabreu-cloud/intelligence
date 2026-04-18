@@ -17,6 +17,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const menuItems = [
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, path: '/' },
+    { id: 'mission-control', label: 'Mission Control', icon: Zap, path: '/mission-control', isSpecial: true },
     { id: 'bria', label: 'Bria Intelligence', icon: Sparkles, path: '/bria' },
     { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/gestion' },
     { id: 'content-grids', label: 'Parrillas', icon: LayoutGrid, path: '/parrillas' },
@@ -75,8 +76,12 @@ const Sidebar = ({ isOpen, onClose }) => {
               className={({ isActive }) => cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group relative overflow-hidden border",
                 isActive
-                  ? "bg-primary/10 text-primary border-primary/20 shadow-sm dark:text-white dark:bg-white/10 dark:border-white/10 dark:shadow-sm backdrop-blur-md"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-white/40 border-transparent dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-white/5 dark:hover:border-white/5"
+                  ? item.isSpecial
+                    ? "bg-gradient-to-r from-orange-500 to-red-600 text-white border-transparent shadow-lg shadow-orange-500/20"
+                    : "bg-primary/10 text-primary border-primary/20 shadow-sm dark:text-white dark:bg-white/10 dark:border-white/10 dark:shadow-sm backdrop-blur-md"
+                  : item.isSpecial
+                    ? "bg-gradient-to-r from-orange-400/10 to-red-500/10 text-orange-600 border-orange-200/50 hover:from-orange-400/20 hover:to-red-500/20 dark:text-orange-400 dark:border-orange-500/20 animate-pulse-subtle"
+                    : "text-zinc-500 hover:text-zinc-900 hover:bg-white/40 border-transparent dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-white/5 dark:hover:border-white/5"
               )}
             >
               {({ isActive }) => (
