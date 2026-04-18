@@ -1,158 +1,213 @@
-import React, { useState, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { Desk, MeetingTable, BeanBag, CoffeeStation, ProductionSet } from './OfficeFurniture';
+import React, { Suspense, useState, useMemo } from 'react';
+import { Canvas } from '@react-three/fiber';
+import {
+  OrbitControls,
+  OrthographicCamera,
+  ContactShadows,
+  Environment,
+  Float,
+  Html,
+  Text
+} from '@react-three/drei';
+import * as THREE from 'three';
+import { Desk3D, Plant3D, BeanBag3D, ProductionSet3D } from './Office3D';
 import PixelAvatar from './PixelAvatar';
 
 /**
- * VirtualOffice - The isometric world engine.
- * Maps team members to fixed desk coordinates and handles the overall layout.
+ * AvatarWrapper - Renders a 2D PixelAvatar in the 3D space using <Html />
  */
+const AvatarWrapper = ({ member, isMeeting, position }) => {
+  return (
+    <group position={position}>
+      <Html
+        transform
+        occlude
+        distanceFactor={5}
+        position={[0, 1.5, 0]}
+        style={{
+          transition: 'all 0.2s',
+          pointerEvents: 'none'
+        }}
+      >
+        <div className="flex flex-col items-center select-none">
+          <div className="transition-transform hover:scale-110">
+            <PixelAvatar
+              member={member}
+              state={isMeeting ? 'meeting' : 'working'}
+            />
+          </div>
+          <div className="mt-2 px-3 py-1 bg-white/95 dark:bg-zinc-800/95 rounded-full border border-slate-200 dark:border-zinc-700 shadow-lg whitespace-nowrap">
+             <span className="text-[11px] font-bold text-slate-700 dark:text-zinc-200">{member.name}</span>
+          </div>
+        </div>
+      </Html>
+    </group>
+  );
+};
+
+const MeetingZone = ({ position = [8, 0, 4] }) => {
+  return (
+    <group position={position}>
+      {/* Bean Bags for Sync */}
+      <BeanBag3D position={[-1.5, 0, 0]} color="#fecaca" />
+      <BeanBag3D position={[1.5, 0, 0]} color="#e9d5ff" />
+      <BeanBag3D position={[0, 0, 1.5]} color="#bfdbfe" />
+
+      {/* Small coffee table */}
+      <Cylinder args={[0.6, 0.6, 0.05, 32]} position={[0, 0.3, 0]}>
+        <meshStandardMaterial color="#ffffff" roughness={0.1} />
+      </Cylinder>
+
+      {/* Label */}
+      <Text
+        position={[0, 0.1, 2.5]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={0.4}
+        color="#a1a1aa"
+      >
+        SYNC & REUNIONES
+      </Text>
+    </group>
+  );
+};
+
+const Cylinder = ({ args, position, children }) => (
+  <mesh position={position} castShadow receiveShadow>
+    <cylinderGeometry args={args} />
+    {children}
+  </mesh>
+);
+
+
+const Box = ({ args, position, children }) => (
+  <mesh position={position} castShadow receiveShadow>
+    <boxGeometry args={args} />
+    {children}
+  </mesh>
+);
+
 const VirtualOffice = ({
   team = [],
   activeMeetings = [],
   productionActive = false,
-  productionClients = [],
   onMemberClick = () => {}
 }) => {
-  const containerRef = useRef(null);
-  const [zoom, setZoom] = useState(1);
-  const [isPanning, setIsPanning] = useState(false);
+  // 3D Grid for desks
+  const deskPositions = useMemo(() => [
+    [-4, 0, -3], [-1, 0, -3], [2, 0, -3],
+    [-4, 0, 0],  [-1, 0, 0],  [2, 0, 0],
+    [-4, 0, 3],  [-1, 0, 3],  [2, 0, 3],
+  ], []);
 
-  // Base grid layout for a 1000x800 canvas
-  // We use a normalized coordinate system for easier mapping
-
-  // FIXED DESKS COORDINATES (X, Y)
-  // These will be assigned to team members dynamically but in a fixed sequence
-  const deskLocations = [
-    { x: 300, y: 300 }, // Pos 1
-    { x: 450, y: 300 }, // Pos 2
-    { x: 600, y: 300 }, // Pos 3
-    { x: 300, y: 450 }, // Pos 4
-    { x: 450, y: 450 }, // Pos 5
-    { x: 600, y: 450 }, // Pos 6
-    { x: 300, y: 600 }, // Pos 7
-    { x: 450, y: 600 }, // Pos 8
-    { x: 600, y: 600 }, // Pos 9
-  ];
-
-  const meetingZone = { x: 750, y: 450 };
-  const coffeeZone = { x: 150, y: 200 };
-  const relaxationZone = { x: 150, y: 550 };
-  const productionZone = { x: 800, y: 150 };
+  const meetingCenter = [8, 0, 4];
 
   return (
-    <div ref={containerRef} className="relative w-full h-full overflow-hidden cursor-grab active:cursor-grabbing bg-sky-50 dark:bg-zinc-950 transition-colors">
-      {/* World Canvas */}
-      <motion.div
-        drag
-        dragConstraints={containerRef}
-        className="relative w-[1200px] h-[900px] origin-center"
-        style={{
-          transformStyle: 'preserve-3d',
-          transform: `perspective(2000px) rotateX(55deg) rotateZ(-45deg) scale(${zoom})`,
-        }}
-      >
-        {/* Floor */}
-        <div className="absolute inset-0 bg-[#fdf2f8] dark:bg-zinc-900 border-[10px] border-white/20 dark:border-white/5 rounded-[40px] shadow-2xl">
-           {/* Grid Pattern */}
-           <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
-                style={{ backgroundImage: 'radial-gradient(circle, #000 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
-        </div>
+    <div className="w-full h-full bg-[#f8fafc] dark:bg-zinc-950 relative">
+      <Canvas shadows dpr={[1, 2]}>
+        <OrthographicCamera
+          makeDefault
+          position={[15, 15, 15]}
+          zoom={45}
+          near={0.1}
+          far={1000}
+        />
 
-        {/* Walls (Implicit by shadow and position) */}
+        {/* Environment & Lighting */}
+        <Suspense fallback={null}>
+          {/* We skip Environment preset "city" because it depends on external HDR assets which often fail in restricted sandbox/prod environments */}
+          <ambientLight intensity={0.8} />
+          <pointLight position={[10, 10, 10]} intensity={1} color="#ffffff" />
+          <pointLight position={[-10, 5, -10]} intensity={0.5} color="#fdf2f8" />
+          <spotLight
+            position={[5, 20, 5]}
+            intensity={1.5}
+            angle={0.5}
+            penumbra={0.5}
+            castShadow
+            shadow-mapSize={[1024, 1024]}
+          />
 
-        {/* OFFICE ELEMENTS */}
+          <ContactShadows
+            position={[0, 0, 0]}
+            opacity={0.3}
+            scale={25}
+            blur={2}
+            far={4.5}
+          />
 
-        {/* Coffee Station */}
-        <div className="absolute" style={{ left: coffeeZone.x, top: coffeeZone.y, transform: 'rotateZ(45deg)' }}>
-          <CoffeeStation />
-        </div>
+          {/* Floor Grid - Soft Pastel */}
+          <gridHelper args={[40, 40, "#fbcfe8", "#fdf2f8"]} position={[0, 0.01, 0]} />
 
-        {/* Bean Bags & Mascot */}
-        <div className="absolute flex gap-4" style={{ left: relaxationZone.x, top: relaxationZone.y, transform: 'rotateZ(45deg)' }}>
-          <BeanBag color="purple" />
-          <BeanBag color="blue" />
-          <div className="relative">
-            <BeanBag color="green" />
-            {/* The Mascot: Pixel Cat */}
-            <div className="absolute top-2 left-2 animate-bounce">
-              <svg width="20" height="20" viewBox="0 0 10 10" fill="#64748b" style={{ imageRendering: 'pixelated' }}>
-                <rect x="2" y="4" width="6" height="4" />
-                <rect x="2" y="2" width="2" height="2" />
-                <rect x="6" y="2" width="2" height="2" />
-                <rect x="4" y="5" width="2" height="1" fill="#000" />
-              </svg>
-            </div>
-          </div>
-        </div>
+          {/* Main Floor */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
+            <planeGeometry args={[40, 40]} />
+            <meshStandardMaterial color="#fdf2f8" roughness={1} />
+          </mesh>
 
-        {/* Meeting Table */}
-        <div className="absolute" style={{ left: meetingZone.x, top: meetingZone.y, transform: 'rotateZ(45deg)' }}>
-           <MeetingTable />
-        </div>
+          {/* Functional Zones */}
+          <MeetingZone position={[8, 0, 4]} />
+          <ProductionSet3D isActive={productionActive} position={[8, 0, -6]} />
 
-        {/* Production Set */}
-        <div className="absolute" style={{ left: productionZone.x, top: productionZone.y, transform: 'rotateZ(45deg)' }}>
-           <ProductionSet isActive={productionActive} clients={productionClients} />
-        </div>
+          {/* Decor: Plants */}
+          <Plant3D position={[-8, 0, -8]} />
+          <Plant3D position={[12, 0, 10]} />
 
-        {/* DESKS & TEAM MEMBERS */}
-        {team.map((member, index) => {
-          const isMeeting = activeMeetings.some(m => m.participants.includes(member.id));
-          const deskPos = deskLocations[index % deskLocations.length];
+          {/* Team Members & Desks */}
+          {team.map((member, index) => {
+            const isMeeting = activeMeetings.some(m => m.participants?.includes(member.id));
+            const deskPos = deskPositions[index % deskPositions.length];
 
-          // If in meeting, offset position towards meeting table
-          const finalPos = isMeeting ? { x: meetingZone.x + (index * 10 - 40), y: meetingZone.y + (index * 5 - 20) } : deskPos;
+            // Layout logic for positions
+            const finalPos = isMeeting
+              ? [meetingCenter[0] + (Math.random() - 0.5) * 2, 0, meetingCenter[2] + (Math.random() - 0.5) * 2]
+              : deskPos;
 
-          return (
-            <motion.div
-              key={member.id}
-              layout
-              initial={false}
-              className="absolute cursor-pointer"
-              style={{ left: finalPos.x, top: finalPos.y, transform: 'rotateZ(45deg)' }}
-              onClick={() => onMemberClick(member)}
-            >
-              {!isMeeting && <Desk color={index % 2 === 0 ? "#fff" : "#fefce8"} />}
+            return (
+              <group key={member.id}>
+                {!isMeeting && <Desk3D position={deskPos} color={index % 2 === 0 ? "#ffffff" : "#fffbeb"} />}
 
-              <div className="absolute -top-12 left-1/2 -translate-x-1/2 transition-transform hover:scale-125" style={{ transformStyle: 'preserve-3d', transform: 'rotateZ(-45deg) rotateX(-55deg)' }}>
-                <PixelAvatar
+                <AvatarWrapper
                   member={member}
-                  state={isMeeting ? 'meeting' : 'working'}
+                  isMeeting={isMeeting}
+                  position={[finalPos[0], 0, finalPos[2]]}
                 />
-                <div className="mt-1 px-2 py-0.5 bg-white/90 dark:bg-zinc-800/90 rounded-full border border-slate-200 dark:border-zinc-700 shadow-sm whitespace-nowrap">
-                   <span className="text-[10px] font-bold text-slate-700 dark:text-zinc-200">{member.name.split(' ')[0]}</span>
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
+              </group>
+            );
+          })}
 
-        {/* Neon Logo on "Wall" */}
-        <div className="absolute top-10 left-1/2 -translate-x-1/2" style={{ transform: 'rotateZ(45deg) rotateX(-90deg) translateZ(50px)' }}>
-          <div className="px-6 py-2 border-2 border-indigo-400 rounded-full shadow-[0_0_20px_rgba(129,140,248,0.5)] bg-indigo-500/10">
-            <span className="text-xl font-black text-indigo-400 italic tracking-tighter animate-pulse">BRAINSTUDIO</span>
-          </div>
-        </div>
+          <OrbitControls
+            enablePan={true}
+            enableZoom={true}
+            maxPolarAngle={Math.PI / 2.1}
+            minZoom={20}
+            maxZoom={100}
+          />
+        </Suspense>
+      </Canvas>
 
-      </motion.div>
-
-      {/* UI Controls */}
-      <div className="absolute bottom-8 right-8 flex flex-col gap-2">
-         <button onClick={() => setZoom(z => Math.min(z + 0.2, 2))} className="w-10 h-10 bg-white dark:bg-zinc-800 rounded-xl shadow-lg flex items-center justify-center font-bold text-lg">+</button>
-         <button onClick={() => setZoom(z => Math.max(z - 0.2, 0.5))} className="w-10 h-10 bg-white dark:bg-zinc-800 rounded-xl shadow-lg flex items-center justify-center font-bold text-lg">-</button>
+      {/* Stats UI */}
+      <div className="absolute top-24 left-8 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md p-5 rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl space-y-3 pointer-events-none">
+         <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">BRAIN-OS V2.0</h3>
+         <div className="space-y-2">
+           <div className="flex items-center gap-3">
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[11px] font-bold text-slate-600">TALENTO ACTIVO: {team.length}</span>
+           </div>
+           <div className="flex items-center gap-3">
+              <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+              <span className="text-[11px] font-bold text-slate-600">EN REUNIÓN: {activeMeetings.length}</span>
+           </div>
+           {productionActive && (
+             <div className="flex items-center gap-3">
+                <div className="w-2.5 h-2.5 rounded-full bg-pink-500 animate-ping" />
+                <span className="text-[11px] font-bold text-slate-600">SET DE PROD: ON AIR</span>
+             </div>
+           )}
+         </div>
       </div>
 
-      {/* Legend */}
-      <div className="absolute top-24 left-8 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md p-4 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xl space-y-2">
-         <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="text-[10px] font-bold uppercase tracking-wider">Activos: {team.length}</span>
-         </div>
-         <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-amber-500" />
-            <span className="text-[10px] font-bold uppercase tracking-wider">En Reunión: {activeMeetings.length}</span>
-         </div>
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-indigo-600/10 border border-indigo-600/20 px-6 py-2 rounded-full backdrop-blur-sm">
+         <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Orbitar: Clic Izquierdo | Panear: Clic Derecho | Zoom: Scroll</p>
       </div>
     </div>
   );

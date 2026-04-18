@@ -10,9 +10,9 @@ import ClientDetailWrapper from './components/modules/ClientDetailWrapper';
 import Team from './components/modules/Team';
 import Profile from './components/modules/Profile';
 import Metrics from './components/modules/Metrics';
-import MissionControl from './components/modules/MissionControl/MissionControl';
 import ContentGrids from './components/modules/ContentGrids';
 import ContentPlanDetail from './components/modules/ContentPlanDetail';
+import MissionControl from './components/modules/MissionControl/MissionControl';
 import TalentRadar from './components/modules/TalentRadar';
 import Login from './components/Login';
 import PrivacyPolicy from './components/public/PrivacyPolicy';
@@ -82,7 +82,7 @@ function AppContent() {
                 <AppLayout onLogout={logout}>
                   <Routes>
                     {/* Rutas Principales */}
-                    <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Dashboard />} />
             <Route path="/inicio" element={<Navigate to="/" replace />} />
 
             <Route path="/bria" element={<Chat />} />
