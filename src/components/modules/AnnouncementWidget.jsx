@@ -290,7 +290,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
                 onOpenChange={setIsModalOpen}
                 title={scope === 'general' ? "Anuncios de la agencia" : "Tablero de anuncios"}
                 description="Historial completo y actualizaciones"
-                icon={<Megaphone className="w-5 h-5 text-indigo-600" />}
+
                 iconBgColor="bg-indigo-600/10"
             >
                 <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-zinc-50/50 dark:bg-zinc-900/20">

@@ -526,7 +526,7 @@ const DeliverablesWidget = ({ clientId }) => {
                 onOpenChange={setIsMaximized}
                 title="Gestión de Entregables"
                 description="Historial de archivos y zona de carga"
-                icon={<Download className="w-5 h-5 text-emerald-500" />}
+
                 iconBgColor="bg-emerald-500/10"
             >
                 <div className="flex-1 overflow-hidden p-6 bg-zinc-50/50 dark:bg-zinc-900/20">

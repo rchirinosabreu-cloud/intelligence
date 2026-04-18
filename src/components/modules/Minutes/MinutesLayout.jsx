@@ -1,5 +1,6 @@
 
 import React, { useState, useCallback } from 'react';
+import PageHeader from '@/components/ui/PageHeader';
 import SourcePanel from './SourcePanel';
 import WorkspacePanel from './WorkspacePanel';
 
@@ -14,10 +15,10 @@ const MinutesLayout = () => {
 
   return (
     <div className="w-full max-w-7xl mx-auto animate-fade-in font-sans">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2 font-sans">Minutas</h1>
-          <p className="text-muted-foreground font-light">Genera reportes y analiza reuniones automáticamente.</p>
-        </div>
+        <PageHeader
+          title="Minutas"
+          subtitle="Genera reportes y analiza reuniones automáticamente."
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[600px] h-full pb-12">
           <SourcePanel
