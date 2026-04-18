@@ -41,7 +41,7 @@ const InsightGenerator = ({ clientId, metrics }) => {
             <Card className="p-6 md:p-8 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-none">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl">
+                        <div className="p-2.5 bg-indigo-50 dark:bg-indigo-600/10 rounded-xl">
                             <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                         </div>
                         <div>
@@ -72,7 +72,7 @@ const InsightGenerator = ({ clientId, metrics }) => {
 
                 {loading && (
                     <div className="py-20 flex flex-col items-center justify-center space-y-4">
-                        <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
+                        <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
                         <p className="text-sm font-medium text-indigo-600 animate-pulse">Analizando métricas y detectando patrones...</p>
                     </div>
                 )}
@@ -94,7 +94,7 @@ const InsightGenerator = ({ clientId, metrics }) => {
                     {/* Recomendaciones Estratégicas */}
                     <Card className="p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-none">
                         <h4 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                            <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
                             💡 Recomendaciones Estratégicas
                         </h4>
                         <div className="prose prose-sm prose-zinc dark:prose-invert max-w-none text-zinc-600 dark:text-zinc-400">

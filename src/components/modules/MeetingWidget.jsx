@@ -64,7 +64,7 @@ const MeetingWidget = () => {
     if (loading) {
         return (
             <Card className="p-4 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl border-zinc-200/50 dark:border-zinc-800/50 h-full min-h-[150px] flex items-center justify-center">
-                <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+                <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
             </Card>
         );
     }
@@ -87,7 +87,7 @@ const MeetingWidget = () => {
         <Card className="p-4 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl border-zinc-200/50 dark:border-zinc-800/50 h-full flex flex-col">
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-indigo-500" />
+                    <Calendar className="w-5 h-5 text-indigo-600" />
                     <h3 className="font-semibold text-zinc-800 dark:text-zinc-100 text-sm">Próximas reuniones</h3>
                 </div>
                 <span className="text-[10px] text-zinc-400 font-medium px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-full">
@@ -111,7 +111,7 @@ const MeetingWidget = () => {
                             <div
                                 key={event.id}
                                 className={cn(
-                                    "flex items-center justify-between p-2.5 rounded-lg border transition-all",
+                                    "flex items-center justify-between p-2.5 rounded-xl border transition-all",
                                     isSoon
                                         ? "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/50 shadow-sm"
                                         : "bg-white dark:bg-zinc-800/40 border-zinc-100 dark:border-zinc-800 hover:border-zinc-200 dark:hover:border-zinc-700"
@@ -142,7 +142,7 @@ const MeetingWidget = () => {
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className={cn(
-                                            "flex items-center justify-center w-8 h-8 rounded-lg transition-colors flex-shrink-0",
+                                            "flex items-center justify-center w-8 h-8 rounded-xl transition-colors flex-shrink-0",
                                             isSoon
                                                 ? "bg-amber-500 text-white hover:bg-amber-600 shadow-sm"
                                                 : "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50"
@@ -157,7 +157,7 @@ const MeetingWidget = () => {
                                             href={event.html_link}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-50 dark:bg-zinc-800 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors flex-shrink-0"
+                                            className="flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors flex-shrink-0"
                                             title="Ver en Calendario"
                                         >
                                             <ExternalLink className="w-4 h-4" />

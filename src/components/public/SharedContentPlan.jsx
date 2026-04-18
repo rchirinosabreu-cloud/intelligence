@@ -87,7 +87,7 @@ const SharedContentPlan = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
+        <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-4" />
         <p className="text-zinc-500 font-medium">Cargando parrilla de contenidos...</p>
       </div>
     );
@@ -118,13 +118,13 @@ const SharedContentPlan = () => {
         <div className="max-w-6xl mx-auto px-6 h-24 flex items-center justify-between">
           <div className="flex items-center gap-4">
             {plan.client.logoUrl && (
-              <img src={plan.client.logoUrl} alt={plan.client.name} className="h-10 w-10 object-contain rounded-lg" />
+              <img src={plan.client.logoUrl} alt={plan.client.name} className="h-10 w-10 object-contain rounded-xl" />
             )}
             <div>
               <h1 className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tighter">
                 {plan.client.name}
               </h1>
-              <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest">
+              <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest">
                 Parrilla {getMonthName(plan.month)} {plan.year}
               </p>
             </div>
@@ -159,14 +159,14 @@ const SharedContentPlan = () => {
             return (
               <div
                 key={item.id}
-                className="bg-white dark:bg-zinc-900 rounded-[2.5rem] overflow-hidden shadow-sm border border-transparent hover:border-indigo-500/20 transition-all duration-500"
+                className="bg-white dark:bg-zinc-900 rounded-[2.5rem] overflow-hidden shadow-sm border border-transparent hover:border-indigo-600/20 transition-all duration-500"
               >
                 <div className="p-8 lg:p-10">
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
                     {/* Left: Metadata */}
                     <div className="lg:col-span-3 space-y-6">
                       <div className="flex items-center gap-3">
-                        <span className="text-xs font-black text-indigo-500/40 font-mono tracking-tighter">
+                        <span className="text-xs font-black text-indigo-600/40 font-mono tracking-tighter">
                           #{String(index + 1).padStart(2, '0')}
                         </span>
                         <div className="p-2.5 bg-zinc-100 dark:bg-white/5 text-zinc-500 rounded-xl">
@@ -193,7 +193,7 @@ const SharedContentPlan = () => {
                           <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${
                             isAprobado
                               ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600'
-                              : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-600'
+                              : 'bg-indigo-600/10 border-indigo-600/30 text-indigo-600'
                           }`}>
                             {isAprobado ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
                             {isAprobado ? 'Aprobado' : 'En Revisión'}
@@ -287,7 +287,7 @@ const SharedContentPlan = () => {
                           value={clientComment}
                           onChange={(e) => setClientComment(e.target.value)}
                           placeholder="Escribe tus sugerencias de cambio aquí..."
-                          className="w-full min-h-[100px] bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
+                          className="w-full min-h-[100px] bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm focus:ring-4 focus:ring-indigo-600/10 outline-none transition-all"
                         />
                         <div className="flex justify-end">
                           <button

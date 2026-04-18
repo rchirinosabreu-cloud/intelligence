@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
 import { motion } from 'framer-motion';
-import { ArrowUpRight, Zap, TrendingUp, Clock, CheckCircle2, Target } from 'lucide-react';
+import { ArrowUpRight, Zap, TrendingUp, Clock, CheckCircle2, Target, LayoutDashboard } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
 import MeetingWidget from './MeetingWidget';
 import HealthCheckWidget from './HealthCheckWidget';
 import AnnouncementWidget from './AnnouncementWidget';
@@ -116,19 +117,11 @@ const Dashboard = () => {
       animate="show"
       className="space-y-6"
     >
-      {/* Welcome Widget - Full Width */}
-      <motion.div variants={item}>
-        <Card className="bg-gradient-to-r from-white to-zinc-50 border-zinc-200/60 dark:from-zinc-900 dark:to-zinc-900/50 dark:border-zinc-800">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">
-                ¡Hola, {getFirstName()}! {getDailyMessage()}
-              </h2>
-              <p className="text-zinc-500 dark:text-zinc-400">Aquí está el resumen de progreso y logros del mes.</p>
-            </div>
-          </div>
-        </Card>
-      </motion.div>
+      <PageHeader
+        title={`¡Hola, ${getFirstName()}! ${getDailyMessage()}`}
+        subtitle="Aquí está el resumen de progreso y logros del mes."
+        icon={LayoutDashboard}
+      />
 
       {/* Bento Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -162,7 +155,7 @@ const Dashboard = () => {
                   {/* Progress Bar */}
                   <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-2.5 overflow-hidden">
                       <div
-                        className="bg-indigo-600 dark:bg-indigo-500 h-2.5 rounded-full transition-all duration-1000 ease-out"
+                        className="bg-indigo-600 dark:bg-indigo-600 h-2.5 rounded-full transition-all duration-1000 ease-out"
                         style={{ width: `${metrics.percentage}%` }}
                       ></div>
                   </div>

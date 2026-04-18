@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Card } from '@/components/ui/Card';
-import { Users, Activity, Target, Zap, TrendingUp, AlertCircle, ChevronRight, X, Loader2, Sparkles, Filter, Calendar, BarChart3, LayoutGrid, FileText, Camera, Upload } from 'lucide-react';
+import { Users, Activity, Target, Zap, TrendingUp, AlertCircle, ChevronRight, X, Loader2, Sparkles, Filter, Calendar, BarChart3, LayoutGrid, FileText, Camera, Upload, Radar } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ScatterChart, Scatter, ZAxis, LabelList } from 'recharts';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
@@ -75,7 +76,7 @@ const TalentRadar = () => {
     if (isLoadingSummary) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[400px]">
-                <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-4" />
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-4" />
                 <p className="text-sm text-zinc-500 font-medium">Cargando Radar de Talento...</p>
             </div>
         );
@@ -83,42 +84,31 @@ const TalentRadar = () => {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
-            {/* Header & Filters */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                <div className="space-y-1">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-indigo-500/10 rounded-xl">
-                            <Target className="w-5 h-5 text-indigo-500" />
-                        </div>
-                        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">
-                            Radar de Talento & Operaciones
-                        </h1>
-                    </div>
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                        Visualización estratégica del desempeño y carga de la agencia.
-                    </p>
-                </div>
-
-                <div className="flex items-center gap-2 p-1 bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/5 rounded-2xl">
+            <PageHeader
+                title="Radar de Talento & Operaciones"
+                subtitle="Visualización estratégica del desempeño y carga de la agencia."
+                icon={Radar}
+            >
+                <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-white/5">
                     <select
                         value={selectedMonth}
                         onChange={(e) => setSelectedMonth(e.target.value)}
-                        className="bg-transparent border-none text-xs font-bold px-3 py-1.5 focus:ring-0 cursor-pointer"
+                        className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest px-3 py-1.5 focus:ring-0 cursor-pointer"
                     >
                         {Array.from({ length: 12 }, (_, i) => (
                             <option key={i+1} value={i+1}>{format(new Date(2025, i, 1), 'MMMM', { locale: es }).toUpperCase()}</option>
                         ))}
                     </select>
-                    <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-700 mx-1" />
+                    <div className="w-px h-4 bg-zinc-200 dark:bg-white/10 mx-1" />
                     <select
                         value={selectedYear}
                         onChange={(e) => setSelectedYear(e.target.value)}
-                        className="bg-transparent border-none text-xs font-bold px-3 py-1.5 focus:ring-0 cursor-pointer"
+                        className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest px-3 py-1.5 focus:ring-0 cursor-pointer"
                     >
                         {[2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                 </div>
-            </div>
+            </PageHeader>
 
             {/* --- LIVE STATUS SECTION --- */}
             <section className="space-y-4">
@@ -133,7 +123,7 @@ const TalentRadar = () => {
                             <Card
                                 key={member.id}
                                 onClick={() => setSelectedMember(member.id)}
-                                className="p-4 bg-white/50 dark:bg-zinc-900/40 backdrop-blur-xl border-zinc-200 dark:border-white/5 hover:border-indigo-500/30 transition-all cursor-pointer group"
+                                className="p-4 bg-white/50 dark:bg-zinc-900/40 backdrop-blur-xl border-zinc-200 dark:border-white/5 hover:border-indigo-600/30 transition-all cursor-pointer group"
                             >
                                 <div className="flex items-center gap-3 mb-4">
                                     <TeamAvatar member={member} className="w-10 h-10 border-2 border-white dark:border-zinc-800" />
@@ -159,7 +149,7 @@ const TalentRadar = () => {
                                             <p className="text-[11px] font-bold text-zinc-900 dark:text-zinc-100 line-clamp-2 leading-tight">
                                                 {activeTask.title}
                                             </p>
-                                            <p className="text-[10px] text-indigo-500 font-medium mt-1">
+                                            <p className="text-[10px] text-indigo-600 font-medium mt-1">
                                                 {activeTask.client?.name}
                                             </p>
                                         </div>
@@ -185,8 +175,8 @@ const TalentRadar = () => {
                             <h3 className="text-sm font-bold">Distribución de Capacidad</h3>
                             <p className="text-[10px] text-zinc-500">¿En qué gasta su tiempo la agencia?</p>
                         </div>
-                        <div className="p-2 bg-indigo-500/10 rounded-lg">
-                            <BarChart3 className="w-4 h-4 text-indigo-500" />
+                        <div className="p-2 bg-indigo-600/10 rounded-xl">
+                            <BarChart3 className="w-4 h-4 text-indigo-600" />
                         </div>
                     </div>
 
@@ -243,7 +233,7 @@ const TalentRadar = () => {
 
                     <div className="h-[280px] w-full relative">
                         {/* Matrix Labels */}
-                        <div className="absolute top-2 right-4 text-[8px] font-black text-indigo-500/40 uppercase tracking-[0.2em]">Súper Estrellas</div>
+                        <div className="absolute top-2 right-4 text-[8px] font-black text-indigo-600/40 uppercase tracking-[0.2em]">Súper Estrellas</div>
                         <div className="absolute top-2 left-4 text-[8px] font-black text-zinc-400/40 uppercase tracking-[0.2em]">Promesas</div>
                         <div className="absolute bottom-12 right-4 text-[8px] font-black text-zinc-400/40 uppercase tracking-[0.2em]">Ejecutores</div>
                         <div className="absolute bottom-12 left-4 text-[8px] font-black text-red-500/30 uppercase tracking-[0.2em]">En Riesgo</div>
@@ -468,8 +458,8 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
             onOpenChange={(open) => !open && onClose()}
             title={member?.name || 'Cargando...'}
             description={member?.role || 'Perfil de Talento'}
-            icon={<Users className="w-5 h-5 text-indigo-500" />}
-            iconBgColor="bg-indigo-500/10"
+            icon={<Users className="w-5 h-5 text-indigo-600" />}
+            iconBgColor="bg-indigo-600/10"
         >
             <div className="flex flex-col h-full overflow-hidden">
                 {/* Tabs Header */}
@@ -479,7 +469,7 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                             onClick={() => setActiveTab('profile')}
                             className={cn(
                                 "py-3 px-4 text-[10px] font-bold uppercase tracking-widest transition-all border-b-2",
-                                activeTab === 'profile' ? "text-indigo-500 border-indigo-500" : "text-zinc-400 border-transparent hover:text-zinc-600"
+                                activeTab === 'profile' ? "text-indigo-600 border-indigo-600" : "text-zinc-400 border-transparent hover:text-zinc-600"
                             )}
                         >
                             Info Pública
@@ -488,7 +478,7 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                             onClick={() => setActiveTab('performance')}
                             className={cn(
                                 "py-3 px-4 text-[10px] font-bold uppercase tracking-widest transition-all border-b-2",
-                                activeTab === 'performance' ? "text-indigo-500 border-indigo-500" : "text-zinc-400 border-transparent hover:text-zinc-600"
+                                activeTab === 'performance' ? "text-indigo-600 border-indigo-600" : "text-zinc-400 border-transparent hover:text-zinc-600"
                             )}
                         >
                             Desempeño
@@ -561,13 +551,13 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                     <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                                        <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                                        <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
                                         Insights Ejecutivos (IA)
                                     </h4>
                                     <button
                                         onClick={generateInsight}
                                         disabled={isGenerating}
-                                        className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 rounded-lg text-white text-[10px] font-bold transition-all shadow-lg flex items-center gap-2"
+                                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-600 disabled:opacity-50 rounded-xl text-white text-[10px] font-bold transition-all shadow-lg flex items-center gap-2"
                                     >
                                         {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
                                         GENERAR ANÁLISIS
@@ -577,14 +567,14 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                 {aiInsight ? (
                                     <div className="p-5 bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl relative overflow-hidden group">
                                         <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                                            <Sparkles className="w-12 h-12 text-indigo-500" />
+                                            <Sparkles className="w-12 h-12 text-indigo-600" />
                                         </div>
                                         <p className="text-sm text-indigo-900 dark:text-indigo-200 leading-relaxed italic">
                                             "{aiInsight}"
                                         </p>
                                         <div className="mt-4 flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-[10px] text-white font-bold">B</div>
-                                            <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-tighter">Bria Ops Director</span>
+                                            <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] text-white font-bold">B</div>
+                                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-tighter">Bria Ops Director</span>
                                         </div>
                                     </div>
                                 ) : (
@@ -610,7 +600,7 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                             <div className="flex items-center justify-between mb-1">
                                                 <div className="flex items-center gap-2">
                                                     <ClientLogo client={task.client} className="w-4 h-4 rounded" />
-                                                    <span className="text-[10px] font-bold text-indigo-500">{task.client?.name}</span>
+                                                    <span className="text-[10px] font-bold text-indigo-600">{task.client?.name}</span>
                                                 </div>
                                                 {task.returnCount > 0 && (
                                                     <span className="text-[9px] px-1.5 py-0.5 bg-red-500/10 text-red-500 rounded-full font-bold">
@@ -623,7 +613,7 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                                 <div className="flex items-center gap-1.5">
                                                     <div className={cn(
                                                         "w-1.5 h-1.5 rounded-full",
-                                                        task.aiComplexity === 'ALTA' ? 'bg-amber-500' : task.aiComplexity === 'MEDIA' ? 'bg-indigo-500' : 'bg-emerald-500'
+                                                        task.aiComplexity === 'ALTA' ? 'bg-amber-500' : task.aiComplexity === 'MEDIA' ? 'bg-indigo-600' : 'bg-emerald-500'
                                                     )} />
                                                     <span>{task.aiComplexity}</span>
                                                 </div>

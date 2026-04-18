@@ -5,8 +5,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2, AlertTriangle, AlertOctagon, MessageSquare, Edit2, X, RotateCcw, Send, Trash2, Zap, Star, Link as LinkIcon, LayoutGrid } from 'lucide-react';
+import { Filter, Calendar, MoreHorizontal, CheckCircle2, Clock, AlertCircle, ChevronDown, User, Loader2, AlertTriangle, AlertOctagon, MessageSquare, Edit2, X, RotateCcw, Send, Trash2, Zap, Star, Link as LinkIcon, LayoutGrid, ClipboardList, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import PageHeader from '@/components/ui/PageHeader';
+import { Button } from '@/components/ui/button';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
     Dialog,
@@ -627,7 +629,7 @@ const NativeTasks = () => {
   if (loadingTasks && tasks.length === 0) {
       return (
           <div className="h-full flex flex-col items-center justify-center space-y-4">
-              <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
+              <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
               <p className="text-zinc-500 dark:text-zinc-400 text-sm animate-pulse">Cargando base de datos...</p>
           </div>
       );
@@ -648,7 +650,7 @@ const NativeTasks = () => {
               </p>
               <button
                 onClick={() => window.location.reload()}
-                className="mt-4 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+                className="mt-4 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity"
               >
                   Reintentar
               </button>
@@ -658,26 +660,28 @@ const NativeTasks = () => {
 
   return (
     <div className="space-y-6 h-full flex flex-col">
-      {/* Header & Filters */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-1">Pendientes (Nativo)</h2>
-          <p className="text-zinc-500 dark:text-zinc-400 text-sm">Gestiona tareas con la base de datos de Prisma.</p>
-        </div>
+      <PageHeader
+        title="Gestión de Tareas"
+        subtitle="Gestiona y prioriza el flujo operativo de la agencia."
+        icon={ClipboardList}
+      >
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          <Button
+            size="lg"
+            onClick={() => setIsCreating(true)}
+            className="flex-1 sm:flex-none"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nueva Tarea
+          </Button>
 
-        <div className="flex flex-wrap items-center gap-3">
-            <button
-                onClick={() => setIsCreating(true)}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
-            >
-                + Nueva tarea
-            </button>
+          <div className="flex flex-wrap items-center gap-3 flex-1 sm:flex-none">
             {/* Responsible Filter */}
             <div className="relative group">
                 <select
                     value={responsibleFilter}
                     onChange={(e) => setResponsibleFilter(e.target.value)}
-                    className="appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-sm transition-all w-48 truncate"
+                    className="appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-sm transition-all w-48 truncate"
                 >
                     {responsibles.map((r, i) => (
                         <option key={i} value={r}>
@@ -694,7 +698,7 @@ const NativeTasks = () => {
                 <select
                     value={clientFilter}
                     onChange={(e) => setClientFilter(e.target.value)}
-                    className="appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-sm transition-all w-48 truncate"
+                    className="appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-sm transition-all w-48 truncate"
                 >
                     {clients.map((c, i) => (
                         <option key={i} value={c}>
@@ -712,7 +716,7 @@ const NativeTasks = () => {
                     value={dateFilter}
                     onChange={(e) => setDateFilter(e.target.value)}
                     className={cn(
-                        "appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-sm transition-all",
+                        "appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-sm transition-all",
                         dateFilter === 'Solo Vencidos'
                             ? "border-red-200 text-red-600 bg-red-50 dark:bg-red-900/10 dark:text-red-400 dark:border-red-900/30"
                             : "border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700"
@@ -733,8 +737,9 @@ const NativeTasks = () => {
 
                 <ChevronDown className="w-4 h-4 text-zinc-400 absolute right-3 top-2.5 pointer-events-none group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors" />
             </div>
+          </div>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Modals */}
       <TaskCreateModal
@@ -792,14 +797,14 @@ const NativeTasks = () => {
               <DialogFooter className="flex sm:justify-between gap-3">
                   <button
                       onClick={() => setReturningTask(null)}
-                      className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                      className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
                   >
                       Cancelar
                   </button>
                   <button
                       onClick={() => handleReturnTask()}
                       disabled={!returnReason.trim() || isSubmittingReturn}
-                      className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
                   >
                       {isSubmittingReturn ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                       Devolver ahora
@@ -834,14 +839,14 @@ const NativeTasks = () => {
               <DialogFooter className="flex sm:justify-between gap-3">
                   <button
                       onClick={() => setDeletingTask(null)}
-                      className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                      className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
                   >
                       Cancelar
                   </button>
                   <button
                       onClick={() => handleDeleteTask()}
                       disabled={!deleteReason.trim() || isSubmittingDelete}
-                      className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
                   >
                       {isSubmittingDelete ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                       Eliminar Tarea
@@ -941,7 +946,7 @@ const NativeTasks = () => {
                                 {col.id === 'pendiente' && returnedTasks.length > 0 && (
                                     <button
                                         onClick={() => setIsReturnedSidebarOpen(true)}
-                                        className="group/returned relative flex items-center gap-1.5 px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-all border border-red-100 dark:border-red-900/30 shadow-sm"
+                                        className="group/returned relative flex items-center gap-1.5 px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-all border border-red-100 dark:border-red-900/30 shadow-sm"
                                     >
                                         <RotateCcw className="w-3.5 h-3.5 animate-pulse" />
                                         <span className="text-[10px] font-black uppercase tracking-tighter">
@@ -961,7 +966,7 @@ const NativeTasks = () => {
                                             "flex-1 rounded-xl p-2 transition-colors space-y-3 min-h-[100px]",
                                             col.color,
                                             "bg-opacity-50 dark:bg-opacity-20 border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-700/50",
-                                            snapshot.isDraggingOver && "ring-2 ring-indigo-500/20"
+                                            snapshot.isDraggingOver && "ring-2 ring-indigo-600/20"
                                         )}
                                     >
                                         {columnTasks.map((task, index) => (
@@ -977,7 +982,7 @@ const NativeTasks = () => {
                                         ))}
                                         {provided.placeholder}
                                         {columnTasks.length === 0 && !snapshot.isDraggingOver && (
-                                            <div className="h-24 flex items-center justify-center text-zinc-400 dark:text-zinc-600 text-sm border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg">
+                                            <div className="h-24 flex items-center justify-center text-zinc-400 dark:text-zinc-600 text-sm border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">
                                                 Sin tareas
                                             </div>
                                         )}
@@ -1030,7 +1035,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                             "group cursor-pointer relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm transition-shadow",
                             "transition-all duration-700 ease-in-out",
                             // Border priority: Dragging > Highlight > Overdue > Priority > Normal
-                            snapshot.isDragging ? "ring-2 ring-indigo-500 shadow-xl z-50 opacity-90 rotate-2 scale-105" : "",
+                            snapshot.isDragging ? "ring-2 ring-indigo-600 shadow-xl z-50 opacity-90 rotate-2 scale-105" : "",
                             !snapshot.isDragging && isHighlighted ? "ring-2 ring-red-500 scale-[1.02] z-10" : "ring-2 ring-transparent",
                             !snapshot.isDragging && !isHighlighted && overdue ? "border-red-500/50 ring-1 ring-red-500/20" : "",
                             !snapshot.isDragging && !isHighlighted && !overdue && task.isPriority ? "border-l-4 border-l-red-500 border-zinc-200 dark:border-zinc-800" : "border-zinc-200 dark:border-zinc-800",
@@ -1061,7 +1066,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                                         e.stopPropagation();
                                                         onReturn(task);
                                                     }}
-                                                    className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-500 rounded-lg transition-colors group/btn"
+                                                    className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-500 rounded-xl transition-colors group/btn"
                                                     title="Devolver tarea"
                                                 >
                                                     <RotateCcw className="w-3.5 h-3.5" />
@@ -1072,7 +1077,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                                     e.stopPropagation();
                                                     onDelete(task);
                                                 }}
-                                                className="p-1 text-slate-400 hover:text-red-500 rounded-lg transition-colors group/btn"
+                                                className="p-1 text-slate-400 hover:text-red-500 rounded-xl transition-colors group/btn"
                                                 title="Eliminar tarea"
                                             >
                                                 <Trash2 className="w-3.5 h-3.5" />

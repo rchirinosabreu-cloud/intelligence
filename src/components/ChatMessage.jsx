@@ -27,7 +27,7 @@ const ThinkingBlock = ({ thought }) => {
   if (!thought) return null;
 
   return (
-    <div className="mb-4 rounded-lg overflow-hidden border border-gray-200 bg-gray-50/50">
+    <div className="mb-4 rounded-xl overflow-hidden border border-gray-200 bg-gray-50/50">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-500 hover:bg-gray-100 transition-colors"

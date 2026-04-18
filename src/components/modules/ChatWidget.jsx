@@ -382,7 +382,7 @@ const ChatWidget = ({
                 <button
                     onClick={handleSendMessage}
                     disabled={!content.trim() || isSubmitting}
-                    className="absolute right-2 bottom-2 p-1.5 bg-primary hover:bg-primary/90 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-lg text-primary-foreground transition-colors h-8 w-8 flex items-center justify-center shadow-sm"
+                    className="absolute right-2 bottom-2 p-1.5 bg-primary hover:bg-primary/90 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-xl text-primary-foreground transition-colors h-8 w-8 flex items-center justify-center shadow-sm"
                 >
                     {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4" />}
                 </button>
@@ -394,7 +394,7 @@ const ChatWidget = ({
         <Card className="w-full flex flex-col border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 h-full overflow-hidden">
             <div className="flex justify-between items-center p-6 shrink-0 border-b border-zinc-100 dark:border-zinc-800/50">
                 <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-primary/10 rounded-lg">
+                    <div className="p-1.5 bg-primary/10 rounded-xl">
                         <MessageSquare className="w-4 h-4 text-primary" />
                     </div>
                     <h3 className="font-semibold text-zinc-900 dark:text-white">{title}</h3>
@@ -402,7 +402,7 @@ const ChatWidget = ({
 
                 <button
                     onClick={() => setIsModalOpen(true)}
-                    className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                    className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
                     title="Ver chat completo"
                 >
                     <Maximize2 className="w-4 h-4" />
@@ -432,7 +432,7 @@ const ChatWidget = ({
         <Card className="w-full flex flex-col p-6 relative group overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
                 <div className="flex justify-between items-center mb-4">
                     <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-primary/10 rounded-lg">
+                        <div className="p-1.5 bg-primary/10 rounded-xl">
                             <MessageSquare className="w-4 h-4 text-primary" />
                         </div>
                         <h3 className="font-semibold text-zinc-900 dark:text-white">{title}</h3>
@@ -472,7 +472,7 @@ const ChatWidget = ({
                 <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
                     <button
                         onClick={() => setIsModalOpen(true)}
-                        className="w-full py-2 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-2 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-2"
                     >
                         Abrir chat
                         <ArrowRight className="w-3 h-3" />
@@ -485,7 +485,7 @@ const ChatWidget = ({
         <Card className="w-full flex flex-col max-h-[480px] p-6 relative group overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
             <div className="flex justify-between items-center mb-4 shrink-0">
                 <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-primary/10 rounded-lg">
+                    <div className="p-1.5 bg-primary/10 rounded-xl">
                         <MessageSquare className="w-4 h-4 text-primary" />
                     </div>
                     <h3 className="font-semibold text-zinc-900 dark:text-white">{title}</h3>
@@ -525,7 +525,7 @@ const ChatWidget = ({
             <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
                 <button
                     onClick={() => setIsModalOpen(true)}
-                    className="w-full py-2 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-2 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-2"
                 >
                     Abrir chat
                     <ArrowRight className="w-3 h-3" />

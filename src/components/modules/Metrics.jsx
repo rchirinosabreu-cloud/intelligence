@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Users, Facebook, Instagram, Megaphone, Loader2, AlertTriangle, CheckCircle2, Settings2, Save, Unplug, Eye, MousePointer2, TrendingUp, Target, Sparkles, RefreshCw } from 'lucide-react';
+import { BarChart3, Users, Facebook, Instagram, Megaphone, Loader2, AlertTriangle, CheckCircle2, Settings2, Save, Unplug, Eye, MousePointer2, TrendingUp, Target, Sparkles, RefreshCw, BarChart2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/button';
+import PageHeader from '@/components/ui/PageHeader';
 import { toast } from 'react-hot-toast';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useQuery } from '@tanstack/react-query';
@@ -309,37 +310,30 @@ const Metrics = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2 flex items-center gap-3">
-            <BarChart3 className="w-6 h-6 text-primary" />
-            BrainStudio Metrics
-          </h2>
-          <p className="text-zinc-500 dark:text-zinc-400 text-sm">
-            {view === 'config' ? 'Configuración de Activos' : 'Reporte Estratégico Real-time'}
-          </p>
-        </div>
-
+      <PageHeader
+        title="BrainStudio Metrics"
+        subtitle={view === 'config' ? 'Configuración de Activos' : 'Reporte Estratégico Real-time'}
+        icon={BarChart2}
+      >
         {selectedClientId && integrationStatus && (
-           <div className="flex items-center gap-3">
+           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
              {view === 'report' && (
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="default"
                   disabled
-                  className="text-xs h-9 gap-2 border-zinc-200 dark:border-zinc-800 text-zinc-400 cursor-not-allowed hidden md:flex"
+                  className="gap-2 hidden md:flex"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   Descargar Reporte (PDF)
                 </Button>
              )}
-             <div className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-none">
+             <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-white/5">
               <Button
                 variant={view === 'config' ? 'secondary' : 'ghost'}
                 size="sm"
                 onClick={() => setView('config')}
-                className="text-xs h-8"
+                className="h-8 rounded-xl"
               >
                 Configuración
               </Button>
@@ -347,14 +341,14 @@ const Metrics = () => {
                 variant={view === 'report' ? 'secondary' : 'ghost'}
                 size="sm"
                 onClick={() => setView('report')}
-                className="text-xs h-8"
+                className="h-8 rounded-xl"
               >
                 Reporte
               </Button>
            </div>
            </div>
         )}
-      </div>
+      </PageHeader>
 
       {/* Main Content Area */}
       {!selectedClientId ? (
@@ -439,7 +433,7 @@ const Metrics = () => {
                         <Button
                             size="sm"
                             onClick={() => setView('report')}
-                            className="bg-primary hover:bg-primary/90 text-white gap-2 h-9 text-xs shadow-sm px-6 rounded-lg font-bold"
+                            className="bg-primary hover:bg-primary/90 text-white gap-2 h-9 text-xs shadow-sm px-6 rounded-xl font-bold"
                         >
                             <BarChart3 className="w-4 h-4" />
                             Ver Dashboard
@@ -451,7 +445,7 @@ const Metrics = () => {
             {/* Asset Mapping (Fase 1) */}
             <Card className="p-8 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-none">
                 <div className="flex items-center gap-3 mb-8 pb-4 border-b border-zinc-100 dark:border-zinc-800">
-                    <div className="p-2 bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-100 dark:border-zinc-800">
+                    <div className="p-2 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-100 dark:border-zinc-800">
                         <Settings2 className="w-5 h-5 text-zinc-500" />
                     </div>
                     <div>

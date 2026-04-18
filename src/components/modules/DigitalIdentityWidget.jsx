@@ -13,7 +13,7 @@ const DigitalIdentityWidget = () => {
     return (
         <Card className="w-full flex flex-col h-full min-h-[300px] p-6">
             <div className="flex items-center gap-2 mb-6">
-                <div className="p-1.5 bg-purple-500/10 rounded-lg">
+                <div className="p-1.5 bg-purple-500/10 rounded-xl">
                     <Palette className="w-4 h-4 text-purple-500" />
                 </div>
                 <h3 className="font-semibold text-zinc-900 dark:text-white">Identidad Digital</h3>

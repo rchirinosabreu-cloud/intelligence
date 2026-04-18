@@ -54,7 +54,7 @@ const WorkspacePanel = ({ selectedSource, analysisReady }) => {
         ) : (
            <div className="space-y-8">
               {/* Context Info */}
-              <div className="bg-white dark:bg-zinc-900 rounded-lg p-4 border border-border flex items-start gap-3">
+              <div className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-border flex items-start gap-3">
                   <Info className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
                   <div>
                     <h4 className="text-sm font-bold text-gray-300 mb-1">Contexto de Análisis</h4>
@@ -72,7 +72,7 @@ const WorkspacePanel = ({ selectedSource, analysisReady }) => {
                   </div>
               </div>
 
-              <div className="bg-white dark:bg-zinc-900 rounded-lg p-4 border border-border space-y-4">
+              <div className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-border space-y-4">
                 <div>
                   <label className="text-xs uppercase tracking-wide text-muted-foreground">Título del documento</label>
                   <input
@@ -80,7 +80,7 @@ const WorkspacePanel = ({ selectedSource, analysisReady }) => {
                     value={reportTitle}
                     onChange={(event) => setReportTitle(event.target.value)}
                     placeholder="Ej. Reporte Ejecutivo de Talento"
-                    className="mt-2 w-full rounded-lg bg-white dark:bg-zinc-900 border border-border px-3 py-2 text-sm text-zinc-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="mt-2 w-full rounded-xl bg-white dark:bg-zinc-900 border border-border px-3 py-2 text-sm text-zinc-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/40"
                   />
                 </div>
                 <div>
@@ -90,13 +90,13 @@ const WorkspacePanel = ({ selectedSource, analysisReady }) => {
                     value={projectSubtitle}
                     onChange={(event) => setProjectSubtitle(event.target.value)}
                     placeholder="Ej. Horizonte 2026"
-                    className="mt-2 w-full rounded-lg bg-white dark:bg-zinc-900 border border-border px-3 py-2 text-sm text-zinc-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="mt-2 w-full rounded-xl bg-white dark:bg-zinc-900 border border-border px-3 py-2 text-sm text-zinc-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/40"
                   />
                 </div>
               </div>
 
               {!analysisReady ? (
-                <div className="bg-white dark:bg-zinc-900 rounded-lg p-5 border border-border flex items-start gap-3">
+                <div className="bg-white dark:bg-zinc-900 rounded-xl p-5 border border-border flex items-start gap-3">
                   <AlertCircle className="w-5 h-5 text-muted-foreground mt-0.5" />
                   <div>
                     <p className="text-sm font-semibold text-zinc-900 dark:text-white">Confirma el inicio del análisis</p>

@@ -112,7 +112,7 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="flex flex-col gap-2 p-3 bg-red-900/20 border border-red-500/30 rounded-lg text-red-300 text-sm"
+            className="flex flex-col gap-2 p-3 bg-red-900/20 border border-red-500/30 rounded-xl text-red-300 text-sm"
           >
             <div className="flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -150,7 +150,7 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
                 onClick={() => handleMeetingClick(meeting)}
-                className={`p-4 rounded-lg border cursor-pointer transition-all duration-200 group ${
+                className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 group ${
                   selectedMeeting?.id === meeting.id
                     ? 'bg-muted/50 border-primary shadow-sm '
                     : 'bg-white dark:bg-zinc-900 border-border hover:border-border hover:bg-white dark:bg-zinc-900'

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Mic, Sparkles, Paperclip, MoreVertical, StopCircle } from 'lucide-react';
+import { Send, Bot, User, Mic, Sparkles, Paperclip, MoreVertical, StopCircle, MessageSquare } from 'lucide-react';
 import { motion } from 'framer-motion';
+import PageHeader from '@/components/ui/PageHeader';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -95,24 +96,16 @@ const Chat = () => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)] relative bg-white dark:bg-zinc-950 transition-colors">
-      {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-800/50 mb-4 px-6 pt-4 transition-colors shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 dark:bg-indigo-500/10 dark:border-indigo-500/20 flex items-center justify-center transition-colors">
-             <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-zinc-900 dark:text-white transition-colors">Bria Intelligence</h2>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">Online • v6.0</span>
-            </div>
-          </div>
+      <PageHeader
+        title="Bria Intelligence"
+        subtitle="Analista de estrategia y operaciones con IA."
+        icon={MessageSquare}
+      >
+        <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-white/5">
+          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">v6.0 Online</span>
         </div>
-        <button className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">
-          <MoreVertical className="w-5 h-5" />
-        </button>
-      </div>
+      </PageHeader>
 
       {/* Messages Area */}
       <div
@@ -128,7 +121,7 @@ const Chat = () => {
           >
             {/* Avatar (AI) */}
             {msg.role === 'assistant' && (
-              <div className="w-8 h-8 rounded-lg bg-white border border-zinc-200 dark:bg-zinc-900 dark:border-zinc-800 flex items-center justify-center flex-shrink-0 shadow-sm transition-colors mt-1">
+              <div className="w-8 h-8 rounded-xl bg-white border border-zinc-200 dark:bg-zinc-900 dark:border-zinc-800 flex items-center justify-center flex-shrink-0 shadow-sm transition-colors mt-1">
                 <Bot className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
               </div>
             )}
@@ -150,7 +143,7 @@ const Chat = () => {
                             code({node, inline, className, children, ...props}) {
                                 const match = /language-(\w+)/.exec(className || '')
                                 return !inline && match ? (
-                                    <pre className="bg-zinc-100 dark:bg-zinc-950 p-2 rounded-lg overflow-x-auto my-2 text-xs">
+                                    <pre className="bg-zinc-100 dark:bg-zinc-950 p-2 rounded-xl overflow-x-auto my-2 text-xs">
                                         <code className={className} {...props}>
                                             {children}
                                         </code>
@@ -173,7 +166,7 @@ const Chat = () => {
 
             {/* Avatar (User) */}
             {msg.role === 'user' && (
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-500/20 mt-1">
+              <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-600/20 mt-1">
                 <User className="w-5 h-5 text-white" />
               </div>
             )}
@@ -187,7 +180,7 @@ const Chat = () => {
                 animate={{ opacity: 1 }}
                 className="flex justify-start gap-4"
             >
-                 <div className="w-8 h-8 rounded-lg bg-white border border-zinc-200 dark:bg-zinc-900 dark:border-zinc-800 flex items-center justify-center flex-shrink-0 shadow-sm mt-1">
+                 <div className="w-8 h-8 rounded-xl bg-white border border-zinc-200 dark:bg-zinc-900 dark:border-zinc-800 flex items-center justify-center flex-shrink-0 shadow-sm mt-1">
                     <Bot className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                  </div>
                  <div className="bg-white border border-zinc-200 dark:bg-zinc-900/50 dark:border-zinc-800/50 px-4 py-3 rounded-2xl rounded-bl-none flex items-center gap-1">
@@ -204,7 +197,7 @@ const Chat = () => {
         <div className="max-w-3xl mx-auto relative pointer-events-auto">
           <div className="relative group">
             {/* Background Blur & Shadow */}
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full opacity-20 blur group-hover:opacity-30 transition duration-500"></div>
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full opacity-20 blur group-hover:opacity-30 transition duration-500"></div>
 
             <div className="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-full shadow-xl flex items-center p-2 pr-2">
 
@@ -242,7 +235,7 @@ const Chat = () => {
                         ) : (
                             <button
                                 onClick={handleSend}
-                                className="p-3 bg-indigo-600 hover:bg-indigo-500 rounded-full text-white transition-all shadow-lg shadow-indigo-500/30"
+                                className="p-3 bg-indigo-600 hover:bg-indigo-600 rounded-full text-white transition-all shadow-lg shadow-indigo-600/30"
                             >
                                 <Send className="w-4 h-4" />
                             </button>

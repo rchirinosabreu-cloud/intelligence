@@ -1,6 +1,8 @@
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useEffect } from 'react';
-import { Plus, MoreVertical, Edit2, UserX, UserCheck, Eye } from 'lucide-react';
+import { Plus, MoreVertical, Edit2, UserX, UserCheck, Eye, Users } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
+import { Button } from '@/components/ui/button';
 import { getApiBaseUrl } from '../../lib/apiBaseUrl';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
@@ -104,24 +106,22 @@ export default function Team() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-6 animate-fade-in font-sans">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-950 dark:text-white mb-2 font-sans">Equipo</h1>
-          <p className="text-zinc-500 dark:text-zinc-400 font-light">
-            {isAdmin ? "Gestiona a los miembros de la agencia y sus roles." : "Directorio de los miembros de la agencia."}
-          </p>
-        </div>
+    <div className="w-full max-w-7xl mx-auto animate-fade-in font-sans">
+      <PageHeader
+        title="Equipo"
+        subtitle={isAdmin ? "Gestiona a los miembros de la agencia y sus roles." : "Directorio de los miembros de la agencia."}
+        icon={Users}
+      >
         {isAdmin && (
-          <button
+          <Button
+            size="lg"
             onClick={() => handleOpenModal()}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm px-4 py-2 rounded-xl flex items-center transition-colors"
           >
-            <Plus size={18} className="mr-2" />
+            <Plus className="w-4 h-4 mr-2" />
             Añadir miembro
-          </button>
+          </Button>
         )}
-      </div>
+      </PageHeader>
 
       {loading ? (
         <div className="flex justify-center items-center h-64">
@@ -143,7 +143,7 @@ export default function Team() {
                   {member.userId && (
                     <button
                       onClick={() => navigate(`/perfil/${member.userId}`)}
-                      className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
+                      className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
                       title="Ver Perfil y Desempeño"
                     >
                       <Eye size={16} />
@@ -151,14 +151,14 @@ export default function Team() {
                   )}
                   <button
                     onClick={() => handleOpenModal(member)}
-                    className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
+                    className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
                     title="Editar"
                   >
                     <Edit2 size={16} />
                   </button>
                   <button
                     onClick={() => handleToggleActive(member)}
-                    className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400"
+                    className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400"
                     title={member.isActive ? "Desactivar" : "Reactivar"}
                   >
                     {member.isActive ? <UserX size={16} className="text-red-400 hover:text-red-600 dark:hover:text-red-400" /> : <UserCheck size={16} className="text-green-400 hover:text-green-600 dark:hover:text-green-400" />}
@@ -224,7 +224,7 @@ export default function Team() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                 required
               />
             </div>
@@ -236,7 +236,7 @@ export default function Team() {
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
                 placeholder="Ej. Desarrollador, Diseñador, Project Manager"
-                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                 required
               />
             </div>
@@ -247,7 +247,7 @@ export default function Team() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
               />
             </div>
 
@@ -258,7 +258,7 @@ export default function Team() {
                 value={avatarUrl}
                 onChange={(e) => setAvatarUrl(e.target.value)}
                 placeholder="https://..."
-                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
               />
             </div>
 
@@ -270,12 +270,11 @@ export default function Team() {
               >
                 Cancelar
               </button>
-              <button
+              <Button
                 type="submit"
-                className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
               >
                 Guardar
-              </button>
+              </Button>
             </div>
           </form>
         </DialogContent>

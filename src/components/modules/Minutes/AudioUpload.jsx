@@ -95,7 +95,7 @@ const AudioUpload = ({ onSelectAudio, selectedAudio }) => {
         <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Subir Audios</h3>
       </div>
 
-      <div {...getRootProps()} className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all duration-200 h-48 flex flex-col justify-center items-center ${isDragActive ? 'border-indigo-500 bg-muted/50' : 'border-border bg-white dark:bg-zinc-900 hover:border-primary/50 hover:bg-white dark:bg-zinc-900'}`}>
+      <div {...getRootProps()} className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 h-48 flex flex-col justify-center items-center ${isDragActive ? 'border-indigo-600 bg-muted/50' : 'border-border bg-white dark:bg-zinc-900 hover:border-primary/50 hover:bg-white dark:bg-zinc-900'}`}>
         <input {...getInputProps()} />
 
         {processing ? (
@@ -123,7 +123,7 @@ const AudioUpload = ({ onSelectAudio, selectedAudio }) => {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             onClick={() => onSelectAudio && onSelectAudio(audio)}
-            className={`p-4 rounded-lg border cursor-pointer transition-all duration-200 ${selectedAudio?.id === audio.id ? 'bg-muted/50 border-primary shadow-sm ' : 'bg-white dark:bg-zinc-900 border-border hover:border-primary/50 hover:bg-white dark:bg-zinc-900'}`}
+            className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 ${selectedAudio?.id === audio.id ? 'bg-muted/50 border-primary shadow-sm ' : 'bg-white dark:bg-zinc-900 border-border hover:border-primary/50 hover:bg-white dark:bg-zinc-900'}`}
         >
           <div className="flex items-center gap-3">
             <FileAudio className="w-5 h-5 text-primary" />

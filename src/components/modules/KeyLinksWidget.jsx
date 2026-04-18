@@ -97,7 +97,7 @@ const KeyLinksWidget = ({ clientId }) => {
         <Card className="w-full flex flex-col h-full min-h-[200px]">
             <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-zinc-900 dark:text-white flex items-center gap-2">
-                    <LinkIcon className="w-4 h-4 text-indigo-500" />
+                    <LinkIcon className="w-4 h-4 text-indigo-600" />
                     Enlaces Clave
                 </h3>
 
@@ -126,7 +126,7 @@ const KeyLinksWidget = ({ clientId }) => {
                                             value={newTitle}
                                             onChange={(e) => setNewTitle(e.target.value)}
                                             placeholder="Ej. Sitio Web"
-                                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                                             autoFocus
                                         />
                                     </div>
@@ -136,7 +136,7 @@ const KeyLinksWidget = ({ clientId }) => {
                                             value={newUrl}
                                             onChange={(e) => setNewUrl(e.target.value)}
                                             placeholder="https://..."
-                                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                                         />
                                     </div>
 
@@ -147,7 +147,7 @@ const KeyLinksWidget = ({ clientId }) => {
                                         <button
                                             type="submit"
                                             disabled={isSubmitting || !newTitle || !newUrl}
-                                            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium flex items-center gap-2"
+                                            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-600 text-white rounded-xl text-sm font-medium flex items-center gap-2"
                                         >
                                             {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Guardar'}
                                         </button>
@@ -162,7 +162,7 @@ const KeyLinksWidget = ({ clientId }) => {
             <div className="space-y-2">
                 {loading ? (
                     <div className="space-y-2">
-                        {[1,2,3].map(i => <div key={i} className="h-10 bg-zinc-100 dark:bg-zinc-800/50 rounded-lg animate-pulse" />)}
+                        {[1,2,3].map(i => <div key={i} className="h-10 bg-zinc-100 dark:bg-zinc-800/50 rounded-xl animate-pulse" />)}
                     </div>
                 ) : links.length === 0 ? (
                     <div className="text-center py-6 text-zinc-400 text-sm">
@@ -172,7 +172,7 @@ const KeyLinksWidget = ({ clientId }) => {
                     links.map(link => (
                         <div
                             key={link.id}
-                            className="group flex items-center justify-between p-3 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800/50 border border-transparent hover:border-zinc-100 dark:hover:border-white/5 transition-all"
+                            className="group flex items-center justify-between p-3 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/50 border border-transparent hover:border-zinc-100 dark:hover:border-white/5 transition-all"
                         >
                             <a
                                 href={ensureAbsoluteUrl(link.url)}
@@ -180,8 +180,8 @@ const KeyLinksWidget = ({ clientId }) => {
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-3 flex-1 min-w-0"
                             >
-                                <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center shrink-0">
-                                    <ExternalLink className="w-4 h-4 text-indigo-500" />
+                                <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-600/10 flex items-center justify-center shrink-0">
+                                    <ExternalLink className="w-4 h-4 text-indigo-600" />
                                 </div>
                                 <div className="truncate">
                                     <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200 truncate group-hover:text-indigo-600 transition-colors">
@@ -195,7 +195,7 @@ const KeyLinksWidget = ({ clientId }) => {
 
                             <button
                                 onClick={() => handleDeleteLink(link.id)}
-                                className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                                className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl opacity-0 group-hover:opacity-100 transition-all"
                                 title="Eliminar"
                             >
                                 <Trash2 className="w-4 h-4" />

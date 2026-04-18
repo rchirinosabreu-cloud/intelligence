@@ -33,7 +33,7 @@ const TEAM = [
     { name: 'Rodny', initial: 'RO', color: 'bg-blue-500' },
     { name: 'Jarlan', initial: 'JA', color: 'bg-green-500' },
     { name: 'Francisco', initial: 'FR', color: 'bg-yellow-500' },
-    { name: 'Camila', initial: 'CA', color: 'bg-indigo-500' },
+    { name: 'Camila', initial: 'CA', color: 'bg-indigo-600' },
     { name: 'Elisa', initial: 'EL', color: 'bg-rose-500' },
     { name: 'Melissa', initial: 'ME', color: 'bg-orange-500' }
 ];
@@ -189,7 +189,7 @@ const ClientTasksWidget = ({ clientId }) => {
         <Card className="w-full flex flex-col h-full min-h-[400px] p-6">
             <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-blue-500/10 rounded-lg">
+                    <div className="p-1.5 bg-blue-500/10 rounded-xl">
                         <CheckSquare className="w-4 h-4 text-blue-500" />
                     </div>
                     <h3 className="font-semibold text-zinc-900 dark:text-white">Pendientes</h3>
@@ -197,7 +197,7 @@ const ClientTasksWidget = ({ clientId }) => {
                 </div>
                 <button
                     onClick={() => setIsCreating(true)}
-                    className="flex items-center justify-center w-8 h-8 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors"
+                    className="flex items-center justify-center w-8 h-8 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-xl transition-colors"
                     title="Nueva tarea"
                 >
                     <Plus className="w-4 h-4" />
@@ -345,14 +345,14 @@ const ClientTasksWidget = ({ clientId }) => {
                     <DialogFooter className="flex sm:justify-between gap-3">
                         <button
                             onClick={() => setDeletingTask(null)}
-                            className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                            className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
                         >
                             Cancelar
                         </button>
                         <button
                             onClick={() => handleDeleteTask()}
                             disabled={!deleteReason.trim() || isSubmittingDelete}
-                            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
                         >
                             {isSubmittingDelete ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                             Eliminar Tarea

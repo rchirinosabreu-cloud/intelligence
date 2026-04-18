@@ -237,8 +237,8 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
             <Card className="w-full flex flex-col relative overflow-hidden group border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl transition-all hover:border-zinc-300 dark:hover:border-zinc-700 h-full max-h-[350px]">
                 <div className="flex items-center justify-between mb-4 p-4 pb-0">
                     <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-indigo-500/10 rounded-lg">
-                            <Megaphone className="w-4 h-4 text-indigo-500" />
+                        <div className="p-1.5 bg-indigo-600/10 rounded-xl">
+                            <Megaphone className="w-4 h-4 text-indigo-600" />
                         </div>
                         <h3 className="font-semibold text-zinc-900 dark:text-white text-sm">
                             {scope === 'general' ? 'Anuncios importantes' : 'Anuncios'}
@@ -277,7 +277,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
                 <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 shrink-0 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md">
                     <button
                         onClick={() => setIsModalOpen(true)}
-                        className="w-full py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-2"
                     >
                         Ver historial o crear anuncio
                         <ArrowRight className="w-3 h-3" />
@@ -290,13 +290,13 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
                 onOpenChange={setIsModalOpen}
                 title={scope === 'general' ? "Anuncios de la agencia" : "Tablero de anuncios"}
                 description="Historial completo y actualizaciones"
-                icon={<Megaphone className="w-5 h-5 text-indigo-500" />}
-                iconBgColor="bg-indigo-500/10"
+                icon={<Megaphone className="w-5 h-5 text-indigo-600" />}
+                iconBgColor="bg-indigo-600/10"
             >
                 <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-zinc-50/50 dark:bg-zinc-900/20">
                     <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm border border-zinc-200 dark:border-zinc-800 space-y-4 relative">
                         <div className="flex items-center gap-2 mb-2">
-                            <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                            <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
                             <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Nuevo mensaje</span>
                         </div>
 
@@ -337,7 +337,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
                                         onClick={() => setSelectedType(t.id)}
                                         disabled={isSubmitting}
                                         className={cn(
-                                            "px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all flex items-center gap-1.5",
+                                            "px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all flex items-center gap-1.5",
                                             selectedType === t.id
                                                 ? cn(t.bg, t.color, "border-transparent ring-1 ring-inset", t.id === 'urgent' ? 'ring-red-500' : t.id === 'win' ? 'ring-emerald-500' : 'ring-blue-500')
                                                 : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700"
@@ -353,7 +353,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
                             <button
                                 onClick={handleAdd}
                                 disabled={!text.trim() || isSubmitting}
-                                className="px-4 py-2 bg-primary hover:bg-indigo-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-lg text-white text-xs font-bold transition-all flex items-center gap-2"
+                                className="px-4 py-2 bg-primary hover:bg-indigo-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 rounded-xl text-white text-xs font-bold transition-all flex items-center gap-2"
                             >
                                 {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin"/> : <Send className="w-3 h-3" />}
                                 PUBLICAR

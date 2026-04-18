@@ -44,7 +44,7 @@ const ChaosMeter = () => {
         return (
             <div className="w-full p-4 rounded-xl bg-gradient-to-br from-orange-400 to-red-500 shadow-lg shadow-red-500/20 border border-red-400/20 transition-all duration-500">
                 <div className="flex items-start gap-3">
-                    <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                    <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
                         <Flame className="w-5 h-5 text-white animate-pulse fill-white" />
                     </div>
                     <div className="flex flex-col">
@@ -63,7 +63,7 @@ const ChaosMeter = () => {
     return (
         <div className="w-full p-4 rounded-xl bg-violet-50 dark:bg-zinc-800/80 border border-violet-100/50 dark:border-white/5 transition-all duration-500">
             <div className="flex items-start gap-3">
-                <div className="p-2 bg-emerald-100 dark:bg-emerald-500/10 rounded-lg">
+                <div className="p-2 bg-emerald-100 dark:bg-emerald-500/10 rounded-xl">
                     <Leaf className="w-5 h-5 text-emerald-600 dark:text-emerald-500" />
                 </div>
                 <div className="flex flex-col">

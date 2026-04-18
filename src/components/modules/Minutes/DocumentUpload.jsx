@@ -96,7 +96,7 @@ const DocumentUpload = ({ onSelectDocument, selectedDocument }) => {
 
       <div
         {...getRootProps()}
-        className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all duration-200 ${
+        className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
           isDragActive
             ? 'border-primary bg-muted/50'
             : 'border-border bg-white dark:bg-zinc-900 hover:border-border hover:bg-white dark:bg-zinc-900'
@@ -129,7 +129,7 @@ const DocumentUpload = ({ onSelectDocument, selectedDocument }) => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           onClick={() => onSelectDocument && onSelectDocument(doc)}
-          className={`p-4 rounded-lg border cursor-pointer transition-all duration-200 ${
+          className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
             selectedDocument?.id === doc.id
               ? 'bg-muted/50 border-primary shadow-sm '
               : 'bg-white dark:bg-zinc-900 border-border hover:border-border hover:bg-white dark:bg-zinc-900'

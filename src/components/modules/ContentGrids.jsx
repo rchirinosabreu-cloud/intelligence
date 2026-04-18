@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { LayoutGrid, Plus, Calendar, Filter, Search, MoreHorizontal, ChevronRight, Loader2, Trash2, Eye } from 'lucide-react';
+import { LayoutGrid, Plus, Calendar, Filter, Search, MoreHorizontal, ChevronRight, Loader2, Trash2, Eye, Table2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import PageHeader from '@/components/ui/PageHeader';
+import { Button } from '@/components/ui/button';
 import CreatePlanModal from './ContentGrids/CreatePlanModal';
 import {
   DropdownMenu,
@@ -93,31 +95,26 @@ const ContentGrids = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Header Section */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
-            Parrillas de Contenido
-          </h1>
-          <p className="text-zinc-500 dark:text-zinc-400 text-sm">
-            Gestiona y planifica la presencia digital de tus clientes.
-          </p>
-        </div>
-
-        <button
+      <PageHeader
+        title="Parrillas de Contenido"
+        subtitle="Gestiona y planifica la presencia digital de tus clientes."
+        icon={Table2}
+      >
+        <Button
+          size="lg"
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all shadow-lg shadow-indigo-500/20 font-medium"
+          className="w-full sm:w-auto"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-4 h-4 mr-2" />
           Nuevo Plan
-        </button>
-      </header>
+        </Button>
+      </PageHeader>
 
       {/* Stats/Filters Bar */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-4 rounded-2xl bg-white/50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/5 backdrop-blur-sm">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+            <div className="p-2 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
               <Calendar className="w-5 h-5" />
             </div>
             <div>
@@ -136,7 +133,7 @@ const ContentGrids = () => {
               placeholder="Buscar por cliente, mes o año..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-zinc-100 dark:bg-white/5 border-transparent focus:border-indigo-500/50 focus:ring-0 rounded-xl text-sm transition-all text-zinc-900 dark:text-zinc-100"
+              className="w-full pl-10 pr-4 py-2 bg-zinc-100 dark:bg-white/5 border-transparent focus:border-indigo-600/50 focus:ring-0 rounded-xl text-sm transition-all text-zinc-900 dark:text-zinc-100"
             />
           </div>
           <button className="p-2 rounded-xl bg-zinc-100 dark:bg-white/5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
@@ -149,7 +146,7 @@ const ContentGrids = () => {
       <div className="bg-white/50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/5 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl shadow-black/5">
         {isLoading ? (
           <div className="p-20 flex flex-col items-center justify-center gap-4">
-            <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
+            <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
             <p className="text-zinc-500 animate-pulse">Cargando planes de contenido...</p>
           </div>
         ) : filteredPlans.length > 0 ? (
@@ -183,10 +180,10 @@ const ContentGrids = () => {
                                 ? plan.client.logoUrl
                                 : `/api/clients/${plan.client.id}/logo-image`}
                               alt={plan.client.name}
-                              className="w-8 h-8 rounded-lg object-cover border border-zinc-200 dark:border-white/10"
+                              className="w-8 h-8 rounded-xl object-cover border border-zinc-200 dark:border-white/10"
                             />
                           ) : (
-                            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-600 font-bold text-xs uppercase">
+                            <div className="w-8 h-8 rounded-xl bg-indigo-600/10 flex items-center justify-center text-indigo-600 font-bold text-xs uppercase">
                               {plan.client?.name?.substring(0, 2)}
                             </div>
                           )}
@@ -205,7 +202,7 @@ const ContentGrids = () => {
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <button className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-lg transition-colors text-zinc-500">
+                              <button className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-xl transition-colors text-zinc-500">
                                 <MoreHorizontal className="w-4 h-4" />
                               </button>
                             </DropdownMenuTrigger>
@@ -259,13 +256,13 @@ const ContentGrids = () => {
                 }
               </p>
             </div>
-            <button
+            <Button
+              size="lg"
               onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-2xl hover:scale-105 transition-all font-bold"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-5 h-5 mr-2" />
               Crear primer plan
-            </button>
+            </Button>
           </div>
         )}
       </div>

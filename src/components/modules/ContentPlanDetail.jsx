@@ -8,8 +8,10 @@ import {
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
   Calendar, User, LayoutGrid, FileText, Instagram, Facebook, Video, Image as ImageIcon,
   Edit2, Check, AlertCircle, Sparkles, Users, UserCheck, StickyNote, ChevronUp, Share2,
-  MessageSquare
+  MessageSquare, Table2
 } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
+import { Button } from '@/components/ui/button';
 import { toast } from 'react-hot-toast';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
@@ -54,7 +56,7 @@ const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }) => {
             href={link}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 hover:text-indigo-700 font-bold text-[10px] rounded-lg transition-colors max-w-full truncate"
+            className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 hover:text-indigo-700 font-bold text-[10px] rounded-xl transition-colors max-w-full truncate"
           >
             <ExternalLink className="w-2.5 h-2.5" />
             {links.length > 1 ? `Link ${i + 1}` : 'Ver Link'}
@@ -74,7 +76,7 @@ const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }) => {
             onChange={(e) => handleUpdateLink(i, e.target.value)}
             onBlur={handleBlur}
             placeholder={placeholder}
-            className="flex-1 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+            className="flex-1 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all"
           />
           <button
             onClick={() => handleRemoveLink(i)}
@@ -86,7 +88,7 @@ const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }) => {
       ))}
       <button
         onClick={handleAddLink}
-        className="flex items-center gap-1 text-[10px] font-bold text-indigo-500 hover:text-indigo-600 transition-colors px-1"
+        className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors px-1"
       >
         <Plus className="w-3 h-3" /> Añadir Link
       </button>
@@ -131,7 +133,7 @@ const FeedbackHistory = ({ comments, isEditing, onUpdate, isOpen }) => {
   return (
     <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-500 overflow-hidden">
       <div className="flex items-center gap-2">
-        <div className="p-1.5 bg-slate-100 dark:bg-white/5 text-slate-500 rounded-lg">
+        <div className="p-1.5 bg-slate-100 dark:bg-white/5 text-slate-500 rounded-xl">
           <MessageSquare className="w-3.5 h-3.5" />
         </div>
         <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em]">
@@ -181,7 +183,7 @@ const ContentItemCard = ({
       id={`item-${item.id}`}
       className={`group relative bg-white dark:bg-zinc-900 transition-all duration-300 rounded-3xl overflow-hidden shadow-sm ${
         isEditing
-          ? 'ring-4 ring-indigo-500/5'
+          ? 'ring-4 ring-indigo-600/5'
           : isDevuelto
           ? 'border border-amber-500/30'
           : 'hover:shadow-md'
@@ -193,10 +195,10 @@ const ContentItemCard = ({
           <div className="lg:col-span-3 space-y-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className="text-xs font-black text-indigo-500/40 font-mono tracking-tighter">
+                <span className="text-xs font-black text-indigo-600/40 font-mono tracking-tighter">
                   #{String(index + 1).padStart(2, '0')}
                 </span>
-                <div className={`p-2.5 rounded-xl ${isEditing ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-100 dark:bg-white/5 text-zinc-500'}`}>
+                <div className={`p-2.5 rounded-xl ${isEditing ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'bg-zinc-100 dark:bg-white/5 text-zinc-500'}`}>
                   {item.format === 'Reel' || item.format === 'Video' ? <Video className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
                 </div>
                 {isEditing ? (
@@ -228,7 +230,7 @@ const ContentItemCard = ({
                         onUpdate({ id: item.id, objective: e.target.value });
                       }
                     }}
-                    className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                    className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-600/20 outline-none"
                   />
                 ) : (
                   <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 leading-tight">{item.objective}</p>
@@ -247,7 +249,7 @@ const ContentItemCard = ({
                         onUpdate({ id: item.id, publishDate: e.target.value });
                       }
                     }}
-                    className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                    className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-indigo-600/20 outline-none"
                   />
                 ) : (
                   <div className="flex items-center gap-2 text-sm font-bold text-indigo-600 dark:text-indigo-400">
@@ -283,7 +285,7 @@ const ContentItemCard = ({
 
             <div className="pt-4 border-t border-zinc-100 dark:border-white/5">
               <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-2">
-                <StickyNote className="w-3 h-3 text-indigo-500" /> Nota Interna
+                  <StickyNote className="w-3 h-3 text-indigo-600" /> Nota Interna
               </label>
               {isEditing ? (
                 <AutoResizeTextarea
@@ -294,7 +296,7 @@ const ContentItemCard = ({
                     }
                   }}
                   placeholder="Instrucciones para el equipo..."
-                  className="w-full bg-zinc-50/50 dark:bg-white/2 border border-zinc-200/60 dark:border-white/5 rounded-xl p-3 text-[11px] font-medium focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all"
+                  className="w-full bg-zinc-50/50 dark:bg-white/2 border border-zinc-200/60 dark:border-white/5 rounded-xl p-3 text-[11px] font-medium focus:ring-2 focus:ring-indigo-600/10 outline-none transition-all"
                 />
               ) : (
                 <div className="bg-zinc-50/30 dark:bg-white/2 p-3 rounded-xl text-[11px] text-zinc-500 dark:text-zinc-400 italic leading-relaxed">
@@ -309,7 +311,7 @@ const ContentItemCard = ({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-indigo-500" /> Copy Visual / Guion
+                  <FileText className="w-3.5 h-3.5 text-indigo-600" /> Copy Visual / Guion
                 </label>
               </div>
               {isEditing ? (
@@ -321,7 +323,7 @@ const ContentItemCard = ({
                     }
                   }}
                   placeholder="Escribe el copy visual o guion aquí..."
-                  className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/30 transition-all outline-none"
+                  className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600/30 transition-all outline-none"
                 />
               ) : (
                 <div className="bg-zinc-50/50 dark:bg-white/2 p-4 rounded-2xl text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
@@ -332,7 +334,7 @@ const ContentItemCard = ({
 
             <div className="space-y-2">
               <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
-                <Instagram className="w-3.5 h-3.5 text-indigo-500" /> Caption (Post)
+                <Instagram className="w-3.5 h-3.5 text-indigo-600" /> Caption (Post)
               </label>
               {isEditing ? (
                 <AutoResizeTextarea
@@ -343,7 +345,7 @@ const ContentItemCard = ({
                     }
                   }}
                   placeholder="Escribe el pie de foto para redes..."
-                  className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/30 transition-all outline-none"
+                  className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600/30 transition-all outline-none"
                 />
               ) : (
                 <div className="bg-zinc-50/50 dark:bg-white/2 p-4 rounded-2xl text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
@@ -365,7 +367,7 @@ const ContentItemCard = ({
             <div className="space-y-5">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
-                  <ExternalLink className="w-3.5 h-3.5 text-indigo-500" /> Referencias (Links)
+                  <ExternalLink className="w-3.5 h-3.5 text-indigo-600" /> Referencias (Links)
                 </label>
                 <MultiLinkInput
                   values={item.mediaUrl}
@@ -377,7 +379,7 @@ const ContentItemCard = ({
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" /> Insumos (Links)
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> Insumos (Links)
                 </label>
                 <MultiLinkInput
                   values={item.assetsLinks}
@@ -393,7 +395,7 @@ const ContentItemCard = ({
                     ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600'
                     : isDevuelto
                     ? 'bg-red-500/5 border-red-500/20 text-red-600'
-                    : 'bg-indigo-500/5 border-indigo-500/20 text-indigo-600'
+                    : 'bg-indigo-600/5 border-indigo-600/20 text-indigo-600'
                 }`}>
                   <div className="flex items-center gap-2">
                     {isRealizado ? <CheckCircle2 className="w-4 h-4" /> : isDevuelto ? <AlertCircle className="w-4 h-4" /> : <Clock className="w-4 h-4 animate-pulse" />}
@@ -412,13 +414,14 @@ const ContentItemCard = ({
                   )}
                 </div>
               ) : (
-                <button
+                <Button
                   onClick={onDispatch}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all font-black text-[10px] uppercase tracking-[0.1em] shadow-lg shadow-black/5"
+                  variant="primary"
+                  className="w-full py-6 font-black text-[10px] uppercase tracking-[0.1em]"
                 >
-                  <Send className="w-3 h-3" />
+                  <Send className="w-4 h-4 mr-2" />
                   Despachar a Kanban
-                </button>
+                </Button>
               )}
             </div>
 
@@ -426,10 +429,10 @@ const ContentItemCard = ({
               <div className="flex items-center justify-between">
                 <button
                   onClick={onEditToggle}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase transition-all ${
                     isEditing
                       ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
-                      : 'text-zinc-500 hover:text-indigo-600 hover:bg-indigo-500/5'
+                      : 'text-zinc-500 hover:text-indigo-600 hover:bg-indigo-600/5'
                   }`}
                 >
                   {isEditing ? <Check className="w-3.5 h-3.5" /> : <Edit2 className="w-3.5 h-3.5" />}
@@ -438,7 +441,7 @@ const ContentItemCard = ({
 
                 <button
                   onClick={() => onDelete(item.id)}
-                  className="p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-all"
+                  className="p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-xl transition-all"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -490,7 +493,7 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
       <DialogContent className="sm:max-w-[425px] bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 shadow-2xl">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
-            <Send className="w-5 h-5 text-indigo-500" />
+            <Send className="w-5 h-5 text-indigo-600" />
             Despachar a Kanban
           </DialogTitle>
           <DialogDescription>
@@ -504,7 +507,7 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
             <select
               value={data.assigneeId}
               onChange={(e) => setData({ ...data, assigneeId: e.target.value })}
-              className="w-full h-11 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all text-sm"
+              className="w-full h-11 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all text-sm"
             >
               <option value="">Sin asignar (Pendiente)</option>
               {team?.map(member => (
@@ -519,7 +522,7 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
               type="date"
               value={data.dueDate}
               onChange={(e) => setData({ ...data, dueDate: e.target.value })}
-              className="w-full h-11 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all text-sm"
+              className="w-full h-11 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all text-sm"
             />
           </div>
 
@@ -529,37 +532,37 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
                 type="checkbox"
                 checked={data.isPriority}
                 onChange={(e) => setData({ ...data, isPriority: e.target.checked })}
-                className="w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+                className="w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-600"
               />
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-indigo-500 transition-colors">Prioridad</span>
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-indigo-600 transition-colors">Prioridad</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer group">
               <input
                 type="checkbox"
                 checked={data.isSpecial}
                 onChange={(e) => setData({ ...data, isSpecial: e.target.checked })}
-                className="w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+                className="w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-600"
               />
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-indigo-500 transition-colors">Especial</span>
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-indigo-600 transition-colors">Especial</span>
             </label>
           </div>
         </div>
 
-        <DialogFooter>
-          <button
+        <DialogFooter className="gap-2">
+          <Button
+            variant="ghost"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors"
           >
             Cancelar
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => onConfirm(data)}
             disabled={isPending}
-            className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-2 disabled:opacity-50"
+            className="px-8"
           >
-            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
             Confirmar Despacho
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -632,9 +635,9 @@ const ContentPlanDetail = () => {
         const element = itemRefs.current[highlightId];
         if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          element.classList.add('ring-2', 'ring-indigo-500', 'ring-offset-4', 'dark:ring-offset-zinc-950');
+          element.classList.add('ring-2', 'ring-indigo-600', 'ring-offset-4', 'dark:ring-offset-zinc-950');
           setTimeout(() => {
-            element.classList.remove('ring-2', 'ring-indigo-500', 'ring-offset-4', 'dark:ring-offset-zinc-950');
+            element.classList.remove('ring-2', 'ring-indigo-600', 'ring-offset-4', 'dark:ring-offset-zinc-950');
           }, 3000);
         }
       }, 500);
@@ -745,7 +748,7 @@ const ContentPlanDetail = () => {
   if (planLoading) {
     return (
       <div className="flex flex-col items-center justify-center p-20 gap-4">
-        <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
+        <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
         <p className="text-zinc-500">Cargando detalles de la parrilla...</p>
       </div>
     );
@@ -755,89 +758,80 @@ const ContentPlanDetail = () => {
 
   return (
     <div className="space-y-8 pb-20 animate-in fade-in duration-500">
-      {/* Header */}
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-zinc-200 dark:border-white/5 pb-8">
-        <div className="space-y-4">
-          <button
-            onClick={() => navigate('/parrillas')}
-            className="flex items-center gap-2 text-zinc-500 hover:text-indigo-600 transition-colors text-sm font-bold uppercase tracking-widest"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Parrillas
-          </button>
+      <PageHeader
+        title={`${getMonthName(plan.month)} ${plan.year}`}
+        subtitle="Planificación estratégica de contenidos digitales."
+        icon={Table2}
+        breadcrumbs={[
+          { label: 'Parrillas', href: '/parrillas' },
+          { label: plan.client?.name || 'Cliente' },
+        ]}
+      >
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-3 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-white/5">
+            <select
+              value={plan.status}
+              onChange={(e) => updatePlanMutation.mutate({ status: e.target.value })}
+              className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest focus:ring-0 cursor-pointer px-3 py-1.5"
+            >
+              <option value="PLANIFICACION">Planificación</option>
+              <option value="EN_APROBACION">En Aprobación</option>
+              <option value="ACTIVO">Activo</option>
+              <option value="FINALIZADO">Finalizado</option>
+            </select>
 
-          <div className="space-y-1">
-            <div className="flex items-center gap-4">
-              <h1 className="text-4xl font-black tracking-tighter text-zinc-900 dark:text-white capitalize">
-                {getMonthName(plan.month)} {plan.year}
-              </h1>
-              <div className="px-3 py-1 rounded-full bg-zinc-100 dark:bg-white/5 text-zinc-500 text-[10px] font-bold uppercase tracking-widest border border-zinc-200 dark:border-white/10">
-                {plan.status}
-              </div>
-            </div>
+            <div className="w-px h-4 bg-zinc-200 dark:bg-white/10" />
 
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-               <div className="flex items-center gap-2">
-                 <Users className="w-3.5 h-3.5 text-zinc-400" />
-                 <select
-                   value={plan.clientId}
-                   onChange={(e) => updatePlanMutation.mutate({ clientId: e.target.value })}
-                   className="bg-transparent border-none text-zinc-500 dark:text-zinc-400 font-medium p-0 focus:ring-0 text-sm cursor-pointer hover:text-indigo-500 transition-colors"
-                 >
-                   {clients?.map(c => (
-                     <option key={c.id} value={c.id}>{c.name}</option>
-                   ))}
-                 </select>
-               </div>
-
-               <div className="flex items-center gap-2">
-                 <UserCheck className="w-3.5 h-3.5 text-zinc-400" />
-                 <select
-                   value={plan.ownerId || ''}
-                   onChange={(e) => updatePlanMutation.mutate({ ownerId: e.target.value || null })}
-                   className="bg-transparent border-none text-zinc-500 dark:text-zinc-400 font-medium p-0 focus:ring-0 text-sm cursor-pointer hover:text-indigo-500 transition-colors"
-                 >
-                   <option value="">Sin Responsable (CM)</option>
-                   {team?.map(member => (
-                     <option key={member.id} value={member.id}>{member.name}</option>
-                   ))}
-                 </select>
-               </div>
-            </div>
+            <button
+              onClick={() => generateShareTokenMutation.mutate()}
+              disabled={generateShareTokenMutation.isPending}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-zinc-500 hover:text-indigo-600 transition-all font-bold text-[10px] uppercase tracking-widest"
+              title={plan.shareToken ? 'Actualizar link compartido' : 'Generar link compartido'}
+            >
+              {generateShareTokenMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Share2 className="w-3 h-3" />}
+              {plan.shareToken ? 'Link' : 'Compartir'}
+            </button>
           </div>
-        </div>
 
-        <div className="flex items-center gap-3 bg-white/50 dark:bg-zinc-900/50 p-2 rounded-2xl border border-zinc-200/50 dark:border-white/5 backdrop-blur-sm">
-          <select
-            value={plan.status}
-            onChange={(e) => updatePlanMutation.mutate({ status: e.target.value })}
-            className="bg-transparent border-none text-xs font-bold uppercase tracking-widest focus:ring-0 cursor-pointer px-4"
-          >
-            <option value="PLANIFICACION">Planificación</option>
-            <option value="EN_APROBACION">En Aprobación</option>
-            <option value="ACTIVO">Activo</option>
-            <option value="FINALIZADO">Finalizado</option>
-          </select>
-
-          <button
-            onClick={() => generateShareTokenMutation.mutate()}
-            disabled={generateShareTokenMutation.isPending}
-            className="flex items-center gap-2 px-4 py-2.5 text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-all font-bold text-xs"
-            title={plan.shareToken ? 'Actualizar link compartido' : 'Generar link compartido'}
-          >
-            {generateShareTokenMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
-            {plan.shareToken ? 'Link de Cliente' : 'Compartir'}
-          </button>
-
-          <button
+          <Button
+            size="lg"
             onClick={handleAddItem}
-            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all shadow-lg shadow-indigo-500/20 font-bold text-sm"
+            className="w-full sm:w-auto"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 mr-2" />
             Añadir Contenido
-          </button>
+          </Button>
         </div>
-      </header>
+      </PageHeader>
+
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1">
+          <div className="flex items-center gap-2">
+            <Users className="w-3.5 h-3.5 text-zinc-400" />
+            <select
+              value={plan.clientId}
+              onChange={(e) => updatePlanMutation.mutate({ clientId: e.target.value })}
+              className="bg-transparent border-none text-zinc-500 dark:text-zinc-400 font-medium p-0 focus:ring-0 text-sm cursor-pointer hover:text-indigo-600 transition-colors"
+            >
+              {clients?.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <UserCheck className="w-3.5 h-3.5 text-zinc-400" />
+            <select
+              value={plan.ownerId || ''}
+              onChange={(e) => updatePlanMutation.mutate({ ownerId: e.target.value || null })}
+              className="bg-transparent border-none text-zinc-500 dark:text-zinc-400 font-medium p-0 focus:ring-0 text-sm cursor-pointer hover:text-indigo-600 transition-colors"
+            >
+              <option value="">Sin Responsable (CM)</option>
+              {team?.map(member => (
+                <option key={member.id} value={member.id}>{member.name}</option>
+              ))}
+            </select>
+          </div>
+      </div>
 
       {/* Internal Notes Panel */}
       <div className="bg-white/40 dark:bg-zinc-900/30 border border-zinc-200/60 dark:border-white/5 rounded-3xl overflow-hidden">
@@ -846,7 +840,7 @@ const ContentPlanDetail = () => {
           className="w-full flex items-center justify-between p-6 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-500/10 text-indigo-600 rounded-lg">
+            <div className="p-2 bg-indigo-600/10 text-indigo-600 rounded-xl">
               <StickyNote className="w-5 h-5" />
             </div>
             <div className="text-left">
@@ -867,7 +861,7 @@ const ContentPlanDetail = () => {
                 }
               }}
               placeholder="Escribe aquí las instrucciones generales, insights del cliente o notas estratégicas..."
-              className="w-full bg-zinc-50/50 dark:bg-white/2 border border-zinc-200/60 dark:border-white/5 rounded-2xl p-6 text-sm text-zinc-700 dark:text-zinc-300 min-h-[120px] focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
+              className="w-full bg-zinc-50/50 dark:bg-white/2 border border-zinc-200/60 dark:border-white/5 rounded-2xl p-6 text-sm text-zinc-700 dark:text-zinc-300 min-h-[120px] focus:ring-4 focus:ring-indigo-600/10 outline-none transition-all"
             />
           </div>
         )}
@@ -901,13 +895,14 @@ const ContentPlanDetail = () => {
             <p className="text-zinc-500 max-w-xs mx-auto text-sm leading-relaxed mb-6">
               Empieza a planificar tu contenido añadiendo la primera pieza.
             </p>
-            <button
+            <Button
+              size="lg"
               onClick={handleAddItem}
-              className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:scale-105 transition-all mx-auto font-bold shadow-xl shadow-indigo-500/20"
+              className="mx-auto"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-5 h-5 mr-2" />
               Crear Pieza
-            </button>
+            </Button>
           </div>
         )}
       </div>

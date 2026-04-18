@@ -19,7 +19,7 @@ export default function ClientLogo({ client, className }) {
     : `/api/clients/${client.id}/logo-image`;
 
   return (
-    <div className={cn("relative shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-white/5", className)}>
+    <div className={cn("relative shrink-0 overflow-hidden rounded-xl bg-zinc-100 dark:bg-white/5", className)}>
       <img
         src={src}
         alt={client.name}

@@ -60,7 +60,7 @@ const ChatHistory = ({
              <input 
                type="text" 
                placeholder="Buscar..."
-               className="w-full pl-9 pr-4 py-2 bg-brand-mauve rounded-lg text-sm text-brand-charcoal placeholder:text-brand-charcoal/40 focus:outline-none focus:ring-1 focus:ring-brand-lavender transition-all"
+               className="w-full pl-9 pr-4 py-2 bg-brand-mauve rounded-xl text-sm text-brand-charcoal placeholder:text-brand-charcoal/40 focus:outline-none focus:ring-1 focus:ring-brand-lavender transition-all"
              />
           </div>
         </div>
@@ -108,7 +108,7 @@ const ChatHistory = ({
                     e.stopPropagation();
                     onDeleteChat(chat.id);
                   }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 text-red-400 hover:text-red-500 transition-all"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-xl opacity-0 group-hover:opacity-100 hover:bg-red-50 text-red-400 hover:text-red-500 transition-all"
                   title="Eliminar chat"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
