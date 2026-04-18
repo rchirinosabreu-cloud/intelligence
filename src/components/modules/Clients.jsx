@@ -1,8 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Plus, Users, Search, MoreVertical, ExternalLink, Loader2, Edit } from 'lucide-react';
+import { Plus, Users, Search, MoreVertical, ExternalLink, Loader2, Edit, Briefcase } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import PageHeader from '@/components/ui/PageHeader';
+import { Button } from '@/components/ui/button';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -148,32 +150,30 @@ const Clients = () => {
   );
 
   return (
-    <div className="space-y-8 p-6 pb-20">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-zinc-900 dark:text-white mb-2 tracking-tight">Clientes</h2>
-          <p className="text-zinc-500 dark:text-zinc-400">Gestiona los espacios de trabajo y activos de tus clientes.</p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 group-focus-within:text-primary transition-colors" />
+    <div className="space-y-8 pb-20">
+      <PageHeader
+        title="Clientes"
+        subtitle="Gestiona los espacios de trabajo y activos de tus clientes."
+        icon={Briefcase}
+      >
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+          <div className="relative group flex-1 sm:flex-none">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 group-focus-within:text-indigo-600 transition-colors" />
             <input
               type="text"
               placeholder="Buscar cliente..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4 py-2.5 bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all w-64 shadow-sm"
+              className="w-full sm:w-64 pl-10 pr-4 py-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600/20 transition-all"
             />
           </div>
 
           <Dialog.Root open={isModalOpen} onOpenChange={setIsModalOpen}>
             <Dialog.Trigger asChild>
-              <button className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0">
-                <Plus className="w-4 h-4" />
-                <span>Nuevo cliente</span>
-              </button>
+              <Button size="lg">
+                <Plus className="w-4 h-4 mr-2" />
+                Nuevo Cliente
+              </Button>
             </Dialog.Trigger>
 
             <Dialog.Portal>
@@ -222,14 +222,14 @@ const Clients = () => {
 
                   <div className="flex justify-end gap-3 pt-4">
                     <Dialog.Close asChild>
-                      <button type="button" className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 rounded-lg transition-colors font-medium text-sm">
+                      <button type="button" className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 rounded-xl transition-colors font-medium text-sm">
                         Cancelar
                       </button>
                     </Dialog.Close>
                     <button
                       type="submit"
                       disabled={isCreating || !newClientName.trim() || !newClientSlug.trim()}
-                      className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-medium transition-colors shadow-lg shadow-primary/20 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors shadow-lg shadow-primary/20 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear espacio'}
                     </button>
@@ -239,7 +239,7 @@ const Clients = () => {
             </Dialog.Portal>
           </Dialog.Root>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Edit Client Modal */}
       <Dialog.Root open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
@@ -289,14 +289,14 @@ const Clients = () => {
 
               <div className="flex justify-end gap-3 pt-4">
                 <Dialog.Close asChild>
-                  <button type="button" className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 rounded-lg transition-colors font-medium text-sm">
+                  <button type="button" className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 rounded-xl transition-colors font-medium text-sm">
                     Cancelar
                   </button>
                 </Dialog.Close>
                 <button
                   type="submit"
                   disabled={isUpdating || !editClientName.trim() || !editClientSlug.trim()}
-                  className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-medium transition-colors shadow-lg shadow-primary/20 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors shadow-lg shadow-primary/20 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Guardar cambios'}
                 </button>
@@ -316,7 +316,7 @@ const Clients = () => {
       ) : error ? (
         <div className="p-8 text-center rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
           <p className="text-red-600 dark:text-red-400 font-medium">Error: {error}</p>
-          <button onClick={fetchClients} className="mt-4 px-4 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 rounded-lg text-sm shadow-sm hover:bg-zinc-50 transition-colors">
+          <button onClick={fetchClients} className="mt-4 px-4 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 rounded-xl text-sm shadow-sm hover:bg-zinc-50 transition-colors">
             Reintentar
           </button>
         </div>
@@ -332,7 +332,7 @@ const Clients = () => {
             {!searchQuery && (
               <button
                 onClick={() => setIsModalOpen(true)}
-                className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-medium transition-colors shadow-lg shadow-primary/20 text-sm"
+                className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors shadow-lg shadow-primary/20 text-sm"
               >
                 Crear primer cliente
               </button>
@@ -376,7 +376,7 @@ const Clients = () => {
                         <DropdownMenu.Trigger asChild>
                           <button
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors opacity-0 group-hover:opacity-100 focus:outline-none"
+                            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors opacity-0 group-hover:opacity-100 focus:outline-none"
                           >
                               <MoreVertical className="w-4 h-4" />
                           </button>
@@ -393,7 +393,7 @@ const Clients = () => {
                                 e.stopPropagation();
                                 handleOpenEditModal(client);
                               }}
-                              className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer outline-none"
+                              className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl cursor-pointer outline-none"
                             >
                               <Edit className="w-4 h-4" />
                               <span>Editar</span>

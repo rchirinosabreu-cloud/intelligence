@@ -525,8 +525,8 @@ const Profile = () => {
                                                     className="w-full bg-transparent border-none text-sm resize-none focus:ring-0 placeholder:text-primary/40 dark:text-white"
                                                 />
                                                 <div className="flex justify-end gap-2">
-                                                    <button onClick={() => setIsCreatingNote(false)} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"><X className="w-4 h-4 text-zinc-500" /></button>
-                                                    <button onClick={handleCreateNote} className="bg-primary text-white p-2 rounded-lg shadow-md"><Check className="w-4 h-4" /></button>
+                                                    <button onClick={() => setIsCreatingNote(false)} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-xl transition-colors"><X className="w-4 h-4 text-zinc-500" /></button>
+                                                    <button onClick={handleCreateNote} className="bg-primary text-white p-2 rounded-xl shadow-md"><Check className="w-4 h-4" /></button>
                                                 </div>
                                             </CardContent>
                                         </Card>
@@ -556,8 +556,8 @@ const Profile = () => {
                                                         className="w-full bg-transparent border-none text-sm resize-none focus:ring-0 dark:text-white flex-1"
                                                     />
                                                     <div className="flex justify-end gap-2">
-                                                        <button onClick={() => setEditingNote(null)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg"><X className="w-4 h-4" /></button>
-                                                        <button onClick={handleUpdateNote} className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 p-2 rounded-lg"><Check className="w-4 h-4" /></button>
+                                                        <button onClick={() => setEditingNote(null)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl"><X className="w-4 h-4" /></button>
+                                                        <button onClick={handleUpdateNote} className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 p-2 rounded-xl"><Check className="w-4 h-4" /></button>
                                                     </div>
                                                 </div>
                                             ) : (
@@ -566,8 +566,8 @@ const Profile = () => {
                                                         <div className="flex justify-between items-start">
                                                             <CardTitle className="text-lg font-bold group-hover:text-primary transition-colors">{note.title}</CardTitle>
                                                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <button onClick={() => setEditingNote(note)} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-primary transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
-                                                                <button onClick={() => handleDeleteNote(note.id)} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                                <button onClick={() => setEditingNote(note)} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-primary transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
+                                                                <button onClick={() => handleDeleteNote(note.id)} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                                                             </div>
                                                         </div>
                                                         <CardDescription className="text-xs">{new Date(note.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</CardDescription>
@@ -767,7 +767,7 @@ const Profile = () => {
                                             {isAdmin && (
                                                 <button
                                                     onClick={() => handleDeleteFeedback(item.id)}
-                                                    className="p-2 opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded-lg transition-all"
+                                                    className="p-2 opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded-xl transition-all"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>

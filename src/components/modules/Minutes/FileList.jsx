@@ -28,7 +28,7 @@ const FileList = ({ files, onRemove }) => {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="group flex items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-border hover:border-border transition-colors"
+              className="group flex items-center justify-between p-3 rounded-xl bg-white dark:bg-zinc-900 border border-border hover:border-border transition-colors"
             >
               <div className="flex items-center gap-3 overflow-hidden">
                 <div className="p-2 bg-muted/50 rounded-md">

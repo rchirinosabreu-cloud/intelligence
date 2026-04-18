@@ -274,7 +274,7 @@ const DeliverablesWidget = ({ clientId }) => {
                 {!isPanel && (
                     <div className="flex items-center justify-between mb-5 px-1">
                         <div className="flex items-center gap-2">
-                            <div className="p-1.5 bg-emerald-500/10 rounded-lg">
+                            <div className="p-1.5 bg-emerald-500/10 rounded-xl">
                                 <Download className="w-4 h-4 text-emerald-500" />
                             </div>
                             <h3 className="font-semibold text-zinc-900 dark:text-white text-sm">
@@ -287,7 +287,7 @@ const DeliverablesWidget = ({ clientId }) => {
                             </span>
                             <button
                                 onClick={() => setIsMaximized(true)}
-                                className="p-1.5 text-zinc-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-all"
+                                className="p-1.5 text-zinc-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-all"
                                 title="Gestionar historial"
                             >
                                 <Maximize2 className="w-4 h-4" />
@@ -382,7 +382,7 @@ const DeliverablesWidget = ({ clientId }) => {
                                                     className="flex-1 flex items-center gap-3 min-w-0 cursor-pointer"
                                                     onClick={() => window.open(file.url, '_blank', 'noopener,noreferrer')}
                                                 >
-                                                    <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 group-hover:border-emerald-200 transition-colors">
+                                                    <div className="p-2.5 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 group-hover:border-emerald-200 transition-colors">
                                                         <Icon className="w-5 h-5 text-emerald-500" />
                                                     </div>
                                                     <div className="flex-1 min-w-0">
@@ -400,7 +400,7 @@ const DeliverablesWidget = ({ clientId }) => {
                                                     {canPreview(file.mimeType) && (
                                                         <button
                                                             onClick={(e) => handlePreview(e, file)}
-                                                            className="p-2 text-zinc-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-all"
+                                                            className="p-2 text-zinc-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-all"
                                                             title="Vista rápida"
                                                         >
                                                             <Eye className="w-4 h-4" />
@@ -410,7 +410,7 @@ const DeliverablesWidget = ({ clientId }) => {
                                                         <button
                                                             onClick={(e) => handleDelete(e, file.id)}
                                                             disabled={isDeleting === file.id}
-                                                            className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                                                            className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
                                                             title="Eliminar permanentemente"
                                                         >
                                                             {isDeleting === file.id ? (
@@ -444,7 +444,7 @@ const DeliverablesWidget = ({ clientId }) => {
                     <div className="w-full h-full max-w-6xl flex flex-col z-[65] relative animate-in zoom-in-95 duration-300">
                         <div className="flex items-center justify-between mb-4 bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl">
                             <div className="flex items-center gap-3 pl-2">
-                                <div className="p-2 bg-emerald-500/20 rounded-lg">
+                                <div className="p-2 bg-emerald-500/20 rounded-xl">
                                     {React.createElement(getFileIcon(previewFile.mimeType), { className: "w-4 h-4 text-emerald-500" })}
                                 </div>
                                 <div className="flex flex-col">
@@ -476,7 +476,7 @@ const DeliverablesWidget = ({ clientId }) => {
                                     <img
                                         src={previewFile.url}
                                         alt={previewFile.name}
-                                        className="max-w-full max-h-full object-contain rounded-lg shadow-xl"
+                                        className="max-w-full max-h-full object-contain rounded-xl shadow-xl"
                                     />
                                 </div>
                             )}
@@ -513,7 +513,7 @@ const DeliverablesWidget = ({ clientId }) => {
                 <div className="mt-4 border-t border-zinc-100 dark:border-zinc-800 pt-4 shrink-0">
                     <button
                         onClick={() => setIsMaximized(true)}
-                        className="w-full py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-2"
                     >
                         Gestionar todos los entregables
                         <ArrowRight className="w-3 h-3" />

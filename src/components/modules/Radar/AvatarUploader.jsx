@@ -62,7 +62,7 @@ const AvatarUploader = ({ member, memberId, onUploadSuccess }) => {
                 <div className="relative group shrink-0">
                     <TeamAvatar
                         member={member}
-                        className="w-32 h-32 border-4 border-indigo-500/20 shadow-2xl bg-zinc-50 dark:bg-zinc-800"
+                        className="w-32 h-32 border-4 border-indigo-600/20 shadow-2xl bg-zinc-50 dark:bg-zinc-800"
                         size={128}
                     />
                     <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
@@ -82,16 +82,16 @@ const AvatarUploader = ({ member, memberId, onUploadSuccess }) => {
                 {...getRootProps()}
                 className={cn(
                     "p-8 border-2 border-dashed rounded-3xl transition-all cursor-pointer flex flex-col items-center justify-center text-center gap-3",
-                    isDragActive ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/10 scale-[0.98]" : "border-zinc-200 dark:border-white/5 hover:border-indigo-500/50",
+                    isDragActive ? "border-indigo-600 bg-indigo-50 dark:bg-indigo-900/10 scale-[0.98]" : "border-zinc-200 dark:border-white/5 hover:border-indigo-600/50",
                     isUploading && "opacity-50 cursor-not-allowed"
                 )}
             >
                 <input {...getInputProps()} />
-                <div className="p-4 bg-indigo-500/10 rounded-2xl">
+                <div className="p-4 bg-indigo-600/10 rounded-2xl">
                     {isUploading ? (
-                        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+                        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
                     ) : (
-                        <Upload className="w-8 h-8 text-indigo-500" />
+                        <Upload className="w-8 h-8 text-indigo-600" />
                     )}
                 </div>
                 <div>

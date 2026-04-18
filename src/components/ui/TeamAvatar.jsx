@@ -67,7 +67,7 @@ export default function TeamAvatar({ member, className, size = 32 }) {
     return (
       <div
         className={cn(
-          "rounded-full shrink-0 shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center bg-indigo-500",
+          "rounded-full shrink-0 shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center bg-indigo-600",
           "w-8 h-8", // Default sizing
           className
         )}

@@ -27,7 +27,7 @@ const AdsControlPanel = ({ data }) => {
                 {/* Inversión */}
                 <Card className="p-5 border-zinc-200 dark:border-zinc-800 shadow-none">
                     <div className="flex justify-between items-start mb-4">
-                        <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                        <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                             <DollarSign className="w-5 h-5" />
                         </div>
                         <Badge variant="secondary" className="text-[10px]">
@@ -51,7 +51,7 @@ const AdsControlPanel = ({ data }) => {
                 {/* Resultados */}
                 <Card className="p-5 border-zinc-200 dark:border-zinc-800 shadow-none">
                     <div className="flex justify-between items-start mb-4">
-                        <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                        <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-600/10 text-indigo-600 dark:text-indigo-400">
                             <Target className="w-5 h-5" />
                         </div>
                     </div>
@@ -72,11 +72,11 @@ const AdsControlPanel = ({ data }) => {
                 {/* CPA / Eficiencia */}
                 <Card className="p-5 border-zinc-200 dark:border-zinc-800 shadow-none relative overflow-hidden group">
                     <div className="flex justify-between items-start mb-4">
-                        <div className={`p-2 rounded-lg ${isEfficient ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400' : 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400'}`}>
+                        <div className={`p-2 rounded-xl ${isEfficient ? 'bg-indigo-50 dark:bg-indigo-600/10 text-indigo-600 dark:text-indigo-400' : 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400'}`}>
                             <Zap className={`w-5 h-5 ${isEfficient ? 'animate-pulse' : ''}`} />
                         </div>
                         {isEfficient && (
-                            <Badge className="bg-indigo-500/10 text-indigo-600 border-indigo-500/20 text-[9px] font-bold uppercase tracking-tighter animate-in fade-in zoom-in duration-300">
+                            <Badge className="bg-indigo-600/10 text-indigo-600 border-indigo-600/20 text-[9px] font-bold uppercase tracking-tighter animate-in fade-in zoom-in duration-300">
                                 Eficiencia Alta
                             </Badge>
                         )}
@@ -88,7 +88,7 @@ const AdsControlPanel = ({ data }) => {
                     </p>
                     {isEfficient && (
                         <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                            <Zap className="w-20 h-20 text-indigo-500" />
+                            <Zap className="w-20 h-20 text-indigo-600" />
                         </div>
                     )}
                 </Card>
@@ -96,7 +96,7 @@ const AdsControlPanel = ({ data }) => {
                 {/* Alcance Ads */}
                 <Card className="p-5 border-zinc-200 dark:border-zinc-800 shadow-none">
                     <div className="flex justify-between items-start mb-4">
-                        <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                        <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                             <TrendingUp className="w-5 h-5" />
                         </div>
                     </div>

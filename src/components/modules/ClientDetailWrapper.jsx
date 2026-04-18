@@ -55,7 +55,7 @@ const ClientDetailWrapper = () => {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full min-h-[50vh]">
-                <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
             </div>
         );
     }
@@ -66,7 +66,7 @@ const ClientDetailWrapper = () => {
                 <p className="text-zinc-500 dark:text-zinc-400">{error || "Cliente no encontrado"}</p>
                 <button
                     onClick={() => navigate('/clientes')}
-                    className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 rounded-lg text-sm font-medium transition-colors"
+                    className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 rounded-xl text-sm font-medium transition-colors"
                 >
                     Volver a Clientes
                 </button>

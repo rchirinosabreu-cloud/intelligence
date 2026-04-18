@@ -105,14 +105,14 @@ IMPORTANTE: Todos los valores de los campos JSON deben ser Strings o Arrays de S
       )}
 
       {loading && (
-        <div className="p-8 text-center bg-white dark:bg-zinc-900 rounded-lg border border-border">
+        <div className="p-8 text-center bg-white dark:bg-zinc-900 rounded-xl border border-border">
           <Loader2 className="w-8 h-8 text-muted-foreground animate-spin mx-auto mb-3" />
           <p className="text-muted-foreground">Realizando análisis cruzado de fuentes...</p>
         </div>
       )}
 
       {error && (
-        <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-200 flex items-start gap-3">
+        <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-xl text-red-200 flex items-start gap-3">
            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
            <div>
              <p className="font-semibold">Error al generar análisis</p>
@@ -123,7 +123,7 @@ IMPORTANTE: Todos los valores de los campos JSON deben ser Strings o Arrays de S
       )}
 
       {analysisData && !loading && (
-         <div className="bg-white dark:bg-zinc-900 rounded-lg p-6 border border-border shadow-md space-y-4">
+         <div className="bg-white dark:bg-zinc-900 rounded-xl p-6 border border-border shadow-md space-y-4">
           <div className="flex flex-col items-center gap-4 text-center pb-4 border-b border-border">
             <div className="bg-muted/50 p-3 rounded-full">
               <CheckCircle className="w-8 h-8 text-muted-foreground" />

@@ -222,7 +222,7 @@ const AppLayout = ({ children }) => {
                                 className="p-4 focus:bg-zinc-50 dark:focus:bg-zinc-800/50 cursor-pointer border-b border-zinc-50 dark:border-zinc-800/30 last:border-0"
                             >
                                 <div className="flex gap-3 items-start w-full">
-                                    <div className="p-1.5 bg-primary/10 rounded-lg shrink-0 mt-0.5">
+                                    <div className="p-1.5 bg-primary/10 rounded-xl shrink-0 mt-0.5">
                                         <MessageSquare className="w-3.5 h-3.5 text-primary" />
                                     </div>
                                     <div className="flex-1">

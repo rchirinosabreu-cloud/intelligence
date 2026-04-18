@@ -118,7 +118,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="p-2 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -133,7 +133,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                     placeholder="Buscar tarea o cliente..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                    className="w-full pl-9 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:text-white"
                 />
             </div>
 
@@ -145,7 +145,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                         value={selectedDate}
                         onChange={(e) => setSelectedDate(e.target.value)}
                         max={todayStr}
-                        className="w-full pl-9 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                        className="w-full pl-9 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:text-white"
                     />
                 </div>
 
@@ -154,7 +154,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                     <select
                         value={selectedUser}
                         onChange={(e) => setSelectedUser(e.target.value)}
-                        className="w-full pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                        className="w-full pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:text-white"
                     >
                         <option value="all">Todos los miembros</option>
                         {uniqueUsers.map(u => (

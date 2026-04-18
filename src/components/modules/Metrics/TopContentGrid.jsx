@@ -36,7 +36,7 @@ const TopContentGrid = ({ content }) => {
     <div className="space-y-4">
       <div className="flex items-center justify-end gap-2 mb-2">
          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Ordenar por:</span>
-         <div className="flex bg-zinc-100 dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800">
+         <div className="flex bg-zinc-100 dark:bg-zinc-900 p-0.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
             <button
               onClick={() => setSortBy('reach')}
               className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${sortBy === 'reach' ? 'bg-white dark:bg-zinc-800 text-primary shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}

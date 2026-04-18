@@ -69,7 +69,7 @@ const HealthCheckWidget = () => {
     if (loading && clients.length === 0) {
         return (
              <Card className="p-4 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl border-zinc-200/50 dark:border-zinc-800/50 h-full flex items-center justify-center min-h-[200px]">
-                <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+                <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
             </Card>
         );
     }
@@ -93,7 +93,7 @@ const HealthCheckWidget = () => {
             {/* Header */}
             <div className="p-4 border-b border-zinc-100 dark:border-zinc-800/50 flex items-center justify-between bg-white/40 dark:bg-zinc-900/40 rounded-t-xl">
                 <div className="flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-indigo-500" />
+                    <Activity className="w-5 h-5 text-indigo-600" />
                     <h3 className="font-semibold text-zinc-800 dark:text-zinc-100 text-sm">Salud de clientes</h3>
                 </div>
                 <span className="text-[10px] text-zinc-500 font-medium px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-full">
@@ -117,7 +117,7 @@ const HealthCheckWidget = () => {
                             <div
                                 key={idx}
                                 className={cn(
-                                    "relative flex items-center justify-between p-2 rounded-lg border border-transparent transition-all group",
+                                    "relative flex items-center justify-between p-2 rounded-xl border border-transparent transition-all group",
                                     config.rowClass
                                 )}
                             >

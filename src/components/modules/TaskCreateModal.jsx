@@ -143,7 +143,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                             required
                             value={newTaskData.title}
                             onChange={e => setNewTaskData({...newTaskData, title: e.target.value})}
-                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                             placeholder="Ej: Revisión de artes"
                         />
                     </div>
@@ -155,7 +155,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                             onChange={e => setNewTaskData({...newTaskData, clientId: e.target.value})}
                             disabled={!!defaultClientId}
                             className={cn(
-                                "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white",
+                                "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white",
                                 !!defaultClientId && "opacity-60 cursor-not-allowed"
                             )}
                         >
@@ -171,7 +171,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                             <select
                                 value={newTaskData.assigneeId}
                                 onChange={e => setNewTaskData({...newTaskData, assigneeId: e.target.value})}
-                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                             >
                                 <option value="">Sin asignar</option>
                                 {teamMembers.map(member => (
@@ -192,7 +192,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                                     }
                                 }}
                                 dateFormat="dd/MM/yyyy"
-                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                                 placeholderText="Seleccionar fecha"
                                 isClearable
                             />
@@ -237,7 +237,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                                 required
                                 value={newTaskData.specialType}
                                 onChange={e => setNewTaskData({...newTaskData, specialType: e.target.value})}
-                                className="w-full bg-purple-50/30 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 text-zinc-900 dark:text-white"
+                                className="w-full bg-purple-50/30 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 text-zinc-900 dark:text-white"
                                 placeholder="Ej: Manual de Marca, PPT de Ventas..."
                             />
                         </motion.div>
@@ -275,7 +275,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                                         setNewTaskData({...newTaskData, referenceUrl: val});
                                     }}
                                     className={cn(
-                                        "w-full bg-zinc-50 dark:bg-zinc-950 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 text-zinc-900 dark:text-white",
+                                        "w-full bg-zinc-50 dark:bg-zinc-950 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 text-zinc-900 dark:text-white",
                                         newTaskData.referenceUrl && !validateUrl(newTaskData.referenceUrl)
                                             ? "border-red-500 focus:ring-red-500/50"
                                             : "border-zinc-200 dark:border-zinc-800 focus:ring-primary/50"
@@ -296,7 +296,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                         <textarea
                             value={newTaskData.comments}
                             onChange={e => setNewTaskData({...newTaskData, comments: e.target.value})}
-                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white resize-none h-20"
+                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white resize-none h-20"
                             placeholder="Detalles adicionales..."
                         />
                     </div>
@@ -311,7 +311,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                             Crear tarea

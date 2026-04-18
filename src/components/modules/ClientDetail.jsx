@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Layout } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
 import FlowWidget from './FlowWidget';
 import DigitalIdentityWidget from './DigitalIdentityWidget';
 import DeliverablesWidget from './DeliverablesWidget';
@@ -28,20 +29,16 @@ const ClientDetail = ({ client, onBack }) => {
   if (!client) return <div>No se seleccionó cliente</div>;
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-6 space-y-6 animate-in fade-in duration-300 pb-20">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <button
-            onClick={onBack}
-            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-        >
-            <ArrowLeft className="w-5 h-5 text-zinc-500" />
-        </button>
-        <div>
-            <h2 className="text-2xl font-bold text-zinc-900 dark:text-white">{client.name}</h2>
-            <p className="text-sm text-zinc-500">/{client.slug} • Espacio Activo</p>
-        </div>
-      </div>
+    <div className="w-full max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300 pb-20">
+      <PageHeader
+        title={client.name}
+        subtitle={`/${client.slug} • Espacio Activo de Trabajo`}
+        icon={Layout}
+        breadcrumbs={[
+          { label: 'Clientes', href: '/clientes' },
+          { label: client.name }
+        ]}
+      />
 
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">

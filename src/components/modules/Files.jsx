@@ -14,7 +14,7 @@ const Files = () => {
       case 'xls': return <FileSpreadsheet className="w-8 h-8 md:w-10 md:h-10 text-emerald-500/80" />;
       case 'ppt': return <Presentation className="w-8 h-8 md:w-10 md:h-10 text-orange-500/80" />;
       case 'zip': return <FileArchive className="w-8 h-8 md:w-10 md:h-10 text-amber-500/80" />;
-      case 'folder': return <Folder className="w-8 h-8 md:w-10 md:h-10 text-indigo-500/80 fill-indigo-500/20" />;
+      case 'folder': return <Folder className="w-8 h-8 md:w-10 md:h-10 text-indigo-600/80 fill-indigo-600/20" />;
       case 'img': return <Image className="w-8 h-8 md:w-10 md:h-10 text-purple-500/80" />;
       case 'doc': return <FileText className="w-8 h-8 md:w-10 md:h-10 text-blue-500/80" />;
       default: return <FileIcon className="w-8 h-8 md:w-10 md:h-10 text-zinc-400 dark:text-zinc-500/80" />;
@@ -28,7 +28,7 @@ const Files = () => {
             <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-1 transition-colors">Archivos</h2>
             <p className="text-zinc-500 dark:text-zinc-400 text-sm transition-colors">Base de conocimiento y entregables.</p>
          </div>
-         <button className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors shadow-lg shadow-indigo-500/20 text-sm">
+         <button className="px-4 py-2 bg-indigo-600 hover:bg-indigo-600 text-white rounded-xl font-medium transition-colors shadow-lg shadow-indigo-600/20 text-sm">
             Subir Archivo
          </button>
       </div>
@@ -43,7 +43,7 @@ const Files = () => {
             whileHover={{ y: -5 }}
             transition={{ type: "spring", stiffness: 300 }}
           >
-            <Card className="group h-48 flex flex-col items-center justify-center text-center relative hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-indigo-300 dark:hover:border-indigo-500/30 cursor-pointer overflow-hidden transition-all">
+            <Card className="group h-48 flex flex-col items-center justify-center text-center relative hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-indigo-300 dark:hover:border-indigo-600/30 cursor-pointer overflow-hidden transition-all">
                 <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded text-zinc-400 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">
                         <MoreVertical className="w-4 h-4" />

@@ -29,7 +29,7 @@ const PrivacyPolicy = () => {
           Cumplimos estrictamente con las políticas de Meta sobre la eliminación de datos. Si un usuario desea eliminar sus datos de nuestra base de datos o desconectar permanentemente sus activos de nuestra plataforma, puede hacerlo de forma autónoma desde el panel de control o mediante una solicitud formal.
         </p>
         <div className="bg-zinc-50 dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-100 dark:border-zinc-800 mt-4">
-          <p className="font-bold text-zinc-900 dark:text-zinc-100 mb-2 underline decoration-indigo-500 underline-offset-4">Instrucciones para la Eliminación de Datos:</p>
+          <p className="font-bold text-zinc-900 dark:text-zinc-100 mb-2 underline decoration-indigo-600 underline-offset-4">Instrucciones para la Eliminación de Datos:</p>
           <p className="text-sm">
             Para solicitar la eliminación definitiva de sus datos de integración o cualquier información almacenada en nuestra plataforma, por favor contacte a nuestro equipo técnico en:
             <a href="mailto:labs@brainstudioagencia.com" className="ml-1 text-indigo-600 dark:text-indigo-400 font-medium">labs@brainstudioagencia.com</a>.

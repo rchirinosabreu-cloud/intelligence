@@ -77,7 +77,7 @@ const QualityStreakWidget = () => {
 
                 {/* Historical Record Badge */}
                 <div className="flex items-center gap-3 px-4 py-2 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800/50 shadow-inner">
-                    <div className="p-1.5 bg-amber-100 dark:bg-amber-500/10 rounded-lg">
+                    <div className="p-1.5 bg-amber-100 dark:bg-amber-500/10 rounded-xl">
                         <Trophy className="w-4 h-4 text-amber-600 dark:text-amber-500" />
                     </div>
                     <div>

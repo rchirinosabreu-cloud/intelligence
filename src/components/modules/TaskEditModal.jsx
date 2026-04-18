@@ -219,7 +219,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                             required
                             value={editFormData.title || ''}
                             onChange={e => setEditFormData({...editFormData, title: e.target.value})}
-                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                         />
                     </div>
 
@@ -230,7 +230,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                                 required
                                 value={editFormData.clientId || ''}
                                 onChange={e => setEditFormData({...editFormData, clientId: e.target.value})}
-                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                             >
                                 <option value="">Selecciona un cliente...</option>
                                 {clientsList.map(c => (
@@ -243,7 +243,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                             <select
                                 value={editFormData.assigneeId || ''}
                                 onChange={e => setEditFormData({...editFormData, assigneeId: e.target.value})}
-                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                             >
                                 <option value="">Sin asignar</option>
                                 {teamMembers.map(member => (
@@ -259,7 +259,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                             <select
                                 value={editFormData.status || 'PENDIENTE'}
                                 onChange={e => setEditFormData({...editFormData, status: e.target.value})}
-                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                             >
                                 <option value="PENDIENTE">Pendiente</option>
                                 <option value="EN_CURSO">En proceso</option>
@@ -280,7 +280,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                                     }
                                 }}
                                 dateFormat="dd/MM/yyyy"
-                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
+                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                                 placeholderText="Seleccionar fecha"
                                 isClearable
                             />
@@ -326,7 +326,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                                 required
                                 value={editFormData.specialType}
                                 onChange={e => setEditFormData({...editFormData, specialType: e.target.value})}
-                                className="w-full bg-purple-50/30 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 text-zinc-900 dark:text-white"
+                                className="w-full bg-purple-50/30 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 text-zinc-900 dark:text-white"
                                 placeholder="Ej: Manual de Marca, PPT de Ventas..."
                             />
                         </motion.div>
@@ -364,7 +364,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                                         setEditFormData({...editFormData, referenceUrl: val});
                                     }}
                                     className={cn(
-                                        "w-full bg-zinc-50 dark:bg-zinc-950 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 text-zinc-900 dark:text-white",
+                                        "w-full bg-zinc-50 dark:bg-zinc-950 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 text-zinc-900 dark:text-white",
                                         editFormData.referenceUrl && !validateUrl(editFormData.referenceUrl)
                                             ? "border-red-500 focus:ring-red-500/50"
                                             : "border-zinc-200 dark:border-zinc-800 focus:ring-primary/50"
@@ -385,7 +385,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                         <textarea
                             value={editFormData.comments || ''}
                             onChange={e => setEditFormData({...editFormData, comments: e.target.value})}
-                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white resize-none h-24"
+                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white resize-none h-24"
                             placeholder="Detalles adicionales..."
                         />
                     </div>
@@ -402,7 +402,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                             type="submit"
                             disabled={isSubmitting}
                             className={cn(
-                                "px-6 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm",
+                                "px-6 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm",
                                 (editFormData.originalStatus === 'DEVUELTA' || (editFormData.originalStatus === 'PENDIENTE' && (editFormData.comments || '').includes('[DEVOLUCIÓN')))
                                     ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 border-none"
                                     : "bg-primary hover:bg-primary/90 text-primary-foreground"

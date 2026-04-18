@@ -97,7 +97,7 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
               <select
                 value={formData.clientId}
                 onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
-                className="w-full h-12 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-medium"
+                className="w-full h-12 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all font-medium"
                 required
               >
                 <option value="">Selecciona un cliente...</option>
@@ -113,7 +113,7 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
                 <select
                   value={formData.month}
                   onChange={(e) => setFormData({ ...formData, month: parseInt(e.target.value) })}
-                  className="w-full h-12 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-medium"
+                  className="w-full h-12 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all font-medium"
                 >
                   {months.map((m) => (
                     <option key={m.value} value={m.value}>{m.label}</option>
@@ -127,7 +127,7 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
                   type="number"
                   value={formData.year}
                   onChange={(e) => setFormData({ ...formData, year: parseInt(e.target.value) })}
-                  className="w-full h-12 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-medium"
+                  className="w-full h-12 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all font-medium"
                 />
               </div>
             </div>
@@ -144,7 +144,7 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-2 disabled:opacity-50"
+              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2 disabled:opacity-50"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               Crear Parrilla
