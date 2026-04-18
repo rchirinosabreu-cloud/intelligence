@@ -87,7 +87,7 @@ const TalentRadar = () => {
             <PageHeader
                 title="Radar de Talento & Operaciones"
                 subtitle="Visualización estratégica del desempeño y carga de la agencia."
-                icon={Radar}
+
             >
                 <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-white/5">
                     <select
@@ -458,7 +458,7 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
             onOpenChange={(open) => !open && onClose()}
             title={member?.name || 'Cargando...'}
             description={member?.role || 'Perfil de Talento'}
-            icon={<Users className="w-5 h-5 text-indigo-600" />}
+
             iconBgColor="bg-indigo-600/10"
         >
             <div className="flex flex-col h-full overflow-hidden">

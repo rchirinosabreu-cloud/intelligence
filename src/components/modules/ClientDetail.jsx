@@ -33,7 +33,7 @@ const ClientDetail = ({ client, onBack }) => {
       <PageHeader
         title={client.name}
         subtitle={`/${client.slug} • Espacio Activo de Trabajo`}
-        icon={Layout}
+
         breadcrumbs={[
           { label: 'Clientes', href: '/clientes' },
           { label: client.name }

@@ -416,7 +416,7 @@ const ContentItemCard = ({
               ) : (
                 <Button
                   onClick={onDispatch}
-                  variant="primary"
+                  variant="default"
                   className="w-full py-6 font-black text-[10px] uppercase tracking-[0.1em]"
                 >
                   <Send className="w-4 h-4 mr-2" />
@@ -761,7 +761,7 @@ const ContentPlanDetail = () => {
       <PageHeader
         title={`${getMonthName(plan.month)} ${plan.year}`}
         subtitle="Planificación estratégica de contenidos digitales."
-        icon={Table2}
+
         breadcrumbs={[
           { label: 'Parrillas', href: '/parrillas' },
           { label: plan.client?.name || 'Cliente' },

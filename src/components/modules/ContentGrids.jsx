@@ -98,7 +98,7 @@ const ContentGrids = () => {
       <PageHeader
         title="Parrillas de Contenido"
         subtitle="Gestiona y planifica la presencia digital de tus clientes."
-        icon={Table2}
+
       >
         <Button
           size="lg"

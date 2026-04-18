@@ -543,7 +543,7 @@ const ChatWidget = ({
                 onOpenChange={setIsModalOpen}
                 title={title}
                 description={description}
-                icon={<MessageSquare className="w-5 h-5 text-primary fill-primary" />}
+
                 iconBgColor="bg-primary/10"
             >
                 <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 bg-zinc-50/50 dark:bg-zinc-900/20">

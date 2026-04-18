@@ -120,7 +120,7 @@ const Dashboard = () => {
       <PageHeader
         title={`¡Hola, ${getFirstName()}! ${getDailyMessage()}`}
         subtitle="Aquí está el resumen de progreso y logros del mes."
-        icon={LayoutDashboard}
+
       />
 
       {/* Bento Grid */}

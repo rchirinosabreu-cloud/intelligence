@@ -154,7 +154,7 @@ const Clients = () => {
       <PageHeader
         title="Clientes"
         subtitle="Gestiona los espacios de trabajo y activos de tus clientes."
-        icon={Briefcase}
+
       >
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
           <div className="relative group flex-1 sm:flex-none">

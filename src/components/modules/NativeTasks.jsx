@@ -663,7 +663,7 @@ const NativeTasks = () => {
       <PageHeader
         title="Gestión de Tareas"
         subtitle="Gestiona y prioriza el flujo operativo de la agencia."
-        icon={ClipboardList}
+
       >
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           <Button

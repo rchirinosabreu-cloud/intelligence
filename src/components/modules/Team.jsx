@@ -110,7 +110,7 @@ export default function Team() {
       <PageHeader
         title="Equipo"
         subtitle={isAdmin ? "Gestiona a los miembros de la agencia y sus roles." : "Directorio de los miembros de la agencia."}
-        icon={Users}
+
       >
         {isAdmin && (
           <Button

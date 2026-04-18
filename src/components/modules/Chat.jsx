@@ -99,7 +99,7 @@ const Chat = () => {
       <PageHeader
         title="Bria Intelligence"
         subtitle="Analista de estrategia y operaciones con IA."
-        icon={MessageSquare}
+
       >
         <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-white/5">
           <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
