@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const ActivityMap = () => {
+  const [hoveredMember, setHoveredMember] = useState(null);
+
   const { data: apiStatus = [], isLoading, refetch } = useQuery({
     queryKey: ['team-activity-status'],
     queryFn: async () => {
@@ -36,10 +38,11 @@ const ActivityMap = () => {
 
   // Areas definition (normalized 0-100 coordinates)
   const areas = [
-    { id: 'estudio', name: 'El Estudio', icon: Video, x: 5, y: 30, w: 25, h: 40, color: 'fuchsia' },
-    { id: 'nave', name: 'La Nave', icon: Zap, x: 35, y: 15, w: 30, h: 70, color: 'indigo' },
-    { id: 'bunker', name: 'El Búnker', icon: Lock, x: 35, y: 2, w: 30, h: 10, color: 'slate' },
-    { id: 'cafe', name: 'El Café Brain', icon: Coffee, x: 70, y: 30, w: 25, h: 40, color: 'orange' },
+    { id: 'estudio', name: 'Jornadas de producción', icon: Video, x: 5, y: 30, w: 25, h: 40, color: 'fuchsia' },
+    { id: 'nave', name: 'Oficina central', icon: Zap, x: 35, y: 15, w: 30, h: 70, color: 'indigo' },
+    { id: 'bunker', name: 'Sala de juntas', icon: Lock, x: 35, y: 2, w: 30, h: 10, color: 'slate' },
+    { id: 'cafe', name: 'Cafecito time', icon: Coffee, x: 70, y: 30, w: 25, h: 40, color: 'orange' },
+    { id: 'permiso', name: 'De permiso', icon: User, x: 5, y: 2, w: 25, h: 20, color: 'red' },
   ];
 
   // Helper to get status color
@@ -54,34 +57,48 @@ const ActivityMap = () => {
     }
   };
 
-  // Helper to determine position
+  // Helper to determine position with clustering logic
   const getAvatarPosition = (member) => {
-    // If production event active, move to Estudio
-    if (member.status === 'PRODUCCION') {
-      return { x: 15, y: 50 }; // Center of Estudio
-    }
-    // If in meeting, move to Bunker
-    if (member.status === 'REUNION') {
-      return { x: 50, y: 7 }; // Center of Bunker
-    }
-    // If at Cafe
-    if (member.status === 'LIBRE') {
-       // Spread them out slightly in the cafe
-       const offset = (parseInt(member.id.slice(-1), 16) || 0) % 5;
-       return { x: 82 + offset, y: 50 + offset };
+    // 1. Determine Zone base position
+    let basePos = { x: 50, y: 50 };
+
+    if (member.status === 'AUSENTE') {
+      basePos = { x: 17, y: 12 }; // De permiso
+    } else if (member.status === 'PRODUCCION') {
+      basePos = { x: 17, y: 50 }; // Jornadas de producción
+    } else if (member.status === 'REUNION') {
+      basePos = { x: 50, y: 7 };  // Sala de juntas
+    } else if (member.status === 'LIBRE') {
+      basePos = { x: 82, y: 50 }; // Cafecito time
+    } else {
+      // Oficina central (Escritorio)
+      if (member.desktopX && member.desktopY) {
+        return { x: member.desktopX, y: member.desktopY };
+      }
+      const idx = teamStatus.indexOf(member);
+      basePos = {
+        x: 40 + (idx % 3) * 10,
+        y: 25 + Math.floor(idx / 3) * 12
+      };
+      return basePos; // Desks are fixed, no clustering needed
     }
 
-    // Default: La Nave (Escritorio)
-    // We use desktopX/Y if available, or generate a grid position
-    if (member.desktopX && member.desktopY) {
-      return { x: member.desktopX, y: member.desktopY };
+    // 2. Apply Clustering (Separación Orgánica) for shared areas
+    // Find how many people are in the same status/zone
+    const membersInZone = teamStatus.filter(m => m.status === member.status);
+    const memberIndex = membersInZone.findIndex(m => m.id === member.id);
+    const count = membersInZone.length;
+
+    if (count > 1) {
+      const angle = (memberIndex / count) * Math.PI * 2;
+      const radius = 4; // Separation radius
+      return {
+        x: basePos.x + Math.cos(angle) * radius,
+        y: basePos.y + Math.sin(angle) * radius
+      };
     }
 
-    // Fallback Grid in La Nave (35-65 x, 15-85 y)
-    const idx = teamStatus.indexOf(member);
-    const gridX = 40 + (idx % 3) * 10;
-    const gridY = 25 + Math.floor(idx / 3) * 12;
-    return { x: gridX, y: gridY };
+    return basePos;
   };
 
   const isProductionActive = teamStatus.some(m => m.status === 'PRODUCCION');
@@ -98,9 +115,9 @@ const ActivityMap = () => {
         <div
           key={area.id}
           className={cn(
-            "absolute border-2 border-dashed transition-all duration-500 rounded-2xl flex flex-col items-center justify-start pt-4",
-            area.id === 'estudio' && isProductionActive ? "border-fuchsia-500 bg-fuchsia-500/5 animate-pulse" : "border-zinc-200 dark:border-zinc-800",
-            area.id === 'nave' && "bg-slate-50/30 dark:bg-zinc-800/20"
+            "absolute border-2 border-dashed transition-all duration-700 rounded-3xl flex flex-col items-center justify-start pt-4",
+            area.id === 'estudio' && isProductionActive ? "border-fuchsia-500 bg-fuchsia-500/5" : "border-zinc-200 dark:border-zinc-800",
+            area.id === 'nave' && "bg-slate-50/30 dark:bg-zinc-800/10"
           )}
           style={{
             left: `${area.x}%`,
@@ -114,9 +131,20 @@ const ActivityMap = () => {
             <span className="text-[10px] font-bold uppercase tracking-widest">{area.name}</span>
           </div>
 
-          {/* Studio Neon Effect */}
+          {/* Studio Neon Effect (Soft Glow Pulse - "Latido Creativo") */}
           {area.id === 'estudio' && isProductionActive && (
-             <div className="absolute inset-0 shadow-[inset_0_0_50px_rgba(217,70,239,0.2)] pointer-events-none rounded-2xl" />
+             <motion.div
+               animate={{
+                 opacity: [0.3, 0.6, 0.3],
+                 scale: [1, 1.02, 1]
+               }}
+               transition={{
+                 duration: 4,
+                 repeat: Infinity,
+                 ease: "easeInOut"
+               }}
+               className="absolute inset-0 shadow-[inset_0_0_60px_rgba(217,70,239,0.4)] pointer-events-none rounded-3xl border-2 border-fuchsia-500"
+             />
           )}
         </div>
       ))}
@@ -134,29 +162,41 @@ const ActivityMap = () => {
               layout
               initial={{ opacity: 0, scale: 0.5 }}
               animate={{
-                opacity: isAusente ? 0.4 : 1,
+                opacity: isAusente ? 0.6 : 1,
                 scale: 1,
                 left: `${pos.x}%`,
                 top: `${pos.y}%`,
               }}
-              className="absolute -translate-x-1/2 -translate-y-1/2 z-10 group"
+              transition={{
+                type: "spring",
+                stiffness: 50,
+                damping: 20,
+                mass: 1.5
+              }}
+              onMouseEnter={() => setHoveredMember(member.id)}
+              onMouseLeave={() => setHoveredMember(null)}
+              className="absolute -translate-x-1/2 -translate-y-1/2 z-10 cursor-pointer"
             >
               <div className="relative">
                 {/* Focused Aura */}
                 {isEnfocado && (
-                   <div className="absolute -inset-4 bg-purple-500/20 rounded-full blur-xl animate-pulse" />
+                   <motion.div
+                    animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.3, 0.1] }}
+                    transition={{ duration: 4, repeat: Infinity }}
+                    className="absolute -inset-6 bg-purple-500/20 rounded-full blur-2xl"
+                   />
                 )}
 
-                {/* Desktop Background (only in Nave) */}
-                {member.status !== 'AUSENTE' && member.status !== 'REUNION' && member.status !== 'PRODUCCION' && member.status !== 'LIBRE' && (
-                  <div className="absolute top-8 left-1/2 -translate-x-1/2 w-8 h-4 bg-zinc-100 dark:bg-zinc-800 rounded-t-sm border border-zinc-200 dark:border-zinc-700" />
+                {/* Desktop Background (only in Nave - "Oficina Central") */}
+                {!['AUSENTE', 'REUNION', 'PRODUCCION', 'LIBRE'].includes(member.status) && (
+                  <div className="absolute top-8 left-1/2 -translate-x-1/2 w-8 h-4 bg-zinc-100 dark:bg-zinc-800 rounded-t-sm border border-zinc-200 dark:border-zinc-700 opacity-50" />
                 )}
 
                 <TeamAvatar
                   member={member}
                   className={cn(
-                    "w-12 h-12 ring-4 transition-all duration-500",
-                    isAusente ? "grayscale ring-zinc-300 dark:ring-zinc-800" : "ring-white dark:ring-zinc-900 shadow-xl"
+                    "w-12 h-12 ring-4 transition-all duration-700 ease-in-out",
+                    isAusente ? "grayscale opacity-60 ring-zinc-100 dark:ring-zinc-800" : "ring-white dark:ring-zinc-900 shadow-2xl scale-100 group-hover:scale-110"
                   )}
                 />
 
@@ -166,20 +206,41 @@ const ActivityMap = () => {
                   getStatusColor(member.status)
                 )} />
 
-                {/* Floating Tooltip/Label */}
-                <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                  <div className="bg-zinc-900 text-white text-[10px] px-2 py-1 rounded-lg shadow-xl flex flex-col items-center">
-                    <span className="font-bold">{member.name}</span>
-                    <span className="text-zinc-400">{member.currentTask?.title || member.currentEvent?.title || member.role}</span>
-                  </div>
-                </div>
+                {/* Clean UI Tooltip (Hover-First) - ZEN Style */}
+                <AnimatePresence>
+                  {hoveredMember === member.id && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.9 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                      className="absolute -top-20 left-1/2 -translate-x-1/2 pointer-events-none whitespace-nowrap z-50"
+                    >
+                      <div className="bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-white text-[11px] px-5 py-3 rounded-[20px] shadow-[0_20px_50px_rgba(0,0,0,0.1)] backdrop-blur-xl border border-white/20 dark:border-zinc-800/50 flex flex-col items-center gap-1.5 min-w-[140px]">
+                        <span className="font-bold tracking-tight text-sm">{member.name}</span>
+                        <div className="flex items-center gap-2 px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-full">
+                           <div className={cn("w-1.5 h-1.5 rounded-full", getStatusColor(member.status))} />
+                           <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-tighter">
+                            {member.status === 'PRODUCCION' ? 'En Producción' :
+                             member.status === 'REUNION' ? 'En Reunión' :
+                             member.status === 'AUSENTE' ? 'De Permiso' :
+                             member.status === 'ENFOCADO' ? 'Enfocado' : 'Disponible'}
+                           </span>
+                        </div>
+                        <span className="text-zinc-500 dark:text-zinc-400 text-[10px] max-w-[120px] truncate text-center font-medium italic">
+                          {member.currentTask?.title || member.currentEvent?.title || member.role}
+                        </span>
 
-                {/* Project Label (for Focused/Priority) */}
-                {(isEnfocado || member.status === 'OCUPADO') && member.currentTask && (
-                   <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm border border-zinc-200 dark:border-zinc-700 px-2 py-0.5 rounded-full shadow-sm whitespace-nowrap">
-                      <span className="text-[9px] font-bold text-zinc-600 dark:text-zinc-300">{member.currentTask.title}</span>
-                   </div>
-                )}
+                        {member.currentEvent?.meetLink && (
+                          <div className="mt-2 flex items-center gap-1.5 px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full animate-pulse-subtle">
+                            <Video className="w-3 h-3" />
+                            <span className="text-[9px] font-bold uppercase tracking-tighter">Google Meet</span>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </motion.div>
           );

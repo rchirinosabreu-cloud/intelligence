@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function seedActivity() {
-  console.log('Seeding activity data...');
+  console.log('Seeding activity data (Refined)...');
 
   // 1. Ensure we have team members with coordinates
   const members = await prisma.teamMember.findMany();
@@ -12,9 +12,10 @@ async function seedActivity() {
     return;
   }
 
+  // Use normalized 0-100 coordinates for the 2D map
   const coords = [
-    { x: 100, y: 100 }, { x: 200, y: 100 }, { x: 300, y: 100 },
-    { x: 100, y: 200 }, { x: 200, y: 200 }, { x: 300, y: 200 }
+    { x: 45, y: 35 }, { x: 55, y: 35 }, { x: 45, y: 55 },
+    { x: 55, y: 55 }, { x: 45, y: 75 }, { x: 55, y: 75 }
   ];
 
   for (let i = 0; i < members.length; i++) {
@@ -28,35 +29,37 @@ async function seedActivity() {
   }
 
   // 2. Create some operational events
-  const today = new Date();
-  const start = new Date(today.setHours(today.getHours() - 1));
-  const end = new Date(today.setHours(today.getHours() + 4));
+  const now = new Date();
+  const start = new Date(now.getTime() - 3600000); // 1 hour ago
+  const end = new Date(now.getTime() + 14400000); // 4 hours from now
 
-  // Production Event (to trigger neon lights)
+  // Delete existing events to avoid clutter during demo seeding
+  await prisma.operationalEvent.deleteMany({});
+
+  // Production Event (to trigger neon pulse)
   await prisma.operationalEvent.create({
     data: {
       title: 'Jornada de Producción: Podcast Brain',
       type: 'PRODUCTION',
-      startDate: start,
-      endDate: end,
-      description: 'Grabación de episodios 4 y 5'
+      startAt: start,
+      endAt: end,
+      description: 'Grabación de episodios 4 y 5',
+      memberIds: [members[0]?.id].filter(Boolean)
     }
   });
 
   // Meeting Event
   await prisma.operationalEvent.create({
     data: {
-      title: 'Daily Sync',
+      title: 'Daily Sync Estratégico',
       type: 'MEETING',
-      startDate: start,
-      endDate: end,
-      description: 'Alineación matutina'
+      startAt: start,
+      endAt: end,
+      description: 'Alineación matutina',
+      memberIds: [members[1]?.id].filter(Boolean),
+      meetLink: 'https://meet.google.com/abc-defg-hij'
     }
   });
-
-  // 3. Ensure some tasks are "In Process" with Special/Priority tags
-  // We'll just check if any exist or simulate status in the service if needed,
-  // but better to have real tasks.
 
   console.log('Activity data seeded successfully.');
 }

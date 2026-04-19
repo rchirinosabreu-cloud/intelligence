@@ -15,8 +15,11 @@ import {
   Lock
 } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, setHours, setMinutes } from 'date-fns';
 import { es } from 'date-fns/locale';
+import DatePicker, { registerLocale } from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
+registerLocale('es', es);
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
@@ -29,9 +32,11 @@ const OperationalCalendar = () => {
   const [formData, setFormData] = useState({
     title: '',
     type: 'PRODUCTION',
-    startAt: '',
-    endAt: '',
-    memberIds: []
+    startAt: new Date(),
+    endAt: new Date(),
+    memberIds: [],
+    recurrence: 'NONE',
+    meetLink: ''
   });
 
   const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PM';
@@ -219,12 +224,12 @@ const OperationalCalendar = () => {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-500 uppercase">Título del Evento</label>
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Título del Evento</label>
                 <input
                   type="text"
                   required
                   placeholder="Ej: Jornada con TruPeak"
-                  className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 transition-all"
+                  className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 transition-all shadow-sm"
                   value={formData.title}
                   onChange={e => setFormData({...formData, title: e.target.value})}
                 />
@@ -232,39 +237,72 @@ const OperationalCalendar = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 uppercase">Tipo</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Tipo</label>
                   <select
-                    className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20"
+                    className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
                     value={formData.type}
                     onChange={e => setFormData({...formData, type: e.target.value})}
                   >
-                    <option value="PRODUCTION">Producción</option>
-                    <option value="ABSENCE">Permiso/Ausencia</option>
-                    <option value="PROJECT">Proyecto Especial</option>
-                    <option value="MEETING">Reunión</option>
+                    <option value="PRODUCTION">🎬 Producción</option>
+                    <option value="ABSENCE">🏖️ Permiso/Ausencia</option>
+                    <option value="PROJECT">🚀 Proyecto Especial</option>
+                    <option value="MEETING">🤝 Reunión</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Recurrencia</label>
+                  <select
+                    className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
+                    value={formData.recurrence}
+                    onChange={e => setFormData({...formData, recurrence: e.target.value})}
+                  >
+                    <option value="NONE">Única vez</option>
+                    <option value="WEEKLY">Semanal</option>
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 uppercase">Inicio</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Meet Link (Opcional)</label>
+                <div className="relative">
+                  <Video className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                   <input
-                    type="datetime-local"
-                    required
-                    className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none"
-                    value={formData.startAt}
-                    onChange={e => setFormData({...formData, startAt: e.target.value})}
+                    type="url"
+                    placeholder="https://meet.google.com/..."
+                    className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-11 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
+                    value={formData.meetLink}
+                    onChange={e => setFormData({...formData, meetLink: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Inicio</label>
+                  <DatePicker
+                    selected={formData.startAt}
+                    onChange={date => setFormData({...formData, startAt: date})}
+                    showTimeSelect
+                    timeIntervals={15}
+                    timeCaption="Hora"
+                    dateFormat="d MMMM, yyyy h:mm aa"
+                    locale="es"
+                    className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
+                    wrapperClassName="w-full"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 uppercase">Fin</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none"
-                    value={formData.endAt}
-                    onChange={e => setFormData({...formData, endAt: e.target.value})}
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Fin</label>
+                  <DatePicker
+                    selected={formData.endAt}
+                    onChange={date => setFormData({...formData, endAt: date})}
+                    showTimeSelect
+                    timeIntervals={15}
+                    timeCaption="Hora"
+                    dateFormat="d MMMM, yyyy h:mm aa"
+                    locale="es"
+                    className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
+                    wrapperClassName="w-full"
                   />
                 </div>
               </div>
