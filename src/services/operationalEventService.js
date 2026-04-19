@@ -18,7 +18,9 @@ export async function createOperationalEvent(data) {
       description: data.description,
       startAt: new Date(data.startAt),
       endAt: new Date(data.endAt),
-      memberIds: data.memberIds || []
+      memberIds: data.memberIds || [],
+      recurrence: data.recurrence || 'NONE',
+      meetLink: data.meetLink || null
     }
   });
 }

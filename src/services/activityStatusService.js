@@ -29,15 +29,34 @@ export async function getTeamActivityStatus() {
   const now = new Date();
   const activeEvents = await prisma.operationalEvent.findMany({
     where: {
-      startAt: { lte: now },
-      endAt: { gte: now }
+      OR: [
+        { startAt: { lte: now }, endAt: { gte: now } },
+        { recurrence: 'WEEKLY', startAt: { lte: now } }
+      ]
     }
+  });
+
+  // Filter recurring events that match current time in their cycle
+  const currentEvents = activeEvents.filter(event => {
+    if (event.recurrence === 'NONE' || !event.recurrence) {
+      return event.startAt <= now && event.endAt >= now;
+    }
+    if (event.recurrence === 'WEEKLY') {
+      const start = new Date(event.startAt);
+      const end = new Date(event.endAt);
+      const duration = end.getTime() - start.getTime();
+      const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+      const timeDiff = now.getTime() - start.getTime();
+      const offsetInWeek = timeDiff % msPerWeek;
+      return offsetInWeek >= 0 && offsetInWeek <= duration;
+    }
+    return false;
   });
 
   return members.map(member => {
     let status = 'LIBRE'; // Default: 🟢 Libre
     let currentTask = member.nativeTasks[0] || null;
-    let currentEvent = activeEvents.find(e => e.memberIds.includes(member.id));
+    let currentEvent = currentEvents.find(e => e.memberIds.includes(member.id));
 
     // Priority 1: Events (Meeting or Absence)
     if (currentEvent) {
@@ -69,7 +88,11 @@ export async function getTeamActivityStatus() {
       desktopY: member.desktopY,
       status,
       currentTask: currentTask ? { title: currentTask.title } : null,
-      currentEvent: currentEvent ? { title: currentEvent.title, type: currentEvent.type } : null
+      currentEvent: currentEvent ? {
+        title: currentEvent.title,
+        type: currentEvent.type,
+        meetLink: currentEvent.meetLink
+      } : null
     };
   });
 }
