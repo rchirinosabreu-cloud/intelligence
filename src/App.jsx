@@ -13,6 +13,7 @@ import Metrics from './components/modules/Metrics';
 import ContentGrids from './components/modules/ContentGrids';
 import ContentPlanDetail from './components/modules/ContentPlanDetail';
 import TalentRadar from './components/modules/TalentRadar';
+import Activity from './components/modules/Activity';
 import Login from './components/Login';
 import PrivacyPolicy from './components/public/PrivacyPolicy';
 import TermsOfService from './components/public/TermsOfService';
@@ -33,30 +34,22 @@ const queryClient = new QueryClient({
   },
 });
 
+const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div className="min-h-screen bg-zinc-950 flex items-center justify-center">Cargando...</div>;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+};
+
 function AppContent() {
   const { isAuthenticated, isLoading, login, logout, currentUser } = useAuth();
-
-  // Escuchar errores de permisos (403 Forbidden)
-  React.useEffect(() => {
-    const handleForbidden = () => {
-      toast.error('No tienes permisos para realizar esta acción', {
-        id: 'forbidden-error', // Prevenir duplicados
-      });
-    };
-
-    const handleAiError = () => {
-      toast.error('Error de IA: No se pudo procesar la solicitud', {
-        id: 'ai-service-error',
-      });
-    };
-
-    window.addEventListener('auth-forbidden', handleForbidden);
-    window.addEventListener('ai-error', handleAiError);
-    return () => {
-      window.removeEventListener('auth-forbidden', handleForbidden);
-      window.removeEventListener('ai-error', handleAiError);
-    };
-  }, []);
 
   if (isLoading) {
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center">Cargando...</div>;
@@ -66,53 +59,127 @@ function AppContent() {
     <ThemeProvider>
       <Router>
         <Routes>
-          {/* Public Legal Routes */}
-          <Route path="/privacidad" element={<PrivacyPolicy />} />
-          <Route path="/terminos" element={<TermsOfService />} />
+          <Route path="/login" element={!isAuthenticated ? <Login onLogin={login} /> : <Navigate to="/" replace />} />
+
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
           <Route path="/compartir/:token" element={<SharedContentPlan />} />
 
-          {/* Protected App Routes */}
-          {!isAuthenticated ? (
-            <Route path="*" element={<Login onLogin={login} />} />
-          ) : (
-            <Route
-              path="*"
-              element={
-                <AppLayout onLogout={logout}>
-                  <Routes>
-                    {/* Rutas Principales */}
-                    <Route path="/" element={<Dashboard />} />
-            <Route path="/inicio" element={<Navigate to="/" replace />} />
+          <Route path="/" element={
+            <ProtectedRoute>
+              <AppLayout onLogout={logout} user={currentUser}>
+                <Dashboard />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
 
-            <Route path="/bria" element={<Chat />} />
-            <Route path="/gestion" element={<NativeTasks />} />
-            <Route path="/parrillas" element={<ContentGrids />} />
-            <Route path="/parrillas/:clientSlug/:period" element={<ContentPlanDetail />} />
-            <Route path="/parrillas/:planId" element={<ContentPlanDetail />} />
-            <Route path="/minutas" element={<MinutesLayout />} />
-            <Route path="/metricas" element={<Metrics />} />
+          <Route path="/chat" element={
+            <ProtectedRoute>
+              <AppLayout onLogout={logout} user={currentUser}>
+                <Chat />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
 
-            <Route path="/clientes" element={<Clients />} />
-            <Route path="/cliente/:clientId" element={<ClientDetailWrapper />} />
-            <Route path="/radar" element={(currentUser?.role === 'ADMIN' || currentUser?.role === 'PM') ? <TalentRadar /> : <Navigate to="/" replace />} />
-            <Route path="/equipo" element={<Team />} />
-            <Route path="/perfil" element={<Profile />} />
-            <Route path="/perfil/:userId" element={<Profile />} />
+          <Route path="/gestion" element={
+            <ProtectedRoute>
+              <AppLayout onLogout={logout} user={currentUser}>
+                <NativeTasks />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
 
-                    {/* Fallback para rutas no encontradas - redirigir a inicio */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </AppLayout>
-              }
-            />
-          )}
+          <Route path="/actividad" element={
+            <ProtectedRoute>
+              <AppLayout onLogout={logout} user={currentUser}>
+                <Activity />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/parrillas" element={
+            <ProtectedRoute>
+              <AppLayout onLogout={logout} user={currentUser}>
+                <ContentGrids />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/parrillas/:id" element={
+            <ProtectedRoute>
+              <AppLayout onLogout={logout} user={currentUser}>
+                <ContentPlanDetail />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/parrillas/:slug/:period" element={
+            <ProtectedRoute>
+              <AppLayout onLogout={logout} user={currentUser}>
+                <ContentPlanDetail />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/minutas/*" element={
+            <ProtectedRoute>
+              <AppLayout onLogout={logout} user={currentUser}>
+                <MinutesLayout />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/metricas" element={
+            <ProtectedRoute>
+              <AppLayout onLogout={logout} user={currentUser}>
+                <Metrics />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/clientes" element={
+            <ProtectedRoute>
+              <AppLayout onLogout={logout} user={currentUser}>
+                <Clients />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/clientes/:id" element={
+            <ProtectedRoute>
+              <AppLayout onLogout={logout} user={currentUser}>
+                <ClientDetailWrapper />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/equipo" element={
+            <ProtectedRoute>
+              <AppLayout onLogout={logout} user={currentUser}>
+                <Team />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/radar" element={
+            <ProtectedRoute>
+              <AppLayout onLogout={logout} user={currentUser}>
+                <TalentRadar />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/perfil" element={
+            <ProtectedRoute>
+              <AppLayout onLogout={logout} user={currentUser}>
+                <Profile />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            className: 'dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-800 border',
-          }}
-        />
+        <Toaster position="top-right" />
       </Router>
     </ThemeProvider>
   );

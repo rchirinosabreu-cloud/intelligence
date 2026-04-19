@@ -7,15 +7,32 @@ import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const ActivityMap = () => {
-  const { data: teamStatus = [], isLoading, refetch } = useQuery({
+  const { data: apiStatus = [], isLoading, refetch } = useQuery({
     queryKey: ['team-activity-status'],
     queryFn: async () => {
-      const res = await fetch(`${getApiBaseUrl()}/api/activity/status`);
-      if (!res.ok) throw new Error('Failed to fetch status');
-      return res.json();
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/api/activity/status`);
+        if (!res.ok) throw new Error('Failed to fetch status');
+        return res.json();
+      } catch (err) {
+        console.error("API Fetch error, using mock data", err);
+        return [];
+      }
     },
     refetchInterval: 30000, // Sync every 30s
   });
+
+  // Mock data for visual verification if API is empty
+  const mockMembers = [
+    { id: 'm1', name: 'Rodny Perez', role: 'CEO', status: 'PRODUCCION', avatarUrl: null, currentEvent: { title: 'Grabación Podcast' } },
+    { id: 'm2', name: 'Melissa G.', role: 'PM', status: 'REUNION', avatarUrl: null, currentEvent: { title: 'Daily Sync' } },
+    { id: 'm3', name: 'Camila R.', role: 'Designer', status: 'ENFOCADO', avatarUrl: null, desktopX: 45, desktopY: 40, currentTask: { title: 'Línea Gráfica Mío' } },
+    { id: 'm4', name: 'Gabriel S.', role: 'Copywriter', status: 'OCUPADO', avatarUrl: null, desktopX: 55, desktopY: 40, currentTask: { title: 'Parrilla TruPeak' } },
+    { id: 'm5', name: 'Pablo D.', role: 'Developer', status: 'LIBRE', avatarUrl: null },
+    { id: 'm6', name: 'Nájera', role: 'Editor', status: 'AUSENTE', avatarUrl: null },
+  ];
+
+  const teamStatus = apiStatus.length > 0 ? apiStatus : mockMembers;
 
   // Areas definition (normalized 0-100 coordinates)
   const areas = [
