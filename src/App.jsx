@@ -71,6 +71,7 @@ function AppContent() {
           <Route path="/privacidad" element={<PrivacyPolicy />} />
           <Route path="/terminos" element={<TermsOfService />} />
           <Route path="/compartir/:token" element={<SharedContentPlan />} />
+          <Route path="/public-mission-control" element={<MissionControl />} />
 
           {/* Protected App Routes */}
           {!isAuthenticated ? (
