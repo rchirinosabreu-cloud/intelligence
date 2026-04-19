@@ -69,6 +69,7 @@ const MissionControl = () => {
             team={status.team}
             activeMeetings={status.meetings}
             productionActive={status.production.isActive}
+            productionClient={status.production.clients?.[0] || ""}
             onMemberClick={handleMemberClick}
           />
         )}

@@ -1,6 +1,6 @@
 import React from 'react';
 import * as THREE from 'three';
-import { Box, Cylinder, Sphere } from '@react-three/drei';
+import { Box, Cylinder, Sphere, Text } from '@react-three/drei';
 
 export const Desk3D = ({ position = [0, 0, 0], color = "#ffffff" }) => {
   return (
@@ -199,7 +199,7 @@ export const BeanBag3D = ({ position = [0, 0, 0], color = "#fca5a5" }) => {
   );
 };
 
-export const ProductionSet3D = ({ position = [0, 0, 0], isActive }) => {
+export const ProductionSet3D = ({ position = [0, 0, 0], isActive, clientName }) => {
   return (
     <group position={position}>
       {/* Stage Floor */}
@@ -241,8 +241,20 @@ export const ProductionSet3D = ({ position = [0, 0, 0], isActive }) => {
       <group position={[0, 0.2, 1.5]} rotation={[-Math.PI / 2, 0, 0]}>
          <mesh>
            <planeGeometry args={[3, 0.6]} />
-           <meshStandardMaterial color="#f472b6" transparent opacity={0.8} />
+           <meshStandardMaterial color={isActive ? "#f472b6" : "#94a3b8"} transparent opacity={0.8} />
          </mesh>
+         {isActive && clientName && (
+           <Text
+             position={[0, 0, 0.01]}
+             fontSize={0.25}
+             color="white"
+             fontWeight="black"
+             anchorX="center"
+             anchorY="middle"
+           >
+             {clientName.toUpperCase()}
+           </Text>
+         )}
       </group>
     </group>
   );

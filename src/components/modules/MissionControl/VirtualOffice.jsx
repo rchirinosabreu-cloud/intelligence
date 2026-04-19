@@ -80,6 +80,7 @@ const VirtualOffice = ({
   team = [],
   activeMeetings = [],
   productionActive = false,
+  productionClient = "",
   onMemberClick = () => {}
 }) => {
   // Fixed Grid for 9 members
@@ -89,7 +90,12 @@ const VirtualOffice = ({
     [-6, 0, 4],  [-2, 0, 4],  [2, 0, 4],
   ], []);
 
-  const meetingCenter = [8, 0, 4];
+  // Stable positions for meetings based on member index to prevent jitter
+  const meetingPositions = useMemo(() => [
+    [8.5, 0, 5.5], [11.5, 0, 5.5], [10, 0, 8],
+    [8, 0, 7], [12, 0, 7], [10, 0, 4.5],
+    [7.5, 0, 5], [12.5, 0, 5], [10, 0, 9],
+  ], []);
 
   return (
     <div className="w-full h-full bg-[#f8fafc] dark:bg-zinc-950 relative">
@@ -137,7 +143,11 @@ const VirtualOffice = ({
 
           {/* Functional Zones */}
           <MeetingZone position={[10, 0, 6]} />
-          <ProductionSet3D isActive={productionActive} position={[10, 0, -8]} />
+          <ProductionSet3D
+            isActive={productionActive}
+            clientName={productionClient}
+            position={[10, 0, -8]}
+          />
 
           {/* Decor: Plants & Coffee */}
           <Plant3D position={[-14, 0, -14]} />
@@ -160,11 +170,9 @@ const VirtualOffice = ({
           {team.map((member, index) => {
             const isMeeting = activeMeetings.some(m => m.participants?.includes(member.id));
             const deskPos = deskPositions[index % deskPositions.length];
+            const meetPos = meetingPositions[index % meetingPositions.length];
 
-            // Layout logic for positions
-            const finalPos = isMeeting
-              ? [10 + (Math.random() - 0.5) * 4, 0, 6 + (Math.random() - 0.5) * 4]
-              : deskPos;
+            const finalPos = isMeeting ? meetPos : deskPos;
 
             return (
               <group key={member.id}>
