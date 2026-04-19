@@ -139,10 +139,24 @@ model TeamMember {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   userId       String?       @unique
+  desktopX     Int?
+  desktopY     Int?
   clientTasks  ClientTask[]
   contentPlans ContentPlan[]
   flowMessages FlowMessage[]
   nativeTasks  Task[]
+}
+
+model OperationalEvent {
+  id          String   @id @default(uuid())
+  title       String
+  type        String   // PRODUCTION, ABSENCE, PROJECT, MEETING
+  description String?
+  startAt     DateTime
+  endAt       DateTime
+  memberIds   String[] @default([]) // IDs of TeamMembers involved
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model DeletedTaskLog {

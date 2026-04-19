@@ -13,6 +13,7 @@ import Metrics from './components/modules/Metrics';
 import ContentGrids from './components/modules/ContentGrids';
 import ContentPlanDetail from './components/modules/ContentPlanDetail';
 import TalentRadar from './components/modules/TalentRadar';
+import Activity from './components/modules/Activity';
 import Login from './components/Login';
 import PrivacyPolicy from './components/public/PrivacyPolicy';
 import TermsOfService from './components/public/TermsOfService';
@@ -89,6 +90,7 @@ function AppContent() {
             <Route path="/parrillas" element={<ContentGrids />} />
             <Route path="/parrillas/:clientSlug/:period" element={<ContentPlanDetail />} />
             <Route path="/parrillas/:planId" element={<ContentPlanDetail />} />
+            <Route path="/actividad" element={<Activity />} />
             <Route path="/minutas" element={<MinutesLayout />} />
             <Route path="/metricas" element={<Metrics />} />
 

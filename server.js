@@ -31,6 +31,7 @@ import contentRouter from './src/routes/api/content.js';
 import dbRouter from './src/routes/api/db.js';
 import clientFileRouter from './src/routes/api/clientFiles.js';
 import talentRadarRouter from './src/routes/api/talentRadar.js';
+import activityRouter from './src/routes/api/activity.js';
 
 console.log("[Boot] Imports loaded successfully.");
 
@@ -395,6 +396,9 @@ app.get('/api/clients/:clientId/logo-image', async (req, res) => {
 
 // Talent Radar Routes (IA Analytics)
 app.use('/api/talent-radar', authenticateToken, talentRadarRouter);
+
+// Activity & Operational Calendar Routes
+app.use('/api/activity', authenticateToken, activityRouter);
 
 // User Management Endpoints
 app.post('/api/users', authenticateToken, async (req, res) => {
