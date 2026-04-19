@@ -82,7 +82,7 @@ function AppContent() {
                 <AppLayout onLogout={logout}>
                   <Routes>
                     {/* Rutas Principales */}
-            <Route path="/" element={<Dashboard />} />
+                    <Route path="/" element={<Dashboard />} />
             <Route path="/inicio" element={<Navigate to="/" replace />} />
 
             <Route path="/bria" element={<Chat />} />
