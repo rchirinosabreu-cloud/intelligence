@@ -294,6 +294,7 @@ const ActivityMap = () => {
                     </motion.div>
                   )}
                 </AnimatePresence>
+              </div>
               </motion.div>
             </motion.div>
           );

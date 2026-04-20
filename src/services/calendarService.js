@@ -112,7 +112,7 @@ export async function createMeetEvent(title, startAt, endAt, description = '') {
                 end: { dateTime: new Date(endAt).toISOString() },
                 conferenceData: {
                     createRequest: {
-                        requestId: `meet-${Date.now()}`,
+                        requestId: `meet-${Date.now()}-${Math.random().toString(36).substring(7)}`,
                         conferenceSolutionKey: { type: 'hangoutsMeet' }
                     }
                 }
