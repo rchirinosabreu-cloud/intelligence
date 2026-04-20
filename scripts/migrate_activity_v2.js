@@ -1,7 +1,7 @@
 import prisma from '../src/lib/prisma.js';
 
 async function migrate() {
-  console.log('🚀 INICIANDO MIGRACIÓN PARA ACTIVIDAD (Brainstudio 2026 - REVISADO)...');
+  console.log('🚀 INICIANDO MIGRACIÓN PARA ACTIVIDAD (Brainstudio 2026 - REVISADO V2)...');
 
   try {
     // 1. Agregar columnas a TeamMember
@@ -22,7 +22,7 @@ async function migrate() {
         "endAt" TIMESTAMP(3) NOT NULL,
         "memberIds" TEXT[] DEFAULT '{}',
         "recurrence" TEXT,
-        "meetLink" TEXT,
+        "meetingLink" TEXT,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -32,7 +32,15 @@ async function migrate() {
 
     // Ensure new columns exist if table was already there
     await prisma.$executeRaw`ALTER TABLE "OperationalEvent" ADD COLUMN IF NOT EXISTS "recurrence" TEXT`;
-    await prisma.$executeRaw`ALTER TABLE "OperationalEvent" ADD COLUMN IF NOT EXISTS "meetLink" TEXT`;
+    await prisma.$executeRaw`ALTER TABLE "OperationalEvent" ADD COLUMN IF NOT EXISTS "meetingLink" TEXT`;
+
+    // Handle rename from meetLink if it existed in a previous run
+    try {
+      await prisma.$executeRaw`ALTER TABLE "OperationalEvent" RENAME COLUMN "meetLink" TO "meetingLink"`;
+      console.log('🔄 Renombrado meetLink a meetingLink.');
+    } catch (e) {
+      // Column might not exist or already be meetingLink
+    }
 
     console.log('✅ Tabla OperationalEvent verificada.');
 
@@ -40,8 +48,6 @@ async function migrate() {
 
   } catch (error) {
     console.error('❌ ERROR CRÍTICO durante la migración:', error);
-    // Don't exit if we are in a tool environment where we want to see the error
-    // process.exit(1);
     throw error;
   } finally {
     await prisma.$disconnect();

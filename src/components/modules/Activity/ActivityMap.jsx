@@ -231,11 +231,23 @@ const ActivityMap = () => {
                           {member.currentTask?.title || member.currentEvent?.title || member.role}
                         </span>
 
-                        {member.currentEvent?.meetLink && (
-                          <div className="mt-2 flex items-center gap-1.5 px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full animate-pulse-subtle">
-                            <Video className="w-3 h-3" />
-                            <span className="text-[9px] font-bold uppercase tracking-tighter">Google Meet</span>
-                          </div>
+                        {member.currentEvent?.description && (
+                          <p className="text-[9px] text-zinc-400 dark:text-zinc-500 max-w-[150px] whitespace-normal text-center mt-1 leading-tight">
+                            {member.currentEvent.description}
+                          </p>
+                        )}
+
+                        {member.currentEvent?.meetingLink && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(member.currentEvent.meetingLink, '_blank');
+                            }}
+                            className="mt-2 flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 text-white rounded-full animate-pulse-subtle hover:bg-indigo-700 transition-colors cursor-pointer pointer-events-auto"
+                          >
+                            <Video className="w-3 h-3 text-white" />
+                            <span className="text-[9px] font-bold uppercase tracking-tighter">¿Quieres unirte?</span>
+                          </button>
                         )}
                       </div>
                     </motion.div>

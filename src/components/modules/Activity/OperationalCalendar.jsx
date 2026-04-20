@@ -29,6 +29,7 @@ const OperationalCalendar = () => {
   const queryClient = useQueryClient();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingEventId, setEditingEventId] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
     type: 'PRODUCTION',
@@ -36,7 +37,8 @@ const OperationalCalendar = () => {
     endAt: new Date(),
     memberIds: [],
     recurrence: 'NONE',
-    meetLink: ''
+    meetingLink: '',
+    description: ''
   });
 
   const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PM';
@@ -73,12 +75,16 @@ const OperationalCalendar = () => {
 
   const events = apiEvents.length > 0 ? apiEvents : mockEvents;
 
-  const createMutation = useMutation({
-    mutationFn: async (newEvent) => {
-      const res = await fetch(`${getApiBaseUrl()}/api/activity/events`, {
-        method: 'POST',
+  const eventMutation = useMutation({
+    mutationFn: async (eventData) => {
+      const url = editingEventId
+        ? `${getApiBaseUrl()}/api/activity/events/${editingEventId}`
+        : `${getApiBaseUrl()}/api/activity/events`;
+
+      const res = await fetch(url, {
+        method: editingEventId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newEvent)
+        body: JSON.stringify(eventData)
       });
       return res.json();
     },
@@ -86,7 +92,8 @@ const OperationalCalendar = () => {
       queryClient.invalidateQueries(['operational-events']);
       queryClient.invalidateQueries(['team-activity-status']);
       setIsModalOpen(false);
-      toast.success('Evento creado correctamente');
+      setEditingEventId(null);
+      toast.success(editingEventId ? 'Evento actualizado' : 'Evento creado');
     }
   });
 
@@ -103,7 +110,28 @@ const OperationalCalendar = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    createMutation.mutate(formData);
+    eventMutation.mutate(formData);
+  };
+
+  const handleEdit = (event) => {
+    setEditingEventId(event.id);
+    setFormData({
+      title: event.title,
+      type: event.type,
+      startAt: new Date(event.startAt),
+      endAt: new Date(event.endAt),
+      memberIds: event.memberIds || [],
+      recurrence: event.recurrence || 'NONE',
+      meetingLink: event.meetingLink || '',
+      description: event.description || ''
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = (id) => {
+    if (window.confirm('¿Estás seguro de que deseas eliminar este evento? Esta acción no se puede deshacer.')) {
+      deleteMutation.mutate(id);
+    }
   };
 
   const days = eachDayOfInterval({
@@ -190,8 +218,10 @@ const OperationalCalendar = () => {
               {events.filter(e => isSameDay(new Date(e.startAt), day)).map(event => (
                 <div
                   key={event.id}
+                  onClick={() => isAdmin && handleEdit(event)}
                   className={cn(
-                    "group relative p-1.5 rounded-lg border text-[10px] font-medium transition-all cursor-default flex items-center gap-1.5",
+                    "group relative p-1.5 rounded-lg border text-[10px] font-medium transition-all flex items-center gap-1.5",
+                    isAdmin ? "cursor-pointer hover:shadow-md" : "cursor-default",
                     getEventColor(event.type)
                   )}
                 >
@@ -200,7 +230,10 @@ const OperationalCalendar = () => {
 
                   {isAdmin && (
                     <button
-                      onClick={() => deleteMutation.mutate(event.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(event.id);
+                      }}
                       className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-500 hover:text-white rounded transition-all"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -218,8 +251,8 @@ const OperationalCalendar = () => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold">Nuevo Evento Operativo</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-zinc-400 hover:text-zinc-600">✕</button>
+              <h3 className="text-xl font-bold">{editingEventId ? 'Editar Evento' : 'Nuevo Evento Operativo'}</h3>
+              <button onClick={() => { setIsModalOpen(false); setEditingEventId(null); }} className="text-zinc-400 hover:text-zinc-600">✕</button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -262,18 +295,31 @@ const OperationalCalendar = () => {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Meet Link (Opcional)</label>
-                <div className="relative">
-                  <Video className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                  <input
-                    type="url"
-                    placeholder="https://meet.google.com/..."
-                    className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-11 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
-                    value={formData.meetLink}
-                    onChange={e => setFormData({...formData, meetLink: e.target.value})}
-                  />
+              {formData.type === 'MEETING' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Link de Reunión</label>
+                  <div className="relative">
+                    <Video className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                    <input
+                      type="url"
+                      placeholder="https://meet.google.com/..."
+                      className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-11 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
+                      value={formData.meetingLink}
+                      onChange={e => setFormData({...formData, meetingLink: e.target.value})}
+                    />
+                  </div>
                 </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Descripción</label>
+                <textarea
+                  rows={2}
+                  placeholder="Contexto adicional para el equipo..."
+                  className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm resize-none"
+                  value={formData.description}
+                  onChange={e => setFormData({...formData, description: e.target.value})}
+                />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -331,11 +377,11 @@ const OperationalCalendar = () => {
 
               <button
                 type="submit"
-                disabled={createMutation.isPending}
+                disabled={eventMutation.isPending}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-2xl transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2"
               >
-                {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                Guardar Evento
+                {eventMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                {editingEventId ? 'Actualizar Evento' : 'Guardar Evento'}
               </button>
             </form>
           </div>

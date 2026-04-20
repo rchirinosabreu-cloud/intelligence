@@ -91,7 +91,8 @@ export async function getTeamActivityStatus() {
       currentEvent: currentEvent ? {
         title: currentEvent.title,
         type: currentEvent.type,
-        meetLink: currentEvent.meetLink
+        meetingLink: currentEvent.meetingLink,
+        description: currentEvent.description
       } : null
     };
   });
