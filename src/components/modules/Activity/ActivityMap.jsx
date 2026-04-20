@@ -24,17 +24,7 @@ const ActivityMap = () => {
     refetchInterval: 30000, // Sync every 30s
   });
 
-  // Mock data for visual verification if API is empty
-  const mockMembers = [
-    { id: 'm1', name: 'Rodny Perez', role: 'CEO', status: 'PRODUCCION', avatarUrl: null, currentEvent: { title: 'Grabación Podcast' } },
-    { id: 'm2', name: 'Melissa G.', role: 'PM', status: 'REUNION', avatarUrl: null, currentEvent: { title: 'Daily Sync' } },
-    { id: 'm3', name: 'Camila R.', role: 'Designer', status: 'ENFOCADO', avatarUrl: null, desktopX: 45, desktopY: 40, currentTask: { title: 'Línea Gráfica Mío' } },
-    { id: 'm4', name: 'Gabriel S.', role: 'Copywriter', status: 'OCUPADO', avatarUrl: null, desktopX: 55, desktopY: 40, currentTask: { title: 'Parrilla TruPeak' } },
-    { id: 'm5', name: 'Pablo D.', role: 'Developer', status: 'LIBRE', avatarUrl: null },
-    { id: 'm6', name: 'Nájera', role: 'Editor', status: 'AUSENTE', avatarUrl: null },
-  ];
-
-  const teamStatus = apiStatus.length > 0 ? apiStatus : mockMembers;
+  const teamStatus = apiStatus;
 
   // Areas definition (normalized 0-100 coordinates)
   const areas = [
@@ -100,6 +90,15 @@ const ActivityMap = () => {
 
     return basePos;
   };
+
+  if (isLoading) {
+    return (
+      <div className="w-full aspect-[16/9] flex flex-col items-center justify-center bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800">
+        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
+        <span className="text-zinc-500 font-medium">Sincronizando Oficina Virtual...</span>
+      </div>
+    );
+  }
 
   const isProductionActive = teamStatus.some(m => m.status === 'PRODUCCION');
 
