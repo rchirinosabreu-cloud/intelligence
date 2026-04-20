@@ -73,7 +73,8 @@ export async function getTeamActivityStatus() {
     if (currentEvent) {
       if (currentEvent.type === 'ABSENCE') {
         status = 'AUSENTE'; // ❌ Ausente
-      } else if (currentEvent.type === 'MEETING') {
+      } else if (currentEvent.type === 'MEETING' && currentEvent.meetingLink) {
+        // Only trigger Meeting status if there's a link (avoid empty calendar blocks hijacking status)
         status = 'REUNION'; // ⚪ En reunión
       } else if (currentEvent.type === 'PRODUCTION') {
         status = 'PRODUCCION'; // Part of Production Set

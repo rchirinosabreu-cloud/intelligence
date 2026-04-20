@@ -217,8 +217,11 @@ const ActivityMap = () => {
     permiso: teamStatus.filter(m => m.status === 'AUSENTE'),
     estudio: teamStatus.filter(m => m.status === 'PRODUCCION'),
     bunker: teamStatus.filter(m => m.status === 'REUNION'),
-    cafe: teamStatus.filter(m => m.status === 'LIBRE'),
-    nave: teamStatus.filter(m => ['ENFOCADO', 'OCUPADO'].includes(m.status) || (!m.status && m.status !== 'AUSENTE')), // Default or working
+    cafe: [], // Pureza visual: café is for aesthetics or manual break (empty for now)
+    nave: teamStatus.filter(m =>
+      ['ENFOCADO', 'OCUPADO', 'LIBRE'].includes(m.status) ||
+      (!m.status && m.status !== 'AUSENTE' && m.status !== 'PRODUCCION' && m.status !== 'REUNION')
+    ),
   };
 
   const isProductionActive = membersByZone.estudio.length > 0;
