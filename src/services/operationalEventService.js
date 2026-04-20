@@ -20,7 +20,7 @@ export async function createOperationalEvent(data) {
       endAt: new Date(data.endAt),
       memberIds: data.memberIds || [],
       recurrence: data.recurrence || 'NONE',
-      meetLink: data.meetLink || null
+      meetingLink: data.meetingLink || null
     }
   });
 }
@@ -29,9 +29,14 @@ export async function updateOperationalEvent(id, data) {
   return await prisma.operationalEvent.update({
     where: { id },
     data: {
-      ...data,
+      title: data.title,
+      type: data.type,
+      description: data.description,
       startAt: data.startAt ? new Date(data.startAt) : undefined,
       endAt: data.endAt ? new Date(data.endAt) : undefined,
+      memberIds: data.memberIds,
+      recurrence: data.recurrence,
+      meetingLink: data.meetingLink
     }
   });
 }

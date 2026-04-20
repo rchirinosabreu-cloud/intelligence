@@ -153,10 +153,10 @@ model OperationalEvent {
   type        String   // PRODUCTION, ABSENCE, PROJECT, MEETING
   description String?
   startAt     DateTime
-  endAt       DateTime
+  endAt     DateTime
   memberIds   String[] @default([]) // IDs of TeamMembers involved
   recurrence  String?  // NONE, WEEKLY
-  meetLink    String?
+  meetingLink String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
