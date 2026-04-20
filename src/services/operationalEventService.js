@@ -20,6 +20,7 @@ export async function createOperationalEvent(data) {
       endAt: new Date(data.endAt),
       memberIds: data.memberIds || [],
       recurrence: data.recurrence || 'NONE',
+      recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
       meetingLink: data.meetingLink || null
     }
   });
@@ -36,6 +37,7 @@ export async function updateOperationalEvent(id, data) {
       endAt: data.endAt ? new Date(data.endAt) : undefined,
       memberIds: data.memberIds,
       recurrence: data.recurrence,
+      recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
       meetingLink: data.meetingLink
     }
   });

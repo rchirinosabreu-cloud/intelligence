@@ -156,6 +156,7 @@ model OperationalEvent {
   endAt     DateTime
   memberIds   String[] @default([]) // IDs of TeamMembers involved
   recurrence  String?  // NONE, WEEKLY
+  recurrenceEnd DateTime?
   meetingLink String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
