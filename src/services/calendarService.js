@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { JWT } from 'google-auth-library';
+import crypto from 'crypto';
 
 let calendarClient;
 let authClient;
@@ -103,7 +104,7 @@ export async function createMeetEvent(title, startAt, endAt, description = '') {
         console.log(`[CalendarService] Creating Meet event in ${calendarId}: ${title}`);
 
         const response = await calendar.events.insert({
-            calendarId: calendarId, // Agency primary calendar
+            calendarId: calendarId,
             conferenceDataVersion: 1,
             requestBody: {
                 summary: title,
@@ -112,7 +113,7 @@ export async function createMeetEvent(title, startAt, endAt, description = '') {
                 end: { dateTime: new Date(endAt).toISOString() },
                 conferenceData: {
                     createRequest: {
-                        requestId: `meet-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+                        requestId: crypto.randomBytes(16).toString('hex'),
                         conferenceSolutionKey: { type: 'hangoutsMeet' }
                     }
                 }
