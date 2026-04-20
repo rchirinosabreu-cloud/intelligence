@@ -141,6 +141,7 @@ model TeamMember {
   userId       String?       @unique
   desktopX     Int?
   desktopY     Int?
+  statusMessage String?
   clientTasks  ClientTask[]
   contentPlans ContentPlan[]
   flowMessages FlowMessage[]

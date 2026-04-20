@@ -14,6 +14,7 @@ export async function getTeamActivityStatus() {
       avatarUrl: true,
       desktopX: true,
       desktopY: true,
+      statusMessage: true,
       nativeTasks: {
         where: { status: 'EN_CURSO' },
         select: {
@@ -96,6 +97,7 @@ export async function getTeamActivityStatus() {
       avatarUrl: member.avatarUrl,
       desktopX: member.desktopX,
       desktopY: member.desktopY,
+      statusMessage: member.statusMessage,
       status,
       currentTask: currentTask ? { title: currentTask.title } : null,
       currentEvent: currentEvent ? {

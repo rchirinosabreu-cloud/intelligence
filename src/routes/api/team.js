@@ -104,6 +104,19 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+router.patch('/member/status-message', async (req, res) => {
+  const { memberId, statusMessage } = req.body;
+  try {
+    const updatedMember = await prisma.teamMember.update({
+      where: { id: memberId },
+      data: { statusMessage }
+    });
+    res.json(updatedMember);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update status message' });
+  }
+});
+
 // Desactivar lógicamente (o borrar si se prefiere, pero usamos desactivación según las specs)
 router.delete('/:id', async (req, res) => {
   try {
