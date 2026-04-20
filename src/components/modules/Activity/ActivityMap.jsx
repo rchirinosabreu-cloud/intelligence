@@ -174,7 +174,10 @@ const ActivityMap = () => {
               }}
               onMouseEnter={() => setHoveredMember(member.id)}
               onMouseLeave={() => setHoveredMember(null)}
-              className="absolute -translate-x-1/2 -translate-y-1/2 z-10 cursor-pointer"
+              className={cn(
+                "absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all",
+                hoveredMember === member.id ? "z-[100] scale-110" : "z-10"
+              )}
             >
               <div className="relative">
                 {/* Focused Aura */}
@@ -213,28 +216,32 @@ const ActivityMap = () => {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 10, scale: 0.9 }}
                       transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                      className="absolute -top-20 left-1/2 -translate-x-1/2 pointer-events-none whitespace-nowrap z-50"
+                      className="absolute -top-24 left-1/2 -translate-x-1/2 pointer-events-none whitespace-nowrap"
                     >
-                      <div className="bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-white text-[11px] px-5 py-3 rounded-[20px] shadow-[0_20px_50px_rgba(0,0,0,0.1)] backdrop-blur-xl border border-white/20 dark:border-zinc-800/50 flex flex-col items-center gap-1.5 min-w-[140px]">
+                      <div className="bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-white text-[11px] px-6 py-4 rounded-[24px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.2)] backdrop-blur-2xl border border-white/20 dark:border-zinc-800/50 flex flex-col items-center gap-2 min-w-[220px]">
                         <span className="font-bold tracking-tight text-sm">{member.name}</span>
-                        <div className="flex items-center gap-2 px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-full">
+
+                        <div className="flex items-center gap-2 px-2.5 py-1 bg-zinc-100 dark:bg-zinc-800/50 rounded-full">
                            <div className={cn("w-1.5 h-1.5 rounded-full", getStatusColor(member.status))} />
-                           <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-tighter">
+                           <span className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-[0.1em]">
                             {member.status === 'PRODUCCION' ? 'En Producción' :
                              member.status === 'REUNION' ? 'En Reunión' :
                              member.status === 'AUSENTE' ? 'De Permiso' :
                              member.status === 'ENFOCADO' ? 'Enfocado' : 'Disponible'}
                            </span>
                         </div>
-                        <span className="text-zinc-500 dark:text-zinc-400 text-[10px] max-w-[120px] truncate text-center font-medium italic">
-                          {member.currentTask?.title || member.currentEvent?.title || member.role}
-                        </span>
 
-                        {member.currentEvent?.description && (
-                          <p className="text-[9px] text-zinc-400 dark:text-zinc-500 max-w-[150px] whitespace-normal text-center mt-1 leading-tight">
-                            {member.currentEvent.description}
-                          </p>
-                        )}
+                        <div className="flex flex-col items-center max-w-[200px]">
+                          <span className="text-zinc-600 dark:text-zinc-300 text-[11px] font-bold text-center leading-snug whitespace-normal">
+                            {member.currentTask?.title || member.currentEvent?.title || member.role}
+                          </span>
+
+                          {member.currentEvent?.description && (
+                            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium text-center mt-1.5 leading-relaxed whitespace-normal opacity-80">
+                              {member.currentEvent.description}
+                            </p>
+                          )}
+                        </div>
 
                         {member.currentEvent?.meetingLink && (
                           <button

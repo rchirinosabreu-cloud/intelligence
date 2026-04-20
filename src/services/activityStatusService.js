@@ -31,7 +31,14 @@ export async function getTeamActivityStatus() {
     where: {
       OR: [
         { startAt: { lte: now }, endAt: { gte: now } },
-        { recurrence: 'WEEKLY', startAt: { lte: now } }
+        {
+          recurrence: 'WEEKLY',
+          startAt: { lte: now },
+          OR: [
+            { recurrenceEnd: null },
+            { recurrenceEnd: { gte: now } }
+          ]
+        }
       ]
     }
   });
@@ -42,6 +49,9 @@ export async function getTeamActivityStatus() {
       return event.startAt <= now && event.endAt >= now;
     }
     if (event.recurrence === 'WEEKLY') {
+      // Final boundary check
+      if (event.recurrenceEnd && event.recurrenceEnd < now) return false;
+
       const start = new Date(event.startAt);
       const end = new Date(event.endAt);
       const duration = end.getTime() - start.getTime();

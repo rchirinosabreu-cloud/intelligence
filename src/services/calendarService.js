@@ -22,7 +22,10 @@ function getCalendarClient() {
         authClient = new JWT({
             email: credentials.client_email,
             key: credentials.private_key,
-            scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
+            scopes: [
+                'https://www.googleapis.com/auth/calendar.readonly',
+                'https://www.googleapis.com/auth/calendar.events'
+            ],
         });
 
         // Instantiate Calendar v3 with this auth client
@@ -85,5 +88,42 @@ export async function getUpcomingEvents(calendarId = 'social.brainstudio@gmail.c
     } catch (error) {
         console.error(`[CalendarService] Error fetching events:`, error.message);
         throw error;
+    }
+}
+
+/**
+ * Creates a Google Calendar event with a Google Meet link.
+ */
+export async function createMeetEvent(title, startAt, endAt, description = '') {
+    const calendar = getCalendarClient();
+    if (!calendar) return null;
+
+    try {
+        console.log(`[CalendarService] Creating Meet event: ${title}`);
+
+        const response = await calendar.events.insert({
+            calendarId: 'social.brainstudio@gmail.com', // Agency primary calendar
+            conferenceDataVersion: 1,
+            requestBody: {
+                summary: title,
+                description: description,
+                start: { dateTime: new Date(startAt).toISOString() },
+                end: { dateTime: new Date(endAt).toISOString() },
+                conferenceData: {
+                    createRequest: {
+                        requestId: `meet-${Date.now()}`,
+                        conferenceSolutionKey: { type: 'hangoutsMeet' }
+                    }
+                }
+            }
+        });
+
+        const meetLink = response.data.hangoutLink;
+        console.log(`[CalendarService] Created event with link: ${meetLink}`);
+        return meetLink;
+    } catch (error) {
+        console.error("[CalendarService] Failed to create Meet event:", error.message);
+        // Fallback or return null so the UI can handle it
+        return null;
     }
 }

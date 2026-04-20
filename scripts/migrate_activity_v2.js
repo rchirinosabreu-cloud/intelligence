@@ -1,7 +1,7 @@
 import prisma from '../src/lib/prisma.js';
 
 async function migrate() {
-  console.log('🚀 INICIANDO MIGRACIÓN PARA ACTIVIDAD (Brainstudio 2026 - REVISADO V2)...');
+  console.log('🚀 INICIANDO MIGRACIÓN PARA ACTIVIDAD (Brainstudio 2026 - REVISADO V3)...');
 
   try {
     // 1. Agregar columnas a TeamMember
@@ -23,6 +23,7 @@ async function migrate() {
         "memberIds" TEXT[] DEFAULT '{}',
         "recurrence" TEXT,
         "meetingLink" TEXT,
+        "recurrenceEnd" TIMESTAMP(3),
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -33,6 +34,7 @@ async function migrate() {
     // Ensure new columns exist if table was already there
     await prisma.$executeRaw`ALTER TABLE "OperationalEvent" ADD COLUMN IF NOT EXISTS "recurrence" TEXT`;
     await prisma.$executeRaw`ALTER TABLE "OperationalEvent" ADD COLUMN IF NOT EXISTS "meetingLink" TEXT`;
+    await prisma.$executeRaw`ALTER TABLE "OperationalEvent" ADD COLUMN IF NOT EXISTS "recurrenceEnd" TIMESTAMP(3)`;
 
     // Handle rename from meetLink if it existed in a previous run
     try {

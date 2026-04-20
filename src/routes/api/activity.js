@@ -1,6 +1,7 @@
 import express from 'express';
 import { getOperationalEvents, createOperationalEvent, updateOperationalEvent, deleteOperationalEvent } from '../../services/operationalEventService.js';
 import { getTeamActivityStatus } from '../../services/activityStatusService.js';
+import { createMeetEvent } from '../../services/calendarService.js';
 
 const router = express.Router();
 
@@ -32,6 +33,17 @@ router.post('/events', async (req, res) => {
     res.json(event);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create event' });
+  }
+});
+
+router.post('/events/generate-meet', async (req, res) => {
+  const { title, startAt, endAt, description } = req.body;
+  try {
+    const meetingLink = await createMeetEvent(title, startAt, endAt, description);
+    if (!meetingLink) throw new Error("Could not generate link");
+    res.json({ meetingLink });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate Meet link', details: error.message });
   }
 });
 

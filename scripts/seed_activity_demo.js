@@ -57,7 +57,7 @@ async function seedActivity() {
       endAt: end,
       description: 'Alineación matutina',
       memberIds: [members[1]?.id].filter(Boolean),
-      meetLink: 'https://meet.google.com/abc-defg-hij'
+      meetingLink: 'https://meet.google.com/abc-defg-hij'
     }
   });
 

@@ -12,7 +12,8 @@ import {
   Video,
   UserX,
   Zap,
-  Lock
+  Lock,
+  Sparkles
 } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, setHours, setMinutes } from 'date-fns';
@@ -37,10 +38,12 @@ const OperationalCalendar = () => {
     endAt: new Date(),
     memberIds: [],
     recurrence: 'NONE',
+    recurrenceEnd: null,
     meetingLink: '',
     description: ''
   });
 
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PM';
 
   // Fetch Team for assignment
@@ -109,6 +112,37 @@ const OperationalCalendar = () => {
     eventMutation.mutate(formData);
   };
 
+  const generateMeetLink = async () => {
+    if (!formData.title || !formData.startAt || !formData.endAt) {
+      toast.error('Completa título y fechas para generar link');
+      return;
+    }
+
+    setIsGeneratingLink(true);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/events/generate-meet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formData.title,
+          startAt: formData.startAt,
+          endAt: formData.endAt,
+          description: formData.description
+        })
+      });
+
+      if (!res.ok) throw new Error('Error en el servidor');
+      const data = await res.json();
+      setFormData({ ...formData, meetingLink: data.meetingLink });
+      toast.success('Google Meet generado');
+    } catch (err) {
+      console.error(err);
+      toast.error('No se pudo generar el link');
+    } finally {
+      setIsGeneratingLink(false);
+    }
+  };
+
   const handleEdit = (event) => {
     setEditingEventId(event.id);
     setFormData({
@@ -118,6 +152,7 @@ const OperationalCalendar = () => {
       endAt: new Date(event.endAt),
       memberIds: event.memberIds || [],
       recurrence: event.recurrence || 'NONE',
+      recurrenceEnd: event.recurrenceEnd ? new Date(event.recurrenceEnd) : null,
       meetingLink: event.meetingLink || '',
       description: event.description || ''
     });
@@ -130,10 +165,49 @@ const OperationalCalendar = () => {
     }
   };
 
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+
   const days = eachDayOfInterval({
-    start: startOfMonth(currentDate),
-    end: endOfMonth(currentDate)
+    start: monthStart,
+    end: monthEnd
   });
+
+  // Function to project recurring events into the calendar grid
+  const getProjectedEvents = () => {
+    const projected = [];
+    events.forEach(event => {
+      if (event.recurrence === 'NONE' || !event.recurrence) {
+        projected.push(event);
+      } else if (event.recurrence === 'WEEKLY') {
+        let current = new Date(event.startAt);
+        const eventEnd = new Date(event.endAt);
+        const duration = eventEnd.getTime() - current.getTime();
+        const limit = event.recurrenceEnd ? new Date(event.recurrenceEnd) : monthEnd;
+
+        // Move current to the first instance within the visible month or later
+        while (current < monthStart) {
+          current = new Date(current.getTime() + 7 * 24 * 60 * 60 * 1000);
+        }
+
+        // Project until limit or end of visible month
+        const maxDate = limit < monthEnd ? limit : monthEnd;
+
+        while (current <= maxDate) {
+          projected.push({
+            ...event,
+            startAt: current.toISOString(),
+            endAt: new Date(current.getTime() + duration).toISOString(),
+            isProjected: true // For visual differentiation if needed
+          });
+          current = new Date(current.getTime() + 7 * 24 * 60 * 60 * 1000);
+        }
+      }
+    });
+    return projected;
+  };
+
+  const projectedEvents = getProjectedEvents();
 
   const getEventIcon = (type) => {
     switch (type) {
@@ -211,9 +285,9 @@ const OperationalCalendar = () => {
               {format(day, 'd')}
             </span>
             <div className="mt-2 space-y-1">
-              {events.filter(e => isSameDay(new Date(e.startAt), day)).map(event => (
+              {projectedEvents.filter(e => isSameDay(new Date(e.startAt), day)).map((event, idx) => (
                 <div
-                  key={event.id}
+                  key={`${event.id}-${idx}`}
                   onClick={() => isAdmin && handleEdit(event)}
                   className={cn(
                     "group relative p-1.5 rounded-lg border text-[10px] font-medium transition-all flex items-center gap-1.5",
@@ -291,9 +365,35 @@ const OperationalCalendar = () => {
                 </div>
               </div>
 
+              {formData.recurrence === 'WEEKLY' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Hasta cuándo (Horizonte)</label>
+                  <DatePicker
+                    selected={formData.recurrenceEnd}
+                    onChange={date => setFormData({...formData, recurrenceEnd: date})}
+                    dateFormat="d MMMM, yyyy"
+                    locale="es"
+                    placeholderText="Seleccionar fecha fin de recurrencia"
+                    className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
+                    wrapperClassName="w-full"
+                  />
+                </div>
+              )}
+
               {formData.type === 'MEETING' && (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Link de Reunión</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Link de Reunión</label>
+                    <button
+                      type="button"
+                      onClick={generateMeetLink}
+                      disabled={isGeneratingLink}
+                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 transition-colors disabled:opacity-50"
+                    >
+                      {isGeneratingLink ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                      Generar automático
+                    </button>
+                  </div>
                   <div className="relative">
                     <Video className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                     <input
