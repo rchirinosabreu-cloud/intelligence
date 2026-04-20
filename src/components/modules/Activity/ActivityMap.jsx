@@ -42,6 +42,18 @@ const Zone = ({ id, name, icon: Icon, children, className, isActive }) => (
 const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
   const isEnfocado = member.status === 'ENFOCADO';
   const isAusente = member.status === 'AUSENTE';
+  const timeoutRef = React.useRef(null);
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setHoveredMember(member.id);
+  };
+
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => {
+      setHoveredMember(prev => prev === member.id ? null : prev);
+    }, 300);
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -86,11 +98,11 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
       animate={{ opacity: isAusente ? 0.6 : 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.8 }}
       transition={{ type: "spring", stiffness: 150, damping: 20 }}
-      onMouseEnter={() => setHoveredMember(member.id)}
-      onMouseLeave={() => setHoveredMember(null)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       className={cn(
         "relative cursor-pointer transition-all",
-        hoveredMember === member.id ? "z-50 scale-110" : "z-30"
+        hoveredMember === member.id ? "z-[100] scale-110" : "z-30"
       )}
     >
       <div className="relative">
@@ -137,9 +149,13 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="absolute bottom-full left-1/2 -translate-x-1/2 pb-4 pointer-events-none z-50"
+              transition={{ duration: 0.2 }}
+              className="absolute bottom-full left-1/2 -translate-x-1/2 pb-4 z-[110]"
             >
-              <div className="bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-white px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border border-white/40 dark:border-zinc-800/40 flex items-center gap-3 min-w-[280px]">
+              <div
+                className="bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-white px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border border-white/40 dark:border-zinc-800/40 flex items-center gap-3 min-w-[300px]"
+                onMouseEnter={handleMouseEnter}
+              >
                 <div className="flex flex-col gap-0.5 flex-shrink-0">
                    <span className="font-bold text-[12px]">{member.name}</span>
                    <div className="flex items-center gap-1.5">
@@ -150,9 +166,24 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
                    </div>
                 </div>
                 <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800" />
-                <p className="flex-1 text-zinc-500 dark:text-zinc-400 text-[10px] font-medium leading-snug line-clamp-2">
-                  {member.currentTask?.title || member.currentEvent?.title || member.role}
-                </p>
+                <div className="flex-1 flex items-center justify-between gap-4">
+                  <p className="text-zinc-500 dark:text-zinc-400 text-[10px] font-medium leading-snug line-clamp-2">
+                    {member.currentTask?.title || member.currentEvent?.title || member.role}
+                  </p>
+
+                  {/* UNIRSE Button for Meetings */}
+                  {member.status === 'REUNION' && member.currentEvent?.meetingLink && (
+                    <a
+                      href={member.currentEvent.meetingLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-shrink-0 px-3 py-1.5 bg-indigo-600 text-white text-[9px] font-bold rounded-xl hover:bg-indigo-700 transition-colors flex items-center gap-1.5"
+                    >
+                      <Video className="w-3 h-3" />
+                      UNIRSE
+                    </a>
+                  )}
+                </div>
               </div>
             </motion.div>
           )}
