@@ -38,7 +38,7 @@ function getCalendarClient() {
     }
 }
 
-export async function getUpcomingEvents(calendarId = 'social.brainstudio@gmail.com') {
+export async function getUpcomingEvents(calendarId = process.env.GOOGLE_CALENDAR_ID || 'social.brainstudio@gmail.com') {
     const calendar = getCalendarClient();
     if (!calendar) {
         throw new Error("Calendar client not initialized");
@@ -99,10 +99,11 @@ export async function createMeetEvent(title, startAt, endAt, description = '') {
     if (!calendar) return null;
 
     try {
-        console.log(`[CalendarService] Creating Meet event: ${title}`);
+        const calendarId = process.env.GOOGLE_CALENDAR_ID || 'social.brainstudio@gmail.com';
+        console.log(`[CalendarService] Creating Meet event in ${calendarId}: ${title}`);
 
         const response = await calendar.events.insert({
-            calendarId: 'social.brainstudio@gmail.com', // Agency primary calendar
+            calendarId: calendarId, // Agency primary calendar
             conferenceDataVersion: 1,
             requestBody: {
                 summary: title,
