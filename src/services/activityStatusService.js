@@ -27,39 +27,54 @@ export async function getTeamActivityStatus() {
     }
   });
 
+  // Unified agency time (UTC)
   const now = new Date();
+  const BUFFER_MS = 5 * 60 * 1000; // 5 minute safety buffer
+
   const activeEvents = await prisma.operationalEvent.findMany({
     where: {
       OR: [
-        { startAt: { lte: now }, endAt: { gte: now } },
+        {
+          startAt: { lte: new Date(now.getTime() + BUFFER_MS) },
+          endAt: { gte: new Date(now.getTime() - BUFFER_MS) }
+        },
         {
           recurrence: 'WEEKLY',
-          startAt: { lte: now },
+          startAt: { lte: new Date(now.getTime() + BUFFER_MS) },
           OR: [
             { recurrenceEnd: null },
-            { recurrenceEnd: { gte: now } }
+            { recurrenceEnd: { gte: new Date(now.getTime() - BUFFER_MS) } }
           ]
         }
       ]
     }
   });
 
-  // Filter recurring events that match current time in their cycle
+  // Filter recurring events that match current time in their cycle (with buffer)
   const currentEvents = activeEvents.filter(event => {
+    const eventStart = new Date(event.startAt).getTime();
+    const eventEnd = new Date(event.endAt).getTime();
+    const nowTime = now.getTime();
+
     if (event.recurrence === 'NONE' || !event.recurrence) {
-      return event.startAt <= now && event.endAt >= now;
+      return eventStart - BUFFER_MS <= nowTime && eventEnd + BUFFER_MS >= nowTime;
     }
     if (event.recurrence === 'WEEKLY') {
-      // Final boundary check
-      if (event.recurrenceEnd && event.recurrenceEnd < now) return false;
+      // Final boundary check (with buffer)
+      if (event.recurrenceEnd && new Date(event.recurrenceEnd).getTime() + BUFFER_MS < nowTime) return false;
 
-      const start = new Date(event.startAt);
-      const end = new Date(event.endAt);
-      const duration = end.getTime() - start.getTime();
+      const start = new Date(event.startAt).getTime();
+      const end = new Date(event.endAt).getTime();
+      const duration = end - start;
       const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-      const timeDiff = now.getTime() - start.getTime();
-      const offsetInWeek = timeDiff % msPerWeek;
-      return offsetInWeek >= 0 && offsetInWeek <= duration;
+
+      // Calculate offset within the weekly cycle, ensuring it's positive
+      const timeDiff = nowTime - start;
+      const offsetInWeek = ((timeDiff % msPerWeek) + msPerWeek) % msPerWeek;
+
+      // Check if current time falls within event duration + buffer
+      // We check if it's within [0, duration] or in the buffers [msPerWeek - buffer, msPerWeek] or [0, buffer]
+      return offsetInWeek <= duration + BUFFER_MS || offsetInWeek >= msPerWeek - BUFFER_MS;
     }
     return false;
   });
@@ -67,20 +82,29 @@ export async function getTeamActivityStatus() {
   return members.map(member => {
     let status = 'LIBRE'; // Default: 🟢 Libre
     let currentTask = member.nativeTasks[0] || null;
-    let currentEvent = currentEvents.find(e => e.memberIds.includes(member.id));
 
-    // Priority 1: Events (Meeting or Absence)
-    if (currentEvent) {
-      if (currentEvent.type === 'ABSENCE') {
-        status = 'AUSENTE'; // ❌ Ausente
-      } else if (currentEvent.type === 'MEETING' && currentEvent.meetingLink) {
-        // Only trigger Meeting status if there's a link (avoid empty calendar blocks hijacking status)
-        status = 'REUNION'; // ⚪ En reunión
-      } else if (currentEvent.type === 'PRODUCTION') {
-        status = 'PRODUCCION'; // Part of Production Set
-      }
+    // Find all events for this member
+    const memberEvents = currentEvents.filter(e => e.memberIds.includes(member.id));
+
+    // Priority 1: ABSENCE (Absolute priority, red dot)
+    const absenceEvent = memberEvents.find(e => e.type === 'ABSENCE');
+    const meetingEvent = memberEvents.find(e => e.type === 'MEETING' && e.meetingLink);
+    const productionEvent = memberEvents.find(e => e.type === 'PRODUCTION');
+
+    let prioritizedEvent = null;
+
+    if (absenceEvent) {
+      status = 'AUSENTE';
+      prioritizedEvent = absenceEvent;
+    } else if (meetingEvent) {
+      status = 'REUNION';
+      prioritizedEvent = meetingEvent;
+    } else if (productionEvent) {
+      status = 'PRODUCCION';
+      prioritizedEvent = productionEvent;
     }
-    // Priority 2: Kanban Tasks
+
+    // Priority 2: Kanban Tasks (only if no high-priority calendar events)
     else if (currentTask) {
       if (currentTask.isSpecial) {
         status = 'ENFOCADO'; // 🟣 Enfocado
@@ -101,11 +125,11 @@ export async function getTeamActivityStatus() {
       statusMessage: member.statusMessage,
       status,
       currentTask: currentTask ? { title: currentTask.title } : null,
-      currentEvent: currentEvent ? {
-        title: currentEvent.title,
-        type: currentEvent.type,
-        meetingLink: currentEvent.meetingLink,
-        description: currentEvent.description
+      currentEvent: prioritizedEvent ? {
+        title: prioritizedEvent.title,
+        type: prioritizedEvent.type,
+        meetingLink: prioritizedEvent.meetingLink,
+        description: prioritizedEvent.description
       } : null
     };
   });
