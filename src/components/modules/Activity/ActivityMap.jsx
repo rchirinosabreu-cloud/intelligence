@@ -241,7 +241,7 @@ const ActivityMap = () => {
             ))}
           </Zone>
 
-          <Zone id="estudio" name="Jornadas de producción" icon={Video} className="h-[380px]" isActive={isProductionActive}>
+          <Zone id="estudio" name="Producción" icon={Video} className="h-[380px]" isActive={isProductionActive}>
             {membersByZone.estudio.map(m => (
               <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
             ))}
