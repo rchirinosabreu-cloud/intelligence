@@ -128,8 +128,8 @@ const ActivityMap = () => {
   const isProductionActive = teamStatus.some(m => m.status === 'PRODUCCION');
 
   return (
-    <div className="relative w-full aspect-[16/9] bg-[#fdfbff] dark:bg-zinc-950 rounded-[40px] border border-zinc-200/60 dark:border-zinc-800/60 overflow-hidden shadow-[0_20px_70px_-15px_rgba(0,0,0,0.1)] transition-all duration-700">
-
+    <div className="relative w-full p-20 bg-[#fdfbff] dark:bg-zinc-950 rounded-[40px] border border-zinc-200/60 dark:border-zinc-800/60 shadow-[0_20px_70px_-15px_rgba(0,0,0,0.1)] transition-all duration-700">
+      <div className="relative w-full aspect-[16/9] overflow-visible">
       {/* Global Dotted Grid cover entire area */}
       <div className="absolute inset-0 opacity-[0.1] dark:opacity-[0.15] pointer-events-none"
            style={{
@@ -217,17 +217,17 @@ const ActivityMap = () => {
             <motion.div
               key={member.id}
               layout
-              initial={{ opacity: 0, y: 20, scale: 0.8 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{
                 opacity: isAusente ? 0.6 : 1,
                 y: 0,
-                scale: 1,
                 left: `${pos.x}%`,
                 top: `${pos.y}%`,
               }}
               transition={{
-                layout: { type: "spring", stiffness: 60, damping: 25, mass: 1.2 },
-                initial: { duration: 0.6, ease: "easeOut" }
+                layout: { type: "spring", stiffness: 100, damping: 15 },
+                opacity: { duration: 0.4 },
+                y: { type: "spring", stiffness: 100, damping: 15 }
               }}
               onMouseEnter={() => setHoveredMember(member.id)}
               onMouseLeave={() => setHoveredMember(null)}
@@ -278,14 +278,14 @@ const ActivityMap = () => {
                 <AnimatePresence>
                   {hoveredMember === member.id && (
                     <motion.div
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                      className="absolute -top-16 left-1/2 -translate-x-1/2 pointer-events-none whitespace-nowrap"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 20 }}
+                      transition={{ type: "spring", stiffness: 100, damping: 15 }}
+                      className="absolute bottom-full left-1/2 -translate-x-1/2 pb-4 pointer-events-none z-[110]"
                     >
-                      <div className="bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-white px-5 py-3 rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.25)] backdrop-blur-xl border border-white/40 dark:border-zinc-800/40 flex items-center gap-4 min-w-[320px]">
-                        <div className="flex flex-col gap-0.5">
+                      <div className="bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-white px-5 py-3 rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.25)] backdrop-blur-xl border border-white/40 dark:border-zinc-800/40 flex items-center gap-4 min-w-[320px] max-w-[400px]">
+                        <div className="flex flex-col gap-0.5 flex-shrink-0">
                            <span className="font-bold tracking-tight text-[13px]">{member.name}</span>
                            <div className="flex items-center gap-1.5">
                               <div className={cn("w-1.5 h-1.5 rounded-full", getStatusColor(member.status))} />
@@ -295,12 +295,12 @@ const ActivityMap = () => {
                            </div>
                         </div>
 
-                        <div className="h-6 w-px bg-zinc-200 dark:bg-zinc-800" />
+                        <div className="h-6 w-px bg-zinc-200 dark:bg-zinc-800 flex-shrink-0" />
 
-                        <div className="flex-1 flex flex-col justify-center">
-                          <span className="text-zinc-600 dark:text-zinc-300 text-[11px] font-bold truncate max-w-[140px]">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-zinc-600 dark:text-zinc-300 text-[11px] font-bold leading-snug line-clamp-2 break-words">
                             {member.currentTask?.title || member.currentEvent?.title || member.role}
-                          </span>
+                          </p>
                         </div>
 
                         {member.currentEvent?.meetingLink && (
@@ -348,6 +348,7 @@ const ActivityMap = () => {
       >
         <Zap className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
       </button>
+      </div>
     </div>
   );
 };
