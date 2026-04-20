@@ -16,7 +16,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, setHours, setMinutes } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";

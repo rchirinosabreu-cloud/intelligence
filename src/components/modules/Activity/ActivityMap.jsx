@@ -41,9 +41,34 @@ const ActivityMap = () => {
       case 'LIBRE': return 'bg-green-500';
       case 'ENFOCADO': return 'bg-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.5)]';
       case 'OCUPADO': return 'bg-orange-500';
-      case 'REUNION': return 'bg-slate-200';
+      case 'REUNION': return 'bg-white'; // White dot for meeting
+      case 'PRODUCCION': return 'bg-fuchsia-500';
       case 'AUSENTE': return 'bg-red-500';
       default: return 'bg-zinc-400';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'LIBRE': return 'DISPONIBLE';
+      case 'ENFOCADO': return 'ENFOCADO';
+      case 'OCUPADO': return 'OCUPADO';
+      case 'REUNION': return 'EN REUNIÓN';
+      case 'PRODUCCION': return 'EN PRODUCCIÓN';
+      case 'AUSENTE': return 'DE PERMISO';
+      default: return status;
+    }
+  };
+
+  const getStatusTextColorClass = (status) => {
+    switch (status) {
+      case 'LIBRE': return 'text-green-600 dark:text-green-400';
+      case 'ENFOCADO': return 'text-purple-600 dark:text-purple-400';
+      case 'OCUPADO': return 'text-orange-600 dark:text-orange-400';
+      case 'REUNION': return 'text-zinc-600 dark:text-zinc-400';
+      case 'PRODUCCION': return 'text-fuchsia-600 dark:text-fuchsia-400';
+      case 'AUSENTE': return 'text-red-600 dark:text-red-400';
+      default: return 'text-zinc-500';
     }
   };
 
@@ -80,8 +105,11 @@ const ActivityMap = () => {
     const count = membersInZone.length;
 
     if (count > 1) {
+      // Use distinct radius and spacing for different zones
+      const isLargeZone = member.status === 'LIBRE' || member.status === 'AUSENTE';
       const angle = (memberIndex / count) * Math.PI * 2;
-      const radius = 4; // Separation radius
+      const radius = isLargeZone ? 6 : 4;
+
       return {
         x: basePos.x + Math.cos(angle) * radius,
         y: basePos.y + Math.sin(angle) * radius
@@ -159,18 +187,17 @@ const ActivityMap = () => {
             <motion.div
               key={member.id}
               layout
-              initial={{ opacity: 0, scale: 0.5 }}
+              initial={{ opacity: 0, y: 20, scale: 0.8 }}
               animate={{
                 opacity: isAusente ? 0.6 : 1,
+                y: 0,
                 scale: 1,
                 left: `${pos.x}%`,
                 top: `${pos.y}%`,
               }}
               transition={{
-                type: "spring",
-                stiffness: 50,
-                damping: 20,
-                mass: 1.5
+                layout: { type: "spring", stiffness: 50, damping: 20, mass: 1.5 },
+                initial: { duration: 0.6, ease: "easeOut" }
               }}
               onMouseEnter={() => setHoveredMember(member.id)}
               onMouseLeave={() => setHoveredMember(null)}
@@ -179,6 +206,17 @@ const ActivityMap = () => {
                 hoveredMember === member.id ? "z-[100] scale-110" : "z-10"
               )}
             >
+              <motion.div
+                className="relative"
+                animate={{
+                  y: [0, -4, 0],
+                }}
+                transition={{
+                  duration: 4 + (Math.random() * 2),
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+              >
               <div className="relative">
                 {/* Focused Aura */}
                 {isEnfocado && (
@@ -223,11 +261,8 @@ const ActivityMap = () => {
 
                         <div className="flex items-center gap-2 px-2.5 py-1 bg-zinc-100 dark:bg-zinc-800/50 rounded-full">
                            <div className={cn("w-1.5 h-1.5 rounded-full", getStatusColor(member.status))} />
-                           <span className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-[0.1em]">
-                            {member.status === 'PRODUCCION' ? 'En Producción' :
-                             member.status === 'REUNION' ? 'En Reunión' :
-                             member.status === 'AUSENTE' ? 'De Permiso' :
-                             member.status === 'ENFOCADO' ? 'Enfocado' : 'Disponible'}
+                           <span className={cn("text-[9px] font-black uppercase tracking-[0.1em]", getStatusTextColorClass(member.status))}>
+                            {getStatusText(member.status)}
                            </span>
                         </div>
 
@@ -259,7 +294,7 @@ const ActivityMap = () => {
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
+              </motion.div>
             </motion.div>
           );
         })}
