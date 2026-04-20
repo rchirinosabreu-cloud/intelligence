@@ -60,20 +60,16 @@ const OperationalCalendar = () => {
         const start = startOfMonth(currentDate).toISOString();
         const end = endOfMonth(currentDate).toISOString();
         const res = await fetch(`${getApiBaseUrl()}/api/activity/events?start=${start}&end=${end}`);
-        if (!res.ok) return [];
+        if (!res.ok) throw new Error('Failed to fetch events');
         return res.json();
       } catch (err) {
+        console.error("Calendar fetch error:", err);
         return [];
       }
     }
   });
 
-  const mockEvents = [
-    { id: 'e1', title: 'Jornada de Producción: Podcast Brain', type: 'PRODUCTION', startAt: new Date().toISOString() },
-    { id: 'e2', title: 'Daily Sync', type: 'MEETING', startAt: new Date().toISOString() },
-  ];
-
-  const events = apiEvents.length > 0 ? apiEvents : mockEvents;
+  const events = apiEvents;
 
   const eventMutation = useMutation({
     mutationFn: async (eventData) => {
