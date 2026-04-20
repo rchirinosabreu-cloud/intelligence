@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Coffee, Video, Users, User, Zap, Lock, Info, Monitor, MousePointer2 } from 'lucide-react';
+import { Coffee, Video, Users, User, Zap, Lock, Info, Monitor, MessageCircle, Send, X } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/context/AuthContext';
 
 const ActivityMap = () => {
+  const { currentUser } = useAuth();
   const [hoveredMember, setHoveredMember] = useState(null);
+  const [isSettingStatus, setIsSettingStatus] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const { data: apiStatus = [], isLoading, refetch } = useQuery({
     queryKey: ['team-activity-status'],
@@ -29,11 +34,11 @@ const ActivityMap = () => {
   // Areas definition (normalized 0-100 coordinates)
   // Adjusted for safe margins
   const areas = [
-    { id: 'estudio', name: 'Jornadas de producción', icon: Video, x: 8, y: 35, w: 22, h: 35, color: 'fuchsia' },
-    { id: 'nave', name: 'Oficina central', icon: Zap, x: 36, y: 20, w: 28, h: 65, color: 'indigo' },
-    { id: 'bunker', name: 'Sala de juntas', icon: Lock, x: 36, y: 5, w: 28, h: 10, color: 'slate' },
-    { id: 'cafe', name: 'Cafecito time', icon: Coffee, x: 70, y: 35, w: 22, h: 35, color: 'orange' },
-    { id: 'permiso', name: 'De permiso', icon: User, x: 8, y: 5, w: 22, h: 22, color: 'red' },
+    { id: 'estudio', name: 'Jornadas de producción', icon: Video, x: 8, y: 78, w: 22, h: 20, color: 'fuchsia' },
+    { id: 'nave', name: 'Oficina central', icon: Zap, x: 36, y: 20, w: 28, h: 42, color: 'indigo' },
+    { id: 'bunker', name: 'Sala de juntas', icon: Lock, x: 36, y: 2, w: 28, h: 10, color: 'slate' },
+    { id: 'cafe', name: 'Cafecito time', icon: Coffee, x: 70, y: 78, w: 22, h: 20, color: 'orange' },
+    { id: 'permiso', name: 'De permiso', icon: User, x: 8, y: 2, w: 22, h: 15, color: 'red' },
   ];
 
   // Helper to get status color
@@ -78,13 +83,13 @@ const ActivityMap = () => {
     let basePos = { x: 50, y: 50 };
 
     if (member.status === 'AUSENTE') {
-      basePos = { x: 19, y: 16 }; // De permiso
+      basePos = { x: 19, y: 9.5 }; // De permiso
     } else if (member.status === 'PRODUCCION') {
-      basePos = { x: 19, y: 52 }; // Jornadas de producción
+      basePos = { x: 19, y: 88 }; // Jornadas de producción
     } else if (member.status === 'REUNION') {
-      basePos = { x: 50, y: 10 };  // Sala de juntas
+      basePos = { x: 50, y: 7 };  // Sala de juntas
     } else if (member.status === 'LIBRE') {
-      basePos = { x: 81, y: 52 }; // Cafecito time
+      basePos = { x: 81, y: 88 }; // Cafecito time
     } else {
       // Oficina central (Escritorio)
       if (member.desktopX && member.desktopY) {
@@ -93,7 +98,7 @@ const ActivityMap = () => {
       const idx = teamStatus.indexOf(member);
       basePos = {
         x: 42 + (idx % 3) * 8,
-        y: 35 + Math.floor(idx / 3) * 12
+        y: 32 + Math.floor(idx / 3) * 8
       };
       return basePos;
     }
@@ -114,6 +119,26 @@ const ActivityMap = () => {
     }
 
     return basePos;
+  };
+
+  const handleUpdateStatusMessage = async () => {
+    if (!currentUser?.id) return;
+    setIsUpdating(true);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/team/member/status-message`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberId: currentUser.id, statusMessage })
+      });
+      if (res.ok) {
+        setIsSettingStatus(false);
+        refetch();
+      }
+    } catch (err) {
+      console.error("Failed to update status message", err);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   if (isLoading) {
@@ -257,6 +282,20 @@ const ActivityMap = () => {
                    />
                 )}
 
+                {/* Cafecito Contextual Bubble */}
+                {member.status === 'LIBRE' && member.statusMessage && (
+                   <motion.div
+                    initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-6 z-30"
+                   >
+                     <div className="bg-orange-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-2xl shadow-lg whitespace-nowrap relative">
+                        {member.statusMessage}
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-orange-500" />
+                     </div>
+                   </motion.div>
+                )}
+
                 {/* Avatar Shadow Circle (Organic feel) */}
                 <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-8 h-2 bg-black/5 dark:bg-white/5 blur-sm rounded-full" />
 
@@ -342,12 +381,57 @@ const ActivityMap = () => {
          ))}
       </div>
 
-      <button
-        onClick={() => refetch()}
-        className="absolute bottom-8 right-8 p-3 bg-white/80 dark:bg-zinc-900/80 hover:bg-white dark:hover:bg-zinc-800 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl transition-all shadow-sm"
-      >
-        <Zap className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-      </button>
+      <div className="absolute bottom-8 right-8 flex flex-col gap-3 z-[150]">
+        <AnimatePresence>
+          {isSettingStatus && (
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl p-2.5 rounded-2xl border border-white/40 dark:border-zinc-800/40 shadow-2xl flex items-center gap-2 min-w-[240px]"
+            >
+              <input
+                autoFocus
+                value={statusMessage}
+                onChange={(e) => setStatusMessage(e.target.value)}
+                placeholder="¿Qué estás haciendo?"
+                className="flex-1 bg-transparent border-none text-[11px] font-medium focus:ring-0 px-2 placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
+                onKeyDown={(e) => e.key === 'Enter' && handleUpdateStatusMessage()}
+              />
+              <button
+                onClick={handleUpdateStatusMessage}
+                disabled={isUpdating}
+                className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                <Send className="w-3 h-3" />
+              </button>
+              <button
+                onClick={() => setIsSettingStatus(false)}
+                className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg"
+              >
+                <X className="w-3 h-3 text-zinc-400" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={() => setIsSettingStatus(!isSettingStatus)}
+            className="p-3 bg-white/80 dark:bg-zinc-900/80 hover:bg-white dark:hover:bg-zinc-800 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl transition-all shadow-sm group"
+            title="Estado Cafecito"
+          >
+            <MessageCircle className="w-4 h-4 text-orange-500" />
+          </button>
+
+          <button
+            onClick={() => refetch()}
+            className="p-3 bg-white/80 dark:bg-zinc-900/80 hover:bg-white dark:hover:bg-zinc-800 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl transition-all shadow-sm"
+          >
+            <Zap className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+          </button>
+        </div>
+      </div>
       </div>
     </div>
   );
