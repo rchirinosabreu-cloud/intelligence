@@ -43,9 +43,14 @@ const Chat = () => {
 
     try {
       const baseUrl = getApiBaseUrl();
+      const token = localStorage.getItem('token');
+
       const response = await fetch(`${baseUrl}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           messages: [...messages, userMessage].map(m => ({ role: m.role, content: m.content }))
         }),
