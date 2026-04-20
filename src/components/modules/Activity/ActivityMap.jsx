@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Coffee, Video, Zap, Lock, Monitor, MessageCircle, Send, X, User } from 'lucide-react';
+import { Coffee, Video, Zap, Lock, Monitor, X, User } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '@/context/AuthContext';
 
 const Zone = ({ id, name, icon: Icon, children, className, isActive }) => (
   <div className={cn(
@@ -95,9 +94,22 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
     <motion.div
       layoutId={`member-${member.id}`}
       initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: isAusente ? 0.6 : 1, scale: 1 }}
+      animate={{
+        opacity: isAusente ? 0.6 : 1,
+        scale: 1,
+        y: [0, -4, 0] // Floating Latido effect
+      }}
       exit={{ opacity: 0, scale: 0.8 }}
-      transition={{ type: "spring", stiffness: 150, damping: 20 }}
+      transition={{
+        type: "spring",
+        stiffness: 150,
+        damping: 20,
+        y: {
+          duration: 3 + Math.random() * 2,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }
+      }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       className={cn(
@@ -113,20 +125,6 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
             transition={{ duration: 4, repeat: Infinity }}
             className="absolute -inset-6 bg-purple-500/20 rounded-full blur-2xl"
            />
-        )}
-
-        {/* Cafecito Contextual Bubble */}
-        {member.status === 'LIBRE' && member.statusMessage && (
-           <motion.div
-            initial={{ opacity: 0, scale: 0.8, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 z-30"
-           >
-             <div className="bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-2xl shadow-lg whitespace-nowrap relative">
-                {member.statusMessage}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-orange-500" />
-             </div>
-           </motion.div>
         )}
 
         <TeamAvatar
@@ -150,10 +148,10 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               transition={{ duration: 0.2 }}
-              className="absolute bottom-full left-1/2 -translate-x-1/2 pb-4 z-[110]"
+              className="absolute bottom-full left-1/2 -translate-x-1/2 pb-4 z-[999]"
             >
               <div
-                className="bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-white px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border border-white/40 dark:border-zinc-800/40 flex items-center gap-3 min-w-[300px]"
+                className="bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-white px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border border-white/40 dark:border-zinc-800/40 flex items-center gap-3 min-w-[300px] pointer-events-auto"
                 onMouseEnter={handleMouseEnter}
               >
                 <div className="flex flex-col gap-0.5 flex-shrink-0">
@@ -194,11 +192,7 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
 };
 
 const ActivityMap = () => {
-  const { currentUser } = useAuth();
   const [hoveredMember, setHoveredMember] = useState(null);
-  const [isSettingStatus, setIsSettingStatus] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('');
-  const [isUpdating, setIsUpdating] = useState(false);
 
   const { data: teamStatus = [], isLoading, refetch } = useQuery({
     queryKey: ['team-activity-status'],
@@ -209,26 +203,6 @@ const ActivityMap = () => {
     },
     refetchInterval: 15000,
   });
-
-  const handleUpdateStatusMessage = async () => {
-    if (!currentUser?.id) return;
-    setIsUpdating(true);
-    try {
-      const res = await fetch(`${getApiBaseUrl()}/api/team/member/status-message`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ memberId: currentUser.id, statusMessage })
-      });
-      if (res.ok) {
-        setIsSettingStatus(false);
-        refetch();
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsUpdating(false);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -250,7 +224,7 @@ const ActivityMap = () => {
   const isProductionActive = membersByZone.estudio.length > 0;
 
   return (
-    <div className="relative w-full p-12 min-h-[850px] bg-[#f8f9fc] dark:bg-zinc-950 rounded-[40px] border border-zinc-200/50 dark:border-zinc-800/50 shadow-xl overflow-hidden">
+    <div className="relative w-full p-16 md:p-24 min-h-[900px] bg-[#f8f9fc] dark:bg-zinc-950 rounded-[40px] border border-zinc-200/50 dark:border-zinc-800/50 shadow-xl overflow-hidden">
       {/* Background Dotted Grid */}
       <div className="absolute inset-0 opacity-[0.05] dark:opacity-[0.1] pointer-events-none"
            style={{ backgroundImage: 'radial-gradient(circle, currentColor 1.5px, transparent 1.5px)', backgroundSize: '32px 32px' }}
@@ -335,33 +309,7 @@ const ActivityMap = () => {
       </div>
 
       <div className="absolute bottom-10 right-10 flex flex-col gap-3 z-50">
-        <AnimatePresence>
-          {isSettingStatus && (
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl p-2 rounded-2xl border border-zinc-200 shadow-2xl flex items-center gap-2 min-w-[260px]"
-            >
-              <input
-                autoFocus
-                value={statusMessage}
-                onChange={(e) => setStatusMessage(e.target.value)}
-                placeholder="¿Qué estás haciendo?"
-                className="flex-1 bg-transparent border-none text-[11px] font-medium focus:ring-0 px-2"
-                onKeyDown={(e) => e.key === 'Enter' && handleUpdateStatusMessage()}
-              />
-              <button onClick={handleUpdateStatusMessage} disabled={isUpdating} className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700">
-                <Send className="w-3 h-3" />
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         <div className="flex gap-3 justify-end">
-          <button onClick={() => setIsSettingStatus(!isSettingStatus)} className="p-3.5 bg-white/80 dark:bg-zinc-900/80 hover:bg-white border border-zinc-200 rounded-2xl transition-all shadow-sm">
-            <MessageCircle className="w-4 h-4 text-orange-500" />
-          </button>
           <button onClick={() => refetch()} className="p-3.5 bg-white/80 dark:bg-zinc-900/80 hover:bg-white border border-zinc-200 rounded-2xl transition-all shadow-sm">
             <Zap className="w-4 h-4 text-indigo-600" />
           </button>
