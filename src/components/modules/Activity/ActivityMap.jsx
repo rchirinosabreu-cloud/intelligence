@@ -78,47 +78,41 @@ const ActivityMap = () => {
     }
   };
 
-  // Helper to determine position with clustering logic
+  // Refactored to deterministic Grid Positioning (Operación Rescate)
   const getAvatarPosition = (member) => {
-    let basePos = { x: 50, y: 50 };
+    let targetZoneId = 'nave';
+    if (member.status === 'AUSENTE') targetZoneId = 'permiso';
+    else if (member.status === 'PRODUCCION') targetZoneId = 'estudio';
+    else if (member.status === 'REUNION') targetZoneId = 'bunker';
+    else if (member.status === 'LIBRE') targetZoneId = 'cafe';
 
-    if (member.status === 'AUSENTE') {
-      basePos = { x: 19, y: 9.5 }; // De permiso
-    } else if (member.status === 'PRODUCCION') {
-      basePos = { x: 19, y: 88 }; // Jornadas de producción
-    } else if (member.status === 'REUNION') {
-      basePos = { x: 50, y: 7 };  // Sala de juntas
-    } else if (member.status === 'LIBRE') {
-      basePos = { x: 81, y: 88 }; // Cafecito time
-    } else {
-      // Oficina central (Escritorio)
-      if (member.desktopX && member.desktopY) {
-        return { x: member.desktopX, y: member.desktopY };
-      }
-      const idx = teamStatus.indexOf(member);
-      basePos = {
-        x: 42 + (idx % 3) * 8,
-        y: 32 + Math.floor(idx / 3) * 8
-      };
-      return basePos;
-    }
+    const zone = areas.find(a => a.id === targetZoneId);
 
-    const membersInZone = teamStatus.filter(m => m.status === member.status);
-    const memberIndex = membersInZone.findIndex(m => m.id === member.id);
-    const count = membersInZone.length;
+    // Get all members in the SAME zone to grid them
+    const membersInSameZone = teamStatus.filter(m => {
+      if (targetZoneId === 'nave') return ['ENFOCADO', 'OCUPADO'].includes(m.status);
+      if (targetZoneId === 'permiso') return m.status === 'AUSENTE';
+      if (targetZoneId === 'estudio') return m.status === 'PRODUCCION';
+      if (targetZoneId === 'bunker') return m.status === 'REUNION';
+      if (targetZoneId === 'cafe') return m.status === 'LIBRE';
+      return false;
+    });
 
-    if (count > 1) {
-      const isLargeZone = member.status === 'LIBRE' || member.status === 'AUSENTE';
-      const angle = (memberIndex / count) * Math.PI * 2;
-      const radius = isLargeZone ? 5 : 3.5;
+    const memberIdx = membersInSameZone.findIndex(m => m.id === member.id);
 
-      return {
-        x: basePos.x + Math.cos(angle) * radius,
-        y: basePos.y + Math.sin(angle) * radius
-      };
-    }
+    // Deterministic Grid Math
+    const cols = zone.id === 'nave' ? 3 : 2;
+    const col = memberIdx % cols;
+    const row = Math.floor(memberIdx / cols);
 
-    return basePos;
+    // Calculate cell centers
+    const cellW = zone.w / cols;
+    const cellH = zone.h / Math.max(1, Math.ceil(membersInSameZone.length / cols));
+
+    return {
+      x: zone.x + (col + 0.5) * cellW,
+      y: zone.y + (row + 0.5) * cellH
+    };
   };
 
   const handleUpdateStatusMessage = async () => {
@@ -153,9 +147,25 @@ const ActivityMap = () => {
   const isProductionActive = teamStatus.some(m => m.status === 'PRODUCCION');
 
   return (
-    <div className="relative w-full p-20 bg-[#fdfbff] dark:bg-zinc-950 rounded-[40px] border border-zinc-200/60 dark:border-zinc-800/60 shadow-[0_20px_70px_-15px_rgba(0,0,0,0.1)] transition-all duration-700">
-      <div className="relative w-full aspect-[16/9] overflow-visible">
-      {/* Global Dotted Grid cover entire area */}
+    <div className="relative w-full p-[60px] min-h-[800px] bg-[#fdfbff] dark:bg-zinc-950 rounded-[40px] border border-zinc-200/60 dark:border-zinc-800/60 shadow-[0_20px_70px_-15px_rgba(0,0,0,0.1)] transition-all duration-700 overflow-hidden">
+      {/* Legend Pinning - Fixed Absolute Position to the OUTER container corner */}
+      <div className="absolute bottom-[20px] left-[20px] flex items-center gap-5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/40 dark:border-zinc-800/40 shadow-2xl z-[100]">
+         {[
+           { color: 'bg-green-500', label: 'Libre' },
+           { color: 'bg-purple-500', label: 'Foco' },
+           { color: 'bg-orange-500', label: 'Ocupado' },
+           { color: 'bg-slate-200', label: 'Reunión' },
+           { color: 'bg-red-500', label: 'Permiso' },
+         ].map((item, idx) => (
+           <div key={idx} className="flex items-center gap-2">
+             <div className={cn("w-2 h-2 rounded-full", item.color)} />
+             <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{item.label}</span>
+           </div>
+         ))}
+      </div>
+
+      <div className="relative w-full h-[680px] overflow-visible">
+      {/* Global Dotted Grid cover entire area - FUNDO Z-0 */}
       <div className="absolute inset-0 opacity-[0.1] dark:opacity-[0.15] pointer-events-none"
            style={{
              backgroundImage: 'radial-gradient(circle, currentColor 1.2px, transparent 1.2px)',
@@ -166,9 +176,9 @@ const ActivityMap = () => {
       {/* Areas Render */}
       {areas.map(area => (
         <React.Fragment key={area.id}>
-          {/* Section Header Label (Floating above area) */}
+          {/* Section Header Label (Floating above area) - Lower Z-Index for Background */}
           <div
-            className="absolute -translate-x-1/2 flex items-center justify-center z-20"
+            className="absolute -translate-x-1/2 flex items-center justify-center z-10"
             style={{
               left: `${area.x + area.w / 2}%`,
               top: `${area.y - 4.5}%`
@@ -258,19 +268,11 @@ const ActivityMap = () => {
               onMouseLeave={() => setHoveredMember(null)}
               className={cn(
                 "absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all",
-                hoveredMember === member.id ? "z-[100] scale-110" : "z-10"
+                hoveredMember === member.id ? "z-40 scale-110" : "z-30"
               )}
             >
               <motion.div
                 className="relative"
-                animate={{
-                  y: [0, -3, 0],
-                }}
-                transition={{
-                  duration: 4 + (Math.random() * 2),
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
               >
               <div className="relative">
                 {/* Focused Aura */}
@@ -313,7 +315,7 @@ const ActivityMap = () => {
                   getStatusColor(member.status)
                 )} />
 
-                {/* Refined Tooltip - wider, shorter, matching label style */}
+                {/* Refined Tooltip - wider, shorter, matching label style - Top Z-Index */}
                 <AnimatePresence>
                   {hoveredMember === member.id && (
                     <motion.div
@@ -321,7 +323,7 @@ const ActivityMap = () => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 20 }}
                       transition={{ type: "spring", stiffness: 100, damping: 15 }}
-                      className="absolute bottom-full left-1/2 -translate-x-1/2 pb-4 pointer-events-none z-[110]"
+                      className="absolute bottom-full left-1/2 -translate-x-1/2 pb-4 pointer-events-none z-50"
                     >
                       <div className="bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-white px-5 py-3 rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.25)] backdrop-blur-xl border border-white/40 dark:border-zinc-800/40 flex items-center gap-4 min-w-[320px] max-w-[400px]">
                         <div className="flex flex-col gap-0.5 flex-shrink-0">
@@ -365,21 +367,6 @@ const ActivityMap = () => {
         })}
       </AnimatePresence>
 
-      {/* Legend */}
-      <div className="absolute bottom-8 left-8 flex items-center gap-5 bg-white/70 dark:bg-zinc-900/70 backdrop-blur-md px-5 py-2.5 rounded-2xl border border-white/40 dark:border-zinc-800/40 shadow-sm">
-         {[
-           { color: 'bg-green-500', label: 'Libre' },
-           { color: 'bg-purple-500', label: 'Foco' },
-           { color: 'bg-orange-500', label: 'Ocupado' },
-           { color: 'bg-slate-200', label: 'Reunión' },
-           { color: 'bg-red-500', label: 'Permiso' },
-         ].map((item, idx) => (
-           <div key={idx} className="flex items-center gap-2">
-             <div className={cn("w-2 h-2 rounded-full", item.color)} />
-             <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{item.label}</span>
-           </div>
-         ))}
-      </div>
 
       <div className="absolute bottom-8 right-8 flex flex-col gap-3 z-[150]">
         <AnimatePresence>
