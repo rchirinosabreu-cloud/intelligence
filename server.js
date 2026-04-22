@@ -222,6 +222,7 @@ app.get('/api/public/parrilla/:token', async (req, res) => {
         copyText: item.copyText,
         captionText: item.captionText,
         publishDate: item.publishDate,
+        mediaUrl: item.mediaUrl,
         status: item.status,
         comments: item.comments
       }))

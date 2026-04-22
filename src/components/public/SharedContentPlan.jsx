@@ -4,7 +4,8 @@ import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import {
   CheckCircle2, Clock, AlertCircle, Loader2, Calendar,
-  Video, Image as ImageIcon, MessageSquare, Check, X, Send
+  Video, Image as ImageIcon, MessageSquare, Check, X, Send,
+  ExternalLink
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -217,6 +218,28 @@ const SharedContentPlan = () => {
                           {item.captionText || <span className="italic text-zinc-400">Sin pie de foto...</span>}
                         </div>
                       </div>
+
+                      {item.mediaUrl && item.mediaUrl.length > 0 && (
+                        <div className="space-y-3">
+                          <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Referencias</label>
+                          <div className="flex flex-col gap-3">
+                            {item.mediaUrl.map((link, i) => (
+                              <a
+                                key={i}
+                                href={link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2.5 text-sm font-bold text-zinc-600 dark:text-zinc-400 hover:text-indigo-600 transition-colors w-fit"
+                              >
+                                <div className="p-1.5 bg-zinc-100 dark:bg-white/5 rounded-lg">
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </div>
+                                {item.mediaUrl.length > 1 ? `Referencia #${i + 1}` : 'Ver Referencia'}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Right: Actions */}
