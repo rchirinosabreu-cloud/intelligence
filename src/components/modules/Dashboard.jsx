@@ -180,7 +180,7 @@ const Dashboard = () => {
                   <span className="text-4xl font-bold text-zinc-900 dark:text-white tracking-tight">
                       {loadingMetrics ? '...' : metrics.completed}
                   </span>
-                  <p className="text-xs text-zinc-400 mt-2">Pendientes finalizados en el historial</p>
+                  <p className="text-xs text-zinc-400 mt-2">Pendientes finalizados este mes</p>
                 </div>
               </Card>
             </motion.div>
