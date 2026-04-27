@@ -169,7 +169,7 @@ const NativeTasks = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const [responsibleFilter, setResponsibleFilter] = useState('Todos');
+  const [responsibleFilter, setResponsibleFilter] = useState(currentUser?.name || 'Todos');
   const [dateFilter, setDateFilter] = useState('Hoy + Vencidos');
   const [clientFilter, setClientFilter] = useState('Todos');
 
@@ -242,16 +242,6 @@ const NativeTasks = () => {
     staleTime: 600000, // 10 minutes
   });
 
-  // Set default responsible filter based on user role
-  useEffect(() => {
-    const user = sessionStorage.getItem('currentUser');
-    if (user) {
-      const parsedUser = JSON.parse(user);
-      if (parsedUser.role !== 'ADMIN' && parsedUser.name) {
-        setResponsibleFilter(parsedUser.name);
-      }
-    }
-  }, []);
 
   // Deep linking logic: open returned tasks sidebar and open specific task if taskId is provided
   useEffect(() => {
