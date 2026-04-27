@@ -4,14 +4,20 @@ import { classifyTaskWithAI } from './aiService.js';
 
 export const getDashboardMetrics = async () => {
     try {
-        // Total historical completed tasks
-        const totalCompleted = await prisma.task.count({
-            where: {
-                status: 'REALIZADA'
-            }
+        // America/Bogota Month Boundaries
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Bogota',
+            year: 'numeric',
+            month: '2-digit'
         });
+        const monthStr = formatter.format(new Date()); // "YYYY-MM"
 
-        // Pending tasks
+        const startOfMonth = new Date(`${monthStr}-01T05:00:00.000Z`);
+        const nextMonthDate = new Date(startOfMonth);
+        nextMonthDate.setUTCMonth(nextMonthDate.getUTCMonth() + 1);
+        const endOfMonth = new Date(nextMonthDate.getTime() - 1);
+
+        // 1. Pending (Historical active) - NOT filtered by month
         const pendingCount = await prisma.task.count({
             where: {
                 status: {
@@ -20,12 +26,44 @@ export const getDashboardMetrics = async () => {
             }
         });
 
-        const totalActive = pendingCount + totalCompleted;
-        const percentage = totalActive > 0 ? Math.round((totalCompleted / totalActive) * 100) : 0;
+        // 2. Completed this month
+        const completedThisMonthCount = await prisma.task.count({
+            where: {
+                status: 'REALIZADA',
+                completedAt: {
+                    gte: startOfMonth,
+                    lte: endOfMonth
+                }
+            }
+        });
+
+        // 3. Total (Universo Único de Actividad: Creadas este mes OR Terminadas este mes)
+        const totalUniqueActiveThisMonth = await prisma.task.count({
+            where: {
+                OR: [
+                    {
+                        createdAt: {
+                            gte: startOfMonth,
+                            lte: endOfMonth
+                        }
+                    },
+                    {
+                        completedAt: {
+                            gte: startOfMonth,
+                            lte: endOfMonth
+                        }
+                    }
+                ]
+            }
+        });
+
+        const percentage = totalUniqueActiveThisMonth > 0
+            ? Math.round((completedThisMonthCount / totalUniqueActiveThisMonth) * 100)
+            : 0;
 
         return {
-            total: totalActive,
-            completed: totalCompleted,
+            total: totalUniqueActiveThisMonth,
+            completed: completedThisMonthCount,
             pending: pendingCount,
             percentage
         };

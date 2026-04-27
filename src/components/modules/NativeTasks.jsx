@@ -214,6 +214,7 @@ const NativeTasks = () => {
           creatorName: task.creator?.name || 'Sistema',
           status: task.status,
           dueDateFormatted: task.dueDate ? task.dueDate.split('T')[0].split('-').reverse().join('-') : null,
+          completedAt: task.completedAt,
           comments: task.comments,
           isPriority: task.isPriority || false,
           isSpecial: task.isSpecial || false,
@@ -426,13 +427,29 @@ const NativeTasks = () => {
 
   const filteredTasks = useMemo(() => {
       let filtered = tasks.filter(task => {
-        // Filter by Responsible
+        // 1. STRICT MONTH FILTER FOR "REALIZADO" COLUMN
+        // According to ticket: Only show tasks completed in the current month in the "Realizado" column.
+        const columnId = getColumnId(task.status, task.comments);
+        if (columnId === 'realizado') {
+            if (!task.completedAt) return false;
+
+            const completedDate = new Date(task.completedAt);
+            const now = new Date();
+
+            // Boundary check for current month (Local Client Time is fine for UI)
+            const isCurrentMonth = completedDate.getMonth() === now.getMonth() &&
+                                  completedDate.getFullYear() === now.getFullYear();
+
+            if (!isCurrentMonth) return false;
+        }
+
+        // 2. Filter by Responsible
         if (responsibleFilter !== 'Todos' && (task.assigneeName || "Desconocido") !== responsibleFilter) return false;
 
-        // Filter by Client
+        // 3. Filter by Client
         if (clientFilter !== 'Todos' && (task.clientName || "Desconocido") !== clientFilter) return false;
 
-        // Filter by Date Logic
+        // 4. Filter by Date Logic (UI Date Filters)
         // 'Hoy + Vencidos' (Default): Muestra fecha <= HOY.
         // 'Solo Vencidos' (⚠️): Muestra fecha < HOY.
         // 'Esta Semana': Muestra fecha >= Lunes Y fecha <= Domingo.
@@ -457,7 +474,7 @@ const NativeTasks = () => {
         return true;
       });
 
-      // 2. Sorting: Always by Date Ascending (Oldest First)
+      // 5. Sorting: Always by Date Ascending (Oldest First)
       filtered.sort((a, b) => {
           const dateA = parseDate(a.dueDateFormatted) || new Date(2100, 0, 1); // Future if null
           const dateB = parseDate(b.dueDateFormatted) || new Date(2100, 0, 1);
