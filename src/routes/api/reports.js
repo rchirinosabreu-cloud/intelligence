@@ -101,13 +101,13 @@ router.post('/generate', upload.fields([
             model: MODEL_NAME,
             systemInstruction: {
                 role: "system",
-                parts: [{ text: `Eres un Analista de Estrategia Senior en Brainstudio. Tu objetivo es generar un "Reporte de desempeño digital" profesional, equilibrado y con visión de negocio.
+                parts: [{ text: `Eres el Director Estratégico de Brainstudio. Tu objetivo es generar un "Reporte de desempeño digital" imponente y profesional.
 
-Reglas de Redacción:
-1. Títulos RAE: Usa solo mayúscula inicial (ej: Análisis orgánico (RRSS)).
-2. Análisis equilibrado: Redacta entre 3 y 5 párrafos concisos por sección.
-3. Tono: Directo, profesional, enfocado en ROI y optimización.
-4. Jerarquía: Destaca números pero evita el exceso de negritas o cursivas.
+Reglas Estéticas y de Contenido:
+1. Títulos RAE: Solo mayúscula inicial (ej: Análisis orgánico (RRSS), Hoja de ruta estratégica). Sin negritas excesivas, sin cursivas.
+2. Análisis Equilibrado: Entre 3 y 5 párrafos concisos por sección.
+3. Hoja de ruta: Es OBLIGATORIO proponer 3 pasos tácticos basados en datos en el campo "hoja_de_ruta".
+4. Tono: Profesional, directo y visionario.
 
 ESTRUCTURA JSON OBLIGATORIA:
 {
@@ -118,13 +118,14 @@ ESTRUCTURA JSON OBLIGATORIA:
       { "label": "Nuevos seguidores", "value": "+150" },
       { "label": "Alcance total", "value": "85K" }
     ],
-    "analysis": "Logros y avances en 3-5 párrafos...",
+    "analysis": "Logros y avances...",
     "topContent": [
-      { "title": "...", "type": "Reel/Imagen", "reach": "10K", "engagement": "1.2K" }
+      { "title": "...", "type": "Reel/Estática", "reach": "10K", "engagement": "1.2K" }
     ],
     "charts": {
-      "engagementByFormat": [{ "name": "Reels", "value": 70 }, { "name": "Imágenes", "value": 30 }],
-      "followersEvolution": [{ "date": "...", "value": 100 }]
+      "engagementByFormat": [{ "name": "Reels", "value": 70 }, { "name": "Estáticas", "value": 30 }],
+      "platformReach": [{ "name": "Instagram", "value": 50000 }, { "name": "Facebook", "value": 35000 }],
+      "dailyEvolution": [{ "date": "1", "value": 100 }]
     }
   },
   "performance": {
@@ -134,13 +135,16 @@ ESTRUCTURA JSON OBLIGATORIA:
       { "label": "Impresiones", "value": "250K" },
       { "label": "Alcance", "value": "180K" }
     ],
-    "analysis": "Rendimiento y resultados en 3-5 párrafos...",
-    "strategy": "Estrategia de optimización...",
+    "analysis": "Rendimiento y resultados...",
     "charts": {
-      "adsEfficiency": [{ "campaign": "...", "cpr": 0.5 }]
+      "accumulatedArea": [{ "date": "1", "reach": 1000, "impressions": 1500 }]
     }
   },
-  "roadmap": "Hoja de ruta estratégica propositiva para el próximo mes..."
+  "hoja_de_ruta": [
+    { "step": "1", "title": "...", "description": "..." },
+    { "step": "2", "title": "...", "description": "..." },
+    { "step": "3", "title": "...", "description": "..." }
+  ]
 }` }]
             },
             generationConfig: {
@@ -148,19 +152,19 @@ ESTRUCTURA JSON OBLIGATORIA:
             }
         });
 
-        const prompt = `Genera el Reporte de desempeño digital para el cliente ${client.name}.
+        const prompt = `Analiza estos datos para ${client.name}:
 
-        DATA CONSOLIDADA (MÉTRICAS):
+        RESUMEN:
         Orgánico: ${JSON.stringify(summary.organic)}
         Performance: ${JSON.stringify(summary.ads)}
 
-        DATA RELEVANTE (EXTRACCIÓN DE FORMATOS Y CAMPAÑAS):
-        ${JSON.stringify({
-          organicSample: organicRawData.slice(0, 30),
-          adsSample: adsRawData.slice(0, 30)
-        })}
+        DATOS RELEVANTE PARA GRÁFICAS:
+        - Reels vs Estáticas (Engagement).
+        - IG vs FB (Alcance).
+        - Evolución diaria del mes.
+        - Alcance vs Impresiones (Acumulados de Ads).
 
-        Instrucción: Identifica el rendimiento por formato (Reel vs Imagen) y la eficiencia de las campañas de Ads para las gráficas.`;
+        Muestra ${JSON.stringify({ organicSample: organicRawData.slice(0, 40), adsSample: adsRawData.slice(0, 40) })}`;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
