@@ -51,7 +51,6 @@ router.post('/generate', upload.fields([
             const logoFile = req.files['logo'][0];
             try {
                 const uploadResult = await uploadClientFile(logoFile, client.name);
-                // Use a proper URL format that the frontend can resolve
                 updatedLogoUrl = `${process.env.API_BASE_URL || ''}/api/clients/${client.id}/logo-image?gcsPath=${encodeURIComponent(uploadResult.gcsPath)}`;
 
                 await prisma.client.update({
@@ -77,21 +76,19 @@ router.post('/generate', upload.fields([
         const organicRawData = parseFiles(req.files['organic']);
         const adsRawData = parseFiles(req.files['ads']);
 
-        if (organicRawData.length === 0 && adsRawData.length === 0) {
-            return res.status(400).json({ error: 'At least one data file is required' });
-        }
-
-        // Pre-processing for AI: Summarize key numbers to help Gemini be precise
+        // Pre-processing totals for the widgets
         const summary = {
             organic: {
-                totalReach: organicRawData.reduce((acc, row) => acc + (Number(row.Alcance || row.Reach || row.Impressions || 0)), 0),
-                avgEngagement: (organicRawData.reduce((acc, row) => acc + (Number(row.Engagement || row.Interacciones || 0)), 0) / (organicRawData.length || 1)).toFixed(2),
-                rowsCount: organicRawData.length
+                impressions: organicRawData.reduce((acc, row) => acc + (Number(row.Impresiones || row.Impressions || 0)), 0),
+                interactions: organicRawData.reduce((acc, row) => acc + (Number(row.Interacciones || row.Engagement || row.Interactions || 0)), 0),
+                followersGrowth: organicRawData.reduce((acc, row) => acc + (Number(row.Seguidores || row.Followers || 0)), 0),
+                totalReach: organicRawData.reduce((acc, row) => acc + (Number(row.Alcance || row.Reach || 0)), 0)
             },
             ads: {
-                totalSpend: adsRawData.reduce((acc, row) => acc + (Number(row.Spend || row.Inversión || row.Amount || 0)), 0),
-                totalResults: adsRawData.reduce((acc, row) => acc + (Number(row.Results || row.Resultados || row.Conversions || 0)), 0),
-                rowsCount: adsRawData.length
+                investment: adsRawData.reduce((acc, row) => acc + (Number(row.Spend || row.Inversión || row.Amount || 0)), 0),
+                conversions: adsRawData.reduce((acc, row) => acc + (Number(row.Results || row.Resultados || row.Conversions || 0)), 0),
+                impressions: adsRawData.reduce((acc, row) => acc + (Number(row.Impressions || row.Impresiones || 0)), 0),
+                totalReach: adsRawData.reduce((acc, row) => acc + (Number(row.Reach || row.Alcance || 0)), 0)
             }
         };
 
@@ -104,43 +101,46 @@ router.post('/generate', upload.fields([
             model: MODEL_NAME,
             systemInstruction: {
                 role: "system",
-                parts: [{ text: `Eres el Director de Estrategia Senior de Brainstudio. Tu misión es realizar una "Auditoría Estratégica" multifuente.
-No te limites a resumir; debes diagnosticar éxitos y proponer una hoja de ruta ganadora.
+                parts: [{ text: `Eres un Analista de Estrategia Senior en Brainstudio. Tu objetivo es generar un "Reporte de desempeño digital" profesional, equilibrado y con visión de negocio.
 
-Reglas de Análisis:
-1. Resalta cifras globales imponentes (Alcance Total, Inversión Total).
-2. "Top Content": Identifica las 3-5 mejores publicaciones basándote en la data.
-3. Tono: Profesional, optimista y visionario. Transforma debilidades en "oportunidades de optimización".
-4. Diagnóstico: Explica por qué el contenido ganador funcionó (gancho, formato, timing).
+Reglas de Redacción:
+1. Títulos RAE: Usa solo mayúscula inicial (ej: Análisis orgánico (RRSS)).
+2. Análisis equilibrado: Redacta entre 3 y 5 párrafos concisos por sección.
+3. Tono: Directo, profesional, enfocado en ROI y optimización.
+4. Jerarquía: Destaca números pero evita el exceso de negritas o cursivas.
 
 ESTRUCTURA JSON OBLIGATORIA:
 {
-  "narrative": "Análisis profundo y estratégico...",
-  "kpis": {
-    "organic": [
-      { "label": "Alcance Total", "value": "120,450", "trend": "+15%" },
-      { "label": "Engagement Promedio", "value": "4.2%", "trend": "+0.5%" },
-      { "label": "Nuevos Seguidores", "value": "850", "trend": "+12%" }
+  "organic": {
+    "widgets": [
+      { "label": "Impresiones", "value": "120K" },
+      { "label": "Interacciones", "value": "5.4K" },
+      { "label": "Nuevos seguidores", "value": "+150" },
+      { "label": "Alcance total", "value": "85K" }
     ],
-    "ads": [
-      { "label": "Inversión Total", "value": "$1,200", "trend": "Estable" },
-      { "label": "Costo por Resultado", "value": "$0.45", "trend": "-10%" },
-      { "label": "ROAS Estimado", "value": "4.5x", "trend": "+0.8x" }
-    ]
+    "analysis": "Logros y avances en 3-5 párrafos...",
+    "topContent": [
+      { "title": "...", "type": "Reel/Imagen", "reach": "10K", "engagement": "1.2K" }
+    ],
+    "charts": {
+      "engagementByFormat": [{ "name": "Reels", "value": 70 }, { "name": "Imágenes", "value": 30 }],
+      "followersEvolution": [{ "date": "...", "value": 100 }]
+    }
   },
-  "topContent": [
-    { "title": "Reel: Beneficios de X", "metrics": "15k Views / 1.2k Likes", "whyItWorked": "El gancho inicial resolvió un problema común de la audiencia.", "link": "#" }
-  ],
-  "comparison": "Comparativa entre canales y campañas...",
-  "roadmap": [
-    { "step": "1", "action": "Acción estratégica A", "reason": "Basado en hallazgo X" },
-    { "step": "2", "action": "Acción estratégica B", "reason": "Basado en hallazgo Y" },
-    { "step": "3", "action": "Acción estratégica C", "reason": "Basado en hallazgo Z" }
-  ],
-  "charts": {
-    "organicTrend": [{ "date": "...", "value": 0 }],
-    "adsDistribution": [{ "name": "...", "value": 0 }]
-  }
+  "performance": {
+    "widgets": [
+      { "label": "Inversión", "value": "$1,200" },
+      { "label": "Conversiones", "value": "450" },
+      { "label": "Impresiones", "value": "250K" },
+      { "label": "Alcance", "value": "180K" }
+    ],
+    "analysis": "Rendimiento y resultados en 3-5 párrafos...",
+    "strategy": "Estrategia de optimización...",
+    "charts": {
+      "adsEfficiency": [{ "campaign": "...", "cpr": 0.5 }]
+    }
+  },
+  "roadmap": "Hoja de ruta estratégica propositiva para el próximo mes..."
 }` }]
             },
             generationConfig: {
@@ -148,16 +148,19 @@ ESTRUCTURA JSON OBLIGATORIA:
             }
         });
 
-        const prompt = `Realiza la Auditoría Estratégica para ${client.name}.
+        const prompt = `Genera el Reporte de desempeño digital para el cliente ${client.name}.
 
-        RESUMEN MATEMÁTICO PREVIO:
-        Orgánico: Alcance Total de ${summary.organic.totalReach}, Engagement Promedio de ${summary.organic.avgEngagement}.
-        Pauta: Inversión Total de ${summary.ads.totalSpend}, Resultados Totales de ${summary.ads.totalResults}.
+        DATA CONSOLIDADA (MÉTRICAS):
+        Orgánico: ${JSON.stringify(summary.organic)}
+        Performance: ${JSON.stringify(summary.ads)}
 
-        DATOS CRUDOS PARA PROFUNDIZAR (MÉTODOS, GANCHOS, LINKS):
-        ${JSON.stringify({ organic: organicRawData.slice(0, 50), ads: adsRawData.slice(0, 50) })}
+        DATA RELEVANTE (EXTRACCIÓN DE FORMATOS Y CAMPAÑAS):
+        ${JSON.stringify({
+          organicSample: organicRawData.slice(0, 30),
+          adsSample: adsRawData.slice(0, 30)
+        })}
 
-        Instrucción: Usa los datos crudos para identificar el "Top Content" y dar el diagnóstico de por qué funcionaron.`;
+        Instrucción: Identifica el rendimiento por formato (Reel vs Imagen) y la eficiencia de las campañas de Ads para las gráficas.`;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
@@ -172,8 +175,8 @@ ESTRUCTURA JSON OBLIGATORIA:
         });
 
     } catch (error) {
-        console.error('[Reports API] Error generating strategic audit:', error);
-        res.status(500).json({ error: 'Failed to generate audit', details: error.message });
+        console.error('[Reports API] Error generating final report:', error);
+        res.status(500).json({ error: 'Failed to generate report', details: error.message });
     }
 });
 
