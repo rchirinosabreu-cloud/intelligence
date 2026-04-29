@@ -201,7 +201,7 @@ const ActivityMap = () => {
       if (!res.ok) throw new Error('Failed to fetch status');
       return res.json();
     },
-    refetchInterval: 15000,
+    refetchInterval: 10000, // Faster refresh to sync with calendar changes
   });
 
   if (isLoading) {
