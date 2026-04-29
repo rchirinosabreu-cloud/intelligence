@@ -30,8 +30,8 @@ try {
 }
 
 router.post('/generate', upload.fields([
-    { name: 'organic', maxCount: 1 },
-    { name: 'ads', maxCount: 1 },
+    { name: 'organic', maxCount: 10 },
+    { name: 'ads', maxCount: 10 },
     { name: 'logo', maxCount: 1 }
 ]), async (req, res) => {
     try {
@@ -45,15 +45,12 @@ router.post('/generate', upload.fields([
             return res.status(404).json({ error: 'Client not found' });
         }
 
-        // 1. Handle Logo Upload (if provided)
+        // 1. Handle Logo Upload
         let updatedLogoUrl = client.logoUrl;
         if (req.files['logo']) {
             const logoFile = req.files['logo'][0];
             try {
                 const uploadResult = await uploadClientFile(logoFile, client.name);
-                // The storage service returns a signed URL and a gcsPath.
-                // Based on server.js proxy logic, we might want to store a specific format or just the URL.
-                // The proxy in server.js expects 'gcsPath=' in the URL to handle it specially.
                 updatedLogoUrl = `${process.env.API_BASE_URL || ''}/api/clients/${client.id}/logo-image?gcsPath=${encodeURIComponent(uploadResult.gcsPath)}`;
 
                 await prisma.client.update({
@@ -62,24 +59,28 @@ router.post('/generate', upload.fields([
                 });
             } catch (uploadError) {
                 console.error('[Reports API] Logo upload failed:', uploadError);
-                // Non-critical, continue with report generation
             }
         }
 
-        // 2. Parse Files
-        const parseFile = (file) => {
-            if (!file) return null;
-            const workbook = XLSX.read(file.buffer, { type: 'buffer' });
-            const sheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[sheetName];
-            return XLSX.utils.sheet_to_json(worksheet);
+        // 2. Parse Multiple Files
+        const parseFiles = (files) => {
+            if (!files || files.length === 0) return [];
+            return files.map(file => {
+                const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                return {
+                    fileName: file.originalname,
+                    data: XLSX.utils.sheet_to_json(worksheet)
+                };
+            });
         };
 
-        const organicData = parseFile(req.files['organic']?.[0]);
-        const adsData = parseFile(req.files['ads']?.[0]);
+        const organicFilesData = parseFiles(req.files['organic']);
+        const adsFilesData = parseFiles(req.files['ads']);
 
-        if (!organicData && !adsData) {
-            return res.status(400).json({ error: 'At least one data file (Organic or Ads) is required' });
+        if (organicFilesData.length === 0 && adsFilesData.length === 0) {
+            return res.status(400).json({ error: 'At least one data file is required' });
         }
 
         // 3. AI Analysis with Gemini 2.5 Pro
@@ -91,23 +92,34 @@ router.post('/generate', upload.fields([
             model: MODEL_NAME,
             systemInstruction: {
                 role: "system",
-                parts: [{ text: `Eres el Director Estratégico de Brainstudio. Analiza estos datos de marketing. Tu objetivo es redactar un reporte que resalte el valor de la agencia.
-Reglas:
-1. Si los datos son bajos, no hables de fracaso, habla de 'oportunidades de optimización'.
-2. Provee siempre una estrategia esperanzadora para el próximo mes.
-3. Devuélveme el análisis narrativo y un objeto JSON con los puntos clave para las gráficas.
+                parts: [{ text: `Eres el Director Estratégico de Brainstudio. Analiza estos datos de marketing consolidados de múltiples fuentes.
+Tu objetivo es redactar un reporte "Deep Analysis" que resalte el valor de la agencia.
 
-IMPORTANTE: Responde con un JSON que tenga esta estructura exacta:
+Reglas:
+1. Consolidación: Suma métricas globales, pero también compara el rendimiento entre fuentes (archivos).
+2. Tono: Profesional, analítico y optimista. Habla de "oportunidades de optimización".
+3. Visualización: Devuélveme un JSON estructurado para alimentar widgets de KPI, tablas de comparación y gráficas.
+
+ESTRUCTURA JSON OBLIGATORIA:
 {
-  "narrative": "Tu análisis aquí...",
+  "narrative": "Análisis profundo...",
+  "kpis": [
+    { "label": "Alcance Total", "value": "120K", "trend": "+12%" },
+    { "label": "Interacciones", "value": "5.4K", "trend": "+5%" }
+  ],
+  "topPerformers": [
+    { "source": "Instagram_Oct.csv", "metric": "Engagement", "value": "4.2%" },
+    { "source": "Facebook_Ads.xlsx", "metric": "ROAS", "value": "3.5x" }
+  ],
   "metrics": {
     "organic": {
       "followers": [{ "date": "...", "value": 0 }],
-      "interactions": [{ "date": "...", "value": 0 }]
+      "interactions": [{ "date": "...", "value": 0 }],
+      "distributionBySource": [{ "name": "Source A", "value": 100 }]
     },
     "ads": {
       "funnel": [{ "stage": "...", "value": 0 }],
-      "distribution": [{ "name": "...", "value": 0 }]
+      "distributionBySource": [{ "name": "Campaign A", "value": 500 }]
     }
   },
   "keyTakeaways": ["Punto 1", "Punto 2"],
@@ -119,13 +131,14 @@ IMPORTANTE: Responde con un JSON que tenga esta estructura exacta:
             }
         });
 
-        const prompt = `Analiza los siguientes datos para el cliente ${client.name}:
+        const prompt = `Analiza los siguientes datos consolidados para el cliente ${client.name}.
+Hay ${organicFilesData.length} fuentes orgánicas y ${adsFilesData.length} fuentes de pauta.
 
-        DATOS ORGÁNICOS:
-        ${JSON.stringify(organicData || "No provisto")}
+DATOS ORGÁNICOS (MULTI-FUENTE):
+${JSON.stringify(organicFilesData)}
 
-        DATOS DE PAUTA (ADS):
-        ${JSON.stringify(adsData || "No provisto")}`;
+DATOS DE PAUTA (MULTI-FUENTE):
+${JSON.stringify(adsFilesData)}`;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
@@ -140,7 +153,7 @@ IMPORTANTE: Responde con un JSON que tenga esta estructura exacta:
         });
 
     } catch (error) {
-        console.error('[Reports API] Error generating report:', error);
+        console.error('[Reports API] Error generating multi-file report:', error);
         res.status(500).json({ error: 'Failed to generate report', details: error.message });
     }
 });
