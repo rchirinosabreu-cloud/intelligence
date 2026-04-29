@@ -313,34 +313,36 @@ const OperationalCalendar = () => {
         ))}
 
         {days.map(day => (
-          <div key={day.toString()} className="bg-white dark:bg-zinc-900 p-2 md:p-4 min-h-[120px] md:min-h-[140px] transition-colors hover:bg-zinc-50/50 dark:hover:bg-white/5">
-            <span className={cn(
-              "text-sm font-bold",
-              isSameDay(day, new Date()) ? "text-indigo-600 dark:text-indigo-400" : "text-zinc-400 dark:text-zinc-600"
-            )}>
-              {format(day, 'd')}
-            </span>
-            <div className="mt-2 space-y-1">
+          <div key={day.toString()} className="bg-white dark:bg-zinc-900 min-h-[120px] md:min-h-[140px] transition-colors hover:bg-zinc-50/50 dark:hover:bg-white/5 border-r border-b border-zinc-100 dark:border-zinc-800">
+            <div className="p-2 md:p-4">
+               <span className={cn(
+                "text-sm font-bold",
+                isSameDay(day, new Date()) ? "text-indigo-600 dark:text-indigo-400" : "text-zinc-400 dark:text-zinc-600"
+              )}>
+                {format(day, 'd')}
+              </span>
+            </div>
+            <div className="mt-[-8px] space-y-1 pb-4">
               {projectedEvents.filter(e => isSameDay(new Date(e.displayStartAt || e.startAt), day)).map((event, idx) => (
                 <div
                   key={`${event.id}-${idx}`}
                   onClick={() => isAdmin && handleEdit(event)}
                   className={cn(
-                    "group relative p-1.5 border text-[10px] font-medium transition-all flex items-center gap-1.5",
-                    isAdmin ? "cursor-pointer hover:shadow-md" : "cursor-default",
+                    "group relative px-3 py-1.5 border-y text-[10px] font-bold transition-all flex items-center gap-1.5",
+                    isAdmin ? "cursor-pointer hover:brightness-95" : "cursor-default",
                     getEventColor(event.type),
-                    // Multi-day visualization logic
+                    // Multi-day visualization logic: Remove rounded corners and side borders to create a single bar
                     event.isMultiDay ? (
-                        event.isFirstDay ? "rounded-l-lg border-r-0 mr-[-2px] z-10" :
-                        event.isLastDay ? "rounded-r-lg border-l-0 ml-[-2px]" :
-                        "rounded-none border-x-0 mx-[-2px]"
-                    ) : "rounded-lg"
+                        event.isFirstDay ? "rounded-l-xl border-l ml-2 z-10" :
+                        event.isLastDay ? "rounded-r-xl border-r mr-2" :
+                        "rounded-none border-x-0"
+                    ) : "rounded-xl border-x mx-2"
                   )}
                 >
                   {(!event.isMultiDay || event.isFirstDay) && getEventIcon(event.type)}
                   <span className={cn(
                       "truncate flex-1",
-                      event.isMultiDay && !event.isFirstDay && "invisible" // Only show title on first day for clean look
+                      event.isMultiDay && !event.isFirstDay && "invisible" // Hide text except on first day
                   )}>
                     {event.title}
                   </span>
@@ -351,7 +353,7 @@ const OperationalCalendar = () => {
                         e.stopPropagation();
                         handleDelete(event.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-500 hover:text-white rounded transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-500 hover:text-white rounded transition-all shrink-0"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
