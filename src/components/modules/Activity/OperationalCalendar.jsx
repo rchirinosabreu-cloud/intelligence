@@ -173,34 +173,70 @@ const OperationalCalendar = () => {
     end: monthEnd
   });
 
-  // Function to project recurring events into the calendar grid
+  // Function to project events (including multi-day and recurring) into the calendar grid
   const getProjectedEvents = () => {
     const projected = [];
     events.forEach(event => {
+      const eventStart = new Date(event.startAt);
+      const eventEnd = new Date(event.endAt);
+
       if (event.recurrence === 'NONE' || !event.recurrence) {
-        projected.push(event);
+        // Multi-day non-recurring events: Project into each day
+        let currentDay = new Date(eventStart);
+        currentDay.setHours(0, 0, 0, 0);
+
+        const lastDay = new Date(eventEnd);
+        lastDay.setHours(0, 0, 0, 0);
+
+        while (currentDay <= lastDay) {
+          if (currentDay >= monthStart && currentDay <= monthEnd) {
+            projected.push({
+              ...event,
+              // Display dates for the specific cell
+              displayStartAt: currentDay.toISOString(),
+              isMultiDay: !isSameDay(eventStart, eventEnd),
+              isFirstDay: isSameDay(currentDay, eventStart),
+              isLastDay: isSameDay(currentDay, eventEnd)
+            });
+          }
+          currentDay = new Date(currentDay.getTime() + 24 * 60 * 60 * 1000);
+        }
       } else if (event.recurrence === 'WEEKLY') {
-        let current = new Date(event.startAt);
-        const eventEnd = new Date(event.endAt);
-        const duration = eventEnd.getTime() - current.getTime();
+        let currentInstanceStart = new Date(eventStart);
+        const duration = eventEnd.getTime() - eventStart.getTime();
         const limit = event.recurrenceEnd ? new Date(event.recurrenceEnd) : monthEnd;
 
-        // Move current to the first instance within the visible month or later
-        while (current < monthStart) {
-          current = new Date(current.getTime() + 7 * 24 * 60 * 60 * 1000);
+        // Move current to the first instance that could overlap with the visible month
+        // (Even if it started weeks ago, a multi-day instance might still overlap)
+        while (new Date(currentInstanceStart.getTime() + duration) < monthStart) {
+          currentInstanceStart = new Date(currentInstanceStart.getTime() + 7 * 24 * 60 * 60 * 1000);
         }
 
-        // Project until limit or end of visible month
         const maxDate = limit < monthEnd ? limit : monthEnd;
 
-        while (current <= maxDate) {
-          projected.push({
-            ...event,
-            startAt: current.toISOString(),
-            endAt: new Date(current.getTime() + duration).toISOString(),
-            isProjected: true // For visual differentiation if needed
-          });
-          current = new Date(current.getTime() + 7 * 24 * 60 * 60 * 1000);
+        while (currentInstanceStart <= maxDate) {
+            const instanceEnd = new Date(currentInstanceStart.getTime() + duration);
+
+            let currentDay = new Date(currentInstanceStart);
+            currentDay.setHours(0, 0, 0, 0);
+
+            const lastDay = new Date(instanceEnd);
+            lastDay.setHours(0, 0, 0, 0);
+
+            while (currentDay <= lastDay) {
+                if (currentDay >= monthStart && currentDay <= monthEnd) {
+                    projected.push({
+                        ...event,
+                        displayStartAt: currentDay.toISOString(),
+                        isProjected: true,
+                        isMultiDay: !isSameDay(currentInstanceStart, instanceEnd),
+                        isFirstDay: isSameDay(currentDay, currentInstanceStart),
+                        isLastDay: isSameDay(currentDay, lastDay)
+                    });
+                }
+                currentDay = new Date(currentDay.getTime() + 24 * 60 * 60 * 1000);
+            }
+            currentInstanceStart = new Date(currentInstanceStart.getTime() + 7 * 24 * 60 * 60 * 1000);
         }
       }
     });
@@ -277,7 +313,7 @@ const OperationalCalendar = () => {
         ))}
 
         {days.map(day => (
-          <div key={day.toString()} className="bg-white dark:bg-zinc-900 p-4 min-h-[140px] transition-colors hover:bg-zinc-50/50 dark:hover:bg-white/5">
+          <div key={day.toString()} className="bg-white dark:bg-zinc-900 p-2 md:p-4 min-h-[120px] md:min-h-[140px] transition-colors hover:bg-zinc-50/50 dark:hover:bg-white/5">
             <span className={cn(
               "text-sm font-bold",
               isSameDay(day, new Date()) ? "text-indigo-600 dark:text-indigo-400" : "text-zinc-400 dark:text-zinc-600"
@@ -285,20 +321,31 @@ const OperationalCalendar = () => {
               {format(day, 'd')}
             </span>
             <div className="mt-2 space-y-1">
-              {projectedEvents.filter(e => isSameDay(new Date(e.startAt), day)).map((event, idx) => (
+              {projectedEvents.filter(e => isSameDay(new Date(e.displayStartAt || e.startAt), day)).map((event, idx) => (
                 <div
                   key={`${event.id}-${idx}`}
                   onClick={() => isAdmin && handleEdit(event)}
                   className={cn(
-                    "group relative p-1.5 rounded-lg border text-[10px] font-medium transition-all flex items-center gap-1.5",
+                    "group relative p-1.5 border text-[10px] font-medium transition-all flex items-center gap-1.5",
                     isAdmin ? "cursor-pointer hover:shadow-md" : "cursor-default",
-                    getEventColor(event.type)
+                    getEventColor(event.type),
+                    // Multi-day visualization logic
+                    event.isMultiDay ? (
+                        event.isFirstDay ? "rounded-l-lg border-r-0 mr-[-2px] z-10" :
+                        event.isLastDay ? "rounded-r-lg border-l-0 ml-[-2px]" :
+                        "rounded-none border-x-0 mx-[-2px]"
+                    ) : "rounded-lg"
                   )}
                 >
-                  {getEventIcon(event.type)}
-                  <span className="truncate flex-1">{event.title}</span>
+                  {(!event.isMultiDay || event.isFirstDay) && getEventIcon(event.type)}
+                  <span className={cn(
+                      "truncate flex-1",
+                      event.isMultiDay && !event.isFirstDay && "invisible" // Only show title on first day for clean look
+                  )}>
+                    {event.title}
+                  </span>
 
-                  {isAdmin && (
+                  {isAdmin && (!event.isMultiDay || event.isLastDay) && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

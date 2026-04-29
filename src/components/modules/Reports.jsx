@@ -159,9 +159,9 @@ const Reports = () => {
   );
 
   const SectionHeader = ({ title, clientLogo }) => (
-    <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-50">
+    <div className="flex items-center justify-between mb-8 border-b border-slate-100 pb-4">
        <h3 className="text-xl font-bold tracking-tight text-slate-800">{title}</h3>
-       {clientLogo && <img src={clientLogo} className="h-8 w-auto object-contain" />}
+       {clientLogo && <img src={clientLogo} className="h-10 w-auto object-contain" />}
     </div>
   );
 
