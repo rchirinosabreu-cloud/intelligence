@@ -98,26 +98,26 @@ export async function getTeamActivityStatus() {
     // Find all events for this member
     const memberEvents = todayEvents.filter(e => e.memberIds.includes(member.id));
 
-    // Priority 1: AUSENCIA/PERMISO (If any "Permiso" event today)
+    // Priority 1: REUNION REAL (Active NOW - specific time match)
+    const meetingEvent = memberEvents.find(e => e.type === 'MEETING' && checkEventActive(e, now));
+
+    // Priority 2: AUSENCIA/PERMISO (If any "Permiso" event today)
     const absenceEvent = memberEvents.find(e => (e.type === 'ABSENCE' || e.title?.toLowerCase().includes('permiso')) && checkEventToday(e));
 
-    // Priority 2: PRODUCCION (If any production event today)
+    // Priority 3: PRODUCCION (If any production event today)
     const productionEvent = memberEvents.find(e => e.type === 'PRODUCTION' && checkEventToday(e));
-
-    // Priority 3: REUNION REAL (Active now)
-    const meetingEvent = memberEvents.find(e => e.type === 'MEETING' && checkEventActive(e, now));
 
     let prioritizedEvent = null;
 
-    if (absenceEvent) {
+    if (meetingEvent) {
+      status = 'REUNION';
+      prioritizedEvent = meetingEvent;
+    } else if (absenceEvent) {
       status = 'AUSENTE';
       prioritizedEvent = absenceEvent;
     } else if (productionEvent) {
       status = 'PRODUCCION';
       prioritizedEvent = productionEvent;
-    } else if (meetingEvent) {
-      status = 'REUNION';
-      prioritizedEvent = meetingEvent;
     }
     // Priority 4: ENFOQUE (Tasks "En proceso")
     else if (currentTask) {
