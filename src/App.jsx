@@ -14,6 +14,7 @@ import ContentGrids from './components/modules/ContentGrids';
 import ContentPlanDetail from './components/modules/ContentPlanDetail';
 import TalentRadar from './components/modules/TalentRadar';
 import Activity from './components/modules/Activity';
+import Reports from './components/modules/Reports';
 import Login from './components/Login';
 import PrivacyPolicy from './components/public/PrivacyPolicy';
 import TermsOfService from './components/public/TermsOfService';
@@ -88,6 +89,7 @@ function AppContent() {
                     <Route path="/bria" element={<Chat />} />
                     <Route path="/gestion" element={<NativeTasks />} />
                     <Route path="/actividad" element={<Activity />} />
+                    <Route path="/reportes" element={<Reports />} />
                     <Route path="/parrillas" element={<ContentGrids />} />
                     <Route path="/parrillas/:clientSlug/:period" element={<ContentPlanDetail />} />
                     <Route path="/parrillas/:planId" element={<ContentPlanDetail />} />

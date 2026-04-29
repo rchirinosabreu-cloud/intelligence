@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Sparkles, CheckSquare, LayoutGrid, FileText, BarChart3, Users, UserCheck, User, Moon, Sun, Bell, X, Zap, Map } from 'lucide-react';
+import { LayoutDashboard, Sparkles, CheckSquare, LayoutGrid, FileText, BarChart3, Users, UserCheck, User, Moon, Sun, Bell, X, Zap, Map, FileBarChart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
@@ -20,6 +20,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { id: 'bria', label: 'Bria Intelligence', icon: Sparkles, path: '/bria' },
     { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/gestion' },
     { id: 'activity', label: 'Actividad', icon: Map, path: '/actividad' },
+    { id: 'reports', label: 'Reportes', icon: FileBarChart, path: '/reportes' },
     { id: 'content-grids', label: 'Parrillas', icon: LayoutGrid, path: '/parrillas' },
     { id: 'minutes', label: 'Minutas', icon: FileText, path: '/minutas' },
     { id: 'metrics', label: 'Métricas', icon: BarChart3, path: '/metricas' },
