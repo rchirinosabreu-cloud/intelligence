@@ -29,91 +29,105 @@ export async function getTeamActivityStatus() {
 
   // Unified agency time (UTC)
   const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+
   const BUFFER_MS = 5 * 60 * 1000; // 5 minute safety buffer
 
-  const activeEvents = await prisma.operationalEvent.findMany({
+  // Fetch all events for today (to detect ABSENCE and PRODUCTION)
+  // and recurring events
+  const todayEvents = await prisma.operationalEvent.findMany({
     where: {
       OR: [
         {
-          startAt: { lte: new Date(now.getTime() + BUFFER_MS) },
-          endAt: { gte: new Date(now.getTime() - BUFFER_MS) }
+          startAt: { lte: endOfToday },
+          endAt: { gte: startOfToday }
         },
         {
           recurrence: 'WEEKLY',
-          startAt: { lte: new Date(now.getTime() + BUFFER_MS) },
+          startAt: { lte: endOfToday },
           OR: [
             { recurrenceEnd: null },
-            { recurrenceEnd: { gte: new Date(now.getTime() - BUFFER_MS) } }
+            { recurrenceEnd: { gte: startOfToday } }
           ]
         }
       ]
     }
   });
 
-  // Filter recurring events that match current time in their cycle (with buffer)
-  const currentEvents = activeEvents.filter(event => {
+  const checkEventActive = (event, time) => {
     const eventStart = new Date(event.startAt).getTime();
     const eventEnd = new Date(event.endAt).getTime();
-    const nowTime = now.getTime();
+    const checkTime = time.getTime();
 
     if (event.recurrence === 'NONE' || !event.recurrence) {
-      return eventStart - BUFFER_MS <= nowTime && eventEnd + BUFFER_MS >= nowTime;
+      return eventStart - BUFFER_MS <= checkTime && eventEnd + BUFFER_MS >= checkTime;
     }
     if (event.recurrence === 'WEEKLY') {
-      // Final boundary check (with buffer)
-      if (event.recurrenceEnd && new Date(event.recurrenceEnd).getTime() + BUFFER_MS < nowTime) return false;
-
+      if (event.recurrenceEnd && new Date(event.recurrenceEnd).getTime() + BUFFER_MS < checkTime) return false;
       const start = new Date(event.startAt).getTime();
       const end = new Date(event.endAt).getTime();
       const duration = end - start;
       const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-
-      // Calculate offset within the weekly cycle, ensuring it's positive
-      const timeDiff = nowTime - start;
+      const timeDiff = checkTime - start;
       const offsetInWeek = ((timeDiff % msPerWeek) + msPerWeek) % msPerWeek;
-
-      // Check if current time falls within event duration + buffer
-      // We check if it's within [0, duration] or in the buffers [msPerWeek - buffer, msPerWeek] or [0, buffer]
       return offsetInWeek <= duration + BUFFER_MS || offsetInWeek >= msPerWeek - BUFFER_MS;
     }
     return false;
-  });
+  };
+
+  // Helper to check if event happens at any point "today"
+  const checkEventToday = (event) => {
+    // If it's not recurring, we already filtered it by startAt/endAt in the query
+    if (event.recurrence === 'NONE' || !event.recurrence) return true;
+
+    if (event.recurrence === 'WEEKLY') {
+        const eventDate = new Date(event.startAt);
+        const dayOfWeek = eventDate.getDay();
+        return now.getDay() === dayOfWeek;
+    }
+    return false;
+  };
 
   return members.map(member => {
     let status = 'LIBRE'; // Default: 🟢 Libre
     let currentTask = member.nativeTasks[0] || null;
 
     // Find all events for this member
-    const memberEvents = currentEvents.filter(e => e.memberIds.includes(member.id));
+    const memberEvents = todayEvents.filter(e => e.memberIds.includes(member.id));
 
-    // Priority 1: ABSENCE (Absolute priority, red dot)
-    const absenceEvent = memberEvents.find(e => e.type === 'ABSENCE');
-    const meetingEvent = memberEvents.find(e => e.type === 'MEETING' && e.meetingLink);
-    const productionEvent = memberEvents.find(e => e.type === 'PRODUCTION');
+    // Priority 1: AUSENCIA/PERMISO (If any "Permiso" event today)
+    const absenceEvent = memberEvents.find(e => (e.type === 'ABSENCE' || e.title?.toLowerCase().includes('permiso')) && checkEventToday(e));
+
+    // Priority 2: PRODUCCION (If any production event today)
+    const productionEvent = memberEvents.find(e => e.type === 'PRODUCTION' && checkEventToday(e));
+
+    // Priority 3: REUNION REAL (Active now)
+    const meetingEvent = memberEvents.find(e => e.type === 'MEETING' && checkEventActive(e, now));
 
     let prioritizedEvent = null;
 
     if (absenceEvent) {
       status = 'AUSENTE';
       prioritizedEvent = absenceEvent;
-    } else if (meetingEvent) {
-      status = 'REUNION';
-      prioritizedEvent = meetingEvent;
     } else if (productionEvent) {
       status = 'PRODUCCION';
       prioritizedEvent = productionEvent;
+    } else if (meetingEvent) {
+      status = 'REUNION';
+      prioritizedEvent = meetingEvent;
     }
-
-    // Priority 2: Kanban Tasks (only if no high-priority calendar events)
+    // Priority 4: ENFOQUE (Tasks "En proceso")
     else if (currentTask) {
       if (currentTask.isSpecial) {
         status = 'ENFOCADO'; // 🟣 Enfocado
-      } else if (currentTask.isPriority) {
-        status = 'OCUPADO'; // 🟠 Ocupado
       } else {
-        status = 'OCUPADO'; // Standard "En proceso"
+        status = 'OCUPADO'; // Standard "En proceso" or priority
       }
     }
+    // Priority 5: CAFECITO TIME (status remains LIBRE)
 
     return {
       id: member.id,
