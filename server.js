@@ -32,6 +32,7 @@ import dbRouter from './src/routes/api/db.js';
 import clientFileRouter from './src/routes/api/clientFiles.js';
 import talentRadarRouter from './src/routes/api/talentRadar.js';
 import activityRouter from './src/routes/api/activity.js';
+import reportsRouter from './src/routes/api/reports.js';
 
 console.log("[Boot] Imports loaded successfully.");
 
@@ -400,6 +401,9 @@ app.use('/api/talent-radar', authenticateToken, talentRadarRouter);
 
 // Activity & Operational Calendar Routes
 app.use('/api/activity', authenticateToken, activityRouter);
+
+// Reports Router
+app.use('/api/reports', authenticateToken, reportsRouter);
 
 // User Management Endpoints
 app.post('/api/users', authenticateToken, async (req, res) => {
