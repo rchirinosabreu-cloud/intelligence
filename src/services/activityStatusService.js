@@ -96,42 +96,40 @@ export async function getTeamActivityStatus() {
   };
 
   return members.map(member => {
-    let status = 'LIBRE'; // Default: 🟢 Libre
+    // FIXED: Strict Location Logic (BS-OPS-007)
+    // Fallback order: MEETING (Active Now) > ABSENCE (Today) > PRODUCTION (Today) > TASK (In Progress) > LIBRE (Cafecito)
+    let status = 'LIBRE';
     let currentTask = member.nativeTasks[0] || null;
 
-    // Find all events for this member
     const memberEvents = todayEvents.filter(e => e.memberIds.includes(member.id));
 
-    // Priority 1: REUNION REAL (Active NOW - specific time match)
+    // VALIDACIÓN ESTRICTA: Solo si la reunión está sucediendo en este preciso instante.
     const meetingEvent = memberEvents.find(e => e.type === 'MEETING' && checkEventActive(e, now));
 
-    // Priority 2: AUSENCIA/PERMISO (If any "Permiso" event today)
+    // Eventos de día completo (o que ocurren hoy)
     const absenceEvent = memberEvents.find(e => (e.type === 'ABSENCE' || e.title?.toLowerCase().includes('permiso')) && checkEventToday(e));
-
-    // Priority 3: PRODUCCION (If any production event today)
     const productionEvent = memberEvents.find(e => e.type === 'PRODUCTION' && checkEventToday(e));
 
     let prioritizedEvent = null;
 
     if (meetingEvent) {
+      // Prioridad Máxima: En reunión (Bunker/Sala de Juntas)
       status = 'REUNION';
       prioritizedEvent = meetingEvent;
     } else if (absenceEvent) {
+      // De permiso
       status = 'AUSENTE';
       prioritizedEvent = absenceEvent;
     } else if (productionEvent) {
+      // En jornada de producción
       status = 'PRODUCCION';
       prioritizedEvent = productionEvent;
     }
-    // Priority 4: ENFOQUE (Tasks "En proceso")
     else if (currentTask) {
-      if (currentTask.isSpecial) {
-        status = 'ENFOCADO'; // 🟣 Enfocado
-      } else {
-        status = 'OCUPADO'; // Standard "En proceso" or priority
-      }
+      // Trabajando en la oficina central
+      status = currentTask.isSpecial ? 'ENFOCADO' : 'OCUPADO';
     }
-    // Priority 5: CAFECITO TIME (status remains LIBRE)
+    // Fallback: Si no hay nada de lo anterior, queda como LIBRE (Cafecito Time)
 
     return {
       id: member.id,
