@@ -62,18 +62,22 @@ export async function getTeamActivityStatus() {
     const eventEnd = new Date(event.endAt).getTime();
     const checkTime = time.getTime();
 
+    // Meetings require strict time validation (no buffer) to avoid "ghost meetings"
+    const isMeeting = event.type === 'MEETING';
+    const currentBuffer = isMeeting ? 0 : BUFFER_MS;
+
     if (event.recurrence === 'NONE' || !event.recurrence) {
-      return eventStart - BUFFER_MS <= checkTime && eventEnd + BUFFER_MS >= checkTime;
+      return eventStart - currentBuffer <= checkTime && eventEnd + currentBuffer >= checkTime;
     }
     if (event.recurrence === 'WEEKLY') {
-      if (event.recurrenceEnd && new Date(event.recurrenceEnd).getTime() + BUFFER_MS < checkTime) return false;
+      if (event.recurrenceEnd && new Date(event.recurrenceEnd).getTime() + currentBuffer < checkTime) return false;
       const start = new Date(event.startAt).getTime();
       const end = new Date(event.endAt).getTime();
       const duration = end - start;
       const msPerWeek = 7 * 24 * 60 * 60 * 1000;
       const timeDiff = checkTime - start;
       const offsetInWeek = ((timeDiff % msPerWeek) + msPerWeek) % msPerWeek;
-      return offsetInWeek <= duration + BUFFER_MS || offsetInWeek >= msPerWeek - BUFFER_MS;
+      return offsetInWeek <= duration + currentBuffer || offsetInWeek >= msPerWeek - currentBuffer;
     }
     return false;
   };
