@@ -101,13 +101,13 @@ router.post('/generate', upload.fields([
             model: MODEL_NAME,
             systemInstruction: {
                 role: "system",
-                parts: [{ text: `Eres el Director Estratégico de Brainstudio. Tu objetivo es generar un "Reporte de desempeño digital" imponente y profesional.
+                parts: [{ text: `Eres el Director Estratégico de Brainstudio. Tu misión es generar un "Reporte de desempeño digital" de alto impacto.
 
-Reglas Estéticas y de Contenido:
-1. Títulos RAE: Solo mayúscula inicial (ej: Análisis orgánico (RRSS), Hoja de ruta estratégica). Sin negritas excesivas, sin cursivas.
-2. Análisis Equilibrado: Entre 3 y 5 párrafos concisos por sección.
-3. Hoja de ruta: Es OBLIGATORIO proponer 3 pasos tácticos basados en datos en el campo "hoja_de_ruta".
-4. Tono: Profesional, directo y visionario.
+REGLAS DE DIAGRAMACIÓN Y CONTENIDO:
+1. Títulos RAE: Solo mayúscula inicial (ej: Análisis orgánico (RRSS)). Sin negritas excesivas, sin cursivas.
+2. Cero Espacios en Blanco: El análisis narrativo debe ser de ancho completo.
+3. Top Content: Debes analizar exactamente 5 piezas con sus métricas y redactar un comentario de 2 líneas por pieza.
+4. Hoja de ruta: Es OBLIGATORIO un plan táctico de 3 pasos al final del reporte.
 
 ESTRUCTURA JSON OBLIGATORIA:
 {
@@ -118,14 +118,13 @@ ESTRUCTURA JSON OBLIGATORIA:
       { "label": "Nuevos seguidores", "value": "+150" },
       { "label": "Alcance total", "value": "85K" }
     ],
-    "analysis": "Logros y avances...",
+    "analysis": "Logros y avances (Ancho completo)...",
     "topContent": [
-      { "title": "...", "type": "Reel/Estática", "reach": "10K", "engagement": "1.2K" }
+      { "title": "...", "type": "Reel/Estática", "reach": "10K", "engagement": "1.2K", "aiComment": "Comentario estratégico de 2 líneas..." }
     ],
     "charts": {
-      "engagementByFormat": [{ "name": "Reels", "value": 70 }, { "name": "Estáticas", "value": 30 }],
-      "platformReach": [{ "name": "Instagram", "value": 50000 }, { "name": "Facebook", "value": 35000 }],
-      "dailyEvolution": [{ "date": "1", "value": 100 }]
+      "engagementDonut": [{ "name": "Reels", "value": 70 }, { "name": "Estáticas", "value": 30 }],
+      "platformBar": [{ "name": "Instagram", "value": 50000 }, { "name": "Facebook", "value": 35000 }]
     }
   },
   "performance": {
@@ -135,7 +134,7 @@ ESTRUCTURA JSON OBLIGATORIA:
       { "label": "Impresiones", "value": "250K" },
       { "label": "Alcance", "value": "180K" }
     ],
-    "analysis": "Rendimiento y resultados...",
+    "analysis": "Rendimiento y resultados (Ancho completo)...",
     "charts": {
       "accumulatedArea": [{ "date": "1", "reach": 1000, "impressions": 1500 }]
     }
@@ -152,19 +151,16 @@ ESTRUCTURA JSON OBLIGATORIA:
             }
         });
 
-        const prompt = `Analiza estos datos para ${client.name}:
+        const prompt = `Genera el Reporte para ${client.name}.
 
-        RESUMEN:
+        RESUMEN MATEMÁTICO:
         Orgánico: ${JSON.stringify(summary.organic)}
         Performance: ${JSON.stringify(summary.ads)}
 
-        DATOS RELEVANTE PARA GRÁFICAS:
-        - Reels vs Estáticas (Engagement).
-        - IG vs FB (Alcance).
-        - Evolución diaria del mes.
-        - Alcance vs Impresiones (Acumulados de Ads).
+        DATOS PARA TOP CONTENT (EXTRAE 5):
+        ${JSON.stringify(organicRawData.slice(0, 30))}
 
-        Muestra ${JSON.stringify({ organicSample: organicRawData.slice(0, 40), adsSample: adsRawData.slice(0, 40) })}`;
+        Instrucción: Asegura que el JSON incluya las gráficas solicitadas: Área suave para alcance de Ads, Donut para engagement y Barras para comparativa de plataformas.`;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
@@ -179,7 +175,7 @@ ESTRUCTURA JSON OBLIGATORIA:
         });
 
     } catch (error) {
-        console.error('[Reports API] Error generating final report:', error);
+        console.error('[Reports API] Error generating BS-REP-005 report:', error);
         res.status(500).json({ error: 'Failed to generate report', details: error.message });
     }
 });
