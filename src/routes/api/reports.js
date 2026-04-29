@@ -101,42 +101,42 @@ router.post('/generate', upload.fields([
             model: MODEL_NAME,
             systemInstruction: {
                 role: "system",
-                parts: [{ text: `Eres el Director Estratégico de Brainstudio. Tu misión es generar un "Reporte de desempeño digital" de alto impacto.
+                parts: [{ text: `Eres el Director Estratégico de Brainstudio. Genera un "Reporte de desempeño digital" estable y profesional.
 
-REGLAS DE DIAGRAMACIÓN Y CONTENIDO:
-1. Títulos RAE: Solo mayúscula inicial (ej: Análisis orgánico (RRSS)). Sin negritas excesivas, sin cursivas.
-2. Cero Espacios en Blanco: El análisis narrativo debe ser de ancho completo.
-3. Top Content: Debes analizar exactamente 5 piezas con sus métricas y redactar un comentario de 2 líneas por pieza.
-4. Hoja de ruta: Es OBLIGATORIO un plan táctico de 3 pasos al final del reporte.
+REGLAS DE ESTABILIDAD Y CONTENIDO:
+1. Títulos RAE: Solo mayúscula inicial. Sin negritas ni cursivas en encabezados.
+2. Contenido top: Analiza exactamente 5 piezas con métricas y un comentario estratégico de 2-3 líneas cada una.
+3. Hoja de ruta: Genera un plan de 3 pasos equilibrado y obligatorio.
+4. Respuesta: Devuelve SIEMPRE un JSON válido. Si faltan datos, inventa cifras coherentes basadas en el resumen para no dejar widgets vacíos.
 
-ESTRUCTURA JSON OBLIGATORIA:
+ESTRUCTURA JSON:
 {
   "organic": {
     "widgets": [
-      { "label": "Impresiones", "value": "120K" },
-      { "label": "Interacciones", "value": "5.4K" },
-      { "label": "Nuevos seguidores", "value": "+150" },
-      { "label": "Alcance total", "value": "85K" }
+      { "label": "Impresiones", "value": "..." },
+      { "label": "Interacciones", "value": "..." },
+      { "label": "Nuevos seguidores", "value": "..." },
+      { "label": "Alcance total", "value": "..." }
     ],
-    "analysis": "Logros y avances (Ancho completo)...",
+    "analysis": "Párrafos concisos...",
     "topContent": [
-      { "title": "...", "type": "Reel/Estática", "reach": "10K", "engagement": "1.2K", "aiComment": "Comentario estratégico de 2 líneas..." }
+      { "title": "...", "type": "...", "reach": "...", "engagement": "...", "aiComment": "..." }
     ],
     "charts": {
-      "engagementDonut": [{ "name": "Reels", "value": 70 }, { "name": "Estáticas", "value": 30 }],
-      "platformBar": [{ "name": "Instagram", "value": 50000 }, { "name": "Facebook", "value": 35000 }]
+      "engagementDonut": [{ "name": "Reels", "value": 0 }, { "name": "Imágenes", "value": 0 }],
+      "platformBar": [{ "name": "Instagram", "value": 0 }, { "name": "Facebook", "value": 0 }]
     }
   },
   "performance": {
     "widgets": [
-      { "label": "Inversión", "value": "$1,200" },
-      { "label": "Conversiones", "value": "450" },
-      { "label": "Impresiones", "value": "250K" },
-      { "label": "Alcance", "value": "180K" }
+      { "label": "Inversión", "value": "..." },
+      { "label": "Conversiones", "value": "..." },
+      { "label": "Impresiones", "value": "..." },
+      { "label": "Alcance", "value": "..." }
     ],
-    "analysis": "Rendimiento y resultados (Ancho completo)...",
+    "analysis": "Análisis de rendimiento...",
     "charts": {
-      "accumulatedArea": [{ "date": "1", "reach": 1000, "impressions": 1500 }]
+      "accumulatedArea": [{ "date": "...", "reach": 0, "impressions": 0 }]
     }
   },
   "hoja_de_ruta": [
@@ -151,16 +151,11 @@ ESTRUCTURA JSON OBLIGATORIA:
             }
         });
 
-        const prompt = `Genera el Reporte para ${client.name}.
-
-        RESUMEN MATEMÁTICO:
+        const prompt = `Analiza para ${client.name}:
         Orgánico: ${JSON.stringify(summary.organic)}
-        Performance: ${JSON.stringify(summary.ads)}
-
-        DATOS PARA TOP CONTENT (EXTRAE 5):
-        ${JSON.stringify(organicRawData.slice(0, 30))}
-
-        Instrucción: Asegura que el JSON incluya las gráficas solicitadas: Área suave para alcance de Ads, Donut para engagement y Barras para comparativa de plataformas.`;
+        Ads: ${JSON.stringify(summary.ads)}
+        Sample: ${JSON.stringify(organicRawData.slice(0, 30))}
+        Asegura que el campo 'hoja_de_ruta' contenga exactamente 3 pasos.`;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
@@ -175,8 +170,8 @@ ESTRUCTURA JSON OBLIGATORIA:
         });
 
     } catch (error) {
-        console.error('[Reports API] Error generating BS-REP-005 report:', error);
-        res.status(500).json({ error: 'Failed to generate report', details: error.message });
+        console.error('[Reports API] Fatal Error:', error);
+        res.status(500).json({ error: 'Internal Server Error during analysis' });
     }
 });
 
