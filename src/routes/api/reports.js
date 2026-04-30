@@ -130,7 +130,7 @@ router.post('/generate', upload.any(), async (req, res) => {
         // Pre-processing totals for the widgets
         const summary = {
             organic: {
-                impressions: organicRawData.reduce((acc, row) => acc + (Number(row.Impresiones || 0)), 0),
+                visualizations: organicRawData.reduce((acc, row) => acc + (Number(row.Visualizaciones || row.Reproducciones || row.Impresiones || 0)), 0),
                 interactions: organicRawData.reduce((acc, row) => {
                     // IG: ("Me gusta" + "Comentarios" + "Veces que se compartió" + "Veces que se guardó")
                     if (row["Me gusta"] !== undefined) {
@@ -177,17 +177,22 @@ REGLAS DE ESTABILIDAD Y CONTENIDO:
 2. Contenido top: Analiza exactamente 5 piezas con métricas y un comentario estratégico de 2-3 líneas cada una.
 3. Hoja de ruta: Genera un plan de 3 pasos equilibrado y obligatorio.
 4. Respuesta: Devuelve SIEMPRE un JSON válido. Si el dato no está en los archivos, reporta 0 y menciona que el archivo no contenía esa métrica. Queda terminantemente PROHIBIDO inventar cifras.
+5. Profundidad: El análisis de "analysis" debe ser extenso, buscando patrones específicos (ej. "Los miércoles hay más visualizaciones").
 
 ESTRUCTURA JSON:
 {
   "organic": {
     "widgets": [
-      { "label": "Impresiones", "value": 0 },
-      { "label": "Interacciones", "value": 0 },
+      { "label": "Alcance total", "value": 0 },
       { "label": "Nuevos seguidores", "value": 0 },
-      { "label": "Alcance total", "value": 0 }
+      { "label": "Visualizaciones", "value": 0 },
+      { "label": "Interacciones", "value": 0 }
     ],
-    "analysis": "Párrafos concisos...",
+    "analysis": "Análisis profundo de patrones y tendencias...",
+    "oportunidades_aprendizaje": [
+      { "type": "Aprendizaje", "text": "..." },
+      { "type": "Oportunidad", "text": "..." }
+    ],
     "topContent": [
       { "title": "...", "type": "...", "reach": "...", "engagement": "...", "aiComment": "..." }
     ],
@@ -199,11 +204,10 @@ ESTRUCTURA JSON:
   "performance": {
     "widgets": [
       { "label": "Inversión", "value": 0 },
-      { "label": "Conversiones", "value": 0 },
       { "label": "Impresiones", "value": 0 },
       { "label": "Alcance", "value": 0 }
     ],
-    "analysis": "Análisis de rendimiento...",
+    "analysis": "Análisis profundo de rendimiento y visibilidad...",
     "charts": {
       "accumulatedArea": [{ "date": "...", "reach": 0, "impressions": 0 }]
     }

@@ -352,12 +352,31 @@ const Reports = () => {
                   </div>
 
                   {/* Narrativa Full Width */}
-                  <Card className="bg-[#fcfcfd]">
-                     <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-6">Logros y avances</h4>
-                     <div className="text-lg text-slate-600 leading-relaxed font-normal whitespace-pre-wrap">
-                        {report.analysis.organic.analysis}
-                     </div>
-                  </Card>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                     <Card className="md:col-span-2 bg-[#fcfcfd]">
+                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-6">Análisis de patrones y tendencias</h4>
+                        <div className="text-lg text-slate-600 leading-relaxed font-normal whitespace-pre-wrap">
+                           {report.analysis.organic.analysis}
+                        </div>
+                     </Card>
+
+                     <Card className="bg-emerald-50/30 border-emerald-100">
+                        <h4 className="text-sm font-bold text-emerald-800 uppercase tracking-wider mb-6">Oportunidades y aprendizajes</h4>
+                        <div className="space-y-6">
+                           {(report.analysis.organic.oportunidades_aprendizaje || []).map((item, i) => (
+                              <div key={i} className="space-y-1">
+                                 <span className={cn(
+                                    "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded",
+                                    item.type === 'Oportunidad' ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                                 )}>
+                                    {item.type}
+                                 </span>
+                                 <p className="text-sm text-slate-600 leading-snug">{item.text}</p>
+                              </div>
+                           ))}
+                        </div>
+                     </Card>
+                  </div>
 
                   {/* Gráficas Advanced */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -480,8 +499,8 @@ const Reports = () => {
                                  <XAxis dataKey="date" fontSize={10} axisLine={false} tickLine={false} />
                                  <YAxis fontSize={10} axisLine={false} tickLine={false} />
                                  <Tooltip />
-                                 <Area type="monotone" dataKey="reach" stroke="#8b5cf6" fillOpacity={1} fill="url(#areaColorFin)" strokeWidth={4} />
-                                 <Area type="monotone" dataKey="impressions" stroke="#06b6d4" fill="none" strokeWidth={1} strokeDasharray="5 5" />
+                                 <Area type="monotone" dataKey="reach" stroke="#7c3aed" fillOpacity={1} fill="url(#areaColorFin)" strokeWidth={2} />
+                                 <Area type="monotone" dataKey="impressions" stroke="#0891b2" fill="none" strokeWidth={2} strokeDasharray="5 5" />
                               </AreaChart>
                            </ResponsiveContainer>
                         </ChartErrorBoundary>
