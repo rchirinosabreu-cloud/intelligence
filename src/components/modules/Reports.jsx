@@ -126,6 +126,19 @@ const Reports = () => {
     }
   };
 
+  const formatCurrency = (val) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(val) + ' COP';
+  };
+
+  const formatNumber = (val) => {
+    return new Intl.NumberFormat('es-CO').format(val);
+  };
+
   const downloadPDF = async () => {
     if (!reportRef.current) return;
     const toastId = toast.loading('Generando documento...');
@@ -279,6 +292,49 @@ const Reports = () => {
                   </div>
                </div>
 
+               {/* Sección: Auditoría de Datos */}
+               <div className="space-y-4">
+                  <div className="px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center gap-3">
+                     <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                     </div>
+                     <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resumen de Auditoría</p>
+                        <p className="text-sm font-medium text-slate-700">{report.transparencyLog}</p>
+                     </div>
+                  </div>
+
+                  {report.sourcesAudit && report.sourcesAudit.length > 0 && (
+                     <Card className="p-0 overflow-hidden border-slate-200">
+                        <div className="bg-slate-50 px-6 py-3 border-b border-slate-100">
+                           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                              <FileText className="w-3 h-3" /> Fuentes de Datos Procesadas
+                           </h4>
+                        </div>
+                        <div className="divide-y divide-slate-50">
+                           {report.sourcesAudit.map((source, idx) => (
+                              <div key={idx} className="px-6 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
+                                 <div className="flex items-center gap-3">
+                                    <div className={cn(
+                                       "w-2 h-2 rounded-full",
+                                       source.type === 'Ads' ? "bg-cyan-400" :
+                                       source.type === 'Organic' ? "bg-emerald-400" : "bg-slate-300"
+                                    )} />
+                                    <span className="text-xs font-bold text-slate-700">{source.name}</span>
+                                 </div>
+                                 <span className={cn(
+                                    "text-[10px] font-medium px-2 py-0.5 rounded-full",
+                                    source.type === 'Desconocido' ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-500"
+                                 )}>
+                                    {source.status}
+                                 </span>
+                              </div>
+                           ))}
+                        </div>
+                     </Card>
+                  )}
+               </div>
+
                {/* Sección: Análisis orgánico (RRSS) */}
                <div className="space-y-12">
                   <SectionHeader title="Análisis orgánico (RRSS)" clientLogo={report.client.logoUrl} />
@@ -288,7 +344,9 @@ const Reports = () => {
                      {(report.analysis.organic.widgets || []).map((w, i) => (
                        <Card key={i} className="p-6">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{w.label}</span>
-                          <p className="text-3xl font-black text-slate-900 tracking-tight mt-1">{w.value}</p>
+                          <p className="text-3xl font-black text-slate-900 tracking-tight mt-1">
+                            {typeof w.value === 'number' ? formatNumber(w.value) : w.value}
+                          </p>
                        </Card>
                      ))}
                   </div>
@@ -390,7 +448,11 @@ const Reports = () => {
                      {(report.analysis.performance.widgets || []).map((w, i) => (
                        <Card key={i} className="p-6">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{w.label}</span>
-                          <p className="text-3xl font-black text-slate-900 tracking-tight mt-1">{w.value}</p>
+                          <p className="text-3xl font-black text-slate-900 tracking-tight mt-1">
+                            {w.label.toLowerCase().includes('inversión') && typeof w.value === 'number'
+                              ? formatCurrency(w.value)
+                              : (typeof w.value === 'number' ? formatNumber(w.value) : w.value)}
+                          </p>
                        </Card>
                      ))}
                   </div>
