@@ -449,7 +449,7 @@ const Reports = () => {
                        <Card key={i} className="p-6">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{w.label}</span>
                           <p className="text-3xl font-black text-slate-900 tracking-tight mt-1">
-                            {w.label.toLowerCase().includes('inversión') && typeof w.value === 'number'
+                            {(w.label.toLowerCase().includes('inversión') || w.label.toLowerCase().includes('importe')) && typeof w.value === 'number'
                               ? formatCurrency(w.value)
                               : (typeof w.value === 'number' ? formatNumber(w.value) : w.value)}
                           </p>

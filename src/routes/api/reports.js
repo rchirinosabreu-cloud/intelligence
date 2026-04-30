@@ -81,14 +81,14 @@ router.post('/generate', upload.any(), async (req, res) => {
             const headers = Object.keys(json[0]);
 
             // Detection logic based on mandatory headers (Huella Digital)
-            const isAds = headers.includes("Importe gastado (COP)") && headers.includes("Resultados");
-            const isOrganic = headers.includes("Me gusta") && headers.includes("Alcance") && headers.includes("Impresiones");
+            const isAds = headers.includes("Importe gastado (COP)");
+            const isOrganic = headers.includes("Me gusta") || headers.includes("Reacciones");
 
             if (isAds) {
-                // Ads Logic: Use total row if "Nombre del conjunto de anuncios" OR "Nombre de la campaña" is empty/null, otherwise sum individuals
+                // Ads Logic:
+                // STEP A: Buscar la fila donde "Nombre del conjunto de anuncios" esté vacío.
                 const totalRow = json.find(row =>
                     (!row["Nombre del conjunto de anuncios"] || String(row["Nombre del conjunto de anuncios"]).trim() === "") &&
-                    (!row["Nombre de la campaña"] || String(row["Nombre de la campaña"]).trim() === "") &&
                     row["Importe gastado (COP)"]
                 );
 
@@ -97,9 +97,9 @@ router.post('/generate', upload.any(), async (req, res) => {
                     adsRawData.push(totalRow);
                     processedRows = 1;
                 } else {
-                    const individualRows = json.filter(row => row["Nombre del conjunto de anuncios"] || row["Nombre de la campaña"]);
-                    adsRawData.push(...individualRows);
-                    processedRows = individualRows.length;
+                    // STEP B (Fallback): suma todos los valores de la columna
+                    adsRawData.push(...json);
+                    processedRows = json.length;
                 }
                 sourcesAudit.push({
                     name: file.originalname,
@@ -107,6 +107,7 @@ router.post('/generate', upload.any(), async (req, res) => {
                     type: "Ads"
                 });
             } else if (isOrganic) {
+                // SUMAR TODO el 100% de las filas
                 organicRawData.push(...json);
                 sourcesAudit.push({
                     name: file.originalname,
@@ -129,16 +130,34 @@ router.post('/generate', upload.any(), async (req, res) => {
         // Pre-processing totals for the widgets
         const summary = {
             organic: {
-                impressions: organicRawData.reduce((acc, row) => acc + (Number(row.Impresiones || row.Impressions || 0)), 0),
-                interactions: organicRawData.reduce((acc, row) => acc + (Number(row.Interacciones || row.Engagement || row.Interactions || row["Me gusta"] || 0)), 0),
-                followersGrowth: organicRawData.reduce((acc, row) => acc + (Number(row.Seguidores || row.Followers || 0)), 0),
-                totalReach: organicRawData.reduce((acc, row) => acc + (Number(row.Alcance || row.Reach || 0)), 0)
+                impressions: organicRawData.reduce((acc, row) => acc + (Number(row.Impresiones || 0)), 0),
+                interactions: organicRawData.reduce((acc, row) => {
+                    // IG: ("Me gusta" + "Comentarios" + "Veces que se compartió" + "Veces que se guardó")
+                    if (row["Me gusta"] !== undefined) {
+                        return acc + (
+                            Number(row["Me gusta"] || 0) +
+                            Number(row.Comentarios || 0) +
+                            Number(row["Veces que se compartió"] || 0) +
+                            Number(row["Veces que se guardó"] || 0)
+                        );
+                    }
+                    // FB: ("Reacciones, comentarios y veces que se compartió" + "Total de clics")
+                    if (row["Reacciones"] !== undefined || row["Reacciones, comentarios y veces que se compartió"] !== undefined) {
+                        return acc + (
+                            Number(row["Reacciones, comentarios y veces que se compartió"] || 0) +
+                            Number(row["Total de clics"] || 0)
+                        );
+                    }
+                    return acc;
+                }, 0),
+                followersGrowth: organicRawData.reduce((acc, row) => acc + (Number(row.Seguidores || row["Seguidores netos"] || 0)), 0),
+                totalReach: organicRawData.reduce((acc, row) => acc + (Number(row.Alcance || 0)), 0)
             },
             ads: {
-                investment: adsRawData.reduce((acc, row) => acc + (Number(row["Importe gastado (COP)"] || row.Spend || row.Inversión || row.Amount || 0)), 0),
-                conversions: adsRawData.reduce((acc, row) => acc + (Number(row.Results || row.Resultados || row.Conversions || 0)), 0),
-                impressions: adsRawData.reduce((acc, row) => acc + (Number(row.Impressions || row.Impresiones || 0)), 0),
-                totalReach: adsRawData.reduce((acc, row) => acc + (Number(row.Reach || row.Alcance || 0)), 0)
+                investment: adsRawData.reduce((acc, row) => acc + (Number(row["Importe gastado (COP)"] || 0)), 0),
+                conversions: adsRawData.reduce((acc, row) => acc + (Number(row.Resultados || 0)), 0),
+                impressions: adsRawData.reduce((acc, row) => acc + (Number(row.Impresiones || 0)), 0),
+                totalReach: adsRawData.reduce((acc, row) => acc + (Number(row.Alcance || 0)), 0)
             }
         };
 
