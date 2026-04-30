@@ -63,6 +63,7 @@ const Reports = () => {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [report, setReport] = useState(null);
+  const [editedValues, setEditedValues] = useState({});
   const reportRef = useRef(null);
 
   useEffect(() => {
@@ -92,6 +93,16 @@ const Reports = () => {
     else if (type === 'logo') setLogoFile(null);
   };
 
+  const handleValueEdit = (section, index, newValue) => {
+    const key = `${section}-${index}`;
+    // Convert back to number if possible for formatting
+    const numValue = newValue.replace(/[^\d]/g, '');
+    setEditedValues(prev => ({
+      ...prev,
+      [key]: numValue ? parseInt(numValue, 10) : newValue
+    }));
+  };
+
   const generateReport = async () => {
     if (!selectedClientId) {
       toast.error('Selecciona un cliente');
@@ -99,6 +110,7 @@ const Reports = () => {
     }
     setIsGenerating(true);
     setReport(null);
+    setEditedValues({});
 
     const formData = new FormData();
     formData.append('clientId', selectedClientId);
@@ -341,14 +353,19 @@ const Reports = () => {
 
                   {/* Widgets */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                     {(report.analysis.organic.widgets || []).map((w, i) => (
-                       <Card key={i} className="p-6">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{w.label}</span>
-                          <p className="text-3xl font-black text-slate-900 tracking-tight mt-1">
-                            {typeof w.value === 'number' ? formatNumber(w.value) : w.value}
-                          </p>
-                       </Card>
-                     ))}
+                     {(report.analysis.organic.widgets || []).map((w, i) => {
+                       const editedVal = editedValues[`organic-${i}`] !== undefined ? editedValues[`organic-${i}`] : w.value;
+                       return (
+                        <Card key={i} className="p-6">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{w.label}</span>
+                            <input
+                              className="w-full bg-transparent border-none text-3xl font-black text-slate-900 tracking-tight mt-1 outline-none focus:ring-1 focus:ring-primary/20 rounded cursor-edit"
+                              value={typeof editedVal === 'number' ? formatNumber(editedVal) : editedVal}
+                              onChange={(e) => handleValueEdit('organic', i, e.target.value)}
+                            />
+                        </Card>
+                       );
+                     })}
                   </div>
 
                   {/* Narrativa Full Width */}
@@ -464,16 +481,21 @@ const Reports = () => {
                   <SectionHeader title="Performance digital" clientLogo={report.client.logoUrl} />
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                     {(report.analysis.performance.widgets || []).map((w, i) => (
-                       <Card key={i} className="p-6">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{w.label}</span>
-                          <p className="text-3xl font-black text-slate-900 tracking-tight mt-1">
-                            {(w.label.toLowerCase().includes('inversión') || w.label.toLowerCase().includes('importe')) && typeof w.value === 'number'
-                              ? formatCurrency(w.value)
-                              : (typeof w.value === 'number' ? formatNumber(w.value) : w.value)}
-                          </p>
-                       </Card>
-                     ))}
+                     {(report.analysis.performance.widgets || []).map((w, i) => {
+                       const editedVal = editedValues[`performance-${i}`] !== undefined ? editedValues[`performance-${i}`] : w.value;
+                       const isCurrency = w.label.toLowerCase().includes('inversión') || w.label.toLowerCase().includes('importe');
+
+                       return (
+                        <Card key={i} className="p-6">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{w.label}</span>
+                            <input
+                              className="w-full bg-transparent border-none text-3xl font-black text-slate-900 tracking-tight mt-1 outline-none focus:ring-1 focus:ring-primary/20 rounded cursor-edit"
+                              value={isCurrency && typeof editedVal === 'number' ? formatCurrency(editedVal) : (typeof editedVal === 'number' ? formatNumber(editedVal) : editedVal)}
+                              onChange={(e) => handleValueEdit('performance', i, e.target.value)}
+                            />
+                        </Card>
+                       );
+                     })}
                   </div>
 
                   <Card className="bg-[#fcfcfd]">
@@ -484,7 +506,7 @@ const Reports = () => {
                   </Card>
 
                   <Card>
-                     <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-10">Alcance acumulado vs impresiones</h4>
+                     <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-10">Alcance acumulado vs visualizaciones</h4>
                      <div className="h-[300px]">
                         <ChartErrorBoundary>
                            <ResponsiveContainer width="100%" height="100%">
@@ -499,8 +521,8 @@ const Reports = () => {
                                  <XAxis dataKey="date" fontSize={10} axisLine={false} tickLine={false} />
                                  <YAxis fontSize={10} axisLine={false} tickLine={false} />
                                  <Tooltip />
-                                 <Area type="monotone" dataKey="reach" stroke="#7c3aed" fillOpacity={1} fill="url(#areaColorFin)" strokeWidth={2} />
-                                 <Area type="monotone" dataKey="impressions" stroke="#0891b2" fill="none" strokeWidth={2} strokeDasharray="5 5" />
+                                 <Area type="monotone" dataKey="reach" stroke="#7c3aed" fillOpacity={1} fill="url(#areaColorFin)" strokeWidth={3} />
+                                 <Area type="monotone" dataKey="visualizations" stroke="#0891b2" fill="none" strokeWidth={3} strokeDasharray="5 5" />
                               </AreaChart>
                            </ResponsiveContainer>
                         </ChartErrorBoundary>
