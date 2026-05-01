@@ -294,10 +294,10 @@ const Reports = () => {
                   </div>
                   <div className="space-y-6">
                      <h2 className="text-4xl md:text-5xl font-light text-slate-900 tracking-tight leading-tight">
-                        Reporte de desempeño digital
+                        Reporte de Desempeño Digital de {report.client.name} - 2026
                      </h2>
                      <div className="flex items-center justify-center gap-4 text-sm font-medium text-slate-400 uppercase tracking-widest">
-                        <span>{report.client.name}</span>
+                        <span>Brainstudio Agency</span>
                         <div className="w-1 h-1 rounded-full bg-slate-200" />
                         <span>{new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</span>
                      </div>
@@ -506,7 +506,7 @@ const Reports = () => {
                   </Card>
 
                   <Card>
-                     <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-10">Alcance acumulado vs visualizaciones</h4>
+                     <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-10">Alcance acumulado vs impresiones</h4>
                      <div className="h-[300px]">
                         <ChartErrorBoundary>
                            <ResponsiveContainer width="100%" height="100%">
@@ -533,7 +533,7 @@ const Reports = () => {
                                  />
                                  <Area
                                    type="monotone"
-                                   dataKey="visualizations"
+                                   dataKey="impressions"
                                    stroke="#0891b2"
                                    fill="none"
                                    strokeWidth={3}

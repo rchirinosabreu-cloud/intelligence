@@ -64,6 +64,7 @@ router.post('/generate', upload.any(), async (req, res) => {
         const organicRawData = [];
         const adsRawData = [];
         const sourcesAudit = [];
+        let detectedAccountName = '';
 
         for (const file of files) {
             if (file.fieldname === 'logo') continue;
@@ -85,6 +86,11 @@ router.post('/generate', upload.any(), async (req, res) => {
             const isOrganic = headers.includes("Me gusta") || headers.includes("Reacciones");
 
             if (isAds) {
+                // Try to extract account name
+                if (!detectedAccountName) {
+                    detectedAccountName = json.find(row => row["Nombre de la cuenta"])?.["Nombre de la cuenta"];
+                }
+
                 // Ads Logic:
                 // STEP A: Buscar la fila donde "Nombre del conjunto de anuncios" esté vacío.
                 const totalRow = json.find(row =>
@@ -107,6 +113,11 @@ router.post('/generate', upload.any(), async (req, res) => {
                     type: "Ads"
                 });
             } else if (isOrganic) {
+                // Try to extract account name
+                if (!detectedAccountName) {
+                    detectedAccountName = json.find(row => row["Nombre de la página"])?.["Nombre de la página"];
+                }
+
                 // SUMAR TODO el 100% de las filas
                 organicRawData.push(...json);
                 sourcesAudit.push({
@@ -180,6 +191,7 @@ REGLAS DE ESTABILIDAD Y CONTENIDO:
 5. Profundidad: El análisis de "analysis" debe ser extenso (mínimo 3 párrafos para pauta), buscando patrones específicos (ej. "Los miércoles hay más visualizaciones") y enfocándose en Costo por Mil (CPM) y la relación entre Inversión y Alcance (eficiencia del gasto).
 6. Aprendizajes: La sección "oportunidades_aprendizaje" en Orgánico debe contener al menos 4 puntos clave robustos.
 7. Prohibición: No mencionar "Conversiones" en ninguna parte del análisis de Performance Digital. Queda terminantemente PROHIBIDO usar la palabra "Conversiones".
+8. Gráficas: El campo 'accumulatedArea' DEBE ser un array de al menos 7 puntos de datos que representen la evolución temporal (fechas) del Alcance e Impresiones, agrupando o sumando por fecha si es necesario para mostrar una tendencia clara.
 
 ESTRUCTURA JSON:
 {
@@ -211,9 +223,9 @@ ESTRUCTURA JSON:
       { "label": "Impresiones", "value": 0 },
       { "label": "Alcance", "value": 0 }
     ],
-    "analysis": "Análisis profundo de rendimiento, visibilidad, CPM y eficiencia de gasto (Inversión vs Alcance) (mínimo 3 párrafos). NO USAR LA PALABRA CONVERSIONES.",
+    "analysis": "Análisis profundo de rendimiento, visibilidad, CPM y eficiencia de gasto (Inversión vs Alcance) (mínimo 3 párrafos). NO USAR LA PALABRA CONVERSIONES. Centrarse en Alcance e Impresiones.",
     "charts": {
-      "accumulatedArea": [{ "date": "...", "reach": 0, "visualizations": 0 }]
+      "accumulatedArea": [{ "date": "...", "reach": 0, "impressions": 0 }]
     }
   },
   "hoja_de_ruta": [
@@ -241,7 +253,7 @@ ESTRUCTURA JSON:
 
         res.json({
             client: {
-                name: client.name,
+                name: detectedAccountName || client.name,
                 logoUrl: updatedLogoUrl
             },
             transparencyLog,
