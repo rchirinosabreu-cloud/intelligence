@@ -64,6 +64,12 @@ const Reports = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [report, setReport] = useState(null);
   const [editedValues, setEditedValues] = useState({});
+  const [editedTexts, setEditedTexts] = useState({
+    title: '',
+    organicAnalysis: '',
+    performanceAnalysis: '',
+    oportunidades: []
+  });
   const reportRef = useRef(null);
 
   useEffect(() => {
@@ -103,6 +109,16 @@ const Reports = () => {
     }));
   };
 
+  const handleTextEdit = (field, value, index = null) => {
+    if (index !== null && field === 'oportunidades') {
+      const newOportunidades = [...editedTexts.oportunidades];
+      newOportunidades[index] = { ...newOportunidades[index], text: value };
+      setEditedTexts(prev => ({ ...prev, oportunidades: newOportunidades }));
+    } else {
+      setEditedTexts(prev => ({ ...prev, [field]: value }));
+    }
+  };
+
   const generateReport = async () => {
     if (!selectedClientId) {
       toast.error('Selecciona un cliente');
@@ -111,6 +127,7 @@ const Reports = () => {
     setIsGenerating(true);
     setReport(null);
     setEditedValues({});
+    setEditedTexts({ title: '', organicAnalysis: '', performanceAnalysis: '', oportunidades: [] });
 
     const formData = new FormData();
     formData.append('clientId', selectedClientId);
@@ -127,6 +144,12 @@ const Reports = () => {
       });
       if (response.data?.analysis) {
         setReport(response.data);
+        setEditedTexts({
+            title: `Reporte de Desempeño Digital de ${response.data.client.name} - 2026`,
+            organicAnalysis: response.data.analysis.organic.analysis,
+            performanceAnalysis: response.data.analysis.performance.analysis,
+            oportunidades: response.data.analysis.organic.oportunidades_aprendizaje || []
+        });
         toast.success('Reporte final generado');
       } else {
         throw new Error('Invalid response');
@@ -159,7 +182,24 @@ const Reports = () => {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
-        logging: false
+        logging: false,
+        onclone: (clonedDoc) => {
+          // Robustly hide elements with no-print class
+          const noPrintElements = clonedDoc.querySelectorAll('.no-print');
+          noPrintElements.forEach(el => el.style.display = 'none');
+
+          // Convert textareas to divs for better PDF rendering (no scrollbars, full height)
+          const textareas = clonedDoc.querySelectorAll('textarea, input');
+          textareas.forEach(ta => {
+            const div = clonedDoc.createElement('div');
+            div.innerText = ta.value;
+            div.className = ta.className;
+            div.style.height = 'auto';
+            div.style.whiteSpace = 'pre-wrap';
+            div.style.border = 'none';
+            ta.parentNode.replaceChild(div, ta);
+          });
+        }
       });
       const imgData = canvas.toDataURL('image/png', 1.0);
       const pdf = new jsPDF({
@@ -168,7 +208,8 @@ const Reports = () => {
         format: [canvas.width / 2, canvas.height / 2]
       });
       pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 2, canvas.height / 2);
-      pdf.save(`Reporte_Bonsai_${report.client.name}.pdf`);
+      const fileName = editedTexts.title.replace(/[^a-z0-9]/gi, '_').substring(0, 50);
+      pdf.save(`${fileName}.pdf`);
       toast.success('Descarga lista', { id: toastId });
     } catch (err) {
       toast.error('Error al exportar PDF', { id: toastId });
@@ -292,10 +333,13 @@ const Reports = () => {
                       className="h-full w-full object-contain"
                     />
                   </div>
-                  <div className="space-y-6">
-                     <h2 className="text-4xl md:text-5xl font-light text-slate-900 tracking-tight leading-tight">
-                        Reporte de Desempeño Digital de {report.client.name} - 2026
-                     </h2>
+                  <div className="space-y-6 w-full max-w-4xl">
+                     <textarea
+                        className="w-full bg-transparent border-none text-4xl md:text-5xl font-light text-slate-900 tracking-tight leading-tight text-center resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl py-2 px-4"
+                        rows={2}
+                        value={editedTexts.title}
+                        onChange={(e) => handleTextEdit('title', e.target.value)}
+                     />
                      <div className="flex items-center justify-center gap-4 text-sm font-medium text-slate-400 uppercase tracking-widest">
                         <span>Brainstudio Agency</span>
                         <div className="w-1 h-1 rounded-full bg-slate-200" />
@@ -372,15 +416,17 @@ const Reports = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                      <Card className="md:col-span-2 bg-[#fcfcfd]">
                         <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-6">Análisis de patrones y tendencias</h4>
-                        <div className="text-lg text-slate-600 leading-relaxed font-normal whitespace-pre-wrap">
-                           {report.analysis.organic.analysis}
-                        </div>
+                        <textarea
+                           className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[200px]"
+                           value={editedTexts.organicAnalysis}
+                           onChange={(e) => handleTextEdit('organicAnalysis', e.target.value)}
+                        />
                      </Card>
 
                      <Card className="bg-emerald-50/30 border-emerald-100">
                         <h4 className="text-sm font-bold text-emerald-800 uppercase tracking-wider mb-6">Oportunidades y aprendizajes</h4>
                         <div className="space-y-6">
-                           {(report.analysis.organic.oportunidades_aprendizaje || []).map((item, i) => (
+                           {editedTexts.oportunidades.map((item, i) => (
                               <div key={i} className="space-y-1">
                                  <span className={cn(
                                     "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded",
@@ -388,7 +434,12 @@ const Reports = () => {
                                  )}>
                                     {item.type}
                                  </span>
-                                 <p className="text-sm text-slate-600 leading-snug">{item.text}</p>
+                                 <textarea
+                                    className="w-full bg-transparent border-none text-sm text-slate-600 leading-snug resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-lg"
+                                    rows={3}
+                                    value={item.text}
+                                    onChange={(e) => handleTextEdit('oportunidades', e.target.value, i)}
+                                 />
                               </div>
                            ))}
                         </div>
@@ -500,9 +551,11 @@ const Reports = () => {
 
                   <Card className="bg-[#fcfcfd]">
                      <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-6">Rendimiento y resultados</h4>
-                     <div className="text-lg text-slate-600 leading-relaxed font-normal whitespace-pre-wrap">
-                        {report.analysis.performance.analysis}
-                     </div>
+                     <textarea
+                        className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[150px]"
+                        value={editedTexts.performanceAnalysis}
+                        onChange={(e) => handleTextEdit('performanceAnalysis', e.target.value)}
+                     />
                   </Card>
 
                   <Card>
