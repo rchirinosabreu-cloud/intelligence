@@ -177,9 +177,9 @@ REGLAS DE ESTABILIDAD Y CONTENIDO:
 2. Contenido top: Analiza exactamente 5 piezas con métricas y un comentario estratégico de 2-3 líneas cada una.
 3. Hoja de ruta: Genera un plan de 3 pasos equilibrado y obligatorio.
 4. Respuesta: Devuelve SIEMPRE un JSON válido. Si el dato no está en los archivos, reporta 0 y menciona que el archivo no contenía esa métrica. Queda terminantemente PROHIBIDO inventar cifras.
-5. Profundidad: El análisis de "analysis" debe ser extenso (mínimo 3 párrafos para pauta), buscando patrones específicos (ej. "Los miércoles hay más visualizaciones") y enfocándose en Costo por Mil (CPM) y eficiencia del presupuesto en la sección de pauta.
+5. Profundidad: El análisis de "analysis" debe ser extenso (mínimo 3 párrafos para pauta), buscando patrones específicos (ej. "Los miércoles hay más visualizaciones") y enfocándose en Costo por Mil (CPM) y la relación entre Inversión y Alcance (eficiencia del gasto).
 6. Aprendizajes: La sección "oportunidades_aprendizaje" en Orgánico debe contener al menos 4 puntos clave robustos.
-7. Prohibición: No mencionar "Conversiones" en ninguna parte del análisis de Performance Digital.
+7. Prohibición: No mencionar "Conversiones" en ninguna parte del análisis de Performance Digital. Queda terminantemente PROHIBIDO usar la palabra "Conversiones".
 
 ESTRUCTURA JSON:
 {
@@ -211,7 +211,7 @@ ESTRUCTURA JSON:
       { "label": "Impresiones", "value": 0 },
       { "label": "Alcance", "value": 0 }
     ],
-    "analysis": "Análisis profundo de rendimiento, visibilidad, CPM y eficiencia (mínimo 3 párrafos)...",
+    "analysis": "Análisis profundo de rendimiento, visibilidad, CPM y eficiencia de gasto (Inversión vs Alcance) (mínimo 3 párrafos). NO USAR LA PALABRA CONVERSIONES.",
     "charts": {
       "accumulatedArea": [{ "date": "...", "reach": 0, "visualizations": 0 }]
     }

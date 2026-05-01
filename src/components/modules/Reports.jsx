@@ -304,8 +304,8 @@ const Reports = () => {
                   </div>
                </div>
 
-               {/* Sección: Auditoría de Datos */}
-               <div className="space-y-4">
+               {/* Sección: Auditoría de Datos (Oculta en Impresión) */}
+               <div className="space-y-4 no-print">
                   <div className="px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center gap-3">
                      <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
                         <CheckCircle2 className="w-4 h-4 text-emerald-500" />
@@ -480,7 +480,7 @@ const Reports = () => {
                <div className="space-y-12 pt-24 border-t border-slate-100">
                   <SectionHeader title="Performance digital" clientLogo={report.client.logoUrl} />
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                      {(report.analysis.performance.widgets || []).map((w, i) => {
                        const editedVal = editedValues[`performance-${i}`] !== undefined ? editedValues[`performance-${i}`] : w.value;
                        const isCurrency = w.label.toLowerCase().includes('inversión') || w.label.toLowerCase().includes('importe');
@@ -521,8 +521,26 @@ const Reports = () => {
                                  <XAxis dataKey="date" fontSize={10} axisLine={false} tickLine={false} />
                                  <YAxis fontSize={10} axisLine={false} tickLine={false} />
                                  <Tooltip />
-                                 <Area type="monotone" dataKey="reach" stroke="#7c3aed" fillOpacity={1} fill="url(#areaColorFin)" strokeWidth={3} />
-                                 <Area type="monotone" dataKey="visualizations" stroke="#0891b2" fill="none" strokeWidth={3} strokeDasharray="5 5" />
+                                 <Area
+                                   type="monotone"
+                                   dataKey="reach"
+                                   stroke="#7c3aed"
+                                   fillOpacity={1}
+                                   fill="url(#areaColorFin)"
+                                   strokeWidth={3}
+                                   dot={{ r: 4, fill: '#7c3aed', strokeWidth: 2, stroke: '#fff' }}
+                                   activeDot={{ r: 6 }}
+                                 />
+                                 <Area
+                                   type="monotone"
+                                   dataKey="visualizations"
+                                   stroke="#0891b2"
+                                   fill="none"
+                                   strokeWidth={3}
+                                   strokeDasharray="5 5"
+                                   dot={{ r: 4, fill: '#0891b2', strokeWidth: 2, stroke: '#fff' }}
+                                   activeDot={{ r: 6 }}
+                                 />
                               </AreaChart>
                            </ResponsiveContainer>
                         </ChartErrorBoundary>
