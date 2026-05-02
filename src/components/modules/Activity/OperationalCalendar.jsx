@@ -251,6 +251,8 @@ const OperationalCalendar = () => {
       case 'ABSENCE': return <UserX className="w-3 h-3" />;
       case 'PROJECT': return <Zap className="w-3 h-3" />;
       case 'MEETING': return <Lock className="w-3 h-3" />;
+      case 'WORK_DAY': return <Clock className="w-3 h-3" />;
+      case 'BREAK': return <Coffee className="w-3 h-3" />;
       default: return null;
     }
   };
@@ -261,6 +263,8 @@ const OperationalCalendar = () => {
       case 'ABSENCE': return 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
       case 'PROJECT': return 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800';
       case 'MEETING': return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
+      case 'WORK_DAY': return 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-400 dark:border-cyan-800';
+      case 'BREAK': return 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800';
       default: return 'bg-zinc-100 text-zinc-700';
     }
   };
@@ -398,6 +402,8 @@ const OperationalCalendar = () => {
                     <option value="ABSENCE">🏖️ Permiso/Ausencia</option>
                     <option value="PROJECT">🚀 Proyecto Especial</option>
                     <option value="MEETING">🤝 Reunión</option>
+                    <option value="WORK_DAY">💻 Jornada Laboral</option>
+                    <option value="BREAK">☕ Descanso / Café</option>
                   </select>
                 </div>
                 <div className="space-y-1.5">
