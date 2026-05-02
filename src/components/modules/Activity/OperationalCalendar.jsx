@@ -13,7 +13,8 @@ import {
   UserX,
   Zap,
   Lock,
-  Sparkles
+  Sparkles,
+  Coffee
 } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths } from 'date-fns';
