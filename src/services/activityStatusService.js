@@ -95,74 +95,111 @@ export async function getTeamActivityStatus() {
     return false;
   };
 
-  return members.map(member => {
-    // NEW HIERARCHY (BS-LIVE-STATUS):
-    // 1. MEETING (Active Now) -> Sala de Juntas
-    // 2. ABSENCE (Today) -> De permiso
-    // 3. PRODUCTION (Today) -> Producción
-    // 4. WORK_DAY / JORNADA (Active Now) -> Oficina Central
-    // 5. TASK (In Progress) -> Oficina Central (if no calendar event)
-    // 6. BREAK / CAFE (Active Now) -> Cafecito Time
-    // 7. OFFLINE (Default)
+  return members.map(member => calculateMemberStatus(member, todayEvents, now));
+}
 
-    let status = 'OFFLINE';
-    let currentTask = member.nativeTasks[0] || null;
-    let prioritizedEvent = null;
+export function calculateMemberStatus(member, todayEvents, now) {
+  const BUFFER_MS = 5 * 60 * 1000;
 
-    const memberEvents = todayEvents.filter(e => e.memberIds.includes(member.id));
+  const checkEventActive = (event, time) => {
+    const eventStart = new Date(event.startAt).getTime();
+    const eventEnd = new Date(event.endAt).getTime();
+    const checkTime = time.getTime();
+    const isMeeting = event.type === 'MEETING';
+    const currentBuffer = isMeeting ? 0 : BUFFER_MS;
 
-    // Active Events (Right now)
-    const meetingEvent = memberEvents.find(e => e.type === 'MEETING' && checkEventActive(e, now));
-    const workDayEvent = memberEvents.find(e =>
-      (e.type === 'WORK_DAY' || e.type === 'JORNADA' || e.title?.toLowerCase().includes('jornada laboral')) &&
-      checkEventActive(e, now)
-    );
-    const breakEvent = memberEvents.find(e =>
-      (e.type === 'BREAK' || e.title?.toLowerCase().includes('descanso') || e.title?.toLowerCase().includes('café') || e.title?.toLowerCase().includes('cafe')) &&
-      checkEventActive(e, now)
-    );
-
-    // Day-level Events
-    const absenceEvent = memberEvents.find(e => (e.type === 'ABSENCE' || e.title?.toLowerCase().includes('permiso')) && checkEventToday(e));
-    const productionEvent = memberEvents.find(e => e.type === 'PRODUCTION' && checkEventToday(e));
-
-    // Priority Resolution Logic (Mirror of Reality)
-    if (meetingEvent) {
-      status = 'REUNION';
-      prioritizedEvent = meetingEvent;
-    } else if (absenceEvent) {
-      status = 'AUSENTE';
-      prioritizedEvent = absenceEvent;
-    } else if (productionEvent) {
-      status = 'PRODUCCION';
-      prioritizedEvent = productionEvent;
-    } else if (breakEvent) {
-      // Break has higher priority than regular work to show the movement to Cafecito
-      status = 'LIBRE';
-      prioritizedEvent = breakEvent;
-    } else if (workDayEvent) {
-      status = 'OCUPADO'; // In Central Office
-      prioritizedEvent = workDayEvent;
-    } else if (currentTask) {
-      status = currentTask.isSpecial ? 'ENFOCADO' : 'OCUPADO';
+    if (event.recurrence === 'NONE' || !event.recurrence) {
+      return eventStart - currentBuffer <= checkTime && eventEnd + currentBuffer >= checkTime;
     }
+    if (event.recurrence === 'WEEKLY') {
+      if (event.recurrenceEnd && new Date(event.recurrenceEnd).getTime() + currentBuffer < checkTime) return false;
+      const start = new Date(event.startAt).getTime();
+      const end = new Date(event.endAt).getTime();
+      const duration = end - start;
+      const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+      const timeDiff = checkTime - start;
+      const offsetInWeek = ((timeDiff % msPerWeek) + msPerWeek) % msPerWeek;
+      return offsetInWeek <= duration + currentBuffer || offsetInWeek >= msPerWeek - currentBuffer;
+    }
+    return false;
+  };
 
-    return {
-      id: member.id,
-      name: member.name,
-      role: member.role,
-      avatarUrl: member.avatarUrl,
-      desktopX: member.desktopX,
-      desktopY: member.desktopY,
-      statusMessage: member.statusMessage,
-      status,
-      currentTask: currentTask ? { title: currentTask.title } : null,
-      currentEvent: prioritizedEvent ? {
-        title: prioritizedEvent.title,
-        type: prioritizedEvent.type,
-        meetingLink: prioritizedEvent.meetingLink,
-        description: prioritizedEvent.description
-      } : null
-    };
-  });
+  const checkEventToday = (event) => {
+    if (event.recurrence === 'NONE' || !event.recurrence) return true;
+    if (event.recurrence === 'WEEKLY') {
+        const eventDate = new Date(event.startAt);
+        const dayOfWeek = eventDate.getDay();
+        return now.getDay() === dayOfWeek;
+    }
+    return false;
+  };
+
+  // NEW HIERARCHY (BS-LIVE-STATUS):
+  // 1. MEETING (Active Now) -> Sala de Juntas
+  // 2. ABSENCE (Today) -> De permiso
+  // 3. PRODUCTION (Today) -> Producción
+  // 4. WORK_DAY / JORNADA (Active Now) -> Oficina Central
+  // 5. TASK (In Progress) -> Oficina Central (if no calendar event)
+  // 6. BREAK / CAFE (Active Now) -> Cafecito Time
+  // 7. OFFLINE (Default)
+
+  let status = 'OFFLINE';
+  let currentTask = (member.nativeTasks && member.nativeTasks[0]) || null;
+  let prioritizedEvent = null;
+
+  const memberEvents = todayEvents.filter(e => e.memberIds?.includes(member.id));
+
+  // Active Events (Right now)
+  const meetingEvent = memberEvents.find(e => e.type === 'MEETING' && checkEventActive(e, now));
+  const workDayEvent = memberEvents.find(e =>
+    (e.type === 'WORK_DAY' || e.type === 'JORNADA' || e.title?.toLowerCase().includes('jornada laboral')) &&
+    checkEventActive(e, now)
+  );
+  const breakEvent = memberEvents.find(e =>
+    (e.type === 'BREAK' || e.title?.toLowerCase().includes('descanso') || e.title?.toLowerCase().includes('café') || e.title?.toLowerCase().includes('cafe')) &&
+    checkEventActive(e, now)
+  );
+
+  // Day-level Events
+  const absenceEvent = memberEvents.find(e => (e.type === 'ABSENCE' || e.title?.toLowerCase().includes('permiso')) && checkEventToday(e));
+  const productionEvent = memberEvents.find(e => e.type === 'PRODUCTION' && checkEventToday(e));
+
+  // Priority Resolution Logic (Mirror of Reality)
+  if (meetingEvent) {
+    status = 'REUNION';
+    prioritizedEvent = meetingEvent;
+  } else if (absenceEvent) {
+    status = 'AUSENTE';
+    prioritizedEvent = absenceEvent;
+  } else if (productionEvent) {
+    status = 'PRODUCCION';
+    prioritizedEvent = productionEvent;
+  } else if (breakEvent) {
+    // Break has higher priority than regular work to show the movement to Cafecito
+    status = 'LIBRE';
+    prioritizedEvent = breakEvent;
+  } else if (workDayEvent) {
+    status = 'OCUPADO'; // In Central Office
+    prioritizedEvent = workDayEvent;
+  } else if (currentTask) {
+    status = currentTask.isSpecial ? 'ENFOCADO' : 'OCUPADO';
+  }
+
+  return {
+    id: member.id,
+    name: member.name,
+    role: member.role,
+    avatarUrl: member.avatarUrl,
+    desktopX: member.desktopX,
+    desktopY: member.desktopY,
+    statusMessage: member.statusMessage,
+    status,
+    currentTask: currentTask ? { title: currentTask.title } : null,
+    currentEvent: prioritizedEvent ? {
+      title: prioritizedEvent.title,
+      type: prioritizedEvent.type,
+      meetingLink: prioritizedEvent.meetingLink,
+      description: prioritizedEvent.description
+    } : null
+  };
 }
