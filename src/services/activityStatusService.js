@@ -134,14 +134,14 @@ export function calculateMemberStatus(member, todayEvents, now) {
     return false;
   };
 
-  // NEW HIERARCHY (BS-LIVE-STATUS):
+  // NEW HIERARCHY (BS-MAP-REPAIR):
   // 1. MEETING (Active Now) -> Sala de Juntas
   // 2. ABSENCE (Today) -> De permiso
   // 3. PRODUCTION (Today) -> Producción
-  // 4. WORK_DAY / JORNADA (Active Now) -> Oficina Central
-  // 5. TASK (In Progress) -> Oficina Central (if no calendar event)
-  // 6. BREAK / CAFE (Active Now) -> Cafecito Time
-  // 7. OFFLINE (Default)
+  // 4. BREAK / CAFE (Active Now) -> Cafecito Time
+  // 5. WORK_DAY / JORNADA (Active Now) -> Oficina Central (Escritorio)
+  // 6. TASK (In Progress) -> Oficina Central (if no calendar event)
+  // 7. OFFLINE (Default) -> Invisible en el mapa
 
   let status = 'OFFLINE';
   let currentTask = (member.nativeTasks && member.nativeTasks[0]) || null;
@@ -150,7 +150,10 @@ export function calculateMemberStatus(member, todayEvents, now) {
   const memberEvents = todayEvents.filter(e => e.memberIds?.includes(member.id));
 
   // Active Events (Right now)
-  const meetingEvent = memberEvents.find(e => e.type === 'MEETING' && checkEventActive(e, now));
+  const meetingEvent = memberEvents.find(e =>
+    (e.type === 'MEETING' || e.title?.toLowerCase().includes('sala de juntas')) &&
+    checkEventActive(e, now)
+  );
   const workDayEvent = memberEvents.find(e =>
     (e.type === 'WORK_DAY' || e.type === 'JORNADA' || e.title?.toLowerCase().includes('jornada laboral')) &&
     checkEventActive(e, now)
@@ -164,7 +167,7 @@ export function calculateMemberStatus(member, todayEvents, now) {
   const absenceEvent = memberEvents.find(e => (e.type === 'ABSENCE' || e.title?.toLowerCase().includes('permiso')) && checkEventToday(e));
   const productionEvent = memberEvents.find(e => e.type === 'PRODUCTION' && checkEventToday(e));
 
-  // Priority Resolution Logic (Mirror of Reality)
+  // Priority Resolution Logic (BS-MAP-REPAIR)
   if (meetingEvent) {
     status = 'REUNION';
     prioritizedEvent = meetingEvent;
@@ -175,14 +178,11 @@ export function calculateMemberStatus(member, todayEvents, now) {
     status = 'PRODUCCION';
     prioritizedEvent = productionEvent;
   } else if (breakEvent) {
-    // Break has higher priority than regular work to show the movement to Cafecito
     status = 'LIBRE';
     prioritizedEvent = breakEvent;
   } else if (workDayEvent) {
-    status = 'OCUPADO'; // In Central Office
+    status = currentTask?.isSpecial ? 'ENFOCADO' : 'OCUPADO'; // In Central Office
     prioritizedEvent = workDayEvent;
-  } else if (currentTask) {
-    status = currentTask.isSpecial ? 'ENFOCADO' : 'OCUPADO';
   }
 
   return {

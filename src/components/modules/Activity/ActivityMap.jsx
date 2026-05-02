@@ -216,13 +216,13 @@ const ActivityMap = () => {
   }
 
   // Filtrado de miembros por zona (BS-LIVE-STATUS)
+  // Solo mostramos miembros con estados activos. Offline desaparecen.
   const membersByZone = {
     permiso: teamStatus.filter(m => m.status === 'AUSENTE'),
     estudio: teamStatus.filter(m => m.status === 'PRODUCCION'),
     bunker: teamStatus.filter(m => m.status === 'REUNION'),
     cafe: teamStatus.filter(m => m.status === 'LIBRE'),
     nave: teamStatus.filter(m => ['ENFOCADO', 'OCUPADO'].includes(m.status)),
-    offline: teamStatus.filter(m => m.status === 'OFFLINE' || !m.status),
   };
 
   const isProductionActive = membersByZone.estudio.length > 0;
@@ -234,31 +234,8 @@ const ActivityMap = () => {
            style={{ backgroundImage: 'radial-gradient(circle, currentColor 1.5px, transparent 1.5px)', backgroundSize: '32px 32px' }}
       />
 
-      {/* Main Architectural Grid: Adaptive 3-Column Layout */}
-      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[240px_1fr_240px] gap-[40px]">
-
-        {/* Columna Izquierda: Offline Sidebar */}
-        <div className="flex flex-col gap-6 bg-white/40 dark:bg-zinc-900/40 rounded-[32px] p-6 border border-zinc-200/40 dark:border-zinc-800/40 backdrop-blur-sm h-fit lg:h-full">
-           <div className="flex items-center gap-2 mb-4 px-2">
-              <UserX className="w-4 h-4 text-zinc-400" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Desconectados</span>
-           </div>
-           <div className="flex flex-col gap-4 overflow-y-auto max-h-[700px] pr-2 custom-scrollbar">
-              {membersByZone.offline.length === 0 ? (
-                <p className="text-[10px] text-zinc-400 italic text-center py-8">Todos están en línea</p>
-              ) : (
-                membersByZone.offline.map(m => (
-                  <div key={m.id} className="flex items-center gap-3 opacity-60 hover:opacity-100 transition-opacity">
-                    <TeamAvatar member={m} className="w-8 h-8 ring-2 ring-white dark:ring-zinc-900 shadow-sm grayscale" />
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 truncate w-24">{m.name}</span>
-                      <span className="text-[8px] text-zinc-400 uppercase tracking-tighter">OFFLINE</span>
-                    </div>
-                  </div>
-                ))
-              )}
-           </div>
-        </div>
+      {/* Main Architectural Grid: Two-column layout focusing on the office */}
+      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-[40px]">
 
         {/* Columna Central: Operación Vertical (Permiso > Producción > Sala de Juntas > Oficina Central) */}
         <div className="flex flex-col gap-[60px]">
