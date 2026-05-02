@@ -96,40 +96,56 @@ export async function getTeamActivityStatus() {
   };
 
   return members.map(member => {
-    // FIXED: Strict Location Logic (BS-OPS-007)
-    // Fallback order: MEETING (Active Now) > ABSENCE (Today) > PRODUCTION (Today) > TASK (In Progress) > LIBRE (Cafecito)
-    let status = 'LIBRE';
+    // NEW HIERARCHY (BS-LIVE-STATUS):
+    // 1. MEETING (Active Now) -> Sala de Juntas
+    // 2. ABSENCE (Today) -> De permiso
+    // 3. PRODUCTION (Today) -> Producción
+    // 4. WORK_DAY / JORNADA (Active Now) -> Oficina Central
+    // 5. TASK (In Progress) -> Oficina Central (if no calendar event)
+    // 6. BREAK / CAFE (Active Now) -> Cafecito Time
+    // 7. OFFLINE (Default)
+
+    let status = 'OFFLINE';
     let currentTask = member.nativeTasks[0] || null;
+    let prioritizedEvent = null;
 
     const memberEvents = todayEvents.filter(e => e.memberIds.includes(member.id));
 
-    // VALIDACIÓN ESTRICTA: Solo si la reunión está sucediendo en este preciso instante.
+    // Active Events (Right now)
     const meetingEvent = memberEvents.find(e => e.type === 'MEETING' && checkEventActive(e, now));
+    const workDayEvent = memberEvents.find(e =>
+      (e.type === 'WORK_DAY' || e.type === 'JORNADA' || e.title?.toLowerCase().includes('jornada laboral')) &&
+      checkEventActive(e, now)
+    );
+    const breakEvent = memberEvents.find(e =>
+      (e.type === 'BREAK' || e.title?.toLowerCase().includes('descanso') || e.title?.toLowerCase().includes('café') || e.title?.toLowerCase().includes('cafe')) &&
+      checkEventActive(e, now)
+    );
 
-    // Eventos de día completo (o que ocurren hoy)
+    // Day-level Events
     const absenceEvent = memberEvents.find(e => (e.type === 'ABSENCE' || e.title?.toLowerCase().includes('permiso')) && checkEventToday(e));
     const productionEvent = memberEvents.find(e => e.type === 'PRODUCTION' && checkEventToday(e));
 
-    let prioritizedEvent = null;
-
+    // Priority Resolution Logic (Mirror of Reality)
     if (meetingEvent) {
-      // Prioridad Máxima: En reunión (Bunker/Sala de Juntas)
       status = 'REUNION';
       prioritizedEvent = meetingEvent;
     } else if (absenceEvent) {
-      // De permiso
       status = 'AUSENTE';
       prioritizedEvent = absenceEvent;
     } else if (productionEvent) {
-      // En jornada de producción
       status = 'PRODUCCION';
       prioritizedEvent = productionEvent;
-    }
-    else if (currentTask) {
-      // Trabajando en la oficina central
+    } else if (breakEvent) {
+      // Break has higher priority than regular work to show the movement to Cafecito
+      status = 'LIBRE';
+      prioritizedEvent = breakEvent;
+    } else if (workDayEvent) {
+      status = 'OCUPADO'; // In Central Office
+      prioritizedEvent = workDayEvent;
+    } else if (currentTask) {
       status = currentTask.isSpecial ? 'ENFOCADO' : 'OCUPADO';
     }
-    // Fallback: Si no hay nada de lo anterior, queda como LIBRE (Cafecito Time)
 
     return {
       id: member.id,
