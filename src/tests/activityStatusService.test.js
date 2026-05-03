@@ -12,49 +12,44 @@ const baseMember = {
   nativeTasks: []
 };
 
-describe('activityStatusService.calculateMemberStatus (BS-MAP-REBORN)', () => {
-  it('asigna PRODUCCION por evento activo tipo PRODUCTION', () => {
-    const now = new Date('2026-05-02T15:30:00.000Z');
-    const production = {
-      type: 'PRODUCTION',
-      title: 'Grabación de contenido',
-      startAt: '2026-05-02T15:00:00.000Z',
-      endAt: '2026-05-02T17:00:00.000Z',
+describe('activityStatusService.calculateMemberStatus', () => {
+  it('no debe mover a REUNION si el evento es futuro', () => {
+    const now = new Date('2026-05-02T15:00:00.000Z');
+    const futureMeeting = {
+      type: 'MEETING',
+      title: 'Sala de juntas',
+      startAt: '2026-05-04T15:00:00.000Z',
+      endAt: '2026-05-04T16:00:00.000Z',
       recurrence: 'NONE',
       memberIds: [7]
     };
 
-    const result = calculateMemberStatus(baseMember, [production], now);
-    expect(result.status).toBe('PRODUCCION');
+    const result = calculateMemberStatus(baseMember, [futureMeeting], now);
+
+    expect(result.status).toBe('OFFLINE');
   });
 
-  it('asigna PRODUCCION por tarea técnica activa', () => {
+  it('debe asignar OCUPADO para evento activo WORK_DAY/JORNADA', () => {
     const now = new Date('2026-05-02T15:30:00.000Z');
-    const member = { ...baseMember, nativeTasks: [{ id: 1, title: 'Infra deploy', isSpecial: false, isTechnical: true }] };
+    const jornada = {
+      type: 'JORNADA',
+      title: 'Jornada Laboral',
+      startAt: '2026-05-02T15:00:00.000Z',
+      endAt: '2026-05-02T16:00:00.000Z',
+      recurrence: 'NONE',
+      memberIds: [7]
+    };
 
-    const result = calculateMemberStatus(member, [], now);
-    expect(result.status).toBe('PRODUCCION');
-  });
+    const result = calculateMemberStatus(baseMember, [jornada], now);
 
-  it('asigna ENFOCADO por tarea especial en foco', () => {
-    const now = new Date('2026-05-02T15:30:00.000Z');
-    const member = { ...baseMember, nativeTasks: [{ id: 2, title: 'Deep task', isSpecial: true, isTechnical: false }] };
-
-    const result = calculateMemberStatus(member, [], now);
-    expect(result.status).toBe('ENFOCADO');
-  });
-
-  it('asigna OCUPADO por tarea en progreso no especial', () => {
-    const now = new Date('2026-05-02T15:30:00.000Z');
-    const member = { ...baseMember, nativeTasks: [{ id: 3, title: 'Task en progreso', isSpecial: false, isTechnical: false }] };
-
-    const result = calculateMemberStatus(member, [], now);
     expect(result.status).toBe('OCUPADO');
   });
 
-  it('queda LIBRE sin tareas ni eventos', () => {
+  it('debe permanecer OFFLINE si no tiene eventos activos ni tareas EN_CURSO', () => {
     const now = new Date('2026-05-02T15:30:00.000Z');
+
     const result = calculateMemberStatus(baseMember, [], now);
-    expect(result.status).toBe('LIBRE');
+
+    expect(result.status).toBe('OFFLINE');
   });
 });
