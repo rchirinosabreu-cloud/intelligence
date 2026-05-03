@@ -231,11 +231,10 @@ const ActivityMap = () => {
   // Filtrado de miembros por zona (Mapa definitivo 5 zonas).
   const membersByZone = {
     bunker: teamStatus.filter(m => m.status === 'REUNION'),
-    bunker: teamStatus.filter(m => m.status === 'REUNION'),
     foco: teamStatus.filter(m => m.status === 'ENFOCADO'),
-    central: teamStatus.filter(m => m.status === 'LIBRE' || (m.status === 'OCUPADO' && m.currentEvent?.type !== 'BREAK') || m.status === 'PRODUCCION'),
+    central: teamStatus.filter(m => ['LIBRE', 'OCUPADO'].includes(m.status)),
     permiso: teamStatus.filter(m => m.status === 'AUSENTE'),
-    cafe: teamStatus.filter(m => m.status === 'OCUPADO' && m.currentEvent?.type === 'BREAK'),
+    cafe: teamStatus.filter(m => !['REUNION', 'ENFOCADO', 'LIBRE', 'OCUPADO', 'AUSENTE'].includes(m.status)),
   };
 
   return (
@@ -245,8 +244,8 @@ const ActivityMap = () => {
            style={{ backgroundImage: 'radial-gradient(circle, currentColor 1.5px, transparent 1.5px)', backgroundSize: '32px 32px' }}
       />
 
-      {/* Main Architectural Grid: Habitaciones horizontales */}
-      <div className="relative z-10 grid grid-cols-1 xl:grid-cols-[220px_220px_minmax(520px,40%)_220px_220px] gap-6 items-start">
+      {/* Main Architectural Grid: 5 zonas horizontales */}
+      <div className="relative z-10 grid grid-cols-1 xl:grid-cols-[220px_220px_1fr_220px_220px] gap-6">
         <Zone id="bunker" name="Sala de juntas" icon={Lock} className="min-h-[520px]">
           {membersByZone.bunker.map(m => (
             <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
@@ -267,9 +266,11 @@ const ActivityMap = () => {
               </div>
             ))}
           </div>
-          <div className="relative z-10 flex flex-wrap items-center justify-center gap-10 p-10">
+          <div className="relative z-10 grid grid-cols-3 lg:grid-cols-4 gap-x-10 gap-y-16 p-10">
             {membersByZone.central.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
+              <div key={m.id} className="flex items-center justify-center">
+                <MemberAvatar member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
+              </div>
             ))}
           </div>
         </Zone>
@@ -280,27 +281,24 @@ const ActivityMap = () => {
           ))}
         </Zone>
 
-        <Zone id="cafe" name="Cafecito Time" icon={Coffee} className="min-h-[520px]">
+        <Zone id="cafe" name="Comedor / café" icon={Coffee} className="min-h-[520px]">
           <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] dark:opacity-[0.06] pointer-events-none">
             <div className="w-32 h-32 border-[8px] border-zinc-400 dark:border-white rounded-full" />
           </div>
-          <div className="relative z-10 flex flex-wrap items-center justify-center gap-8">
-            {membersByZone.cafe.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
-            ))}
-          </div>
+          {membersByZone.cafe.map(m => (
+            <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
+          ))}
         </Zone>
       </div>
 
       {/* Legend & Controls */}
       <div className="absolute bottom-10 left-10 flex items-center gap-6 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md px-6 py-3 rounded-2xl border border-zinc-200/50 dark:border-zinc-800/50 shadow-lg z-50">
         {[
-          { color: 'bg-green-500', label: 'Libre' },
+          { color: 'bg-green-500', label: 'Oficina (Libre)' },
           { color: 'bg-purple-500', label: 'Foco' },
-          { color: 'bg-orange-500', label: 'Ocupado' },
           { color: 'bg-zinc-300', label: 'Reunión' },
-          { color: 'bg-fuchsia-500', label: 'Producción' },
           { color: 'bg-red-500', label: 'Permiso' },
+          { color: 'bg-orange-500', label: 'Comedor/Break' },
         ].map((item, idx) => (
           <div key={idx} className="flex items-center gap-2">
             <div className={cn("w-2 h-2 rounded-full", item.color)} />
