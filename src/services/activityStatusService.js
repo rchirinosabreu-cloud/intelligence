@@ -154,28 +154,31 @@ export function calculateMemberStatus(member, todayEvents, now) {
     return false;
   };
 
-  // NEW HIERARCHY (BS-MAP-REPAIR):
-  // 1. MEETING (Active Now) -> Sala de Juntas
-  // 2. ABSENCE (Today) -> De permiso
-  // 3. PRODUCTION (Today) -> Producción
-  // 4. BREAK / CAFE (Active Now) -> Cafecito Time
-  // 5. WORK_DAY / JORNADA (Active Now) -> Oficina Central (Escritorio)
-  // 6. TASK (In Progress) -> Oficina Central (if no calendar event)
-  // 7. OFFLINE (Default) -> Invisible en el mapa
+  // JERARQUÍA DEFINITIVA (5 ZONAS):
+  // 1. PERMISSION / VACATION -> Zona de Permiso
+  // 2. MEETING -> Sala de Juntas
+  // 3. DEEP_WORK / FOCUS -> Zona de Foco
+  // 4. BREAK / CAFE -> Comedor / Café
+  // 5. DEFAULT -> Oficina Central (LIBRE)
 
-  let status = 'OFFLINE';
+  let status = 'LIBRE';
   let currentTask = (member.nativeTasks && member.nativeTasks[0]) || null;
   let prioritizedEvent = null;
 
   const memberEvents = todayEvents.filter(e => e.memberIds?.includes(member.id));
 
   // Active Events (Right now)
+  const permissionEvent = memberEvents.find(e =>
+    (e.type === 'PERMISSION' || e.type === 'VACATION' || e.type === 'ABSENCE' ||
+      e.title?.toLowerCase().includes('permiso') || e.title?.toLowerCase().includes('vacaciones')) &&
+    checkEventActive(e, now)
+  );
   const meetingEvent = memberEvents.find(e =>
     (e.type === 'MEETING' || e.title?.toLowerCase().includes('sala de juntas')) &&
     checkEventActive(e, now)
   );
-  const workDayEvent = memberEvents.find(e =>
-    (e.type === 'WORK_DAY' || e.type === 'JORNADA' || e.title?.toLowerCase().includes('jornada laboral')) &&
+  const focusEvent = memberEvents.find(e =>
+    (e.type === 'DEEP_WORK' || e.type === 'FOCUS' || e.title?.toLowerCase().includes('foco') || e.title?.toLowerCase().includes('concentración')) &&
     checkEventActive(e, now)
   );
   const breakEvent = memberEvents.find(e =>
@@ -183,26 +186,19 @@ export function calculateMemberStatus(member, todayEvents, now) {
     checkEventActive(e, now)
   );
 
-  // STRICT TEMPORAL VALIDATION (BS-MAP-FINAL-V2)
-  const absenceEvent = memberEvents.find(e => (e.type === 'ABSENCE' || e.title?.toLowerCase().includes('permiso')) && checkEventActive(e, now));
-  const productionEvent = memberEvents.find(e => (e.type === 'PRODUCTION' || e.title?.toLowerCase().includes('producción')) && checkEventActive(e, now));
-
-  // Priority Resolution Logic (BS-MAP-FINAL-V2)
-  if (meetingEvent) {
+  // Priority Resolution Logic
+  if (permissionEvent) {
+    status = 'AUSENTE';
+    prioritizedEvent = permissionEvent;
+  } else if (meetingEvent) {
     status = 'REUNION';
     prioritizedEvent = meetingEvent;
-  } else if (absenceEvent) {
-    status = 'AUSENTE';
-    prioritizedEvent = absenceEvent;
-  } else if (productionEvent) {
-    status = 'PRODUCCION';
-    prioritizedEvent = productionEvent;
+  } else if (focusEvent) {
+    status = 'ENFOCADO';
+    prioritizedEvent = focusEvent;
   } else if (breakEvent) {
-    status = 'LIBRE';
+    status = 'OCUPADO';
     prioritizedEvent = breakEvent;
-  } else if (workDayEvent) {
-    status = currentTask?.isSpecial ? 'ENFOCADO' : 'OCUPADO'; // In Central Office
-    prioritizedEvent = workDayEvent;
   }
 
   return {
