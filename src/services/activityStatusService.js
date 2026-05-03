@@ -79,13 +79,19 @@ export async function getTeamActivityStatus() {
     }
     if (event.recurrence === 'WEEKLY') {
       if (event.recurrenceEnd && new Date(event.recurrenceEnd).getTime() + currentBuffer < checkTime) return false;
-      const start = new Date(event.startAt).getTime();
-      const end = new Date(event.endAt).getTime();
-      const duration = end - start;
-      const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-      const timeDiff = checkTime - start;
-      const offsetInWeek = ((timeDiff % msPerWeek) + msPerWeek) % msPerWeek;
-      return offsetInWeek <= duration + currentBuffer || offsetInWeek >= msPerWeek - currentBuffer;
+
+      const eventStartDate = new Date(event.startAt);
+      const eventEndDate = new Date(event.endAt);
+      const sameWeekDay = eventStartDate.getDay() === time.getDay();
+      if (!sameWeekDay) return false;
+
+      const minutesOfDay = (d) => d.getHours() * 60 + d.getMinutes();
+      const nowMinutes = minutesOfDay(time);
+      const startMinutes = minutesOfDay(eventStartDate);
+      const endMinutes = minutesOfDay(eventEndDate);
+      const bufferMinutes = Math.floor(currentBuffer / 60000);
+
+      return nowMinutes >= startMinutes - bufferMinutes && nowMinutes <= endMinutes + bufferMinutes;
     }
     return false;
   };
@@ -121,13 +127,19 @@ export function calculateMemberStatus(member, todayEvents, now) {
     }
     if (event.recurrence === 'WEEKLY') {
       if (event.recurrenceEnd && new Date(event.recurrenceEnd).getTime() + currentBuffer < checkTime) return false;
-      const start = new Date(event.startAt).getTime();
-      const end = new Date(event.endAt).getTime();
-      const duration = end - start;
-      const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-      const timeDiff = checkTime - start;
-      const offsetInWeek = ((timeDiff % msPerWeek) + msPerWeek) % msPerWeek;
-      return offsetInWeek <= duration + currentBuffer || offsetInWeek >= msPerWeek - currentBuffer;
+
+      const eventStartDate = new Date(event.startAt);
+      const eventEndDate = new Date(event.endAt);
+      const sameWeekDay = eventStartDate.getDay() === time.getDay();
+      if (!sameWeekDay) return false;
+
+      const minutesOfDay = (d) => d.getHours() * 60 + d.getMinutes();
+      const nowMinutes = minutesOfDay(time);
+      const startMinutes = minutesOfDay(eventStartDate);
+      const endMinutes = minutesOfDay(eventEndDate);
+      const bufferMinutes = Math.floor(currentBuffer / 60000);
+
+      return nowMinutes >= startMinutes - bufferMinutes && nowMinutes <= endMinutes + bufferMinutes;
     }
     return false;
   };
