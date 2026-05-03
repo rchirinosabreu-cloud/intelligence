@@ -142,16 +142,15 @@ export function calculateMemberStatus(member, todayEvents, now) {
     return false;
   };
 
-  // NEW HIERARCHY (BS-MAP-REPAIR):
+  // NEW HIERARCHY (BS-OFFICE-V4-FINAL):
   // 1. MEETING (Active Now) -> Sala de Juntas
-  // 2. ABSENCE (Today) -> De permiso
-  // 3. PRODUCTION (Today) -> Producción
+  // 2. ABSENCE (Active Now) -> De permiso
+  // 3. PRODUCTION (Active Now) -> Producción
   // 4. BREAK / CAFE (Active Now) -> Cafecito Time
-  // 5. WORK_DAY / JORNADA (Active Now) -> Oficina Central (Escritorio)
-  // 6. TASK (In Progress) -> Oficina Central (if no calendar event)
-  // 7. OFFLINE (Default) -> Invisible en el mapa
+  // 5. WORK_DAY / JORNADA (Active Now) -> Oficina Central
+  // 6. DEFAULT -> Libre (Oficina Central)
 
-  let status = 'OFFLINE';
+  let status = 'LIBRE'; // Default: Always visible as Libre
   let currentTask = (member.nativeTasks && member.nativeTasks[0]) || null;
   let prioritizedEvent = null;
 
@@ -170,12 +169,10 @@ export function calculateMemberStatus(member, todayEvents, now) {
     (e.type === 'BREAK' || e.title?.toLowerCase().includes('descanso') || e.title?.toLowerCase().includes('café') || e.title?.toLowerCase().includes('cafe')) &&
     checkEventActive(e, now)
   );
-
-  // STRICT TEMPORAL VALIDATION (BS-MAP-FINAL-V2)
   const absenceEvent = memberEvents.find(e => (e.type === 'ABSENCE' || e.title?.toLowerCase().includes('permiso')) && checkEventActive(e, now));
   const productionEvent = memberEvents.find(e => (e.type === 'PRODUCTION' || e.title?.toLowerCase().includes('producción')) && checkEventActive(e, now));
 
-  // Priority Resolution Logic (BS-MAP-FINAL-V2)
+  // Priority Resolution Logic (BS-OFFICE-V4-FINAL)
   if (meetingEvent) {
     status = 'REUNION';
     prioritizedEvent = meetingEvent;
@@ -186,11 +183,13 @@ export function calculateMemberStatus(member, todayEvents, now) {
     status = 'PRODUCCION';
     prioritizedEvent = productionEvent;
   } else if (breakEvent) {
-    status = 'LIBRE';
+    status = 'LIBRE'; // In logic, CAFE is LIBRE zone
     prioritizedEvent = breakEvent;
   } else if (workDayEvent) {
-    status = currentTask?.isSpecial ? 'ENFOCADO' : 'OCUPADO'; // In Central Office
+    status = currentTask?.isSpecial ? 'ENFOCADO' : 'OCUPADO';
     prioritizedEvent = workDayEvent;
+  } else if (currentTask) {
+    status = currentTask.isSpecial ? 'ENFOCADO' : 'OCUPADO';
   }
 
   return {
