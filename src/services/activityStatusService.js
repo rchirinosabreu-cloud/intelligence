@@ -154,13 +154,12 @@ export function calculateMemberStatus(member, todayEvents, now) {
     return false;
   };
 
-  // JERARQUÍA BS-MAP-PRO-V3 (6 ESTADOS):
-  // 1. PERMISSION / VACATION -> AUSENTE
-  // 2. MEETING -> REUNION
-  // 3. PRODUCTION -> PRODUCCION
-  // 4. FOCUS EVENT / SPECIAL TASK -> ENFOCADO
-  // 5. BREAK / TASK IN PROGRESS -> OCUPADO
-  // 6. DEFAULT -> LIBRE
+  // JERARQUÍA DEFINITIVA (5 ZONAS):
+  // 1. PERMISSION / VACATION -> Zona de Permiso
+  // 2. MEETING -> Sala de Juntas
+  // 3. DEEP_WORK / FOCUS -> Zona de Foco
+  // 4. BREAK / CAFE -> Comedor / Café
+  // 5. DEFAULT -> Oficina Central (LIBRE)
 
   let status = 'LIBRE';
   let currentTask = (member.nativeTasks && member.nativeTasks[0]) || null;
@@ -176,10 +175,6 @@ export function calculateMemberStatus(member, todayEvents, now) {
   );
   const meetingEvent = memberEvents.find(e =>
     (e.type === 'MEETING' || e.title?.toLowerCase().includes('sala de juntas')) &&
-    checkEventActive(e, now)
-  );
-  const productionEvent = memberEvents.find(e =>
-    (e.type === 'PRODUCTION' || e.title?.toLowerCase().includes('producción') || e.title?.toLowerCase().includes('produccion')) &&
     checkEventActive(e, now)
   );
   const focusEvent = memberEvents.find(e =>
@@ -198,13 +193,10 @@ export function calculateMemberStatus(member, todayEvents, now) {
   } else if (meetingEvent) {
     status = 'REUNION';
     prioritizedEvent = meetingEvent;
-  } else if (productionEvent) {
-    status = 'PRODUCCION';
-    prioritizedEvent = productionEvent;
-  } else if (focusEvent || currentTask?.isSpecial) {
+  } else if (focusEvent) {
     status = 'ENFOCADO';
     prioritizedEvent = focusEvent;
-  } else if (breakEvent || currentTask) {
+  } else if (breakEvent) {
     status = 'OCUPADO';
     prioritizedEvent = breakEvent;
   }

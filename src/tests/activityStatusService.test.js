@@ -12,41 +12,44 @@ const baseMember = {
   nativeTasks: []
 };
 
-describe('activityStatusService.calculateMemberStatus (BS-MAP-PRO-V3)', () => {
-  it('prioriza PRODUCCION cuando el evento está activo', () => {
-    const now = new Date('2026-05-02T15:30:00.000Z');
-    const production = {
-      type: 'PRODUCTION',
-      title: 'Grabación de contenido',
-      startAt: '2026-05-02T15:00:00.000Z',
-      endAt: '2026-05-02T17:00:00.000Z',
+describe('activityStatusService.calculateMemberStatus', () => {
+  it('no debe mover a REUNION si el evento es futuro', () => {
+    const now = new Date('2026-05-02T15:00:00.000Z');
+    const futureMeeting = {
+      type: 'MEETING',
+      title: 'Sala de juntas',
+      startAt: '2026-05-04T15:00:00.000Z',
+      endAt: '2026-05-04T16:00:00.000Z',
       recurrence: 'NONE',
       memberIds: [7]
     };
 
-    const result = calculateMemberStatus(baseMember, [production], now);
-    expect(result.status).toBe('PRODUCCION');
+    const result = calculateMemberStatus(baseMember, [futureMeeting], now);
+
+    expect(result.status).toBe('OFFLINE');
   });
 
-  it('usa color por actividad Kanban: ENFOCADO si tarea especial', () => {
+  it('debe asignar OCUPADO para evento activo WORK_DAY/JORNADA', () => {
     const now = new Date('2026-05-02T15:30:00.000Z');
-    const member = { ...baseMember, nativeTasks: [{ id: 1, title: 'Deep task', isSpecial: true }] };
+    const jornada = {
+      type: 'JORNADA',
+      title: 'Jornada Laboral',
+      startAt: '2026-05-02T15:00:00.000Z',
+      endAt: '2026-05-02T16:00:00.000Z',
+      recurrence: 'NONE',
+      memberIds: [7]
+    };
 
-    const result = calculateMemberStatus(member, [], now);
-    expect(result.status).toBe('ENFOCADO');
-  });
+    const result = calculateMemberStatus(baseMember, [jornada], now);
 
-  it('usa color por actividad Kanban: OCUPADO si tarea en progreso no especial', () => {
-    const now = new Date('2026-05-02T15:30:00.000Z');
-    const member = { ...baseMember, nativeTasks: [{ id: 2, title: 'Task en progreso', isSpecial: false }] };
-
-    const result = calculateMemberStatus(member, [], now);
     expect(result.status).toBe('OCUPADO');
   });
 
-  it('queda LIBRE cuando no hay evento ni tarea activa', () => {
+  it('debe permanecer OFFLINE si no tiene eventos activos ni tareas EN_CURSO', () => {
     const now = new Date('2026-05-02T15:30:00.000Z');
+
     const result = calculateMemberStatus(baseMember, [], now);
-    expect(result.status).toBe('LIBRE');
+
+    expect(result.status).toBe('OFFLINE');
   });
 });
