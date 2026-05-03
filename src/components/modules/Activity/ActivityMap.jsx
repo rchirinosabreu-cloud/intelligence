@@ -215,14 +215,14 @@ const ActivityMap = () => {
     );
   }
 
-  // Filtrado de miembros por zona (BS-LIVE-STATUS)
-  // Solo mostramos miembros con estados activos. Offline desaparecen.
+  // Filtrado de miembros por zona (BS-MAP-FINAL-V2)
+  // Solo mostramos miembros con estados activos. Invisible por defecto.
   const membersByZone = {
+    bunker: teamStatus.filter(m => m.status === 'REUNION'),
+    nave: teamStatus.filter(m => ['ENFOCADO', 'OCUPADO'].includes(m.status)),
     permiso: teamStatus.filter(m => m.status === 'AUSENTE'),
     estudio: teamStatus.filter(m => m.status === 'PRODUCCION'),
-    bunker: teamStatus.filter(m => m.status === 'REUNION'),
     cafe: teamStatus.filter(m => m.status === 'LIBRE'),
-    nave: teamStatus.filter(m => ['ENFOCADO', 'OCUPADO'].includes(m.status)),
   };
 
   const isProductionActive = membersByZone.estudio.length > 0;
@@ -234,27 +234,22 @@ const ActivityMap = () => {
            style={{ backgroundImage: 'radial-gradient(circle, currentColor 1.5px, transparent 1.5px)', backgroundSize: '32px 32px' }}
       />
 
-      {/* Main Architectural Grid: 3-column layout centering the Office */}
+      {/* Main Architectural Grid: BS-MAP-FINAL-V2 [BUNKER] - [OFICINA CENTRAL] - [OTROS] */}
       <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[240px_1fr_240px] gap-[40px]">
 
-        {/* Columna Izquierda: De permiso / Producción */}
+        {/* Columna IZQUIERDA: SALA DE JUNTAS (Bunker) */}
         <div className="flex flex-col gap-[40px]">
-          <Zone id="permiso" name="De permiso" icon={User} className="h-[300px]">
-            {membersByZone.permiso.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
-            ))}
-          </Zone>
-          <Zone id="estudio" name="Producción" icon={Video} className="h-[520px]" isActive={isProductionActive}>
-            {membersByZone.estudio.map(m => (
+          <Zone id="bunker" name="Sala de juntas" icon={Lock} className="h-[400px]">
+            {membersByZone.bunker.map(m => (
               <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
             ))}
           </Zone>
         </div>
 
-        {/* Columna Central: OFICINA CENTRAL (The Heart) */}
+        {/* Columna CENTRAL / PRINCIPAL: OFICINA CENTRAL (Escritorios) */}
         <div className="flex flex-col gap-[40px]">
           <Zone id="nave" name="Oficina central" icon={Zap} className="min-h-[860px] bg-indigo-50/20 dark:bg-indigo-900/5">
-            {/* Escritorios 4x4 Grid for prominence */}
+            {/* Escritorios 4x4 Grid for visual weight */}
             <div className="absolute inset-0 p-16 grid grid-cols-4 grid-rows-4 gap-12 opacity-[0.03] dark:opacity-[0.06] pointer-events-none">
               {[...Array(16)].map((_, i) => (
                 <div key={i} className="bg-zinc-400 dark:bg-white rounded-2xl flex items-center justify-center border-2 border-zinc-300">
@@ -263,7 +258,7 @@ const ActivityMap = () => {
               ))}
             </div>
 
-            {/* Miembros en Oficina */}
+            {/* Miembros en Oficina (Only active Jornada/Tasks) */}
             <div className="relative z-10 grid grid-cols-4 gap-x-12 gap-y-20 p-10">
               {membersByZone.nave.map(m => (
                 <div key={m.id} className="flex items-center justify-center">
@@ -274,20 +269,26 @@ const ActivityMap = () => {
           </Zone>
         </div>
 
-        {/* Columna Derecha: Sala de Juntas / Wellness */}
+        {/* Columna DERECHA: Wellness y Producción */}
         <div className="flex flex-col gap-[40px]">
-          <Zone id="bunker" name="Sala de juntas" icon={Lock} className="h-[400px]">
-            {membersByZone.bunker.map(m => (
+          <Zone id="estudio" name="Producción" icon={Video} className="h-[280px]" isActive={isProductionActive}>
+            {membersByZone.estudio.map(m => (
               <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
             ))}
           </Zone>
 
-          <Zone id="cafe" name="Cafecito time" icon={Coffee} className="h-[420px] mt-auto">
+          <Zone id="cafe" name="Comedor / Café" icon={Coffee} className="h-[280px]">
             {/* Mesa Circular Decorativa */}
             <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] dark:opacity-[0.06] pointer-events-none">
-              <div className="w-44 h-44 border-[8px] border-zinc-400 dark:border-white rounded-full" />
+              <div className="w-32 h-32 border-[8px] border-zinc-400 dark:border-white rounded-full" />
             </div>
             {membersByZone.cafe.map(m => (
+              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
+            ))}
+          </Zone>
+
+          <Zone id="permiso" name="De permiso" icon={User} className="h-[220px] mt-auto">
+            {membersByZone.permiso.map(m => (
               <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
             ))}
           </Zone>

@@ -171,11 +171,11 @@ export function calculateMemberStatus(member, todayEvents, now) {
     checkEventActive(e, now)
   );
 
-  // Day-level Events
-  const absenceEvent = memberEvents.find(e => (e.type === 'ABSENCE' || e.title?.toLowerCase().includes('permiso')) && checkEventToday(e));
-  const productionEvent = memberEvents.find(e => e.type === 'PRODUCTION' && checkEventToday(e));
+  // STRICT TEMPORAL VALIDATION (BS-MAP-FINAL-V2)
+  const absenceEvent = memberEvents.find(e => (e.type === 'ABSENCE' || e.title?.toLowerCase().includes('permiso')) && checkEventActive(e, now));
+  const productionEvent = memberEvents.find(e => (e.type === 'PRODUCTION' || e.title?.toLowerCase().includes('producción')) && checkEventActive(e, now));
 
-  // Priority Resolution Logic (BS-MAP-REPAIR)
+  // Priority Resolution Logic (BS-MAP-FINAL-V2)
   if (meetingEvent) {
     status = 'REUNION';
     prioritizedEvent = meetingEvent;
