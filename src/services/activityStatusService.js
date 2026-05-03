@@ -27,13 +27,18 @@ export async function getTeamActivityStatus() {
     }
   });
 
-  // Unified agency time (America/Bogota)
-  // This creates a Date object whose local components (Day, Hour) match Bogota
-  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const endOfToday = new Date(now);
-  endOfToday.setHours(23, 59, 59, 999);
+  // Unified agency time (America/Bogota) as absolute Source of Truth
+  const now = new Date();
+
+  // Helper to get Bogota date boundaries for DB filtering
+  const getBogotaBoundary = (date, hours, mins, secs, ms) => {
+    const d = new Date(date.toLocaleString("en-US", { timeZone: "America/Bogota" }));
+    d.setHours(hours, mins, secs, ms);
+    return d;
+  };
+
+  const startOfToday = getBogotaBoundary(now, 0, 0, 0, 0);
+  const endOfToday = getBogotaBoundary(now, 23, 59, 59, 999);
 
   const BUFFER_MS = 5 * 60 * 1000; // 5 minute safety buffer
 
@@ -59,27 +64,43 @@ export async function getTeamActivityStatus() {
   });
 
   const checkEventActive = (event, time) => {
-    const eventStart = new Date(event.startAt).getTime();
-    const eventEnd = new Date(event.endAt).getTime();
+    const eventStart = new Date(event.startAt);
+    const eventEnd = new Date(event.endAt);
     const checkTime = time.getTime();
 
-    // Meetings require strict time validation (no buffer) to avoid "ghost meetings"
+    // Meetings require strict time validation (no buffer)
     const isMeeting = event.type === 'MEETING' || event.title?.toLowerCase().includes('sala de juntas');
     const currentBuffer = isMeeting ? 0 : BUFFER_MS;
 
     if (event.recurrence === 'NONE' || !event.recurrence) {
-      // STRICT: Must be today and current time must be within bounds
-      return eventStart - currentBuffer <= checkTime && eventEnd + currentBuffer >= checkTime;
+      // BS-TIME-FIX: Pure ISO comparison
+      return (checkTime >= eventStart.getTime() - currentBuffer) && (checkTime <= eventEnd.getTime() + currentBuffer);
     }
+
     if (event.recurrence === 'WEEKLY') {
-      if (event.recurrenceEnd && new Date(event.recurrenceEnd).getTime() + currentBuffer < checkTime) return false;
-      const start = new Date(event.startAt).getTime();
-      const end = new Date(event.endAt).getTime();
-      const duration = end - start;
-      const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-      const timeDiff = checkTime - start;
-      const offsetInWeek = ((timeDiff % msPerWeek) + msPerWeek) % msPerWeek;
-      return offsetInWeek <= duration + currentBuffer || offsetInWeek >= msPerWeek - currentBuffer;
+      // 1. If we are before the very first occurrence, it's not active
+      if (checkTime < eventStart.getTime() - currentBuffer) return false;
+
+      // 2. If we are after the recurrence end, it's not active
+      if (event.recurrenceEnd && checkTime > new Date(event.recurrenceEnd).getTime() + currentBuffer) return false;
+
+      // 3. Match Day of Week (Bogota Time)
+      const eventDay = new Date(eventStart.toLocaleString("en-US", { timeZone: "America/Bogota" })).getDay();
+      const currentDay = new Date(time.toLocaleString("en-US", { timeZone: "America/Bogota" })).getDay();
+      if (eventDay !== currentDay) return false;
+
+      // 4. Match Time Window (Hours/Minutes)
+      const getMinutes = (d) => {
+          const date = new Date(d.toLocaleString("en-US", { timeZone: "America/Bogota" }));
+          return date.getHours() * 60 + date.getMinutes();
+      };
+
+      const eventStartMin = getMinutes(eventStart);
+      const eventEndMin = getMinutes(eventEnd);
+      const currentMin = getMinutes(time);
+      const bufferMin = currentBuffer / 60000;
+
+      return currentMin >= eventStartMin - bufferMin && currentMin <= eventEndMin + bufferMin;
     }
     return false;
   };
@@ -104,24 +125,32 @@ export function calculateMemberStatus(member, todayEvents, now) {
   const BUFFER_MS = 5 * 60 * 1000;
 
   const checkEventActive = (event, time) => {
-    const eventStart = new Date(event.startAt).getTime();
-    const eventEnd = new Date(event.endAt).getTime();
+    const eventStart = new Date(event.startAt);
+    const eventEnd = new Date(event.endAt);
     const checkTime = time.getTime();
     const isMeeting = event.type === 'MEETING' || event.title?.toLowerCase().includes('sala de juntas');
     const currentBuffer = isMeeting ? 0 : BUFFER_MS;
 
     if (event.recurrence === 'NONE' || !event.recurrence) {
-      return eventStart - currentBuffer <= checkTime && eventEnd + currentBuffer >= checkTime;
+      return (checkTime >= eventStart.getTime() - currentBuffer) && (checkTime <= eventEnd.getTime() + currentBuffer);
     }
     if (event.recurrence === 'WEEKLY') {
-      if (event.recurrenceEnd && new Date(event.recurrenceEnd).getTime() + currentBuffer < checkTime) return false;
-      const start = new Date(event.startAt).getTime();
-      const end = new Date(event.endAt).getTime();
-      const duration = end - start;
-      const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-      const timeDiff = checkTime - start;
-      const offsetInWeek = ((timeDiff % msPerWeek) + msPerWeek) % msPerWeek;
-      return offsetInWeek <= duration + currentBuffer || offsetInWeek >= msPerWeek - currentBuffer;
+      if (checkTime < eventStart.getTime() - currentBuffer) return false;
+      if (event.recurrenceEnd && checkTime > new Date(event.recurrenceEnd).getTime() + currentBuffer) return false;
+
+      const eventDay = new Date(eventStart.toLocaleString("en-US", { timeZone: "America/Bogota" })).getDay();
+      const currentDay = new Date(time.toLocaleString("en-US", { timeZone: "America/Bogota" })).getDay();
+      if (eventDay !== currentDay) return false;
+
+      const getMinutes = (d) => {
+          const date = new Date(d.toLocaleString("en-US", { timeZone: "America/Bogota" }));
+          return date.getHours() * 60 + date.getMinutes();
+      };
+      const eventStartMin = getMinutes(eventStart);
+      const eventEndMin = getMinutes(eventEnd);
+      const currentMin = getMinutes(time);
+      const bufferMin = currentBuffer / 60000;
+      return currentMin >= eventStartMin - bufferMin && currentMin <= eventEndMin + bufferMin;
     }
     return false;
   };
