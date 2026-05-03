@@ -79,13 +79,19 @@ export async function getTeamActivityStatus() {
     }
     if (event.recurrence === 'WEEKLY') {
       if (event.recurrenceEnd && new Date(event.recurrenceEnd).getTime() + currentBuffer < checkTime) return false;
-      const start = new Date(event.startAt).getTime();
-      const end = new Date(event.endAt).getTime();
-      const duration = end - start;
-      const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-      const timeDiff = checkTime - start;
-      const offsetInWeek = ((timeDiff % msPerWeek) + msPerWeek) % msPerWeek;
-      return offsetInWeek <= duration + currentBuffer || offsetInWeek >= msPerWeek - currentBuffer;
+
+      const eventStartDate = new Date(event.startAt);
+      const eventEndDate = new Date(event.endAt);
+      const sameWeekDay = eventStartDate.getDay() === time.getDay();
+      if (!sameWeekDay) return false;
+
+      const minutesOfDay = (d) => d.getHours() * 60 + d.getMinutes();
+      const nowMinutes = minutesOfDay(time);
+      const startMinutes = minutesOfDay(eventStartDate);
+      const endMinutes = minutesOfDay(eventEndDate);
+      const bufferMinutes = Math.floor(currentBuffer / 60000);
+
+      return nowMinutes >= startMinutes - bufferMinutes && nowMinutes <= endMinutes + bufferMinutes;
     }
     return false;
   };
@@ -121,13 +127,19 @@ export function calculateMemberStatus(member, todayEvents, now) {
     }
     if (event.recurrence === 'WEEKLY') {
       if (event.recurrenceEnd && new Date(event.recurrenceEnd).getTime() + currentBuffer < checkTime) return false;
-      const start = new Date(event.startAt).getTime();
-      const end = new Date(event.endAt).getTime();
-      const duration = end - start;
-      const msPerWeek = 7 * 24 * 60 * 60 * 1000;
-      const timeDiff = checkTime - start;
-      const offsetInWeek = ((timeDiff % msPerWeek) + msPerWeek) % msPerWeek;
-      return offsetInWeek <= duration + currentBuffer || offsetInWeek >= msPerWeek - currentBuffer;
+
+      const eventStartDate = new Date(event.startAt);
+      const eventEndDate = new Date(event.endAt);
+      const sameWeekDay = eventStartDate.getDay() === time.getDay();
+      if (!sameWeekDay) return false;
+
+      const minutesOfDay = (d) => d.getHours() * 60 + d.getMinutes();
+      const nowMinutes = minutesOfDay(time);
+      const startMinutes = minutesOfDay(eventStartDate);
+      const endMinutes = minutesOfDay(eventEndDate);
+      const bufferMinutes = Math.floor(currentBuffer / 60000);
+
+      return nowMinutes >= startMinutes - bufferMinutes && nowMinutes <= endMinutes + bufferMinutes;
     }
     return false;
   };
@@ -142,28 +154,36 @@ export function calculateMemberStatus(member, todayEvents, now) {
     return false;
   };
 
-  // NEW HIERARCHY (BS-MAP-REPAIR):
-  // 1. MEETING (Active Now) -> Sala de Juntas
-  // 2. ABSENCE (Today) -> De permiso
-  // 3. PRODUCTION (Today) -> Producción
-  // 4. BREAK / CAFE (Active Now) -> Cafecito Time
-  // 5. WORK_DAY / JORNADA (Active Now) -> Oficina Central (Escritorio)
-  // 6. TASK (In Progress) -> Oficina Central (if no calendar event)
-  // 7. OFFLINE (Default) -> Invisible en el mapa
+  // JERARQUÍA BS-MAP-PRO-V3 (6 ESTADOS):
+  // 1. PERMISSION / VACATION -> AUSENTE
+  // 2. MEETING -> REUNION
+  // 3. PRODUCTION -> PRODUCCION
+  // 4. FOCUS EVENT / SPECIAL TASK -> ENFOCADO
+  // 5. BREAK / TASK IN PROGRESS -> OCUPADO
+  // 6. DEFAULT -> LIBRE
 
-  let status = 'OFFLINE';
+  let status = 'LIBRE';
   let currentTask = (member.nativeTasks && member.nativeTasks[0]) || null;
   let prioritizedEvent = null;
 
   const memberEvents = todayEvents.filter(e => e.memberIds?.includes(member.id));
 
   // Active Events (Right now)
+  const permissionEvent = memberEvents.find(e =>
+    (e.type === 'PERMISSION' || e.type === 'VACATION' || e.type === 'ABSENCE' ||
+      e.title?.toLowerCase().includes('permiso') || e.title?.toLowerCase().includes('vacaciones')) &&
+    checkEventActive(e, now)
+  );
   const meetingEvent = memberEvents.find(e =>
     (e.type === 'MEETING' || e.title?.toLowerCase().includes('sala de juntas')) &&
     checkEventActive(e, now)
   );
-  const workDayEvent = memberEvents.find(e =>
-    (e.type === 'WORK_DAY' || e.type === 'JORNADA' || e.title?.toLowerCase().includes('jornada laboral')) &&
+  const productionEvent = memberEvents.find(e =>
+    (e.type === 'PRODUCTION' || e.title?.toLowerCase().includes('producción') || e.title?.toLowerCase().includes('produccion')) &&
+    checkEventActive(e, now)
+  );
+  const focusEvent = memberEvents.find(e =>
+    (e.type === 'DEEP_WORK' || e.type === 'FOCUS' || e.title?.toLowerCase().includes('foco') || e.title?.toLowerCase().includes('concentración')) &&
     checkEventActive(e, now)
   );
   const breakEvent = memberEvents.find(e =>
@@ -171,26 +191,22 @@ export function calculateMemberStatus(member, todayEvents, now) {
     checkEventActive(e, now)
   );
 
-  // STRICT TEMPORAL VALIDATION (BS-MAP-FINAL-V2)
-  const absenceEvent = memberEvents.find(e => (e.type === 'ABSENCE' || e.title?.toLowerCase().includes('permiso')) && checkEventActive(e, now));
-  const productionEvent = memberEvents.find(e => (e.type === 'PRODUCTION' || e.title?.toLowerCase().includes('producción')) && checkEventActive(e, now));
-
-  // Priority Resolution Logic (BS-MAP-FINAL-V2)
-  if (meetingEvent) {
+  // Priority Resolution Logic
+  if (permissionEvent) {
+    status = 'AUSENTE';
+    prioritizedEvent = permissionEvent;
+  } else if (meetingEvent) {
     status = 'REUNION';
     prioritizedEvent = meetingEvent;
-  } else if (absenceEvent) {
-    status = 'AUSENTE';
-    prioritizedEvent = absenceEvent;
   } else if (productionEvent) {
     status = 'PRODUCCION';
     prioritizedEvent = productionEvent;
-  } else if (breakEvent) {
-    status = 'LIBRE';
+  } else if (focusEvent || currentTask?.isSpecial) {
+    status = 'ENFOCADO';
+    prioritizedEvent = focusEvent;
+  } else if (breakEvent || currentTask) {
+    status = 'OCUPADO';
     prioritizedEvent = breakEvent;
-  } else if (workDayEvent) {
-    status = currentTask?.isSpecial ? 'ENFOCADO' : 'OCUPADO'; // In Central Office
-    prioritizedEvent = workDayEvent;
   }
 
   return {
