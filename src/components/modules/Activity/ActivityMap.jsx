@@ -56,14 +56,13 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'LIBRE': return 'bg-green-500';
-      case 'ENFOCADO': return 'bg-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.5)]';
-      case 'OCUPADO': return 'bg-orange-500';
-      case 'REUNION': return 'bg-zinc-300';
-      case 'PRODUCCION': return 'bg-fuchsia-500';
-      case 'AUSENTE': return 'bg-red-500';
-      case 'OFFLINE': return 'bg-zinc-400';
-      default: return 'bg-zinc-400';
+      case 'LIBRE': return 'border-green-500';
+      case 'ENFOCADO': return 'border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.5)]';
+      case 'OCUPADO': return 'border-orange-500';
+      case 'REUNION': return 'border-zinc-400'; // Grayish
+      case 'PRODUCCION': return 'border-fuchsia-500';
+      case 'AUSENTE': return 'border-red-900'; // Dark Red
+      default: return 'border-zinc-200';
     }
   };
 
@@ -233,10 +232,10 @@ const ActivityMap = () => {
   };
 
   return (
-    <div className="relative w-full p-16 md:p-24 min-h-[900px] bg-[#f8f9fc] dark:bg-zinc-950 rounded-[40px] border border-zinc-200/50 dark:border-zinc-800/50 shadow-xl overflow-hidden">
+    <div className="relative w-full p-8 md:p-12 min-h-[1000px] bg-[#fdfdfd] dark:bg-zinc-950 rounded-[40px] border border-zinc-200/50 dark:border-zinc-800/50 shadow-2xl overflow-hidden">
       {/* Background Dotted Grid */}
-      <div className="absolute inset-0 opacity-[0.05] dark:opacity-[0.1] pointer-events-none"
-           style={{ backgroundImage: 'radial-gradient(circle, currentColor 1.5px, transparent 1.5px)', backgroundSize: '32px 32px' }}
+      <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.08] pointer-events-none"
+           style={{ backgroundImage: 'radial-gradient(circle, currentColor 1.5px, transparent 1.5px)', backgroundSize: '40px 40px' }}
       />
 
       {/* Main Architectural Grid: 5 zonas horizontales */}
