@@ -234,59 +234,58 @@ const ActivityMap = () => {
            style={{ backgroundImage: 'radial-gradient(circle, currentColor 1.5px, transparent 1.5px)', backgroundSize: '32px 32px' }}
       />
 
-      {/* Main Architectural Grid: Two-column layout focusing on the office */}
-      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-[40px]">
+      {/* Main Architectural Grid: 3-column layout centering the Office */}
+      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[240px_1fr_240px] gap-[40px]">
 
-        {/* Columna Central: Operación Vertical (Permiso > Producción > Sala de Juntas > Oficina Central) */}
-        <div className="flex flex-col gap-[60px]">
-          <div className="grid grid-cols-2 gap-[40px]">
-            <Zone id="permiso" name="De permiso" icon={User} className="h-[200px]">
-              {membersByZone.permiso.map(m => (
-                <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
-              ))}
-            </Zone>
-            <Zone id="bunker" name="Sala de juntas" icon={Lock} className="h-[200px]">
-              {membersByZone.bunker.map(m => (
-                <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
-              ))}
-            </Zone>
-          </div>
-
-          <div className="grid grid-cols-[1.5fr_1fr] gap-[40px]">
-             <Zone id="nave" name="Oficina central" icon={Zap} className="h-[520px] bg-indigo-50/20 dark:bg-indigo-900/5">
-                {/* Escritorios 3x3 */}
-                <div className="absolute inset-0 p-10 grid grid-cols-3 grid-rows-3 gap-10 opacity-[0.03] dark:opacity-[0.06] pointer-events-none">
-                  {[...Array(9)].map((_, i) => (
-                    <div key={i} className="bg-zinc-400 dark:bg-white rounded-xl flex items-center justify-center border-2 border-zinc-300">
-                      <Monitor className="w-8 h-8" />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Miembros en Oficina */}
-                <div className="relative z-10 grid grid-cols-3 gap-x-12 gap-y-16 p-6">
-                  {membersByZone.nave.map(m => (
-                    <div key={m.id} className="flex items-center justify-center">
-                      <MemberAvatar member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
-                    </div>
-                  ))}
-                </div>
-              </Zone>
-
-              <Zone id="estudio" name="Producción" icon={Video} className="h-[520px]" isActive={isProductionActive}>
-                {membersByZone.estudio.map(m => (
-                  <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
-                ))}
-              </Zone>
-          </div>
+        {/* Columna Izquierda: De permiso / Producción */}
+        <div className="flex flex-col gap-[40px]">
+          <Zone id="permiso" name="De permiso" icon={User} className="h-[300px]">
+            {membersByZone.permiso.map(m => (
+              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
+            ))}
+          </Zone>
+          <Zone id="estudio" name="Producción" icon={Video} className="h-[520px]" isActive={isProductionActive}>
+            {membersByZone.estudio.map(m => (
+              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
+            ))}
+          </Zone>
         </div>
 
-        {/* Columna Derecha: Wellness (Cafecito) */}
-        <div className="flex flex-col justify-end">
-          <Zone id="cafe" name="Cafecito time" icon={Coffee} className="h-[380px]">
+        {/* Columna Central: OFICINA CENTRAL (The Heart) */}
+        <div className="flex flex-col gap-[40px]">
+          <Zone id="nave" name="Oficina central" icon={Zap} className="min-h-[860px] bg-indigo-50/20 dark:bg-indigo-900/5">
+            {/* Escritorios 4x4 Grid for prominence */}
+            <div className="absolute inset-0 p-16 grid grid-cols-4 grid-rows-4 gap-12 opacity-[0.03] dark:opacity-[0.06] pointer-events-none">
+              {[...Array(16)].map((_, i) => (
+                <div key={i} className="bg-zinc-400 dark:bg-white rounded-2xl flex items-center justify-center border-2 border-zinc-300">
+                  <Monitor className="w-10 h-10" />
+                </div>
+              ))}
+            </div>
+
+            {/* Miembros en Oficina */}
+            <div className="relative z-10 grid grid-cols-4 gap-x-12 gap-y-20 p-10">
+              {membersByZone.nave.map(m => (
+                <div key={m.id} className="flex items-center justify-center">
+                  <MemberAvatar member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
+                </div>
+              ))}
+            </div>
+          </Zone>
+        </div>
+
+        {/* Columna Derecha: Sala de Juntas / Wellness */}
+        <div className="flex flex-col gap-[40px]">
+          <Zone id="bunker" name="Sala de juntas" icon={Lock} className="h-[400px]">
+            {membersByZone.bunker.map(m => (
+              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
+            ))}
+          </Zone>
+
+          <Zone id="cafe" name="Cafecito time" icon={Coffee} className="h-[420px] mt-auto">
             {/* Mesa Circular Decorativa */}
             <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] dark:opacity-[0.06] pointer-events-none">
-              <div className="w-40 h-40 border-[8px] border-zinc-400 dark:border-white rounded-full" />
+              <div className="w-44 h-44 border-[8px] border-zinc-400 dark:border-white rounded-full" />
             </div>
             {membersByZone.cafe.map(m => (
               <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />

@@ -27,8 +27,15 @@ export async function getTeamActivityStatus() {
     }
   });
 
-  // Unified agency time (UTC)
-  const now = new Date();
+  // Unified agency time (America/Bogota)
+  const bogotaTime = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Bogota',
+    year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: 'numeric', minute: 'numeric', second: 'numeric',
+    hour12: false
+  }).format(new Date());
+
+  const now = new Date(bogotaTime);
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
   const endOfToday = new Date(now);
@@ -63,10 +70,11 @@ export async function getTeamActivityStatus() {
     const checkTime = time.getTime();
 
     // Meetings require strict time validation (no buffer) to avoid "ghost meetings"
-    const isMeeting = event.type === 'MEETING';
+    const isMeeting = event.type === 'MEETING' || event.title?.toLowerCase().includes('sala de juntas');
     const currentBuffer = isMeeting ? 0 : BUFFER_MS;
 
     if (event.recurrence === 'NONE' || !event.recurrence) {
+      // STRICT: Must be today and current time must be within bounds
       return eventStart - currentBuffer <= checkTime && eventEnd + currentBuffer >= checkTime;
     }
     if (event.recurrence === 'WEEKLY') {
@@ -105,7 +113,7 @@ export function calculateMemberStatus(member, todayEvents, now) {
     const eventStart = new Date(event.startAt).getTime();
     const eventEnd = new Date(event.endAt).getTime();
     const checkTime = time.getTime();
-    const isMeeting = event.type === 'MEETING';
+    const isMeeting = event.type === 'MEETING' || event.title?.toLowerCase().includes('sala de juntas');
     const currentBuffer = isMeeting ? 0 : BUFFER_MS;
 
     if (event.recurrence === 'NONE' || !event.recurrence) {
