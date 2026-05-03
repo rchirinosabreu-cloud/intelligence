@@ -151,11 +151,6 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
           )}
         />
 
-        <div className={cn(
-          "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-[2px] border-white dark:border-zinc-900",
-          getStatusColor(member.status)
-        )} />
-
         {/* Tooltip */}
         <AnimatePresence>
           {hoveredMember === member.id && (
