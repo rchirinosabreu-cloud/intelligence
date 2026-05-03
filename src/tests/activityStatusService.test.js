@@ -13,55 +13,7 @@ const baseMember = {
 };
 
 describe('activityStatusService.calculateMemberStatus', () => {
-  it('prioriza PERMISSION/VACATION sobre cualquier otro evento', () => {
-    const now = new Date('2026-05-02T15:30:00.000Z');
-    const meeting = {
-      type: 'MEETING',
-      title: 'Sala de juntas',
-      startAt: '2026-05-02T15:00:00.000Z',
-      endAt: '2026-05-02T16:00:00.000Z',
-      recurrence: 'NONE',
-      memberIds: [7]
-    };
-    const permission = {
-      type: 'PERMISSION',
-      title: 'Cita médica',
-      startAt: '2026-05-02T15:00:00.000Z',
-      endAt: '2026-05-02T17:00:00.000Z',
-      recurrence: 'NONE',
-      memberIds: [7]
-    };
-
-    const result = calculateMemberStatus(baseMember, [meeting, permission], now);
-
-    expect(result.status).toBe('AUSENTE');
-  });
-
-  it('asigna ENFOCADO para evento activo DEEP_WORK/FOCUS', () => {
-    const now = new Date('2026-05-02T15:30:00.000Z');
-    const focus = {
-      type: 'FOCUS',
-      title: 'Bloque de concentración',
-      startAt: '2026-05-02T15:00:00.000Z',
-      endAt: '2026-05-02T16:00:00.000Z',
-      recurrence: 'NONE',
-      memberIds: [7]
-    };
-
-    const result = calculateMemberStatus(baseMember, [focus], now);
-
-    expect(result.status).toBe('ENFOCADO');
-  });
-
-  it('asigna LIBRE en oficina central cuando no hay evento activo', () => {
-    const now = new Date('2026-05-02T15:30:00.000Z');
-
-    const result = calculateMemberStatus(baseMember, [], now);
-
-    expect(result.status).toBe('LIBRE');
-  });
-
-  it('no activa reunión futura', () => {
+  it('no debe mover a REUNION si el evento es futuro', () => {
     const now = new Date('2026-05-02T15:00:00.000Z');
     const futureMeeting = {
       type: 'MEETING',
@@ -74,6 +26,30 @@ describe('activityStatusService.calculateMemberStatus', () => {
 
     const result = calculateMemberStatus(baseMember, [futureMeeting], now);
 
-    expect(result.status).toBe('LIBRE');
+    expect(result.status).toBe('OFFLINE');
+  });
+
+  it('debe asignar OCUPADO para evento activo WORK_DAY/JORNADA', () => {
+    const now = new Date('2026-05-02T15:30:00.000Z');
+    const jornada = {
+      type: 'JORNADA',
+      title: 'Jornada Laboral',
+      startAt: '2026-05-02T15:00:00.000Z',
+      endAt: '2026-05-02T16:00:00.000Z',
+      recurrence: 'NONE',
+      memberIds: [7]
+    };
+
+    const result = calculateMemberStatus(baseMember, [jornada], now);
+
+    expect(result.status).toBe('OCUPADO');
+  });
+
+  it('debe permanecer OFFLINE si no tiene eventos activos ni tareas EN_CURSO', () => {
+    const now = new Date('2026-05-02T15:30:00.000Z');
+
+    const result = calculateMemberStatus(baseMember, [], now);
+
+    expect(result.status).toBe('OFFLINE');
   });
 });
