@@ -80,6 +80,18 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
     }
   };
 
+  const getStatusRingClass = (status) => {
+    switch (status) {
+      case 'LIBRE': return 'ring-[3px] ring-green-500';
+      case 'ENFOCADO': return 'ring-[3px] ring-purple-500';
+      case 'OCUPADO': return 'ring-[3px] ring-orange-500';
+      case 'REUNION': return 'ring-[3px] ring-zinc-400';
+      case 'PRODUCCION': return 'ring-[3px] ring-fuchsia-500';
+      case 'AUSENTE': return 'ring-[3px] ring-red-700';
+      default: return 'ring-[3px] ring-zinc-400';
+    }
+  };
+
   const getStatusTextColorClass = (status) => {
     switch (status) {
       case 'LIBRE': return 'text-green-600 dark:text-green-400';
@@ -133,8 +145,9 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
         <TeamAvatar
           member={member}
           className={cn(
-            "w-12 h-12 ring-4 transition-all duration-700 ease-in-out",
-            isAusente ? "grayscale opacity-50 ring-zinc-100 dark:ring-zinc-800" : "ring-white dark:ring-zinc-900 shadow-xl"
+            "w-12 h-12 transition-all duration-700 ease-in-out",
+            getStatusRingClass(member.status),
+            isAusente ? "grayscale opacity-60" : "shadow-xl"
           )}
         />
 
