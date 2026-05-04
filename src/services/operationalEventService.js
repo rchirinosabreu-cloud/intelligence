@@ -1,10 +1,24 @@
 import prisma from '../lib/prisma.js';
 
 export async function getOperationalEvents(start, end) {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+
   return await prisma.operationalEvent.findMany({
     where: {
-      startAt: { gte: new Date(start) },
-      endAt: { lte: new Date(end) }
+      OR: [
+        // Event starts within range
+        { startAt: { gte: startDate, lte: endDate } },
+        // Event ends within range
+        { endAt: { gte: startDate, lte: endDate } },
+        // Event spans across the entire range
+        {
+          AND: [
+            { startAt: { lte: startDate } },
+            { endAt: { gte: endDate } }
+          ]
+        }
+      ]
     },
     orderBy: { startAt: 'asc' }
   });

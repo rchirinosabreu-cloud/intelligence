@@ -27,18 +27,14 @@ export async function getTeamActivityStatus() {
     }
   });
 
-  // Unified agency time (America/Bogota) as absolute Source of Truth
+  // Unified agency time (America/Bogota) as absolute Source of Truth (UTC-5)
   const now = new Date();
 
-  // Helper to get Bogota date boundaries for DB filtering
-  const getBogotaBoundary = (date, hours, mins, secs, ms) => {
-    const d = new Date(date.toLocaleString("en-US", { timeZone: "America/Bogota" }));
-    d.setHours(hours, mins, secs, ms);
-    return d;
-  };
-
-  const startOfToday = getBogotaBoundary(now, 0, 0, 0, 0);
-  const endOfToday = getBogotaBoundary(now, 23, 59, 59, 999);
+  // Robust calculation of Bogota 'today' boundaries in UTC
+  // Bogota Day starts when UTC is 05:00:00 (since UTC = Bog + 5)
+  const bogotaNow = new Date(now.getTime() - (5 * 3600000));
+  const startOfToday = new Date(Date.UTC(bogotaNow.getUTCFullYear(), bogotaNow.getUTCMonth(), bogotaNow.getUTCDate(), 5, 0, 0, 0));
+  const endOfToday = new Date(startOfToday.getTime() + (24 * 3600000) - 1);
 
   // Fetch all events for today (to detect ABSENCE and PRODUCTION)
   // and recurring events
@@ -81,29 +77,24 @@ export function calculateMemberStatus(member, todayEvents, now) {
       if (checkTime < eventStart.getTime() - currentBuffer) return false;
       if (event.recurrenceEnd && checkTime > new Date(event.recurrenceEnd).getTime() + currentBuffer) return false;
 
-      const eventDay = new Date(eventStart.toLocaleString("en-US", { timeZone: "America/Bogota" })).getDay();
-      const currentDay = new Date(time.toLocaleString("en-US", { timeZone: "America/Bogota" })).getDay();
-      if (eventDay !== currentDay) return false;
-
-      const getMinutes = (d) => {
-          const date = new Date(d.toLocaleString("en-US", { timeZone: "America/Bogota" }));
-          return date.getHours() * 60 + date.getMinutes();
+      // Use absolute UTC offsets to avoid local server time interference
+      const getBogotaDayAndMinutes = (d) => {
+          const bogotaTime = new Date(d.getTime() - (5 * 3600000));
+          return {
+              day: bogotaTime.getUTCDay(),
+              minutes: bogotaTime.getUTCHours() * 60 + bogotaTime.getUTCMinutes()
+          };
       };
-      const eventStartMin = getMinutes(eventStart);
-      const eventEndMin = getMinutes(eventEnd);
-      const currentMin = getMinutes(time);
-      const bufferMin = currentBuffer / 60000;
-      return currentMin >= eventStartMin - bufferMin && currentMin <= eventEndMin + bufferMin;
-    }
-    return false;
-  };
 
-  const checkEventToday = (event) => {
-    if (event.recurrence === 'NONE' || !event.recurrence) return true;
-    if (event.recurrence === 'WEEKLY') {
-        const eventDate = new Date(event.startAt);
-        const dayOfWeek = eventDate.getDay();
-        return now.getDay() === dayOfWeek;
+      const eventTime = getBogotaDayAndMinutes(eventStart);
+      const currentTime = getBogotaDayAndMinutes(time);
+
+      if (eventTime.day !== currentTime.day) return false;
+
+      const bufferMin = currentBuffer / 60000;
+      const eventEndMin = getBogotaDayAndMinutes(eventEnd).minutes;
+
+      return currentTime.minutes >= eventTime.minutes - bufferMin && currentTime.minutes <= eventEndMin + bufferMin;
     }
     return false;
   };

@@ -99,12 +99,19 @@ const OperationalCalendar = () => {
 
   const deleteMutation = useMutation({
     mutationFn: async (id) => {
-      await fetch(`${getApiBaseUrl()}/api/activity/events/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/events/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete event');
+      return res.json();
     },
     onSuccess: () => {
+      // Invalidate both events and status to trigger immediate UI update
       queryClient.invalidateQueries(['operational-events']);
       queryClient.invalidateQueries(['team-activity-status']);
       toast.success('Evento eliminado');
+    },
+    onError: (error) => {
+      console.error("Deletion error:", error);
+      toast.error('No se pudo eliminar el evento');
     }
   });
 
