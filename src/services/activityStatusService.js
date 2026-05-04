@@ -40,8 +40,6 @@ export async function getTeamActivityStatus() {
   const startOfToday = getBogotaBoundary(now, 0, 0, 0, 0);
   const endOfToday = getBogotaBoundary(now, 23, 59, 59, 999);
 
-  const BUFFER_MS = 5 * 60 * 1000; // 5 minute safety buffer
-
   // Fetch all events for today (to detect ABSENCE and PRODUCTION)
   // and recurring events
   const todayEvents = await prisma.operationalEvent.findMany({
@@ -62,61 +60,6 @@ export async function getTeamActivityStatus() {
       ]
     }
   });
-
-  const checkEventActive = (event, time) => {
-    const eventStart = new Date(event.startAt);
-    const eventEnd = new Date(event.endAt);
-    const checkTime = time.getTime();
-
-    // Meetings require strict time validation (no buffer)
-    const isMeeting = event.type === 'MEETING' || event.title?.toLowerCase().includes('sala de juntas');
-    const currentBuffer = isMeeting ? 0 : BUFFER_MS;
-
-    if (event.recurrence === 'NONE' || !event.recurrence) {
-      // BS-TIME-FIX: Pure ISO comparison
-      return (checkTime >= eventStart.getTime() - currentBuffer) && (checkTime <= eventEnd.getTime() + currentBuffer);
-    }
-
-    if (event.recurrence === 'WEEKLY') {
-      // 1. If we are before the very first occurrence, it's not active
-      if (checkTime < eventStart.getTime() - currentBuffer) return false;
-
-      // 2. If we are after the recurrence end, it's not active
-      if (event.recurrenceEnd && checkTime > new Date(event.recurrenceEnd).getTime() + currentBuffer) return false;
-
-      // 3. Match Day of Week (Bogota Time)
-      const eventDay = new Date(eventStart.toLocaleString("en-US", { timeZone: "America/Bogota" })).getDay();
-      const currentDay = new Date(time.toLocaleString("en-US", { timeZone: "America/Bogota" })).getDay();
-      if (eventDay !== currentDay) return false;
-
-      // 4. Match Time Window (Hours/Minutes)
-      const getMinutes = (d) => {
-          const date = new Date(d.toLocaleString("en-US", { timeZone: "America/Bogota" }));
-          return date.getHours() * 60 + date.getMinutes();
-      };
-
-      const eventStartMin = getMinutes(eventStart);
-      const eventEndMin = getMinutes(eventEnd);
-      const currentMin = getMinutes(time);
-      const bufferMin = currentBuffer / 60000;
-
-      return currentMin >= eventStartMin - bufferMin && currentMin <= eventEndMin + bufferMin;
-    }
-    return false;
-  };
-
-  // Helper to check if event happens at any point "today"
-  const checkEventToday = (event) => {
-    // If it's not recurring, we already filtered it by startAt/endAt in the query
-    if (event.recurrence === 'NONE' || !event.recurrence) return true;
-
-    if (event.recurrence === 'WEEKLY') {
-        const eventDate = new Date(event.startAt);
-        const dayOfWeek = eventDate.getDay();
-        return now.getDay() === dayOfWeek;
-    }
-    return false;
-  };
 
   return members.map(member => calculateMemberStatus(member, todayEvents, now));
 }

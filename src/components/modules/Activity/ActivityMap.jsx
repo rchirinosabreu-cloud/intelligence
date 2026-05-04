@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const Zone = ({ id, name, icon: Icon, children, className, isActive }) => (
   <div className={cn(
-    "relative flex flex-col min-h-[180px] p-8 transition-all duration-700 rounded-[32px] border-2 border-dashed overflow-visible",
+    "relative flex flex-col min-h-[180px] p-10 transition-all duration-700 rounded-[32px] border-2 border-dashed overflow-visible",
     isActive ? "border-fuchsia-500 bg-fuchsia-500/5 shadow-[0_0_40px_rgba(217,70,239,0.1)]" : "border-zinc-200/40 dark:border-zinc-800/40 bg-white/40 dark:bg-zinc-900/40",
     className
   )}>
@@ -23,7 +23,7 @@ const Zone = ({ id, name, icon: Icon, children, className, isActive }) => (
     </div>
 
     {/* Content Container */}
-    <div className="relative flex-1 flex flex-wrap items-center justify-center gap-6">
+    <div className="relative flex-1 flex flex-wrap items-center justify-center gap-4">
       {children}
     </div>
 
@@ -145,10 +145,10 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               transition={{ duration: 0.2 }}
-              className="absolute bottom-full left-1/2 -translate-x-1/2 pb-4 z-[999]"
+              className="absolute bottom-full left-1/2 -translate-x-1/2 pb-6 z-[9999]"
             >
               <div
-                className="bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-white px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border border-white/40 dark:border-zinc-800/40 flex items-center gap-3 min-w-[300px] pointer-events-auto"
+                className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white px-5 py-4 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-2xl border border-white/20 dark:border-zinc-800/20 flex items-center gap-4 min-w-[320px] pointer-events-auto"
                 onMouseEnter={handleMouseEnter}
               >
                 <div className="flex flex-col gap-0.5 flex-shrink-0">
@@ -227,16 +227,16 @@ const ActivityMap = () => {
   const isProductionActive = membersByZone.estudio.length > 0;
 
   return (
-    <div className="relative w-full p-8 md:p-12 min-h-[1000px] bg-[#fdfdfd] dark:bg-zinc-950 rounded-[40px] border border-zinc-200/50 dark:border-zinc-800/50 shadow-2xl overflow-hidden">
+    <div className="relative w-full p-12 md:p-16 min-h-[1000px] bg-[#fdfdfd] dark:bg-zinc-950 rounded-[40px] border border-zinc-200/50 dark:border-zinc-800/50 shadow-2xl overflow-visible">
       {/* Background Dotted Grid */}
-      <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.08] pointer-events-none"
+      <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.08] pointer-events-none rounded-[40px] overflow-hidden"
            style={{ backgroundImage: 'radial-gradient(circle, currentColor 1.5px, transparent 1.5px)', backgroundSize: '40px 40px' }}
       />
 
       <div className="relative z-10 flex flex-col gap-8">
 
         {/* FILA SUPERIOR: Permiso | Bunker | Foco */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start">
           <Zone id="permiso" name="Zona de Permiso" icon={User} className="h-[280px] bg-red-50/10 dark:bg-red-900/5">
             {membersByZone.permiso.map(m => (
               <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
@@ -257,7 +257,7 @@ const ActivityMap = () => {
         </div>
 
         {/* FILA INFERIOR: Producción | Oficina Central (40%) | Cafecito */}
-        <div className="grid grid-cols-1 lg:grid-cols-[30%_40%_30%] gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[28%_40%_28%] gap-10 items-stretch justify-center">
           <Zone id="estudio" name="Producción" icon={Video} className="h-[500px]" isActive={isProductionActive}>
             {membersByZone.estudio.map(m => (
               <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
