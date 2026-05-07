@@ -60,6 +60,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 clientId: cId,
                 assigneeId: taskData.assigneeId || '',
                 status: initialStatus,
+                isReturned: taskData.isReturned || false,
                 originalStatus: initialStatus, // Store original to detect auto-resolve and anti-spam confetti
                 dueDate: formattedDate,
                 comments: taskData.comments || '',
@@ -117,19 +118,22 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 isoDate = `${cleanDate}T12:00:00.000Z`;
             }
 
-            // Auto-resolve logic: If it was visually 'Devuelto' (by status or by tag),
+            // Auto-resolve logic: If it was visually 'Devuelto' (by flag, status or tag),
             // and the user is using the "Reintegrar" action, we resolve it.
             const currentComments = editFormData.comments || '';
-            const isVisuallyReturned = editFormData.originalStatus === 'DEVUELTA' ||
+            const isVisuallyReturned = editFormData.isReturned ||
+                                      editFormData.originalStatus === 'DEVUELTA' ||
                                       (editFormData.originalStatus === 'PENDIENTE' && currentComments.includes('[DEVOLUCIÓN'));
 
             let finalStatus = editFormData.status;
             let finalComments = currentComments;
+            let finalIsReturned = editFormData.isReturned;
 
             if (isVisuallyReturned && finalStatus === editFormData.originalStatus) {
                 console.log("[TaskEditModal] Auto-resolve triggered for visually returned task.");
                 // Force PENDIENTE. The backend will handle the [REINTEGRADA] tag.
                 finalStatus = 'PENDIENTE';
+                finalIsReturned = false;
             }
 
             // Trigger confetti if status is changing to 'REALIZADA' (Optimistic)
@@ -149,6 +153,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 dueDate: isoDate,
                 comments: finalComments,
                 status: statusToSubmit,
+                isReturned: finalIsReturned,
                 isPriority: editFormData.isPriority,
                 isSpecial: editFormData.isSpecial,
                 specialType: editFormData.isSpecial ? editFormData.specialType : null,
@@ -403,13 +408,13 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                             disabled={isSubmitting}
                             className={cn(
                                 "px-6 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm",
-                                (editFormData.originalStatus === 'DEVUELTA' || (editFormData.originalStatus === 'PENDIENTE' && (editFormData.comments || '').includes('[DEVOLUCIÓN')))
+                                (editFormData.isReturned || editFormData.originalStatus === 'DEVUELTA' || (editFormData.originalStatus === 'PENDIENTE' && (editFormData.comments || '').includes('[DEVOLUCIÓN')))
                                     ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 border-none"
                                     : "bg-primary hover:bg-primary/90 text-primary-foreground"
                             )}
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                            {(editFormData.originalStatus === 'DEVUELTA' || (editFormData.originalStatus === 'PENDIENTE' && (editFormData.comments || '').includes('[DEVOLUCIÓN')))
+                            {(editFormData.isReturned || editFormData.originalStatus === 'DEVUELTA' || (editFormData.originalStatus === 'PENDIENTE' && (editFormData.comments || '').includes('[DEVOLUCIÓN')))
                                 ? 'Guardar y reintegrar tarea'
                                 : 'Guardar cambios'}
                         </button>

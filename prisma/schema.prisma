@@ -193,6 +193,8 @@ model Task {
   aiCategory    String?
   aiComplexity  String?
   returnCount   Int          @default(0)
+  isReturned    Boolean      @default(false)
+  returnedAt    DateTime?
   startedAt     DateTime?
   assignee      TeamMember?  @relation(fields: [assigneeId], references: [id])
   client        Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
