@@ -136,18 +136,10 @@ const CLIENT_COLORS = {
 };
 
 // Note: Backend strictly returns Enum values: PENDIENTE, EN_CURSO, REALIZADA, DEVUELTA.
-// Hierarchical Blindness: REALIZADA > EN_CURSO > DEVUELTA (by status or by comment if PENDIENTE)
-const getColumnId = (status, comments = '') => {
+// Hierarchical Blindness: REALIZADA > EN_CURSO > DEVUELTA (by status or by flag)
+const getColumnId = (status, isReturned = false, comments = '') => {
     if (!status) return 'pendiente';
     const s = String(status).toUpperCase();
-
-    // Total Reintegration Fix:
-    // If [REINTEGRADA] appears after the last [DEVOLUCIÓN], we trust the DB status.
-    const lastReturnIdx = (comments || '').lastIndexOf('[DEVOLUCIÓN');
-    const lastReintegratedIdx = (comments || '').lastIndexOf('[REINTEGRADA');
-    const isReintegrated = lastReintegratedIdx > lastReturnIdx;
-
-    const hasReturnTag = (comments || '').includes('[DEVOLUCIÓN') && !isReintegrated;
 
     // High Priority: Always REALIZADA
     if (s === 'REALIZADA' || s === 'REALIZADO') return 'realizado';
@@ -155,9 +147,11 @@ const getColumnId = (status, comments = '') => {
     // Medium Priority: EN_CURSO
     if (s === 'EN_CURSO' || s === 'EN PROCESO') return 'en-proceso';
 
-    // Shielding Logic: DEVUELTA or (PENDIENTE with Return Tag)
-    // HOTFIX: Must be exactly uppercase for Enum matching
-    if (s === 'DEVUELTA' || (s === 'PENDIENTE' && hasReturnTag)) return 'devuelto';
+    // Shielding Logic: DEVUELTA or isReturned flag
+    // If [REINTEGRADA] appears, we trust the DB status unless isReturned is explicitly true.
+    const hasReturnTag = (comments || '').includes('[DEVOLUCIÓN') && !(comments || '').includes('[REINTEGRADA');
+
+    if (s === 'DEVUELTA' || isReturned || (s === 'PENDIENTE' && hasReturnTag)) return 'devuelto';
 
     return 'pendiente';
 };
@@ -213,6 +207,7 @@ const NativeTasks = () => {
           creatorId: task.creatorId,
           creatorName: task.creator?.name || 'Sistema',
           status: task.status,
+              isReturned: task.isReturned || false,
           dueDateFormatted: task.dueDate ? task.dueDate.split('T')[0].split('-').reverse().join('-') : null,
           completedAt: task.completedAt,
           comments: task.comments,
@@ -263,7 +258,7 @@ const NativeTasks = () => {
             setEditingTask(taskToOpen);
 
             // If the task is in the 'devuelto' column, ensure the sidebar is open
-            if (getColumnId(taskToOpen.status, taskToOpen.comments) === 'devuelto') {
+            if (getColumnId(taskToOpen.status, taskToOpen.isReturned, taskToOpen.comments) === 'devuelto') {
                 setIsReturnedSidebarOpen(true);
             }
         }
@@ -313,7 +308,7 @@ const NativeTasks = () => {
           // 3. OPTIMISTIC UPDATE
           queryClient.setQueryData(['nativeTasks'], prev => prev?.map(t =>
             t.id === returningTask.id
-                ? { ...t, status: 'DEVUELTA', comments: updatedComments, comentarios: updatedComments }
+                ? { ...t, status: 'DEVUELTA', isReturned: true, comments: updatedComments, comentarios: updatedComments }
                 : t
           ));
 
@@ -322,6 +317,7 @@ const NativeTasks = () => {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                   status: 'DEVUELTA',
+                  isReturned: true,
                   comments: updatedComments
               })
           });
@@ -419,7 +415,7 @@ const NativeTasks = () => {
       let filtered = tasks.filter(task => {
         // 1. STRICT MONTH FILTER FOR "REALIZADO" COLUMN
         // According to ticket: Only show tasks completed in the current month in the "Realizado" column.
-        const columnId = getColumnId(task.status, task.comments);
+        const columnId = getColumnId(task.status, task.isReturned, task.comments);
         if (columnId === 'realizado') {
             if (!task.completedAt) return false;
 
@@ -482,7 +478,7 @@ const NativeTasks = () => {
   ];
 
   const returnedTasks = useMemo(() => {
-      return tasks.filter(t => getColumnId(t.status, t.comments) === 'devuelto');
+      return tasks.filter(t => getColumnId(t.status, t.isReturned, t.comments) === 'devuelto');
   }, [tasks]);
 
   const onDragEnd = async (result) => {
@@ -526,14 +522,15 @@ const NativeTasks = () => {
               const now = new Date().toLocaleString('es-CO');
               const reintegratedTag = `[REINTEGRADA - ${now}]`;
               movedTask.comments = `${reintegratedTag}\n${movedTask.comments || ''}`.trim();
-              console.log("[onDragEnd] Optimistic UI: Added reintegrated tag.");
+              movedTask.isReturned = false;
+              console.log("[onDragEnd] Optimistic UI: Added reintegrated tag and reset flag.");
       }
 
       // Calculate Insertion Position (handling filters and visibility)
       // Filter the *remaining* tasks to match what's visible in the destination column
       const visibleTasksInDestColumn = newTasks.filter(task => {
           // Match Column
-          if (getColumnId(task.status, task.comments) !== destinationColumnId) return false;
+          if (getColumnId(task.status, task.isReturned, task.comments) !== destinationColumnId) return false;
 
           // Match Active Filters
           if (responsibleFilter !== 'Todos' && (task.assigneeName || "Desconocido") !== responsibleFilter) return false;
@@ -600,7 +597,10 @@ const NativeTasks = () => {
           // Construct Payload
           const payload = { status: newStatusForDB };
 
-          // If moving to Pendiente from Devuelto, the backend handles the [REINTEGRADA] tag.
+          // If moving to Pendiente from Devuelto, reset flag. Backend handles [REINTEGRADA] tag.
+          if (newStatusForDB === 'PENDIENTE' && sourceColumnId === 'devuelto') {
+              payload.isReturned = false;
+          }
 
           console.log(`[onDragEnd] Syncing status to ${newStatusForDB}...`, payload);
 
@@ -937,7 +937,7 @@ const NativeTasks = () => {
               {/* Grid Column Layout Area */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1">
                   {columns.map((col) => {
-                      const columnTasks = filteredTasks.filter(t => getColumnId(t.status, t.comments) === col.id);
+                      const columnTasks = filteredTasks.filter(t => getColumnId(t.status, t.isReturned, t.comments) === col.id);
 
                       return (
                         <div key={col.id} className="flex flex-col gap-4">
@@ -1011,7 +1011,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
     const isHighlighted = highlightedTaskId === String(task.id);
 
     // Overdue Logic for Style
-    const columnId = getColumnId(task.status, task.comments);
+    const columnId = getColumnId(task.status, task.isReturned, task.comments);
     const isDone = columnId === 'realizado';
     const isReturned = columnId === 'devuelto';
     const overdue = !isDone && isOverdue(task.dueDateFormatted);

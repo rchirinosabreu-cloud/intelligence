@@ -79,10 +79,7 @@ export const getQualityStreak = async () => {
             where: {
                 OR: [
                     { status: 'DEVUELTA' },
-                    {
-                        status: 'PENDIENTE',
-                        comments: { contains: '[DEVOLUCIÓN' }
-                    }
+                    { isReturned: true }
                 ]
             },
             orderBy: { updatedAt: 'desc' },
@@ -93,10 +90,7 @@ export const getQualityStreak = async () => {
             where: {
                 OR: [
                     { status: 'DEVUELTA' },
-                    {
-                        status: 'PENDIENTE',
-                        comments: { contains: '[DEVOLUCIÓN' }
-                    }
+                    { isReturned: true }
                 ]
             }
         });
@@ -326,6 +320,8 @@ export const updateTask = async (id, data, updaterId = null) => {
                 completedAt: true,
                 startedAt: true,
                 returnCount: true,
+                isReturned: true,
+                returnedAt: true,
                 comments: true,
                 isPriority: true,
                 isSpecial: true,
@@ -360,6 +356,8 @@ export const updateTask = async (id, data, updaterId = null) => {
             // Radar de Mérito: Increment returnCount on transition to DEVUELTA
             if (isReturned) {
                 updateData.returnCount = (currentTask.returnCount || 0) + 1;
+                updateData.isReturned = true;
+                updateData.returnedAt = new Date();
             }
 
             // Radar de Mérito: Initial startedAt logic
@@ -369,12 +367,17 @@ export const updateTask = async (id, data, updaterId = null) => {
 
             // --- Lógica de Cierre de Ciclo (Notificación de Corrección) ---
             // Si el estado anterior era visually returned y el nuevo es 'Pendiente' o 'En proceso'
-            // Consideramos visualmente devuelto si tiene el tag o el status DEVUELTA.
-            const wasVisuallyReturned = (oldStatus === 'DEVUELTA') ||
+            // Consideramos visualmente devuelto si tiene el tag o el status DEVUELTA o el flag isReturned.
+            const wasVisuallyReturned = currentTask.isReturned || (oldStatus === 'DEVUELTA') ||
                                        (oldStatus === 'PENDIENTE' && (currentTask.comments || '').includes('[DEVOLUCIÓN'));
 
             isCorrected = wasVisuallyReturned &&
                               (newStatus === 'PENDIENTE' || newStatus === 'EN_CURSO');
+
+            if (isCorrected) {
+                updateData.isReturned = false;
+                updateData.returnedAt = null;
+            }
 
             // Fix Reintegration: Add [REINTEGRADA] tag
             if (isCorrected) {
@@ -415,7 +418,7 @@ export const updateTask = async (id, data, updaterId = null) => {
                         });
 
                         // Check if it's a production task (not a publication task)
-                        const isProductionTask = !currentTask.title.startsWith('[Publicar]');
+                        const isProductionTask = !(currentTask.title || '').startsWith('[Publicar]');
 
                         if (linkedItem && linkedItem.plan?.ownerId && isProductionTask) {
                             console.log(`[nativeTaskService] Production task completed. Creating Publication task for CM: ${linkedItem.plan.ownerId}`);
