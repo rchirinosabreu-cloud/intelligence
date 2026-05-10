@@ -31,28 +31,26 @@ try {
  * @returns {Promise<number[]>} - The vector embedding.
  */
 export const generateEmbedding = async (text) => {
-    if (!vertexAI) throw new Error("Vertex AI not initialized");
+    if (!vertexAI) {
+        console.error("[BrainCoreService] Vertex AI not initialized");
+        return null;
+    }
 
     try {
-        // Vertex AI Node.js SDK doesn't have a direct high-level method for embeddings in some versions,
-        // but we can use the generative model interface if supported or fallback to REST/lower-level.
-        // For text-embedding-004, we use the prediction service.
+        // Use the standard GenerativeModel interface for embeddings in Vertex AI SDK
+        const model = vertexAI.getGenerativeModel({ model: EMBEDDING_MODEL });
 
-        const endpoint = `projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${EMBEDDING_MODEL}`;
-        const predictionServiceClient = vertexAI.preview.getGenerativeModel({ model: EMBEDDING_MODEL });
+        const result = await model.embedContent(text);
+        const embedding = result.embedding;
 
-        // Note: The above is a bit hand-wavy depending on SDK version.
-        // Let's use the standard way if available or assume it exists.
-        // Actually, text-embedding-004 is usually called via the prediction service.
+        if (!embedding || !embedding.values) {
+            throw new Error("No embedding values returned from Vertex AI");
+        }
 
-        const result = await predictionServiceClient.embedContent({
-            content: { parts: [{ text }] }
-        });
-
-        return result.embedding.values;
+        return embedding.values;
     } catch (error) {
-        console.error("[BrainCoreService] Embedding generation failed:", error);
-        throw error;
+        console.error("[BrainCoreService] Embedding generation failed (Cerebro en mantenimiento):", error.message);
+        return null;
     }
 };
 
@@ -93,6 +91,9 @@ export const performOCR = async (imageBuffer, mimeType) => {
  */
 export const addAgencyContext = async (content, type = 'TEXT', metadata = {}) => {
     const embedding = await generateEmbedding(content);
+    if (!embedding) {
+        throw new Error("Cerebro en mantenimiento: No se pudo generar el embedding para el nuevo contexto.");
+    }
 
     // We use a raw query because Prisma doesn't natively support pgvector's vector type yet
     // with standard create() if it's an Unsupported type.
@@ -115,6 +116,8 @@ export const addAgencyContext = async (content, type = 'TEXT', metadata = {}) =>
  */
 export const searchContext = async (queryText, limit = 5) => {
     const embedding = await generateEmbedding(queryText);
+    if (!embedding) return []; // Return empty if embeddings fail
+
     const vectorStr = `[${embedding.join(',')}]`;
 
     const results = await prisma.$queryRawUnsafe(
