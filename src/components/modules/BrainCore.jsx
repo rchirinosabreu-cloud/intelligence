@@ -124,7 +124,7 @@ const BrainCore = () => {
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-6rem)] relative bg-transparent transition-colors overflow-hidden">
+        <div className="flex flex-col h-[calc(100vh-6rem)] relative bg-slate-950/20 transition-colors overflow-hidden">
             <PageHeader title="Brain Core Command Center" subtitle="Dashboard de Inteligencia Proactiva y Memoria Estratégica.">
                 <div className="flex items-center gap-3">
                     <select
@@ -152,9 +152,9 @@ const BrainCore = () => {
                     <div className="mb-8 max-w-4xl mx-auto w-full">
                         <div className="relative group">
                             <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-3xl opacity-20 blur-xl group-focus-within:opacity-40 transition duration-700" />
-                            <form onSubmit={handleFeedBrain} className="relative bg-white/40 dark:bg-zinc-900/40 backdrop-blur-3xl border border-zinc-200/50 dark:border-white/10 rounded-3xl shadow-[0_32px_64px_-12px_rgba(0,0,0,0.1)] dark:shadow-[0_32px_64px_-12px_rgba(0,0,0,0.5)] flex items-center p-2">
+                            <form onSubmit={handleFeedBrain} className="relative bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-white/10 rounded-3xl shadow-[0_32px_64px_-12px_rgba(0,0,0,0.1)] flex items-center p-2">
                                 <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*" />
-                                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-4 hover:bg-black/10 dark:hover:bg-white/10 rounded-2xl text-zinc-400 transition-all flex-shrink-0">
+                                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-4 hover:bg-white/10 rounded-2xl text-zinc-400 transition-all flex-shrink-0">
                                     <ImageIcon className="w-6 h-6" />
                                 </button>
                                 <input
@@ -206,10 +206,10 @@ const BrainCore = () => {
                                             exit={{ opacity: 0, scale: 0.95 }}
                                             className={cn(
                                                 "p-6 rounded-[2.5rem] border backdrop-blur-md transition-all duration-500 group hover:shadow-2xl relative overflow-hidden",
-                                                card.type === 'ALERTA' ? 'bg-red-50/40 border-red-200/50 dark:bg-red-900/10 dark:border-red-800/30' :
-                                                card.type === 'INSIGHT' ? 'bg-amber-50/40 border-amber-200/50 dark:bg-amber-900/10 dark:border-amber-800/30' :
-                                                card.type === 'RECOMENDACIÓN' ? 'bg-indigo-50/40 border-indigo-200/50 dark:bg-indigo-900/10 dark:border-indigo-800/30' :
-                                                'bg-white/40 dark:bg-zinc-900/10 border-zinc-200/50 dark:border-white/5'
+                                                card.type === 'ALERTA' ? 'bg-red-900/20 border-red-500/20' :
+                                                card.type === 'INSIGHT' ? 'bg-amber-900/20 border-amber-500/20' :
+                                                card.type === 'RECOMENDACIÓN' ? 'bg-indigo-900/20 border-indigo-500/20' :
+                                                'bg-white/5 dark:bg-slate-900/40 border-white/10'
                                             )}
                                         >
                                             <div className="flex items-start justify-between mb-4">
@@ -245,7 +245,7 @@ const BrainCore = () => {
                 </div>
 
                 {/* Right Panel: Knowledge Radar (Glassmorphism) */}
-                <div className="w-96 bg-white/20 dark:bg-zinc-900/20 backdrop-blur-3xl border-l border-zinc-200/50 dark:border-white/10 flex flex-col p-8 overflow-y-auto">
+                <div className="w-96 bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border-l border-white/10 flex flex-col p-8 overflow-y-auto">
                     <div className="flex items-center gap-3 mb-10">
                         <div className="p-3 bg-zinc-900 dark:bg-white rounded-2xl text-white dark:text-zinc-900 shadow-xl">
                             <ShieldCheck className="w-6 h-6" />
@@ -269,7 +269,7 @@ const BrainCore = () => {
                                 </h4>
                                 <ul className="space-y-3">
                                     {radar.preferences?.map((p, i) => (
-                                        <li key={i} className="text-xs bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md p-4 rounded-3xl border border-zinc-100 dark:border-white/5 text-zinc-700 dark:text-zinc-300 shadow-sm">
+                                        <li key={i} className="text-xs bg-white/5 dark:bg-slate-800/20 backdrop-blur-md p-4 rounded-3xl border border-white/5 text-zinc-700 dark:text-zinc-300 shadow-sm">
                                             {p}
                                         </li>
                                     ))}
@@ -282,7 +282,7 @@ const BrainCore = () => {
                                 </h4>
                                 <ul className="space-y-3">
                                     {radar.dislikes?.map((d, i) => (
-                                        <li key={i} className="text-xs bg-red-500/5 dark:bg-red-500/10 p-4 rounded-3xl border border-red-500/10 text-red-700 dark:text-red-400 font-bold shadow-sm">
+                                        <li key={i} className="text-xs bg-red-500/10 p-4 rounded-3xl border border-red-500/10 text-red-700 dark:text-red-400 font-bold shadow-sm">
                                             {d}
                                         </li>
                                     ))}
