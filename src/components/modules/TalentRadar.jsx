@@ -574,7 +574,7 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                         </p>
                                         <div className="mt-4 flex items-center gap-2">
                                             <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] text-white font-bold">B</div>
-                                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-tighter">Bria Ops Director</span>
+                                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-tighter">Brain Core Ops Director</span>
                                         </div>
                                     </div>
                                 ) : (

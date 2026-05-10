@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { addAgencyContext, performAdvancedExtraction, getIntelligenceFeed, getClientProfileFromMemory, searchContext, updateAgencyContext, deleteAgencyContext, getMemoryStats } from '../../services/brainCoreService.js';
+import { addAgencyContext, performAdvancedExtraction, getIntelligenceFeed, getClientProfileFromMemory, searchContext, updateAgencyContext, deleteAgencyContext, getMemoryStats, askBrainCore } from '../../services/brainCoreService.js';
 import prisma from '../../lib/prisma.js';
 
 const router = express.Router();
@@ -17,8 +17,9 @@ const restrictAccess = (req, res, next) => {
 // 1. Context Feed (Dashboard protagonis)
 router.get('/feed', restrictAccess, async (req, res) => {
     try {
+        const { status } = req.query;
         const [feed, stats] = await Promise.all([
-            getIntelligenceFeed(),
+            getIntelligenceFeed(status),
             getMemoryStats()
         ]);
         res.json({ feed, stats });
@@ -52,7 +53,10 @@ router.post('/context', restrictAccess, upload.single('image'), async (req, res)
 
         if (!content) return res.status(400).json({ error: 'Contenido vacío.' });
 
-        const record = await addAgencyContext(content, req.file ? 'IMAGE' : 'TEXT', clientId, metadata);
+        // Si es una imagen, forzamos estado PENDING para aprobación manual
+        const status = req.file ? 'PENDING' : 'APPROVED';
+
+        const record = await addAgencyContext(content, req.file ? 'IMAGE' : 'TEXT', clientId, metadata, status);
         res.status(201).json(record);
     } catch (error) {
         console.error('[BrainCoreRoute] Error in /context:', error);
@@ -63,8 +67,14 @@ router.post('/context', restrictAccess, upload.single('image'), async (req, res)
 // 3. Update Memory
 router.patch('/context/:id', restrictAccess, async (req, res) => {
     try {
-        const { content } = req.body;
-        await updateAgencyContext(req.params.id, content);
+        const { content, status } = req.body;
+        if (content) await updateAgencyContext(req.params.id, content);
+        if (status) {
+            await prisma.agencyContext.update({
+                where: { id: req.params.id },
+                data: { status }
+            });
+        }
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -81,7 +91,19 @@ router.delete('/context/:id', restrictAccess, async (req, res) => {
     }
 });
 
-// 5. Knowledge Radar (Client Profile)
+// 5. Ask Brain Core (Semantic Search)
+router.get('/ask', restrictAccess, async (req, res) => {
+    try {
+        const { q, clientId } = req.query;
+        if (!q) return res.status(400).json({ error: 'Falta la pregunta.' });
+        const answer = await askBrainCore(q, clientId === 'null' ? null : clientId);
+        res.json(answer);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 6. Knowledge Radar (Client Profile)
 router.get('/radar/:clientId', restrictAccess, async (req, res) => {
     try {
         const profile = await getClientProfileFromMemory(req.params.clientId);

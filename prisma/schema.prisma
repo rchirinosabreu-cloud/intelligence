@@ -278,10 +278,19 @@ model AgencyContext {
   content          String
   vectorEmbeddings Unsupported("vector(768)")?
   type             String                    @default("TEXT") // TEXT or IMAGE
+  status           String                    @default("APPROVED") // PENDING, APPROVED, DISCARDED
   clientId         String?
   metadata         Json?
   createdAt        DateTime                  @default(now())
   client           Client?                   @relation(fields: [clientId], references: [id])
+}
+
+model AutomationConfig {
+  id             String   @id @default("global")
+  storageState   Json?
+  monitoredChats Json?
+  lastRun        DateTime?
+  updatedAt      DateTime @updatedAt
 }
 
 model FlowMessage {

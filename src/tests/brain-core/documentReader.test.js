@@ -1,14 +1,14 @@
 /**
- * Pruebas Unitarias para el "Nervio Óptico" de Bria (Document Reader)
+ * Pruebas Unitarias para el "Nervio Óptico" de Brain Core (Document Reader)
  * TDD Plan - Casos Borde y Happy Paths
  *
  * TODO: Ejecutar mediante un test runner (Jest/Vitest) al integrarlo en CI/CD.
  */
 
 /*
-import { readPdfFromBucket } from '../../services/bria/documentReader.js';
+import { readPdfFromBucket } from '../../services/brain-core/documentReader.js';
 
-describe('Bria Document Reader (Optic Nerve)', () => {
+describe('Brain Core Document Reader (Optic Nerve)', () => {
 
     // Test 1: Happy Path
     it('debe descargar un archivo PDF válido desde GCP y retornar texto mayor a 0 caracteres', async () => {

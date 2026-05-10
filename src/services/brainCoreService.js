@@ -73,8 +73,9 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
         const model = vertexAI.getGenerativeModel({ model: CHAT_MODEL });
         const promptText = `Analiza esta captura de pantalla de WhatsApp u otra imagen de la agencia.
         Detecta el sentimiento, extrae preferencias del cliente, lo que odia, lo que aprueba y cualquier instrucción crítica.
+        TU OBJETIVO es generar una propuesta de memoria concisa y accionable.
         Responde en formato JSON:
-        { "content": "Texto completo extraído", "insights": { "preferences": [], "dislikes": [], "approvals": [], "sentiment": "" } }`;
+        { "content": "Resumen ejecutivo de la instrucción (Ej: Alexander prefiere entregas los jueves)", "insights": { "preferences": [], "dislikes": [], "approvals": [], "sentiment": "" } }`;
 
         const imagePart = { inlineData: { data: imageBuffer.toString('base64'), mimeType } };
 
@@ -93,7 +94,7 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
 /**
  * Saves context with client siloing.
  */
-export const addAgencyContext = async (content, type = 'TEXT', clientId = null, metadata = {}) => {
+export const addAgencyContext = async (content, type = 'TEXT', clientId = null, metadata = {}, status = 'APPROVED') => {
     const embedding = await generateEmbedding(content);
     if (!embedding) throw new Error("Brain Core en mantenimiento: Error de sincronización.");
 
@@ -103,7 +104,8 @@ export const addAgencyContext = async (content, type = 'TEXT', clientId = null, 
             content,
             type,
             clientId,
-            metadata
+            metadata,
+            status
         }
     });
 
@@ -143,20 +145,40 @@ export const searchContext = async (queryText, clientId = null, limit = 5) => {
 /**
  * Generates the categorized Intelligence Feed.
  */
-export const getIntelligenceFeed = async () => {
+export const getIntelligenceFeed = async (statusFilter = 'APPROVED') => {
+    // Prioritize tasks: 1. Deadlines, 2. VIP (Special), 3. Priority
     const activeTasks = await prisma.task.findMany({
         where: { status: { in: ['PENDIENTE', 'EN_CURSO'] } },
-        take: 15,
+        take: 30,
         include: { client: true },
-        orderBy: { createdAt: 'desc' }
+        orderBy: [
+            { dueDate: 'asc' },
+            { isSpecial: 'desc' },
+            { isPriority: 'desc' }
+        ]
     });
 
     // Recent context history
     const recentHistory = await prisma.agencyContext.findMany({
-        take: 10,
+        where: { status: statusFilter || 'APPROVED' },
+        take: 15,
         orderBy: { createdAt: 'desc' },
         include: { client: true }
     });
+
+    // If viewing proposals, just return them as historical cards for the UI to handle
+    if (statusFilter === 'PENDING') {
+        return recentHistory.map(h => ({
+            id: h.id,
+            contextId: h.id,
+            type: 'PROPUESTA',
+            title: `Propuesta de ${h.client?.name || 'Agencia'}`,
+            content: h.content,
+            severity: 'warning',
+            timestamp: h.createdAt,
+            metadata: h.metadata
+        }));
+    }
 
     if (activeTasks.length === 0) {
         return recentHistory.map(h => ({
@@ -170,25 +192,15 @@ export const getIntelligenceFeed = async () => {
         }));
     }
 
-    // Parallel context search for tasks
+    // Parallel context search for tasks (only approved context)
     const tasksWithContext = await Promise.all(activeTasks.map(async (task) => {
         const context = await searchContext(`${task.title} ${task.comments || ''}`, task.clientId, 3);
-        return { task, context: context.filter(c => c.similarity > 0.75) };
+        // Ensure we only cross-ref with APPROVED context
+        const approvedContext = context.filter(c => c.similarity > 0.7 && (c.status === 'APPROVED' || !c.status));
+        return { task, context: approvedContext };
     }));
 
     const meaningfulTasks = tasksWithContext.filter(p => p.context.length > 0);
-
-    if (meaningfulTasks.length === 0) {
-        return recentHistory.map(h => ({
-            id: h.id,
-            contextId: h.id,
-            type: 'HISTORIAL',
-            title: `Memoria de ${h.client?.name || 'Agencia'}`,
-            content: h.content,
-            severity: 'info',
-            timestamp: h.createdAt
-        }));
-    }
 
     return await generateStructuredFeedWithAI(meaningfulTasks, recentHistory);
 };
@@ -197,13 +209,27 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
     if (!vertexAI) return [];
     const model = vertexAI.getGenerativeModel({ model: CHAT_MODEL });
 
-    const promptText = `Analiza las tareas y el historial reciente de la agencia. Genera un feed de tarjetas inteligentes.
-    Tareas y Contexto: ${JSON.stringify(meaningfulTasks.map(t => ({ title: t.task.title, context: t.context.map(c => ({ id: c.id, content: c.content })) })))}
-    Historial Reciente: ${JSON.stringify(recentHistory.map(h => ({ id: h.id, content: h.content })))}
+    const promptText = `Eres el Brain Core de Brainstudio. Tu misión es cruzar tareas activas con la memoria de la agencia.
+
+    TAREAS CRÍTICAS Y SU CONTEXTO SEMÁNTICO:
+    ${JSON.stringify(meaningfulTasks.map(t => ({
+        title: t.task.title,
+        client: t.task.client?.name,
+        isPriority: t.task.isPriority,
+        isSpecial: t.task.isSpecial,
+        context: t.context.map(c => ({ id: c.id, content: c.content }))
+    })))}
+
+    HISTORIAL RECIENTE DE MEMORIA:
+    ${JSON.stringify(recentHistory.map(h => ({ id: h.id, content: h.content, client: h.client?.name })))}
+
+    REGLAS DE GENERACIÓN:
+    1. Si hay un conflicto o instrucción específica (ej: "Alexander odia el rojo") que aplique a una tarea activa de Alexander, genera una ALERTA (severity: critical). Estas deben ir primero.
+    2. Si hay patrones en el historial que sugieran una mejor forma de hacer las cosas, genera una RECOMENDACIÓN (severity: warning).
+    3. Si es solo información relevante, usa INSIGHT o HISTORIAL (severity: info).
 
     Devuelve un array JSON de objetos:
-    { "id": "uuid", "contextId": "id del AgencyContext original si aplica", "type": "ALERTA/INSIGHT/RECOMENDACIÓN/HISTORIAL", "title": "Título corto", "content": "Cuerpo conciso", "severity": "critical/warning/info", "timestamp": "ISO Date" }
-    Si una tarjeta de HISTORIAL se basa en un solo registro, incluye su contextId. Si es una ALERTA combinada, no es necesario contextId.`;
+    { "id": "uuid", "contextId": "id del AgencyContext original", "type": "ALERTA/INSIGHT/RECOMENDACIÓN/HISTORIAL", "title": "Título corto y directo", "content": "Cuerpo conciso", "severity": "critical/warning/info", "timestamp": "ISO Date" }`;
 
     try {
         const result = await model.generateContent({
@@ -248,6 +274,43 @@ export const deleteAgencyContext = async (id) => {
 export const getMemoryStats = async () => {
     const count = await prisma.agencyContext.count();
     return { count };
+};
+
+/**
+ * Synthesizes a response to a natural language question using available memory.
+ */
+export const askBrainCore = async (question, clientId = null) => {
+    if (!vertexAI) return { content: "Brain Core fuera de línea." };
+
+    // Search semantic context
+    const context = await searchContext(question, clientId, 10);
+    const approvedContext = context.filter(c => c.similarity > 0.65);
+
+    if (approvedContext.length === 0) {
+        return { content: "No tengo recuerdos específicos sobre eso aún. ¿Quieres que guarde esta información?" };
+    }
+
+    const model = vertexAI.getGenerativeModel({ model: CHAT_MODEL });
+    const promptText = `Pregunta del Usuario: "${question}"
+
+    Contexto recuperado de la memoria:
+    ${approvedContext.map(c => `- ${c.content}`).join('\n')}
+
+    Instrucciones: Responde a la pregunta basándote ÚNICAMENTE en el contexto proporcionado.
+    Si el contexto no tiene la respuesta, admítelo. Sé directo y usa un tono profesional de Director de Agencia.`;
+
+    try {
+        const result = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: promptText }] }]
+        });
+        return {
+            content: result.response.candidates[0].content.parts[0].text,
+            sources: approvedContext.map(c => ({ id: c.id, content: c.content }))
+        };
+    } catch (e) {
+        console.error("[BrainCoreService] Question failed:", e);
+        return { content: "Error procesando la consulta semántica." };
+    }
 };
 
 /**
