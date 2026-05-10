@@ -144,46 +144,59 @@ const BrainCore = () => {
                 </div>
             </PageHeader>
 
-            <div className="flex flex-1 min-h-0">
+            <div className="flex flex-1 min-h-0 relative">
                 {/* Main Dashboard Area */}
-                <div className="flex-1 flex flex-col min-w-0 p-6 overflow-hidden">
+                <div className="flex-1 flex flex-col min-w-0 p-6 overflow-hidden relative">
 
-                    {/* Console (Input) Glassmorphism */}
-                    <div className="mb-10 max-w-4xl mx-auto w-full px-4">
-                        <div className="relative group">
-                            <div className="absolute -inset-1 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-400 rounded-[2.5rem] opacity-20 blur-2xl group-focus-within:opacity-40 transition duration-1000" />
-                            <form onSubmit={handleFeedBrain} className="relative bg-white/[0.03] backdrop-blur-2xl border border-white/10 rounded-[2rem] shadow-2xl flex items-center p-2">
-                                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*" />
-                                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-4 hover:bg-white/5 rounded-2xl text-indigo-400 transition-all flex-shrink-0">
-                                    <ImageIcon className="w-6 h-6" />
-                                </button>
-                                <input
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    placeholder="Alimenta al cerebro: notas, capturas o instrucciones..."
-                                    className="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder:text-zinc-500 px-4 py-4 text-lg font-light"
-                                />
-                                <button type="submit" disabled={!input.trim() || isProcessing} className="p-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl shadow-xl shadow-indigo-600/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-30 flex items-center justify-center min-w-[60px]">
-                                    {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                                </button>
-                            </form>
-                        </div>
-                        <AnimatePresence>
-                            {isProcessing && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: -10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -10 }}
-                                    className="mt-4 flex items-center justify-center gap-3 text-indigo-500 font-bold text-xs tracking-widest uppercase"
-                                >
-                                    <Sparkles className="w-4 h-4 animate-pulse" /> {processingMessage}
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                    {/* Upper Space: Brain Health / Summary */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="p-5 rounded-3xl bg-white/[0.02] border border-white/5 backdrop-blur-md"
+                        >
+                            <div className="flex items-center gap-3 mb-2 text-indigo-400">
+                                <Zap className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Capacidad Cognitiva</span>
+                            </div>
+                            <div className="text-2xl font-light text-white">98.2%</div>
+                            <div className="w-full bg-white/5 h-1 rounded-full mt-3 overflow-hidden">
+                                <motion.div initial={{ width: 0 }} animate={{ width: '98.2%' }} className="bg-indigo-500 h-full shadow-[0_0_8px_rgba(99,102,241,0.5)]" />
+                            </div>
+                        </motion.div>
+
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.1 }}
+                            className="p-5 rounded-3xl bg-white/[0.02] border border-white/5 backdrop-blur-md"
+                        >
+                            <div className="flex items-center gap-3 mb-2 text-emerald-400">
+                                <CheckCircle2 className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Sincronización</span>
+                                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            </div>
+                            <div className="text-2xl font-light text-white">Active</div>
+                            <p className="text-[10px] text-zinc-500 mt-2">Vector Memory & Kanban cross-ref active.</p>
+                        </motion.div>
+
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.2 }}
+                            className="p-5 rounded-3xl bg-indigo-500/10 border border-indigo-500/20 backdrop-blur-md"
+                        >
+                            <div className="flex items-center gap-3 mb-2 text-indigo-300">
+                                <Sparkles className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Proactive Mode</span>
+                            </div>
+                            <div className="text-lg font-bold text-indigo-100">Senior Director</div>
+                            <p className="text-[10px] text-indigo-300/50 mt-1 uppercase font-bold tracking-tighter">Gemini 2.5 Pro reasoning enabled.</p>
+                        </motion.div>
                     </div>
 
                     {/* Intelligence Feed */}
-                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar pb-32">
                         <div className="flex items-center gap-2 mb-6">
                             <Sparkles className="w-5 h-5 text-indigo-400" />
                             <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-300/50">Intelligence Feed</h2>
@@ -209,9 +222,10 @@ const BrainCore = () => {
                                         <motion.div
                                             key={card.id}
                                             layout
-                                            initial={{ opacity: 0, scale: 0.95 }}
-                                            animate={{ opacity: 1, scale: 1 }}
-                                            exit={{ opacity: 0, scale: 0.95 }}
+                                            initial={{ opacity: 0, scale: 0.9, y: 50 }}
+                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                            exit={{ opacity: 0, scale: 0.9 }}
+                                            transition={{ type: "spring", damping: 20, stiffness: 100 }}
                                             className={cn(
                                                 "p-6 rounded-[2.5rem] border backdrop-blur-xl transition-all duration-500 group hover:shadow-2xl relative overflow-hidden",
                                                 card.type === 'ALERTA' ? 'bg-red-500/10 border-red-500/20' :
@@ -249,6 +263,42 @@ const BrainCore = () => {
                                 </AnimatePresence>
                             </div>
                         )}
+                    </div>
+
+                    {/* Floating Chat Bar (Bottom) */}
+                    <div className="absolute bottom-6 left-6 right-6 z-40 pointer-events-none">
+                        <div className="max-w-4xl mx-auto w-full pointer-events-auto">
+                            <div className="relative group">
+                                <div className="absolute -inset-1 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-400 rounded-[2.5rem] opacity-20 blur-2xl group-focus-within:opacity-40 transition duration-1000" />
+                                <form onSubmit={handleFeedBrain} className="relative bg-slate-900/60 backdrop-blur-3xl border border-white/10 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center p-2">
+                                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*" />
+                                    <button type="button" onClick={() => fileInputRef.current?.click()} className="p-4 hover:bg-white/5 rounded-2xl text-indigo-400 transition-all flex-shrink-0">
+                                        <ImageIcon className="w-6 h-6" />
+                                    </button>
+                                    <input
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        placeholder="Alimenta al cerebro: notas, capturas o instrucciones..."
+                                        className="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder:text-zinc-500 px-4 py-4 text-lg font-light"
+                                    />
+                                    <button type="submit" disabled={!input.trim() || isProcessing} className="p-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl shadow-xl shadow-indigo-600/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-30 flex items-center justify-center min-w-[60px]">
+                                        {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                                    </button>
+                                </form>
+                            </div>
+                            <AnimatePresence>
+                                {isProcessing && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: 10 }}
+                                        className="mt-4 flex items-center justify-center gap-3 text-indigo-400 font-bold text-xs tracking-widest uppercase bg-slate-950/40 backdrop-blur-xl py-2 rounded-full border border-white/5 mx-auto w-fit px-6"
+                                    >
+                                        <Sparkles className="w-4 h-4 animate-pulse" /> {processingMessage}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
                     </div>
                 </div>
 
