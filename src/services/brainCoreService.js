@@ -151,7 +151,24 @@ export const getIntelligenceFeed = async () => {
         orderBy: { createdAt: 'desc' }
     });
 
-    if (activeTasks.length === 0) return [];
+    // Recent context history
+    const recentHistory = await prisma.agencyContext.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: { client: true }
+    });
+
+    if (activeTasks.length === 0) {
+        return recentHistory.map(h => ({
+            id: h.id,
+            contextId: h.id,
+            type: 'HISTORIAL',
+            title: `Memoria de ${h.client?.name || 'Agencia'}`,
+            content: h.content,
+            severity: 'info',
+            timestamp: h.createdAt
+        }));
+    }
 
     // Parallel context search for tasks
     const tasksWithContext = await Promise.all(activeTasks.map(async (task) => {
@@ -161,16 +178,10 @@ export const getIntelligenceFeed = async () => {
 
     const meaningfulTasks = tasksWithContext.filter(p => p.context.length > 0);
 
-    // Recent context history
-    const recentHistory = await prisma.agencyContext.findMany({
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        include: { client: true }
-    });
-
     if (meaningfulTasks.length === 0) {
         return recentHistory.map(h => ({
             id: h.id,
+            contextId: h.id,
             type: 'HISTORIAL',
             title: `Memoria de ${h.client?.name || 'Agencia'}`,
             content: h.content,
@@ -187,11 +198,12 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
     const model = vertexAI.getGenerativeModel({ model: CHAT_MODEL });
 
     const promptText = `Analiza las tareas y el historial reciente de la agencia. Genera un feed de tarjetas inteligentes.
-    Tareas y Contexto: ${JSON.stringify(meaningfulTasks.map(t => ({ title: t.task.title, context: t.context.map(c => c.content) })))}
-    Historial Reciente: ${JSON.stringify(recentHistory.map(h => h.content))}
+    Tareas y Contexto: ${JSON.stringify(meaningfulTasks.map(t => ({ title: t.task.title, context: t.context.map(c => ({ id: c.id, content: c.content })) })))}
+    Historial Reciente: ${JSON.stringify(recentHistory.map(h => ({ id: h.id, content: h.content })))}
 
     Devuelve un array JSON de objetos:
-    { "id": "uuid", "type": "ALERTA/INSIGHT/RECOMENDACIÓN/HISTORIAL", "title": "Título corto", "content": "Cuerpo conciso", "severity": "critical/warning/info", "timestamp": "ISO Date" }`;
+    { "id": "uuid", "contextId": "id del AgencyContext original si aplica", "type": "ALERTA/INSIGHT/RECOMENDACIÓN/HISTORIAL", "title": "Título corto", "content": "Cuerpo conciso", "severity": "critical/warning/info", "timestamp": "ISO Date" }
+    Si una tarjeta de HISTORIAL se basa en un solo registro, incluye su contextId. Si es una ALERTA combinada, no es necesario contextId.`;
 
     try {
         const result = await model.generateContent({
@@ -202,6 +214,40 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
         console.error("[BrainCoreService] Feed generation failed:", e);
         return [];
     }
+};
+
+/**
+ * Updates memory entry.
+ */
+export const updateAgencyContext = async (id, content) => {
+    const embedding = await generateEmbedding(content);
+    if (!embedding) throw new Error("Error recalculando vectores.");
+
+    await prisma.agencyContext.update({
+        where: { id },
+        data: { content }
+    });
+
+    await prisma.$executeRawUnsafe(
+        `UPDATE "AgencyContext" SET "vectorEmbeddings" = $1::vector WHERE id = $2`,
+        `[${embedding.join(',')}]`,
+        id
+    );
+};
+
+/**
+ * Deletes memory entry.
+ */
+export const deleteAgencyContext = async (id) => {
+    return await prisma.agencyContext.delete({ where: { id } });
+};
+
+/**
+ * Gets total data points count.
+ */
+export const getMemoryStats = async () => {
+    const count = await prisma.agencyContext.count();
+    return { count };
 };
 
 /**
