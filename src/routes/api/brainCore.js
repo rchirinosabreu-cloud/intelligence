@@ -49,7 +49,12 @@ router.get('/feed', restrictAccess, async (req, res) => {
         res.json(feed);
     } catch (error) {
         console.error('[BrainCoreRoute] Error in /feed:', error);
-        res.status(500).json({ error: error.message });
+        // Soft error for the feed
+        res.json([{
+            alert: "Cerebro en mantenimiento: El feed proactivo no está disponible temporalmente.",
+            severity: "info",
+            taskId: "system"
+        }]);
     }
 });
 
@@ -91,7 +96,10 @@ router.post('/query', restrictAccess, async (req, res) => {
         });
     } catch (error) {
         console.error('[BrainCoreRoute] Error in /query:', error);
-        res.status(500).json({ error: error.message });
+        res.json({
+            answer: "Cerebro en mantenimiento: Lo siento, no puedo procesar tu consulta en este momento porque mi motor de embeddings está desconectado. Por favor, intenta de nuevo más tarde.",
+            sources: []
+        });
     }
 });
 
