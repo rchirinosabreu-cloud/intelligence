@@ -27,18 +27,39 @@ try {
 }
 
 /**
- * Generates embeddings for a given text.
+ * Generates embeddings for a given text using text-embedding-004.
  */
 export const generateEmbedding = async (text) => {
     if (!vertexAI) return null;
     try {
-        const model = vertexAI.getGenerativeModel({ model: EMBEDDING_MODEL });
-        const result = await model.embedContent({
-            content: { parts: [{ text }] }
+        // En Vertex AI para Node.js v1.10.0, embedContent NO existe en el objeto model.
+        // Se debe usar la API REST directamente via el cliente de predicción o fetch manual.
+        // Implementamos fetch manual alineado con el SDK para text-embedding-004.
+        const token = await vertexAI.googleAuth.getAccessToken();
+        const url = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${EMBEDDING_MODEL}:predict`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                instances: [{ content: text }]
+            })
         });
-        return result.embedding.values;
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(JSON.stringify(err));
+        }
+
+        const result = await response.json();
+        // El formato de respuesta para embeddings en Vertex AI predict es:
+        // { predictions: [ { embeddings: { values: [...] } } ] }
+        return result.predictions[0].embeddings.values;
     } catch (error) {
-        console.error("[BrainCoreService] Embedding generation failed (Cerebro en mantenimiento):", error.message);
+        console.error("[BrainCoreService] Embedding generation failed:", error.message);
         return null;
     }
 };
@@ -50,13 +71,17 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
     if (!vertexAI) return null;
     try {
         const model = vertexAI.getGenerativeModel({ model: CHAT_MODEL });
-        const prompt = `Analiza esta captura de pantalla de WhatsApp u otra imagen de la agencia.
+        const promptText = `Analiza esta captura de pantalla de WhatsApp u otra imagen de la agencia.
         Detecta el sentimiento, extrae preferencias del cliente, lo que odia, lo que aprueba y cualquier instrucción crítica.
         Responde en formato JSON:
         { "content": "Texto completo extraído", "insights": { "preferences": [], "dislikes": [], "approvals": [], "sentiment": "" } }`;
 
         const imagePart = { inlineData: { data: imageBuffer.toString('base64'), mimeType } };
-        const result = await model.generateContent([prompt, imagePart]);
+
+        const result = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: promptText }, imagePart] }]
+        });
+
         const responseText = result.response.candidates[0].content.parts[0].text;
         return JSON.parse(responseText.replace(/```json|```/g, ''));
     } catch (error) {
@@ -70,7 +95,7 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
  */
 export const addAgencyContext = async (content, type = 'TEXT', clientId = null, metadata = {}) => {
     const embedding = await generateEmbedding(content);
-    if (!embedding) throw new Error("Cerebro en mantenimiento: Error de embeddings.");
+    if (!embedding) throw new Error("Brain Core en mantenimiento: Error de sincronización.");
 
     const id = crypto.randomUUID();
     const createdAt = new Date();
@@ -153,7 +178,7 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
     if (!vertexAI) return [];
     const model = vertexAI.getGenerativeModel({ model: CHAT_MODEL });
 
-    const prompt = `Analiza las tareas y el historial reciente de la agencia. Genera un feed de tarjetas inteligentes.
+    const promptText = `Analiza las tareas y el historial reciente de la agencia. Genera un feed de tarjetas inteligentes.
     Tareas y Contexto: ${JSON.stringify(meaningfulTasks.map(t => ({ title: t.task.title, context: t.context.map(c => c.content) })))}
     Historial Reciente: ${JSON.stringify(recentHistory.map(h => h.content))}
 
@@ -161,9 +186,12 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
     { "id": "uuid", "type": "ALERTA/INSIGHT/RECOMENDACIÓN/HISTORIAL", "title": "Título corto", "content": "Cuerpo conciso", "severity": "critical/warning/info", "timestamp": "ISO Date" }`;
 
     try {
-        const result = await model.generateContent(prompt);
+        const result = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: promptText }] }]
+        });
         return JSON.parse(result.response.candidates[0].content.parts[0].text.replace(/```json|```/g, ''));
     } catch (e) {
+        console.error("[BrainCoreService] Feed generation failed:", e);
         return [];
     }
 };
@@ -181,16 +209,19 @@ export const getClientProfileFromMemory = async (clientId) => {
     if (contexts.length === 0) return null;
 
     const model = vertexAI.getGenerativeModel({ model: CHAT_MODEL });
-    const prompt = `Analiza estas notas de la agencia sobre un cliente específico y construye su 'Ficha Mental'.
+    const promptText = `Analiza estas notas de la agencia sobre un cliente específico y construye su 'Ficha Mental'.
     Notas: ${contexts.map(c => c.content).join('\n')}
 
     Devuelve JSON:
     { "preferences": [], "dislikes": [], "approvals": [], "sentiment": "Evolución del sentimiento" }`;
 
     try {
-        const result = await model.generateContent(prompt);
+        const result = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: promptText }] }]
+        });
         return JSON.parse(result.response.candidates[0].content.parts[0].text.replace(/```json|```/g, ''));
     } catch (e) {
+        console.error("[BrainCoreService] Radar generation failed:", e);
         return null;
     }
 };
