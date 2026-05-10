@@ -13,6 +13,7 @@ import Metrics from './components/modules/Metrics';
 import ContentGrids from './components/modules/ContentGrids';
 import ContentPlanDetail from './components/modules/ContentPlanDetail';
 import TalentRadar from './components/modules/TalentRadar';
+import BrainCore from './components/modules/BrainCore';
 import Activity from './components/modules/Activity';
 import Reports from './components/modules/Reports';
 import Login from './components/Login';
@@ -34,6 +35,17 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function BrainCoreGuard({ children }) {
+  const { currentUser } = useAuth();
+  const allowedEmails = ['chrodny@gmail.com', 'fvilladigital@gmail.com'];
+
+  if (!allowedEmails.includes(currentUser?.email)) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
 
 function AppContent() {
   const { isAuthenticated, isLoading, login, logout, currentUser } = useAuth();
@@ -86,7 +98,15 @@ function AppContent() {
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/inicio" element={<Navigate to="/" replace />} />
 
-                    <Route path="/bria" element={<Chat />} />
+                    <Route path="/bria" element={<Navigate to="/brain-core" replace />} />
+                    <Route
+                      path="/brain-core"
+                      element={
+                        <BrainCoreGuard>
+                          <BrainCore />
+                        </BrainCoreGuard>
+                      }
+                    />
                     <Route path="/gestion" element={<NativeTasks />} />
                     <Route path="/actividad" element={<Activity />} />
                     <Route path="/reportes" element={<Reports />} />

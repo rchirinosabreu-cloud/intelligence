@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Sparkles, CheckSquare, LayoutGrid, FileText, BarChart3, Users, UserCheck, User, Moon, Sun, Bell, X, Zap, Map, FileBarChart } from 'lucide-react';
+import { LayoutDashboard, Sparkles, CheckSquare, LayoutGrid, FileText, BarChart3, Users, UserCheck, User, Moon, Sun, Bell, X, Zap, Map, FileBarChart, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
@@ -17,7 +17,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const menuItems = [
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, path: '/' },
-    { id: 'bria', label: 'Bria Intelligence', icon: Sparkles, path: '/bria' },
+    { id: 'brain-core', label: 'Brain Core', icon: Brain, path: '/brain-core', allowedEmails: ['chrodny@gmail.com', 'fvilladigital@gmail.com'] },
     { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/gestion' },
     { id: 'activity', label: 'Actividad', icon: Map, path: '/actividad' },
     { id: 'reports', label: 'Reportes', icon: FileBarChart, path: '/reportes' },
@@ -30,8 +30,9 @@ const Sidebar = ({ isOpen, onClose }) => {
   ];
 
   const filteredMenuItems = menuItems.filter(item => {
-    if (!item.roles) return true;
-    return item.roles.includes(currentUser?.role);
+    if (item.allowedEmails && !item.allowedEmails.includes(currentUser?.email)) return false;
+    if (item.roles && !item.roles.includes(currentUser?.role)) return false;
+    return true;
   });
 
   return (
