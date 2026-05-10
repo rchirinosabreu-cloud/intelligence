@@ -33,10 +33,12 @@ export const generateEmbedding = async (text) => {
     if (!vertexAI) return null;
     try {
         const model = vertexAI.getGenerativeModel({ model: EMBEDDING_MODEL });
-        const result = await model.embedContent(text);
+        const result = await model.embedContent({
+            content: { parts: [{ text }] }
+        });
         return result.embedding.values;
     } catch (error) {
-        console.error("[BrainCoreService] Embedding generation failed:", error.message);
+        console.error("[BrainCoreService] Embedding generation failed (Cerebro en mantenimiento):", error.message);
         return null;
     }
 };
