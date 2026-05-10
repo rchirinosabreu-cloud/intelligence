@@ -272,6 +272,15 @@ model FeedbackRecord {
   collaborator     User         @relation("ReceivedFeedback", fields: [collaboratorId], references: [id], onDelete: Cascade)
 }
 
+model AgencyContext {
+  id               String                    @id @default(uuid())
+  content          String
+  vectorEmbeddings Unsupported("vector(768)")?
+  type             String                    @default("TEXT") // TEXT or IMAGE
+  metadata         Json?
+  createdAt        DateTime                  @default(now())
+}
+
 model FlowMessage {
   id        String     @id @default(uuid())
   clientId  String
