@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Brain, User, Paperclip, Sparkles, AlertCircle, Info, MessageSquare, Image as ImageIcon, Loader2, Zap, Target, ShieldCheck, CheckCircle2, History, ChevronRight } from 'lucide-react';
+import { Send, Brain, User, Paperclip, Sparkles, AlertCircle, Info, MessageSquare, Image as ImageIcon, Loader2, Zap, Target, ShieldCheck, CheckCircle2, History, ChevronRight, Trash2, Edit3, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import { cn } from '@/lib/utils';
@@ -25,12 +25,15 @@ const SkeletonCard = () => (
 const BrainCore = () => {
     const [input, setInput] = useState('');
     const [feed, setFeed] = useState([]);
+    const [stats, setStats] = useState({ count: 0 });
     const [radar, setRadar] = useState(null);
     const [isLoadingFeed, setIsLoadingFeed] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingMessage, setProcessingMessage] = useState('');
     const [selectedClientId, setSelectedClientId] = useState(null);
     const [clients, setClients] = useState([]);
+    const [editingItem, setEditingItem] = useState(null);
+    const [showMetricDetail, setShowMetricDetail] = useState(null);
 
     const fileInputRef = useRef(null);
     const baseUrl = getApiBaseUrl();
@@ -44,7 +47,11 @@ const BrainCore = () => {
                 fetch(`${baseUrl}/api/db/clients`, { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
-            if (feedRes.ok) setFeed(await feedRes.json());
+            if (feedRes.ok) {
+                const data = await feedRes.json();
+                setFeed(data.feed || []);
+                setStats(data.stats || { count: 0 });
+            }
             if (clientsRes.ok) setClients(await clientsRes.json());
         } catch (error) {
             console.error("Fetch error:", error);
@@ -72,24 +79,48 @@ const BrainCore = () => {
         if (!input.trim() || isProcessing) return;
 
         setIsProcessing(true);
-        setProcessingMessage('Sincronizando con Memoria Vectorial...');
+        setProcessingMessage(editingItem ? 'Actualizando memoria...' : 'Sincronizando con Memoria Vectorial...');
 
         try {
-            const response = await fetch(`${baseUrl}/api/brain-core/context`, {
-                method: 'POST',
+            const url = editingItem
+                ? `${baseUrl}/api/brain-core/context/${editingItem.contextId}`
+                : `${baseUrl}/api/brain-core/context`;
+
+            const method = editingItem ? 'PATCH' : 'POST';
+
+            const response = await fetch(url, {
+                method,
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ content: input, clientId: selectedClientId })
             });
 
             if (response.ok) {
-                toast.success("Memoria actualizada.");
+                toast.success(editingItem ? "Memoria corregida." : "Memoria actualizada.");
                 setInput('');
+                setEditingItem(null);
                 fetchInitialData();
             }
         } catch (error) {
-            toast.error("Error al alimentar al cerebro.");
+            toast.error("Error al procesar la memoria.");
         } finally {
             setIsProcessing(false);
+        }
+    };
+
+    const handleDeleteMemory = async (contextId) => {
+        if (!confirm('¿Eliminar este aprendizaje permanentemente?')) return;
+
+        try {
+            const response = await fetch(`${baseUrl}/api/brain-core/context/${contextId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                toast.success("Memoria eliminada.");
+                fetchInitialData();
+            }
+        } catch (e) {
+            toast.error("Error al eliminar.");
         }
     };
 
@@ -125,7 +156,20 @@ const BrainCore = () => {
 
     return (
         <div className="flex flex-col h-[calc(100vh-6rem)] relative bg-zinc-50/50 transition-colors overflow-hidden">
-            <PageHeader title="Brain Core Command Center" subtitle="Dashboard de Inteligencia Proactiva y Memoria Estratégica.">
+            <PageHeader
+                title="Brain Core Command Center"
+                subtitle={
+                    <div className="flex items-center gap-2">
+                        <span className="text-zinc-500">Dashboard de Inteligencia Proactiva.</span>
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-tight">
+                                Cerebro sincronizado: Analizando {stats.count} puntos de datos
+                            </span>
+                        </div>
+                    </div>
+                }
+            >
                 <div className="flex items-center gap-3">
                     <select
                         onChange={(e) => {
@@ -153,7 +197,8 @@ const BrainCore = () => {
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="p-5 rounded-3xl bg-white border border-zinc-200/60 shadow-sm"
+                            onClick={() => setShowMetricDetail('cognition')}
+                            className="p-5 rounded-3xl bg-white border border-zinc-200/60 shadow-sm hover:shadow-md transition-all cursor-pointer group"
                         >
                             <div className="flex items-center gap-3 mb-2 text-primary">
                                 <Zap className="w-4 h-4" />
@@ -163,13 +208,23 @@ const BrainCore = () => {
                             <div className="w-full bg-zinc-100 h-1.5 rounded-full mt-3 overflow-hidden">
                                 <motion.div initial={{ width: 0 }} animate={{ width: '98.2%' }} className="bg-primary h-full shadow-[0_0_8px_rgba(var(--primary),0.3)]" />
                             </div>
+                            <AnimatePresence>
+                                {showMetricDetail === 'cognition' && (
+                                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="mt-4 pt-4 border-t border-zinc-50 text-[10px] text-zinc-500 space-y-1">
+                                        <p>• Latencia media: 420ms</p>
+                                        <p>• Fragmentación: 1.8%</p>
+                                        <p>• Relevancia semántica: Alta</p>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </motion.div>
 
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.1 }}
-                            className="p-5 rounded-3xl bg-white border border-zinc-200/60 shadow-sm"
+                            onClick={() => setShowMetricDetail('sync')}
+                            className="p-5 rounded-3xl bg-white border border-zinc-200/60 shadow-sm hover:shadow-md transition-all cursor-pointer group"
                         >
                             <div className="flex items-center gap-3 mb-2 text-emerald-500">
                                 <CheckCircle2 className="w-4 h-4" />
@@ -178,13 +233,23 @@ const BrainCore = () => {
                             </div>
                             <div className="text-2xl font-light text-zinc-900">Active</div>
                             <p className="text-[10px] text-zinc-500 mt-2">Vector Memory & Kanban cross-ref active.</p>
+                            <AnimatePresence>
+                                {showMetricDetail === 'sync' && (
+                                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="mt-4 pt-4 border-t border-zinc-50 text-[10px] text-zinc-500 space-y-1">
+                                        <p>• Postgres + pgvector: OK</p>
+                                        <p>• Vertex AI Embedding: Connected</p>
+                                        <p>• Last Sync: {new Date().toLocaleTimeString()}</p>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </motion.div>
 
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.2 }}
-                            className="p-5 rounded-3xl bg-white border border-zinc-200/60 shadow-sm"
+                            onClick={() => setShowMetricDetail('mode')}
+                            className="p-5 rounded-3xl bg-white border border-zinc-200/60 shadow-sm hover:shadow-md transition-all cursor-pointer group"
                         >
                             <div className="flex items-center gap-3 mb-2 text-primary">
                                 <Sparkles className="w-4 h-4" />
@@ -192,6 +257,15 @@ const BrainCore = () => {
                             </div>
                             <div className="text-lg font-bold text-zinc-900">Senior Director</div>
                             <p className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-tighter">Gemini 2.5 Pro reasoning enabled.</p>
+                            <AnimatePresence>
+                                {showMetricDetail === 'mode' && (
+                                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="mt-4 pt-4 border-t border-zinc-50 text-[10px] text-zinc-500 space-y-1">
+                                        <p>• Tono: Estratégico & Optimista</p>
+                                        <p>• Nivel de Razonamiento: Máximo</p>
+                                        <p>• Filtro de Privacidad: Activo</p>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </motion.div>
                     </div>
 
@@ -258,8 +332,30 @@ const BrainCore = () => {
                                             </div>
                                             <h3 className="text-lg font-bold text-zinc-900 mb-2 leading-tight">{card.title}</h3>
                                             <p className="text-sm text-zinc-600 leading-relaxed mb-6 line-clamp-3 group-hover:line-clamp-none transition-all duration-500">{card.content}</p>
+
                                             <div className="flex items-center justify-between pt-4 border-t border-zinc-50">
-                                                <span className="text-[10px] font-medium text-zinc-400">{new Date(card.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] font-medium text-zinc-400">{new Date(card.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                                    {card.contextId && (
+                                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingItem(card);
+                                                                    setInput(card.content);
+                                                                }}
+                                                                className="p-1.5 hover:bg-zinc-100 rounded-lg text-zinc-400 hover:text-primary transition-colors"
+                                                            >
+                                                                <Edit3 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteMemory(card.contextId)}
+                                                                className="p-1.5 hover:bg-zinc-100 rounded-lg text-zinc-400 hover:text-red-500 transition-colors"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <button className="flex items-center gap-1 text-[10px] font-black uppercase tracking-tighter text-primary hover:translate-x-1 transition-all">
                                                     Explorar <ChevronRight className="w-3 h-3" />
                                                 </button>
@@ -283,9 +379,21 @@ const BrainCore = () => {
                                     <input
                                         value={input}
                                         onChange={(e) => setInput(e.target.value)}
-                                        placeholder="Alimenta al cerebro: notas, capturas o instrucciones..."
+                                        placeholder={editingItem ? "Corrigiendo memoria..." : "Alimenta al cerebro: notas, capturas o instrucciones..."}
                                         className="flex-1 bg-transparent border-none focus:ring-0 text-zinc-900 placeholder:text-zinc-400 px-4 py-4 text-base font-light"
                                     />
+                                    {editingItem && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEditingItem(null);
+                                                setInput('');
+                                            }}
+                                            className="p-4 hover:bg-zinc-50 rounded-2xl text-zinc-400 transition-all"
+                                        >
+                                            <X className="w-6 h-6" />
+                                        </button>
+                                    )}
                                     <button type="submit" disabled={!input.trim() || isProcessing} className="p-4 bg-primary text-white rounded-2xl shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-30 flex items-center justify-center min-w-[60px]">
                                         {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                                     </button>

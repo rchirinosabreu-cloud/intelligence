@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { addAgencyContext, performAdvancedExtraction, getIntelligenceFeed, getClientProfileFromMemory, searchContext } from '../../services/brainCoreService.js';
+import { addAgencyContext, performAdvancedExtraction, getIntelligenceFeed, getClientProfileFromMemory, searchContext, updateAgencyContext, deleteAgencyContext, getMemoryStats } from '../../services/brainCoreService.js';
 import prisma from '../../lib/prisma.js';
 
 const router = express.Router();
@@ -17,8 +17,11 @@ const restrictAccess = (req, res, next) => {
 // 1. Context Feed (Dashboard protagonis)
 router.get('/feed', restrictAccess, async (req, res) => {
     try {
-        const feed = await getIntelligenceFeed();
-        res.json(feed);
+        const [feed, stats] = await Promise.all([
+            getIntelligenceFeed(),
+            getMemoryStats()
+        ]);
+        res.json({ feed, stats });
     } catch (error) {
         console.error('[BrainCoreRoute] Error in /feed:', error);
         res.json([{
@@ -57,7 +60,28 @@ router.post('/context', restrictAccess, upload.single('image'), async (req, res)
     }
 });
 
-// 3. Knowledge Radar (Client Profile)
+// 3. Update Memory
+router.patch('/context/:id', restrictAccess, async (req, res) => {
+    try {
+        const { content } = req.body;
+        await updateAgencyContext(req.params.id, content);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 4. Delete Memory
+router.delete('/context/:id', restrictAccess, async (req, res) => {
+    try {
+        await deleteAgencyContext(req.params.id);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 5. Knowledge Radar (Client Profile)
 router.get('/radar/:clientId', restrictAccess, async (req, res) => {
     try {
         const profile = await getClientProfileFromMemory(req.params.clientId);
