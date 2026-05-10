@@ -97,16 +97,24 @@ export const addAgencyContext = async (content, type = 'TEXT', clientId = null, 
     const embedding = await generateEmbedding(content);
     if (!embedding) throw new Error("Brain Core en mantenimiento: Error de sincronización.");
 
-    const id = crypto.randomUUID();
-    const createdAt = new Date();
+    // Usamos prisma para crear el registro básico (maneja JSON metadata correctamente)
+    const context = await prisma.agencyContext.create({
+        data: {
+            content,
+            type,
+            clientId,
+            metadata
+        }
+    });
 
+    // Luego actualizamos el vector usando SQL Raw para pgvector
     await prisma.$executeRawUnsafe(
-        `INSERT INTO "AgencyContext" (id, content, type, "clientId", metadata, "vectorEmbeddings", "createdAt")
-         VALUES ($1, $2, $3, $4, $5, $6::vector, $7)`,
-        id, content, type, clientId, JSON.stringify(metadata), `[${embedding.join(',')}]`, createdAt
+        `UPDATE "AgencyContext" SET "vectorEmbeddings" = $1::vector WHERE id = $2`,
+        `[${embedding.join(',')}]`,
+        context.id
     );
 
-    return { id, content, type, clientId, metadata };
+    return context;
 };
 
 /**
