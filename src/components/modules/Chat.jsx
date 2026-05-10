@@ -13,7 +13,7 @@ const Chat = () => {
     {
       id: 'welcome',
       role: 'assistant',
-      content: "¡Hola! Soy Bria, tu analista de estrategia. ¿En qué puedo ayudarte hoy?"
+      content: "¡Hola! Soy Brain Core, tu analista de estrategia. ¿En qué puedo ayudarte hoy?"
     }
   ]);
   const [isLoading, setIsLoading] = useState(false);
@@ -102,7 +102,7 @@ const Chat = () => {
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)] relative bg-white dark:bg-zinc-950 transition-colors">
       <PageHeader
-        title="Bria Intelligence"
+        title="Brain Core Intelligence"
         subtitle="Analista de estrategia y operaciones con IA."
 
       >
@@ -218,7 +218,7 @@ const Chat = () => {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleSend()}
                     disabled={isLoading}
-                    placeholder="Escribe un mensaje a Bria..."
+                    placeholder="Escribe un mensaje a Brain Core..."
                     className="flex-1 bg-transparent border-none focus:ring-0 text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 px-3 py-3 text-sm sm:text-base"
                 />
 
@@ -251,7 +251,7 @@ const Chat = () => {
           </div>
 
           <p className="text-center text-[10px] text-zinc-400 dark:text-zinc-600 mt-3 transition-colors">
-            Bria puede cometer errores. Considera verificar la información importante.
+            Brain Core puede cometer errores. Considera verificar la información importante.
           </p>
         </div>
       </div>

@@ -155,7 +155,7 @@ router.post('/meta/insights/generate', async (req, res) => {
         if (!clientId || !metrics) return res.status(400).json({ error: 'Missing clientId or metrics' });
 
         // Forward to the internal /api/chat logic or a dedicated Gemini call
-        // For simplicity and to reuse the Bria persona, we'll construct a prompt and call Gemini proxy or direct
+        // For simplicity and to reuse the Brain Core persona, we'll construct a prompt and call Gemini proxy or direct
         // Let's use the GEMINI_API_KEY directly from env to avoid complex proxying here if we want a specific prompt.
 
         const GEMINI_API_KEY = process.env.GEMINI_API_KEY;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Brain, User, Paperclip, Sparkles, AlertCircle, Info, MessageSquare, Image as ImageIcon, Loader2, Zap, Target, ShieldCheck, CheckCircle2, History, ChevronRight, Trash2, Edit3, X } from 'lucide-react';
+import { Send, Brain, User, Paperclip, Sparkles, AlertCircle, Info, MessageSquare, Image as ImageIcon, Loader2, Zap, Target, ShieldCheck, CheckCircle2, History, ChevronRight, Trash2, Edit3, X, QrCode, Smartphone, Wifi, RefreshCw, Settings2, Check, ExternalLink, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import { cn } from '@/lib/utils';
@@ -27,6 +27,9 @@ const BrainCore = () => {
     const [feed, setFeed] = useState([]);
     const [stats, setStats] = useState({ count: 0 });
     const [radar, setRadar] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResult, setSearchResult] = useState(null);
+    const [isSearching, setIsSearching] = useState(false);
     const [isLoadingFeed, setIsLoadingFeed] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingMessage, setProcessingMessage] = useState('');
@@ -34,6 +37,10 @@ const BrainCore = () => {
     const [clients, setClients] = useState([]);
     const [editingItem, setEditingItem] = useState(null);
     const [showMetricDetail, setShowMetricDetail] = useState(null);
+    const [automationStatus, setAutomationStatus] = useState(null);
+    const [activeTab, setActiveTab] = useState('feed'); // 'feed' or 'proposals'
+    const [availableChats, setAvailableChats] = useState([]);
+    const [monitoredChats, setMonitoredChats] = useState([]);
 
     const fileInputRef = useRef(null);
     const baseUrl = getApiBaseUrl();
@@ -42,9 +49,11 @@ const BrainCore = () => {
     const fetchInitialData = async () => {
         setIsLoadingFeed(true);
         try {
-            const [feedRes, clientsRes] = await Promise.all([
-                fetch(`${baseUrl}/api/brain-core/feed`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(`${baseUrl}/api/db/clients`, { headers: { 'Authorization': `Bearer ${token}` } })
+            const statusParam = activeTab === 'proposals' ? 'PENDING' : 'APPROVED';
+            const [feedRes, clientsRes, automationRes] = await Promise.all([
+                fetch(`${baseUrl}/api/brain-core/feed?status=${statusParam}`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${baseUrl}/api/db/clients`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${baseUrl}/api/automation/status`, { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
             if (feedRes.ok) {
@@ -53,6 +62,7 @@ const BrainCore = () => {
                 setStats(data.stats || { count: 0 });
             }
             if (clientsRes.ok) setClients(await clientsRes.json());
+            if (automationRes.ok) setAutomationStatus(await automationRes.json());
         } catch (error) {
             console.error("Fetch error:", error);
         } finally {
@@ -62,7 +72,7 @@ const BrainCore = () => {
 
     useEffect(() => {
         fetchInitialData();
-    }, []);
+    }, [activeTab]);
 
     const fetchRadar = async (clientId) => {
         if (!clientId) return;
@@ -72,6 +82,24 @@ const BrainCore = () => {
             });
             if (res.ok) setRadar(await res.json());
         } catch (e) { console.error(e); }
+    };
+
+    const handleSearch = async (e) => {
+        if (e) e.preventDefault();
+        if (!searchQuery.trim() || isSearching) return;
+
+        setIsSearching(true);
+        try {
+            const clientParam = selectedClientId ? `&clientId=${selectedClientId}` : '';
+            const res = await fetch(`${baseUrl}/api/brain-core/ask?q=${encodeURIComponent(searchQuery)}${clientParam}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) setSearchResult(await res.json());
+        } catch (e) {
+            toast.error("Error consultando al cerebro.");
+        } finally {
+            setIsSearching(false);
+        }
     };
 
     const handleFeedBrain = async (e) => {
@@ -107,6 +135,22 @@ const BrainCore = () => {
         }
     };
 
+    const handleProposalAction = async (id, status) => {
+        try {
+            const response = await fetch(`${baseUrl}/api/brain-core/context/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ status })
+            });
+            if (response.ok) {
+                toast.success(status === 'APPROVED' ? "Aprendizaje anclado." : "Propuesta descartada.");
+                fetchInitialData();
+            }
+        } catch (e) {
+            toast.error("Error en la acción.");
+        }
+    };
+
     const handleDeleteMemory = async (contextId) => {
         if (!confirm('¿Eliminar este aprendizaje permanentemente?')) return;
 
@@ -122,6 +166,11 @@ const BrainCore = () => {
         } catch (e) {
             toast.error("Error al eliminar.");
         }
+    };
+
+    const fetchChats = async () => {
+        const res = await fetch(`${baseUrl}/api/automation/chats`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.ok) setAvailableChats(await res.json());
     };
 
     const handleFileUpload = async (e) => {
@@ -143,7 +192,8 @@ const BrainCore = () => {
             });
 
             if (response.ok) {
-                toast.success("Captura procesada e integrada.");
+                toast.success("Captura procesada. Revisa la pestaña de Propuestas.");
+                setActiveTab('proposals');
                 fetchInitialData();
             }
         } catch (error) {
@@ -170,6 +220,32 @@ const BrainCore = () => {
                     </div>
                 }
             >
+                <div className="flex items-center gap-6 mr-6">
+                    <div className="flex bg-zinc-100/80 p-1 rounded-xl border border-zinc-200/60">
+                        <button
+                            onClick={() => setActiveTab('feed')}
+                            className={cn(
+                                "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                                activeTab === 'feed' ? "bg-white text-primary shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+                            )}
+                        >
+                            Memoria Activa
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('proposals')}
+                            className={cn(
+                                "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                                activeTab === 'proposals' ? "bg-white text-primary shadow-sm" : "text-zinc-500 hover:text-zinc-700"
+                            )}
+                        >
+                            Propuestas
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        </button>
+                    </div>
+
+                    <div className="h-6 w-px bg-zinc-200" />
+                </div>
+
                 <div className="flex items-center gap-3">
                     <select
                         onChange={(e) => {
@@ -191,6 +267,95 @@ const BrainCore = () => {
             <div className="flex flex-1 min-h-0 relative">
                 {/* Main Dashboard Area */}
                 <div className="flex-1 flex flex-col min-w-0 p-6 overflow-hidden relative">
+
+                    {/* Semantic Search Area */}
+                    <div className="mb-8 relative group">
+                        <form onSubmit={handleSearch} className="relative bg-white border border-zinc-200 rounded-[2.5rem] shadow-sm flex items-center p-1.5 focus-within:ring-4 ring-primary/5 transition-all">
+                            <div className="p-3 text-zinc-400">
+                                <Search className="w-5 h-5" />
+                            </div>
+                            <input
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="¿Qué sabemos sobre los gustos de Alexander? Pregúntale al cerebro..."
+                                className="flex-1 bg-transparent border-none focus:ring-0 text-zinc-900 placeholder:text-zinc-400 px-2 py-3 text-sm font-medium"
+                            />
+                            <button
+                                type="submit"
+                                disabled={!searchQuery.trim() || isSearching}
+                                className="px-6 py-3 bg-zinc-900 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all disabled:opacity-30"
+                            >
+                                {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Consultar"}
+                            </button>
+                        </form>
+
+                        <AnimatePresence>
+                            {searchResult && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    className="absolute top-full left-0 right-0 mt-3 p-6 bg-white border border-zinc-200 rounded-[2rem] shadow-2xl z-50"
+                                >
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-center gap-2 text-primary">
+                                            <Brain className="w-4 h-4" />
+                                            <span className="text-[10px] font-black uppercase tracking-widest">Respuesta Sintetizada</span>
+                                        </div>
+                                        <button onClick={() => setSearchResult(null)} className="p-1 hover:bg-zinc-100 rounded-lg text-zinc-400">
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    <p className="text-sm text-zinc-700 leading-relaxed font-medium mb-6 italic">
+                                        "{searchResult.content}"
+                                    </p>
+                                    {searchResult.sources && (
+                                        <div className="pt-4 border-t border-zinc-50">
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-3">Fuentes detectadas:</span>
+                                            <div className="flex flex-wrap gap-2">
+                                                {searchResult.sources.map(s => (
+                                                    <div key={s.id} className="px-3 py-1 bg-zinc-50 border border-zinc-100 rounded-full text-[9px] text-zinc-500 font-bold truncate max-w-[200px]">
+                                                        {s.content}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    {/* OpenClaw Connection Card (When QR is needed) */}
+                    {automationStatus?.status === 'qr_required' && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            className="mb-8 p-6 rounded-[2.5rem] bg-primary/5 border border-primary/10 shadow-xl shadow-primary/5 flex items-center gap-8"
+                        >
+                            <div className="p-4 bg-white rounded-3xl shadow-lg">
+                                <img src={automationStatus.qrUrl} alt="WhatsApp QR" className="w-32 h-32" />
+                            </div>
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2 text-primary mb-2">
+                                    <QrCode className="w-5 h-5" />
+                                    <h2 className="text-xs font-black uppercase tracking-widest">Enlazar OpenClaw (WhatsApp)</h2>
+                                </div>
+                                <p className="text-sm text-zinc-600 mb-4 max-w-lg">
+                                    Escanea este código para autorizar al agente a extraer minutas y acuerdos automáticamente desde tus chats VIP.
+                                </p>
+                                <div className="flex items-center gap-3">
+                                    <button className="px-4 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/20">
+                                        Escaneado
+                                    </button>
+                                    <button className="px-4 py-2 bg-zinc-100 text-zinc-500 text-[10px] font-black uppercase tracking-widest rounded-xl">
+                                        Más información
+                                    </button>
+                                </div>
+                            </div>
+                            <Smartphone className="w-24 h-24 text-primary/10 absolute right-8" />
+                        </motion.div>
+                    )}
 
                     {/* Upper Space: Brain Health / Summary */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -356,9 +521,26 @@ const BrainCore = () => {
                                                         </div>
                                                     )}
                                                 </div>
-                                                <button className="flex items-center gap-1 text-[10px] font-black uppercase tracking-tighter text-primary hover:translate-x-1 transition-all">
-                                                    Explorar <ChevronRight className="w-3 h-3" />
-                                                </button>
+                                                {activeTab === 'proposals' ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => handleProposalAction(card.id, 'APPROVED')}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-primary hover:text-white transition-all"
+                                                        >
+                                                            <Check className="w-3 h-3" /> Confirmar
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleProposalAction(card.id, 'DISCARDED')}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 text-zinc-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-red-50 hover:text-red-500 transition-all"
+                                                        >
+                                                            <X className="w-3 h-3" /> Descartar
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <button className="flex items-center gap-1 text-[10px] font-black uppercase tracking-tighter text-primary hover:translate-x-1 transition-all">
+                                                        Explorar <ChevronRight className="w-3 h-3" />
+                                                    </button>
+                                                )}
                                             </div>
                                         </motion.div>
                                     ))}
@@ -381,6 +563,12 @@ const BrainCore = () => {
                                         onChange={(e) => setInput(e.target.value)}
                                         placeholder={editingItem ? "Corrigiendo memoria..." : "Alimenta al cerebro: notas, capturas o instrucciones..."}
                                         className="flex-1 bg-transparent border-none focus:ring-0 text-zinc-900 placeholder:text-zinc-400 px-4 py-4 text-base font-light"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleFeedBrain();
+                                            }
+                                        }}
                                     />
                                     {editingItem && (
                                         <button
@@ -415,8 +603,57 @@ const BrainCore = () => {
                     </div>
                 </div>
 
-                {/* Right Panel: Knowledge Radar (Glassmorphism) */}
-                <div className="w-96 bg-white border-l border-zinc-200 flex flex-col p-8 overflow-y-auto">
+                {/* Right Panel: Knowledge Radar & Automation */}
+                <div className="w-96 bg-white border-l border-zinc-200 flex flex-col p-8 overflow-y-auto custom-scrollbar">
+
+                    {/* Automation Control Panel */}
+                    <div className="mb-12 p-6 rounded-[2rem] bg-zinc-50 border border-zinc-100 shadow-sm">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-2">
+                                <Settings2 className="w-4 h-4 text-zinc-400" />
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-900">OpenClaw Config</h3>
+                            </div>
+                            <div className={cn(
+                                "flex items-center gap-1.5 px-2 py-0.5 rounded-full border",
+                                automationStatus?.status === 'ready' ? "bg-emerald-50 border-emerald-100 text-emerald-600" : "bg-amber-50 border-amber-100 text-amber-600"
+                            )}>
+                                {automationStatus?.status === 'ready' ? <Wifi className="w-3 h-3" /> : <RefreshCw className="w-3 h-3 animate-spin" />}
+                                <span className="text-[9px] font-bold uppercase tracking-tight">{automationStatus?.status || 'Offline'}</span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2 block">Monitoreo VIP</label>
+                                <button
+                                    onClick={fetchChats}
+                                    className="w-full py-3 bg-white border border-zinc-200 rounded-2xl text-[10px] font-bold text-zinc-600 hover:border-primary transition-all flex items-center justify-center gap-2 group"
+                                >
+                                    <Smartphone className="w-3.5 h-3.5 text-zinc-400 group-hover:text-primary" />
+                                    Vincular nuevo chat
+                                </button>
+                                {availableChats.length > 0 && (
+                                    <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="mt-2 p-2 bg-white rounded-2xl border border-zinc-200 max-h-40 overflow-y-auto">
+                                        {availableChats.map(chat => (
+                                            <button
+                                                key={chat.id}
+                                                onClick={() => {
+                                                    setMonitoredChats([...monitoredChats, chat.name]);
+                                                    setAvailableChats([]);
+                                                    toast.success(`${chat.name} anclado.`);
+                                                }}
+                                                className="w-full text-left px-3 py-2 hover:bg-zinc-50 rounded-xl text-[10px] font-medium text-zinc-700 flex items-center justify-between group"
+                                            >
+                                                {chat.name}
+                                                <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100" />
+                                            </button>
+                                        ))}
+                                    </motion.div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="flex items-center gap-3 mb-10">
                         <div className="p-3 bg-primary text-white rounded-2xl shadow-lg shadow-primary/20">
                             <ShieldCheck className="w-6 h-6" />

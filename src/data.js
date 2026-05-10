@@ -1,6 +1,6 @@
 export const MOCK_DATA = {
   dashboard: {
-    welcome: "Bienvenido, Director. Bria está operativa al 100%.",
+    welcome: "Bienvenido, Director. Brain Core está operativa al 100%.",
     metrics: [
       { id: 1, label: "Proyectos Activos", value: "3", change: "+1", trend: "up" },
       { id: 2, label: "Tareas Pendientes", value: "12", change: "-2", trend: "down" },
@@ -91,7 +91,7 @@ export const MOCK_DATA = {
     {
       id: 1,
       role: "user",
-      content: "Bria, necesito un análisis rápido de la competencia para SunPartners."
+      content: "Brain Core, necesito un análisis rápido de la competencia para SunPartners."
     },
     {
       id: 2,

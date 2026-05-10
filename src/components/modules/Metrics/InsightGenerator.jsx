@@ -46,7 +46,7 @@ const InsightGenerator = ({ clientId, metrics }) => {
                         </div>
                         <div>
                             <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Generador de Insights con IA</h3>
-                            <p className="text-xs text-zinc-500">Bria analiza tus métricas y redacta recomendaciones estratégicas.</p>
+                            <p className="text-xs text-zinc-500">Brain Core analiza tus métricas y redacta recomendaciones estratégicas.</p>
                         </div>
                     </div>
                     <Button
@@ -65,7 +65,7 @@ const InsightGenerator = ({ clientId, metrics }) => {
                             <Send className="w-6 h-6 text-zinc-400" />
                         </div>
                         <p className="text-sm text-zinc-500 max-w-xs">
-                            Haz clic en el botón para que Bria analice el rendimiento del mes y genere conclusiones.
+                            Haz clic en el botón para que Brain Core analice el rendimiento del mes y genere conclusiones.
                         </p>
                     </div>
                 )}

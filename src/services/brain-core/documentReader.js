@@ -85,7 +85,7 @@ async function parseCsvStream(fileStream) {
 
 /**
  * Descarga un PDF o CSV desde un bucket de GCP y extrae su texto limpio o estructurado.
- * Cumple con los lineamientos de TDD definidos en src/tests/bria/documentReader.test.js.
+ * Cumple con los lineamientos de TDD definidos en src/tests/brain-core/documentReader.test.js.
  *
  * @param {string} bucketName - El nombre del bucket en GCP.
  * @param {string} fileName - La ruta o nombre del archivo en el bucket.
@@ -111,7 +111,7 @@ export async function readDocumentFromBucket(bucketName, fileName) {
     }
 
     try {
-        console.log(`[Bria Optic Nerve] Intentando leer: gs://${bucketName}/${fileName}`);
+        console.log(`[Brain Core Optic Nerve] Intentando leer: gs://${bucketName}/${fileName}`);
 
         const file = storage.bucket(bucketName).file(fileName);
 
@@ -127,7 +127,7 @@ export async function readDocumentFromBucket(bucketName, fileName) {
         if (isPdf) {
             // Descargar archivo a memoria (buffer)
             const [buffer] = await file.download();
-            console.log(`[Bria Optic Nerve] PDF en memoria. Iniciando parseo...`);
+            console.log(`[Brain Core Optic Nerve] PDF en memoria. Iniciando parseo...`);
 
             // Extraer texto
             const pdfData = await pdfParse(buffer);
@@ -138,7 +138,7 @@ export async function readDocumentFromBucket(bucketName, fileName) {
                 throw new UnreadablePdfError(`El PDF fue procesado pero no contiene texto seleccionable. Es probable que sea una imagen escaneada que requiere OCR.`);
             }
         } else if (isCsv) {
-            console.log(`[Bria Optic Nerve] Iniciando stream de CSV...`);
+            console.log(`[Brain Core Optic Nerve] Iniciando stream de CSV...`);
             // Stream the file directly into the CSV parser to avoid loading giant files into memory
             const fileStream = file.createReadStream();
             extractedText = await parseCsvStream(fileStream);
@@ -149,7 +149,7 @@ export async function readDocumentFromBucket(bucketName, fileName) {
         }
 
         // Test 1: Happy Path
-        console.log(`[Bria Optic Nerve] Parseo exitoso. Extracción: ${extractedText.length} caracteres.`);
+        console.log(`[Brain Core Optic Nerve] Parseo exitoso. Extracción: ${extractedText.length} caracteres.`);
         return extractedText;
 
     } catch (error) {
@@ -159,7 +159,7 @@ export async function readDocumentFromBucket(bucketName, fileName) {
         }
 
         // Envolver otros errores inesperados
-        console.error(`[Bria Optic Nerve] Error crítico leyendo ${fileName}:`, error.message);
+        console.error(`[Brain Core Optic Nerve] Error crítico leyendo ${fileName}:`, error.message);
         throw new Error(`Failed to read document: ${error.message}`);
     }
 }

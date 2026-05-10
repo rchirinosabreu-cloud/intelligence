@@ -98,7 +98,6 @@ function AppContent() {
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/inicio" element={<Navigate to="/" replace />} />
 
-                    <Route path="/bria" element={<Navigate to="/brain-core" replace />} />
                     <Route
                       path="/brain-core"
                       element={
