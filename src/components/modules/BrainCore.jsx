@@ -124,7 +124,7 @@ const BrainCore = () => {
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-6rem)] relative bg-slate-950/20 transition-colors overflow-hidden">
+        <div className="flex flex-col h-[calc(100vh-6rem)] relative bg-gradient-to-br from-slate-950 via-indigo-950/40 to-slate-950 transition-colors overflow-hidden rounded-3xl border border-white/5 shadow-2xl">
             <PageHeader title="Brain Core Command Center" subtitle="Dashboard de Inteligencia Proactiva y Memoria Estratégica.">
                 <div className="flex items-center gap-3">
                     <select
@@ -149,21 +149,21 @@ const BrainCore = () => {
                 <div className="flex-1 flex flex-col min-w-0 p-6 overflow-hidden">
 
                     {/* Console (Input) Glassmorphism */}
-                    <div className="mb-8 max-w-4xl mx-auto w-full">
+                    <div className="mb-10 max-w-4xl mx-auto w-full px-4">
                         <div className="relative group">
-                            <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-3xl opacity-20 blur-xl group-focus-within:opacity-40 transition duration-700" />
-                            <form onSubmit={handleFeedBrain} className="relative bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-white/10 rounded-3xl shadow-[0_32px_64px_-12px_rgba(0,0,0,0.1)] flex items-center p-2">
+                            <div className="absolute -inset-1 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-400 rounded-[2.5rem] opacity-20 blur-2xl group-focus-within:opacity-40 transition duration-1000" />
+                            <form onSubmit={handleFeedBrain} className="relative bg-white/[0.03] backdrop-blur-2xl border border-white/10 rounded-[2rem] shadow-2xl flex items-center p-2">
                                 <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*" />
-                                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-4 hover:bg-white/10 rounded-2xl text-zinc-400 transition-all flex-shrink-0">
+                                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-4 hover:bg-white/5 rounded-2xl text-indigo-400 transition-all flex-shrink-0">
                                     <ImageIcon className="w-6 h-6" />
                                 </button>
                                 <input
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
-                                    placeholder="Alimenta al cerebro: pega notas, sube capturas o dicta instrucciones..."
-                                    className="flex-1 bg-transparent border-none focus:ring-0 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 px-4 py-4 text-lg font-medium"
+                                    placeholder="Alimenta al cerebro: notas, capturas o instrucciones..."
+                                    className="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder:text-zinc-500 px-4 py-4 text-lg font-light"
                                 />
-                                <button type="submit" disabled={!input.trim() || isProcessing} className="p-4 bg-indigo-600 text-white rounded-2xl shadow-xl shadow-indigo-600/30 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center min-w-[60px]">
+                                <button type="submit" disabled={!input.trim() || isProcessing} className="p-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl shadow-xl shadow-indigo-600/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-30 flex items-center justify-center min-w-[60px]">
                                     {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                                 </button>
                             </form>
@@ -185,14 +185,22 @@ const BrainCore = () => {
                     {/* Intelligence Feed */}
                     <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                         <div className="flex items-center gap-2 mb-6">
-                            <Sparkles className="w-5 h-5 text-indigo-500" />
-                            <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400">Intelligence Feed</h2>
-                            <div className="h-px flex-1 bg-zinc-100 dark:bg-white/5 ml-4" />
+                            <Sparkles className="w-5 h-5 text-indigo-400" />
+                            <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-300/50">Intelligence Feed</h2>
+                            <div className="h-px flex-1 bg-white/5 ml-4" />
                         </div>
 
                         {isLoadingFeed ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {[1,2,3,4,5,6].map(i => <SkeletonCard key={i} />)}
+                            </div>
+                        ) : feed.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-center opacity-40">
+                                <div className="w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center mb-4 border border-indigo-500/20">
+                                    <Brain className="w-8 h-8 text-indigo-400 animate-pulse" />
+                                </div>
+                                <p className="text-sm font-medium text-indigo-200">Cerebro recalibrando...</p>
+                                <p className="text-[10px] text-indigo-300/50 mt-1 uppercase tracking-widest font-bold">Analizando memoria y tareas activas</p>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
@@ -205,11 +213,11 @@ const BrainCore = () => {
                                             animate={{ opacity: 1, scale: 1 }}
                                             exit={{ opacity: 0, scale: 0.95 }}
                                             className={cn(
-                                                "p-6 rounded-[2.5rem] border backdrop-blur-md transition-all duration-500 group hover:shadow-2xl relative overflow-hidden",
-                                                card.type === 'ALERTA' ? 'bg-red-900/20 border-red-500/20' :
-                                                card.type === 'INSIGHT' ? 'bg-amber-900/20 border-amber-500/20' :
-                                                card.type === 'RECOMENDACIÓN' ? 'bg-indigo-900/20 border-indigo-500/20' :
-                                                'bg-white/5 dark:bg-slate-900/40 border-white/10'
+                                                "p-6 rounded-[2.5rem] border backdrop-blur-xl transition-all duration-500 group hover:shadow-2xl relative overflow-hidden",
+                                                card.type === 'ALERTA' ? 'bg-red-500/10 border-red-500/20' :
+                                                card.type === 'INSIGHT' ? 'bg-amber-500/10 border-amber-500/20' :
+                                                card.type === 'RECOMENDACIÓN' ? 'bg-indigo-500/10 border-indigo-500/20' :
+                                                'bg-white/[0.05] border-white/10'
                                             )}
                                         >
                                             <div className="flex items-start justify-between mb-4">
@@ -224,14 +232,14 @@ const BrainCore = () => {
                                                      card.type === 'INSIGHT' ? <Zap className="w-5 h-5" /> :
                                                      card.type === 'RECOMENDACIÓN' ? <Target className="w-5 h-5" /> : <History className="w-5 h-5" />}
                                                 </div>
-                                                <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 group-hover:text-indigo-500 transition-colors">
+                                                <span className="text-[9px] font-black uppercase tracking-widest text-indigo-300/50 group-hover:text-indigo-400 transition-colors">
                                                     {card.type}
                                                 </span>
                                             </div>
-                                            <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2 leading-tight">{card.title}</h3>
-                                            <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed mb-6 line-clamp-3 group-hover:line-clamp-none transition-all duration-500">{card.content}</p>
-                                            <div className="flex items-center justify-between pt-4 border-t border-zinc-100 dark:border-white/5">
-                                                <span className="text-[10px] font-medium text-zinc-400">{new Date(card.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                            <h3 className="text-lg font-bold text-white mb-2 leading-tight">{card.title}</h3>
+                                            <p className="text-sm text-zinc-400 leading-relaxed mb-6 line-clamp-3 group-hover:line-clamp-none transition-all duration-500">{card.content}</p>
+                                            <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                                                <span className="text-[10px] font-medium text-zinc-500">{new Date(card.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                                 <button className="flex items-center gap-1 text-[10px] font-black uppercase tracking-tighter text-indigo-500 hover:translate-x-1 transition-all">
                                                     Explorar <ChevronRight className="w-3 h-3" />
                                                 </button>
@@ -245,31 +253,31 @@ const BrainCore = () => {
                 </div>
 
                 {/* Right Panel: Knowledge Radar (Glassmorphism) */}
-                <div className="w-96 bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border-l border-white/10 flex flex-col p-8 overflow-y-auto">
+                <div className="w-96 bg-white/[0.02] backdrop-blur-3xl border-l border-white/5 flex flex-col p-8 overflow-y-auto">
                     <div className="flex items-center gap-3 mb-10">
-                        <div className="p-3 bg-zinc-900 dark:bg-white rounded-2xl text-white dark:text-zinc-900 shadow-xl">
+                        <div className="p-3 bg-white rounded-2xl text-slate-950 shadow-xl">
                             <ShieldCheck className="w-6 h-6" />
                         </div>
                         <div>
-                            <h2 className="text-xs font-black uppercase tracking-[0.2em]">Knowledge Radar</h2>
-                            <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-tighter">Perfil Cognitivo del Cliente</p>
+                            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-white">Knowledge Radar</h2>
+                            <p className="text-[9px] text-indigo-300/50 font-bold uppercase tracking-tighter">Perfil Cognitivo del Cliente</p>
                         </div>
                     </div>
 
                     {!radar ? (
                         <div className="flex-1 flex flex-col items-center justify-center text-center opacity-30">
-                            <Target className="w-16 h-16 mb-6 text-zinc-300 dark:text-zinc-700" />
-                            <p className="text-sm font-bold text-zinc-400">Selecciona un cliente para proyectar su conocimiento.</p>
+                            <Target className="w-16 h-16 mb-6 text-indigo-300" />
+                            <p className="text-sm font-bold text-indigo-200">Selecciona un cliente para proyectar su conocimiento.</p>
                         </div>
                     ) : (
                         <div className="space-y-10">
                             <section>
-                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-5 flex items-center gap-2">
+                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300/50 mb-5 flex items-center gap-2">
                                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" /> Preferencias
                                 </h4>
                                 <ul className="space-y-3">
                                     {radar.preferences?.map((p, i) => (
-                                        <li key={i} className="text-xs bg-white/5 dark:bg-slate-800/20 backdrop-blur-md p-4 rounded-3xl border border-white/5 text-zinc-700 dark:text-zinc-300 shadow-sm">
+                                        <li key={i} className="text-xs bg-white/[0.03] backdrop-blur-md p-4 rounded-3xl border border-white/5 text-zinc-300 shadow-sm">
                                             {p}
                                         </li>
                                     ))}
@@ -277,12 +285,12 @@ const BrainCore = () => {
                             </section>
 
                             <section>
-                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-5 flex items-center gap-2">
+                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300/50 mb-5 flex items-center gap-2">
                                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" /> Red Flags
                                 </h4>
                                 <ul className="space-y-3">
                                     {radar.dislikes?.map((d, i) => (
-                                        <li key={i} className="text-xs bg-red-500/10 p-4 rounded-3xl border border-red-500/10 text-red-700 dark:text-red-400 font-bold shadow-sm">
+                                        <li key={i} className="text-xs bg-red-500/5 p-4 rounded-3xl border border-red-500/10 text-red-400/80 font-medium shadow-sm">
                                             {d}
                                         </li>
                                     ))}
