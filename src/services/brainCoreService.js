@@ -1,11 +1,12 @@
 import { VertexAI } from '@google-cloud/vertexai';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 import prisma from '../lib/prisma.js';
 
 dotenv.config();
 
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'brainstudio-intelligence';
-const LOCATION = 'us-central1'; // Embedding 004 typically available in us-central1
+const LOCATION = 'us-central1';
 const EMBEDDING_MODEL = "text-embedding-004";
 const CHAT_MODEL = "gemini-2.5-pro";
 
@@ -26,176 +27,168 @@ try {
 }
 
 /**
- * Generates embeddings for a given text using text-embedding-004.
- * @param {string} text - The text to embed.
- * @returns {Promise<number[]>} - The vector embedding.
+ * Generates embeddings for a given text.
  */
 export const generateEmbedding = async (text) => {
-    if (!vertexAI) {
-        console.error("[BrainCoreService] Vertex AI not initialized");
-        return null;
-    }
-
+    if (!vertexAI) return null;
     try {
-        // Use the standard GenerativeModel interface for embeddings in Vertex AI SDK
         const model = vertexAI.getGenerativeModel({ model: EMBEDDING_MODEL });
-
         const result = await model.embedContent(text);
-        const embedding = result.embedding;
-
-        if (!embedding || !embedding.values) {
-            throw new Error("No embedding values returned from Vertex AI");
-        }
-
-        return embedding.values;
+        return result.embedding.values;
     } catch (error) {
-        console.error("[BrainCoreService] Embedding generation failed (Cerebro en mantenimiento):", error.message);
+        console.error("[BrainCoreService] Embedding generation failed:", error.message);
         return null;
     }
 };
 
 /**
- * Performs OCR on an image buffer using Gemini 2.5 Pro.
- * @param {Buffer} imageBuffer - The image data.
- * @param {string} mimeType - The mime type of the image.
- * @returns {Promise<string>} - The extracted text.
+ * Performs OCR and extraction using Gemini 2.5 Pro.
  */
-export const performOCR = async (imageBuffer, mimeType) => {
-    if (!vertexAI) throw new Error("Vertex AI not initialized");
-
+export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
+    if (!vertexAI) return null;
     try {
         const model = vertexAI.getGenerativeModel({ model: CHAT_MODEL });
+        const prompt = `Analiza esta captura de pantalla de WhatsApp u otra imagen de la agencia.
+        Detecta el sentimiento, extrae preferencias del cliente, lo que odia, lo que aprueba y cualquier instrucción crítica.
+        Responde en formato JSON:
+        { "content": "Texto completo extraído", "insights": { "preferences": [], "dislikes": [], "approvals": [], "sentiment": "" } }`;
 
-        const prompt = "Extrae TODO el texto de esta imagen, especialmente si es una captura de WhatsApp. Devuelve solo el texto extraído sin comentarios adicionales.";
-        const imagePart = {
-            inlineData: {
-                data: imageBuffer.toString('base64'),
-                mimeType: mimeType
-            }
-        };
-
+        const imagePart = { inlineData: { data: imageBuffer.toString('base64'), mimeType } };
         const result = await model.generateContent([prompt, imagePart]);
-        const response = await result.response;
-        return response.candidates[0].content.parts[0].text;
+        const responseText = result.response.candidates[0].content.parts[0].text;
+        return JSON.parse(responseText.replace(/```json|```/g, ''));
     } catch (error) {
-        console.error("[BrainCoreService] OCR failed:", error);
-        throw error;
+        console.error("[BrainCoreService] Advanced extraction failed:", error);
+        return null;
     }
 };
 
 /**
- * Saves information to the AgencyContext.
- * @param {string} content - Text content.
- * @param {string} type - TEXT or IMAGE.
- * @param {Object} metadata - Additional info.
+ * Saves context with client siloing.
  */
-export const addAgencyContext = async (content, type = 'TEXT', metadata = {}) => {
+export const addAgencyContext = async (content, type = 'TEXT', clientId = null, metadata = {}) => {
     const embedding = await generateEmbedding(content);
-    if (!embedding) {
-        throw new Error("Cerebro en mantenimiento: No se pudo generar el embedding para el nuevo contexto.");
-    }
-
-    // We use a raw query because Prisma doesn't natively support pgvector's vector type yet
-    // with standard create() if it's an Unsupported type.
+    if (!embedding) throw new Error("Cerebro en mantenimiento: Error de embeddings.");
 
     const id = crypto.randomUUID();
     const createdAt = new Date();
-    const metadataJson = JSON.stringify(metadata);
 
     await prisma.$executeRawUnsafe(
-        `INSERT INTO "AgencyContext" (id, content, type, metadata, "vectorEmbeddings", "createdAt")
-         VALUES ($1, $2, $3, $4, $5::vector, $6)`,
-        id, content, type, metadataJson, `[${embedding.join(',')}]`, createdAt
+        `INSERT INTO "AgencyContext" (id, content, type, "clientId", metadata, "vectorEmbeddings", "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6::vector, $7)`,
+        id, content, type, clientId, JSON.stringify(metadata), `[${embedding.join(',')}]`, createdAt
     );
 
-    return { id, content, type, metadata };
+    return { id, content, type, clientId, metadata };
 };
 
 /**
- * Searches for relevant context using semantic search.
+ * Semantic search within client silo if specified.
  */
-export const searchContext = async (queryText, limit = 5) => {
+export const searchContext = async (queryText, clientId = null, limit = 5) => {
     const embedding = await generateEmbedding(queryText);
-    if (!embedding) return []; // Return empty if embeddings fail
+    if (!embedding) return [];
 
-    const vectorStr = `[${embedding.join(',')}]`;
+    let query = `SELECT id, content, type, "clientId", metadata, "createdAt",
+                 (1 - ("vectorEmbeddings" <=> $1::vector)) as similarity
+                 FROM "AgencyContext" WHERE "vectorEmbeddings" IS NOT NULL`;
+    const params = [`[${embedding.join(',')}]` ];
 
-    const results = await prisma.$queryRawUnsafe(
-        `SELECT id, content, type, metadata, "createdAt",
-         (1 - ("vectorEmbeddings" <=> $1::vector)) as similarity
-         FROM "AgencyContext"
-         WHERE "vectorEmbeddings" IS NOT NULL
-         ORDER BY "vectorEmbeddings" <=> $1::vector
-         LIMIT $2`,
-        vectorStr, limit
-    );
+    if (clientId) {
+        query += ` AND "clientId" = $2`;
+        params.push(clientId);
+    }
 
-    return results;
+    query += ` ORDER BY "vectorEmbeddings" <=> $1::vector LIMIT ${clientId ? '$3' : '$2'}`;
+    if (clientId) params.push(limit); else params.push(limit);
+
+    return await prisma.$queryRawUnsafe(query, ...params);
 };
 
 /**
- * Generates proactive recommendations by crossing tasks with context.
- * Optimized to use a single AI call for batch analysis.
+ * Generates the categorized Intelligence Feed.
  */
-export const getProactiveFeed = async () => {
-    // 1. Get current active tasks
+export const getIntelligenceFeed = async () => {
     const activeTasks = await prisma.task.findMany({
         where: { status: { in: ['PENDIENTE', 'EN_CURSO'] } },
-        take: 10,
+        take: 15,
+        include: { client: true },
         orderBy: { createdAt: 'desc' }
     });
 
     if (activeTasks.length === 0) return [];
 
-    // 2. Collect relevant context for all tasks (parallel semantic search)
-    const taskContextPairs = await Promise.all(activeTasks.map(async (task) => {
-        const context = await searchContext(`${task.title} ${task.comments || ''}`, 2);
-        return { task, context: context.filter(c => c.similarity > 0.7) };
+    // Parallel context search for tasks
+    const tasksWithContext = await Promise.all(activeTasks.map(async (task) => {
+        const context = await searchContext(`${task.title} ${task.comments || ''}`, task.clientId, 3);
+        return { task, context: context.filter(c => c.similarity > 0.75) };
     }));
 
-    // Filter only tasks that actually have relevant context
-    const tasksWithContext = taskContextPairs.filter(p => p.context.length > 0);
+    const meaningfulTasks = tasksWithContext.filter(p => p.context.length > 0);
 
-    if (tasksWithContext.length === 0) return [];
+    // Recent context history
+    const recentHistory = await prisma.agencyContext.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        include: { client: true }
+    });
 
-    // 3. Batch analysis via AI
-    return await generateBatchRecommendationsWithAI(tasksWithContext);
+    if (meaningfulTasks.length === 0) {
+        return recentHistory.map(h => ({
+            id: h.id,
+            type: 'HISTORIAL',
+            title: `Memoria de ${h.client?.name || 'Agencia'}`,
+            content: h.content,
+            severity: 'info',
+            timestamp: h.createdAt
+        }));
+    }
+
+    return await generateStructuredFeedWithAI(meaningfulTasks, recentHistory);
 };
 
-const generateBatchRecommendationsWithAI = async (tasksWithContext) => {
+const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
     if (!vertexAI) return [];
-
     const model = vertexAI.getGenerativeModel({ model: CHAT_MODEL });
 
-    const tasksDataText = tasksWithContext.map((p, idx) => `
-        Tarea ${idx + 1}:
-        ID: ${p.task.id}
-        Título: ${p.task.title}
-        Descripción: ${p.task.comments || 'N/A'}
-        Contexto Histórico Relacionado:
-        ${p.context.map(c => `- ${c.content}`).join('\n')}
-    `).join('\n---\n');
+    const prompt = `Analiza las tareas y el historial reciente de la agencia. Genera un feed de tarjetas inteligentes.
+    Tareas y Contexto: ${JSON.stringify(meaningfulTasks.map(t => ({ title: t.task.title, context: t.context.map(c => c.content) })))}
+    Historial Reciente: ${JSON.stringify(recentHistory.map(h => h.content))}
 
-    const prompt = `
-        Analiza las siguientes tareas de la agencia frente a su contexto histórico.
-        Tu misión es detectar conflictos, preferencias de clientes o restricciones críticas que el equipo deba conocer.
-
-        ${tasksDataText}
-
-        Responde ÚNICAMENTE un array JSON con objetos que contengan:
-        { "alert": "Mensaje corto y proactivo", "severity": "info/warning/critical", "taskId": "ID de la tarea" }
-
-        Si para una tarea no hay una recomendación crítica real, no la incluyas en el array.
-        Si no hay nada relevante para ninguna, responde [].
-    `;
+    Devuelve un array JSON de objetos:
+    { "id": "uuid", "type": "ALERTA/INSIGHT/RECOMENDACIÓN/HISTORIAL", "title": "Título corto", "content": "Cuerpo conciso", "severity": "critical/warning/info", "timestamp": "ISO Date" }`;
 
     try {
         const result = await model.generateContent(prompt);
-        const text = result.response.candidates[0].content.parts[0].text;
-        const cleanedText = text.replace(/```json|```/g, '').trim();
-        return JSON.parse(cleanedText);
+        return JSON.parse(result.response.candidates[0].content.parts[0].text.replace(/```json|```/g, ''));
     } catch (e) {
-        console.error("[BrainCoreService] Batch recommendation failed:", e);
         return [];
+    }
+};
+
+/**
+ * Gets the "Knowledge Radar" (Client Profile) from memory.
+ */
+export const getClientProfileFromMemory = async (clientId) => {
+    const contexts = await prisma.agencyContext.findMany({
+        where: { clientId },
+        orderBy: { createdAt: 'desc' },
+        take: 50
+    });
+
+    if (contexts.length === 0) return null;
+
+    const model = vertexAI.getGenerativeModel({ model: CHAT_MODEL });
+    const prompt = `Analiza estas notas de la agencia sobre un cliente específico y construye su 'Ficha Mental'.
+    Notas: ${contexts.map(c => c.content).join('\n')}
+
+    Devuelve JSON:
+    { "preferences": [], "dislikes": [], "approvals": [], "sentiment": "Evolución del sentimiento" }`;
+
+    try {
+        const result = await model.generateContent(prompt);
+        return JSON.parse(result.response.candidates[0].content.parts[0].text.replace(/```json|```/g, ''));
+    } catch (e) {
+        return null;
     }
 };

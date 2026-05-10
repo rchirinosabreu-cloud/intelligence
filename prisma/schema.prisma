@@ -77,6 +77,7 @@ model Client {
   flowMessages        FlowMessage[]
   integrations        Integration[]
   nativeTasks         Task[]
+  agencyContexts      AgencyContext[]
 }
 
 model ContentPlan {
@@ -277,8 +278,10 @@ model AgencyContext {
   content          String
   vectorEmbeddings Unsupported("vector(768)")?
   type             String                    @default("TEXT") // TEXT or IMAGE
+  clientId         String?
   metadata         Json?
   createdAt        DateTime                  @default(now())
+  client           Client?                   @relation(fields: [clientId], references: [id])
 }
 
 model FlowMessage {
