@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Instalar dependencias del proyecto (incluyendo Playwright v1.45.0)
-RUN npm install
+RUN npm install --ignore-scripts
 
 # Instalar los binarios de los navegadores para Playwright
 RUN npx playwright install chromium --with-deps
