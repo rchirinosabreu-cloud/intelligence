@@ -261,7 +261,7 @@ app.post('/api/public/items/:id/comment', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3000;
 
 // --- LOGIN & AUTHENTICATION MIDDLEWARE ---
 console.log(`[Auth] JWT_SECRET ${process.env.JWT_SECRET ? 'configured from env' : 'using fallback secret'}.`);
