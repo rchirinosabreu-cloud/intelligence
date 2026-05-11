@@ -1,6 +1,7 @@
 # 1. Imagen que ya tiene los ojos (Playwright) y los músculos (Drivers)
 FROM mcr.microsoft.com/playwright:v1.45.0-jammy
 
+# Directorio de trabajo
 WORKDIR /app
 
 # 2. Instalamos solo las librerías base (SIN ejecutar los scripts que rompen el build)
