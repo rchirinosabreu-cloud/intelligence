@@ -1,5 +1,5 @@
 import express from 'express';
-import { initializeWhatsApp, listActiveChats, runScrapingTask } from '../../services/whatsappAutomationService.js';
+import automationService from '../../services/automationService.js';
 import prisma from '../../lib/prisma.js';
 
 const router = express.Router();
@@ -12,33 +12,46 @@ const restrictAccess = (req, res, next) => {
     next();
 };
 
+/**
+ * GET /api/automation/status
+ * Devuelve el estado actual de la conexión de automatización.
+ */
 router.get('/status', restrictAccess, async (req, res) => {
-    const state = await initializeWhatsApp();
-    res.json(state);
-});
-
-router.get('/chats', restrictAccess, async (req, res) => {
-    const chats = await listActiveChats();
-    res.json(chats);
-});
-
-router.post('/monitored', restrictAccess, async (req, res) => {
-    const { chats } = req.body;
-    await prisma.automationConfig.upsert({
-        where: { id: 'global' },
-        update: { monitoredChats: chats },
-        create: { id: 'global', monitoredChats: chats }
-    });
-    res.json({ success: true });
-});
-
-router.post('/run-now', restrictAccess, async (req, res) => {
-    const config = await prisma.automationConfig.findUnique({ where: { id: 'global' } });
-    const chats = config?.monitoredChats || [];
-    for (const chatName of chats) {
-        await runScrapingTask(chatName);
+    try {
+        const state = await automationService.getStatus();
+        res.json(state);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
-    res.json({ success: true });
+});
+
+/**
+ * POST /api/brain-core/connect-whatsapp
+ * Inicia el proceso de vinculación de WhatsApp y devuelve el QR en Base64.
+ */
+router.post('/connect-whatsapp', restrictAccess, async (req, res) => {
+    try {
+        const result = await automationService.vincularChat();
+        res.json(result);
+    } catch (error) {
+        console.error("[AutomationRoute] Error connecting WhatsApp:", error);
+        res.status(500).json({ error: "No se pudo generar el acceso seguro a WhatsApp.", details: error.message });
+    }
+});
+
+// Mantener compatibilidad con rutas anteriores si es necesario o actualizarlas
+router.get('/chats', restrictAccess, async (req, res) => {
+    try {
+        // Esta lógica dependería de tener la sesión ya activa
+        const status = await automationService.getStatus();
+        if (status.status !== 'ready') {
+            return res.status(400).json({ error: 'WhatsApp no está vinculado.' });
+        }
+        // Aquí se podría implementar un comando de openclaw para listar chats
+        res.json([]);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 export default router;
