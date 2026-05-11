@@ -5,10 +5,10 @@
   "private": true,
   "description": "Brainstudio Intelligence - Minimal ChatGPT-style conversational assistant",
   "scripts": {
-    "start": "npx prisma db push --accept-data-loss && npx prisma generate && node server.js",
+    "start": "npx prisma db push --accept-data-loss && npx prisma generate && node scripts/add_status_message.js && node server.js",
     "dev": "vite --host :: --port 3000",
     "build": "prisma generate && vite build",
-    "postinstall": "prisma generate && npx playwright install --with-deps",
+    "postinstall": "prisma generate && npx playwright install chromium --with-deps",
     "preview": "vite preview --host :: --port 3000",
     "lint": "eslint . --quiet",
     "lint:warn": "eslint .",
@@ -77,7 +77,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
+    "@playwright/test": "^1.59.1",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20.17.10",
     "@types/react": "^18.3.18",
