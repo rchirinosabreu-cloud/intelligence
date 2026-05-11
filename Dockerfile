@@ -1,29 +1,26 @@
-# Usar la imagen oficial de Playwright que ya incluye dependencias de sistema
+# 1. Imagen que ya tiene los ojos (Playwright) y los músculos (Drivers)
 FROM mcr.microsoft.com/playwright:v1.45.0-jammy
 
 # Directorio de trabajo
 WORKDIR /app
 
-# Copiar archivos de dependencias
+# 2. Instalamos solo las librerías base (SIN ejecutar los scripts que rompen el build)
 COPY package*.json ./
+RUN npm ci --ignore-scripts
 
-# Instalar dependencias del proyecto (incluyendo Playwright v1.45.0)
-RUN npm install
-
-# Instalar los binarios de los navegadores para Playwright
-RUN npx playwright install chromium --with-deps
-
-# Copiar el resto de la aplicación
+# 3. Ahora sí copiamos todo el código de la agencia
 COPY . .
 
-# Generar el cliente de Prisma
+# 4. Generamos Prisma (Ahora que ya copiamos el archivo schema.prisma)
 RUN npx prisma generate
 
-# CONSTRUIR EL FRONTEND (Indispensable para que aparezca el dashboard)
+# 5. CONSTRUIMOS EL FRONTEND (Esto hace que tu dashboard aparezca)
 RUN npm run build
 
-# Exponer el puerto configurado
+# 6. Configuraciones de Railway
+ENV NODE_ENV=production
+ENV PORT=3000
 EXPOSE 3000
 
-# Comando de inicio
-CMD ["npm", "start"]
+# 7. Arranque directo y rápido
+CMD ["node", "server.js"]
