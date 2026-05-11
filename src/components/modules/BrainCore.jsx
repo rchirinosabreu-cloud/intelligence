@@ -41,6 +41,8 @@ const BrainCore = () => {
     const [activeTab, setActiveTab] = useState('feed'); // 'feed' or 'proposals'
     const [availableChats, setAvailableChats] = useState([]);
     const [monitoredChats, setMonitoredChats] = useState([]);
+    const [isLinkingWa, setIsLinkingWa] = useState(false);
+    const [waQrCode, setWaQrCode] = useState(null);
 
     const fileInputRef = useRef(null);
     const baseUrl = getApiBaseUrl();
@@ -165,6 +167,36 @@ const BrainCore = () => {
             }
         } catch (e) {
             toast.error("Error al eliminar.");
+        }
+    };
+
+    const handleConnectWhatsApp = async () => {
+        setIsLinkingWa(true);
+        setWaQrCode(null);
+        toast.loading("Generando acceso seguro...", { id: 'wa-link' });
+
+        try {
+            const response = await fetch(`${baseUrl}/api/automation/connect-whatsapp`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.qr) {
+                    setWaQrCode(data.qr);
+                    toast.success("Código QR generado.", { id: 'wa-link' });
+                } else if (data.status === 'ready') {
+                    toast.success("WhatsApp ya está conectado.", { id: 'wa-link' });
+                    fetchInitialData();
+                }
+            } else {
+                toast.error("Error al conectar con el motor de automatización.", { id: 'wa-link' });
+            }
+        } catch (error) {
+            toast.error("Error de red al intentar vincular.", { id: 'wa-link' });
+        } finally {
+            setIsLinkingWa(false);
         }
     };
 
@@ -326,15 +358,15 @@ const BrainCore = () => {
                         </AnimatePresence>
                     </div>
 
-                    {/* OpenClaw Connection Card (When QR is needed) */}
-                    {automationStatus?.status === 'qr_required' && (
+                    {/* OpenClaw Connection Card (When QR is requested or needed) */}
+                    {(automationStatus?.status === 'qr_required' || waQrCode) && (
                         <motion.div
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             className="mb-8 p-6 rounded-[2.5rem] bg-primary/5 border border-primary/10 shadow-xl shadow-primary/5 flex items-center gap-8"
                         >
                             <div className="p-4 bg-white rounded-3xl shadow-lg">
-                                <img src={automationStatus.qrUrl} alt="WhatsApp QR" className="w-32 h-32" />
+                                <img src={waQrCode || automationStatus?.qrUrl} alt="WhatsApp QR" className="w-32 h-32" />
                             </div>
                             <div className="flex-1">
                                 <div className="flex items-center gap-2 text-primary mb-2">
@@ -345,11 +377,20 @@ const BrainCore = () => {
                                     Escanea este código para autorizar al agente a extraer minutas y acuerdos automáticamente desde tus chats VIP.
                                 </p>
                                 <div className="flex items-center gap-3">
-                                    <button className="px-4 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/20">
-                                        Escaneado
+                                    <button
+                                        onClick={() => {
+                                            setWaQrCode(null);
+                                            fetchInitialData();
+                                        }}
+                                        className="px-4 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/20"
+                                    >
+                                        Listo, ya escaneé
                                     </button>
-                                    <button className="px-4 py-2 bg-zinc-100 text-zinc-500 text-[10px] font-black uppercase tracking-widest rounded-xl">
-                                        Más información
+                                    <button
+                                        onClick={() => setWaQrCode(null)}
+                                        className="px-4 py-2 bg-zinc-100 text-zinc-500 text-[10px] font-black uppercase tracking-widest rounded-xl"
+                                    >
+                                        Cerrar
                                     </button>
                                 </div>
                             </div>
@@ -626,11 +667,16 @@ const BrainCore = () => {
                             <div>
                                 <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2 block">Monitoreo VIP</label>
                                 <button
-                                    onClick={fetchChats}
-                                    className="w-full py-3 bg-white border border-zinc-200 rounded-2xl text-[10px] font-bold text-zinc-600 hover:border-primary transition-all flex items-center justify-center gap-2 group"
+                                    onClick={handleConnectWhatsApp}
+                                    disabled={isLinkingWa}
+                                    className="w-full py-3 bg-white border border-zinc-200 rounded-2xl text-[10px] font-bold text-zinc-600 hover:border-primary transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
                                 >
-                                    <Smartphone className="w-3.5 h-3.5 text-zinc-400 group-hover:text-primary" />
-                                    Vincular nuevo chat
+                                    {isLinkingWa ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                                    ) : (
+                                        <Smartphone className="w-3.5 h-3.5 text-zinc-400 group-hover:text-primary" />
+                                    )}
+                                    {isLinkingWa ? 'Generando acceso seguro...' : 'Vincular nuevo chat'}
                                 </button>
                                 {availableChats.length > 0 && (
                                     <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="mt-2 p-2 bg-white rounded-2xl border border-zinc-200 max-h-40 overflow-y-auto">
