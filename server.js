@@ -63,7 +63,6 @@ const normalizeOrigin = (origin = '') => String(origin).trim().replace(/\/$/, ''
 const allowedOrigins = new Set([
   "https://intelligence.brainstudioagencia.com",
   "https://intelligence.brainstudioagencia.com/",
-  "https://api.brainstudioagencia.com",
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:4173",
