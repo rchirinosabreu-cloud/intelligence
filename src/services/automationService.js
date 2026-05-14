@@ -30,7 +30,11 @@ class AutomationService {
 
             context = await chromium.launchPersistentContext(userDataDir, {
                 headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox']
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage'
+                ]
             });
 
             const page = await context.newPage();
