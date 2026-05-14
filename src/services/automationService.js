@@ -35,11 +35,13 @@ class AutomationService {
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
-                    '--disable-blink-features=AutomationControlled',
-                    '--disable-features=IsolateOrigins,site-per-process',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
                     '--no-first-run',
                     '--no-zygote',
-                    '--disable-dev-shm-usage'
+                    '--single-process',
+                    '--disable-gpu',
+                    '--disable-blink-features=AutomationControlled'
                 ]
             });
 
@@ -80,6 +82,15 @@ class AutomationService {
                 // para que WhatsApp complete el handshake del escaneo.
                 // Se cerrará automáticamente tras 3 minutos o al detectar éxito.
                 (async () => {
+                    // Simular actividad cada 30 segundos para que no se pause la sincronización
+                    const activityInterval = setInterval(async () => {
+                        try {
+                            if (page && !page.isClosed()) {
+                                await page.mouse.move(Math.random() * 100, Math.random() * 100);
+                            }
+                        } catch (e) {}
+                    }, 30000);
+
                     try {
                         console.log("[Brain-Hands] Esperando escaneo (3 min timeout)...");
                         await page.waitForSelector('div[id="pane-side"]', { timeout: 180000 });
@@ -87,6 +98,7 @@ class AutomationService {
                     } catch (err) {
                         console.log("[Brain-Hands] El tiempo de escaneo expiró o hubo un error.");
                     } finally {
+                        clearInterval(activityInterval);
                         try { await context.close(); } catch (e) {}
                     }
                 })();
