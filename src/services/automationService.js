@@ -35,9 +35,17 @@ class AutomationService {
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-blink-features=AutomationControlled'
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-features=IsolateOrigins,site-per-process',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-dev-shm-usage'
                 ]
+            });
+
+            // Eliminar la propiedad 'webdriver' para que WhatsApp no nos detecte
+            await context.addInitScript(() => {
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
             });
 
             const page = await context.newPage();
