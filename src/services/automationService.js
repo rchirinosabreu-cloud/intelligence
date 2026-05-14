@@ -30,6 +30,7 @@ class AutomationService {
 
             context = await chromium.launchPersistentContext(userDataDir, {
                 headless: true,
+                userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
@@ -49,10 +50,10 @@ class AutomationService {
 
             // Check if we are already logged in (pane-side exists) or if we need QR (canvas exists)
             try {
-                // Wait for either the QR or the main interface
+                // Wait for either the QR or the main interface - increased timeout to 60s
                 await Promise.race([
-                    page.waitForSelector('canvas', { timeout: 30000 }),
-                    page.waitForSelector('div[id="pane-side"]', { timeout: 30000 })
+                    page.waitForSelector('canvas', { timeout: 60000 }),
+                    page.waitForSelector('div[id="pane-side"]', { timeout: 60000 })
                 ]);
             } catch (e) {
                 console.log("[Brain-Hands] Timeout esperando carga inicial.");
@@ -76,12 +77,16 @@ class AutomationService {
                 return !!document.querySelector('div[id="pane-side"]');
             });
 
-            await context.close();
-
             if (isLoggedIn) {
                 console.log("[Brain-Hands] Sesión activa detectada.");
+                await context.close();
                 return { status: 'ready', message: 'WhatsApp ya está vinculado.' };
             } else {
+                // Captura de debug antes del error
+                const errorPath = path.join(this.stateDir, 'error.png');
+                await page.screenshot({ path: errorPath });
+                console.log(`[Brain-Hands] Error screenshot saved to ${errorPath}`);
+                await context.close();
                 throw new Error("No se pudo detectar el código QR ni una sesión activa en WhatsApp Web.");
             }
         } catch (error) {
