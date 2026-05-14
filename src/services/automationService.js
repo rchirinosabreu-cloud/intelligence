@@ -75,7 +75,21 @@ class AutomationService {
                 const buffer = await qrCanvas.screenshot();
                 const base64 = buffer.toString('base64');
 
-                await context.close();
+                // MANTENER EL NAVEGADOR ABIERTO:
+                // No cerramos el contexto inmediatamente. Lo dejamos vivir en segundo plano
+                // para que WhatsApp complete el handshake del escaneo.
+                // Se cerrará automáticamente tras 3 minutos o al detectar éxito.
+                (async () => {
+                    try {
+                        console.log("[Brain-Hands] Esperando escaneo (3 min timeout)...");
+                        await page.waitForSelector('div[id="pane-side"]', { timeout: 180000 });
+                        console.log("[Brain-Hands] ¡Vinculación Exitosa detectada en segundo plano!");
+                    } catch (err) {
+                        console.log("[Brain-Hands] El tiempo de escaneo expiró o hubo un error.");
+                    } finally {
+                        try { await context.close(); } catch (e) {}
+                    }
+                })();
 
                 return {
                     qr: `data:image/png;base64,${base64}`,
