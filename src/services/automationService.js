@@ -23,18 +23,14 @@ class AutomationService {
      */
     async vincularChat() {
         console.log("[Brain-Hands] Iniciando vinculación de WhatsApp via Playwright...");
-        let browser;
+        let context;
         try {
             // Path for the persistent session
             const userDataDir = path.join(this.stateDir, 'whatsapp_session');
 
-            browser = await chromium.launch({
+            context = await chromium.launchPersistentContext(userDataDir, {
                 headless: true,
                 args: ['--no-sandbox', '--disable-setuid-sandbox']
-            });
-
-            const context = await browser.launchPersistentContext(userDataDir, {
-                viewport: { width: 1280, height: 800 }
             });
 
             const page = await context.newPage();
@@ -65,7 +61,6 @@ class AutomationService {
                 const base64 = buffer.toString('base64');
 
                 await context.close();
-                await browser.close();
 
                 return {
                     qr: `data:image/png;base64,${base64}`,
@@ -78,7 +73,6 @@ class AutomationService {
             });
 
             await context.close();
-            await browser.close();
 
             if (isLoggedIn) {
                 console.log("[Brain-Hands] Sesión activa detectada.");
@@ -87,7 +81,7 @@ class AutomationService {
                 throw new Error("No se pudo detectar el código QR ni una sesión activa en WhatsApp Web.");
             }
         } catch (error) {
-            if (browser) await browser.close();
+            if (context) await context.close();
             console.error("[Brain-Hands] Error en vincularChat:", error);
             throw error;
         }
