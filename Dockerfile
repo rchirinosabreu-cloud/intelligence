@@ -7,8 +7,11 @@ RUN npm ci --ignore-scripts
 
 COPY . .
 
-# Genera Prisma client manualmente
+# Genera Prisma client
 RUN npx prisma generate
+
+# Build del frontend
+RUN npm run build
 
 ENV NODE_ENV=production
 EXPOSE 3000
