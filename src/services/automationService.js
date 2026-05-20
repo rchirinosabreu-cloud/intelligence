@@ -23,18 +23,31 @@ class AutomationService {
      */
     async vincularChat() {
         console.log("[Brain-Hands] Iniciando vinculación de WhatsApp via Playwright...");
-        let browser;
+        let context;
         try {
             // Path for the persistent session
             const userDataDir = path.join(this.stateDir, 'whatsapp_session');
 
-            browser = await chromium.launch({
+            context = await chromium.launchPersistentContext(userDataDir, {
                 headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox']
+                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                viewport: { width: 1280, height: 720 },
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--single-process',
+                    '--disable-gpu',
+                    '--disable-blink-features=AutomationControlled'
+                ]
             });
 
-            const context = await browser.launchPersistentContext(userDataDir, {
-                viewport: { width: 1280, height: 800 }
+            // Eliminar la propiedad 'webdriver' para que WhatsApp no nos detecte
+            await context.addInitScript(() => {
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
             });
 
             const page = await context.newPage();
@@ -49,10 +62,10 @@ class AutomationService {
 
             // Check if we are already logged in (pane-side exists) or if we need QR (canvas exists)
             try {
-                // Wait for either the QR or the main interface
+                // Wait for either the QR or the main interface - increased timeout to 60s
                 await Promise.race([
-                    page.waitForSelector('canvas', { timeout: 30000 }),
-                    page.waitForSelector('div[id="pane-side"]', { timeout: 30000 })
+                    page.waitForSelector('canvas', { timeout: 60000 }),
+                    page.waitForSelector('div[id="pane-side"]', { timeout: 60000 })
                 ]);
             } catch (e) {
                 console.log("[Brain-Hands] Timeout esperando carga inicial.");
@@ -64,8 +77,31 @@ class AutomationService {
                 const buffer = await qrCanvas.screenshot();
                 const base64 = buffer.toString('base64');
 
-                await context.close();
-                await browser.close();
+                // MANTENER EL NAVEGADOR ABIERTO:
+                // No cerramos el contexto inmediatamente. Lo dejamos vivir en segundo plano
+                // para que WhatsApp complete el handshake del escaneo.
+                // Se cerrará automáticamente tras 3 minutos o al detectar éxito.
+                (async () => {
+                    // Simular actividad cada 30 segundos para que no se pause la sincronización
+                    const activityInterval = setInterval(async () => {
+                        try {
+                            if (page && !page.isClosed()) {
+                                await page.mouse.move(Math.random() * 100, Math.random() * 100);
+                            }
+                        } catch (e) {}
+                    }, 30000);
+
+                    try {
+                        console.log("[Brain-Hands] Esperando escaneo (3 min timeout)...");
+                        await page.waitForSelector('div[id="pane-side"]', { timeout: 180000 });
+                        console.log("[Brain-Hands] ¡Vinculación Exitosa detectada en segundo plano!");
+                    } catch (err) {
+                        console.log("[Brain-Hands] El tiempo de escaneo expiró o hubo un error.");
+                    } finally {
+                        clearInterval(activityInterval);
+                        try { await context.close(); } catch (e) {}
+                    }
+                })();
 
                 return {
                     qr: `data:image/png;base64,${base64}`,
@@ -77,17 +113,20 @@ class AutomationService {
                 return !!document.querySelector('div[id="pane-side"]');
             });
 
-            await context.close();
-            await browser.close();
-
             if (isLoggedIn) {
                 console.log("[Brain-Hands] Sesión activa detectada.");
+                await context.close();
                 return { status: 'ready', message: 'WhatsApp ya está vinculado.' };
             } else {
+                // Captura de debug antes del error
+                const errorPath = path.join(this.stateDir, 'error.png');
+                await page.screenshot({ path: errorPath });
+                console.log(`[Brain-Hands] Error screenshot saved to ${errorPath}`);
+                await context.close();
                 throw new Error("No se pudo detectar el código QR ni una sesión activa en WhatsApp Web.");
             }
         } catch (error) {
-            if (browser) await browser.close();
+            if (context) await context.close();
             console.error("[Brain-Hands] Error en vincularChat:", error);
             throw error;
         }
