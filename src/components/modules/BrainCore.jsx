@@ -65,12 +65,20 @@ const BrainCore = () => {
             return;
         }
         setIsLoadingSummary(true);
+        setClientSummary(null); // Clear previous
         try {
             const res = await fetch(`${baseUrl}/api/brain-core/client-summary/${clientId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (res.ok) setClientSummary(await res.json());
-        } catch (e) { console.error(e); }
+            if (res.ok) {
+                setClientSummary(await res.json());
+            } else {
+                setClientSummary({ error: true });
+            }
+        } catch (e) {
+            console.error(e);
+            setClientSummary({ error: true });
+        }
         finally { setIsLoadingSummary(false); }
     };
 
@@ -462,6 +470,18 @@ const BrainCore = () => {
                                 {isLoadingSummary ? (
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         {[1,2,3].map(i => <div key={i} className="h-64 bg-zinc-50 rounded-3xl animate-pulse" />)}
+                                    </div>
+                                ) : clientSummary?.error ? (
+                                    <div className="py-20 text-center bg-red-50/30 rounded-[2rem] border-2 border-dashed border-red-100">
+                                        <AlertCircle className="w-12 h-12 text-red-300 mx-auto mb-4" />
+                                        <p className="text-sm font-bold text-red-500 uppercase tracking-widest">Error al cargar widgets operativos</p>
+                                        <p className="text-xs text-red-400 mt-1">Verifica la conexión con el Excel o las credenciales de Google.</p>
+                                        <button
+                                            onClick={() => fetchClientSummary(selectedClientId)}
+                                            className="mt-6 px-6 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-[10px] font-black uppercase hover:bg-red-50 transition-all"
+                                        >
+                                            Reintentar Carga
+                                        </button>
                                     </div>
                                 ) : clientSummary ? (
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
