@@ -283,7 +283,7 @@ const BrainCore = () => {
                                 animate={{ opacity: 1, y: 0 }}
                                 className="mt-4 flex flex-wrap justify-center gap-2"
                             >
-                                {integrations.map(source => {
+                                {integrations.filter(s => !selectedClientId || s.clientId === selectedClientId).map(source => {
                                     const getDocUrl = () => {
                                         if (source.type === 'SHEETS') return `https://docs.google.com/spreadsheets/d/${source.externalId}`;
                                         if (source.type === 'SLIDES') return `https://docs.google.com/presentation/d/${source.externalId}`;
@@ -319,7 +319,7 @@ const BrainCore = () => {
                         )}
 
                         <AnimatePresence>
-                            {searchResult && (
+                            {(searchResult && !selectedClientId) && (
                                 <motion.div
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
@@ -465,47 +465,69 @@ const BrainCore = () => {
                                     </div>
                                 ) : clientSummary ? (
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                        {/* Status / Alertas */}
-                                        <div className="p-6 bg-zinc-50 rounded-3xl border border-zinc-100">
-                                            <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-6 flex items-center gap-2">
-                                                <AlertCircle className="w-4 h-4 text-red-500" /> Alertas de Gmail
-                                            </h4>
-                                            <div className="space-y-4">
-                                                {clientSummary.alerts?.length > 0 ? clientSummary.alerts.map((a, i) => (
-                                                    <div key={i} className="p-4 bg-white rounded-2xl border border-red-50 shadow-sm">
-                                                        <p className="text-xs font-bold text-zinc-900 mb-1">{a.subject}</p>
-                                                        <p className="text-[10px] text-zinc-500 leading-relaxed">{a.snippet}</p>
+                                        {/* Tarjeta 1: Tareas Críticas */}
+                                        <div className="p-8 bg-zinc-50 rounded-[2.5rem] border border-zinc-100 hover:shadow-xl hover:shadow-red-500/5 transition-all group">
+                                            <div className="flex items-center justify-between mb-8">
+                                                <h4 className="text-[10px] font-black uppercase tracking-widest text-red-500 flex items-center gap-2">
+                                                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> Tareas Críticas
+                                                </h4>
+                                                <span className="text-[9px] font-bold text-zinc-400 uppercase">En Progreso</span>
+                                            </div>
+                                            <div className="space-y-3">
+                                                {clientSummary.criticalTasks?.length > 0 ? clientSummary.criticalTasks.map((t, i) => (
+                                                    <div key={i} className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-zinc-100 shadow-sm group-hover:border-red-100 transition-colors">
+                                                        <div className="w-5 h-5 rounded-lg border-2 border-zinc-100 flex items-center justify-center shrink-0">
+                                                            <Check className="w-3 h-3 text-zinc-200" />
+                                                        </div>
+                                                        <p className="text-xs font-bold text-zinc-700 truncate">{t}</p>
                                                     </div>
-                                                )) : <p className="text-xs text-zinc-400 font-medium italic">Sin alertas críticas hoy.</p>}
+                                                )) : <p className="text-xs text-zinc-400 font-medium italic py-10 text-center">Sin tareas críticas activas.</p>}
                                             </div>
                                         </div>
 
-                                        {/* Tareas Sheets */}
-                                        <div className="p-6 bg-zinc-50 rounded-3xl border border-zinc-100">
-                                            <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-6 flex items-center gap-2">
-                                                <Database className="w-4 h-4 text-emerald-500" /> Tareas (Live Sheets)
-                                            </h4>
+                                        {/* Tarjeta 2: Próximas Entregas */}
+                                        <div className="p-8 bg-zinc-50 rounded-[2.5rem] border border-zinc-100 hover:shadow-xl hover:shadow-amber-500/5 transition-all group">
+                                            <div className="flex items-center justify-between mb-8">
+                                                <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-500 flex items-center gap-2">
+                                                    <div className="w-2 h-2 rounded-full bg-amber-500" /> Próximas Entregas
+                                                </h4>
+                                                <span className="text-[9px] font-bold text-zinc-400 uppercase">Prioridad Alta</span>
+                                            </div>
                                             <div className="space-y-4">
-                                                {clientSummary.tasks?.length > 0 ? clientSummary.tasks.map((t, i) => (
-                                                    <div key={i} className="flex items-start gap-3 p-3 bg-white rounded-2xl border border-zinc-100 shadow-sm">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
-                                                        <p className="text-xs font-medium text-zinc-700">{t}</p>
+                                                {clientSummary.highPriority?.length > 0 ? clientSummary.highPriority.map((p, i) => (
+                                                    <div key={i} className="p-4 bg-white rounded-2xl border border-zinc-100 shadow-sm group-hover:border-amber-100 transition-colors">
+                                                        <p className="text-xs font-bold text-zinc-900 mb-1">{p.task}</p>
+                                                        <div className="flex items-center gap-2 text-[9px] font-black text-zinc-400 uppercase tracking-tighter">
+                                                            <Calendar className="w-3 h-3 text-amber-500" /> {p.deadline}
+                                                        </div>
                                                     </div>
-                                                )) : <p className="text-xs text-zinc-400 font-medium italic">Sin tareas pendientes en Sheets.</p>}
+                                                )) : <p className="text-xs text-zinc-400 font-medium italic py-10 text-center">Sin entregas inmediatas.</p>}
                                             </div>
                                         </div>
 
-                                        {/* Quick Actions / Insights */}
-                                        <div className="p-6 bg-primary/5 rounded-3xl border border-primary/10">
-                                            <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/60 mb-6 flex items-center gap-2">
-                                                <Sparkles className="w-4 h-4" /> Insights de IA
-                                            </h4>
-                                            <p className="text-xs text-zinc-700 leading-relaxed font-medium mb-6">
-                                                {clientSummary.aiInsight || "Analizando comportamiento del cliente..."}
-                                            </p>
-                                            <button className="w-full py-3 bg-white border border-primary/20 text-primary rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary hover:text-white transition-all">
-                                                Generar Reporte Express
-                                            </button>
+                                        {/* Tarjeta 3: Alertas y Bloqueos */}
+                                        <div className="p-8 bg-white rounded-[2.5rem] border-2 border-zinc-100 hover:border-primary/20 hover:shadow-2xl transition-all group relative overflow-hidden">
+                                            <div className="absolute top-0 right-0 p-4">
+                                                <AlertCircle className="w-12 h-12 text-zinc-50" />
+                                            </div>
+                                            <div className="flex items-center justify-between mb-8">
+                                                <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-900 flex items-center gap-2">
+                                                    ⚠️ Alertas / Bloqueos
+                                                </h4>
+                                            </div>
+                                            <div className="space-y-3 mb-8">
+                                                {clientSummary.blockers?.length > 0 ? clientSummary.blockers.map((b, i) => (
+                                                    <div key={i} className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 text-xs font-medium text-zinc-600 leading-relaxed italic">
+                                                        "{b}"
+                                                    </div>
+                                                )) : <p className="text-xs text-zinc-400 font-medium italic py-4">Todo fluye sin bloqueos.</p>}
+                                            </div>
+                                            <div className="pt-6 border-t border-zinc-50">
+                                                <p className="text-[10px] font-black uppercase text-primary/60 mb-2">IA Executive Insight</p>
+                                                <p className="text-xs text-zinc-500 leading-relaxed font-medium">
+                                                    {clientSummary.aiInsight}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 ) : (
