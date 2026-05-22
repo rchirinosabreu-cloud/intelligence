@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Globe, Database, Mail, Layout, Loader2, Link as LinkIcon, ShieldCheck } from 'lucide-react';
+import { X, Plus, Trash2, Globe, Database, Mail, Layout, Loader2, Link as LinkIcon, ShieldCheck, AlertCircle, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { toast } from 'react-hot-toast';
@@ -87,19 +87,6 @@ const SourceManagementModal = ({ isOpen, onClose, onRefresh }) => {
         }
     };
 
-    const handleConnectGoogle = async () => {
-        try {
-            const res = await fetch(`${baseUrl}/api/integrations/google/auth`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const { url } = await res.json();
-                window.location.href = url;
-            }
-        } catch (e) {
-            toast.error("Error al iniciar conexión con Google.");
-        }
-    };
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -164,12 +151,26 @@ const SourceManagementModal = ({ isOpen, onClose, onRefresh }) => {
                                 </div>
                             )}
 
-                            <button
-                                onClick={handleConnectGoogle}
-                                className="w-full mt-8 py-4 bg-white border-2 border-zinc-100 rounded-2xl text-[10px] font-black uppercase tracking-widest text-zinc-600 hover:border-primary/30 hover:text-primary transition-all flex items-center justify-center gap-2"
-                            >
-                                <ShieldCheck className="w-4 h-4" /> Autorizar Cuenta Google
-                            </button>
+                            <div className="mt-8 p-6 bg-primary/5 rounded-3xl border border-primary/10">
+                                <div className="flex items-center gap-2 text-primary mb-3">
+                                    <Info className="w-4 h-4" />
+                                    <h4 className="text-[10px] font-black uppercase tracking-widest">Guía de Conexión</h4>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="flex gap-3">
+                                        <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-[10px] font-black text-primary border border-primary/20 shrink-0">1</div>
+                                        <p className="text-[11px] text-zinc-600 leading-relaxed">
+                                            Comparte tu archivo de Google (Sheets/Slides) como <span className="font-bold text-zinc-900">Lector</span> con el correo de nuestra Cuenta de Servicio (asociada en Railway).
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-[10px] font-black text-primary border border-primary/20 shrink-0">2</div>
+                                        <p className="text-[11px] text-zinc-600 leading-relaxed">
+                                            Registra el ID del documento en el formulario de la derecha.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         {/* Form Area */}

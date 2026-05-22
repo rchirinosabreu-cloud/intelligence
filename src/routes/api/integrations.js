@@ -1,27 +1,7 @@
 import express from 'express';
-import { getAuthUrl, handleAuthCallback } from '../../services/googleAuthService.js';
 import prisma from '../../lib/prisma.js';
 
 const router = express.Router();
-
-// Redirect to Google Consent Screen
-router.get('/google/auth', (req, res) => {
-    const url = getAuthUrl();
-    res.json({ url });
-});
-
-// OAuth2 Callback
-router.get('/google/callback', async (req, res) => {
-    const { code } = req.query;
-    try {
-        await handleAuthCallback(code);
-        // Redirect back to BrainCore in frontend
-        res.redirect('/brain-core?status=success');
-    } catch (error) {
-        console.error('OAuth Callback Error:', error);
-        res.redirect('/brain-core?status=error');
-    }
-});
 
 // Get all integrations
 router.get('/integrations', async (req, res) => {
