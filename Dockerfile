@@ -1,17 +1,17 @@
-# Usar la imagen oficial de Playwright que ya incluye dependencias de sistema
-FROM mcr.microsoft.com/playwright:v1.45.0-jammy
+# Usar una imagen de Node ligera
+FROM node:20-slim
 
 # Directorio de trabajo
 WORKDIR /app
 
+# Instalar dependencias necesarias para Prisma y otras herramientas
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
 # Copiar archivos de dependencias
 COPY package*.json ./
 
-# Instalar dependencias del proyecto (incluyendo Playwright v1.45.0)
+# Instalar dependencias del proyecto
 RUN npm install --ignore-scripts
-
-# Instalar los binarios de los navegadores para Playwright
-RUN npx playwright install chromium --with-deps
 
 # Copiar el resto de la aplicación
 COPY . .

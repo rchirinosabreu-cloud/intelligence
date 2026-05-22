@@ -85,42 +85,66 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
         }
 
         setIsSubmitting(true);
-        try {
-            const baseUrl = getApiBaseUrl();
-            let isoDate = null;
-            if (newTaskData.dueDate) {
-                // Ensure date string uses YYYY-MM-DD format if coming from input type="date"
-                // To avoid timezone offset issues (UTC midnight shifting to previous day in UTC-5),
-                // we explicitly set the time to 12:00:00 UTC. This guarantees that when the browser
-                // parses the date back in any timezone from UTC-12 to UTC+12, it lands on the same day.
-                const cleanDate = newTaskData.dueDate.split('T')[0]; // Extract just the date part if needed
-                isoDate = `${cleanDate}T12:00:00.000Z`;
-            }
 
+        // Optimistic UI: Call onSuccess immediately with a temporary state
+        // This assumes the parent component handles adding it to the list
+        // and can manage a "loading" or "optimistic" state.
+        // For simplicity here, we'll notify success to the user immediately.
+        toast({ title: "Tarea enviada", description: "La tarea se está procesando..." });
+
+        const baseUrl = getApiBaseUrl();
+        let isoDate = null;
+        if (newTaskData.dueDate) {
+            const cleanDate = newTaskData.dueDate.split('T')[0];
+            isoDate = `${cleanDate}T12:00:00.000Z`;
+        }
+
+        const taskPayload = {
+            title: newTaskData.title,
+            clientId: newTaskData.clientId,
+            assigneeId: newTaskData.assigneeId || null,
+            dueDate: isoDate,
+            comments: newTaskData.comments,
+            status: 'PENDIENTE',
+            isPriority: newTaskData.isPriority,
+            isSpecial: newTaskData.isSpecial,
+            specialType: newTaskData.isSpecial ? newTaskData.specialType : null,
+            referenceUrl: newTaskData.hasReference ? newTaskData.referenceUrl : null
+        };
+
+        // Close modal immediately to give a snappy feel
+        onClose();
+
+        try {
             const res = await fetch(`${baseUrl}/api/tasks`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    title: newTaskData.title,
-                    clientId: newTaskData.clientId,
-                    assigneeId: newTaskData.assigneeId || null,
-                    dueDate: isoDate,
-                    comments: newTaskData.comments,
-                    status: 'PENDIENTE',
-                    isPriority: newTaskData.isPriority,
-                    isSpecial: newTaskData.isSpecial,
-                    specialType: newTaskData.isSpecial ? newTaskData.specialType : null,
-                    referenceUrl: newTaskData.hasReference ? newTaskData.referenceUrl : null
-                })
+                body: JSON.stringify(taskPayload)
             });
 
             if (!res.ok) throw new Error("Failed to create task");
 
-            toast({ title: "Tarea creada", description: "La tarea se ha guardado en la base de datos." });
-            onSuccess();
-            onClose();
+            toast({ title: "Tarea confirmada", description: "Se ha guardado correctamente." });
+            onSuccess(); // Trigger actual refresh
         } catch (err) {
-            toast({ variant: "destructive", title: "Error", description: err.message });
+            console.error("Task creation failed:", err);
+            toast({
+                variant: "destructive",
+                title: "Error al crear tarea",
+                description: "La tarea no pudo guardarse. Por favor, reintenta.",
+                action: (
+                    <button
+                        onClick={() => {
+                            // Re-open with data or allow retry logic
+                            toast({ title: "Reintentando..." });
+                            handleCreateTask(e);
+                        }}
+                        className="px-2 py-1 bg-white text-red-600 rounded text-xs font-bold"
+                    >
+                        Reintentar
+                    </button>
+                )
+            });
         } finally {
             setIsSubmitting(false);
         }

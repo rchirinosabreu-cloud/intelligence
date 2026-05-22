@@ -1,26 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Brain, User, Paperclip, Sparkles, AlertCircle, Info, MessageSquare, Image as ImageIcon, Loader2, Zap, Target, ShieldCheck, CheckCircle2, History, ChevronRight, Trash2, Edit3, X, QrCode, Smartphone, Wifi, RefreshCw, Settings2, Check, ExternalLink, Search } from 'lucide-react';
+import { Send, Brain, User, Paperclip, Sparkles, AlertCircle, Info, MessageSquare, Image as ImageIcon, Loader2, Zap, Target, ShieldCheck, CheckCircle2, History, ChevronRight, Trash2, Edit3, X, QrCode, Smartphone, Wifi, RefreshCw, Settings2, Check, ExternalLink, Search, Mail, Video, Calendar, Layout, Plus, StickyNote, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { toast } from 'react-hot-toast';
 
-const SkeletonCard = () => (
-    <div className="p-6 rounded-[2rem] border border-zinc-200/60 bg-white shadow-sm animate-pulse">
-        <div className="flex items-start justify-between mb-4">
-            <div className="w-10 h-10 bg-zinc-100 rounded-2xl" />
-            <div className="w-16 h-3 bg-zinc-100 rounded-full" />
-        </div>
-        <div className="w-3/4 h-5 bg-zinc-100 rounded-lg mb-2" />
-        <div className="w-full h-3 bg-zinc-100 rounded-lg mb-1" />
-        <div className="w-5/6 h-3 bg-zinc-100 rounded-lg mb-6" />
-        <div className="pt-4 border-t border-zinc-50 flex justify-between">
-            <div className="w-12 h-2 bg-zinc-100 rounded-full" />
-            <div className="w-20 h-2 bg-zinc-100 rounded-full" />
-        </div>
-    </div>
-);
+const MOCK_GMAIL = [
+    { id: 1, from: 'Alexander (TruPeak)', subject: 'Feedback sobre los artes de la campaña', time: '10:30 AM', unread: true },
+    { id: 2, from: 'Soporte Meta', subject: 'Tu cuenta publicitaria ha sido verificada', time: '9:15 AM', unread: false },
+    { id: 3, from: 'Google Calendar', subject: 'Recordatorio: Reunión de estrategia mensual', time: '8:00 AM', unread: false },
+];
+
+const MOCK_BASECAMP = [
+    { id: 1, task: 'Finalizar copy para Reels de Artyzza', project: 'Artyzza - Social Media', deadline: 'Hoy' },
+    { id: 2, task: 'Diseñar carrusel de beneficios', project: 'Sunpartners - Web CRO', deadline: 'Mañana' },
+    { id: 3, task: 'Revisión de métricas mensuales Q1', project: 'TruPeak - Analytics', deadline: '15 Mar' },
+    { id: 4, task: 'Programar posts de la semana 2', project: 'Artyzza - Social Media', deadline: 'Viernes' },
+];
 
 const BrainCore = () => {
     const [input, setInput] = useState('');
@@ -37,12 +34,8 @@ const BrainCore = () => {
     const [clients, setClients] = useState([]);
     const [editingItem, setEditingItem] = useState(null);
     const [showMetricDetail, setShowMetricDetail] = useState(null);
-    const [automationStatus, setAutomationStatus] = useState(null);
-    const [activeTab, setActiveTab] = useState('feed'); // 'feed' or 'proposals'
-    const [availableChats, setAvailableChats] = useState([]);
-    const [monitoredChats, setMonitoredChats] = useState([]);
-    const [isLinkingWa, setIsLinkingWa] = useState(false);
-    const [waQrCode, setWaQrCode] = useState(null);
+    const [activeTab, setActiveTab] = useState('feed');
+    const [quickNote, setQuickNote] = useState('');
 
     const fileInputRef = useRef(null);
     const baseUrl = getApiBaseUrl();
@@ -52,10 +45,9 @@ const BrainCore = () => {
         setIsLoadingFeed(true);
         try {
             const statusParam = activeTab === 'proposals' ? 'PENDING' : 'APPROVED';
-            const [feedRes, clientsRes, automationRes] = await Promise.all([
+            const [feedRes, clientsRes] = await Promise.all([
                 fetch(`${baseUrl}/api/brain-core/feed?status=${statusParam}`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(`${baseUrl}/api/db/clients`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(`${baseUrl}/api/automation/status`, { headers: { 'Authorization': `Bearer ${token}` } })
+                fetch(`${baseUrl}/api/db/clients`, { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
             if (feedRes.ok) {
@@ -64,7 +56,6 @@ const BrainCore = () => {
                 setStats(data.stats || { count: 0 });
             }
             if (clientsRes.ok) setClients(await clientsRes.json());
-            if (automationRes.ok) setAutomationStatus(await automationRes.json());
         } catch (error) {
             console.error("Fetch error:", error);
         } finally {
@@ -75,16 +66,6 @@ const BrainCore = () => {
     useEffect(() => {
         fetchInitialData();
     }, [activeTab]);
-
-    const fetchRadar = async (clientId) => {
-        if (!clientId) return;
-        try {
-            const res = await fetch(`${baseUrl}/api/brain-core/radar/${clientId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) setRadar(await res.json());
-        } catch (e) { console.error(e); }
-    };
 
     const handleSearch = async (e) => {
         if (e) e.preventDefault();
@@ -137,622 +118,347 @@ const BrainCore = () => {
         }
     };
 
-    const handleProposalAction = async (id, status) => {
-        try {
-            const response = await fetch(`${baseUrl}/api/brain-core/context/${id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ status })
-            });
-            if (response.ok) {
-                toast.success(status === 'APPROVED' ? "Aprendizaje anclado." : "Propuesta descartada.");
-                fetchInitialData();
-            }
-        } catch (e) {
-            toast.error("Error en la acción.");
-        }
-    };
-
-    const handleDeleteMemory = async (contextId) => {
-        if (!confirm('¿Eliminar este aprendizaje permanentemente?')) return;
-
-        try {
-            const response = await fetch(`${baseUrl}/api/brain-core/context/${contextId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-                toast.success("Memoria eliminada.");
-                fetchInitialData();
-            }
-        } catch (e) {
-            toast.error("Error al eliminar.");
-        }
-    };
-
-    const handleConnectWhatsApp = async () => {
-        setIsLinkingWa(true);
-        setWaQrCode(null);
-        toast.loading("Generando acceso seguro...", { id: 'wa-link' });
-
-        try {
-            const response = await fetch(`${baseUrl}/api/automation/connect-whatsapp`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.qr) {
-                    setWaQrCode(data.qr);
-                    toast.success("Código QR generado.", { id: 'wa-link' });
-                } else if (data.status === 'ready') {
-                    toast.success("WhatsApp ya está conectado.", { id: 'wa-link' });
-                    fetchInitialData();
-                }
-            } else {
-                toast.error("Error al conectar con el motor de automatización.", { id: 'wa-link' });
-            }
-        } catch (error) {
-            toast.error("Error de red al intentar vincular.", { id: 'wa-link' });
-        } finally {
-            setIsLinkingWa(false);
-        }
-    };
-
-    const fetchChats = async () => {
-        const res = await fetch(`${baseUrl}/api/automation/chats`, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (res.ok) setAvailableChats(await res.json());
-    };
-
-    const handleFileUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
+    const handleSaveQuickNote = async () => {
+        if (!quickNote.trim() || isProcessing) return;
         setIsProcessing(true);
-        setProcessingMessage('Gemini 2.5 Pro analizando sentimiento y extrayendo preferencias...');
-
-        const formData = new FormData();
-        formData.append('image', file);
-        if (selectedClientId) formData.append('clientId', selectedClientId);
-
+        setProcessingMessage('Anclando nota rápida...');
         try {
             const response = await fetch(`${baseUrl}/api/brain-core/context`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
-                body: formData
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ content: quickNote, clientId: selectedClientId })
             });
-
             if (response.ok) {
-                toast.success("Captura procesada. Revisa la pestaña de Propuestas.");
-                setActiveTab('proposals');
+                toast.success("Nota guardada en el cerebro.");
+                setQuickNote('');
                 fetchInitialData();
             }
         } catch (error) {
-            toast.error("Error al procesar la captura.");
+            toast.error("Error al guardar nota.");
         } finally {
             setIsProcessing(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-6rem)] relative bg-zinc-50/50 transition-colors overflow-hidden">
-            <PageHeader
-                title="Brain Core Command Center"
-                subtitle={
-                    <div className="flex items-center gap-2">
-                        <span className="text-zinc-500">Dashboard de Inteligencia Proactiva.</span>
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-tight">
-                                Cerebro sincronizado: Analizando {stats.count} puntos de datos
-                            </span>
-                        </div>
+        <div className="flex flex-col h-screen bg-zinc-50 transition-colors overflow-hidden">
+            {/* Optimized Thin Header */}
+            <div className="h-14 border-b border-zinc-200 bg-white flex items-center justify-between px-6 shrink-0 z-50">
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 bg-zinc-900 text-white px-3 py-1.5 rounded-xl shadow-sm">
+                        <Brain className="w-4 h-4 text-primary" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Brain Core v2.0</span>
                     </div>
-                }
-            >
-                <div className="flex items-center gap-6 mr-6">
-                    <div className="flex bg-zinc-100/80 p-1 rounded-xl border border-zinc-200/60">
-                        <button
-                            onClick={() => setActiveTab('feed')}
-                            className={cn(
-                                "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                                activeTab === 'feed' ? "bg-white text-primary shadow-sm" : "text-zinc-500 hover:text-zinc-700"
-                            )}
-                        >
-                            Memoria Activa
+                    <div className="h-4 w-px bg-zinc-200" />
+                    <div className="flex items-center gap-6">
+                        <button className="flex items-center gap-2 group relative">
+                            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span className="text-[9px] font-bold text-emerald-700 uppercase">Sincronizado: {stats.count}</span>
+                            </div>
                         </button>
-                        <button
-                            onClick={() => setActiveTab('proposals')}
-                            className={cn(
-                                "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                                activeTab === 'proposals' ? "bg-white text-primary shadow-sm" : "text-zinc-500 hover:text-zinc-700"
-                            )}
-                        >
-                            Propuestas
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        <button className="flex items-center gap-2 group" onClick={() => setShowMetricDetail('ram')}>
+                            <Zap className="w-3.5 h-3.5 text-primary" />
+                            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">RAM: 420MB</span>
+                        </button>
+                        <button className="flex items-center gap-2 group" onClick={() => setShowMetricDetail('cognition')}>
+                            <Target className="w-3.5 h-3.5 text-zinc-400" />
+                            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Capacidad: 98%</span>
                         </button>
                     </div>
-
-                    <div className="h-6 w-px bg-zinc-200" />
                 </div>
 
                 <div className="flex items-center gap-3">
                     <select
-                        onChange={(e) => {
-                            setSelectedClientId(e.target.value);
-                            fetchRadar(e.target.value);
-                        }}
-                        className="bg-white border border-zinc-200 rounded-xl px-3 py-1.5 text-xs focus:ring-2 ring-primary/20 outline-none"
+                        onChange={(e) => setSelectedClientId(e.target.value)}
+                        className="bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-1 text-[10px] font-bold uppercase tracking-widest focus:ring-2 ring-primary/20 outline-none"
                     >
-                        <option value="">Contexto Global</option>
+                        <option value="">Global Context</option>
                         {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
-                    <div className="flex items-center gap-2 bg-primary/5 border border-primary/10 px-3 py-1.5 rounded-xl">
-                        <Brain className="w-4 h-4 text-primary" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-primary">Command Center V1.1</span>
+                    <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center">
+                        <User className="w-4 h-4 text-zinc-500" />
                     </div>
                 </div>
-            </PageHeader>
+            </div>
 
-            <div className="flex flex-1 min-h-0 relative">
-                {/* Main Dashboard Area */}
-                <div className="flex-1 flex flex-col min-w-0 p-6 overflow-hidden relative">
+            <div className="flex flex-1 overflow-hidden relative">
+                {/* Main Workspace */}
+                <div className="flex-1 flex flex-col min-w-0 p-8 overflow-y-auto custom-scrollbar pb-32">
 
-                    {/* Semantic Search Area */}
-                    <div className="mb-8 relative group">
-                        <form onSubmit={handleSearch} className="relative bg-white border border-zinc-200 rounded-[2.5rem] shadow-sm flex items-center p-1.5 focus-within:ring-4 ring-primary/5 transition-all">
-                            <div className="p-3 text-zinc-400">
-                                <Search className="w-5 h-5" />
+                    {/* The Prompt: Central Piece */}
+                    <div className="max-w-4xl mx-auto w-full mb-12">
+                        <div className="text-center mb-8">
+                            <h1 className="text-3xl font-black text-zinc-900 tracking-tight mb-2">Pregúntale al cerebro...</h1>
+                            <p className="text-sm text-zinc-500 font-medium italic">Acceso instantáneo a la memoria estratégica de la agencia.</p>
+                        </div>
+
+                        <form onSubmit={handleSearch} className="relative bg-white border border-zinc-200 rounded-[2.5rem] shadow-xl shadow-zinc-200/50 flex items-center p-2 focus-within:ring-4 ring-primary/5 transition-all">
+                            <div className="p-4 text-zinc-400">
+                                <Search className="w-6 h-6" />
                             </div>
                             <input
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="¿Qué sabemos sobre los gustos de Alexander? Pregúntale al cerebro..."
-                                className="flex-1 bg-transparent border-none focus:ring-0 text-zinc-900 placeholder:text-zinc-400 px-2 py-3 text-sm font-medium"
+                                placeholder="¿Cuáles son las preferencias de diseño de TruPeak?"
+                                className="flex-1 bg-transparent border-none focus:ring-0 text-zinc-900 placeholder:text-zinc-400 px-2 py-4 text-lg font-medium"
                             />
                             <button
                                 type="submit"
                                 disabled={!searchQuery.trim() || isSearching}
-                                className="px-6 py-3 bg-zinc-900 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all disabled:opacity-30"
+                                className="px-8 py-4 bg-zinc-900 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all disabled:opacity-30"
                             >
-                                {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Consultar"}
+                                {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : "Consultar Cerebro"}
                             </button>
                         </form>
 
                         <AnimatePresence>
                             {searchResult && (
                                 <motion.div
-                                    initial={{ opacity: 0, y: -10 }}
+                                    initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -10 }}
-                                    className="absolute top-full left-0 right-0 mt-3 p-6 bg-white border border-zinc-200 rounded-[2rem] shadow-2xl z-50"
+                                    exit={{ opacity: 0, y: 10 }}
+                                    className="mt-6 p-8 bg-white border border-zinc-200 rounded-[2rem] shadow-2xl z-50"
                                 >
                                     <div className="flex items-start justify-between mb-4">
                                         <div className="flex items-center gap-2 text-primary">
-                                            <Brain className="w-4 h-4" />
+                                            <Sparkles className="w-4 h-4" />
                                             <span className="text-[10px] font-black uppercase tracking-widest">Respuesta Sintetizada</span>
                                         </div>
                                         <button onClick={() => setSearchResult(null)} className="p-1 hover:bg-zinc-100 rounded-lg text-zinc-400">
                                             <X className="w-4 h-4" />
                                         </button>
                                     </div>
-                                    <p className="text-sm text-zinc-700 leading-relaxed font-medium mb-6 italic">
+                                    <p className="text-base text-zinc-700 leading-relaxed font-medium italic">
                                         "{searchResult.content}"
                                     </p>
-                                    {searchResult.sources && (
-                                        <div className="pt-4 border-t border-zinc-50">
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-3">Fuentes detectadas:</span>
-                                            <div className="flex flex-wrap gap-2">
-                                                {searchResult.sources.map(s => (
-                                                    <div key={s.id} className="px-3 py-1 bg-zinc-50 border border-zinc-100 rounded-full text-[9px] text-zinc-500 font-bold truncate max-w-[200px]">
-                                                        {s.content}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
                                 </motion.div>
                             )}
                         </AnimatePresence>
                     </div>
 
-                    {/* OpenClaw Connection Card (When QR is requested or needed) */}
-                    {(automationStatus?.status === 'qr_required' || waQrCode) && (
-                        <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            className="mb-8 p-6 rounded-[2.5rem] bg-primary/5 border border-primary/10 shadow-xl shadow-primary/5 flex items-center gap-8"
-                        >
-                            <div className="p-4 bg-white rounded-3xl shadow-lg">
-                                <img src={waQrCode || automationStatus?.qrUrl} alt="WhatsApp QR" className="w-32 h-32" />
-                            </div>
-                            <div className="flex-1">
-                                <div className="flex items-center gap-2 text-primary mb-2">
-                                    <QrCode className="w-5 h-5" />
-                                    <h2 className="text-xs font-black uppercase tracking-widest">Enlazar OpenClaw (WhatsApp)</h2>
-                                </div>
-                                <p className="text-sm text-zinc-600 mb-4 max-w-lg">
-                                    Escanea este código para autorizar al agente a extraer minutas y acuerdos automáticamente desde tus chats VIP.
-                                </p>
+                    {/* Principal Content Grid */}
+                    <div className="max-w-6xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+                        {/* Today: Gmail & Meet */}
+                        <div className="bg-white rounded-[2rem] border border-zinc-200 p-8 shadow-sm">
+                            <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-3">
-                                    <button
-                                        onClick={() => {
-                                            setWaQrCode(null);
-                                            fetchInitialData();
-                                        }}
-                                        className="px-4 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/20"
-                                    >
-                                        Listo, ya escaneé
-                                    </button>
-                                    <button
-                                        onClick={() => setWaQrCode(null)}
-                                        className="px-4 py-2 bg-zinc-100 text-zinc-500 text-[10px] font-black uppercase tracking-widest rounded-xl"
-                                    >
-                                        Cerrar
+                                    <div className="p-2 bg-red-50 text-red-500 rounded-xl">
+                                        <Mail className="w-5 h-5" />
+                                    </div>
+                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-900">Hoy (Gmail/Meet)</h3>
+                                </div>
+                                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight">3 Pendientes</div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="p-4 bg-zinc-50 border border-zinc-100 rounded-2xl flex items-center justify-between group hover:bg-primary/5 hover:border-primary/20 transition-all cursor-pointer">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-white border border-zinc-200 flex items-center justify-center text-primary">
+                                            <Video className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-zinc-900">Weekly Performance Sync</p>
+                                            <p className="text-[10px] text-zinc-500 font-medium">Google Meet • 11:30 AM</p>
+                                        </div>
+                                    </div>
+                                    <button className="p-2 bg-white rounded-lg border border-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
                                     </button>
                                 </div>
-                            </div>
-                            <Smartphone className="w-24 h-24 text-primary/10 absolute right-8" />
-                        </motion.div>
-                    )}
 
-                    {/* Upper Space: Brain Health / Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            onClick={() => setShowMetricDetail('cognition')}
-                            className="p-5 rounded-3xl bg-white border border-zinc-200/60 shadow-sm hover:shadow-md transition-all cursor-pointer group"
-                        >
-                            <div className="flex items-center gap-3 mb-2 text-primary">
-                                <Zap className="w-4 h-4" />
-                                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Capacidad Cognitiva</span>
+                                {MOCK_GMAIL.map(mail => (
+                                    <div key={mail.id} className="p-4 bg-white border border-zinc-100 rounded-2xl flex items-center justify-between hover:shadow-md transition-all cursor-pointer">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                {mail.unread && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                                                <p className="text-xs font-bold text-zinc-900 truncate">{mail.from}</p>
+                                            </div>
+                                            <p className="text-[10px] text-zinc-500 truncate">{mail.subject}</p>
+                                        </div>
+                                        <div className="text-[9px] font-bold text-zinc-400 ml-4">{mail.time}</div>
+                                    </div>
+                                ))}
                             </div>
-                            <div className="text-2xl font-light text-zinc-900">98.2%</div>
-                            <div className="w-full bg-zinc-100 h-1.5 rounded-full mt-3 overflow-hidden">
-                                <motion.div initial={{ width: 0 }} animate={{ width: '98.2%' }} className="bg-primary h-full shadow-[0_0_8px_rgba(var(--primary),0.3)]" />
-                            </div>
-                            <AnimatePresence>
-                                {showMetricDetail === 'cognition' && (
-                                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="mt-4 pt-4 border-t border-zinc-50 text-[10px] text-zinc-500 space-y-1">
-                                        <p>• Latencia media: 420ms</p>
-                                        <p>• Fragmentación: 1.8%</p>
-                                        <p>• Relevancia semántica: Alta</p>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </motion.div>
+                        </div>
 
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.1 }}
-                            onClick={() => setShowMetricDetail('sync')}
-                            className="p-5 rounded-3xl bg-white border border-zinc-200/60 shadow-sm hover:shadow-md transition-all cursor-pointer group"
-                        >
-                            <div className="flex items-center gap-3 mb-2 text-emerald-500">
-                                <CheckCircle2 className="w-4 h-4" />
-                                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Sincronización</span>
-                                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        {/* Basecamp: Assigned Tasks */}
+                        <div className="bg-white rounded-[2rem] border border-zinc-200 p-8 shadow-sm">
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-emerald-50 text-emerald-500 rounded-xl">
+                                        <Layout className="w-5 h-5" />
+                                    </div>
+                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-900">Basecamp Tasks</h3>
+                                </div>
+                                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight">Mis Asignadas</div>
                             </div>
-                            <div className="text-2xl font-light text-zinc-900">Active</div>
-                            <p className="text-[10px] text-zinc-500 mt-2">Vector Memory & Kanban cross-ref active.</p>
-                            <AnimatePresence>
-                                {showMetricDetail === 'sync' && (
-                                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="mt-4 pt-4 border-t border-zinc-50 text-[10px] text-zinc-500 space-y-1">
-                                        <p>• Postgres + pgvector: OK</p>
-                                        <p>• Vertex AI Embedding: Connected</p>
-                                        <p>• Last Sync: {new Date().toLocaleTimeString()}</p>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </motion.div>
 
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.2 }}
-                            onClick={() => setShowMetricDetail('mode')}
-                            className="p-5 rounded-3xl bg-white border border-zinc-200/60 shadow-sm hover:shadow-md transition-all cursor-pointer group"
-                        >
-                            <div className="flex items-center gap-3 mb-2 text-primary">
-                                <Sparkles className="w-4 h-4" />
-                                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Proactive Mode</span>
+                            <div className="space-y-3">
+                                {MOCK_BASECAMP.map(task => (
+                                    <div key={task.id} className="p-4 bg-zinc-50/50 border border-zinc-100 rounded-2xl hover:border-emerald-200 transition-all group cursor-pointer">
+                                        <div className="flex items-start justify-between mb-2">
+                                            <p className="text-xs font-bold text-zinc-900 group-hover:text-emerald-600 transition-colors">{task.task}</p>
+                                            <span className={cn(
+                                                "text-[9px] font-black uppercase px-2 py-0.5 rounded-full border",
+                                                task.deadline === 'Hoy' ? "bg-red-50 border-red-100 text-red-500" : "bg-zinc-100 border-zinc-200 text-zinc-500"
+                                            )}>
+                                                {task.deadline}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-[9px] font-bold text-zinc-400 uppercase tracking-tighter">
+                                            <Calendar className="w-3 h-3" /> {task.project}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                            <div className="text-lg font-bold text-zinc-900">Senior Director</div>
-                            <p className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-tighter">Gemini 2.5 Pro reasoning enabled.</p>
-                            <AnimatePresence>
-                                {showMetricDetail === 'mode' && (
-                                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="mt-4 pt-4 border-t border-zinc-50 text-[10px] text-zinc-500 space-y-1">
-                                        <p>• Tono: Estratégico & Optimista</p>
-                                        <p>• Nivel de Razonamiento: Máximo</p>
-                                        <p>• Filtro de Privacidad: Activo</p>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </motion.div>
+                        </div>
                     </div>
 
-                    {/* Intelligence Feed */}
-                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar pb-32">
-                        <div className="flex items-center gap-2 mb-6">
-                            <Sparkles className="w-5 h-5 text-primary" />
-                            <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400">Intelligence Feed</h2>
-                            <div className="h-px flex-1 bg-zinc-200/60 ml-4" />
+                    {/* Intelligence Feed Section */}
+                    <div className="max-w-6xl mx-auto w-full">
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center gap-3">
+                                <History className="w-5 h-5 text-zinc-400" />
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Intelligence Feed</h3>
+                            </div>
+                            <div className="flex bg-zinc-100/80 p-1 rounded-xl border border-zinc-200/60">
+                                <button onClick={() => setActiveTab('feed')} className={cn("px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", activeTab === 'feed' ? "bg-white text-primary shadow-sm" : "text-zinc-500 hover:text-zinc-700")}>Memoria</button>
+                                <button onClick={() => setActiveTab('proposals')} className={cn("px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", activeTab === 'proposals' ? "bg-white text-primary shadow-sm" : "text-zinc-500 hover:text-zinc-700")}>Propuestas</button>
+                            </div>
                         </div>
 
                         {isLoadingFeed ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {[1,2,3,4,5,6].map(i => <SkeletonCard key={i} />)}
-                            </div>
-                        ) : feed.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-20 text-center opacity-60">
-                                <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center mb-4 border border-primary/10 shadow-sm">
-                                    <Brain className="w-8 h-8 text-primary animate-pulse" />
-                                </div>
-                                <p className="text-sm font-medium text-zinc-900">Cerebro recalibrando...</p>
-                                <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-widest font-bold">Analizando memoria y tareas activas</p>
+                                {[1,2,3].map(i => <div key={i} className="h-48 rounded-[2rem] bg-zinc-100 animate-pulse" />)}
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
-                                <AnimatePresence mode="popLayout">
-                                    {feed.map((card) => (
-                                        <motion.div
-                                            key={card.id}
-                                            layout
-                                            initial={{ opacity: 0, scale: 0.9, y: 50 }}
-                                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                                            exit={{ opacity: 0, scale: 0.9 }}
-                                            transition={{ type: "spring", damping: 20, stiffness: 100 }}
-                                            className={cn(
-                                                "p-6 rounded-[2.5rem] border transition-all duration-500 group hover:shadow-xl relative overflow-hidden bg-white",
-                                                card.type === 'ALERTA' ? 'border-red-100 shadow-sm shadow-red-500/5' :
-                                                card.type === 'INSIGHT' ? 'border-amber-100 shadow-sm shadow-amber-500/5' :
-                                                card.type === 'RECOMENDACIÓN' ? 'border-primary/10 shadow-sm shadow-primary/5' :
-                                                'border-zinc-200/60 shadow-sm'
-                                            )}
-                                        >
-                                            <div className="flex items-start justify-between mb-4">
-                                                <div className={cn(
-                                                    "p-3 rounded-2xl shadow-sm",
-                                                    card.type === 'ALERTA' ? 'bg-red-50 text-red-500' :
-                                                    card.type === 'INSIGHT' ? 'bg-amber-50 text-amber-500' :
-                                                    card.type === 'RECOMENDACIÓN' ? 'bg-primary/5 text-primary' :
-                                                    'bg-zinc-50 text-zinc-500'
-                                                )}>
-                                                    {card.type === 'ALERTA' ? <AlertCircle className="w-5 h-5" /> :
-                                                     card.type === 'INSIGHT' ? <Zap className="w-5 h-5" /> :
-                                                     card.type === 'RECOMENDACIÓN' ? <Target className="w-5 h-5" /> : <History className="w-5 h-5" />}
-                                                </div>
-                                                <span className={cn(
-                                                    "text-[9px] font-black uppercase tracking-widest",
-                                                    card.type === 'ALERTA' ? 'text-red-400' :
-                                                    card.type === 'INSIGHT' ? 'text-amber-400' :
-                                                    card.type === 'RECOMENDACIÓN' ? 'text-primary/60' :
-                                                    'text-zinc-400'
-                                                )}>
-                                                    {card.type}
-                                                </span>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {feed.map((card) => (
+                                    <motion.div
+                                        key={card.id}
+                                        layout
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="p-6 rounded-[2rem] border border-zinc-200/60 bg-white shadow-sm hover:shadow-md transition-all group"
+                                    >
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="p-2 bg-primary/5 text-primary rounded-xl">
+                                                {card.type === 'ALERTA' ? <AlertCircle className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
                                             </div>
-                                            <h3 className="text-lg font-bold text-zinc-900 mb-2 leading-tight">{card.title}</h3>
-                                            <p className="text-sm text-zinc-600 leading-relaxed mb-6 line-clamp-3 group-hover:line-clamp-none transition-all duration-500">{card.content}</p>
-
-                                            <div className="flex items-center justify-between pt-4 border-t border-zinc-50">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-[10px] font-medium text-zinc-400">{new Date(card.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                                                    {card.contextId && (
-                                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setEditingItem(card);
-                                                                    setInput(card.content);
-                                                                }}
-                                                                className="p-1.5 hover:bg-zinc-100 rounded-lg text-zinc-400 hover:text-primary transition-colors"
-                                                            >
-                                                                <Edit3 className="w-3.5 h-3.5" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDeleteMemory(card.contextId)}
-                                                                className="p-1.5 hover:bg-zinc-100 rounded-lg text-zinc-400 hover:text-red-500 transition-colors"
-                                                            >
-                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                {activeTab === 'proposals' ? (
-                                                    <div className="flex items-center gap-2">
-                                                        <button
-                                                            onClick={() => handleProposalAction(card.id, 'APPROVED')}
-                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-primary hover:text-white transition-all"
-                                                        >
-                                                            <Check className="w-3 h-3" /> Confirmar
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleProposalAction(card.id, 'DISCARDED')}
-                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 text-zinc-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-red-50 hover:text-red-500 transition-all"
-                                                        >
-                                                            <X className="w-3 h-3" /> Descartar
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <button className="flex items-center gap-1 text-[10px] font-black uppercase tracking-tighter text-primary hover:translate-x-1 transition-all">
-                                                        Explorar <ChevronRight className="w-3 h-3" />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </motion.div>
-                                    ))}
-                                </AnimatePresence>
+                                            <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">{card.type}</span>
+                                        </div>
+                                        <h4 className="text-sm font-bold text-zinc-900 mb-2 leading-tight">{card.title}</h4>
+                                        <p className="text-xs text-zinc-500 leading-relaxed line-clamp-3 mb-4">{card.content}</p>
+                                        <div className="pt-4 border-t border-zinc-50 flex items-center justify-between">
+                                            <span className="text-[9px] font-bold text-zinc-400">{new Date(card.timestamp).toLocaleDateString()}</span>
+                                            <ChevronRight className="w-3.5 h-3.5 text-zinc-300 group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                                        </div>
+                                    </motion.div>
+                                ))}
                             </div>
                         )}
                     </div>
-
-                    {/* Floating Chat Bar (Bottom) */}
-                    <div className="absolute bottom-6 left-6 right-6 z-40 pointer-events-none">
-                        <div className="max-w-4xl mx-auto w-full pointer-events-auto">
-                            <div className="relative group">
-                                <form onSubmit={handleFeedBrain} className="relative bg-white/90 backdrop-blur-xl border border-zinc-200/80 rounded-[2rem] shadow-2xl shadow-zinc-200/50 flex items-center p-2">
-                                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*" />
-                                    <button type="button" onClick={() => fileInputRef.current?.click()} className="p-4 hover:bg-zinc-50 rounded-2xl text-primary transition-all flex-shrink-0">
-                                        <ImageIcon className="w-6 h-6" />
-                                    </button>
-                                    <input
-                                        value={input}
-                                        onChange={(e) => setInput(e.target.value)}
-                                        placeholder={editingItem ? "Corrigiendo memoria..." : "Alimenta al cerebro: notas, capturas o instrucciones..."}
-                                        className="flex-1 bg-transparent border-none focus:ring-0 text-zinc-900 placeholder:text-zinc-400 px-4 py-4 text-base font-light"
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                handleFeedBrain();
-                                            }
-                                        }}
-                                    />
-                                    {editingItem && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setEditingItem(null);
-                                                setInput('');
-                                            }}
-                                            className="p-4 hover:bg-zinc-50 rounded-2xl text-zinc-400 transition-all"
-                                        >
-                                            <X className="w-6 h-6" />
-                                        </button>
-                                    )}
-                                    <button type="submit" disabled={!input.trim() || isProcessing} className="p-4 bg-primary text-white rounded-2xl shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-30 flex items-center justify-center min-w-[60px]">
-                                        {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                                    </button>
-                                </form>
-                            </div>
-                            <AnimatePresence>
-                                {isProcessing && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: 10 }}
-                                        className="mt-4 flex items-center justify-center gap-3 text-primary font-bold text-[10px] tracking-widest uppercase bg-white/80 backdrop-blur-xl py-2 rounded-full border border-zinc-200 mx-auto w-fit px-6 shadow-sm"
-                                    >
-                                        <Sparkles className="w-3 h-3 animate-pulse" /> {processingMessage}
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-                    </div>
                 </div>
 
-                {/* Right Panel: Knowledge Radar & Automation */}
-                <div className="w-96 bg-white border-l border-zinc-200 flex flex-col p-8 overflow-y-auto custom-scrollbar">
-
-                    {/* Automation Control Panel */}
-                    <div className="mb-12 p-6 rounded-[2rem] bg-zinc-50 border border-zinc-100 shadow-sm">
-                        <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center gap-2">
-                                <Settings2 className="w-4 h-4 text-zinc-400" />
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-900">OpenClaw Config</h3>
-                            </div>
-                            <div className={cn(
-                                "flex items-center gap-1.5 px-2 py-0.5 rounded-full border",
-                                automationStatus?.status === 'ready' ? "bg-emerald-50 border-emerald-100 text-emerald-600" : "bg-amber-50 border-amber-100 text-amber-600"
-                            )}>
-                                {automationStatus?.status === 'ready' ? <Wifi className="w-3 h-3" /> : <RefreshCw className="w-3 h-3 animate-spin" />}
-                                <span className="text-[9px] font-bold uppercase tracking-tight">{automationStatus?.status || 'Offline'}</span>
-                            </div>
+                {/* Sidebar Dinámico (Derecha) */}
+                <div className="w-96 border-l border-zinc-200 bg-white flex flex-col shrink-0 overflow-y-auto custom-scrollbar">
+                    {/* Quick Notes Area */}
+                    <div className="p-8 border-b border-zinc-100">
+                        <div className="flex items-center gap-3 mb-6">
+                            <StickyNote className="w-5 h-5 text-primary" />
+                            <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-900">Nota Rápida al Cerebro</h3>
                         </div>
-
-                        <div className="space-y-4">
-                            <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2 block">Monitoreo VIP</label>
+                        <div className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 focus-within:ring-2 ring-primary/20 transition-all">
+                            <textarea
+                                value={quickNote}
+                                onChange={(e) => setQuickNote(e.target.value)}
+                                placeholder="Escribe algo importante para no olvidarlo..."
+                                className="w-full bg-transparent border-none focus:ring-0 text-sm text-zinc-700 resize-none h-32 placeholder:text-zinc-400 placeholder:italic"
+                            />
+                            <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-200/50">
+                                <span className="text-[9px] font-bold text-zinc-400 uppercase">{quickNote.length} caracteres</span>
                                 <button
-                                    onClick={handleConnectWhatsApp}
-                                    disabled={isLinkingWa}
-                                    className="w-full py-3 bg-white border border-zinc-200 rounded-2xl text-[10px] font-bold text-zinc-600 hover:border-primary transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
+                                    onClick={handleSaveQuickNote}
+                                    disabled={!quickNote.trim() || isProcessing}
+                                    className="p-2 bg-primary text-white rounded-xl shadow-lg shadow-primary/20 hover:scale-105 transition-all disabled:opacity-30"
                                 >
-                                    {isLinkingWa ? (
-                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                                    ) : (
-                                        <Smartphone className="w-3.5 h-3.5 text-zinc-400 group-hover:text-primary" />
-                                    )}
-                                    {isLinkingWa ? 'Generando acceso seguro...' : 'Vincular nuevo chat'}
+                                    <Plus className="w-4 h-4" />
                                 </button>
-                                {availableChats.length > 0 && (
-                                    <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="mt-2 p-2 bg-white rounded-2xl border border-zinc-200 max-h-40 overflow-y-auto">
-                                        {availableChats.map(chat => (
-                                            <button
-                                                key={chat.id}
-                                                onClick={() => {
-                                                    setMonitoredChats([...monitoredChats, chat.name]);
-                                                    setAvailableChats([]);
-                                                    toast.success(`${chat.name} anclado.`);
-                                                }}
-                                                className="w-full text-left px-3 py-2 hover:bg-zinc-50 rounded-xl text-[10px] font-medium text-zinc-700 flex items-center justify-between group"
-                                            >
-                                                {chat.name}
-                                                <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100" />
-                                            </button>
-                                        ))}
-                                    </motion.div>
-                                )}
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3 mb-10">
-                        <div className="p-3 bg-primary text-white rounded-2xl shadow-lg shadow-primary/20">
-                            <ShieldCheck className="w-6 h-6" />
+                    {/* Active Agency Tasks Area */}
+                    <div className="p-8 flex-1">
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center gap-3">
+                                <Clock className="w-5 h-5 text-zinc-400" />
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-900">Tareas Activas</h3>
+                            </div>
+                            <span className="px-2 py-0.5 bg-zinc-100 text-zinc-500 rounded text-[9px] font-bold uppercase">Agencia</span>
                         </div>
-                        <div>
-                            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-900">Knowledge Radar</h2>
-                            <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-tighter">Perfil Cognitivo del Cliente</p>
+
+                        <div className="space-y-6">
+                            {MOCK_BASECAMP.slice(0, 3).map(task => (
+                                <div key={task.id} className="relative pl-6 border-l-2 border-zinc-100 group">
+                                    <div className="absolute left-[-5px] top-0 w-2 h-2 rounded-full bg-zinc-200 group-hover:bg-primary transition-colors" />
+                                    <p className="text-xs font-bold text-zinc-900 mb-1 group-hover:text-primary transition-colors cursor-pointer">{task.task}</p>
+                                    <p className="text-[10px] text-zinc-400 font-medium">{task.project}</p>
+                                </div>
+                            ))}
                         </div>
+
+                        <button className="w-full mt-12 py-4 bg-zinc-50 text-zinc-500 border border-zinc-200 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-100 transition-all flex items-center justify-center gap-2">
+                            Ver todo el Kanban <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
                     </div>
 
-                    {!radar ? (
-                        <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40">
-                            <Target className="w-16 h-16 mb-6 text-zinc-200" />
-                            <p className="text-sm font-bold text-zinc-400">Selecciona un cliente para proyectar su conocimiento.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-10">
-                            <section>
-                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-5 flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]" /> Preferencias
-                                </h4>
-                                <ul className="space-y-3">
-                                    {radar.preferences?.map((p, i) => (
-                                        <li key={i} className="text-xs bg-zinc-50 p-4 rounded-3xl border border-zinc-100 text-zinc-700 shadow-sm">
-                                            {p}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </section>
-
-                            <section>
-                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-5 flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.3)]" /> Red Flags
-                                </h4>
-                                <ul className="space-y-3">
-                                    {radar.dislikes?.map((d, i) => (
-                                        <li key={i} className="text-xs bg-red-50/50 p-4 rounded-3xl border border-red-100 text-red-600 font-medium shadow-sm">
-                                            {d}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </section>
-
-                            <button
-                                onClick={() => toast.success("Aprendizaje confirmado y anclado.")}
-                                className="w-full py-5 bg-primary text-white rounded-[2rem] text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 group"
-                            >
-                                <ShieldCheck className="w-4 h-4 group-hover:rotate-12 transition-transform" />
-                                Confirmar Aprendizaje
-                            </button>
-                        </div>
-                    )}
+                    {/* Knowledge Confirmation Button (Footer of Sidebar) */}
+                    <div className="p-8 bg-zinc-50/50 border-t border-zinc-100">
+                        <button
+                            onClick={() => toast.success("Aprendizaje confirmado y anclado.")}
+                            className="w-full py-5 bg-white border border-zinc-200 text-zinc-900 rounded-[2rem] text-[10px] font-black uppercase tracking-[0.2em] shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 group"
+                        >
+                            <ShieldCheck className="w-4 h-4 text-primary group-hover:rotate-12 transition-transform" />
+                            Sincronizar Todo
+                        </button>
+                    </div>
                 </div>
+            </div>
+
+            {/* Input de comando flotante (Alimenta al cerebro) */}
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 w-full max-w-2xl px-6">
+                <div className="relative group">
+                    <form onSubmit={handleFeedBrain} className="relative bg-white/90 backdrop-blur-xl border border-zinc-200/80 rounded-3xl shadow-2xl shadow-zinc-200/50 flex items-center p-2">
+                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" />
+                        <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 hover:bg-zinc-50 rounded-2xl text-primary transition-all flex-shrink-0">
+                            <ImageIcon className="w-5 h-5" />
+                        </button>
+                        <input
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder={editingItem ? "Corrigiendo memoria..." : "Alimenta al cerebro con notas o capturas..."}
+                            className="flex-1 bg-transparent border-none focus:ring-0 text-zinc-900 placeholder:text-zinc-400 px-3 py-3 text-sm font-medium"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleFeedBrain();
+                                }
+                            }}
+                        />
+                        <button type="submit" disabled={!input.trim() || isProcessing} className="p-3 bg-primary text-white rounded-2xl shadow-lg shadow-primary/20 hover:scale-105 transition-all disabled:opacity-30">
+                            {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                        </button>
+                    </form>
+                </div>
+                <AnimatePresence>
+                    {isProcessing && (
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="mt-3 flex items-center justify-center gap-2 text-primary font-bold text-[9px] tracking-widest uppercase bg-white/80 backdrop-blur-xl py-1.5 rounded-full border border-zinc-200 mx-auto w-fit px-4 shadow-sm">
+                            <Sparkles className="w-3 h-3 animate-pulse" /> {processingMessage}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
         </div>
     );
