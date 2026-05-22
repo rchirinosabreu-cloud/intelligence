@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, Brain, User, Paperclip, Sparkles, AlertCircle, Info, MessageSquare, Image as ImageIcon, Loader2, Zap, Target, ShieldCheck, CheckCircle2, History, ChevronRight, Trash2, Edit3, X, QrCode, Smartphone, Wifi, RefreshCw, Settings2, Check, ExternalLink, Search, Mail, Video, Calendar, Layout, Plus, StickyNote, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
+import SourceManagementModal from './SourceManagementModal';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { toast } from 'react-hot-toast';
@@ -34,6 +35,7 @@ const BrainCore = () => {
     const [clients, setClients] = useState([]);
     const [editingItem, setEditingItem] = useState(null);
     const [showMetricDetail, setShowMetricDetail] = useState(null);
+    const [isManageSourcesOpen, setIsManageSourcesOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('feed');
     const [quickNote, setQuickNote] = useState('');
     const [workspaceInsights, setWorkspaceInsights] = useState(null);
@@ -157,6 +159,12 @@ const BrainCore = () => {
 
     return (
         <div className="flex flex-col h-screen bg-zinc-50 transition-colors overflow-hidden">
+            <SourceManagementModal
+                isOpen={isManageSourcesOpen}
+                onClose={() => setIsManageSourcesOpen(false)}
+                onRefresh={fetchInitialData}
+            />
+
             {/* Optimized Thin Header */}
             <div className="h-14 border-b border-zinc-200 bg-white flex items-center justify-between px-6 shrink-0 z-50">
                 <div className="flex items-center gap-4">
@@ -179,6 +187,14 @@ const BrainCore = () => {
                         <button className="flex items-center gap-2 group" onClick={() => setShowMetricDetail('cognition')}>
                             <Target className="w-3.5 h-3.5 text-zinc-400" />
                             <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Capacidad: 98%</span>
+                        </button>
+                        <div className="h-4 w-px bg-zinc-100 mx-2" />
+                        <button
+                            onClick={() => setIsManageSourcesOpen(true)}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-all group"
+                        >
+                            <Settings2 className="w-3.5 h-3.5 text-zinc-400 group-hover:text-primary transition-colors" />
+                            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Gestionar Fuentes API</span>
                         </button>
                     </div>
                 </div>
