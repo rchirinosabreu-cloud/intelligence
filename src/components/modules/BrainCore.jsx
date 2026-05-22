@@ -41,6 +41,8 @@ const BrainCore = () => {
     const [workspaceInsights, setWorkspaceInsights] = useState(null);
     const [isLoadingInsights, setIsLoadingInsights] = useState(false);
     const [integrations, setIntegrations] = useState([]);
+    const [clientSummary, setClientSummary] = useState(null);
+    const [isLoadingSummary, setIsLoadingSummary] = useState(false);
 
     const fileInputRef = useRef(null);
     const baseUrl = getApiBaseUrl();
@@ -55,6 +57,21 @@ const BrainCore = () => {
             if (res.ok) setWorkspaceInsights(await res.json());
         } catch (e) { console.error(e); }
         finally { setIsLoadingInsights(false); }
+    };
+
+    const fetchClientSummary = async (clientId) => {
+        if (!clientId) {
+            setClientSummary(null);
+            return;
+        }
+        setIsLoadingSummary(true);
+        try {
+            const res = await fetch(`${baseUrl}/api/brain-core/client-summary/${clientId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) setClientSummary(await res.json());
+        } catch (e) { console.error(e); }
+        finally { setIsLoadingSummary(false); }
     };
 
     const fetchInitialData = async () => {
@@ -204,7 +221,12 @@ const BrainCore = () => {
 
                 <div className="flex items-center gap-3">
                     <select
-                        onChange={(e) => setSelectedClientId(e.target.value)}
+                        value={selectedClientId || ''}
+                        onChange={(e) => {
+                            const val = e.target.value || null;
+                            setSelectedClientId(val);
+                            fetchClientSummary(val);
+                        }}
                         className="bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-1 text-[10px] font-bold uppercase tracking-widest focus:ring-2 ring-primary/20 outline-none"
                     >
                         <option value="">Global Context</option>
@@ -261,18 +283,38 @@ const BrainCore = () => {
                                 animate={{ opacity: 1, y: 0 }}
                                 className="mt-4 flex flex-wrap justify-center gap-2"
                             >
-                                {integrations.map(source => (
-                                    <div
-                                        key={source.id}
-                                        className="flex items-center gap-2 px-3 py-1 bg-white border border-zinc-100 rounded-full shadow-sm hover:border-emerald-200 transition-all group"
-                                    >
-                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                        <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter">
-                                            {source.type === 'SHEETS' ? 'Sheets' : source.type === 'GMAIL' ? 'Gmail' : 'Slides'}:
-                                            <span className="text-zinc-900 ml-1">{source.alias}</span>
-                                        </span>
-                                    </div>
-                                ))}
+                                {integrations.map(source => {
+                                    const getDocUrl = () => {
+                                        if (source.type === 'SHEETS') return `https://docs.google.com/spreadsheets/d/${source.externalId}`;
+                                        if (source.type === 'SLIDES') return `https://docs.google.com/presentation/d/${source.externalId}`;
+                                        return null;
+                                    };
+                                    const url = getDocUrl();
+
+                                    return (
+                                        <div
+                                            key={source.id}
+                                            className="flex items-center gap-2 px-3 py-1 bg-white border border-zinc-100 rounded-full shadow-sm hover:border-emerald-200 transition-all group"
+                                        >
+                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                            <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter">
+                                                {source.type === 'SHEETS' ? 'Sheets' : source.type === 'GMAIL' ? 'Gmail' : 'Slides'}:
+                                                <span className="text-zinc-900 ml-1">{source.alias}</span>
+                                            </span>
+                                            {url && (
+                                                <a
+                                                    href={url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="ml-1 p-0.5 hover:bg-zinc-100 rounded text-zinc-400 hover:text-primary transition-colors"
+                                                    title="Abrir documento original"
+                                                >
+                                                    <ExternalLink className="w-2.5 h-2.5" />
+                                                </a>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </motion.div>
                         )}
 
@@ -397,48 +439,126 @@ const BrainCore = () => {
                         </div>
                     </div>
 
-                    {/* Intelligence Feed Section */}
+                    {/* Intelligence Feed Section OR Client Executive Widget */}
                     <div className="max-w-6xl mx-auto w-full">
-                        <div className="flex items-center justify-between mb-8">
-                            <div className="flex items-center gap-3">
-                                <History className="w-5 h-5 text-zinc-400" />
-                                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Intelligence Feed</h3>
-                            </div>
-                            <div className="flex bg-zinc-100/80 p-1 rounded-xl border border-zinc-200/60">
-                                <button onClick={() => setActiveTab('feed')} className={cn("px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", activeTab === 'feed' ? "bg-white text-primary shadow-sm" : "text-zinc-500 hover:text-zinc-700")}>Memoria</button>
-                                <button onClick={() => setActiveTab('proposals')} className={cn("px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", activeTab === 'proposals' ? "bg-white text-primary shadow-sm" : "text-zinc-500 hover:text-zinc-700")}>Propuestas</button>
-                            </div>
-                        </div>
+                        {selectedClientId ? (
+                            <div className="bg-white rounded-[2.5rem] border-2 border-primary/10 p-10 shadow-xl shadow-primary/5">
+                                <div className="flex items-center justify-between mb-10">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 bg-primary text-white rounded-2xl">
+                                            <ShieldCheck className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-black text-zinc-900 tracking-tight">Centro de Control: {clients.find(c => c.id === selectedClientId)?.name}</h3>
+                                            <p className="text-xs text-zinc-500 font-medium">Resumen ejecutivo y alertas en tiempo real.</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-full">
+                                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                        <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Modo Cliente Activo</span>
+                                    </div>
+                                </div>
 
-                        {isLoadingFeed ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {[1,2,3].map(i => <div key={i} className="h-48 rounded-[2rem] bg-zinc-100 animate-pulse" />)}
+                                {isLoadingSummary ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {[1,2,3].map(i => <div key={i} className="h-64 bg-zinc-50 rounded-3xl animate-pulse" />)}
+                                    </div>
+                                ) : clientSummary ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                        {/* Status / Alertas */}
+                                        <div className="p-6 bg-zinc-50 rounded-3xl border border-zinc-100">
+                                            <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-6 flex items-center gap-2">
+                                                <AlertCircle className="w-4 h-4 text-red-500" /> Alertas de Gmail
+                                            </h4>
+                                            <div className="space-y-4">
+                                                {clientSummary.alerts?.length > 0 ? clientSummary.alerts.map((a, i) => (
+                                                    <div key={i} className="p-4 bg-white rounded-2xl border border-red-50 shadow-sm">
+                                                        <p className="text-xs font-bold text-zinc-900 mb-1">{a.subject}</p>
+                                                        <p className="text-[10px] text-zinc-500 leading-relaxed">{a.snippet}</p>
+                                                    </div>
+                                                )) : <p className="text-xs text-zinc-400 font-medium italic">Sin alertas críticas hoy.</p>}
+                                            </div>
+                                        </div>
+
+                                        {/* Tareas Sheets */}
+                                        <div className="p-6 bg-zinc-50 rounded-3xl border border-zinc-100">
+                                            <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-6 flex items-center gap-2">
+                                                <Database className="w-4 h-4 text-emerald-500" /> Tareas (Live Sheets)
+                                            </h4>
+                                            <div className="space-y-4">
+                                                {clientSummary.tasks?.length > 0 ? clientSummary.tasks.map((t, i) => (
+                                                    <div key={i} className="flex items-start gap-3 p-3 bg-white rounded-2xl border border-zinc-100 shadow-sm">
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                                                        <p className="text-xs font-medium text-zinc-700">{t}</p>
+                                                    </div>
+                                                )) : <p className="text-xs text-zinc-400 font-medium italic">Sin tareas pendientes en Sheets.</p>}
+                                            </div>
+                                        </div>
+
+                                        {/* Quick Actions / Insights */}
+                                        <div className="p-6 bg-primary/5 rounded-3xl border border-primary/10">
+                                            <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/60 mb-6 flex items-center gap-2">
+                                                <Sparkles className="w-4 h-4" /> Insights de IA
+                                            </h4>
+                                            <p className="text-xs text-zinc-700 leading-relaxed font-medium mb-6">
+                                                {clientSummary.aiInsight || "Analizando comportamiento del cliente..."}
+                                            </p>
+                                            <button className="w-full py-3 bg-white border border-primary/20 text-primary rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary hover:text-white transition-all">
+                                                Generar Reporte Express
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="py-20 text-center border-2 border-dashed border-zinc-100 rounded-[2rem]">
+                                        <Database className="w-12 h-12 text-zinc-200 mx-auto mb-4" />
+                                        <p className="text-sm font-bold text-zinc-400">Vincular una fuente (Sheets/Gmail) para activar el Centro de Control.</p>
+                                    </div>
+                                )}
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {feed.map((card) => (
-                                    <motion.div
-                                        key={card.id}
-                                        layout
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className="p-6 rounded-[2rem] border border-zinc-200/60 bg-white shadow-sm hover:shadow-md transition-all group"
-                                    >
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div className="p-2 bg-primary/5 text-primary rounded-xl">
-                                                {card.type === 'ALERTA' ? <AlertCircle className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
-                                            </div>
-                                            <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">{card.type}</span>
-                                        </div>
-                                        <h4 className="text-sm font-bold text-zinc-900 mb-2 leading-tight">{card.title}</h4>
-                                        <p className="text-xs text-zinc-500 leading-relaxed line-clamp-3 mb-4">{card.content}</p>
-                                        <div className="pt-4 border-t border-zinc-50 flex items-center justify-between">
-                                            <span className="text-[9px] font-bold text-zinc-400">{new Date(card.timestamp).toLocaleDateString()}</span>
-                                            <ChevronRight className="w-3.5 h-3.5 text-zinc-300 group-hover:text-primary group-hover:translate-x-1 transition-all" />
-                                        </div>
-                                    </motion.div>
-                                ))}
-                            </div>
+                            <>
+                                <div className="flex items-center justify-between mb-8">
+                                    <div className="flex items-center gap-3">
+                                        <History className="w-5 h-5 text-zinc-400" />
+                                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Intelligence Feed</h3>
+                                    </div>
+                                    <div className="flex bg-zinc-100/80 p-1 rounded-xl border border-zinc-200/60">
+                                        <button onClick={() => setActiveTab('feed')} className={cn("px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", activeTab === 'feed' ? "bg-white text-primary shadow-sm" : "text-zinc-500 hover:text-zinc-700")}>Memoria</button>
+                                        <button onClick={() => setActiveTab('proposals')} className={cn("px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", activeTab === 'proposals' ? "bg-white text-primary shadow-sm" : "text-zinc-500 hover:text-zinc-700")}>Propuestas</button>
+                                    </div>
+                                </div>
+
+                                {isLoadingFeed ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {[1,2,3].map(i => <div key={i} className="h-48 rounded-[2rem] bg-zinc-100 animate-pulse" />)}
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {feed.map((card) => (
+                                            <motion.div
+                                                key={card.id}
+                                                layout
+                                                initial={{ opacity: 0, y: 20 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                className="p-6 rounded-[2rem] border border-zinc-200/60 bg-white shadow-sm hover:shadow-md transition-all group"
+                                            >
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <div className="p-2 bg-primary/5 text-primary rounded-xl">
+                                                        {card.type === 'ALERTA' ? <AlertCircle className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+                                                    </div>
+                                                    <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">{card.type}</span>
+                                                </div>
+                                                <h4 className="text-sm font-bold text-zinc-900 mb-2 leading-tight">{card.title}</h4>
+                                                <p className="text-xs text-zinc-500 leading-relaxed line-clamp-3 mb-4">{card.content}</p>
+                                                <div className="pt-4 border-t border-zinc-50 flex items-center justify-between">
+                                                    <span className="text-[9px] font-bold text-zinc-400">{new Date(card.timestamp).toLocaleDateString()}</span>
+                                                    <ChevronRight className="w-3.5 h-3.5 text-zinc-300 group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
