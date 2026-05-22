@@ -13,12 +13,14 @@ import {
 
 const SourceManagementModal = ({ isOpen, onClose, onRefresh }) => {
     const [integrations, setIntegrations] = useState([]);
+    const [clients, setClients] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [newSource, setNewSource] = useState({
         alias: '',
         type: 'SHEETS',
-        externalId: ''
+        externalId: '',
+        clientId: ''
     });
 
     const baseUrl = getApiBaseUrl();
@@ -27,10 +29,13 @@ const SourceManagementModal = ({ isOpen, onClose, onRefresh }) => {
     const fetchIntegrations = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`${baseUrl}/api/integrations/integrations`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) setIntegrations(await res.json());
+            const [intRes, clientsRes] = await Promise.all([
+                fetch(`${baseUrl}/api/integrations/integrations`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${baseUrl}/api/db/clients`, { headers: { 'Authorization': `Bearer ${token}` } })
+            ]);
+
+            if (intRes.ok) setIntegrations(await intRes.json());
+            if (clientsRes.ok) setClients(await clientsRes.json());
         } catch (e) {
             console.error(e);
         } finally {
@@ -59,7 +64,7 @@ const SourceManagementModal = ({ isOpen, onClose, onRefresh }) => {
 
             if (res.ok) {
                 toast.success("Fuente vinculada correctamente.");
-                setNewSource({ alias: '', type: 'SHEETS', externalId: '' });
+                setNewSource({ alias: '', type: 'SHEETS', externalId: '', clientId: '' });
                 fetchIntegrations();
                 if (onRefresh) onRefresh();
             }
@@ -190,17 +195,30 @@ const SourceManagementModal = ({ isOpen, onClose, onRefresh }) => {
                                     />
                                 </div>
 
-                                <div>
-                                    <label className="block text-[9px] font-black uppercase text-zinc-400 mb-2">Tipo de API</label>
-                                    <select
-                                        value={newSource.type}
-                                        onChange={e => setNewSource({...newSource, type: e.target.value})}
-                                        className="w-full bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 ring-primary/20 outline-none"
-                                    >
-                                        <option value="SHEETS">Google Sheets</option>
-                                        <option value="GMAIL">Gmail Inbox</option>
-                                        <option value="SLIDES">Google Slides</option>
-                                    </select>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-[9px] font-black uppercase text-zinc-400 mb-2">Tipo de API</label>
+                                        <select
+                                            value={newSource.type}
+                                            onChange={e => setNewSource({...newSource, type: e.target.value})}
+                                            className="w-full bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 ring-primary/20 outline-none"
+                                        >
+                                            <option value="SHEETS">Google Sheets</option>
+                                            <option value="GMAIL">Gmail Inbox</option>
+                                            <option value="SLIDES">Google Slides</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[9px] font-black uppercase text-zinc-400 mb-2">Cliente Asociado</label>
+                                        <select
+                                            value={newSource.clientId}
+                                            onChange={e => setNewSource({...newSource, clientId: e.target.value})}
+                                            className="w-full bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 ring-primary/20 outline-none"
+                                        >
+                                            <option value="">Uso Global</option>
+                                            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
+                                    </div>
                                 </div>
 
                                 {newSource.type !== 'GMAIL' && (

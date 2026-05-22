@@ -13,10 +13,16 @@ router.get('/integrations', async (req, res) => {
 
 // Create a new source link (e.g., adding a specific Sheet ID)
 router.post('/sources', async (req, res) => {
-    const { type, externalId, alias } = req.body;
+    const { type, externalId, alias, clientId } = req.body;
     try {
         const source = await prisma.agencyIntegration.create({
-            data: { type, externalId, alias, isActive: true }
+            data: {
+                type,
+                externalId,
+                alias,
+                clientId: clientId || null,
+                isActive: true
+            }
         });
         res.status(201).json(source);
     } catch (error) {

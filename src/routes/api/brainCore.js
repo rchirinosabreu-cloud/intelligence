@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { addAgencyContext, performAdvancedExtraction, getIntelligenceFeed, getClientProfileFromMemory, searchContext, updateAgencyContext, deleteAgencyContext, getMemoryStats, askBrainCore } from '../../services/brainCoreService.js';
-import { getRecentEmails } from '../../services/googleWorkspaceService.js';
+import { getRecentEmails, readGoogleSheet } from '../../services/googleWorkspaceService.js';
 import prisma from '../../lib/prisma.js';
 
 const router = express.Router();
@@ -130,6 +130,51 @@ router.get('/workspace/insights', restrictAccess, async (req, res) => {
         });
     } catch (error) {
         console.error('[BrainCoreRoute] Workspace Insights error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 8. Client Executive Summary (Client Mode)
+router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
+    try {
+        const { clientId } = req.params;
+
+        // 1. Find linked Sheets/Gmail for this client
+        const integrations = await prisma.agencyIntegration.findMany({
+            where: { clientId, isActive: true }
+        });
+
+        const sheetSource = integrations.find(i => i.type === 'SHEETS');
+
+        let tasks = [];
+        let alerts = [];
+
+        // 2. Fetch Tasks from Sheet if exists
+        if (sheetSource && sheetSource.externalId) {
+            try {
+                const rows = await readGoogleSheet(sheetSource.externalId, 'A1:C10');
+                // Assume Column A is task title, Column B is status
+                tasks = rows.slice(1).map(row => row[0]).filter(Boolean);
+            } catch (e) {
+                console.error('Sheet fetch failed for client summary:', e.message);
+            }
+        }
+
+        // 3. Fetch Gmail Alerts (Mock filter for this client)
+        const client = await prisma.client.findUnique({ where: { id: clientId } });
+        const emails = await getRecentEmails(10);
+        alerts = emails.filter(e =>
+            e.from.toLowerCase().includes(client.name.toLowerCase()) ||
+            e.subject.toLowerCase().includes(client.name.toLowerCase())
+        ).slice(0, 3);
+
+        res.json({
+            tasks,
+            alerts,
+            aiInsight: `El cliente ${client.name} tiene ${tasks.length} tareas pendientes en Sheets. Se recomienda revisar el feedback de Gmail.`
+        });
+    } catch (error) {
+        console.error('[BrainCoreRoute] Client Summary error:', error);
         res.status(500).json({ error: error.message });
     }
 });

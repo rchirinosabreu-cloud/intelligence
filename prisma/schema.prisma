@@ -69,6 +69,7 @@ model Client {
   facebookPageId      String?
   instagramBusinessId String?
   brandAssets         BrandAsset[]
+  integrationsV2      AgencyIntegration[]
   announcements       ClientAnnouncement[]
   clientFiles         ClientFile[]
   links               ClientLink[]
@@ -316,10 +317,12 @@ model AgencyIntegration {
   externalId  String?  // Google ID (Spreadsheet ID, etc.)
   alias       String
   isActive    Boolean  @default(true)
+  clientId    String?
   credentials Json?    // OAuth2 tokens (refresh_token, etc.)
   metadata    Json?    // Optional config
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  client      Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
 }
 
 enum TaskStatus {
