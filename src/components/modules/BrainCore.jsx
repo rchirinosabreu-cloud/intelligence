@@ -40,6 +40,7 @@ const BrainCore = () => {
     const [quickNote, setQuickNote] = useState('');
     const [workspaceInsights, setWorkspaceInsights] = useState(null);
     const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+    const [integrations, setIntegrations] = useState([]);
 
     const fileInputRef = useRef(null);
     const baseUrl = getApiBaseUrl();
@@ -60,9 +61,10 @@ const BrainCore = () => {
         setIsLoadingFeed(true);
         try {
             const statusParam = activeTab === 'proposals' ? 'PENDING' : 'APPROVED';
-            const [feedRes, clientsRes] = await Promise.all([
+            const [feedRes, clientsRes, integrationsRes] = await Promise.all([
                 fetch(`${baseUrl}/api/brain-core/feed?status=${statusParam}`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(`${baseUrl}/api/db/clients`, { headers: { 'Authorization': `Bearer ${token}` } })
+                fetch(`${baseUrl}/api/db/clients`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${baseUrl}/api/integrations/integrations`, { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
             if (feedRes.ok) {
@@ -71,6 +73,7 @@ const BrainCore = () => {
                 setStats(data.stats || { count: 0 });
             }
             if (clientsRes.ok) setClients(await clientsRes.json());
+            if (integrationsRes.ok) setIntegrations(await integrationsRes.json());
 
             fetchInsights();
         } catch (error) {
@@ -250,6 +253,28 @@ const BrainCore = () => {
                                 {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : "Consultar Cerebro"}
                             </button>
                         </form>
+
+                        {/* Integration Badges */}
+                        {integrations.length > 0 && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="mt-4 flex flex-wrap justify-center gap-2"
+                            >
+                                {integrations.map(source => (
+                                    <div
+                                        key={source.id}
+                                        className="flex items-center gap-2 px-3 py-1 bg-white border border-zinc-100 rounded-full shadow-sm hover:border-emerald-200 transition-all group"
+                                    >
+                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                        <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter">
+                                            {source.type === 'SHEETS' ? 'Sheets' : source.type === 'GMAIL' ? 'Gmail' : 'Slides'}:
+                                            <span className="text-zinc-900 ml-1">{source.alias}</span>
+                                        </span>
+                                    </div>
+                                ))}
+                            </motion.div>
+                        )}
 
                         <AnimatePresence>
                             {searchResult && (
