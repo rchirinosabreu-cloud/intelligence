@@ -190,18 +190,7 @@ export const createTask = async ({
     try {
         const mappedStatus = statusMapper[status] || 'PENDIENTE';
 
-        // AI Classification (Radar de Mérito Phase 2)
-        let aiCategory = null;
-        let aiComplexity = null;
-
-        try {
-            const classification = await classifyTaskWithAI(title, comments || "");
-            aiCategory = classification.category;
-            aiComplexity = classification.complexity;
-        } catch (aiErr) {
-            console.warn("[nativeTaskService] Task classification with AI failed or timed out. Skipping AI fields.", aiErr.message);
-        }
-
+        // Create the task immediately
         const newTask = await prisma.task.create({
             data: {
                 title,
@@ -215,9 +204,7 @@ export const createTask = async ({
                 isSpecial,
                 specialType,
                 referenceUrl,
-                contentItemId,
-                aiCategory,
-                aiComplexity
+                contentItemId
             },
             include: {
                 client: {
@@ -251,6 +238,26 @@ export const createTask = async ({
                 }
             };
         }
+
+        // Background tasks: AI Classification, Embeddings, etc.
+        // We do NOT await this, allowing the function to return immediately
+        (async () => {
+            try {
+                const classification = await classifyTaskWithAI(title, comments || "");
+                if (classification) {
+                    await prisma.task.update({
+                        where: { id: newTask.id },
+                        data: {
+                            aiCategory: classification.category,
+                            aiComplexity: classification.complexity
+                        }
+                    });
+                    console.log(`[nativeTaskService] Background AI classification completed for task ${newTask.id}`);
+                }
+            } catch (aiErr) {
+                console.warn(`[nativeTaskService] Background task classification failed for task ${newTask.id}:`, aiErr.message);
+            }
+        })();
 
         return newTask;
     } catch (error) {

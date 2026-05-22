@@ -34,7 +34,6 @@ import talentRadarRouter from './src/routes/api/talentRadar.js';
 import activityRouter from './src/routes/api/activity.js';
 import reportsRouter from './src/routes/api/reports.js';
 import brainCoreRouter from './src/routes/api/brainCore.js';
-import automationRouter from './src/routes/api/automation.js';
 
 console.log("[Boot] Imports loaded successfully.");
 
@@ -408,7 +407,6 @@ app.use('/api/reports', authenticateToken, reportsRouter);
 
 // Brain Core Router
 app.use('/api/brain-core', authenticateToken, brainCoreRouter);
-app.use('/api/automation', authenticateToken, automationRouter);
 
 // User Management Endpoints
 app.post('/api/users', authenticateToken, async (req, res) => {
