@@ -44,4 +44,16 @@ router.post('/sources', async (req, res) => {
     }
 });
 
+// Delete an integration/source
+router.delete('/integrations/:id', async (req, res) => {
+    try {
+        await prisma.agencyIntegration.delete({
+            where: { id: req.params.id }
+        });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;
