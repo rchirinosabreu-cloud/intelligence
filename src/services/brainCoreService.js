@@ -2,6 +2,7 @@ import { VertexAI } from '@google-cloud/vertexai';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import prisma from '../lib/prisma.js';
+import { readGoogleSheet, getRecentEmails, readGoogleSlides } from './googleWorkspaceService.js';
 
 dotenv.config();
 
@@ -277,39 +278,106 @@ export const getMemoryStats = async () => {
 };
 
 /**
- * Synthesizes a response to a natural language question using available memory.
+ * Synthesizes a response to a natural language question using available memory and Google Workspace tools.
  */
 export const askBrainCore = async (question, clientId = null) => {
     if (!vertexAI) return { content: "Brain Core fuera de línea." };
 
-    // Search semantic context
+    // Define Workspace Tools
+    const tools = [
+        {
+            functionDeclarations: [
+                {
+                    name: "read_google_sheet",
+                    description: "Lee datos en tiempo real de una hoja de cálculo de Google. Úsalo cuando el usuario pregunte por métricas, inventarios o datos estructurados que no están en la memoria vectorial.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            spreadsheetId: { type: "STRING", description: "El ID del Google Sheet" },
+                            range: { type: "STRING", description: "Rango opcional (Ej: 'Sheet1!A1:Z50')" }
+                        },
+                        required: ["spreadsheetId"]
+                    }
+                },
+                {
+                    name: "get_recent_emails",
+                    description: "Busca correos electrónicos recientes para obtener contexto sobre acuerdos o feedback de clientes.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            maxResults: { type: "NUMBER", description: "Número de correos a traer" }
+                        }
+                    }
+                }
+            ]
+        }
+    ];
+
+    // Fetch available Google Workspace sources
+    const sources = await prisma.agencyIntegration.findMany({
+        where: { isActive: true, externalId: { not: null } }
+    });
+
+    // Search semantic context (Vector Memory)
     const context = await searchContext(question, clientId, 10);
     const approvedContext = context.filter(c => c.similarity > 0.65);
 
-    if (approvedContext.length === 0) {
-        return { content: "No tengo recuerdos específicos sobre eso aún. ¿Quieres que guarde esta información?" };
-    }
+    const model = vertexAI.getGenerativeModel({
+        model: CHAT_MODEL,
+        tools
+    });
 
-    const model = vertexAI.getGenerativeModel({ model: CHAT_MODEL });
+    const chat = model.startChat();
     const promptText = `Pregunta del Usuario: "${question}"
 
-    Contexto recuperado de la memoria:
+    FUENTES DE DATOS DISPONIBLES (Google Workspace):
+    ${sources.map(s => `- [${s.type}] ${s.alias} (ID: ${s.externalId})`).join('\n')}
+
+    Contexto recuperado de la memoria vectorial:
     ${approvedContext.map(c => `- ${c.content}`).join('\n')}
 
-    Instrucciones: Responde a la pregunta basándote ÚNICAMENTE en el contexto proporcionado.
-    Si el contexto no tiene la respuesta, admítelo. Sé directo y usa un tono profesional de Director de Agencia.`;
+    Instrucciones:
+    1. Si necesitas datos frescos de Sheets o Gmail para responder con precisión, usa las herramientas disponibles.
+    2. Si el contexto ya tiene la respuesta, úsalo.
+    3. Responde de forma ejecutiva y profesional.`;
 
     try {
-        const result = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: promptText }] }]
-        });
+        const result = await chat.sendMessage(promptText);
+        const response = result.response;
+        const part = response.candidates[0].content.parts[0];
+
+        // Handle Function Calling
+        if (part.functionCall) {
+            const call = part.functionCall;
+            let toolResult;
+
+            if (call.name === 'read_google_sheet') {
+                toolResult = await readGoogleSheet(call.args.spreadsheetId, call.args.range);
+            } else if (call.name === 'get_recent_emails') {
+                toolResult = await getRecentEmails(call.args.maxResults);
+            }
+
+            // Send tool result back to model
+            const finalResult = await chat.sendMessage([{
+                functionResponse: {
+                    name: call.name,
+                    response: { content: toolResult }
+                }
+            }]);
+
+            return {
+                content: finalResult.response.candidates[0].content.parts[0].text,
+                sources: approvedContext.map(c => ({ id: c.id, content: c.content }))
+            };
+        }
+
         return {
-            content: result.response.candidates[0].content.parts[0].text,
+            content: part.text,
             sources: approvedContext.map(c => ({ id: c.id, content: c.content }))
         };
     } catch (e) {
         console.error("[BrainCoreService] Question failed:", e);
-        return { content: "Error procesando la consulta semántica." };
+        return { content: "Error procesando la consulta semántica o de Workspace." };
     }
 };
 

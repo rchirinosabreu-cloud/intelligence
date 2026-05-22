@@ -310,6 +310,18 @@ model GlobalAnnouncement {
   createdAt DateTime @default(now())
 }
 
+model AgencyIntegration {
+  id          String   @id @default(uuid())
+  type        String   // SHEETS, GMAIL, SLIDES
+  externalId  String?  // Google ID (Spreadsheet ID, etc.)
+  alias       String
+  isActive    Boolean  @default(true)
+  credentials Json?    // OAuth2 tokens (refresh_token, etc.)
+  metadata    Json?    // Optional config
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 enum TaskStatus {
   PENDIENTE
   EN_CURSO

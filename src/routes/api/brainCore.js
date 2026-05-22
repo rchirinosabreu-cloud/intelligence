@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { addAgencyContext, performAdvancedExtraction, getIntelligenceFeed, getClientProfileFromMemory, searchContext, updateAgencyContext, deleteAgencyContext, getMemoryStats, askBrainCore } from '../../services/brainCoreService.js';
+import { getRecentEmails } from '../../services/googleWorkspaceService.js';
 import prisma from '../../lib/prisma.js';
 
 const router = express.Router();
@@ -110,6 +111,25 @@ router.get('/radar/:clientId', restrictAccess, async (req, res) => {
         if (!profile) return res.status(404).json({ error: 'Sin conocimiento previo.' });
         res.json(profile);
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 7. Executive Workspace (Gmail/Basecamp Insights)
+router.get('/workspace/insights', restrictAccess, async (req, res) => {
+    try {
+        const emails = await getRecentEmails(10);
+
+        // Use Gemini to filter and categorize emails (e.g. Basecamp alerts)
+        // For now, return raw to prove connectivity
+        res.json({
+            emails: emails.map(e => ({
+                ...e,
+                isBasecamp: e.from.toLowerCase().includes('basecamp') || e.subject.toLowerCase().includes('basecamp')
+            }))
+        });
+    } catch (error) {
+        console.error('[BrainCoreRoute] Workspace Insights error:', error);
         res.status(500).json({ error: error.message });
     }
 });
