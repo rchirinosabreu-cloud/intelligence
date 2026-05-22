@@ -161,10 +161,11 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
         }
 
         // 3. Structured Analysis with Gemini
-        const credentialsJson = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+        const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
         const vertexAI = new VertexAI({
-            project: credentialsJson.project_id,
-            location: 'us-central1'
+            project: credentials.project_id,
+            location: 'us-central1',
+            googleAuthOptions: { credentials }
         });
         const model = vertexAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
