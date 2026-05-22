@@ -36,10 +36,23 @@ const BrainCore = () => {
     const [showMetricDetail, setShowMetricDetail] = useState(null);
     const [activeTab, setActiveTab] = useState('feed');
     const [quickNote, setQuickNote] = useState('');
+    const [workspaceInsights, setWorkspaceInsights] = useState(null);
+    const [isLoadingInsights, setIsLoadingInsights] = useState(false);
 
     const fileInputRef = useRef(null);
     const baseUrl = getApiBaseUrl();
     const token = localStorage.getItem('authToken');
+
+    const fetchInsights = async () => {
+        setIsLoadingInsights(true);
+        try {
+            const res = await fetch(`${baseUrl}/api/brain-core/workspace/insights`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) setWorkspaceInsights(await res.json());
+        } catch (e) { console.error(e); }
+        finally { setIsLoadingInsights(false); }
+    };
 
     const fetchInitialData = async () => {
         setIsLoadingFeed(true);
@@ -56,6 +69,8 @@ const BrainCore = () => {
                 setStats(data.stats || { count: 0 });
             }
             if (clientsRes.ok) setClients(await clientsRes.json());
+
+            fetchInsights();
         } catch (error) {
             console.error("Fetch error:", error);
         } finally {
@@ -194,7 +209,15 @@ const BrainCore = () => {
                         </div>
 
                         <form onSubmit={handleSearch} className="relative bg-white border border-zinc-200 rounded-[2.5rem] shadow-xl shadow-zinc-200/50 flex items-center p-2 focus-within:ring-4 ring-primary/5 transition-all">
-                            <div className="p-4 text-zinc-400">
+                            <button
+                                type="button"
+                                onClick={() => toast.success("Conectar nueva fuente (Sheets/Slides)...")}
+                                className="ml-2 p-3 hover:bg-zinc-50 rounded-full text-primary transition-all flex-shrink-0"
+                                title="Vincular nueva fuente de datos"
+                            >
+                                <Plus className="w-6 h-6" />
+                            </button>
+                            <div className="p-3 text-zinc-400">
                                 <Search className="w-6 h-6" />
                             </div>
                             <input
@@ -267,18 +290,36 @@ const BrainCore = () => {
                                     </button>
                                 </div>
 
-                                {MOCK_GMAIL.map(mail => (
-                                    <div key={mail.id} className="p-4 bg-white border border-zinc-100 rounded-2xl flex items-center justify-between hover:shadow-md transition-all cursor-pointer">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                {mail.unread && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                                                <p className="text-xs font-bold text-zinc-900 truncate">{mail.from}</p>
+                                {isLoadingInsights ? (
+                                    [1,2,3].map(i => <div key={i} className="h-16 bg-zinc-50 rounded-xl animate-pulse" />)
+                                ) : workspaceInsights?.emails?.length > 0 ? (
+                                    workspaceInsights.emails.map(mail => (
+                                        <div key={mail.id} className="p-4 bg-white border border-zinc-100 rounded-2xl flex items-center justify-between hover:shadow-md transition-all cursor-pointer">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    {mail.unread && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                                                    <p className="text-xs font-bold text-zinc-900 truncate">{mail.from}</p>
+                                                    {mail.isBasecamp && <span className="text-[8px] bg-emerald-50 text-emerald-600 px-1.5 rounded-full font-black uppercase">Basecamp</span>}
+                                                </div>
+                                                <p className="text-[10px] text-zinc-500 truncate">{mail.subject}</p>
                                             </div>
-                                            <p className="text-[10px] text-zinc-500 truncate">{mail.subject}</p>
+                                            <div className="text-[9px] font-bold text-zinc-400 ml-4">{mail.time || 'Reciente'}</div>
                                         </div>
-                                        <div className="text-[9px] font-bold text-zinc-400 ml-4">{mail.time}</div>
-                                    </div>
-                                ))}
+                                    ))
+                                ) : (
+                                    MOCK_GMAIL.map(mail => (
+                                        <div key={mail.id} className="p-4 bg-white border border-zinc-100 rounded-2xl flex items-center justify-between hover:shadow-md transition-all cursor-pointer">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    {mail.unread && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                                                    <p className="text-xs font-bold text-zinc-900 truncate">{mail.from}</p>
+                                                </div>
+                                                <p className="text-[10px] text-zinc-500 truncate">{mail.subject}</p>
+                                            </div>
+                                            <div className="text-[9px] font-bold text-zinc-400 ml-4">{mail.time}</div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
 
@@ -427,39 +468,6 @@ const BrainCore = () => {
                 </div>
             </div>
 
-            {/* Input de comando flotante (Alimenta al cerebro) */}
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 w-full max-w-2xl px-6">
-                <div className="relative group">
-                    <form onSubmit={handleFeedBrain} className="relative bg-white/90 backdrop-blur-xl border border-zinc-200/80 rounded-3xl shadow-2xl shadow-zinc-200/50 flex items-center p-2">
-                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" />
-                        <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 hover:bg-zinc-50 rounded-2xl text-primary transition-all flex-shrink-0">
-                            <ImageIcon className="w-5 h-5" />
-                        </button>
-                        <input
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            placeholder={editingItem ? "Corrigiendo memoria..." : "Alimenta al cerebro con notas o capturas..."}
-                            className="flex-1 bg-transparent border-none focus:ring-0 text-zinc-900 placeholder:text-zinc-400 px-3 py-3 text-sm font-medium"
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleFeedBrain();
-                                }
-                            }}
-                        />
-                        <button type="submit" disabled={!input.trim() || isProcessing} className="p-3 bg-primary text-white rounded-2xl shadow-lg shadow-primary/20 hover:scale-105 transition-all disabled:opacity-30">
-                            {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                        </button>
-                    </form>
-                </div>
-                <AnimatePresence>
-                    {isProcessing && (
-                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="mt-3 flex items-center justify-center gap-2 text-primary font-bold text-[9px] tracking-widest uppercase bg-white/80 backdrop-blur-xl py-1.5 rounded-full border border-zinc-200 mx-auto w-fit px-4 shadow-sm">
-                            <Sparkles className="w-3 h-3 animate-pulse" /> {processingMessage}
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </div>
         </div>
     );
 };
