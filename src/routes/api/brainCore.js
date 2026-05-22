@@ -1,5 +1,6 @@
 import express from 'express';
 import multer from 'multer';
+import { VertexAI } from '@google-cloud/vertexai';
 import { addAgencyContext, performAdvancedExtraction, getIntelligenceFeed, getClientProfileFromMemory, searchContext, updateAgencyContext, deleteAgencyContext, getMemoryStats, askBrainCore } from '../../services/brainCoreService.js';
 import { getRecentEmails, readGoogleSheet } from '../../services/googleWorkspaceService.js';
 import prisma from '../../lib/prisma.js';
@@ -134,48 +135,79 @@ router.get('/workspace/insights', restrictAccess, async (req, res) => {
     }
 });
 
-// 8. Client Executive Summary (Client Mode)
+// 8. Client Executive Summary (Client Mode - Structured Widgets)
 router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
     try {
         const { clientId } = req.params;
 
-        // 1. Find linked Sheets/Gmail for this client
-        const integrations = await prisma.agencyIntegration.findMany({
-            where: { clientId, isActive: true }
-        });
+        // 1. Fetch Integrations and Client Data
+        const [integrations, client] = await Promise.all([
+            prisma.agencyIntegration.findMany({ where: { clientId, isActive: true } }),
+            prisma.client.findUnique({ where: { id: clientId } })
+        ]);
+
+        if (!client) return res.status(404).json({ error: 'Cliente no encontrado' });
 
         const sheetSource = integrations.find(i => i.type === 'SHEETS');
+        let rawSheetData = [];
 
-        let tasks = [];
-        let alerts = [];
-
-        // 2. Fetch Tasks from Sheet if exists
+        // 2. Fetch Live Sheet Data
         if (sheetSource && sheetSource.externalId) {
             try {
-                const rows = await readGoogleSheet(sheetSource.externalId, 'A1:C10');
-                // Assume Column A is task title, Column B is status
-                tasks = rows.slice(1).map(row => row[0]).filter(Boolean);
+                rawSheetData = await readGoogleSheet(sheetSource.externalId, 'A1:E20');
             } catch (e) {
-                console.error('Sheet fetch failed for client summary:', e.message);
+                console.error('Sheet fetch failed:', e.message);
             }
         }
 
-        // 3. Fetch Gmail Alerts (Mock filter for this client)
-        const client = await prisma.client.findUnique({ where: { id: clientId } });
+        // 3. Structured Analysis with Gemini
+        const credentialsJson = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+        const vertexAI = new VertexAI({
+            project: credentialsJson.project_id,
+            location: 'us-central1'
+        });
+        const model = vertexAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+
+        const prompt = `Analiza los siguientes datos extraídos de un Google Sheet operativo para el cliente "${client.name}".
+        TU OBJETIVO es categorizar la información para un dashboard ejecutivo de Project Management.
+
+        DATOS DEL EXCEL (Filas):
+        ${JSON.stringify(rawSheetData)}
+
+        Responde ÚNICAMENTE en formato JSON con la siguiente estructura:
+        {
+          "criticalTasks": ["Tarea 1", "Tarea 2"],
+          "highPriority": [
+            { "task": "Nombre de tarea", "deadline": "Hoy/Fecha" }
+          ],
+          "blockers": ["Descripción de lo que falta o bloquea"],
+          "aiInsight": "Resumen estratégico corto"
+        }
+
+        REGLAS:
+        - criticalTasks: Tareas que están "En progreso" o tienen deadline inmediato.
+        - highPriority: Entregas importantes de esta semana.
+        - blockers: Cualquier fila que indique "Falta info", "Bloqueado" o celdas vacías críticas.`;
+
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.candidates[0].content.parts[0].text;
+        const structuredData = JSON.parse(responseText.replace(/```json|```/g, ''));
+
+        // 4. Fetch Gmail Alerts (Filtering for the client)
         const emails = await getRecentEmails(10);
-        alerts = emails.filter(e =>
+        const alerts = emails.filter(e =>
             e.from.toLowerCase().includes(client.name.toLowerCase()) ||
             e.subject.toLowerCase().includes(client.name.toLowerCase())
         ).slice(0, 3);
 
         res.json({
-            tasks,
-            alerts,
-            aiInsight: `El cliente ${client.name} tiene ${tasks.length} tareas pendientes en Sheets. Se recomienda revisar el feedback de Gmail.`
+            ...structuredData,
+            alerts
         });
+
     } catch (error) {
         console.error('[BrainCoreRoute] Client Summary error:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Error procesando el resumen estructurado." });
     }
 });
 
