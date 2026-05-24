@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import { VertexAI } from '@google-cloud/vertexai';
 import { addAgencyContext, performAdvancedExtraction, getIntelligenceFeed, getClientProfileFromMemory, searchContext, updateAgencyContext, deleteAgencyContext, getMemoryStats, askBrainCore } from '../../services/brainCoreService.js';
-import { getRecentEmails, readGoogleSheet } from '../../services/googleWorkspaceService.js';
+import { getRecentEmails, readGoogleSheet, DEFAULT_IMPERSONATED_EMAIL } from '../../services/googleWorkspaceService.js';
 import prisma from '../../lib/prisma.js';
 
 const router = express.Router();
@@ -119,7 +119,7 @@ router.get('/radar/:clientId', restrictAccess, async (req, res) => {
 // 7. Executive Workspace (Gmail/Basecamp Insights)
 router.get('/workspace/insights', restrictAccess, async (req, res) => {
     try {
-        const emails = await getRecentEmails(10);
+        const emails = await getRecentEmails(15, 'is:unread', DEFAULT_IMPERSONATED_EMAIL);
 
         // Use Gemini to filter and categorize emails (e.g. Basecamp alerts)
         // For now, return raw to prove connectivity
@@ -141,39 +141,59 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
         const { clientId } = req.params;
 
         // 1. Fetch Integrations and Client Data
-        const [integrations, client] = await Promise.all([
-            prisma.agencyIntegration.findMany({ where: { clientId, isActive: true } }),
-            prisma.client.findUnique({ where: { id: clientId } })
-        ]);
+        const client = await prisma.client.findUnique({
+            where: { id: clientId },
+            include: {
+                integrationsV2: {
+                    where: { isActive: true }
+                }
+            }
+        });
 
         if (!client) return res.status(404).json({ error: 'Cliente no encontrado' });
 
-        const sheetSource = integrations.find(i => i.type === 'SHEETS');
-        let rawSheetData = [];
+        const integrations = client.integrationsV2 || [];
 
         // 2. Fetch Live Sheet Data
+        const sheetSource = integrations.find(i => i.type === 'SHEETS');
+        let rawSheetData = [];
         if (sheetSource && sheetSource.externalId) {
             try {
-                rawSheetData = await readGoogleSheet(sheetSource.externalId, 'A1:E20');
+                rawSheetData = await readGoogleSheet(sheetSource.externalId, 'A1:Z100');
             } catch (e) {
-                console.error('Sheet fetch failed:', e.message);
+                console.error(`[ClientSummary] Sheet fetch failed for ${client.name}:`, e.message);
             }
         }
 
-        // 3. Structured Analysis with Gemini
-        const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+        // 3. Fetch Gmail Alerts (Filtering for the client using DWD)
+        // Query pattern: "{clientName}" OR "Basecamp {clientName}"
+        const gmailSearchQuery = `"${client.name}" OR "Basecamp ${client.name}"`;
+
+        let rawEmails = [];
+        try {
+            rawEmails = await getRecentEmails(20, gmailSearchQuery, DEFAULT_IMPERSONATED_EMAIL);
+        } catch (e) {
+            console.error(`[ClientSummary] Gmail fetch failed for ${client.name}:`, e.message);
+        }
+
+        // 4. Multi-Source Structured Analysis with Gemini
+        const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+        const credentials = JSON.parse(credentialsJson);
         const vertexAI = new VertexAI({
             project: credentials.project_id,
             location: 'us-central1',
             googleAuthOptions: { credentials }
         });
-        const model = vertexAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+        const model = vertexAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-        const prompt = `Analiza los siguientes datos extraídos de un Google Sheet operativo para el cliente "${client.name}".
-        TU OBJETIVO es categorizar la información para un dashboard ejecutivo de Project Management.
+        const prompt = `Analiza los siguientes datos operativos para el cliente "${client.name}".
+        TU OBJETIVO es sintetizar un dashboard ejecutivo de Project Management cruzando información de un Google Sheet y correos de Gmail (notificaciones de Basecamp/Alertas).
 
-        DATOS DEL EXCEL (Filas):
+        DATOS DEL EXCEL (Hojas de Seguimiento):
         ${JSON.stringify(rawSheetData)}
+
+        CORREOS RECIENTES (Contexto de conversaciones y alertas de Basecamp):
+        ${JSON.stringify(rawEmails.map(e => ({ from: e.from, subject: e.subject, snippet: e.snippet })))}
 
         Responde ÚNICAMENTE en formato JSON con la siguiente estructura:
         {
@@ -181,34 +201,40 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
           "highPriority": [
             { "task": "Nombre de tarea", "deadline": "Hoy/Fecha" }
           ],
-          "blockers": ["Descripción de lo que falta o bloquea"],
-          "aiInsight": "Resumen estratégico corto"
+          "blockers": ["Punto de bloqueo 1", "Alerta detectada en correo"],
+          "aiInsight": "Resumen estratégico corto y proactivo"
         }
 
-        REGLAS:
-        - criticalTasks: Tareas que están "En progreso" o tienen deadline inmediato.
-        - highPriority: Entregas importantes de esta semana.
-        - blockers: Cualquier fila que indique "Falta info", "Bloqueado" o celdas vacías críticas.`;
+        REGLAS DE CATEGORIZACIÓN:
+        1. criticalTasks: Tareas del Excel marcadas como "En progreso", "Urgente" o con fecha de entrega hoy/mañana.
+        2. highPriority: Entregas importantes o hitos de esta semana según el Excel.
+        3. blockers:
+           - Si en el Excel algo dice "Bloqueado", "Falta info", o celdas críticas vacías.
+           - Si en los CORREOS detectas que el cliente está pidiendo cambios urgentes, hay quejas, o hay notificaciones de Basecamp sobre retrasos o preguntas sin responder.
+        4. aiInsight: Una frase que conecte los puntos. Ej: "El cliente está esperando el carrusel para mañana (visto en Excel), pero envió un correo pidiendo ajustar el logo primero".
+
+        IMPORTANTE: Si no hay datos suficientes para una categoría, devuelve un array vacío []. NO inventes datos.`;
 
         const result = await model.generateContent(prompt);
         const responseText = result.response.candidates[0].content.parts[0].text;
-        const structuredData = JSON.parse(responseText.replace(/```json|```/g, ''));
 
-        // 4. Fetch Gmail Alerts (Filtering for the client)
-        const emails = await getRecentEmails(10);
-        const alerts = emails.filter(e =>
-            e.from.toLowerCase().includes(client.name.toLowerCase()) ||
-            e.subject.toLowerCase().includes(client.name.toLowerCase())
-        ).slice(0, 3);
+        // Clean JSON response from markdown blocks
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        const structuredData = jsonMatch ? JSON.parse(jsonMatch[0]) : {
+            criticalTasks: [],
+            highPriority: [],
+            blockers: ["Error parseando respuesta de IA"],
+            aiInsight: "La inteligencia no pudo estructurar los datos."
+        };
 
         res.json({
             ...structuredData,
-            alerts
+            alerts: rawEmails.slice(0, 3) // Return top 3 emails for the UI widget too
         });
 
     } catch (error) {
         console.error('[BrainCoreRoute] Client Summary error:', error);
-        res.status(500).json({ error: "Error procesando el resumen estructurado." });
+        res.status(500).json({ error: "Error procesando el resumen estructurado multi-fuente." });
     }
 });
 

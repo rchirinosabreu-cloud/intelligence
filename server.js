@@ -663,7 +663,7 @@ try {
 const PROJECT_ID = credentials?.project_id || 'brainstudio-intelligence';
 // Force 'global' location explicitly as requested
 const LOCATION = 'global';
-const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.5-pro";
+const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.0-flash";
 
 // Engine ID for the App (Brainstudio Intelligence)
 const ENGINE_ID = process.env.ENGINE_ID || process.env.DISCOVERY_ENGINE_ENGINE_ID || "brainstudio-intelligence-v_1769659564733";
