@@ -7,7 +7,7 @@ import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import { GoogleGenerativeAI } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import { SearchServiceClient } from '@google-cloud/discoveryengine';
 import { JWT } from 'google-auth-library';
 import fs from 'fs';
@@ -683,7 +683,7 @@ let genAI;
 try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
-        genAI = new GoogleGenerativeAI(apiKey);
+        genAI = new GoogleGenAI({ apiKey });
         console.log("[GoogleGenAI] Client initialized successfully.");
     } else {
         console.warn("[GoogleGenAI] GEMINI_API_KEY is missing.");
