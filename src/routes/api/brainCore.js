@@ -170,10 +170,12 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
         const gmailSearchQuery = `"${client.name}" OR "Basecamp ${client.name}"`;
 
         let rawEmails = [];
+        let gmailError = null;
         try {
             rawEmails = await getRecentEmails(20, gmailSearchQuery, DEFAULT_IMPERSONATED_EMAIL);
         } catch (e) {
             console.error(`[ClientSummary] Gmail fetch failed for ${client.name}:`, e.message);
+            gmailError = e.message;
         }
 
         // 4. Multi-Source Structured Analysis with Gemini
@@ -184,16 +186,16 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
             location: 'us-central1',
             googleAuthOptions: { credentials }
         });
-        const model = vertexAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = vertexAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-1.5-pro" });
 
         const prompt = `Analiza los siguientes datos operativos para el cliente "${client.name}".
         TU OBJETIVO es sintetizar un dashboard ejecutivo de Project Management cruzando información de un Google Sheet y correos de Gmail (notificaciones de Basecamp/Alertas).
 
         DATOS DEL EXCEL (Hojas de Seguimiento):
-        ${JSON.stringify(rawSheetData)}
+        ${rawSheetData.length > 0 ? JSON.stringify(rawSheetData) : "No hay datos de Excel disponibles."}
 
         CORREOS RECIENTES (Contexto de conversaciones y alertas de Basecamp):
-        ${JSON.stringify(rawEmails.map(e => ({ from: e.from, subject: e.subject, snippet: e.snippet })))}
+        ${rawEmails.length > 0 ? JSON.stringify(rawEmails.map(e => ({ from: e.from, subject: e.subject, snippet: e.snippet }))) : (gmailError ? `Error al leer Gmail: ${gmailError}` : "No hay correos recientes disponibles.")}
 
         Responde ÚNICAMENTE en formato JSON con la siguiente estructura:
         {
