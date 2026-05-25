@@ -66,7 +66,8 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
 
         const result = await genAI.models.generateContent({
             model: CHAT_MODEL,
-            contents: [{ role: 'user', parts: [{ text: promptText }, imagePart] }]
+            contents: [{ role: 'user', parts: [{ text: promptText }, imagePart] }],
+            config: { responseMimeType: 'application/json' }
         });
         console.log("================ DEPURACIÓN IA RAW (Extraction) ================", JSON.stringify(result, null, 2));
 
@@ -80,7 +81,13 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
 
         if (!responseText) throw new Error("Empty response from AI");
 
-        return JSON.parse(responseText.replace(/```json|```/g, ''));
+        try {
+            return JSON.parse(responseText.replace(/```json|```/g, ''));
+        } catch (parseError) {
+            console.warn("⚠️ Alerta BrainCore (Extraction): La IA devolvió texto no estructurado. Reintentando limpieza.");
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            return jsonMatch ? JSON.parse(jsonMatch[0]) : { content: responseText, insights: {} };
+        }
     } catch (error) {
         console.error("[BrainCoreService] Advanced extraction failed:", error);
         return null;
@@ -229,7 +236,8 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
     try {
         const result = await genAI.models.generateContent({
             model: CHAT_MODEL,
-            contents: [{ role: 'user', parts: [{ text: promptText }] }]
+            contents: [{ role: 'user', parts: [{ text: promptText }] }],
+            config: { responseMimeType: 'application/json' }
         });
         console.log("================ DEPURACIÓN IA RAW (Structured Feed) ================", JSON.stringify(result, null, 2));
 
@@ -243,7 +251,13 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
 
         if (!responseText) return [];
 
-        return JSON.parse(responseText.replace(/```json|```/g, ''));
+        try {
+            return JSON.parse(responseText.replace(/```json|```/g, ''));
+        } catch (parseError) {
+            console.warn("⚠️ Alerta BrainCore (Structured Feed): Fallo de parseo JSON. Aplicando limpieza Regex.");
+            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+            return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+        }
     } catch (e) {
         console.error("[BrainCoreService] Feed generation failed:", e);
         return [];
@@ -437,7 +451,8 @@ export const getClientProfileFromMemory = async (clientId) => {
     try {
         const result = await genAI.models.generateContent({
             model: CHAT_MODEL,
-            contents: [{ role: 'user', parts: [{ text: promptText }] }]
+            contents: [{ role: 'user', parts: [{ text: promptText }] }],
+            config: { responseMimeType: 'application/json' }
         });
         console.log("================ DEPURACIÓN IA RAW (Radar Profile) ================", JSON.stringify(result, null, 2));
 
@@ -451,7 +466,13 @@ export const getClientProfileFromMemory = async (clientId) => {
 
         if (!responseText) return null;
 
-        return JSON.parse(responseText.replace(/```json|```/g, ''));
+        try {
+            return JSON.parse(responseText.replace(/```json|```/g, ''));
+        } catch (parseError) {
+            console.warn("⚠️ Alerta BrainCore (Radar Profile): Fallo de parseo JSON. Aplicando limpieza Regex.");
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+        }
     } catch (e) {
         console.error("[BrainCoreService] Radar generation failed:", e);
         return null;
