@@ -239,7 +239,7 @@ ESTRUCTURA JSON:
                 responseMimeType: "application/json"
             }
         });
-        const analysis = JSON.parse(result.response.text);
+        const analysis = JSON.parse(result.response?.text);
 
         res.json({
             client: {

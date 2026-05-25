@@ -544,7 +544,7 @@ app.post('/api/openai/v1/chat/completions', authenticateToken, async (req, res) 
         });
 
         if (!response.ok) {
-            const errorText = await response.text;
+            const errorText = await response.text();
             console.error(`[OpenAI API] HTTP Error ${response.status}:`, errorText);
             return res.status(response.status).send(errorText);
         }
@@ -582,7 +582,7 @@ app.post('/api/openai/v1/chat/completions', authenticateToken, async (req, res) 
         } else {
              // Fallback for Node environments where response.body isn't a streamable standard ReadableStream
              // In Node 18+, fetch bodies are web streams, but just in case:
-             const text = await response.text;
+             const text = await response.text();
              res.send(text);
         }
 
@@ -614,7 +614,7 @@ app.post('/api/fireflies/graphql', authenticateToken, async (req, res) => {
             body: JSON.stringify(req.body)
         });
 
-        const data = await response.text; // Read as text first to handle non-JSON error pages safely
+        const data = await response.text(); // Read as text first to handle non-JSON error pages safely
 
         if (!response.ok) {
             console.error(`[Fireflies API] HTTP Error ${response.status}:`, data);
@@ -869,7 +869,7 @@ async function analyzeWebsiteDna(url) {
             throw new Error(`Failed to fetch URL. Status: ${response.status}`);
         }
 
-        const html = await response.text;
+        const html = await response.text();
         const $ = cheerio.load(html);
 
         // Technical Health
@@ -1275,13 +1275,13 @@ function isGenAIRateLimitError(error) {
     return message.includes('429') || message.includes('RESOURCE_EXHAUSTED');
 }
 
-async function sendMessageStreamWithRetry(chat, payload, maxAttempts = 3) {
+async function sendMessageStreamWithRetry(ai, payload, maxAttempts = 3) {
     let attempt = 0;
     let lastError;
     while (attempt < maxAttempts) {
         attempt += 1;
         try {
-            return await chat.sendMessageStream(payload);
+            return await ai.models.generateContentStream(payload);
         } catch (error) {
             lastError = error;
             if (!isGenAIRateLimitError(error) || attempt >= maxAttempts) {
@@ -2162,27 +2162,16 @@ app.post('/api/chat', async (req, res) => {
                 parts: [{ text: msg.content }]
             }));
 
-        let dynamicGenerativeModel;
-        try {
-            dynamicGenerativeModel = genAI.getGenerativeModel({
-                model: MODEL_NAME,
-                systemInstruction: finalSystemPrompt,
-                tools: tools
-            });
-        } catch (initError) {
-            console.error("CRITICAL: Failed to dynamically initialize Google Generative Model:", initError);
-            throw initError;
-        }
-
-        const chat = dynamicGenerativeModel.startChat({
-            history: history,
-        });
-
         console.log(`[API] Sending message to Google Generative model: ${MODEL_NAME}`);
 
         // --- DEBUG LOGS START ---
-        console.log(`[DEBUG] Calling chat.sendMessageStream now...`);
-        const streamResult = await sendMessageStreamWithRetry(chat, lastMessageContent);
+        console.log(`[DEBUG] Calling models.generateContentStream now...`);
+        const streamResult = await sendMessageStreamWithRetry(genAI, {
+            model: MODEL_NAME,
+            systemInstruction: finalSystemPrompt,
+            contents: [...history, { role: 'user', parts: [{ text: lastMessageContent }] }],
+            tools: tools
+        });
         console.log(`[DEBUG] chat.sendMessageStream returned. Starting to iterate stream...`);
 
         let wroteText = false;
@@ -2262,12 +2251,25 @@ app.post('/api/chat', async (req, res) => {
                 console.log(`[API] Sending function response back to model...`);
                 let streamResult2;
                 try {
-                     streamResult2 = await sendMessageStreamWithRetry(chat, [{
-                        functionResponse: {
-                            name: call.name,
-                            response: { content: functionResponseContent }
-                        }
-                     }]);
+                     streamResult2 = await sendMessageStreamWithRetry(genAI, {
+                        model: MODEL_NAME,
+                        systemInstruction: finalSystemPrompt,
+                        contents: [
+                            ...history,
+                            { role: 'user', parts: [{ text: lastMessageContent }] },
+                            fullResponse.candidates[0].content, // Send back model's tool call
+                            {
+                                role: 'user',
+                                parts: [{
+                                    functionResponse: {
+                                        name: call.name,
+                                        response: { content: functionResponseContent }
+                                    }
+                                }]
+                            }
+                        ],
+                        tools: tools
+                     });
                 } catch (streamErr) {
                      console.error("[API] Error calling sendMessageStream with function response:", streamErr);
                      res.write("\n\n(Error interno al comunicar la respuesta de la herramienta al modelo).");
