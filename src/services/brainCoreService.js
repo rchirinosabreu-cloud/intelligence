@@ -2,14 +2,14 @@ import { VertexAI } from '@google-cloud/vertexai';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import prisma from '../lib/prisma.js';
-import { readGoogleSheet, getRecentEmails, readGoogleSlides } from './googleWorkspaceService.js';
+import { readGoogleSheet, getRecentEmails, readGoogleSlides, DEFAULT_IMPERSONATED_EMAIL } from './googleWorkspaceService.js';
 
 dotenv.config();
 
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'brainstudio-intelligence';
 const LOCATION = 'us-central1';
 const EMBEDDING_MODEL = "text-embedding-004";
-const CHAT_MODEL = "gemini-2.5-pro";
+const CHAT_MODEL = "gemini-2.0-flash";
 
 let vertexAI;
 try {
@@ -305,7 +305,8 @@ export const askBrainCore = async (question, clientId = null) => {
                     parameters: {
                         type: "OBJECT",
                         properties: {
-                            maxResults: { type: "NUMBER", description: "Número de correos a traer" }
+                            maxResults: { type: "NUMBER", description: "Número de correos a traer" },
+                            query: { type: "STRING", description: "Query de búsqueda opcional" }
                         }
                     }
                 }
@@ -354,7 +355,7 @@ export const askBrainCore = async (question, clientId = null) => {
             if (call.name === 'read_google_sheet') {
                 toolResult = await readGoogleSheet(call.args.spreadsheetId, call.args.range);
             } else if (call.name === 'get_recent_emails') {
-                toolResult = await getRecentEmails(call.args.maxResults);
+                toolResult = await getRecentEmails(call.args.maxResults || 5, call.args.query || 'is:unread', DEFAULT_IMPERSONATED_EMAIL);
             }
 
             // Send tool result back to model

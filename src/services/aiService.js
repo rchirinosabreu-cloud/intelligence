@@ -5,7 +5,7 @@ dotenv.config();
 
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'brainstudio-intelligence';
 const LOCATION = 'global';
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-pro";
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
 let vertexAI;
 try {

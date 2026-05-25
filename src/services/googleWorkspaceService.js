@@ -2,10 +2,14 @@ import { google } from 'googleapis';
 import { JWT } from 'google-auth-library';
 import prisma from '../lib/prisma.js';
 
+// Default email to impersonate for Gmail access (requires Domain-Wide Delegation)
+export const DEFAULT_IMPERSONATED_EMAIL = 'social.brainstudio@gmail.com';
+
 /**
  * Helper to get a Service Account Auth client.
+ * @param {string} subject - Email to impersonate (requires Domain-Wide Delegation).
  */
-const getServiceAuth = async () => {
+const getServiceAuth = async (subject = null) => {
   const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
   if (!credentialsJson) throw new Error('GOOGLE_APPLICATION_CREDENTIALS_JSON is missing.');
 
@@ -14,6 +18,7 @@ const getServiceAuth = async () => {
   return new JWT({
     email: credentials.client_email,
     key: credentials.private_key,
+    subject: subject, // Impersonation
     scopes: [
       'https://www.googleapis.com/auth/spreadsheets.readonly',
       'https://www.googleapis.com/auth/presentations.readonly',
@@ -35,39 +40,51 @@ export const readGoogleSheet = async (spreadsheetId, range = 'A1:Z100') => {
     range
   });
 
-  return response.data.values;
+  return response.data.values || [];
 };
 
 /**
- * Lists recent unread emails from Gmail.
- * NOTE: Service Accounts require Domain-Wide Delegation for Gmail.
- * If not available, this may return empty or error depending on setup.
+ * Lists recent emails from Gmail.
+ * NOTE: Service Accounts require Domain-Wide Delegation for Gmail impersonation.
  */
-export const getRecentEmails = async (maxResults = 5) => {
+export const getRecentEmails = async (maxResults = 5, query = 'is:unread', subject = null) => {
   try {
-    const auth = await getServiceAuth();
+    const auth = await getServiceAuth(subject);
     const gmail = google.gmail({ version: 'v1', auth });
 
     const response = await gmail.users.messages.list({
-      userId: 'me', // This only works if DWD is set up or if 'me' refers to the SA (rarely useful)
-      q: 'is:unread',
+      userId: 'me', // Refers to the 'subject' if impersonating
+      q: query,
       maxResults
     });
 
     const messages = response.data.messages || [];
     const detailedMessages = await Promise.all(
       messages.map(async (msg) => {
-        const detail = await gmail.users.messages.get({ userId: 'me', id: msg.id });
-        const headers = detail.data.payload.headers;
-        const from = headers.find(h => h.name === 'From')?.value;
-        const subject = headers.find(h => h.name === 'Subject')?.value;
-        return { id: msg.id, from, subject, snippet: detail.data.snippet };
+        try {
+          const detail = await gmail.users.messages.get({ userId: 'me', id: msg.id });
+          const headers = detail.data.payload.headers;
+          const fromHeader = headers.find(h => h.name === 'From')?.value;
+          const subjectHeader = headers.find(h => h.name === 'Subject')?.value;
+          const dateHeader = headers.find(h => h.name === 'Date')?.value;
+
+          return {
+            id: msg.id,
+            from: fromHeader,
+            subject: subjectHeader,
+            date: dateHeader,
+            snippet: detail.data.snippet
+          };
+        } catch (msgErr) {
+          console.error(`[GoogleWorkspaceService] Error fetching message ${msg.id}:`, msgErr.message);
+          return null;
+        }
       })
     );
 
-    return detailedMessages;
+    return detailedMessages.filter(m => m !== null);
   } catch (err) {
-    console.warn('[GoogleWorkspaceService] Gmail listing failed (Service Account mode):', err.message);
+    console.warn('[GoogleWorkspaceService] Gmail listing failed:', err.message);
     return [];
   }
 };

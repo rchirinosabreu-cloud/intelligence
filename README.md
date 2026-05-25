@@ -66,7 +66,7 @@ Edit \`.env\` and add your Google Gemini API key:
 
 \`\`\`env
 VITE_GEMINI_API_KEY=your_actual_api_key_here
-VITE_GEMINI_MODEL=gemini-2.5-pro
+VITE_GEMINI_MODEL=gemini-2.0-flash
 \`\`\`
 
 **Get your API key:**
@@ -102,7 +102,7 @@ npm run preview
    - Go to your project settings
    - Add the following variables:
      - \`VITE_GEMINI_API_KEY\`: Your Google Gemini API key
-     - \`VITE_GEMINI_MODEL\`: \`gemini-2.5-pro\` (or your preferred model)
+     - \`VITE_GEMINI_MODEL\`: \`gemini-2.0-flash\` (or your preferred model)
 
 4. **Deploy**: Railway will automatically build and deploy your application
 
@@ -173,14 +173,14 @@ The application communicates directly with Google Gemini API from the browser:
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | \`VITE_GEMINI_API_KEY\` | Google Gemini API key | - | Yes |
-| \`VITE_GEMINI_MODEL\` | Gemini model to use | \`gemini-2.5-pro\` | No |
+| \`VITE_GEMINI_MODEL\` | Gemini model to use | \`gemini-2.0-flash\` | No |
 
 ## API Configuration
 
 ### Supported Models
 
-- \`gemini-2.5-pro\`: Fast, efficient responses (recommended)
-- \`gemini-2.5-pro\`: More capable, slower responses
+- \`gemini-2.0-flash\`: Fast, efficient responses (recommended)
+- \`gemini-2.0-flash\`: More capable, slower responses
 
 ### Generation Parameters
 
