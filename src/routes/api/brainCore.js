@@ -216,7 +216,7 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
             model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
             contents: [{ role: 'user', parts: [{ text: prompt }] }]
         });
-        const responseText = result.response.text();
+        const responseText = result.response.text;
 
         // Clean JSON response from markdown blocks
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);

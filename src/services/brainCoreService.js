@@ -30,7 +30,7 @@ export const generateEmbedding = async (text) => {
     try {
         const result = await genAI.models.embedContent({
             model: EMBEDDING_MODEL,
-            contents: [{ parts: [{ text }] }]
+            contents: text,
         });
         return result.embedding.values;
     } catch (error) {
@@ -57,7 +57,7 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }, imagePart] }]
         });
-        const responseText = result.response.text();
+        const responseText = result.response.text;
         return JSON.parse(responseText.replace(/```json|```/g, ''));
     } catch (error) {
         console.error("[BrainCoreService] Advanced extraction failed:", error);
@@ -209,7 +209,7 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }]
         });
-        const responseText = result.response.text();
+        const responseText = result.response.text;
         return JSON.parse(responseText.replace(/```json|```/g, ''));
     } catch (e) {
         console.error("[BrainCoreService] Feed generation failed:", e);
@@ -319,7 +319,7 @@ export const askBrainCore = async (question, clientId = null) => {
         let response = result.response;
 
         // Handle Function Calling
-        const calls = response.functionCalls();
+        const calls = response.functionCalls;
         if (calls && calls.length > 0) {
             const call = calls[0];
             let toolResult;
@@ -335,9 +335,9 @@ export const askBrainCore = async (question, clientId = null) => {
                 model: CHAT_MODEL,
                 contents: [
                     { role: 'user', parts: [{ text: promptText }] },
-                    response.candidates[0].content, // Send back model's tool call
+                    { role: 'model', parts: [{ functionCall: call }] },
                     {
-                        role: 'user', // Actually tool results should be in specific structure
+                        role: 'user',
                         parts: [{
                             functionResponse: {
                                 name: call.name,
@@ -350,13 +350,13 @@ export const askBrainCore = async (question, clientId = null) => {
             });
 
             return {
-                content: finalResult.response.text(),
+                content: finalResult.response.text,
                 sources: approvedContext.map(c => ({ id: c.id, content: c.content }))
             };
         }
 
         return {
-            content: response.text(),
+            content: response.text,
             sources: approvedContext.map(c => ({ id: c.id, content: c.content }))
         };
     } catch (e) {
@@ -389,7 +389,7 @@ export const getClientProfileFromMemory = async (clientId) => {
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }]
         });
-        const responseText = result.response.text();
+        const responseText = result.response.text;
         return JSON.parse(responseText.replace(/```json|```/g, ''));
     } catch (e) {
         console.error("[BrainCoreService] Radar generation failed:", e);
