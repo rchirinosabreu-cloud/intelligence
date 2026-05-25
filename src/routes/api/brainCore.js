@@ -182,7 +182,6 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) throw new Error("GEMINI_API_KEY is missing.");
         const genAI = new GoogleGenAI({ apiKey });
-        const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.0-flash" });
 
         const prompt = `Analiza los siguientes datos operativos para el cliente "${client.name}".
         TU OBJETIVO es sintetizar un dashboard ejecutivo de Project Management cruzando información de un Google Sheet y correos de Gmail (notificaciones de Basecamp/Alertas).
@@ -213,7 +212,10 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
 
         IMPORTANTE: Si no hay datos suficientes para una categoría, devuelve un array vacío []. NO inventes datos.`;
 
-        const result = await model.generateContent(prompt);
+        const result = await genAI.models.generateContent({
+            model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+            contents: [{ role: 'user', parts: [{ text: prompt }] }]
+        });
         const responseText = result.response.text();
 
         // Clean JSON response from markdown blocks
