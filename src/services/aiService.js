@@ -72,6 +72,7 @@ export const classifyTaskWithAI = async (title, comments = "") => {
                 responseMimeType: "application/json"
             }
         });
+        console.log("================ DEPURACIÓN IA RAW (Task Classification) ================", JSON.stringify(result, null, 2));
         const text = result.response?.text;
 
         const classification = JSON.parse(text);

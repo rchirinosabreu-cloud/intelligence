@@ -275,6 +275,7 @@ Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introd
             model: MODEL_NAME,
             contents: [{ role: 'user', parts: [{ text: prompt }] }]
         });
+        console.log("================ DEPURACIÓN IA RAW (Talent Insight) ================", JSON.stringify(result, null, 2));
         const insight = result.response?.text;
 
         res.json({ insight });

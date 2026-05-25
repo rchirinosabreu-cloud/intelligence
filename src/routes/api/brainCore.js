@@ -216,6 +216,7 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
             model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
             contents: [{ role: 'user', parts: [{ text: prompt }] }]
         });
+        console.log("================ DEPURACIÓN IA RAW (Client Summary) ================", JSON.stringify(result, null, 2));
 
         let responseText = "";
         const response = result.response;

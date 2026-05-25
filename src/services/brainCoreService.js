@@ -68,6 +68,7 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }, imagePart] }]
         });
+        console.log("================ DEPURACIÓN IA RAW (Extraction) ================", JSON.stringify(result, null, 2));
 
         let responseText = "";
         const response = result.response;
@@ -230,6 +231,7 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }]
         });
+        console.log("================ DEPURACIÓN IA RAW (Structured Feed) ================", JSON.stringify(result, null, 2));
 
         let responseText = "";
         const response = result.response;
@@ -347,6 +349,7 @@ export const askBrainCore = async (question, clientId = null) => {
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
             tools: tools
         });
+        console.log("================ DEPURACIÓN IA RAW (Ask Brain) ================", JSON.stringify(result, null, 2));
         let response = result.response;
 
         // Handle Function Calling
@@ -379,6 +382,7 @@ export const askBrainCore = async (question, clientId = null) => {
                 ],
                 tools: tools
             });
+            console.log("================ DEPURACIÓN IA RAW (Tool Response) ================", JSON.stringify(finalResult, null, 2));
 
             let contentText = "";
             const fResponse = finalResult.response;
@@ -435,6 +439,7 @@ export const getClientProfileFromMemory = async (clientId) => {
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }]
         });
+        console.log("================ DEPURACIÓN IA RAW (Radar Profile) ================", JSON.stringify(result, null, 2));
 
         let responseText = "";
         const response = result.response;
