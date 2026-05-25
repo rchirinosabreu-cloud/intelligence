@@ -9,7 +9,7 @@ dotenv.config();
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'brainstudio-intelligence';
 const LOCATION = 'us-central1';
 const EMBEDDING_MODEL = "text-embedding-004";
-const CHAT_MODEL = "gemini-2.0-flash";
+const CHAT_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-pro";
 
 let vertexAI;
 try {
