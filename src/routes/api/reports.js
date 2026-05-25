@@ -172,7 +172,14 @@ router.post('/generate', upload.any(), async (req, res) => {
             return res.status(500).json({ error: 'AI Service not available' });
         }
 
-        const model = genAI.getGenerativeModel({
+        const prompt = `Analiza para ${client.name}:
+        Orgánico: ${JSON.stringify(summary.organic)}
+        Ads: ${JSON.stringify(summary.ads)}
+        Sample: ${JSON.stringify(organicRawData.slice(0, 30))}
+        Asegura que el campo 'hoja_de_ruta' contenga exactamente 3 pasos.
+        IMPORTANTE: En la sección 'widgets', los valores deben ser NÚMEROS PUROS sin símbolos de moneda ni separadores de miles.`;
+
+        const result = await genAI.models.generateContent({
             model: MODEL_NAME,
             systemInstruction: `Eres el Director Estratégico de Brainstudio. Genera un "Reporte de desempeño digital" estable y profesional.
 
@@ -227,19 +234,11 @@ ESTRUCTURA JSON:
     { "step": "3", "title": "...", "description": "..." }
   ]
 }`,
-            generationConfig: {
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            config: {
                 responseMimeType: "application/json"
             }
         });
-
-        const prompt = `Analiza para ${client.name}:
-        Orgánico: ${JSON.stringify(summary.organic)}
-        Ads: ${JSON.stringify(summary.ads)}
-        Sample: ${JSON.stringify(organicRawData.slice(0, 30))}
-        Asegura que el campo 'hoja_de_ruta' contenga exactamente 3 pasos.
-        IMPORTANTE: En la sección 'widgets', los valores deben ser NÚMEROS PUROS sin símbolos de moneda ni separadores de miles.`;
-
-        const result = await model.generateContent(prompt);
         const analysis = JSON.parse(result.response.text());
 
         res.json({

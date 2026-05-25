@@ -234,7 +234,6 @@ router.post('/member/:memberId/ai-insights', async (req, res) => {
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
         const genAI = new GoogleGenAI({ apiKey });
-        const model = genAI.getGenerativeModel({ model: MODEL_NAME });
 
         // Aggregate metrics for dynamic analysis
         const categoryStats = allTasks.reduce((acc, t) => {
@@ -272,7 +271,10 @@ TAREA DE ANÁLISIS V2:
 
 Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introducciones como "Aquí tienes el análisis...".`;
 
-        const result = await model.generateContent(prompt);
+        const result = await genAI.models.generateContent({
+            model: MODEL_NAME,
+            contents: [{ role: 'user', parts: [{ text: prompt }] }]
+        });
         const insight = result.response.text();
 
         res.json({ insight });

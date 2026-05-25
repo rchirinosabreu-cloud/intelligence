@@ -28,8 +28,10 @@ try {
 export const generateEmbedding = async (text) => {
     if (!genAI) return null;
     try {
-        const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
-        const result = await model.embedContent(text);
+        const result = await genAI.models.embedContent({
+            model: EMBEDDING_MODEL,
+            contents: [{ parts: [{ text }] }]
+        });
         return result.embedding.values;
     } catch (error) {
         console.error("[BrainCoreService] Embedding generation failed:", error.message);
@@ -43,7 +45,6 @@ export const generateEmbedding = async (text) => {
 export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
     if (!genAI) return null;
     try {
-        const model = genAI.getGenerativeModel({ model: CHAT_MODEL });
         const promptText = `Analiza esta captura de pantalla de WhatsApp u otra imagen de la agencia.
         Detecta el sentimiento, extrae preferencias del cliente, lo que odia, lo que aprueba y cualquier instrucción crítica.
         TU OBJETIVO es generar una propuesta de memoria concisa y accionable.
@@ -52,7 +53,10 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
 
         const imagePart = { inlineData: { data: imageBuffer.toString('base64'), mimeType } };
 
-        const result = await model.generateContent([promptText, imagePart]);
+        const result = await genAI.models.generateContent({
+            model: CHAT_MODEL,
+            contents: [{ role: 'user', parts: [{ text: promptText }, imagePart] }]
+        });
         const responseText = result.response.text();
         return JSON.parse(responseText.replace(/```json|```/g, ''));
     } catch (error) {
@@ -177,7 +181,6 @@ export const getIntelligenceFeed = async (statusFilter = 'APPROVED') => {
 
 const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
     if (!genAI) return [];
-    const model = genAI.getGenerativeModel({ model: CHAT_MODEL });
 
     const promptText = `Eres el Brain Core de Brainstudio. Tu misión es cruzar tareas activas con la memoria de la agencia.
 
@@ -202,7 +205,10 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
     { "id": "uuid", "contextId": "id del AgencyContext original", "type": "ALERTA/INSIGHT/RECOMENDACIÓN/HISTORIAL", "title": "Título corto y directo", "content": "Cuerpo conciso", "severity": "critical/warning/info", "timestamp": "ISO Date" }`;
 
     try {
-        const result = await model.generateContent(promptText);
+        const result = await genAI.models.generateContent({
+            model: CHAT_MODEL,
+            contents: [{ role: 'user', parts: [{ text: promptText }] }]
+        });
         const responseText = result.response.text();
         return JSON.parse(responseText.replace(/```json|```/g, ''));
     } catch (e) {
@@ -291,12 +297,6 @@ export const askBrainCore = async (question, clientId = null) => {
     const context = await searchContext(question, clientId, 10);
     const approvedContext = context.filter(c => c.similarity > 0.65);
 
-    const model = genAI.getGenerativeModel({
-        model: CHAT_MODEL,
-        tools
-    });
-
-    const chat = model.startChat();
     const promptText = `Pregunta del Usuario: "${question}"
 
     FUENTES DE DATOS DISPONIBLES (Google Workspace):
@@ -311,7 +311,11 @@ export const askBrainCore = async (question, clientId = null) => {
     3. Responde de forma ejecutiva y profesional.`;
 
     try {
-        let result = await chat.sendMessage(promptText);
+        let result = await genAI.models.generateContent({
+            model: CHAT_MODEL,
+            contents: [{ role: 'user', parts: [{ text: promptText }] }],
+            tools: tools
+        });
         let response = result.response;
 
         // Handle Function Calling
@@ -327,12 +331,23 @@ export const askBrainCore = async (question, clientId = null) => {
             }
 
             // Send tool result back to model
-            const finalResult = await chat.sendMessage([{
-                functionResponse: {
-                    name: call.name,
-                    response: { content: toolResult }
-                }
-            }]);
+            const finalResult = await genAI.models.generateContent({
+                model: CHAT_MODEL,
+                contents: [
+                    { role: 'user', parts: [{ text: promptText }] },
+                    response.candidates[0].content, // Send back model's tool call
+                    {
+                        role: 'user', // Actually tool results should be in specific structure
+                        parts: [{
+                            functionResponse: {
+                                name: call.name,
+                                response: { content: toolResult }
+                            }
+                        }]
+                    }
+                ],
+                tools: tools
+            });
 
             return {
                 content: finalResult.response.text(),
@@ -363,7 +378,6 @@ export const getClientProfileFromMemory = async (clientId) => {
     if (contexts.length === 0) return null;
 
     if (!genAI) return null;
-    const model = genAI.getGenerativeModel({ model: CHAT_MODEL });
     const promptText = `Analiza estas notas de la agencia sobre un cliente específico y construye su 'Ficha Mental'.
     Notas: ${contexts.map(c => c.content).join('\n')}
 
@@ -371,7 +385,10 @@ export const getClientProfileFromMemory = async (clientId) => {
     { "preferences": [], "dislikes": [], "approvals": [], "sentiment": "Evolución del sentimiento" }`;
 
     try {
-        const result = await model.generateContent(promptText);
+        const result = await genAI.models.generateContent({
+            model: CHAT_MODEL,
+            contents: [{ role: 'user', parts: [{ text: promptText }] }]
+        });
         const responseText = result.response.text();
         return JSON.parse(responseText.replace(/```json|```/g, ''));
     } catch (e) {
