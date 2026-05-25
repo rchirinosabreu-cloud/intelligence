@@ -214,7 +214,8 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
 
         const result = await genAI.models.generateContent({
             model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
-            contents: [{ role: 'user', parts: [{ text: prompt }] }]
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            config: { responseMimeType: 'application/json' }
         });
         console.log("================ DEPURACIÓN IA RAW (Client Summary) ================", JSON.stringify(result, null, 2));
 
@@ -240,8 +241,12 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
                 try {
                     structuredData = JSON.parse(jsonMatch[0]);
                 } catch (parseErr) {
-                    console.error("[ClientSummary] JSON parse failed:", parseErr.message);
+                    console.warn("⚠️ Alerta BrainCore (Client Summary): Fallo de parseo JSON. Usando texto plano como Insight.");
+                    structuredData.aiInsight = responseText;
                 }
+            } else {
+                console.warn("⚠️ Alerta BrainCore (Client Summary): No se detectó estructura JSON. Usando texto plano.");
+                structuredData.aiInsight = responseText;
             }
         }
 
