@@ -544,7 +544,7 @@ app.post('/api/openai/v1/chat/completions', authenticateToken, async (req, res) 
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
+            const errorText = await response.text;
             console.error(`[OpenAI API] HTTP Error ${response.status}:`, errorText);
             return res.status(response.status).send(errorText);
         }
@@ -582,7 +582,7 @@ app.post('/api/openai/v1/chat/completions', authenticateToken, async (req, res) 
         } else {
              // Fallback for Node environments where response.body isn't a streamable standard ReadableStream
              // In Node 18+, fetch bodies are web streams, but just in case:
-             const text = await response.text();
+             const text = await response.text;
              res.send(text);
         }
 
@@ -614,7 +614,7 @@ app.post('/api/fireflies/graphql', authenticateToken, async (req, res) => {
             body: JSON.stringify(req.body)
         });
 
-        const data = await response.text(); // Read as text first to handle non-JSON error pages safely
+        const data = await response.text; // Read as text first to handle non-JSON error pages safely
 
         if (!response.ok) {
             console.error(`[Fireflies API] HTTP Error ${response.status}:`, data);
@@ -869,7 +869,7 @@ async function analyzeWebsiteDna(url) {
             throw new Error(`Failed to fetch URL. Status: ${response.status}`);
         }
 
-        const html = await response.text();
+        const html = await response.text;
         const $ = cheerio.load(html);
 
         // Technical Health
@@ -2193,7 +2193,7 @@ app.post('/api/chat', async (req, res) => {
         // Consume the first stream
         for await (const chunk of streamResult.stream) {
             console.log(`[DEBUG] Received chunk from Google GenAI`);
-            const text = chunk.text();
+            const text = chunk.text;
 
             if (text) {
                 const safeText = processFilter(text);
@@ -2206,7 +2206,7 @@ app.post('/api/chat', async (req, res) => {
 
         // Ensure we inspect the full response to detect function calls or missing text
         const fullResponse = await streamResult.response;
-        const functionCalls = fullResponse.functionCalls();
+        const functionCalls = fullResponse.functionCalls;
 
         // If a function call was detected during the stream, we execute it now
         if (functionCalls && functionCalls.length > 0) {
@@ -2280,7 +2280,7 @@ app.post('/api/chat', async (req, res) => {
 
                 for await (const chunk of streamResult2.stream) {
                     console.log(`[DEBUG] Received chunk (post-function) from Google GenAI`);
-                    const text = chunk.text();
+                    const text = chunk.text;
 
                     if (text) {
                         const safeText = processFilter2(text);

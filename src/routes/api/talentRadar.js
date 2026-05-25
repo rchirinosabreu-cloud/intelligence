@@ -275,7 +275,7 @@ Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introd
             model: MODEL_NAME,
             contents: [{ role: 'user', parts: [{ text: prompt }] }]
         });
-        const insight = result.response.text();
+        const insight = result.response.text;
 
         res.json({ insight });
 
