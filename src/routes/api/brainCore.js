@@ -186,7 +186,7 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
             location: 'us-central1',
             googleAuthOptions: { credentials }
         });
-        const model = vertexAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-1.5-pro" });
+        const model = vertexAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3.1-pro-preview" });
 
         const prompt = `Analiza los siguientes datos operativos para el cliente "${client.name}".
         TU OBJETIVO es sintetizar un dashboard ejecutivo de Project Management cruzando información de un Google Sheet y correos de Gmail (notificaciones de Basecamp/Alertas).

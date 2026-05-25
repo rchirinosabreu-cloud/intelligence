@@ -13,7 +13,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'brainstudio-intelligence';
 const LOCATION = 'global';
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-1.5-pro";
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
 
 /**
  * Radar de Talento: Global Summary
