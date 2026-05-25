@@ -6,7 +6,7 @@ import { readGoogleSheet, getRecentEmails, readGoogleSlides, DEFAULT_IMPERSONATE
 
 dotenv.config();
 
-const EMBEDDING_MODEL = "embedding-001";
+const EMBEDDING_MODEL = "gemini-embedding-001";
 const CHAT_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
 let genAI;
