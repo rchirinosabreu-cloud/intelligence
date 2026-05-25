@@ -216,16 +216,33 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
             model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
             contents: [{ role: 'user', parts: [{ text: prompt }] }]
         });
-        const responseText = result.response?.text;
 
-        // Clean JSON response from markdown blocks
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        const structuredData = jsonMatch ? JSON.parse(jsonMatch[0]) : {
+        let responseText = "";
+        const response = result.response;
+        if (response && typeof response.text === 'string') {
+            responseText = response.text;
+        } else if (response && typeof response.text === 'function') {
+            responseText = response.text();
+        }
+
+        // Clean JSON response from markdown blocks with safety check
+        let structuredData = {
             criticalTasks: [],
             highPriority: [],
             blockers: ["Error parseando respuesta de IA"],
             aiInsight: "La inteligencia no pudo estructurar los datos."
         };
+
+        if (responseText) {
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                try {
+                    structuredData = JSON.parse(jsonMatch[0]);
+                } catch (parseErr) {
+                    console.error("[ClientSummary] JSON parse failed:", parseErr.message);
+                }
+            }
+        }
 
         res.json({
             ...structuredData,
