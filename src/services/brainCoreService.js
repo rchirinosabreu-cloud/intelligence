@@ -1,4 +1,4 @@
-import { VertexAI } from '@google-cloud/vertexai';
+import { GoogleGenerativeAI } from '@google/genai';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import prisma from '../lib/prisma.js';
@@ -6,59 +6,31 @@ import { readGoogleSheet, getRecentEmails, readGoogleSlides, DEFAULT_IMPERSONATE
 
 dotenv.config();
 
-const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'brainstudio-intelligence';
-const LOCATION = 'us-central1';
 const EMBEDDING_MODEL = "text-embedding-004";
-const CHAT_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
+const CHAT_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
-let vertexAI;
+let genAI;
 try {
-    const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-    if (credentialsJson) {
-        const credentials = JSON.parse(credentialsJson);
-        vertexAI = new VertexAI({
-            project: PROJECT_ID,
-            location: LOCATION,
-            apiEndpoint: 'aiplatform.googleapis.com',
-            googleAuthOptions: { credentials }
-        });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+        genAI = new GoogleGenerativeAI(apiKey);
+        console.log("[BrainCoreService] Google Generative AI initialized with API Key.");
+    } else {
+        console.warn("[BrainCoreService] GEMINI_API_KEY is missing.");
     }
 } catch (e) {
-    console.error("[BrainCoreService] Failed to initialize Vertex AI client:", e);
+    console.error("[BrainCoreService] Failed to initialize Google Generative AI client:", e);
 }
 
 /**
  * Generates embeddings for a given text using text-embedding-004.
  */
 export const generateEmbedding = async (text) => {
-    if (!vertexAI) return null;
+    if (!genAI) return null;
     try {
-        // En Vertex AI para Node.js v1.10.0, embedContent NO existe en el objeto model.
-        // Se debe usar la API REST directamente via el cliente de predicción o fetch manual.
-        // Implementamos fetch manual alineado con el SDK para text-embedding-004.
-        const token = await vertexAI.googleAuth.getAccessToken();
-        const url = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${EMBEDDING_MODEL}:predict`;
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                instances: [{ content: text }]
-            })
-        });
-
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(JSON.stringify(err));
-        }
-
-        const result = await response.json();
-        // El formato de respuesta para embeddings en Vertex AI predict es:
-        // { predictions: [ { embeddings: { values: [...] } } ] }
-        return result.predictions[0].embeddings.values;
+        const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
+        const result = await model.embedContent(text);
+        return result.embedding.values;
     } catch (error) {
         console.error("[BrainCoreService] Embedding generation failed:", error.message);
         return null;
@@ -66,12 +38,12 @@ export const generateEmbedding = async (text) => {
 };
 
 /**
- * Performs OCR and extraction using Gemini 2.5 Pro.
+ * Performs OCR and extraction using Gemini.
  */
 export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
-    if (!vertexAI) return null;
+    if (!genAI) return null;
     try {
-        const model = vertexAI.getGenerativeModel({ model: CHAT_MODEL });
+        const model = genAI.getGenerativeModel({ model: CHAT_MODEL });
         const promptText = `Analiza esta captura de pantalla de WhatsApp u otra imagen de la agencia.
         Detecta el sentimiento, extrae preferencias del cliente, lo que odia, lo que aprueba y cualquier instrucción crítica.
         TU OBJETIVO es generar una propuesta de memoria concisa y accionable.
@@ -80,11 +52,8 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
 
         const imagePart = { inlineData: { data: imageBuffer.toString('base64'), mimeType } };
 
-        const result = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: promptText }, imagePart] }]
-        });
-
-        const responseText = result.response.candidates[0].content.parts[0].text;
+        const result = await model.generateContent([promptText, imagePart]);
+        const responseText = result.response.text();
         return JSON.parse(responseText.replace(/```json|```/g, ''));
     } catch (error) {
         console.error("[BrainCoreService] Advanced extraction failed:", error);
@@ -207,8 +176,8 @@ export const getIntelligenceFeed = async (statusFilter = 'APPROVED') => {
 };
 
 const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
-    if (!vertexAI) return [];
-    const model = vertexAI.getGenerativeModel({ model: CHAT_MODEL });
+    if (!genAI) return [];
+    const model = genAI.getGenerativeModel({ model: CHAT_MODEL });
 
     const promptText = `Eres el Brain Core de Brainstudio. Tu misión es cruzar tareas activas con la memoria de la agencia.
 
@@ -233,10 +202,9 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
     { "id": "uuid", "contextId": "id del AgencyContext original", "type": "ALERTA/INSIGHT/RECOMENDACIÓN/HISTORIAL", "title": "Título corto y directo", "content": "Cuerpo conciso", "severity": "critical/warning/info", "timestamp": "ISO Date" }`;
 
     try {
-        const result = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: promptText }] }]
-        });
-        return JSON.parse(result.response.candidates[0].content.parts[0].text.replace(/```json|```/g, ''));
+        const result = await model.generateContent(promptText);
+        const responseText = result.response.text();
+        return JSON.parse(responseText.replace(/```json|```/g, ''));
     } catch (e) {
         console.error("[BrainCoreService] Feed generation failed:", e);
         return [];
@@ -281,7 +249,7 @@ export const getMemoryStats = async () => {
  * Synthesizes a response to a natural language question using available memory and Google Workspace tools.
  */
 export const askBrainCore = async (question, clientId = null) => {
-    if (!vertexAI) return { content: "Brain Core fuera de línea." };
+    if (!genAI) return { content: "Brain Core fuera de línea." };
 
     // Define Workspace Tools
     const tools = [
@@ -323,7 +291,7 @@ export const askBrainCore = async (question, clientId = null) => {
     const context = await searchContext(question, clientId, 10);
     const approvedContext = context.filter(c => c.similarity > 0.65);
 
-    const model = vertexAI.getGenerativeModel({
+    const model = genAI.getGenerativeModel({
         model: CHAT_MODEL,
         tools
     });
@@ -343,13 +311,13 @@ export const askBrainCore = async (question, clientId = null) => {
     3. Responde de forma ejecutiva y profesional.`;
 
     try {
-        const result = await chat.sendMessage(promptText);
-        const response = result.response;
-        const part = response.candidates[0].content.parts[0];
+        let result = await chat.sendMessage(promptText);
+        let response = result.response;
 
         // Handle Function Calling
-        if (part.functionCall) {
-            const call = part.functionCall;
+        const calls = response.functionCalls();
+        if (calls && calls.length > 0) {
+            const call = calls[0];
             let toolResult;
 
             if (call.name === 'read_google_sheet') {
@@ -367,13 +335,13 @@ export const askBrainCore = async (question, clientId = null) => {
             }]);
 
             return {
-                content: finalResult.response.candidates[0].content.parts[0].text,
+                content: finalResult.response.text(),
                 sources: approvedContext.map(c => ({ id: c.id, content: c.content }))
             };
         }
 
         return {
-            content: part.text,
+            content: response.text(),
             sources: approvedContext.map(c => ({ id: c.id, content: c.content }))
         };
     } catch (e) {
@@ -394,7 +362,8 @@ export const getClientProfileFromMemory = async (clientId) => {
 
     if (contexts.length === 0) return null;
 
-    const model = vertexAI.getGenerativeModel({ model: CHAT_MODEL });
+    if (!genAI) return null;
+    const model = genAI.getGenerativeModel({ model: CHAT_MODEL });
     const promptText = `Analiza estas notas de la agencia sobre un cliente específico y construye su 'Ficha Mental'.
     Notas: ${contexts.map(c => c.content).join('\n')}
 
@@ -402,10 +371,9 @@ export const getClientProfileFromMemory = async (clientId) => {
     { "preferences": [], "dislikes": [], "approvals": [], "sentiment": "Evolución del sentimiento" }`;
 
     try {
-        const result = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: promptText }] }]
-        });
-        return JSON.parse(result.response.candidates[0].content.parts[0].text.replace(/```json|```/g, ''));
+        const result = await model.generateContent(promptText);
+        const responseText = result.response.text();
+        return JSON.parse(responseText.replace(/```json|```/g, ''));
     } catch (e) {
         console.error("[BrainCoreService] Radar generation failed:", e);
         return null;

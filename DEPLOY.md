@@ -35,5 +35,5 @@ Ahora, tu llave solo funcionará cuando las peticiones vengan desde tu aplicaci�
 
 ## 3. Solución de Problemas Comunes
 
-*   **Error 404 / 400 en consola:** Verifica que el modelo en `src/lib/chatUtils.js` sea `gemini-2.5-pro`.
+*   **Error 404 / 400 en consola:** Verifica que el modelo en `src/lib/chatUtils.js` sea `gemini-2.0-flash`.
 *   **"VITE_GEMINI_API_KEY no está configurado":** Significa que el proceso de "Build" de Railway no tuvo acceso a la variable. Revisa el paso 1 y haz un Redeploy.

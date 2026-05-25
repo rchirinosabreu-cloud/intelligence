@@ -1,26 +1,21 @@
-import { VertexAI } from '@google-cloud/vertexai';
+import { GoogleGenerativeAI } from '@google/genai';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'brainstudio-intelligence';
-const LOCATION = 'global';
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
-let vertexAI;
+let genAI;
 try {
-    const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-    if (credentialsJson) {
-        const credentials = JSON.parse(credentialsJson);
-        vertexAI = new VertexAI({
-            project: PROJECT_ID,
-            location: LOCATION,
-            apiEndpoint: 'aiplatform.googleapis.com',
-            googleAuthOptions: { credentials }
-        });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+        genAI = new GoogleGenerativeAI(apiKey);
+        console.log("[AiService] Google Generative AI initialized.");
+    } else {
+        console.warn("[AiService] GEMINI_API_KEY is missing.");
     }
 } catch (e) {
-    console.error("[AiService] Failed to initialize Vertex AI client:", e);
+    console.error("[AiService] Failed to initialize AI client:", e);
 }
 
 const MASTER_PROMPT = `Rol del Sistema:
@@ -62,18 +57,15 @@ Ejemplo de Salida Esperada (Lo que debe responder Gemini):
  * @returns {Promise<Object>} - { category, complexity }
  */
 export const classifyTaskWithAI = async (title, comments = "") => {
-    if (!vertexAI) {
-        console.warn("[AiService] Vertex AI client not initialized. Skipping classification.");
+    if (!genAI) {
+        console.warn("[AiService] AI client not initialized. Skipping classification.");
         return { category: null, complexity: null };
     }
 
     try {
-        const model = vertexAI.getGenerativeModel({
+        const model = genAI.getGenerativeModel({
             model: MODEL_NAME,
-            systemInstruction: {
-                role: "system",
-                parts: [{ text: MASTER_PROMPT }]
-            },
+            systemInstruction: MASTER_PROMPT,
             generationConfig: {
                 responseMimeType: "application/json"
             }
@@ -81,8 +73,7 @@ export const classifyTaskWithAI = async (title, comments = "") => {
 
         const prompt = `Tarea a clasificar:\n\nTítulo: ${title}\nDescripción: ${comments}`;
         const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.candidates[0].content.parts[0].text;
+        const text = result.response.text();
 
         const classification = JSON.parse(text);
         return {
