@@ -1199,10 +1199,10 @@ const tools = [
                 name: "get_client_guidelines",
                 description: "Obtiene las reglas de redacción (brand guidelines y ai_instructions) de un cliente específico directamente desde la base de datos. DEBE llamarse SIEMPRE antes de generar contenido para asegurar el tono de la marca.",
                 parameters: {
-                    type: FunctionDeclarationSchemaType.OBJECT,
+                    type: "OBJECT",
                     properties: {
                         identifier: {
-                            type: FunctionDeclarationSchemaType.STRING,
+                            type: "STRING",
                             description: "Nombre de la marca o slug del cliente (ej. 'TruPeak' o 'trupeak')."
                         }
                     },
@@ -1213,10 +1213,10 @@ const tools = [
                 name: "search_cloud_storage",
                 description: "Busca en el 'cerebro' de Brainstudio (Google Cloud Storage) documentos no estructurados (PDFs, CSVs, reportes de métricas) de clientes. Usa esto para consultas sobre información interna, manuales o para analizar resultados de campañas pasadas.",
                 parameters: {
-                    type: FunctionDeclarationSchemaType.OBJECT,
+                    type: "OBJECT",
                     properties: {
                         query: {
-                            type: FunctionDeclarationSchemaType.STRING,
+                            type: "STRING",
                             description: "Término de búsqueda (ej. 'Estrategia Sunpartners', 'Métricas Meta TruPeak')."
                         }
                     },
@@ -1227,10 +1227,10 @@ const tools = [
                 name: "analyze_website_dna",
                 description: "Scrapes a website to extract branding DNA (colors, fonts) and technical health (H1, meta).",
                 parameters: {
-                    type: FunctionDeclarationSchemaType.OBJECT,
+                    type: "OBJECT",
                     properties: {
                         url: {
-                            type: FunctionDeclarationSchemaType.STRING,
+                            type: "STRING",
                             description: "The full URL to audit (e.g. https://artyzza.com)"
                         }
                     },
@@ -1241,10 +1241,10 @@ const tools = [
                 name: "fetch_agency_tasks",
                 description: "Connects to the Agency Google Sheet to retrieve pending tasks filtered by responsible person.",
                 parameters: {
-                    type: FunctionDeclarationSchemaType.OBJECT,
+                    type: "OBJECT",
                     properties: {
                         responsible_name: {
-                            type: FunctionDeclarationSchemaType.STRING,
+                            type: "STRING",
                             description: "Name of the responsible person (default: Rodny)."
                         }
                     },
