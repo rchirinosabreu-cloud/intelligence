@@ -361,7 +361,7 @@ export const askBrainCore = async (question, clientId = null) => {
         let result = await genAI.models.generateContent({
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
-            tools: tools
+            config: { tools: tools }
         });
         console.log("================ DEPURACIÓN IA RAW (Ask Brain) ================", JSON.stringify(result, null, 2));
         let response = result.response;
@@ -394,7 +394,7 @@ export const askBrainCore = async (question, clientId = null) => {
                         }]
                     }
                 ],
-                tools: tools
+                config: { tools: tools }
             });
             console.log("================ DEPURACIÓN IA RAW (Tool Response) ================", JSON.stringify(finalResult, null, 2));
 

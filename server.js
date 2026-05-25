@@ -2170,7 +2170,7 @@ app.post('/api/chat', async (req, res) => {
             model: MODEL_NAME,
             systemInstruction: finalSystemPrompt,
             contents: [...history, { role: 'user', parts: [{ text: lastMessageContent }] }],
-            tools: tools
+            config: { tools: tools }
         });
         console.log(`[DEBUG] chat.sendMessageStream returned. Starting to iterate stream...`);
 
@@ -2268,7 +2268,7 @@ app.post('/api/chat', async (req, res) => {
                                 }]
                             }
                         ],
-                        tools: tools
+                        config: { tools: tools }
                      });
                 } catch (streamErr) {
                      console.error("[API] Error calling sendMessageStream with function response:", streamErr);
