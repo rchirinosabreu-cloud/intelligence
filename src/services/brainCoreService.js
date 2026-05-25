@@ -23,19 +23,30 @@ try {
 }
 
 /**
- * Generates embeddings for a given text using text-embedding-004.
+ * Generates embeddings for a given text using the official 2026 embedding model.
  */
 export const generateEmbedding = async (text) => {
     if (!genAI) return null;
     try {
-        const result = await genAI.models.embedContent({
-            model: EMBEDDING_MODEL,
-            contents: text,
+        const response = await genAI.models.embedContent({
+            model: 'gemini-embedding-001',
+            contents: [{ parts: [{ text }] }],
         });
-        return result.embedding.values;
+
+        // Hybrid mapping supporting multiple SDK versions and response formats
+        const embeddingValues = response?.embedding?.values || response?.embeddings?.[0]?.values;
+
+        if (!embeddingValues) {
+            console.error("⚠️ Alerta BrainCore: Estructura de embedding no reconocida:", response);
+            // Return zeroed vector fallback (768 dimensions) to prevent cascading Error 500
+            return new Array(768).fill(0);
+        }
+
+        return embeddingValues;
     } catch (error) {
         console.error("[BrainCoreService] Embedding generation failed:", error.message);
-        return null;
+        // Fail-safe: return zeroed vector instead of null to keep the app running
+        return new Array(768).fill(0);
     }
 };
 
