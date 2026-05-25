@@ -6,7 +6,7 @@ import { readGoogleSheet, getRecentEmails, readGoogleSlides, DEFAULT_IMPERSONATE
 
 dotenv.config();
 
-const EMBEDDING_MODEL = "text-embedding-004";
+const EMBEDDING_MODEL = "embedding-001";
 const CHAT_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
 let genAI;
@@ -57,7 +57,17 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }, imagePart] }]
         });
-        const responseText = result.response?.text;
+
+        let responseText = "";
+        const response = result.response;
+        if (response && typeof response.text === 'string') {
+            responseText = response.text;
+        } else if (response && typeof response.text === 'function') {
+            responseText = response.text();
+        }
+
+        if (!responseText) throw new Error("Empty response from AI");
+
         return JSON.parse(responseText.replace(/```json|```/g, ''));
     } catch (error) {
         console.error("[BrainCoreService] Advanced extraction failed:", error);
@@ -209,7 +219,17 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }]
         });
-        const responseText = result.response?.text;
+
+        let responseText = "";
+        const response = result.response;
+        if (response && typeof response.text === 'string') {
+            responseText = response.text;
+        } else if (response && typeof response.text === 'function') {
+            responseText = response.text();
+        }
+
+        if (!responseText) return [];
+
         return JSON.parse(responseText.replace(/```json|```/g, ''));
     } catch (e) {
         console.error("[BrainCoreService] Feed generation failed:", e);
@@ -349,14 +369,29 @@ export const askBrainCore = async (question, clientId = null) => {
                 tools: tools
             });
 
+            let contentText = "";
+            const fResponse = finalResult.response;
+            if (fResponse && typeof fResponse.text === 'string') {
+                contentText = fResponse.text;
+            } else if (fResponse && typeof fResponse.text === 'function') {
+                contentText = fResponse.text();
+            }
+
             return {
-                content: finalResult.response?.text,
+                content: contentText,
                 sources: approvedContext.map(c => ({ id: c.id, content: c.content }))
             };
         }
 
+        let contentText = "";
+        if (response && typeof response.text === 'string') {
+            contentText = response.text;
+        } else if (response && typeof response.text === 'function') {
+            contentText = response.text();
+        }
+
         return {
-            content: response?.text,
+            content: contentText,
             sources: approvedContext.map(c => ({ id: c.id, content: c.content }))
         };
     } catch (e) {
@@ -389,7 +424,17 @@ export const getClientProfileFromMemory = async (clientId) => {
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }]
         });
-        const responseText = result.response?.text;
+
+        let responseText = "";
+        const response = result.response;
+        if (response && typeof response.text === 'string') {
+            responseText = response.text;
+        } else if (response && typeof response.text === 'function') {
+            responseText = response.text();
+        }
+
+        if (!responseText) return null;
+
         return JSON.parse(responseText.replace(/```json|```/g, ''));
     } catch (e) {
         console.error("[BrainCoreService] Radar generation failed:", e);
