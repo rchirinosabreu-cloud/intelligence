@@ -72,7 +72,7 @@ export const classifyTaskWithAI = async (title, comments = "") => {
                 responseMimeType: "application/json"
             }
         });
-        const text = result.response.text;
+        const text = result.response?.text;
 
         const classification = JSON.parse(text);
         return {
