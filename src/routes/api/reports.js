@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
 import prisma from '../../lib/prisma.js';
-import { GoogleGenerativeAI } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import { uploadClientFile } from '../../services/storageService.js';
 
 const router = express.Router();
@@ -15,7 +15,7 @@ let genAI;
 try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
-        genAI = new GoogleGenerativeAI(apiKey);
+        genAI = new GoogleGenAI({ apiKey });
         console.log("[Reports API] Google Generative AI initialized.");
     } else {
         console.warn("[Reports API] GEMINI_API_KEY is missing.");

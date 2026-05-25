@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -9,7 +9,7 @@ let genAI;
 try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
-        genAI = new GoogleGenerativeAI(apiKey);
+        genAI = new GoogleGenAI({ apiKey });
         console.log("[AiService] Google Generative AI initialized.");
     } else {
         console.warn("[AiService] GEMINI_API_KEY is missing.");

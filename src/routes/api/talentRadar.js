@@ -3,7 +3,7 @@ import prisma from '../../lib/prisma.js';
 import { classifyTaskWithAI } from '../../services/aiService.js';
 import { uploadAvatar, deleteFileFromGCS, getClientFileStream } from '../../services/storageService.js';
 import multer from 'multer';
-import { GoogleGenerativeAI } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -233,7 +233,7 @@ router.post('/member/:memberId/ai-insights', async (req, res) => {
         // Initialize AI
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
-        const genAI = new GoogleGenerativeAI(apiKey);
+        const genAI = new GoogleGenAI({ apiKey });
         const model = genAI.getGenerativeModel({ model: MODEL_NAME });
 
         // Aggregate metrics for dynamic analysis
