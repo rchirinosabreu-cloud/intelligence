@@ -239,6 +239,7 @@ ESTRUCTURA JSON:
                 responseMimeType: "application/json"
             }
         });
+        console.log("================ DEPURACIÓN IA RAW (Report Gen) ================", JSON.stringify(result, null, 2));
         const analysis = JSON.parse(result.response?.text);
 
         res.json({
