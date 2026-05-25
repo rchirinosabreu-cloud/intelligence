@@ -2,31 +2,26 @@ import express from 'express';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
 import prisma from '../../lib/prisma.js';
-import { VertexAI } from '@google-cloud/vertexai';
+import { GoogleGenerativeAI } from '@google/genai';
 import { uploadClientFile } from '../../services/storageService.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Initialize Vertex AI
-const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'brainstudio-intelligence';
-const LOCATION = 'global';
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
+// Initialize AI
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
-let vertexAI;
+let genAI;
 try {
-    const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-    if (credentialsJson) {
-        const credentials = JSON.parse(credentialsJson);
-        vertexAI = new VertexAI({
-            project: PROJECT_ID,
-            location: LOCATION,
-            apiEndpoint: 'aiplatform.googleapis.com',
-            googleAuthOptions: { credentials }
-        });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+        genAI = new GoogleGenerativeAI(apiKey);
+        console.log("[Reports API] Google Generative AI initialized.");
+    } else {
+        console.warn("[Reports API] GEMINI_API_KEY is missing.");
     }
 } catch (e) {
-    console.error("[Reports API] Failed to initialize Vertex AI client:", e);
+    console.error("[Reports API] Failed to initialize AI client:", e);
 }
 
 router.post('/generate', upload.any(), async (req, res) => {
@@ -172,16 +167,14 @@ router.post('/generate', upload.any(), async (req, res) => {
             }
         };
 
-        // 3. AI Analysis with Gemini 2.5 Pro
-        if (!vertexAI) {
+        // 3. AI Analysis
+        if (!genAI) {
             return res.status(500).json({ error: 'AI Service not available' });
         }
 
-        const model = vertexAI.getGenerativeModel({
+        const model = genAI.getGenerativeModel({
             model: MODEL_NAME,
-            systemInstruction: {
-                role: "system",
-                parts: [{ text: `Eres el Director Estratégico de Brainstudio. Genera un "Reporte de desempeño digital" estable y profesional.
+            systemInstruction: `Eres el Director Estratégico de Brainstudio. Genera un "Reporte de desempeño digital" estable y profesional.
 
 REGLAS DE ESTABILIDAD Y CONTENIDO:
 1. Títulos RAE: Solo mayúscula inicial. Sin negritas ni cursivas en encabezados.
@@ -233,8 +226,7 @@ ESTRUCTURA JSON:
     { "step": "2", "title": "...", "description": "..." },
     { "step": "3", "title": "...", "description": "..." }
   ]
-}` }]
-            },
+}`,
             generationConfig: {
                 responseMimeType: "application/json"
             }
@@ -248,8 +240,7 @@ ESTRUCTURA JSON:
         IMPORTANTE: En la sección 'widgets', los valores deben ser NÚMEROS PUROS sin símbolos de moneda ni separadores de miles.`;
 
         const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const analysis = JSON.parse(response.candidates[0].content.parts[0].text);
+        const analysis = JSON.parse(result.response.text());
 
         res.json({
             client: {

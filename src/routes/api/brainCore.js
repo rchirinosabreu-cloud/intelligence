@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { VertexAI } from '@google-cloud/vertexai';
+import { GoogleGenerativeAI } from '@google/genai';
 import { addAgencyContext, performAdvancedExtraction, getIntelligenceFeed, getClientProfileFromMemory, searchContext, updateAgencyContext, deleteAgencyContext, getMemoryStats, askBrainCore } from '../../services/brainCoreService.js';
 import { getRecentEmails, readGoogleSheet, DEFAULT_IMPERSONATED_EMAIL } from '../../services/googleWorkspaceService.js';
 import prisma from '../../lib/prisma.js';
@@ -179,14 +179,10 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
         }
 
         // 4. Multi-Source Structured Analysis with Gemini
-        const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-        const credentials = JSON.parse(credentialsJson);
-        const vertexAI = new VertexAI({
-            project: credentials.project_id,
-            location: 'us-central1',
-            googleAuthOptions: { credentials }
-        });
-        const model = vertexAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-3.1-pro-preview" });
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) throw new Error("GEMINI_API_KEY is missing.");
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.0-flash" });
 
         const prompt = `Analiza los siguientes datos operativos para el cliente "${client.name}".
         TU OBJETIVO es sintetizar un dashboard ejecutivo de Project Management cruzando información de un Google Sheet y correos de Gmail (notificaciones de Basecamp/Alertas).
@@ -218,7 +214,7 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
         IMPORTANTE: Si no hay datos suficientes para una categoría, devuelve un array vacío []. NO inventes datos.`;
 
         const result = await model.generateContent(prompt);
-        const responseText = result.response.candidates[0].content.parts[0].text;
+        const responseText = result.response.text();
 
         // Clean JSON response from markdown blocks
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);

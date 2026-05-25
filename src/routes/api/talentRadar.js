@@ -3,7 +3,7 @@ import prisma from '../../lib/prisma.js';
 import { classifyTaskWithAI } from '../../services/aiService.js';
 import { uploadAvatar, deleteFileFromGCS, getClientFileStream } from '../../services/storageService.js';
 import multer from 'multer';
-import { VertexAI } from '@google-cloud/vertexai';
+import { GoogleGenerativeAI } from '@google/genai';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -11,9 +11,7 @@ dotenv.config();
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'brainstudio-intelligence';
-const LOCATION = 'global';
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
 /**
  * Radar de Talento: Global Summary
@@ -232,19 +230,11 @@ router.post('/member/:memberId/ai-insights', async (req, res) => {
 
         const returnedTasks = allTasks.filter(t => (t.returnCount || 0) > 0);
 
-        // Initialize Vertex AI
-        const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-        if (!credentialsJson) return res.status(500).json({ error: "Vertex AI not configured" });
-
-        const credentials = JSON.parse(credentialsJson);
-        const vertexAI = new VertexAI({
-            project: PROJECT_ID,
-            location: LOCATION,
-            apiEndpoint: 'aiplatform.googleapis.com',
-            googleAuthOptions: { credentials }
-        });
-
-        const model = vertexAI.getGenerativeModel({ model: MODEL_NAME });
+        // Initialize AI
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: MODEL_NAME });
 
         // Aggregate metrics for dynamic analysis
         const categoryStats = allTasks.reduce((acc, t) => {
@@ -283,8 +273,7 @@ TAREA DE ANÁLISIS V2:
 Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introducciones como "Aquí tienes el análisis...".`;
 
         const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const insight = response.candidates[0].content.parts[0].text;
+        const insight = result.response.text();
 
         res.json({ insight });
 

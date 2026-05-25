@@ -7,7 +7,7 @@ import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import { VertexAI, FunctionDeclarationSchemaType } from '@google-cloud/vertexai';
+import { GoogleGenerativeAI } from '@google/genai';
 import { SearchServiceClient } from '@google-cloud/discoveryengine';
 import { JWT } from 'google-auth-library';
 import fs from 'fs';
@@ -663,7 +663,7 @@ try {
 const PROJECT_ID = credentials?.project_id || 'brainstudio-intelligence';
 // Force 'global' location explicitly as requested
 const LOCATION = 'global';
-const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-3.1-pro-preview";
+const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-2.0-flash";
 
 // Engine ID for the App (Brainstudio Intelligence)
 const ENGINE_ID = process.env.ENGINE_ID || process.env.DISCOVERY_ENGINE_ENGINE_ID || "brainstudio-intelligence-v_1769659564733";
@@ -675,22 +675,21 @@ const DATA_STORE_ENTITY_ID = process.env.DATA_STORE_ENTITY_ID || "brainstudio-un
 const DISCOVERY_ENGINE_LOCATION = process.env.DISCOVERY_ENGINE_LOCATION || LOCATION;
 const DISCOVERY_ENGINE_API_ENDPOINT = 'discoveryengine.googleapis.com';
 
-console.log(`[VertexAI] Initializing with Project ID: ${PROJECT_ID || 'UNDEFINED'}, Location: ${LOCATION}, Model: ${MODEL_NAME}`);
+console.log(`[GoogleGenAI] Initializing with Model: ${MODEL_NAME}`);
 console.log(`[DiscoveryEngine] Selected Engine ID: ${ENGINE_ID} (DataStores: ${DATA_STORE_ID}, ${DATA_STORE_ENTITY_ID})`);
 
 // Initialize Clients safely
-let vertexAI;
+let genAI;
 try {
-    if (!PROJECT_ID) throw new Error("Project ID is missing from credentials");
-    vertexAI = new VertexAI({
-        project: PROJECT_ID,
-        location: LOCATION,
-        apiEndpoint: 'aiplatform.googleapis.com', // Explicitly force global endpoint for Vertex AI
-        googleAuthOptions: { credentials }
-    });
-    console.log("[VertexAI] Client initialized successfully.");
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+        genAI = new GoogleGenerativeAI(apiKey);
+        console.log("[GoogleGenAI] Client initialized successfully.");
+    } else {
+        console.warn("[GoogleGenAI] GEMINI_API_KEY is missing.");
+    }
 } catch (e) {
-    console.error("[VertexAI] Failed to initialize client:", e);
+    console.error("[GoogleGenAI] Failed to initialize client:", e);
 }
 
 // Initialize Discovery Engine Client
@@ -1267,7 +1266,7 @@ function getChunkParts(chunk) {
     return chunk?.candidates?.[0]?.content?.parts || [];
 }
 
-function isVertexRateLimitError(error) {
+function isGenAIRateLimitError(error) {
     const code = error?.code || error?.status || error?.response?.status;
     if (code === 429) {
         return true;
@@ -1285,11 +1284,11 @@ async function sendMessageStreamWithRetry(chat, payload, maxAttempts = 3) {
             return await chat.sendMessageStream(payload);
         } catch (error) {
             lastError = error;
-            if (!isVertexRateLimitError(error) || attempt >= maxAttempts) {
+            if (!isGenAIRateLimitError(error) || attempt >= maxAttempts) {
                 throw error;
             }
             const delayMs = 500 * Math.pow(2, attempt - 1);
-            console.warn(`[VertexAI] Rate limited. Retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts})`);
+            console.warn(`[GoogleGenAI] Rate limited. Retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts})`);
             await new Promise(resolve => setTimeout(resolve, delayMs));
         }
     }
@@ -2056,10 +2055,10 @@ app.post('/api/chat', async (req, res) => {
         const { messages } = req.body;
         console.log(`[API] /api/chat received request with ${messages?.length || 0} messages.`);
 
-        if (!credentials || !PROJECT_ID) {
-            console.error("CRITICAL: Missing Google credentials or project ID for Vertex AI.");
+        if (!genAI) {
+            console.error("CRITICAL: Google Generative AI not initialized.");
             res.status(500);
-            res.write("Error: Missing Google credentials or project ID for Vertex AI.");
+            res.write("Error: Google Generative AI not initialized.");
             return res.end();
         }
 
@@ -2078,28 +2077,6 @@ app.post('/api/chat', async (req, res) => {
             return res.end();
         }
 
-        let generativeModel;
-        try {
-            generativeModel = vertexAI.getGenerativeModel({
-                model: MODEL_NAME,
-                systemInstruction: {
-                    role: "system",
-                    parts: [{ text: systemPrompt }]
-                },
-                tools: tools
-            });
-        } catch (initError) {
-            console.error("CRITICAL: Failed to initialize Vertex AI Generative Model with Tools:", initError);
-            throw initError; // Re-throw to be caught by the outer catch block
-        }
-
-        const history = messages
-            .filter(msg => msg.role !== 'system')
-            .slice(0, -1)
-            .map(msg => ({
-                role: msg.role === 'assistant' ? 'model' : 'user',
-                parts: [{ text: msg.content }]
-            }));
 
         const lastMessageContent = messages[messages.length - 1]?.content;
         if (typeof lastMessageContent !== 'string' || !lastMessageContent.trim()) {
@@ -2177,18 +2154,23 @@ app.post('/api/chat', async (req, res) => {
         // We must re-instantiate the model to pass the dynamically extended system instruction
         const finalSystemPrompt = systemPrompt + injectedSkillText;
 
+        const history = messages
+            .filter(msg => msg.role !== 'system')
+            .slice(0, -1)
+            .map(msg => ({
+                role: msg.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: msg.content }]
+            }));
+
         let dynamicGenerativeModel;
         try {
-            dynamicGenerativeModel = vertexAI.getGenerativeModel({
+            dynamicGenerativeModel = genAI.getGenerativeModel({
                 model: MODEL_NAME,
-                systemInstruction: {
-                    role: "system",
-                    parts: [{ text: finalSystemPrompt }]
-                },
+                systemInstruction: finalSystemPrompt,
                 tools: tools
             });
         } catch (initError) {
-            console.error("CRITICAL: Failed to dynamically initialize Vertex AI Generative Model:", initError);
+            console.error("CRITICAL: Failed to dynamically initialize Google Generative Model:", initError);
             throw initError;
         }
 
@@ -2196,14 +2178,13 @@ app.post('/api/chat', async (req, res) => {
             history: history,
         });
 
-        console.log(`[API] Sending message to Vertex AI model: ${MODEL_NAME}`);
+        console.log(`[API] Sending message to Google Generative model: ${MODEL_NAME}`);
 
         // --- DEBUG LOGS START ---
         console.log(`[DEBUG] Calling chat.sendMessageStream now...`);
         const streamResult = await sendMessageStreamWithRetry(chat, lastMessageContent);
         console.log(`[DEBUG] chat.sendMessageStream returned. Starting to iterate stream...`);
 
-        let functionCallDetected = false;
         let wroteText = false;
 
         // Initialize thinking filter
@@ -2211,19 +2192,8 @@ app.post('/api/chat', async (req, res) => {
 
         // Consume the first stream
         for await (const chunk of streamResult.stream) {
-            console.log(`[DEBUG] Received chunk from Vertex AI`);
-            // Check for text content
-            let text = '';
-            if (typeof chunk?.text === 'function') {
-                try {
-                    text = chunk.text();
-                } catch (e) {
-                    // If it's a function call, text() might throw or return empty
-                }
-            }
-            if (!text) {
-                text = extractTextFromParts(getChunkParts(chunk));
-            }
+            console.log(`[DEBUG] Received chunk from Google GenAI`);
+            const text = chunk.text();
 
             if (text) {
                 const safeText = processFilter(text);
@@ -2232,48 +2202,18 @@ app.post('/api/chat', async (req, res) => {
                     wroteText = true;
                 }
             }
-
-            // Check if this chunk indicates a function call
-            const parts = getChunkParts(chunk);
-            if (parts?.some(part => part.functionCall)) {
-                functionCallDetected = true;
-            }
         }
 
         // Ensure we inspect the full response to detect function calls or missing text
         const fullResponse = await streamResult.response;
-        const fullParts = fullResponse?.candidates?.[0]?.content?.parts || [];
-        const functionCallPart = fullParts.find(part => part.functionCall);
-
-        if (functionCallPart) {
-            functionCallDetected = true;
-        }
-
-        if (!wroteText) {
-            // We need to be careful here: if the filter absorbed everything (because it was all thinking),
-            // then we technically "wrote" nothing visible, but the model did respond.
-            // However, the fallbackText usually comes from fullParts.
-            const fallbackText = extractTextFromParts(fullParts);
-            // Apply filter to fallback text too, but beware of double processing if we already processed chunks.
-            // Usually if we processed chunks, buffer is stateful.
-            // If wroteText is false, it means we output nothing.
-            // If fallbackText contains thinking, we should filter it.
-            // But since we streamed, the filter state is advanced.
-            // If the stream was fully consumed, the filter buffered potentially partial tags.
-            // We can try to flush the filter buffer if we had a way, but createThinkingFilter closure variables are private.
-
-            // Simpler approach: If we didn't write anything, maybe it was a pure function call?
-            // Or maybe it was just thinking.
-
-            // If function call detected, we don't worry about empty text yet.
-        }
+        const functionCalls = fullResponse.functionCalls();
 
         // If a function call was detected during the stream, we execute it now
-        if (functionCallDetected) {
-            const call = functionCallPart?.functionCall;
+        if (functionCalls && functionCalls.length > 0) {
+            const call = functionCalls[0];
 
             if (call) {
-                let functionResponseParts = [];
+                let functionResponseContent = "";
 
                 if (call.name === 'get_client_guidelines') {
                     const identifier = call.args?.identifier;
@@ -2284,14 +2224,7 @@ app.post('/api/chat', async (req, res) => {
                         return;
                     }
                     console.log(`[FunctionCall] Executing get_client_guidelines for: ${identifier}`);
-                    const guidelinesText = await getClientGuidelines(identifier);
-
-                    functionResponseParts = [{
-                        functionResponse: {
-                            name: 'get_client_guidelines',
-                            response: { name: 'get_client_guidelines', content: guidelinesText }
-                        }
-                    }];
+                    functionResponseContent = await getClientGuidelines(identifier);
                 } else if (call.name === 'search_cloud_storage') {
                     const query = call.args?.query;
                     if (!query) {
@@ -2302,17 +2235,7 @@ app.post('/api/chat', async (req, res) => {
                     }
                     console.log(`[FunctionCall] Executing search_cloud_storage with query: ${query}`);
                     const toolOutput = await searchCloudStorage(query);
-                    const inlineDataParts = Array.isArray(toolOutput?.inlineDataParts)
-                        ? toolOutput.inlineDataParts
-                        : [];
-
-                    functionResponseParts = [{
-                        functionResponse: {
-                            name: 'search_cloud_storage',
-                            response: { name: 'search_cloud_storage', content: toolOutput.text }
-                        }
-                    }, ...inlineDataParts];
-
+                    functionResponseContent = toolOutput.text;
                 } else if (call.name === 'analyze_website_dna') {
                     const url = call.args?.url;
                     if (!url) {
@@ -2322,31 +2245,16 @@ app.post('/api/chat', async (req, res) => {
                         return;
                     }
                     console.log(`[FunctionCall] Executing analyze_website_dna for: ${url}`);
-                    const auditJson = await analyzeWebsiteDna(url);
-
-                    functionResponseParts = [{
-                        functionResponse: {
-                            name: 'analyze_website_dna',
-                            response: { name: 'analyze_website_dna', content: auditJson }
-                        }
-                    }];
+                    functionResponseContent = await analyzeWebsiteDna(url);
                 } else if (call.name === 'fetch_agency_tasks') {
                     const responsibleName = call.args?.responsible_name || "Rodny";
                     console.log(`[FunctionCall] Executing fetch_agency_tasks for: ${responsibleName}`);
-                    const tasksText = await fetchAgencyTasks(responsibleName);
-
-                    functionResponseParts = [{
-                        functionResponse: {
-                            name: 'fetch_agency_tasks',
-                            response: { name: 'fetch_agency_tasks', content: tasksText }
-                        }
-                    }];
+                    functionResponseContent = await fetchAgencyTasks(responsibleName);
                 }
 
-                // Start a new stream with the answer (if we have a response part)
-                if (functionResponseParts.length === 0) {
-                     console.error(`[FunctionCall] Unknown function called: ${call.name}`);
-                     res.write(`Error: Unknown function ${call.name}`);
+                if (!functionResponseContent) {
+                     console.error(`[FunctionCall] Unknown function or empty response: ${call.name}`);
+                     res.write(`Error: Unknown function or empty response ${call.name}`);
                      res.end();
                      return;
                 }
@@ -2354,7 +2262,12 @@ app.post('/api/chat', async (req, res) => {
                 console.log(`[API] Sending function response back to model...`);
                 let streamResult2;
                 try {
-                     streamResult2 = await sendMessageStreamWithRetry(chat, functionResponseParts);
+                     streamResult2 = await sendMessageStreamWithRetry(chat, [{
+                        functionResponse: {
+                            name: call.name,
+                            response: { content: functionResponseContent }
+                        }
+                     }]);
                 } catch (streamErr) {
                      console.error("[API] Error calling sendMessageStream with function response:", streamErr);
                      res.write("\n\n(Error interno al comunicar la respuesta de la herramienta al modelo).");
@@ -2363,23 +2276,11 @@ app.post('/api/chat', async (req, res) => {
                 }
 
                 let wroteTextInSecondStream = false;
-                // Reset filter or create new one?
-                // Creating new one is safer for the new stream.
                 const processFilter2 = createThinkingFilter();
 
                 for await (const chunk of streamResult2.stream) {
-                    console.log(`[DEBUG] Received chunk (post-function) from Vertex AI`);
-                    let text = '';
-                    if (typeof chunk?.text === 'function') {
-                        try {
-                            text = chunk.text();
-                        } catch (e) {
-                             console.warn("[DEBUG] Chunk (post-function) has no text:", e.message);
-                        }
-                    }
-                    if (!text) {
-                        text = extractTextFromParts(getChunkParts(chunk));
-                    }
+                    console.log(`[DEBUG] Received chunk (post-function) from Google GenAI`);
+                    const text = chunk.text();
 
                     if (text) {
                         const safeText = processFilter2(text);
@@ -2397,18 +2298,6 @@ app.post('/api/chat', async (req, res) => {
             }
         }
 
-        if (!wroteText && !functionCallDetected) {
-            // Only error if we truly got nothing useful.
-            // If we filtered out thinking, that's fine, but the user gets empty string?
-            // Usually the model outputs thinking THEN the answer.
-            // If it only outputs thinking, it's weird.
-            console.error("[VertexAI] Empty response with no function call detected.", {
-                model: MODEL_NAME,
-                parts: fullParts
-            });
-            // Don't send error text if we just suppressed thinking.
-        }
-
         console.log(`[DEBUG] Stream iteration finished. Ending response.`);
         res.end();
 
@@ -2417,17 +2306,17 @@ app.post('/api/chat', async (req, res) => {
             message: error.message,
             stack: error.stack,
             code: error.code,
-            details: error.details, // Vertex AI often provides details here
+            details: error.details,
             response: error.response?.data,
             raw: JSON.stringify(error)
         });
 
         // Return error as text/plain so it's not blocked by CORB
         if (!res.headersSent) {
-            const statusCode = isVertexRateLimitError(error) ? 429 : 500;
+            const statusCode = isGenAIRateLimitError(error) ? 429 : 500;
             res.status(statusCode);
             if (statusCode === 429) {
-                res.write("Error: Vertex AI rate limit exceeded. Please try again shortly.");
+                res.write("Error: Google GenAI rate limit exceeded. Please try again shortly.");
             } else {
                 res.write(`Error: ${error.message}`);
             }
