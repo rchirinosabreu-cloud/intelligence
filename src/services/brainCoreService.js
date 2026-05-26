@@ -6,7 +6,7 @@ import { readGoogleSheet, getRecentEmails, readGoogleSlides, DEFAULT_IMPERSONATE
 
 dotenv.config();
 
-const EMBEDDING_MODEL = "gemini-embedding-001";
+const EMBEDDING_MODEL = "gemini-embedding-2";
 const CHAT_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
 let genAI;
@@ -29,7 +29,7 @@ export const generateEmbedding = async (text) => {
     if (!genAI) return null;
     try {
         const response = await genAI.models.embedContent({
-            model: 'gemini-embedding-001',
+            model: EMBEDDING_MODEL,
             contents: [{ parts: [{ text }] }],
         });
 
@@ -38,15 +38,15 @@ export const generateEmbedding = async (text) => {
 
         if (!embeddingValues) {
             console.error("⚠️ Alerta BrainCore: Estructura de embedding no reconocida:", response);
-            // Return zeroed vector fallback (768 dimensions) to prevent cascading Error 500
-            return new Array(768).fill(0);
+            // Return zeroed vector fallback (3072 dimensions for embedding-2) to prevent cascading Error 500
+            return new Array(3072).fill(0);
         }
 
         return embeddingValues;
     } catch (error) {
         console.error("[BrainCoreService] Embedding generation failed:", error.message);
         // Fail-safe: return zeroed vector instead of null to keep the app running
-        return new Array(768).fill(0);
+        return new Array(3072).fill(0);
     }
 };
 

@@ -275,10 +275,10 @@ model FeedbackRecord {
 }
 
 model AgencyContext {
-  id               String                    @id @default(uuid())
+  id               String                     @id @default(uuid())
   content          String
-  vectorEmbeddings Unsupported("vector(768)")?
-  type             String                    @default("TEXT") // TEXT or IMAGE
+  vectorEmbeddings Unsupported("vector(3072)")?
+  type             String                     @default("TEXT") // TEXT or IMAGE
   status           String                    @default("APPROVED") // PENDING, APPROVED, DISCARDED
   clientId         String?
   metadata         Json?
