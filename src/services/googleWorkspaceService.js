@@ -20,10 +20,9 @@ const getServiceAuth = async (subject = null) => {
     key: credentials.private_key,
     subject: subject || process.env.GOOGLE_CALENDAR_ID || DEFAULT_IMPERSONATED_EMAIL, // Impersonation
     scopes: [
-      'https://www.googleapis.com/auth/spreadsheets.readonly',
-      'https://www.googleapis.com/auth/presentations.readonly',
+      'https://www.googleapis.com/auth/spreadsheets',
       'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/calendar.readonly'
+      'https://www.googleapis.com/auth/calendar'
     ],
   });
 };
