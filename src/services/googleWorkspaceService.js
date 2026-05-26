@@ -18,7 +18,7 @@ const getServiceAuth = async (subject = null) => {
   return new JWT({
     email: credentials.client_email,
     key: credentials.private_key,
-    subject: subject, // Impersonation
+    subject: subject || DEFAULT_IMPERSONATED_EMAIL, // Impersonation
     scopes: [
       'https://www.googleapis.com/auth/spreadsheets.readonly',
       'https://www.googleapis.com/auth/presentations.readonly',
