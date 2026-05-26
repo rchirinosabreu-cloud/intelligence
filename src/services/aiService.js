@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-1.5-pro";
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
 let genAI;
 try {
