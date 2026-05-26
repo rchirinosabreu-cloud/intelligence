@@ -73,7 +73,7 @@ export const classifyTaskWithAI = async (title, comments = "") => {
             }
         });
         console.log("================ DEPURACIÓN IA RAW (Task Classification) ================", JSON.stringify(result, null, 2));
-        const text = result.response?.text;
+        const text = extractModelText(result);
 
         const classification = JSON.parse(text);
         return {
@@ -84,4 +84,20 @@ export const classifyTaskWithAI = async (title, comments = "") => {
         console.error("[AiService] AI Classification failed:", error.message);
         return { category: null, complexity: null };
     }
+};
+
+export const extractModelText = (result) => {
+    const directText = typeof result?.response?.text === 'function'
+        ? result.response.text()
+        : result?.response?.text;
+
+    if (directText && String(directText).trim()) return directText;
+
+    const firstPart = result?.response?.candidates?.[0]?.content?.parts?.[0]
+        || result?.candidates?.[0]?.content?.parts?.[0];
+
+    if (firstPart?.text && String(firstPart.text).trim()) return firstPart.text;
+    if (firstPart?.functionCall?.args) return JSON.stringify(firstPart.functionCall.args);
+
+    throw new Error('Empty AI response');
 };
