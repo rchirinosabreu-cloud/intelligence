@@ -7,19 +7,6 @@ import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { toast } from 'react-hot-toast';
 
-const MOCK_GMAIL = [
-    { id: 1, from: 'Alexander (TruPeak)', subject: 'Feedback sobre los artes de la campaña', time: '10:30 AM', unread: true },
-    { id: 2, from: 'Soporte Meta', subject: 'Tu cuenta publicitaria ha sido verificada', time: '9:15 AM', unread: false },
-    { id: 3, from: 'Google Calendar', subject: 'Recordatorio: Reunión de estrategia mensual', time: '8:00 AM', unread: false },
-];
-
-const MOCK_BASECAMP = [
-    { id: 1, task: 'Finalizar copy para Reels de Artyzza', project: 'Artyzza - Social Media', deadline: 'Hoy' },
-    { id: 2, task: 'Diseñar carrusel de beneficios', project: 'Sunpartners - Web CRO', deadline: 'Mañana' },
-    { id: 3, task: 'Revisión de métricas mensuales Q1', project: 'TruPeak - Analytics', deadline: '15 Mar' },
-    { id: 4, task: 'Programar posts de la semana 2', project: 'Artyzza - Social Media', deadline: 'Viernes' },
-];
-
 const BrainCore = () => {
     const [input, setInput] = useState('');
     const [feed, setFeed] = useState([]);
@@ -362,25 +349,10 @@ const BrainCore = () => {
                                     </div>
                                     <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-900">Hoy (Gmail/Meet)</h3>
                                 </div>
-                                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight">3 Pendientes</div>
+                                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight">{workspaceInsights?.emails?.length || 0} Pendientes</div>
                             </div>
 
                             <div className="space-y-4">
-                                <div className="p-4 bg-zinc-50 border border-zinc-100 rounded-2xl flex items-center justify-between group hover:bg-primary/5 hover:border-primary/20 transition-all cursor-pointer">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-white border border-zinc-200 flex items-center justify-center text-primary">
-                                            <Video className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-zinc-900">Weekly Performance Sync</p>
-                                            <p className="text-[10px] text-zinc-500 font-medium">Google Meet • 11:30 AM</p>
-                                        </div>
-                                    </div>
-                                    <button className="p-2 bg-white rounded-lg border border-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
-                                    </button>
-                                </div>
-
                                 {isLoadingInsights ? (
                                     [1,2,3].map(i => <div key={i} className="h-16 bg-zinc-50 rounded-xl animate-pulse" />)
                                 ) : workspaceInsights?.emails?.length > 0 ? (
@@ -392,24 +364,13 @@ const BrainCore = () => {
                                                     <p className="text-xs font-bold text-zinc-900 truncate">{mail.from}</p>
                                                     {mail.isBasecamp && <span className="text-[8px] bg-emerald-50 text-emerald-600 px-1.5 rounded-full font-black uppercase">Basecamp</span>}
                                                 </div>
-                                                <p className="text-[10px] text-zinc-500 truncate">{mail.subject}</p>
+                                                    <p className="text-[10px] text-zinc-500 truncate">{mail.triage?.summary || mail.subject}</p>
                                             </div>
                                             <div className="text-[9px] font-bold text-zinc-400 ml-4">{mail.time || 'Reciente'}</div>
                                         </div>
                                     ))
                                 ) : (
-                                    MOCK_GMAIL.map(mail => (
-                                        <div key={mail.id} className="p-4 bg-white border border-zinc-100 rounded-2xl flex items-center justify-between hover:shadow-md transition-all cursor-pointer">
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    {mail.unread && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                                                    <p className="text-xs font-bold text-zinc-900 truncate">{mail.from}</p>
-                                                </div>
-                                                <p className="text-[10px] text-zinc-500 truncate">{mail.subject}</p>
-                                            </div>
-                                            <div className="text-[9px] font-bold text-zinc-400 ml-4">{mail.time}</div>
-                                        </div>
-                                    ))
+                                    <p className="text-xs text-zinc-400 font-medium italic py-8 text-center">Sin correos relevantes para mostrar.</p>
                                 )}
                             </div>
                         </div>
@@ -423,26 +384,28 @@ const BrainCore = () => {
                                     </div>
                                     <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-900">Basecamp Tasks</h3>
                                 </div>
-                                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight">Mis Asignadas</div>
+                                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight">{workspaceInsights?.basecampEmails?.length || 0} detectadas</div>
                             </div>
 
                             <div className="space-y-3">
-                                {MOCK_BASECAMP.map(task => (
+                                {(workspaceInsights?.basecampEmails || []).map(task => (
                                     <div key={task.id} className="p-4 bg-zinc-50/50 border border-zinc-100 rounded-2xl hover:border-emerald-200 transition-all group cursor-pointer">
                                         <div className="flex items-start justify-between mb-2">
-                                            <p className="text-xs font-bold text-zinc-900 group-hover:text-emerald-600 transition-colors">{task.task}</p>
+                                            <p className="text-xs font-bold text-zinc-900 group-hover:text-emerald-600 transition-colors">{task.subject}</p>
                                             <span className={cn(
                                                 "text-[9px] font-black uppercase px-2 py-0.5 rounded-full border",
-                                                task.deadline === 'Hoy' ? "bg-red-50 border-red-100 text-red-500" : "bg-zinc-100 border-zinc-200 text-zinc-500"
+                                                task.priority === 'HIGH' ? "bg-red-50 border-red-100 text-red-500" : "bg-zinc-100 border-zinc-200 text-zinc-500"
                                             )}>
-                                                {task.deadline}
+                                                {task.priority || 'LOW'}
                                             </span>
                                         </div>
-                                        <div className="flex items-center gap-2 text-[9px] font-bold text-zinc-400 uppercase tracking-tighter">
-                                            <Calendar className="w-3 h-3" /> {task.project}
-                                        </div>
+                                        <p className="text-[10px] text-zinc-500 truncate mb-2">{task.summary}</p>
+                                        <div className="flex items-center gap-2 text-[9px] font-bold text-zinc-400 uppercase tracking-tighter"><Calendar className="w-3 h-3" /> {task.from || 'Basecamp'}</div>
                                     </div>
                                 ))}
+                                {!isLoadingInsights && (workspaceInsights?.basecampEmails || []).length === 0 && (
+                                    <p className="text-xs text-zinc-400 font-medium italic py-8 text-center">Sin alertas Basecamp relevantes.</p>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -644,13 +607,16 @@ const BrainCore = () => {
                         </div>
 
                         <div className="space-y-6">
-                            {MOCK_BASECAMP.slice(0, 3).map(task => (
+                            {(workspaceInsights?.basecampEmails || []).slice(0, 3).map(task => (
                                 <div key={task.id} className="relative pl-6 border-l-2 border-zinc-100 group">
                                     <div className="absolute left-[-5px] top-0 w-2 h-2 rounded-full bg-zinc-200 group-hover:bg-primary transition-colors" />
-                                    <p className="text-xs font-bold text-zinc-900 mb-1 group-hover:text-primary transition-colors cursor-pointer">{task.task}</p>
-                                    <p className="text-[10px] text-zinc-400 font-medium">{task.project}</p>
+                                    <p className="text-xs font-bold text-zinc-900 mb-1 group-hover:text-primary transition-colors cursor-pointer">{task.subject}</p>
+                                    <p className="text-[10px] text-zinc-400 font-medium">{task.summary}</p>
                                 </div>
                             ))}
+                            {!isLoadingInsights && (workspaceInsights?.basecampEmails || []).length === 0 && (
+                                <p className="text-xs text-zinc-400 font-medium italic">Sin tareas activas de Basecamp.</p>
+                            )}
                         </div>
 
                         <button className="w-full mt-12 py-4 bg-zinc-50 text-zinc-500 border border-zinc-200 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-100 transition-all flex items-center justify-center gap-2">
