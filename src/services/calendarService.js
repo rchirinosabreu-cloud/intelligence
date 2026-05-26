@@ -25,8 +25,7 @@ function getCalendarClient() {
             key: credentials.private_key,
             subject: process.env.GOOGLE_CALENDAR_ID || process.env.GOOGLE_WORKSPACE_SUBJECT || 'contacto@brainstudioagencia.com',
             scopes: [
-                'https://www.googleapis.com/auth/calendar.readonly',
-                'https://www.googleapis.com/auth/calendar.events'
+                'https://www.googleapis.com/auth/calendar'
             ],
         });
 
