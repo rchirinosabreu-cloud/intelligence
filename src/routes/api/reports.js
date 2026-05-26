@@ -9,7 +9,7 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Initialize AI
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-1.5-pro";
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
 let genAI;
 try {

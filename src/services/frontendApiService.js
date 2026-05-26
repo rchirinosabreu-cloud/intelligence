@@ -4,7 +4,7 @@ const getBaseUrl = () => getApiBaseUrl();
 
 const getOpenAiUrl = () => `${getBaseUrl()}/api/openai/v1/chat/completions`;
 const getFirefliesUrl = () => `${getBaseUrl()}/api/fireflies/graphql`;
-const getGeminiUrl = () => `${getBaseUrl()}/api/gemini/v1beta/models/gemini-1.5-pro:generateContent`;
+const getGeminiUrl = () => `${getBaseUrl()}/api/gemini/v1beta/models/gemini-3.5-flash:generateContent`;
 
 // Helper for delay
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
