@@ -5,13 +5,16 @@ const TRIAGE_SCHEMA = {
   properties: {
     category: {
       type: 'string',
-      enum: ['BASECAMP', 'CLIENT_NOTIFICATIONS', 'TEAM_TASKS', 'ADMIN_ALERTS', 'SUPPORT', 'NOISE']
+      enum: ['BASECAMP', 'CLIENT_COMMUNICATION', 'TEAM_OPERATIONS', 'ADMIN_ALERTS', 'SUPPORT', 'NOISE']
     },
     priority: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+    intent: { type: 'string' }, // Ej. 'Cambio solicitado por cliente', 'Asignación de tarea', 'Informativo'
     summary: { type: 'string' },
+    actionItems: { type: 'array', items: { type: 'string' } },
+    actionLink: { type: 'string' },
     shouldDisplay: { type: 'boolean' }
   },
-  required: ['category', 'priority', 'summary', 'shouldDisplay']
+  required: ['category', 'priority', 'intent', 'summary', 'actionItems', 'shouldDisplay']
 };
 
 export const normalizeModelJson = (rawText) => {
@@ -28,22 +31,24 @@ export const normalizeModelJson = (rawText) => {
 };
 
 const classifyEmail = async (email, genAI) => {
-  const prompt = `Actúa como un Analista de Operaciones de Brainstudio. Clasifica este correo y responde SOLO JSON con este esquema exacto.
+  const prompt = `Actúa como un Analista de Operaciones Senior de Brainstudio.
+  Tu misión es realizar un triaje profundo y filtrado de ruido para la bandeja de entrada ejecutiva.
 
-  REGLAS DE CATEGORIZACIÓN:
-  - BASECAMP: Solo si proviene de 'Basecamp' (notificaciones de tareas, comentarios, pings).
-  - CLIENT_NOTIFICATIONS: Comunicaciones directas de clientes.
-  - TEAM_TASKS: Mensajes internos de coordinación o herramientas de diseño (Figma, etc).
-  - ADMIN_ALERTS: Facturas, pagos, alertas legales o de plataforma.
-  - SUPPORT: Soporte técnico o tickets.
-  - NOISE: Newsletters, promociones o spam irrelevante.
+  FILTRADO DE RUIDO (shouldDisplay: false):
+  - Notificaciones automáticas de Figma (a menos que sean menciones directas críticas).
+  - Confirmaciones de calendario ('Reunión aceptada', 'Invitation updated').
+  - Correos de bots, alertas de sistema o newsletters.
+  - Alertas administrativas rutinarias (DIAN, bancos) a menos que requieran acción inmediata (HIGH priority).
 
-  PRIORIDAD (priority):
-  - HIGH: Bloqueos críticos, quejas de clientes, tareas para hoy.
-  - MEDIUM: Tareas estándar, notificaciones de progreso.
-  - LOW: Informativos, acuses de recibo.
+  PRIORIDAD DE VISIBILIDAD (shouldDisplay: true):
+  - Conversaciones HUMANAS directas con clientes o el equipo.
+  - Notificaciones de Basecamp sobre tareas, comentarios o pings.
+  - Alertas críticas de plataforma que requieren intervención humana.
 
-  shouldDisplay: true para todas las categorías excepto NOISE.
+  EXTRACCIÓN DE DATOS:
+  1. intent: Clasifica la intención (ej. 'Cambio solicitado por cliente', 'Asignación de tarea', 'Aprobación recibida').
+  2. actionItems: Lista los sub-pasos o requisitos clave mencionados.
+  3. actionLink: Busca un link de acción directa (Basecamp, Google Sheets, Figma) mencionado en el snippet.
 
   EMAIL:
   From: ${email.from || ''}
@@ -64,19 +69,26 @@ const classifyEmail = async (email, genAI) => {
     const triage = normalizeModelJson(text);
     return { ...email, triage };
   } catch (error) {
-    console.error(`[EmailTriage] Error classifying email ${email.id}:`, error.message);
+    console.error(`[EmailTriage] Deep Extraction Error for email ${email.id}:`, error.message);
 
-    // SMART FALLBACK: Simple keyword matching to avoid noise in Basecamp widget
+    // SMART FALLBACK
     const content = `${email.from} ${email.subject} ${email.snippet}`.toLowerCase();
     const isBasecamp = content.includes('basecamp') || content.includes('3.basecamp.com');
+    const isBot = content.includes('noreply') || content.includes('no-reply') || content.includes('calendar-notification');
+
+    // Attempt link extraction via regex for fallback
+    const linkMatch = email.snippet?.match(/https?:\/\/[^\s]+/);
 
     return {
       ...email,
       triage: {
-        category: isBasecamp ? 'BASECAMP' : 'CLIENT_NOTIFICATIONS',
+        category: isBasecamp ? 'BASECAMP' : 'CLIENT_COMMUNICATION',
         priority: 'MEDIUM',
+        intent: isBasecamp ? 'Notificación de Basecamp' : 'Comunicación externa',
         summary: '(Fallback) ' + (email.subject || 'Sin asunto'),
-        shouldDisplay: true
+        actionItems: ['Revisar correo original para detalles'],
+        actionLink: linkMatch ? linkMatch[0] : null,
+        shouldDisplay: !isBot // Filter bots even in fallback
       }
     };
   }
@@ -89,20 +101,21 @@ export const triageEmailsWithAI = async (emails, genAI) => {
     const triaged = await Promise.all(emails.map((email) => classifyEmail(email, genAI)));
     return triaged.filter((email) => email.triage?.shouldDisplay === true);
   } catch (err) {
-    console.error('[EmailTriage] Batch processing failed:', err.message);
-    // Even if batch fails, return a safe subset using basic filtering
-    return emails.map(e => {
-        const content = `${e.from} ${e.subject}`.toLowerCase();
-        return {
-            ...e,
-            triage: {
-                category: content.includes('basecamp') ? 'BASECAMP' : 'NOISE',
-                priority: 'LOW',
-                summary: e.subject,
-                shouldDisplay: content.includes('basecamp')
-            }
-        };
-    }).filter(e => e.triage.shouldDisplay);
+    console.error('[EmailTriage] Deep Batch processing failed:', err.message);
+    return emails.filter(e => {
+        const c = `${e.from} ${e.subject}`.toLowerCase();
+        return !c.includes('noreply') && !c.includes('calendar');
+    }).map(e => ({
+      ...e,
+      triage: {
+        category: 'CLIENT_COMMUNICATION',
+        priority: 'MEDIUM',
+        intent: 'Informativo',
+        summary: e.subject,
+        actionItems: [],
+        shouldDisplay: true
+      }
+    }));
   }
 };
 

@@ -133,14 +133,25 @@ router.get('/workspace/insights', restrictAccess, async (req, res) => {
         const basecampEmails = onlyBasecampEmails(triagedEmails);
 
         res.json({
-            emails: triagedEmails,
+            emails: triagedEmails.map(e => ({
+                id: e.id,
+                from: e.from,
+                subject: e.subject,
+                date: e.date,
+                summary: e.triage.summary,
+                priority: e.triage.priority,
+                intent: e.triage.intent
+            })),
             basecampEmails: basecampEmails.map((e) => ({
                 id: e.id,
                 subject: e.subject,
                 summary: e.triage.summary,
                 priority: e.triage.priority,
                 from: e.from,
-                date: e.date
+                date: e.date,
+                intent: e.triage.intent,
+                actionItems: e.triage.actionItems || [],
+                actionLink: e.triage.actionLink || null
             }))
         });
     } catch (error) {
@@ -274,7 +285,14 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
 
         res.json({
             ...structuredData,
-            alerts: safeAlerts
+            alerts: safeAlerts.map(e => ({
+                id: e.id,
+                subject: e.subject,
+                summary: e.triage.summary,
+                priority: e.triage.priority,
+                intent: e.triage.intent,
+                actionLink: e.triage.actionLink
+            }))
         });
 
     } catch (error) {
