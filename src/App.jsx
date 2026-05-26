@@ -48,7 +48,7 @@ function BrainCoreGuard({ children }) {
 }
 
 function AppContent() {
-  const { login, logout, currentUser } = useAuth(); const isAuthenticated = true; const isLoading = false;
+  const { login, logout, currentUser, isAuthenticated, isLoading } = useAuth();
 
   // Escuchar errores de permisos (403 Forbidden)
   React.useEffect(() => {

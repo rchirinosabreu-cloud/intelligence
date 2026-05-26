@@ -3,13 +3,14 @@ import multer from 'multer';
 import { GoogleGenAI } from '@google/genai';
 import { addAgencyContext, performAdvancedExtraction, getIntelligenceFeed, getClientProfileFromMemory, searchContext, updateAgencyContext, deleteAgencyContext, getMemoryStats, askBrainCore } from '../../services/brainCoreService.js';
 import { getRecentEmails, readGoogleSheet, DEFAULT_IMPERSONATED_EMAIL } from '../../services/googleWorkspaceService.js';
+import { triageEmailsWithAI, onlyBasecampEmails } from '../../services/emailTriageService.js';
 import prisma from '../../lib/prisma.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 const restrictAccess = (req, res, next) => {
-    const allowedEmails = ['chrodny@gmail.com', 'fvilladigital@gmail.com'];
+    const allowedEmails = ['chrodny@gmail.com', 'fvilladigital@gmail.com', 'contacto@brainstudioagencia.com'];
     if (!req.user || !allowedEmails.includes(req.user.email)) {
         return res.status(403).json({ error: 'Acceso restringido.' });
     }
@@ -119,14 +120,24 @@ router.get('/radar/:clientId', restrictAccess, async (req, res) => {
 // 7. Executive Workspace (Gmail/Basecamp Insights)
 router.get('/workspace/insights', restrictAccess, async (req, res) => {
     try {
-        const emails = await getRecentEmails(15, 'is:unread', DEFAULT_IMPERSONATED_EMAIL);
+        const emails = await getRecentEmails(25, 'is:unread newer_than:7d', DEFAULT_IMPERSONATED_EMAIL);
 
-        // Use Gemini to filter and categorize emails (e.g. Basecamp alerts)
-        // For now, return raw to prove connectivity
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) throw new Error('GEMINI_API_KEY is missing.');
+        const genAI = new GoogleGenAI({ apiKey });
+
+        const triagedEmails = await triageEmailsWithAI(emails, genAI);
+        const basecampEmails = onlyBasecampEmails(triagedEmails);
+
         res.json({
-            emails: emails.map(e => ({
-                ...e,
-                isBasecamp: e.from.toLowerCase().includes('basecamp') || e.subject.toLowerCase().includes('basecamp')
+            emails: triagedEmails,
+            basecampEmails: basecampEmails.map((e) => ({
+                id: e.id,
+                subject: e.subject,
+                summary: e.triage.summary,
+                priority: e.triage.priority,
+                from: e.from,
+                date: e.date
             }))
         });
     } catch (error) {
@@ -213,7 +224,7 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
         IMPORTANTE: Si no hay datos suficientes para una categoría, devuelve un array vacío []. NO inventes datos.`;
 
         const result = await genAI.models.generateContent({
-            model: process.env.GEMINI_MODEL || "gemini-1.5-pro",
+            model: process.env.GEMINI_MODEL || "gemini-3.5-flash",
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: { responseMimeType: 'application/json' }
         });
@@ -252,7 +263,7 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
 
         res.json({
             ...structuredData,
-            alerts: rawEmails.slice(0, 3) // Return top 3 emails for the UI widget too
+            alerts: onlyBasecampEmails(await triageEmailsWithAI(rawEmails, genAI)).slice(0, 3)
         });
 
     } catch (error) {
