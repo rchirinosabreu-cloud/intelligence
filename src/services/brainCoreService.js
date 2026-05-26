@@ -23,29 +23,24 @@ try {
 }
 
 /**
- * Generates embeddings for a given text using the official 2026 embedding model.
+ * Generates embeddings for a given text.
  */
 export const generateEmbedding = async (text) => {
     if (!genAI) return null;
     try {
-        const response = await genAI.models.embedContent({
-            model: EMBEDDING_MODEL,
-            contents: [{ parts: [{ text }] }],
-        });
+        const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
+        const response = await model.embedContent(text);
 
-        // Hybrid mapping supporting multiple SDK versions and response formats
-        const embeddingValues = response?.embedding?.values || response?.embeddings?.[0]?.values;
+        const embeddingValues = response?.embedding?.values;
 
         if (!embeddingValues) {
             console.error("⚠️ Alerta BrainCore: Estructura de embedding no reconocida:", response);
-            // Return zeroed vector fallback (3072 dimensions for embedding-2) to prevent cascading Error 500
             return new Array(3072).fill(0);
         }
 
         return embeddingValues;
     } catch (error) {
         console.error("[BrainCoreService] Embedding generation failed:", error.message);
-        // Fail-safe: return zeroed vector instead of null to keep the app running
         return new Array(3072).fill(0);
     }
 };
@@ -56,6 +51,7 @@ export const generateEmbedding = async (text) => {
 export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
     if (!genAI) return null;
     try {
+        const model = genAI.getGenerativeModel({ model: CHAT_MODEL });
         const promptText = `Analiza esta captura de pantalla de WhatsApp u otra imagen de la agencia.
         Detecta el sentimiento, extrae preferencias del cliente, lo que odia, lo que aprueba y cualquier instrucción crítica.
         TU OBJETIVO es generar una propuesta de memoria concisa y accionable.
@@ -64,10 +60,9 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
 
         const imagePart = { inlineData: { data: imageBuffer.toString('base64'), mimeType } };
 
-        const result = await genAI.models.generateContent({
-            model: CHAT_MODEL,
+        const result = await model.generateContent({
             contents: [{ role: 'user', parts: [{ text: promptText }, imagePart] }],
-            config: { responseMimeType: 'application/json' }
+            generationConfig: { responseMimeType: 'application/json' }
         });
         console.log("================ DEPURACIÓN IA RAW (Extraction) ================", JSON.stringify(result, null, 2));
 
@@ -101,7 +96,6 @@ export const addAgencyContext = async (content, type = 'TEXT', clientId = null, 
     const embedding = await generateEmbedding(content);
     if (!embedding) throw new Error("Brain Core en mantenimiento: Error de sincronización.");
 
-    // Usamos prisma para crear el registro básico (maneja JSON metadata correctamente)
     const context = await prisma.agencyContext.create({
         data: {
             content,
@@ -112,7 +106,6 @@ export const addAgencyContext = async (content, type = 'TEXT', clientId = null, 
         }
     });
 
-    // Luego actualizamos el vector usando SQL Raw para pgvector
     await prisma.$executeRawUnsafe(
         `UPDATE "AgencyContext" SET "vectorEmbeddings" = $1::vector WHERE id = $2`,
         `[${embedding.join(',')}]`,
@@ -149,68 +142,81 @@ export const searchContext = async (queryText, clientId = null, limit = 5) => {
  * Generates the categorized Intelligence Feed.
  */
 export const getIntelligenceFeed = async (statusFilter = 'APPROVED') => {
-    // Prioritize tasks: 1. Deadlines, 2. VIP (Special), 3. Priority
-    const activeTasks = await prisma.task.findMany({
-        where: { status: { in: ['PENDIENTE', 'EN_CURSO'] } },
-        take: 30,
-        include: { client: true },
-        orderBy: [
-            { dueDate: 'asc' },
-            { isSpecial: 'desc' },
-            { isPriority: 'desc' }
-        ]
-    });
+    try {
+        const activeTasks = await prisma.task.findMany({
+            where: { status: { in: ['PENDIENTE', 'EN_CURSO'] } },
+            take: 30,
+            include: { client: true },
+            orderBy: [
+                { dueDate: 'asc' },
+                { isSpecial: 'desc' },
+                { isPriority: 'desc' }
+            ]
+        });
 
-    // Recent context history
-    const recentHistory = await prisma.agencyContext.findMany({
-        where: { status: statusFilter || 'APPROVED' },
-        take: 15,
-        orderBy: { createdAt: 'desc' },
-        include: { client: true }
-    });
+        const recentHistory = await prisma.agencyContext.findMany({
+            where: { status: statusFilter || 'APPROVED' },
+            take: 15,
+            orderBy: { createdAt: 'desc' },
+            include: { client: true }
+        });
 
-    // If viewing proposals, just return them as historical cards for the UI to handle
-    if (statusFilter === 'PENDING') {
-        return recentHistory.map(h => ({
-            id: h.id,
-            contextId: h.id,
-            type: 'PROPUESTA',
-            title: `Propuesta de ${h.client?.name || 'Agencia'}`,
-            content: h.content,
-            severity: 'warning',
-            timestamp: h.createdAt,
-            metadata: h.metadata
+        if (statusFilter === 'PENDING') {
+            return recentHistory.map(h => ({
+                id: h.id,
+                contextId: h.id,
+                type: 'PROPUESTA',
+                title: `Propuesta de ${h.client?.name || 'Agencia'}`,
+                content: h.content,
+                severity: 'warning',
+                timestamp: h.createdAt,
+                metadata: h.metadata
+            }));
+        }
+
+        if (activeTasks.length === 0) {
+            return recentHistory.map(h => ({
+                id: h.id,
+                contextId: h.id,
+                type: 'HISTORIAL',
+                title: `Memoria de ${h.client?.name || 'Agencia'}`,
+                content: h.content,
+                severity: 'info',
+                timestamp: h.createdAt
+            }));
+        }
+
+        const tasksWithContext = await Promise.all(activeTasks.map(async (task) => {
+            const context = await searchContext(`${task.title} ${task.comments || ''}`, task.clientId, 3);
+            const approvedContext = context.filter(c => c.similarity > 0.7 && (c.status === 'APPROVED' || !c.status));
+            return { task, context: approvedContext };
         }));
+
+        const meaningfulTasks = tasksWithContext.filter(p => p.context.length > 0);
+
+        if (meaningfulTasks.length === 0) {
+             return recentHistory.map(h => ({
+                id: h.id,
+                contextId: h.id,
+                type: 'HISTORIAL',
+                title: `Memoria de ${h.client?.name || 'Agencia'}`,
+                content: h.content,
+                severity: 'info',
+                timestamp: h.createdAt
+            }));
+        }
+
+        return await generateStructuredFeedWithAI(meaningfulTasks, recentHistory);
+    } catch (err) {
+        console.error('[BrainCoreService] Error generating feed:', err);
+        return [];
     }
-
-    if (activeTasks.length === 0) {
-        return recentHistory.map(h => ({
-            id: h.id,
-            contextId: h.id,
-            type: 'HISTORIAL',
-            title: `Memoria de ${h.client?.name || 'Agencia'}`,
-            content: h.content,
-            severity: 'info',
-            timestamp: h.createdAt
-        }));
-    }
-
-    // Parallel context search for tasks (only approved context)
-    const tasksWithContext = await Promise.all(activeTasks.map(async (task) => {
-        const context = await searchContext(`${task.title} ${task.comments || ''}`, task.clientId, 3);
-        // Ensure we only cross-ref with APPROVED context
-        const approvedContext = context.filter(c => c.similarity > 0.7 && (c.status === 'APPROVED' || !c.status));
-        return { task, context: approvedContext };
-    }));
-
-    const meaningfulTasks = tasksWithContext.filter(p => p.context.length > 0);
-
-    return await generateStructuredFeedWithAI(meaningfulTasks, recentHistory);
 };
 
 const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
     if (!genAI) return [];
 
+    const model = genAI.getGenerativeModel({ model: CHAT_MODEL });
     const promptText = `Eres el Brain Core de Brainstudio. Tu misión es cruzar tareas activas con la memoria de la agencia.
 
     TAREAS CRÍTICAS Y SU CONTEXTO SEMÁNTICO:
@@ -234,10 +240,9 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
     { "id": "uuid", "contextId": "id del AgencyContext original", "type": "ALERTA/INSIGHT/RECOMENDACIÓN/HISTORIAL", "title": "Título corto y directo", "content": "Cuerpo conciso", "severity": "critical/warning/info", "timestamp": "ISO Date" }`;
 
     try {
-        const result = await genAI.models.generateContent({
-            model: CHAT_MODEL,
+        const result = await model.generateContent({
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
-            config: { responseMimeType: 'application/json' }
+            generationConfig: { responseMimeType: 'application/json' }
         });
         console.log("================ DEPURACIÓN IA RAW (Structured Feed) ================", JSON.stringify(result, null, 2));
 
@@ -304,43 +309,43 @@ export const getMemoryStats = async () => {
 export const askBrainCore = async (question, clientId = null) => {
     if (!genAI) return { content: "Brain Core fuera de línea." };
 
-    // Define Workspace Tools
-    const tools = [
-        {
-            functionDeclarations: [
-                {
-                    name: "read_google_sheet",
-                    description: "Lee datos en tiempo real de una hoja de cálculo de Google. Úsalo cuando el usuario pregunte por métricas, inventarios o datos estructurados que no están en la memoria vectorial.",
-                    parameters: {
-                        type: "OBJECT",
-                        properties: {
-                            spreadsheetId: { type: "STRING", description: "El ID del Google Sheet" },
-                            range: { type: "STRING", description: "Rango opcional (Ej: 'Sheet1!A1:Z50')" }
-                        },
-                        required: ["spreadsheetId"]
-                    }
-                },
-                {
-                    name: "get_recent_emails",
-                    description: "Busca correos electrónicos recientes para obtener contexto sobre acuerdos o feedback de clientes.",
-                    parameters: {
-                        type: "OBJECT",
-                        properties: {
-                            maxResults: { type: "NUMBER", description: "Número de correos a traer" },
-                            query: { type: "STRING", description: "Query de búsqueda opcional" }
+    const model = genAI.getGenerativeModel({
+        model: CHAT_MODEL,
+        tools: [
+            {
+                functionDeclarations: [
+                    {
+                        name: "read_google_sheet",
+                        description: "Lee datos en tiempo real de una hoja de cálculo de Google. Úsalo cuando el usuario pregunte por métricas, inventarios o datos estructurados que no están en la memoria vectorial.",
+                        parameters: {
+                            type: "OBJECT",
+                            properties: {
+                                spreadsheetId: { type: "STRING", description: "El ID del Google Sheet" },
+                                range: { type: "STRING", description: "Rango opcional (Ej: 'Sheet1!A1:Z50')" }
+                            },
+                            required: ["spreadsheetId"]
+                        }
+                    },
+                    {
+                        name: "get_recent_emails",
+                        description: "Busca correos electrónicos recientes para obtener contexto sobre acuerdos o feedback de clientes.",
+                        parameters: {
+                            type: "OBJECT",
+                            properties: {
+                                maxResults: { type: "NUMBER", description: "Número de correos a traer" },
+                                query: { type: "STRING", description: "Query de búsqueda opcional" }
+                            }
                         }
                     }
-                }
-            ]
-        }
-    ];
+                ]
+            }
+        ]
+    });
 
-    // Fetch available Google Workspace sources
     const sources = await prisma.agencyIntegration.findMany({
         where: { isActive: true, externalId: { not: null } }
     });
 
-    // Search semantic context (Vector Memory)
     const context = await searchContext(question, clientId, 10);
     const approvedContext = context.filter(c => c.similarity > 0.65);
 
@@ -358,15 +363,12 @@ export const askBrainCore = async (question, clientId = null) => {
     3. Responde de forma ejecutiva y profesional.`;
 
     try {
-        let result = await genAI.models.generateContent({
-            model: CHAT_MODEL,
-            contents: [{ role: 'user', parts: [{ text: promptText }] }],
-            config: { tools: tools }
+        let result = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: promptText }] }]
         });
         console.log("================ DEPURACIÓN IA RAW (Ask Brain) ================", JSON.stringify(result, null, 2));
         let response = result.response;
 
-        // Handle Function Calling
         const calls = response?.functionCalls;
         if (calls && calls.length > 0) {
             const call = calls[0];
@@ -378,9 +380,7 @@ export const askBrainCore = async (question, clientId = null) => {
                 toolResult = await getRecentEmails(call.args.maxResults || 5, call.args.query || 'is:unread', DEFAULT_IMPERSONATED_EMAIL);
             }
 
-            // Send tool result back to model
-            const finalResult = await genAI.models.generateContent({
-                model: CHAT_MODEL,
+            const finalResult = await model.generateContent({
                 contents: [
                     { role: 'user', parts: [{ text: promptText }] },
                     { role: 'model', parts: [{ functionCall: call }] },
@@ -393,8 +393,7 @@ export const askBrainCore = async (question, clientId = null) => {
                             }
                         }]
                     }
-                ],
-                config: { tools: tools }
+                ]
             });
             console.log("================ DEPURACIÓN IA RAW (Tool Response) ================", JSON.stringify(finalResult, null, 2));
 
@@ -442,6 +441,7 @@ export const getClientProfileFromMemory = async (clientId) => {
     if (contexts.length === 0) return null;
 
     if (!genAI) return null;
+    const model = genAI.getGenerativeModel({ model: CHAT_MODEL });
     const promptText = `Analiza estas notas de la agencia sobre un cliente específico y construye su 'Ficha Mental'.
     Notas: ${contexts.map(c => c.content).join('\n')}
 
@@ -449,10 +449,9 @@ export const getClientProfileFromMemory = async (clientId) => {
     { "preferences": [], "dislikes": [], "approvals": [], "sentiment": "Evolución del sentimiento" }`;
 
     try {
-        const result = await genAI.models.generateContent({
-            model: CHAT_MODEL,
+        const result = await model.generateContent({
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
-            config: { responseMimeType: 'application/json' }
+            generationConfig: { responseMimeType: 'application/json' }
         });
         console.log("================ DEPURACIÓN IA RAW (Radar Profile) ================", JSON.stringify(result, null, 2));
 

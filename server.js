@@ -1187,7 +1187,7 @@ Antes de responder, DEBES realizar un análisis interno profundo y estructurado 
 
 7. PROTOCOLO DE SUGERENCIAS PROACTIVAS (SKILLS)
 Al finalizar CADA respuesta, actúa como facilitadora de la plataforma. Genera 3 sugerencias de acciones que el usuario podría ejecutar a continuación, basándote en el contexto de la conversación.
-La ÚNICA excepción a la regla de los backticks es esta sección. Aquí SÍ DEBES usar el formato de código inline para que visualmente parezcan botones en la interfaz.
+La UI de la plataforma mostrará estas sugerencias como botones interactivos.
 Genera el texto en Español neutro.
 
 Formato de Salida Obligatorio:
@@ -1279,13 +1279,20 @@ function isGenAIRateLimitError(error) {
     return message.includes('429') || message.includes('RESOURCE_EXHAUSTED');
 }
 
-async function sendMessageStreamWithRetry(ai, payload, maxAttempts = 3) {
+async function sendMessageStreamWithRetry(genAI, payload, maxAttempts = 3) {
     let attempt = 0;
     let lastError;
     while (attempt < maxAttempts) {
         attempt += 1;
         try {
-            return await ai.models.generateContentStream(payload);
+            const model = genAI.getGenerativeModel({
+                model: payload.model,
+                systemInstruction: payload.systemInstruction,
+                tools: payload.config?.tools
+            });
+            return await model.generateContentStream({
+                contents: payload.contents
+            });
         } catch (error) {
             lastError = error;
             if (!isGenAIRateLimitError(error) || attempt >= maxAttempts) {
@@ -2169,7 +2176,7 @@ app.post('/api/chat', async (req, res) => {
         console.log(`[API] Sending message to Google Generative model: ${MODEL_NAME}`);
 
         // --- DEBUG LOGS START ---
-        console.log(`[DEBUG] Calling models.generateContentStream now...`);
+        console.log(`[DEBUG] Calling sendMessageStreamWithRetry now...`);
         const streamResult = await sendMessageStreamWithRetry(genAI, {
             model: MODEL_NAME,
             systemInstruction: finalSystemPrompt,

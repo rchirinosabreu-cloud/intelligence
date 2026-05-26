@@ -13,11 +13,11 @@ describe('emailTriageService', () => {
 
   it('filters out emails where shouldDisplay is false', async () => {
     const mockModel = {
-      models: {
+      getGenerativeModel: vi.fn().mockReturnValue({
         generateContent: vi.fn()
-          .mockResolvedValueOnce({ response: { text: JSON.stringify({ category: 'NOISE', priority: 'LOW', summary: 'Newsletter', shouldDisplay: false }) } })
-          .mockResolvedValueOnce({ response: { text: JSON.stringify({ category: 'BASECAMP', priority: 'HIGH', summary: 'Task overdue', shouldDisplay: true }) } })
-      }
+          .mockResolvedValueOnce({ response: { text: () => JSON.stringify({ category: 'NOISE', priority: 'LOW', summary: 'Newsletter', shouldDisplay: false }) } })
+          .mockResolvedValueOnce({ response: { text: () => JSON.stringify({ category: 'BASECAMP', priority: 'HIGH', summary: 'Task overdue', shouldDisplay: true }) } })
+      })
     };
 
     const result = await triageEmailsWithAI([
