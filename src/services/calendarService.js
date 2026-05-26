@@ -23,6 +23,7 @@ function getCalendarClient() {
         authClient = new JWT({
             email: credentials.client_email,
             key: credentials.private_key,
+            subject: process.env.GOOGLE_WORKSPACE_SUBJECT || 'contacto@brainstudioagencia.com',
             scopes: [
                 'https://www.googleapis.com/auth/calendar.readonly',
                 'https://www.googleapis.com/auth/calendar.events'
@@ -39,7 +40,7 @@ function getCalendarClient() {
     }
 }
 
-export async function getUpcomingEvents(calendarId = process.env.GOOGLE_CALENDAR_ID || 'social.brainstudio@gmail.com') {
+export async function getUpcomingEvents(calendarId = process.env.GOOGLE_CALENDAR_ID || process.env.GOOGLE_WORKSPACE_SUBJECT || 'contacto@brainstudioagencia.com') {
     const calendar = getCalendarClient();
     if (!calendar) {
         throw new Error("Calendar client not initialized");
@@ -100,7 +101,7 @@ export async function createMeetEvent(title, startAt, endAt, description = '') {
     if (!calendar) return null;
 
     try {
-        const calendarId = process.env.GOOGLE_CALENDAR_ID || 'social.brainstudio@gmail.com';
+        const calendarId = process.env.GOOGLE_CALENDAR_ID || process.env.GOOGLE_WORKSPACE_SUBJECT || 'contacto@brainstudioagencia.com';
         console.log(`[CalendarService] Creating Meet event in ${calendarId}: ${title}`);
 
         const response = await calendar.events.insert({
