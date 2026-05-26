@@ -607,13 +607,16 @@ const BrainCore = () => {
                         </div>
 
                         <div className="space-y-6">
-                            {MOCK_BASECAMP.slice(0, 3).map(task => (
+                            {(workspaceInsights?.basecampEmails || []).slice(0, 3).map(task => (
                                 <div key={task.id} className="relative pl-6 border-l-2 border-zinc-100 group">
                                     <div className="absolute left-[-5px] top-0 w-2 h-2 rounded-full bg-zinc-200 group-hover:bg-primary transition-colors" />
-                                    <p className="text-xs font-bold text-zinc-900 mb-1 group-hover:text-primary transition-colors cursor-pointer">{task.task}</p>
-                                    <p className="text-[10px] text-zinc-400 font-medium">{task.project}</p>
+                                    <p className="text-xs font-bold text-zinc-900 mb-1 group-hover:text-primary transition-colors cursor-pointer">{task.subject}</p>
+                                    <p className="text-[10px] text-zinc-400 font-medium">{task.summary}</p>
                                 </div>
                             ))}
+                            {!isLoadingInsights && (workspaceInsights?.basecampEmails || []).length === 0 && (
+                                <p className="text-xs text-zinc-400 font-medium italic">Sin tareas activas de Basecamp.</p>
+                            )}
                         </div>
 
                         <button className="w-full mt-12 py-4 bg-zinc-50 text-zinc-500 border border-zinc-200 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-100 transition-all flex items-center justify-center gap-2">
