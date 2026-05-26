@@ -142,7 +142,11 @@ router.get('/workspace/insights', restrictAccess, async (req, res) => {
         });
     } catch (error) {
         console.error('[BrainCoreRoute] Workspace Insights error:', error);
-        res.status(500).json({ error: error.message });
+        return res.status(200).json({
+            emails: [],
+            basecampEmails: [],
+            diagnostic: { error: error.message }
+        });
     }
 });
 
@@ -261,6 +265,8 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
             }
         }
 
+        const safeAlerts = onlyBasecampEmails(await triageEmailsWithAI(rawEmails, genAI)).slice(0, 3);
+
         res.json({
             ...structuredData,
             alerts: onlyBasecampEmails(await triageEmailsWithAI(rawEmails, genAI)).slice(0, 3)
@@ -268,7 +274,13 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
 
     } catch (error) {
         console.error('[BrainCoreRoute] Client Summary error:', error);
-        res.status(500).json({ error: "Error procesando el resumen estructurado multi-fuente." });
+        res.status(200).json({
+            criticalTasks: [],
+            highPriority: [],
+            blockers: ['No fue posible completar el análisis automático.'],
+            aiInsight: 'No se pudo procesar el resumen estructurado con IA en este momento.',
+            alerts: []
+        });
     }
 });
 
