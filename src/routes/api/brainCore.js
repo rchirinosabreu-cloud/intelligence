@@ -25,17 +25,20 @@ router.get('/feed', restrictAccess, async (req, res) => {
             getIntelligenceFeed(status),
             getMemoryStats()
         ]);
-        res.json({ feed, stats });
+        res.json({ feed: feed || [], stats: stats || { count: 0 } });
     } catch (error) {
         console.error('[BrainCoreRoute] Error in /feed:', error);
-        res.json([{
-            id: 'error',
-            type: 'HISTORIAL',
-            title: "Cerebro en Mantenimiento",
-            content: "El motor de inteligencia está sincronizando. Intenta de nuevo en unos segundos.",
-            severity: "info",
-            timestamp: new Date()
-        }]);
+        res.json({
+            feed: [{
+                id: 'error',
+                type: 'HISTORIAL',
+                title: "Cerebro en Mantenimiento",
+                content: "El motor de inteligencia está sincronizando. Intenta de nuevo en unos segundos.",
+                severity: "info",
+                timestamp: new Date()
+            }],
+            stats: { count: 0 }
+        });
     }
 });
 
@@ -197,6 +200,7 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) throw new Error("GEMINI_API_KEY is missing.");
         const genAI = new GoogleGenAI({ apiKey });
+        const modelName = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
         const prompt = `Analiza los siguientes datos operativos para el cliente "${client.name}".
         TU OBJETIVO es sintetizar un dashboard ejecutivo de Project Management cruzando información de un Google Sheet y correos de Gmail (notificaciones de Basecamp/Alertas).
@@ -227,10 +231,10 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
 
         IMPORTANTE: Si no hay datos suficientes para una categoría, devuelve un array vacío []. NO inventes datos.`;
 
-        const result = await genAI.models.generateContent({
-            model: process.env.GEMINI_MODEL || "gemini-3.5-flash",
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent({
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            config: { responseMimeType: 'application/json' }
+            generationConfig: { responseMimeType: 'application/json' }
         });
         console.log("================ DEPURACIÓN IA RAW (Client Summary) ================", JSON.stringify(result, null, 2));
 
@@ -265,11 +269,12 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
             }
         }
 
-        const safeAlerts = onlyBasecampEmails(await triageEmailsWithAI(rawEmails, genAI)).slice(0, 3);
+        const triaged = await triageEmailsWithAI(rawEmails, genAI);
+        const safeAlerts = onlyBasecampEmails(triaged).slice(0, 3);
 
         res.json({
             ...structuredData,
-            alerts: onlyBasecampEmails(await triageEmailsWithAI(rawEmails, genAI)).slice(0, 3)
+            alerts: safeAlerts
         });
 
     } catch (error) {

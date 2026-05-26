@@ -271,12 +271,19 @@ TAREA DE ANÁLISIS V2:
 
 Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introducciones como "Aquí tienes el análisis...".`;
 
-        const result = await genAI.models.generateContent({
-            model: MODEL_NAME,
+        const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+        const result = await model.generateContent({
             contents: [{ role: 'user', parts: [{ text: prompt }] }]
         });
         console.log("================ DEPURACIÓN IA RAW (Talent Insight) ================", JSON.stringify(result, null, 2));
-        const insight = result.response?.text;
+
+        let insight = "";
+        const response = result.response;
+        if (response && typeof response.text === 'string') {
+            insight = response.text;
+        } else if (response && typeof response.text === 'function') {
+            insight = response.text();
+        }
 
         res.json({ insight });
 
