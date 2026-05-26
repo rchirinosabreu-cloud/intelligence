@@ -48,6 +48,7 @@ const ChatWidget = ({
 
     // Fetch Messages
     const fetchMessages = async (isPolling = false) => {
+        if (!localStorage.getItem('authToken')) return;
         try {
             if (!isPolling) setLoading(true);
             const baseUrl = getApiBaseUrl();

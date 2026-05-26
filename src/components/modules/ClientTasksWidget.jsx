@@ -64,7 +64,7 @@ const ClientTasksWidget = ({ clientId }) => {
             const data = await res.json();
             return Array.isArray(data) ? data : [];
         },
-        refetchInterval: 30000,
+        refetchInterval: localStorage.getItem("authToken") ? 30000 : false,
         enabled: !!clientId
     });
 

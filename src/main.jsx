@@ -86,8 +86,8 @@ window.fetch = async (...args) => {
                 localStorage.removeItem('currentUser');
                 window.dispatchEvent(new Event('auth-error'));
 
-                // Optional: Redirect to login if on a protected route
-                if (!window.location.pathname.startsWith('/login')) {
+                // Optional: Redirect to login if on a protected route and NOT already on login page
+                if (!window.location.pathname.includes('/login')) {
                     window.location.href = '/login';
                 }
             } else if (response.status === 403) {

@@ -25,7 +25,7 @@ const ChaosMeter = () => {
 
         fetchStreak();
         // Polling every 5 minutes
-        const interval = setInterval(fetchStreak, 300000);
+        const interval = setInterval(() => localStorage.getItem("authToken") && fetchStreak(), 300000);
         return () => clearInterval(interval);
     }, []);
 

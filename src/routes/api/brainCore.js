@@ -213,7 +213,7 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
         IMPORTANTE: Si no hay datos suficientes para una categoría, devuelve un array vacío []. NO inventes datos.`;
 
         const result = await genAI.models.generateContent({
-            model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+            model: process.env.GEMINI_MODEL || "gemini-1.5-pro",
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: { responseMimeType: 'application/json' }
         });

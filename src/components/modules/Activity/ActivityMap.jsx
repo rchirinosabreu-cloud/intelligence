@@ -198,7 +198,7 @@ const ActivityMap = () => {
       if (!res.ok) throw new Error('Failed to fetch status');
       return res.json();
     },
-    refetchInterval: 5000, // Zero latency feel
+    refetchInterval: localStorage.getItem("authToken") ? 5000 : false, // Zero latency feel
   });
 
   if (isLoading) {
