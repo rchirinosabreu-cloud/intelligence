@@ -269,7 +269,7 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
 
         res.json({
             ...structuredData,
-            alerts: safeAlerts
+            alerts: onlyBasecampEmails(await triageEmailsWithAI(rawEmails, genAI)).slice(0, 3)
         });
 
     } catch (error) {

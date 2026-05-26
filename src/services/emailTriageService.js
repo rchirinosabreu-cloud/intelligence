@@ -19,25 +19,6 @@ export const normalizeModelJson = (rawText) => {
   return JSON.parse(jsonText);
 };
 
-export const extractTriagePayload = (result) => {
-  const directText = typeof result?.response?.text === 'function'
-    ? result.response.text()
-    : result?.response?.text;
-
-  if (directText && String(directText).trim()) return directText;
-
-  const firstPart = result?.response?.candidates?.[0]?.content?.parts?.[0]
-    || result?.candidates?.[0]?.content?.parts?.[0];
-  if (firstPart?.text && String(firstPart.text).trim()) return firstPart.text;
-  if (firstPart?.functionCall?.args) return JSON.stringify(firstPart.functionCall.args);
-
-  const fallbackObject = result?.response?.candidates?.[0]?.content?.parts?.find((p) => p?.functionResponse?.response)
-    ?.functionResponse?.response;
-  if (fallbackObject) return JSON.stringify(fallbackObject);
-
-  return '{}';
-};
-
 const classifyEmail = async (email, genAI) => {
   const prompt = `Clasifica este correo ejecutivo y responde SOLO JSON válido con el esquema solicitado.\nFrom: ${email.from || ''}\nSubject: ${email.subject || ''}\nSnippet: ${email.snippet || ''}`;
 
@@ -50,31 +31,14 @@ const classifyEmail = async (email, genAI) => {
     }
   });
 
-  const text = extractTriagePayload(result);
-
-  try {
-    const triage = normalizeModelJson(text);
-    return { ...email, triage };
-  } catch (error) {
-    console.warn('[EmailTriage] Falling back to NOISE due to parse issue:', error.message);
-    return {
-      ...email,
-      triage: {
-        category: 'NOISE',
-        priority: 'LOW',
-        summary: 'No se pudo clasificar con confianza.',
-        shouldDisplay: false
-      }
-    };
-  }
+  const text = typeof result?.response?.text === 'function' ? result.response.text() : result?.response?.text;
+  const triage = normalizeModelJson(text);
+  return { ...email, triage };
 };
 
 export const triageEmailsWithAI = async (emails, genAI) => {
   if (!Array.isArray(emails) || emails.length === 0) return [];
-  const settled = await Promise.allSettled(emails.map((email) => classifyEmail(email, genAI)));
-  const triaged = settled
-    .filter((r) => r.status === 'fulfilled')
-    .map((r) => r.value);
+  const triaged = await Promise.all(emails.map((email) => classifyEmail(email, genAI)));
   return triaged.filter((email) => email.triage?.shouldDisplay === true);
 };
 

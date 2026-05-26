@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { normalizeModelJson, triageEmailsWithAI, extractTriagePayload } from '../services/emailTriageService.js';
+import { normalizeModelJson, triageEmailsWithAI } from '../services/emailTriageService.js';
 
 describe('emailTriageService', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -28,10 +28,5 @@ describe('emailTriageService', () => {
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('2');
     expect(result[0].triage.category).toBe('BASECAMP');
-  });
-
-  it('returns safe payload when model does not return text/candidates', () => {
-    const payload = extractTriagePayload({ response: {} });
-    expect(payload).toBe('{}');
   });
 });
