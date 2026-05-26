@@ -3,7 +3,7 @@ import { JWT } from 'google-auth-library';
 import prisma from '../lib/prisma.js';
 
 // Default email to impersonate for Gmail access (requires Domain-Wide Delegation)
-export const DEFAULT_IMPERSONATED_EMAIL = 'social.brainstudio@gmail.com';
+export const DEFAULT_IMPERSONATED_EMAIL = process.env.GOOGLE_WORKSPACE_SUBJECT || 'contacto@brainstudioagencia.com';
 
 /**
  * Helper to get a Service Account Auth client.
