@@ -26,6 +26,7 @@ const MeetingWidget = () => {
 
     useEffect(() => {
         const fetchEvents = async () => {
+            if (!localStorage.getItem('authToken')) return;
             try {
                 const baseUrl = getApiBaseUrl();
                 const response = await fetch(`${baseUrl}/api/calendar/upcoming`);

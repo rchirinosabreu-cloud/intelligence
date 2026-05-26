@@ -46,7 +46,8 @@ const AppLayout = ({ children }) => {
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
-    refetchInterval: 30000,
+    enabled: !!currentUser?.id,
+    refetchInterval: currentUser?.id ? 30000 : false,
     refetchOnWindowFocus: true,
   });
 
@@ -61,7 +62,8 @@ const AppLayout = ({ children }) => {
       if (!res.ok) throw new Error("Failed to fetch unread count");
       return await res.json();
     },
-    refetchInterval: 15000,
+    enabled: !!currentUser?.id,
+    refetchInterval: currentUser?.id ? 15000 : false,
     refetchOnWindowFocus: true,
   });
 

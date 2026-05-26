@@ -22,7 +22,7 @@ const HealthCheckWidget = () => {
             const data = await response.json();
             return Array.isArray(data) ? data : [];
         },
-        refetchInterval: 30000,
+        refetchInterval: localStorage.getItem("authToken") ? 30000 : false,
         refetchOnWindowFocus: true,
     });
 

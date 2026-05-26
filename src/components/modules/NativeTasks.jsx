@@ -220,7 +220,8 @@ const NativeTasks = () => {
           plan: task.plan // Contains slug, month, year
       }));
     },
-    refetchInterval: 30000,
+    enabled: !!localStorage.getItem('authToken'),
+    refetchInterval: localStorage.getItem('authToken') ? 30000 : false,
     refetchOnWindowFocus: true,
   });
 

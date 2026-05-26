@@ -49,6 +49,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
     // Fetch Announcements
     const fetchAnnouncements = async (isPolling = false) => {
         if (scope === "client" && !clientId) return;
+        if (!localStorage.getItem('authToken')) return;
         try {
             if (!isPolling) setLoading(true);
             const res = await fetch(getEndpoint(), { cache: 'no-store' });
@@ -68,7 +69,9 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
 
         // Polling interval (15 seconds)
         const intervalId = setInterval(() => {
-            fetchAnnouncements(true);
+            if (localStorage.getItem('authToken')) {
+                fetchAnnouncements(true);
+            }
         }, 15000);
 
         return () => clearInterval(intervalId);

@@ -42,6 +42,7 @@ const Metrics = () => {
   // Check for Meta SDK readiness
   useEffect(() => {
     const checkSDK = setInterval(() => {
+        if (!localStorage.getItem('authToken')) return;
       if (window.FB) {
         setSdkLoaded(true);
         clearInterval(checkSDK);

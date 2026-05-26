@@ -66,7 +66,7 @@ const Dashboard = () => {
       if (!response.ok) throw new Error("Failed to fetch metrics");
       return await response.json();
     },
-    refetchInterval: 30000,
+    refetchInterval: localStorage.getItem("authToken") ? 30000 : false,
     refetchOnWindowFocus: true,
   });
 
@@ -83,7 +83,7 @@ const Dashboard = () => {
       const data = await response.json();
       return Array.isArray(data) ? data : [];
     },
-    refetchInterval: 30000,
+    refetchInterval: localStorage.getItem("authToken") ? 30000 : false,
     refetchOnWindowFocus: true,
   });
 

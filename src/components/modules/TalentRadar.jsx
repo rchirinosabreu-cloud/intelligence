@@ -41,7 +41,7 @@ const TalentRadar = () => {
             });
             return res.data;
         },
-        refetchInterval: 30000 // Refetch live status every 30s
+        refetchInterval: localStorage.getItem("authToken") ? 30000 : false // Refetch live status every 30s
     });
 
     // 2. Heatmap Data Processing
