@@ -704,7 +704,7 @@ try {
     const authClient = new JWT({
         email: credentials.client_email,
         key: credentials.private_key,
-        subject: process.env.GOOGLE_WORKSPACE_SUBJECT || 'contacto@brainstudioagencia.com',
+        subject: process.env.GOOGLE_CALENDAR_ID || process.env.GOOGLE_WORKSPACE_SUBJECT || 'contacto@brainstudioagencia.com',
         scopes: ['https://www.googleapis.com/auth/cloud-platform']
     });
 
@@ -757,7 +757,7 @@ async function fetchClientHealth() {
         const authClient = new JWT({
             email: credentials.client_email,
             key: credentials.private_key,
-            subject: process.env.GOOGLE_WORKSPACE_SUBJECT || 'contacto@brainstudioagencia.com',
+            subject: process.env.GOOGLE_CALENDAR_ID || process.env.GOOGLE_WORKSPACE_SUBJECT || 'contacto@brainstudioagencia.com',
             scopes: ['https://www.googleapis.com/auth/spreadsheets'],
         });
 
