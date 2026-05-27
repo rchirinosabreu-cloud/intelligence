@@ -17,7 +17,7 @@ const restrictAccess = (req, res, next) => {
     next();
 };
 
-// 1. Context Feed (Dashboard protagonis)
+// 1. Context Feed (Dashboard protagonists) - Redesigned for v2.5 Predictive Alerts
 router.get('/feed', restrictAccess, async (req, res) => {
     try {
         const { status } = req.query;
@@ -25,6 +25,7 @@ router.get('/feed', restrictAccess, async (req, res) => {
             getIntelligenceFeed(status),
             getMemoryStats()
         ]);
+
         res.json({ feed: feed || [], stats: stats || { count: 0 } });
     } catch (error) {
         console.error('[BrainCoreRoute] Error in /feed:', error);
@@ -59,7 +60,6 @@ router.post('/context', restrictAccess, upload.single('image'), async (req, res)
 
         if (!content) return res.status(400).json({ error: 'Contenido vacío.' });
 
-        // Si es una imagen, forzamos estado PENDING para aprobación manual
         const status = req.file ? 'PENDING' : 'APPROVED';
 
         const record = await addAgencyContext(content, req.file ? 'IMAGE' : 'TEXT', clientId, metadata, status);
@@ -140,7 +140,8 @@ router.get('/workspace/insights', restrictAccess, async (req, res) => {
                 date: e.date,
                 summary: e.triage.summary,
                 priority: e.triage.priority,
-                intent: e.triage.intent
+                intent: e.triage.intent,
+                friction: e.triage.frictionDetected
             })),
             basecampEmails: basecampEmails.map((e) => ({
                 id: e.id,
@@ -151,7 +152,8 @@ router.get('/workspace/insights', restrictAccess, async (req, res) => {
                 date: e.date,
                 intent: e.triage.intent,
                 actionItems: e.triage.actionItems || [],
-                actionLink: e.triage.actionLink || null
+                actionLink: e.triage.actionLink || null,
+                friction: e.triage.frictionDetected
             }))
         });
     } catch (error) {
@@ -169,7 +171,6 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
     try {
         const { clientId } = req.params;
 
-        // 1. Fetch Integrations and Client Data
         const client = await prisma.client.findUnique({
             where: { id: clientId },
             include: {
@@ -183,7 +184,6 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
 
         const integrations = client.integrationsV2 || [];
 
-        // 2. Fetch Live Sheet Data
         const sheetSource = integrations.find(i => i.type === 'SHEETS');
         let rawSheetData = [];
         if (sheetSource && sheetSource.externalId) {
@@ -194,8 +194,6 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
             }
         }
 
-        // 3. Fetch Gmail Alerts (Filtering for the client using DWD)
-        // Query pattern: "{clientName}" OR "Basecamp {clientName}"
         const gmailSearchQuery = `"${client.name}" OR "Basecamp ${client.name}"`;
 
         let rawEmails = [];
@@ -207,7 +205,6 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
             gmailError = e.message;
         }
 
-        // 4. Multi-Source Structured Analysis with Gemini
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) throw new Error("GEMINI_API_KEY is missing.");
         const genAI = new GoogleGenAI({ apiKey });
@@ -247,11 +244,9 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: { responseMimeType: 'application/json' }
         });
-        console.log("================ DEPURACIÓN IA RAW (Client Summary) ================", JSON.stringify(result, null, 2));
 
         const responseText = result.text;
 
-        // Clean JSON response from markdown blocks with safety check
         let structuredData = {
             criticalTasks: [],
             highPriority: [],
@@ -265,11 +260,9 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
                 try {
                     structuredData = JSON.parse(jsonMatch[0]);
                 } catch (parseErr) {
-                    console.warn("⚠️ Alerta BrainCore (Client Summary): Fallo de parseo JSON. Usando texto plano como Insight.");
                     structuredData.aiInsight = responseText;
                 }
             } else {
-                console.warn("⚠️ Alerta BrainCore (Client Summary): No se detectó estructura JSON. Usando texto plano.");
                 structuredData.aiInsight = responseText;
             }
         }
@@ -285,7 +278,8 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
                 summary: e.triage.summary,
                 priority: e.triage.priority,
                 intent: e.triage.intent,
-                actionLink: e.triage.actionLink
+                actionLink: e.triage.actionLink,
+                friction: e.triage.frictionDetected
             }))
         });
 
