@@ -1285,13 +1285,11 @@ async function sendMessageStreamWithRetry(genAI, payload, maxAttempts = 3) {
     while (attempt < maxAttempts) {
         attempt += 1;
         try {
-            const model = genAI.getGenerativeModel({
+            return await genAI.models.generateContentStream({
                 model: payload.model,
                 systemInstruction: payload.systemInstruction,
-                tools: payload.config?.tools
-            });
-            return await model.generateContentStream({
-                contents: payload.contents
+                contents: payload.contents,
+                config: payload.config
             });
         } catch (error) {
             lastError = error;

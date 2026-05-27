@@ -64,10 +64,11 @@ export const classifyTaskWithAI = async (title, comments = "") => {
 
     try {
         const prompt = `Tarea a clasificar:\n\nTítulo: ${title}\nDescripción: ${comments}`;
-        const model = genAI.getGenerativeModel({ model: MODEL_NAME, systemInstruction: MASTER_PROMPT });
-        const result = await model.generateContent({
+        const result = await genAI.models.generateContent({
+            model: MODEL_NAME,
+            systemInstruction: MASTER_PROMPT,
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: {
+            config: {
                 responseMimeType: "application/json"
             }
         });

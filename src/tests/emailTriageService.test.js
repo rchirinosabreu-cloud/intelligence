@@ -5,7 +5,7 @@ describe('emailTriageService', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('parses JSON wrapped in markdown code fences', () => {
-    const raw = "```json\n{\"category\":\"BASECAMP\",\"priority\":\"HIGH\",\"summary\":\"Urgent blocker\",\"shouldDisplay\":true}\n```";
+    const raw = "```json\n{\"category\":\"BASECAMP\",\"priority\":\"HIGH\",\"summary\":\"Urgent blocker\",\"intent\":\"Testing\",\"actionItems\":[],\"shouldDisplay\":true}\n```";
     const parsed = normalizeModelJson(raw);
     expect(parsed.category).toBe('BASECAMP');
     expect(parsed.shouldDisplay).toBe(true);
@@ -13,11 +13,11 @@ describe('emailTriageService', () => {
 
   it('filters out emails where shouldDisplay is false', async () => {
     const mockModel = {
-      getGenerativeModel: vi.fn().mockReturnValue({
+      models: {
         generateContent: vi.fn()
-          .mockResolvedValueOnce({ response: { text: () => JSON.stringify({ category: 'NOISE', priority: 'LOW', summary: 'Newsletter', shouldDisplay: false }) } })
-          .mockResolvedValueOnce({ response: { text: () => JSON.stringify({ category: 'BASECAMP', priority: 'HIGH', summary: 'Task overdue', shouldDisplay: true }) } })
-      })
+          .mockResolvedValueOnce({ response: { text: () => JSON.stringify({ category: 'NOISE', priority: 'LOW', summary: 'Newsletter', intent: 'Spam', actionItems: [], shouldDisplay: false }) } })
+          .mockResolvedValueOnce({ response: { text: () => JSON.stringify({ category: 'BASECAMP', priority: 'HIGH', summary: 'Task overdue', intent: 'Assignment', actionItems: [], shouldDisplay: true }) } })
+      }
     };
 
     const result = await triageEmailsWithAI([

@@ -271,8 +271,8 @@ TAREA DE ANÁLISIS V2:
 
 Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introducciones como "Aquí tienes el análisis...".`;
 
-        const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-        const result = await model.generateContent({
+        const result = await genAI.models.generateContent({
+            model: MODEL_NAME,
             contents: [{ role: 'user', parts: [{ text: prompt }] }]
         });
         console.log("================ DEPURACIÓN IA RAW (Talent Insight) ================", JSON.stringify(result, null, 2));
