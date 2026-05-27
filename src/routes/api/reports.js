@@ -179,7 +179,9 @@ router.post('/generate', upload.any(), async (req, res) => {
         Asegura que el campo 'hoja_de_ruta' contenga exactamente 3 pasos.
         IMPORTANTE: En la sección 'widgets', los valores deben ser NÚMEROS PUROS sin símbolos de moneda ni separadores de miles.`;
 
-        const systemInstruction = `Eres el Director Estratégico de Brainstudio. Genera un "Reporte de desempeño digital" estable y profesional.
+        const result = await genAI.models.generateContent({
+            model: MODEL_NAME,
+            systemInstruction: `Eres el Director Estratégico de Brainstudio. Genera un "Reporte de desempeño digital" estable y profesional.
 
 REGLAS DE ESTABILIDAD Y CONTENIDO:
 1. Títulos RAE: Solo mayúscula inicial. Sin negritas ni cursivas en encabezados.
@@ -231,24 +233,15 @@ ESTRUCTURA JSON:
     { "step": "2", "title": "...", "description": "..." },
     { "step": "3", "title": "...", "description": "..." }
   ]
-}`;
-
-        const model = genAI.getGenerativeModel({ model: MODEL_NAME, systemInstruction });
-        const result = await model.generateContent({
+}`,
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: {
+            config: {
                 responseMimeType: "application/json"
             }
         });
         console.log("================ DEPURACIÓN IA RAW (Report Gen) ================", JSON.stringify(result, null, 2));
 
-        let responseText = "";
-        const response = result.response;
-        if (response && typeof response.text === 'string') {
-            responseText = response.text;
-        } else if (response && typeof response.text === 'function') {
-            responseText = response.text();
-        }
+        const responseText = result.text;
 
         const analysis = JSON.parse(responseText);
 

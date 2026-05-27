@@ -277,13 +277,7 @@ Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introd
         });
         console.log("================ DEPURACIÓN IA RAW (Talent Insight) ================", JSON.stringify(result, null, 2));
 
-        let insight = "";
-        const response = result.response;
-        if (response && typeof response.text === 'string') {
-            insight = response.text;
-        } else if (response && typeof response.text === 'function') {
-            insight = response.text();
-        }
+        const insight = result.text;
 
         res.json({ insight });
 

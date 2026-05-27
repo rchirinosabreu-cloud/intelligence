@@ -87,14 +87,18 @@ export const classifyTaskWithAI = async (title, comments = "") => {
 };
 
 export const extractModelText = (result) => {
+    // Priority: property .text in @google/genai (v2.6.0)
+    if (result.text && String(result.text).trim()) return result.text;
+
+    // Fallback logic for safety across SDK versions
     const directText = typeof result?.response?.text === 'function'
         ? result.response.text()
         : result?.response?.text;
 
     if (directText && String(directText).trim()) return directText;
 
-    const firstPart = result?.response?.candidates?.[0]?.content?.parts?.[0]
-        || result?.candidates?.[0]?.content?.parts?.[0];
+    const candidates = result?.response?.candidates || result?.candidates;
+    const firstPart = candidates?.[0]?.content?.parts?.[0];
 
     if (firstPart?.text && String(firstPart.text).trim()) return firstPart.text;
     if (firstPart?.functionCall?.args) return JSON.stringify(firstPart.functionCall.args);

@@ -242,20 +242,14 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
 
         IMPORTANTE: Si no hay datos suficientes para una categoría, devuelve un array vacío []. NO inventes datos.`;
 
-        const model = genAI.getGenerativeModel({ model: modelName });
-        const result = await model.generateContent({
+        const result = await genAI.models.generateContent({
+            model: modelName,
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json' }
+            config: { responseMimeType: 'application/json' }
         });
         console.log("================ DEPURACIÓN IA RAW (Client Summary) ================", JSON.stringify(result, null, 2));
 
-        let responseText = "";
-        const response = result.response;
-        if (response && typeof response.text === 'string') {
-            responseText = response.text;
-        } else if (response && typeof response.text === 'function') {
-            responseText = response.text();
-        }
+        const responseText = result.text;
 
         // Clean JSON response from markdown blocks with safety check
         let structuredData = {
