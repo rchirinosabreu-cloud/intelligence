@@ -8,7 +8,7 @@ const TRIAGE_SCHEMA = {
       enum: ['BASECAMP', 'CLIENT_COMMUNICATION', 'TEAM_OPERATIONS', 'ADMIN_ALERTS', 'SUPPORT', 'NOISE']
     },
     priority: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
-    intent: { type: 'string' }, // Ej. 'Cambio solicitado por cliente', 'Asignación de tarea', 'Informativo'
+    intent: { type: 'string' },
     summary: { type: 'string' },
     actionItems: { type: 'array', items: { type: 'string' } },
     actionLink: { type: 'string' },
@@ -56,10 +56,10 @@ const classifyEmail = async (email, genAI) => {
   Snippet: ${email.snippet || ''}`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: TRIAGE_MODEL });
-    const result = await model.generateContent({
+    const result = await genAI.models.generateContent({
+      model: TRIAGE_MODEL,
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: {
+      config: {
         responseMimeType: 'application/json',
         responseSchema: TRIAGE_SCHEMA
       }
@@ -69,14 +69,12 @@ const classifyEmail = async (email, genAI) => {
     const triage = normalizeModelJson(text);
     return { ...email, triage };
   } catch (error) {
-    console.error(`[EmailTriage] Deep Extraction Error for email ${email.id}:`, error.message);
+    console.error(`[EmailTriage] Error classifying email ${email.id}:`, error.message);
 
-    // SMART FALLBACK
     const content = `${email.from} ${email.subject} ${email.snippet}`.toLowerCase();
     const isBasecamp = content.includes('basecamp') || content.includes('3.basecamp.com');
     const isBot = content.includes('noreply') || content.includes('no-reply') || content.includes('calendar-notification');
 
-    // Attempt link extraction via regex for fallback
     const linkMatch = email.snippet?.match(/https?:\/\/[^\s]+/);
 
     return {
@@ -88,7 +86,7 @@ const classifyEmail = async (email, genAI) => {
         summary: '(Fallback) ' + (email.subject || 'Sin asunto'),
         actionItems: ['Revisar correo original para detalles'],
         actionLink: linkMatch ? linkMatch[0] : null,
-        shouldDisplay: !isBot // Filter bots even in fallback
+        shouldDisplay: !isBot
       }
     };
   }

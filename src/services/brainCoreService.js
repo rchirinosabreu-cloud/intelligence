@@ -28,10 +28,12 @@ try {
 export const generateEmbedding = async (text) => {
     if (!genAI) return null;
     try {
-        const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
-        const response = await model.embedContent(text);
+        const response = await genAI.models.embedContent({
+            model: EMBEDDING_MODEL,
+            contents: [{ parts: [{ text }] }],
+        });
 
-        const embeddingValues = response?.embedding?.values;
+        const embeddingValues = response?.embedding?.values || response?.embeddings?.[0]?.values;
 
         if (!embeddingValues) {
             console.error("⚠️ Alerta BrainCore: Estructura de embedding no reconocida:", response);
@@ -51,7 +53,6 @@ export const generateEmbedding = async (text) => {
 export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
     if (!genAI) return null;
     try {
-        const model = genAI.getGenerativeModel({ model: CHAT_MODEL });
         const promptText = `Analiza esta captura de pantalla de WhatsApp u otra imagen de la agencia.
         Detecta el sentimiento, extrae preferencias del cliente, lo que odia, lo que aprueba y cualquier instrucción crítica.
         TU OBJETIVO es generar una propuesta de memoria concisa y accionable.
@@ -60,9 +61,10 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
 
         const imagePart = { inlineData: { data: imageBuffer.toString('base64'), mimeType } };
 
-        const result = await model.generateContent({
+        const result = await genAI.models.generateContent({
+            model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }, imagePart] }],
-            generationConfig: { responseMimeType: 'application/json' }
+            config: { responseMimeType: 'application/json' }
         });
         console.log("================ DEPURACIÓN IA RAW (Extraction) ================", JSON.stringify(result, null, 2));
 
@@ -216,7 +218,6 @@ export const getIntelligenceFeed = async (statusFilter = 'APPROVED') => {
 const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
     if (!genAI) return [];
 
-    const model = genAI.getGenerativeModel({ model: CHAT_MODEL });
     const promptText = `Eres el Brain Core de Brainstudio. Tu misión es cruzar tareas activas con la memoria de la agencia.
 
     TAREAS CRÍTICAS Y SU CONTEXTO SEMÁNTICO:
@@ -240,9 +241,10 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
     { "id": "uuid", "contextId": "id del AgencyContext original", "type": "ALERTA/INSIGHT/RECOMENDACIÓN/HISTORIAL", "title": "Título corto y directo", "content": "Cuerpo conciso", "severity": "critical/warning/info", "timestamp": "ISO Date" }`;
 
     try {
-        const result = await model.generateContent({
+        const result = await genAI.models.generateContent({
+            model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
-            generationConfig: { responseMimeType: 'application/json' }
+            config: { responseMimeType: 'application/json' }
         });
         console.log("================ DEPURACIÓN IA RAW (Structured Feed) ================", JSON.stringify(result, null, 2));
 
@@ -309,39 +311,6 @@ export const getMemoryStats = async () => {
 export const askBrainCore = async (question, clientId = null) => {
     if (!genAI) return { content: "Brain Core fuera de línea." };
 
-    const model = genAI.getGenerativeModel({
-        model: CHAT_MODEL,
-        tools: [
-            {
-                functionDeclarations: [
-                    {
-                        name: "read_google_sheet",
-                        description: "Lee datos en tiempo real de una hoja de cálculo de Google. Úsalo cuando el usuario pregunte por métricas, inventarios o datos estructurados que no están en la memoria vectorial.",
-                        parameters: {
-                            type: "OBJECT",
-                            properties: {
-                                spreadsheetId: { type: "STRING", description: "El ID del Google Sheet" },
-                                range: { type: "STRING", description: "Rango opcional (Ej: 'Sheet1!A1:Z50')" }
-                            },
-                            required: ["spreadsheetId"]
-                        }
-                    },
-                    {
-                        name: "get_recent_emails",
-                        description: "Busca correos electrónicos recientes para obtener contexto sobre acuerdos o feedback de clientes.",
-                        parameters: {
-                            type: "OBJECT",
-                            properties: {
-                                maxResults: { type: "NUMBER", description: "Número de correos a traer" },
-                                query: { type: "STRING", description: "Query de búsqueda opcional" }
-                            }
-                        }
-                    }
-                ]
-            }
-        ]
-    });
-
     const sources = await prisma.agencyIntegration.findMany({
         where: { isActive: true, externalId: { not: null } }
     });
@@ -363,8 +332,40 @@ export const askBrainCore = async (question, clientId = null) => {
     3. Responde de forma ejecutiva y profesional.`;
 
     try {
-        let result = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: promptText }] }]
+        let result = await genAI.models.generateContent({
+            model: CHAT_MODEL,
+            contents: [{ role: 'user', parts: [{ text: promptText }] }],
+            config: {
+                tools: [
+                    {
+                        functionDeclarations: [
+                            {
+                                name: "read_google_sheet",
+                                description: "Lee datos en tiempo real de una hoja de cálculo de Google. Úsalo cuando el usuario pregunte por métricas, inventarios o datos estructurados que no están en la memoria vectorial.",
+                                parameters: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        spreadsheetId: { type: "STRING", description: "El ID del Google Sheet" },
+                                        range: { type: "STRING", description: "Rango opcional (Ej: 'Sheet1!A1:Z50')" }
+                                    },
+                                    required: ["spreadsheetId"]
+                                }
+                            },
+                            {
+                                name: "get_recent_emails",
+                                description: "Busca correos electrónicos recientes para obtener contexto sobre acuerdos o feedback de clientes.",
+                                parameters: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        maxResults: { type: "NUMBER", description: "Número de correos a traer" },
+                                        query: { type: "STRING", description: "Query de búsqueda opcional" }
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
         });
         console.log("================ DEPURACIÓN IA RAW (Ask Brain) ================", JSON.stringify(result, null, 2));
         let response = result.response;
@@ -380,7 +381,8 @@ export const askBrainCore = async (question, clientId = null) => {
                 toolResult = await getRecentEmails(call.args.maxResults || 5, call.args.query || 'is:unread', DEFAULT_IMPERSONATED_EMAIL);
             }
 
-            const finalResult = await model.generateContent({
+            const finalResult = await genAI.models.generateContent({
+                model: CHAT_MODEL,
                 contents: [
                     { role: 'user', parts: [{ text: promptText }] },
                     { role: 'model', parts: [{ functionCall: call }] },
@@ -441,7 +443,6 @@ export const getClientProfileFromMemory = async (clientId) => {
     if (contexts.length === 0) return null;
 
     if (!genAI) return null;
-    const model = genAI.getGenerativeModel({ model: CHAT_MODEL });
     const promptText = `Analiza estas notas de la agencia sobre un cliente específico y construye su 'Ficha Mental'.
     Notas: ${contexts.map(c => c.content).join('\n')}
 
@@ -449,9 +450,10 @@ export const getClientProfileFromMemory = async (clientId) => {
     { "preferences": [], "dislikes": [], "approvals": [], "sentiment": "Evolución del sentimiento" }`;
 
     try {
-        const result = await model.generateContent({
+        const result = await genAI.models.generateContent({
+            model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
-            generationConfig: { responseMimeType: 'application/json' }
+            config: { responseMimeType: 'application/json' }
         });
         console.log("================ DEPURACIÓN IA RAW (Radar Profile) ================", JSON.stringify(result, null, 2));
 
