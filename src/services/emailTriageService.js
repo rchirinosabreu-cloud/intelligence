@@ -12,9 +12,10 @@ const TRIAGE_SCHEMA = {
     summary: { type: 'string' },
     actionItems: { type: 'array', items: { type: 'string' } },
     actionLink: { type: 'string' },
+    frictionDetected: { type: 'boolean' },
     shouldDisplay: { type: 'boolean' }
   },
-  required: ['category', 'priority', 'intent', 'summary', 'actionItems', 'shouldDisplay']
+  required: ['category', 'priority', 'intent', 'summary', 'actionItems', 'frictionDetected', 'shouldDisplay']
 };
 
 export const normalizeModelJson = (rawText) => {
@@ -34,21 +35,24 @@ const classifyEmail = async (email, genAI) => {
   const prompt = `Actúa como un Analista de Operaciones Senior de Brainstudio.
   Tu misión es realizar un triaje profundo y filtrado de ruido para la bandeja de entrada ejecutiva.
 
-  FILTRADO DE RUIDO (shouldDisplay: false):
-  - Notificaciones automáticas de Figma (a menos que sean menciones directas críticas).
-  - Confirmaciones de calendario ('Reunión aceptada', 'Invitation updated').
-  - Correos de bots, alertas de sistema o newsletters.
-  - Alertas administrativas rutinarias (DIAN, bancos) a menos que requieran acción inmediata (HIGH priority).
+  REGLAS DE FILTRADO (shouldDisplay: false):
+  - TODO correo automático de sistema (DIAN, tokens de acceso, newsletters, promociones).
+  - Notificaciones de Figma (a menos que mencionen un 'blocking comment').
+  - Confirmaciones de calendario rutinarias ('Accepted', 'Updated invitation').
 
-  PRIORIDAD DE VISIBILIDAD (shouldDisplay: true):
-  - Conversaciones HUMANAS directas con clientes o el equipo.
-  - Notificaciones de Basecamp sobre tareas, comentarios o pings.
-  - Alertas críticas de plataforma que requieren intervención humana.
+  REGLAS DE PRIORIDAD (Matriz Dinámica):
+  - HIGH:
+    1. Si detectas fricción (quejas, insatisfacción, reclamos).
+    2. Urgencia temporal explícita ("para hoy", "ASAP", "urgente").
+    3. Si el emisor es un cliente estratégico pidiendo cambios en entregables de hoy.
+  - MEDIUM: Tareas estándar, notificaciones de Basecamp de nuevos proyectos, feedback constructivo.
+  - LOW: Acuses de recibo, informativos que no requieren acción.
 
   EXTRACCIÓN DE DATOS:
   1. intent: Clasifica la intención (ej. 'Cambio solicitado por cliente', 'Asignación de tarea', 'Aprobación recibida').
-  2. actionItems: Lista los sub-pasos o requisitos clave mencionados.
-  3. actionLink: Busca un link de acción directa (Basecamp, Google Sheets, Figma) mencionado en el snippet.
+  2. actionItems: Lista los sub-pasos accionables.
+  3. actionLink: Busca un link de acción directa mencionado en el correo.
+  4. frictionDetected: true si el tono es de reclamo o urgencia por error.
 
   EMAIL:
   From: ${email.from || ''}
@@ -65,16 +69,15 @@ const classifyEmail = async (email, genAI) => {
       }
     });
 
-    // In @google/genai (v2.6.0), text is a direct property of the response object
     const text = result.text;
     const triage = normalizeModelJson(text);
     return { ...email, triage };
   } catch (error) {
-    console.error(`[EmailTriage] Error classifying email ${email.id}:`, error.message);
+    console.error(`[EmailTriage] Deep Extraction Error for email ${email.id}:`, error.message);
 
     const content = `${email.from} ${email.subject} ${email.snippet}`.toLowerCase();
     const isBasecamp = content.includes('basecamp') || content.includes('3.basecamp.com');
-    const isBot = content.includes('noreply') || content.includes('no-reply') || content.includes('calendar-notification');
+    const isBot = content.includes('noreply') || content.includes('no-reply') || content.includes('calendar-notification') || content.includes('dian.gov.co');
 
     const linkMatch = email.snippet?.match(/https?:\/\/[^\s]+/);
 
@@ -87,6 +90,7 @@ const classifyEmail = async (email, genAI) => {
         summary: '(Fallback) ' + (email.subject || 'Sin asunto'),
         actionItems: ['Revisar correo original para detalles'],
         actionLink: linkMatch ? linkMatch[0] : null,
+        frictionDetected: false,
         shouldDisplay: !isBot
       }
     };
@@ -103,7 +107,7 @@ export const triageEmailsWithAI = async (emails, genAI) => {
     console.error('[EmailTriage] Deep Batch processing failed:', err.message);
     return emails.filter(e => {
         const c = `${e.from} ${e.subject}`.toLowerCase();
-        return !c.includes('noreply') && !c.includes('calendar');
+        return !c.includes('noreply') && !c.includes('calendar') && !c.includes('dian');
     }).map(e => ({
       ...e,
       triage: {
@@ -112,6 +116,7 @@ export const triageEmailsWithAI = async (emails, genAI) => {
         intent: 'Informativo',
         summary: e.subject,
         actionItems: [],
+        frictionDetected: false,
         shouldDisplay: true
       }
     }));

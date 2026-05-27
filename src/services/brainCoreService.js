@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import crypto from 'crypto';
 import prisma from '../lib/prisma.js';
 import { readGoogleSheet, getRecentEmails, readGoogleSlides, DEFAULT_IMPERSONATED_EMAIL } from './googleWorkspaceService.js';
+import { triageEmailsWithAI } from './emailTriageService.js';
 
 dotenv.config();
 
@@ -135,27 +136,42 @@ export const searchContext = async (queryText, clientId = null, limit = 5) => {
 };
 
 /**
- * Generates the categorized Intelligence Feed.
+ * Generates the categorized Intelligence Feed with v2.5 Predictive Analysis.
  */
 export const getIntelligenceFeed = async (statusFilter = 'APPROVED') => {
     try {
-        const activeTasks = await prisma.task.findMany({
-            where: { status: { in: ['PENDIENTE', 'EN_CURSO'] } },
-            take: 30,
-            include: { client: true },
-            orderBy: [
-                { dueDate: 'asc' },
-                { isSpecial: 'desc' },
-                { isPriority: 'desc' }
-            ]
-        });
+        // 1. Fetch High Impact Data for Prediction
+        const now = new Date();
+        const fourDaysAgo = new Date(now.getTime() - (4 * 24 * 60 * 60 * 1000));
 
-        const recentHistory = await prisma.agencyContext.findMany({
-            where: { status: statusFilter || 'APPROVED' },
-            take: 15,
-            orderBy: { createdAt: 'desc' },
-            include: { client: true }
-        });
+        const [activeTasks, recentHistory, overdueTasks, recentEmails] = await Promise.all([
+            prisma.task.findMany({
+                where: { status: { in: ['PENDIENTE', 'EN_CURSO'] } },
+                take: 30,
+                include: { client: true, assignee: true },
+                orderBy: [{ dueDate: 'asc' }, { isSpecial: 'desc' }]
+            }),
+            prisma.agencyContext.findMany({
+                where: { status: statusFilter || 'APPROVED' },
+                take: 15,
+                orderBy: { createdAt: 'desc' },
+                include: { client: true }
+            }),
+            prisma.task.findMany({
+                where: {
+                    status: { in: ['PENDIENTE', 'EN_CURSO'] },
+                    dueDate: { lt: fourDaysAgo }
+                },
+                include: { client: true, assignee: true }
+            }),
+            getRecentEmails(20, 'is:unread newer_than:2d', DEFAULT_IMPERSONATED_EMAIL)
+        ]);
+
+        // 2. Perform Triaged Email Analysis
+        const triagedEmails = await triageEmailsWithAI(recentEmails, genAI);
+
+        // 3. Predictive Operational Analysis
+        const predictions = await generateOperationalPredictions(activeTasks, overdueTasks, triagedEmails);
 
         if (statusFilter === 'PENDING') {
             return recentHistory.map(h => ({
@@ -170,18 +186,6 @@ export const getIntelligenceFeed = async (statusFilter = 'APPROVED') => {
             }));
         }
 
-        if (activeTasks.length === 0) {
-            return recentHistory.map(h => ({
-                id: h.id,
-                contextId: h.id,
-                type: 'HISTORIAL',
-                title: `Memoria de ${h.client?.name || 'Agencia'}`,
-                content: h.content,
-                severity: 'info',
-                timestamp: h.createdAt
-            }));
-        }
-
         const tasksWithContext = await Promise.all(activeTasks.map(async (task) => {
             const context = await searchContext(`${task.title} ${task.comments || ''}`, task.clientId, 3);
             const approvedContext = context.filter(c => c.similarity > 0.7 && (c.status === 'APPROVED' || !c.status));
@@ -190,26 +194,79 @@ export const getIntelligenceFeed = async (statusFilter = 'APPROVED') => {
 
         const meaningfulTasks = tasksWithContext.filter(p => p.context.length > 0);
 
-        if (meaningfulTasks.length === 0) {
-             return recentHistory.map(h => ({
-                id: h.id,
-                contextId: h.id,
-                type: 'HISTORIAL',
-                title: `Memoria de ${h.client?.name || 'Agencia'}`,
-                content: h.content,
-                severity: 'info',
-                timestamp: h.createdAt
-            }));
-        }
+        const structuredFeed = await generateStructuredFeedWithAI(meaningfulTasks, recentHistory, predictions);
 
-        return await generateStructuredFeedWithAI(meaningfulTasks, recentHistory);
+        // Merge triaged emails into the feed if they are relevant (HIGH priority or BASECAMP)
+        const emailCards = triagedEmails.filter(e => e.triage.priority === 'HIGH' || e.triage.category === 'BASECAMP').map(e => ({
+            id: e.id,
+            type: e.triage.category,
+            title: e.subject,
+            content: e.triage.summary,
+            severity: e.triage.priority === 'HIGH' ? 'critical' : 'warning',
+            timestamp: e.date,
+            metadata: {
+                intent: e.triage.intent,
+                actionItems: e.triage.actionItems,
+                actionLink: e.triage.actionLink,
+                friction: e.triage.frictionDetected
+            }
+        }));
+
+        return [...predictions, ...emailCards, ...structuredFeed].sort((a, b) => {
+            const severityMap = { critical: 3, warning: 2, info: 1 };
+            return (severityMap[b.severity] || 0) - (severityMap[a.severity] || 0);
+        });
+
     } catch (err) {
         console.error('[BrainCoreService] Error generating feed:', err);
         return [];
     }
 };
 
-const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
+/**
+ * Algorithm to detect bottleneck risks and generate pro-active alerts.
+ */
+const generateOperationalPredictions = async (activeTasks, overdueTasks, triagedEmails) => {
+    if (!genAI) return [];
+
+    const criticalChanges = triagedEmails.filter(e =>
+        e.triage.intent?.toLowerCase().includes('cambio') ||
+        e.triage.frictionDetected
+    );
+
+    if (overdueTasks.length === 0 && criticalChanges.length === 0) return [];
+
+    const promptText = `Analiza los siguientes riesgos operativos de la agencia Brainstudio y genera ALERTAS PREDICTIVAS.
+
+    TAREAS MUY VENCIDAS (+4 días):
+    ${JSON.stringify(overdueTasks.map(t => ({ title: t.title, assignee: t.assignee?.name, client: t.client?.name })))}
+
+    CAMBIOS CRÍTICOS SOLICITADOS POR CLIENTE:
+    ${JSON.stringify(criticalChanges.map(e => ({ subject: e.subject, summary: e.triage.summary, intent: e.triage.intent })))}
+
+    TU OBJETIVO:
+    1. Detectar si un colaborador con tareas vencidas ha recibido un cambio crítico de última hora.
+    2. Calcular el riesgo de retraso en la publicación de la Parrilla.
+    3. Sugerir una acción correctiva inteligente (ej. reasignación).
+
+    Devuelve un array JSON de objetos:
+    { "id": "pred_uuid", "type": "AMENAZA", "title": "Título de riesgo", "content": "Análisis y sugerencia", "severity": "critical", "timestamp": "ISO Date" }`;
+
+    try {
+        const result = await genAI.models.generateContent({
+            model: CHAT_MODEL,
+            contents: [{ role: 'user', parts: [{ text: promptText }] }],
+            config: { responseMimeType: 'application/json' }
+        });
+
+        return JSON.parse(result.text || "[]");
+    } catch (e) {
+        console.error("[BrainCoreService] Prediction failed:", e);
+        return [];
+    }
+};
+
+const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory, predictions) => {
     if (!genAI) return [];
 
     const promptText = `Eres el Brain Core de Brainstudio. Tu misión es cruzar tareas activas con la memoria de la agencia.
@@ -227,7 +284,7 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
     ${JSON.stringify(recentHistory.map(h => ({ id: h.id, content: h.content, client: h.client?.name })))}
 
     REGLAS DE GENERACIÓN:
-    1. Si hay un conflicto o instrucción específica (ej: "Alexander odia el rojo") que aplique a una tarea activa de Alexander, genera una ALERTA (severity: critical). Estas deben ir primero.
+    1. Si hay un conflicto o instrucción específica (ej: "Alexander odia el rojo") que aplique a una tarea activa de Alexander, genera una ALERTA (severity: critical).
     2. Si hay patrones en el historial que sugieran una mejor forma de hacer las cosas, genera una RECOMENDACIÓN (severity: warning).
     3. Si es solo información relevante, usa INSIGHT o HISTORIAL (severity: info).
 
@@ -240,16 +297,13 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
             config: { responseMimeType: 'application/json' }
         });
-        console.log("================ DEPURACIÓN IA RAW (Structured Feed) ================", JSON.stringify(result, null, 2));
 
         const responseText = result.text;
-
         if (!responseText) return [];
 
         try {
             return JSON.parse(responseText.replace(/```json|```/g, ''));
         } catch (parseError) {
-            console.warn("⚠️ Alerta BrainCore (Structured Feed): Fallo de parseo JSON. Aplicando limpieza Regex.");
             const jsonMatch = responseText.match(/\[[\s\S]*\]/);
             return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
         }
@@ -355,7 +409,6 @@ export const askBrainCore = async (question, clientId = null) => {
                 ]
             }
         });
-        console.log("================ DEPURACIÓN IA RAW (Ask Brain) ================", JSON.stringify(result, null, 2));
 
         const calls = result.functionCalls;
         if (calls && calls.length > 0) {
@@ -384,7 +437,6 @@ export const askBrainCore = async (question, clientId = null) => {
                     }
                 ]
             });
-            console.log("================ DEPURACIÓN IA RAW (Tool Response) ================", JSON.stringify(finalResult, null, 2));
 
             return {
                 content: finalResult.text,
@@ -427,16 +479,13 @@ export const getClientProfileFromMemory = async (clientId) => {
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
             config: { responseMimeType: 'application/json' }
         });
-        console.log("================ DEPURACIÓN IA RAW (Radar Profile) ================", JSON.stringify(result, null, 2));
 
         const responseText = result.text;
-
         if (!responseText) return null;
 
         try {
             return JSON.parse(responseText.replace(/```json|```/g, ''));
         } catch (parseError) {
-            console.warn("⚠️ Alerta BrainCore (Radar Profile): Fallo de parseo JSON. Aplicando limpieza Regex.");
             const jsonMatch = responseText.match(/\{[\s\S]*\}/);
             return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
         }
