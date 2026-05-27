@@ -15,8 +15,8 @@ describe('emailTriageService', () => {
     const mockModel = {
       models: {
         generateContent: vi.fn()
-          .mockResolvedValueOnce({ response: { text: () => JSON.stringify({ category: 'NOISE', priority: 'LOW', summary: 'Newsletter', intent: 'Spam', actionItems: [], shouldDisplay: false }) } })
-          .mockResolvedValueOnce({ response: { text: () => JSON.stringify({ category: 'BASECAMP', priority: 'HIGH', summary: 'Task overdue', intent: 'Assignment', actionItems: [], shouldDisplay: true }) } })
+          .mockResolvedValueOnce({ text: JSON.stringify({ category: 'NOISE', priority: 'LOW', summary: 'Newsletter', intent: 'Spam', actionItems: [], shouldDisplay: false }) })
+          .mockResolvedValueOnce({ text: JSON.stringify({ category: 'BASECAMP', priority: 'HIGH', summary: 'Task overdue', intent: 'Assignment', actionItems: [], shouldDisplay: true }) })
       }
     };
 

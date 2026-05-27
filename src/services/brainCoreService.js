@@ -68,13 +68,7 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
         });
         console.log("================ DEPURACIÓN IA RAW (Extraction) ================", JSON.stringify(result, null, 2));
 
-        let responseText = "";
-        const response = result.response;
-        if (response && typeof response.text === 'string') {
-            responseText = response.text;
-        } else if (response && typeof response.text === 'function') {
-            responseText = response.text();
-        }
+        const responseText = result.text;
 
         if (!responseText) throw new Error("Empty response from AI");
 
@@ -248,13 +242,7 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory) => {
         });
         console.log("================ DEPURACIÓN IA RAW (Structured Feed) ================", JSON.stringify(result, null, 2));
 
-        let responseText = "";
-        const response = result.response;
-        if (response && typeof response.text === 'string') {
-            responseText = response.text;
-        } else if (response && typeof response.text === 'function') {
-            responseText = response.text();
-        }
+        const responseText = result.text;
 
         if (!responseText) return [];
 
@@ -368,9 +356,8 @@ export const askBrainCore = async (question, clientId = null) => {
             }
         });
         console.log("================ DEPURACIÓN IA RAW (Ask Brain) ================", JSON.stringify(result, null, 2));
-        let response = result.response;
 
-        const calls = response?.functionCalls;
+        const calls = result.functionCalls;
         if (calls && calls.length > 0) {
             const call = calls[0];
             let toolResult;
@@ -399,29 +386,14 @@ export const askBrainCore = async (question, clientId = null) => {
             });
             console.log("================ DEPURACIÓN IA RAW (Tool Response) ================", JSON.stringify(finalResult, null, 2));
 
-            let contentText = "";
-            const fResponse = finalResult.response;
-            if (fResponse && typeof fResponse.text === 'string') {
-                contentText = fResponse.text;
-            } else if (fResponse && typeof fResponse.text === 'function') {
-                contentText = fResponse.text();
-            }
-
             return {
-                content: contentText,
+                content: finalResult.text,
                 sources: approvedContext.map(c => ({ id: c.id, content: c.content }))
             };
         }
 
-        let contentText = "";
-        if (response && typeof response.text === 'string') {
-            contentText = response.text;
-        } else if (response && typeof response.text === 'function') {
-            contentText = response.text();
-        }
-
         return {
-            content: contentText,
+            content: result.text,
             sources: approvedContext.map(c => ({ id: c.id, content: c.content }))
         };
     } catch (e) {
@@ -457,13 +429,7 @@ export const getClientProfileFromMemory = async (clientId) => {
         });
         console.log("================ DEPURACIÓN IA RAW (Radar Profile) ================", JSON.stringify(result, null, 2));
 
-        let responseText = "";
-        const response = result.response;
-        if (response && typeof response.text === 'string') {
-            responseText = response.text;
-        } else if (response && typeof response.text === 'function') {
-            responseText = response.text();
-        }
+        const responseText = result.text;
 
         if (!responseText) return null;
 

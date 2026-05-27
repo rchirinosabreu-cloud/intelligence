@@ -65,7 +65,8 @@ const classifyEmail = async (email, genAI) => {
       }
     });
 
-    const text = typeof result?.response?.text === 'function' ? result.response.text() : result?.response?.text;
+    // In @google/genai (v2.6.0), text is a direct property of the response object
+    const text = result.text;
     const triage = normalizeModelJson(text);
     return { ...email, triage };
   } catch (error) {
