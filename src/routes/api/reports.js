@@ -125,13 +125,15 @@ router.post('/generate', upload.any(), async (req, res) => {
 
         const promptText = `Analiza los siguientes pantallazos de métricas para el cliente ${client.name}.
 
-        Tienes a tu disposición una lista de URLs de imágenes cargadas que corresponden a los pantallazos enviados (en el mismo orden):
+        IMPORTANTE: Aquí tienes la lista de URLs firmadas de las imágenes que acabas de recibir. DEBES usar EXACTAMENTE estas URLs en tu respuesta JSON para mapear cada análisis con su imagen correspondiente.
+
+        LISTA DE URLs DISPONIBLES:
         ${JSON.stringify(imageUrlMap.map(img => ({ name: img.originalname, url: img.url })))}
 
         TU MISIÓN:
-        1. Identifica qué imagen corresponde a cada sección.
+        1. Identifica visualmente qué imagen corresponde a cada sección (Avance, Radiografía, Resumen, Macro, Micro).
         2. Para cada sección, extrae los datos clave y redacta un análisis ejecutivo con un tono 100% OPTIMISTA, COMERCIAL y VISUAL.
-        3. SIEMPRE debes incluir la 'imagen_url' correspondiente de la lista proporcionada.
+        3. SIEMPRE debes incluir la 'imagen_url' correspondiente de la LISTA DE URLs DISPONIBLES arriba. NO inventes URLs ni uses paths relativos.
 
         REGLAS DE TONO:
         - Prohibido usar palabras como "caída", "pérdida", "mal rendimiento".
