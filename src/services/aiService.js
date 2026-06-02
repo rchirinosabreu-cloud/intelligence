@@ -68,7 +68,7 @@ export const classifyTaskWithAI = async (title, comments = "") => {
             model: MODEL_NAME,
             systemInstruction: MASTER_PROMPT,
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            config: {
+            generationConfig: {
                 responseMimeType: "application/json"
             }
         });

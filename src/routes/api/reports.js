@@ -215,18 +215,32 @@ router.post('/generate', upload.any(), async (req, res) => {
                     ...imageParts
                 ]
             }],
-            config: {
+            generationConfig: {
                 responseMimeType: "application/json",
-                maxOutputTokens: 8192
+                maxOutputTokens: 8192,
+                temperature: 0.1
             }
         });
 
         if (!result || !result.text) {
+            console.error("[Reports API] Raw AI Result Error:", JSON.stringify(result, null, 2));
             throw new Error("La IA no devolvió un formato de texto válido.");
         }
 
         const responseText = result.text;
-        let analysis = JSON.parse(responseText);
+        let analysis;
+        try {
+            analysis = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error("[Reports API] JSON Parse Error. Raw Text:", responseText);
+            // Fallback: try to find JSON block if AI added markdown wrappers despite the config
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                analysis = JSON.parse(jsonMatch[0]);
+            } else {
+                throw new Error("No se pudo parsear el JSON de la IA.");
+            }
+        }
 
         // Transform Signed URLs to local Proxy URLs in the final analysis JSON
         const transformToProxy = (url) => {
