@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import prisma from '../../lib/prisma.js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { uploadClientFile, getSignedUrl, getClientFileStream } from '../../services/storageService.js';
 
 const router = express.Router();
@@ -14,7 +14,7 @@ let genAI;
 try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
-        genAI = new GoogleGenerativeAI(apiKey);
+        genAI = new GoogleGenAI({ apiKey });
         console.log("[Reports API] Google Generative AI initialized.");
     } else {
         console.warn("[Reports API] GEMINI_API_KEY is missing.");
@@ -216,7 +216,7 @@ router.post('/generate', upload.any(), async (req, res) => {
             }
         });
 
-        const responseText = result.response.text();
+        const responseText = typeof result.response.text === 'function' ? result.response.text() : result.response.text;
         let analysis = JSON.parse(responseText);
 
         // Transform Signed URLs to local Proxy URLs in the final analysis JSON
