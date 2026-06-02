@@ -221,7 +221,11 @@ router.post('/generate', upload.any(), async (req, res) => {
             }
         });
 
-        const responseText = typeof result.response.text === 'function' ? result.response.text() : result.response.text;
+        if (!result || !result.text) {
+            throw new Error("La IA no devolvió un formato de texto válido.");
+        }
+
+        const responseText = result.text;
         let analysis = JSON.parse(responseText);
 
         // Transform Signed URLs to local Proxy URLs in the final analysis JSON
