@@ -115,9 +115,22 @@ const Reports = () => {
     }
   };
 
-  const handleTextEdit = (section, field, value) => {
+  const handleTextEdit = (section, field, value, index = null) => {
     if (section === 'title') {
         setEditedTexts(prev => ({ ...prev, title: value }));
+        return;
+    }
+    if (section === 'hoja_de_ruta' && index !== null) {
+        const newRoadmap = [...(report?.analysis?.hoja_de_ruta || [])];
+        newRoadmap[index] = { ...newRoadmap[index], [field]: value };
+        // We update the local report state for the roadmap as it's more complex than simple fields
+        setReport(prev => ({
+            ...prev,
+            analysis: {
+                ...prev.analysis,
+                hoja_de_ruta: newRoadmap
+            }
+        }));
         return;
     }
     setEditedTexts(prev => ({
@@ -233,10 +246,18 @@ const Reports = () => {
     </div>
   );
 
+  const getImageUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('/api')) {
+        return `${getApiBaseUrl()}${url}`;
+    }
+    return url;
+  };
+
   const SectionHeader = ({ title, clientLogo }) => (
     <div className="flex items-center justify-between mb-8 border-b border-slate-100 pb-4">
        <h3 className="text-xl font-bold tracking-tight text-slate-800">{title}</h3>
-       {clientLogo && <img src={clientLogo} className="h-10 w-auto object-contain" />}
+       {clientLogo && <img src={getImageUrl(clientLogo)} className="h-10 w-auto object-contain" />}
     </div>
   );
 
@@ -347,7 +368,7 @@ const Reports = () => {
                <div className="flex flex-col items-center text-center space-y-12 py-20 border-b border-slate-100 relative">
                   <div className="h-40 md:h-52 w-auto">
                      <img
-                      src={report.client.logoUrl || '/brainstudio-logo.png'}
+                      src={getImageUrl(report.client.logoUrl) || '/brainstudio-logo.png'}
                       alt={report.client.name}
                       className="h-full w-full object-contain"
                     />
@@ -380,7 +401,7 @@ const Reports = () => {
                     {report.analysis.organic.avance?.imagen_url && (
                         <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto">
                             <img
-                              src={report.analysis.organic.avance.imagen_url}
+                              src={getImageUrl(report.analysis.organic.avance.imagen_url)}
                               className="w-full h-auto"
                               alt="Avance General"
                               onError={(e) => console.error("Error loading image:", report.analysis.organic.avance.imagen_url)}
@@ -404,7 +425,7 @@ const Reports = () => {
                     {report.analysis.organic.radiografia?.imagen_url && (
                         <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto">
                             <img
-                              src={report.analysis.organic.radiografia.imagen_url}
+                              src={getImageUrl(report.analysis.organic.radiografia.imagen_url)}
                               className="w-full h-auto"
                               alt="Radiografía del Público"
                               onError={(e) => console.error("Error loading image:", report.analysis.organic.radiografia.imagen_url)}
@@ -428,7 +449,7 @@ const Reports = () => {
                     {report.analysis.organic.resumen?.imagen_url && (
                         <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto">
                             <img
-                              src={report.analysis.organic.resumen.imagen_url}
+                              src={getImageUrl(report.analysis.organic.resumen.imagen_url)}
                               className="w-full h-auto"
                               alt="Resumen de Contenido"
                               onError={(e) => console.error("Error loading image:", report.analysis.organic.resumen.imagen_url)}
@@ -459,7 +480,7 @@ const Reports = () => {
                     {report.analysis.performance.macro?.imagen_url && (
                         <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-4xl mx-auto">
                             <img
-                              src={report.analysis.performance.macro.imagen_url}
+                              src={getImageUrl(report.analysis.performance.macro.imagen_url)}
                               className="w-full h-auto"
                               alt="Rendimiento Macro"
                               onError={(e) => console.error("Error loading image:", report.analysis.performance.macro.imagen_url)}
@@ -483,7 +504,7 @@ const Reports = () => {
                     {report.analysis.performance.micro?.imagen_url && (
                         <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-4xl mx-auto">
                             <img
-                              src={report.analysis.performance.micro.imagen_url}
+                              src={getImageUrl(report.analysis.performance.micro.imagen_url)}
                               className="w-full h-auto"
                               alt="Desglose Micro"
                               onError={(e) => console.error("Error loading image:", report.analysis.performance.micro.imagen_url)}
@@ -517,9 +538,18 @@ const Reports = () => {
                               <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/10 text-white flex items-center justify-center shrink-0 font-black text-xl shadow-xl">
                                  {step.step || i+1}
                               </div>
-                              <div className="space-y-2">
-                                 <h4 className="text-xl font-bold text-white leading-tight">{step.title}</h4>
-                                 <p className="text-lg text-slate-400 font-medium leading-relaxed">{step.description}</p>
+                              <div className="space-y-2 flex-1">
+                                 <input
+                                    className="w-full bg-transparent border-none text-xl font-bold text-white leading-tight outline-none focus:ring-1 focus:ring-primary/30 rounded-lg px-2"
+                                    value={step.title}
+                                    onChange={(e) => handleTextEdit('hoja_de_ruta', 'title', e.target.value, i)}
+                                 />
+                                 <textarea
+                                    className="w-full bg-transparent border-none text-lg text-slate-400 font-medium leading-relaxed resize-none outline-none focus:ring-1 focus:ring-primary/30 rounded-lg px-2"
+                                    rows={2}
+                                    value={step.description}
+                                    onChange={(e) => handleTextEdit('hoja_de_ruta', 'description', e.target.value, i)}
+                                 />
                               </div>
                            </div>
                         ))}

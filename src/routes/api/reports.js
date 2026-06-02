@@ -28,6 +28,11 @@ router.get('/image-proxy', async (req, res) => {
         const { path } = req.query;
         if (!path) return res.status(400).send("Path is required");
 
+        // Basic Security: Ensure the path is not a traversal attempt
+        if (path.includes('..') || path.startsWith('/') || path.includes(':')) {
+            return res.status(403).send("Invalid path");
+        }
+
         const stream = getClientFileStream(path);
 
         // Determine content type based on extension
@@ -201,8 +206,8 @@ router.post('/generate', upload.any(), async (req, res) => {
           ]
         }`;
 
-        const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-        const result = await model.generateContent({
+        const result = await genAI.models.generateContent({
+            model: MODEL_NAME,
             contents: [{
                 role: 'user',
                 parts: [
@@ -210,7 +215,7 @@ router.post('/generate', upload.any(), async (req, res) => {
                     ...imageParts
                 ]
             }],
-            generationConfig: {
+            config: {
                 responseMimeType: "application/json",
                 maxOutputTokens: 8192
             }
