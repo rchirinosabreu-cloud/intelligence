@@ -63,7 +63,7 @@ const classifyEmail = async (email, genAI) => {
     const result = await genAI.models.generateContent({
       model: TRIAGE_MODEL,
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: {
+      generationConfig: {
         responseMimeType: 'application/json',
         responseSchema: TRIAGE_SCHEMA
       }
