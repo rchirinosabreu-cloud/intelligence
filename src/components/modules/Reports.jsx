@@ -236,7 +236,7 @@ const Reports = () => {
   const SectionHeader = ({ title, clientLogo }) => (
     <div className="flex items-center justify-between mb-8 border-b border-slate-100 pb-4">
        <h3 className="text-xl font-bold tracking-tight text-slate-800">{title}</h3>
-       {clientLogo && <img src={clientLogo} className="h-10 w-auto object-contain" crossOrigin="anonymous" />}
+       {clientLogo && <img src={clientLogo} className="h-10 w-auto object-contain" />}
     </div>
   );
 
@@ -350,7 +350,6 @@ const Reports = () => {
                       src={report.client.logoUrl || '/brainstudio-logo.png'}
                       alt={report.client.name}
                       className="h-full w-full object-contain"
-                      crossOrigin="anonymous"
                     />
                   </div>
                   <div className="space-y-6 w-full max-w-4xl">
@@ -384,7 +383,6 @@ const Reports = () => {
                               src={report.analysis.organic.avance.imagen_url}
                               className="w-full h-auto"
                               alt="Avance General"
-                              crossOrigin="anonymous"
                               onError={(e) => console.error("Error loading image:", report.analysis.organic.avance.imagen_url)}
                             />
                         </div>
@@ -409,7 +407,6 @@ const Reports = () => {
                               src={report.analysis.organic.radiografia.imagen_url}
                               className="w-full h-auto"
                               alt="Radiografía del Público"
-                              crossOrigin="anonymous"
                               onError={(e) => console.error("Error loading image:", report.analysis.organic.radiografia.imagen_url)}
                             />
                         </div>
@@ -434,7 +431,6 @@ const Reports = () => {
                               src={report.analysis.organic.resumen.imagen_url}
                               className="w-full h-auto"
                               alt="Resumen de Contenido"
-                              crossOrigin="anonymous"
                               onError={(e) => console.error("Error loading image:", report.analysis.organic.resumen.imagen_url)}
                             />
                         </div>
@@ -466,7 +462,6 @@ const Reports = () => {
                               src={report.analysis.performance.macro.imagen_url}
                               className="w-full h-auto"
                               alt="Rendimiento Macro"
-                              crossOrigin="anonymous"
                               onError={(e) => console.error("Error loading image:", report.analysis.performance.macro.imagen_url)}
                             />
                         </div>
@@ -491,7 +486,6 @@ const Reports = () => {
                               src={report.analysis.performance.micro.imagen_url}
                               className="w-full h-auto"
                               alt="Desglose Micro"
-                              crossOrigin="anonymous"
                               onError={(e) => console.error("Error loading image:", report.analysis.performance.micro.imagen_url)}
                             />
                         </div>

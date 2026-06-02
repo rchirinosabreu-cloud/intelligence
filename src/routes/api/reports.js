@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import prisma from '../../lib/prisma.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { uploadClientFile, getSignedUrl } from '../../services/storageService.js';
+import { uploadClientFile, getSignedUrl, getClientFileStream } from '../../services/storageService.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -22,6 +22,27 @@ try {
 } catch (e) {
     console.error("[Reports API] Failed to initialize AI client:", e);
 }
+
+router.get('/image-proxy', async (req, res) => {
+    try {
+        const { path } = req.query;
+        if (!path) return res.status(400).send("Path is required");
+
+        const stream = getClientFileStream(path);
+
+        // Determine content type based on extension
+        const ext = path.split('.').pop().toLowerCase();
+        const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
+
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+
+        stream.pipe(res);
+    } catch (error) {
+        console.error("[Reports API] Proxy error:", error);
+        res.status(500).send("Error loading image");
+    }
+});
 
 router.post('/generate', upload.any(), async (req, res) => {
     try {
@@ -76,10 +97,20 @@ router.post('/generate', upload.any(), async (req, res) => {
 
                 if (file.fieldname === 'organic') {
                     organicImages.push(imageData);
-                    sourcesAudit.push({ name: file.originalname, status: "Cargada (RRSS)", type: "Organic" });
+                    sourcesAudit.push({
+                        name: file.originalname,
+                        status: "Cargada (RRSS)",
+                        type: "Organic",
+                        gcsPath: uploadResult.gcsPath
+                    });
                 } else if (file.fieldname === 'ads') {
                     adsImages.push(imageData);
-                    sourcesAudit.push({ name: file.originalname, status: "Cargada (ADS)", type: "Ads" });
+                    sourcesAudit.push({
+                        name: file.originalname,
+                        status: "Cargada (ADS)",
+                        type: "Ads",
+                        gcsPath: uploadResult.gcsPath
+                    });
                 }
             } catch (uploadError) {
                 console.error(`[Reports API] File upload failed for ${file.originalname}:`, uploadError);
@@ -186,7 +217,29 @@ router.post('/generate', upload.any(), async (req, res) => {
         });
 
         const responseText = result.response.text();
-        const analysis = JSON.parse(responseText);
+        let analysis = JSON.parse(responseText);
+
+        // Transform Signed URLs to local Proxy URLs in the final analysis JSON
+        const transformToProxy = (url) => {
+            const match = imageUrlMap.find(m => m.url === url);
+            if (match) {
+                const pathMatch = sourcesAudit.find(s => s.name === match.originalname);
+                if (pathMatch?.gcsPath) {
+                    return `/api/reports/image-proxy?path=${encodeURIComponent(pathMatch.gcsPath)}`;
+                }
+            }
+            return url;
+        };
+
+        if (analysis.organic) {
+            if (analysis.organic.avance) analysis.organic.avance.imagen_url = transformToProxy(analysis.organic.avance.imagen_url);
+            if (analysis.organic.radiografia) analysis.organic.radiografia.imagen_url = transformToProxy(analysis.organic.radiografia.imagen_url);
+            if (analysis.organic.resumen) analysis.organic.resumen.imagen_url = transformToProxy(analysis.organic.resumen.imagen_url);
+        }
+        if (analysis.performance) {
+            if (analysis.performance.macro) analysis.performance.macro.imagen_url = transformToProxy(analysis.performance.macro.imagen_url);
+            if (analysis.performance.micro) analysis.performance.micro.imagen_url = transformToProxy(analysis.performance.micro.imagen_url);
+        }
 
         res.json({
             client: {
