@@ -135,7 +135,8 @@ router.post('/generate', upload.any(), async (req, res) => {
         2. Para cada sección, extrae los datos clave y redacta un análisis ejecutivo con un tono 100% OPTIMISTA, COMERCIAL y VISUAL.
         3. SIEMPRE debes incluir la 'imagen_url' correspondiente de la LISTA DE URLs DISPONIBLES arriba. NO inventes URLs ni uses paths relativos.
 
-        REGLAS DE TONO:
+        REGLAS DE TONO Y ESTILO:
+        - Sé SINTÉTICO y DIRECTO. Los textos narrativos deben ser breves (máximo 3-4 líneas por sección) para asegurar la eficiencia del reporte.
         - Prohibido usar palabras como "caída", "pérdida", "mal rendimiento".
         - Si algo bajó, es una "estabilización" o "ventana de oportunidad estratégica".
         - Todo debe transmitir progreso y dirección.
@@ -179,7 +180,8 @@ router.post('/generate', upload.any(), async (req, res) => {
                 ]
             }],
             generationConfig: {
-                responseMimeType: "application/json"
+                responseMimeType: "application/json",
+                maxOutputTokens: 8192
             }
         });
 
