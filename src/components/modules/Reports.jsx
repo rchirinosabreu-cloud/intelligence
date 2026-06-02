@@ -27,10 +27,6 @@ import {
   ExternalLink,
   Monitor
 } from 'lucide-react';
-import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart as RePieChart, Pie, Cell, Legend, AreaChart, Area
-} from 'recharts';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { toast } from 'react-hot-toast';
@@ -38,19 +34,6 @@ import axios from 'axios';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
-
-// --- Error Boundary for Charts ---
-class ChartErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError(error) { return { hasError: true }; }
-  render() {
-    if (this.state.hasError) return <div className="h-full flex items-center justify-center text-slate-300 text-xs italic">Gráfica no disponible</div>;
-    return this.props.children;
-  }
-}
 
 const Reports = () => {
   const { currentUser } = useAuth();
@@ -61,14 +44,22 @@ const Reports = () => {
   const [adsFiles, setAdsFiles] = useState([]);
   const [logoFile, setLogoFile] = useState(null);
 
+  const [organicPreviews, setOrganicPreviews] = useState([]);
+  const [adsPreviews, setAdsPreviews] = useState([]);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [report, setReport] = useState(null);
-  const [editedValues, setEditedValues] = useState({});
   const [editedTexts, setEditedTexts] = useState({
     title: '',
-    organicAnalysis: '',
-    performanceAnalysis: '',
-    oportunidades: []
+    organic: {
+        avance: '',
+        radiografia: '',
+        resumen: ''
+    },
+    performance: {
+        macro: '',
+        micro: ''
+    }
   });
   const reportRef = useRef(null);
 
@@ -87,36 +78,55 @@ const Reports = () => {
 
   const handleFilesChange = (type, e) => {
     const selectedFiles = Array.from(e.target.files || []);
-    if (type === 'organic') setOrganicFiles(prev => [...prev, ...selectedFiles]);
-    else if (type === 'ads') setAdsFiles(prev => [...prev, ...selectedFiles]);
-    else if (type === 'logo') setLogoFile(selectedFiles[0]);
+
+    if (type === 'organic') {
+      if (organicFiles.length + selectedFiles.length > 8) {
+        toast.error('Límite máximo de 8 imágenes para RRSS');
+        return;
+      }
+      setOrganicFiles(prev => [...prev, ...selectedFiles]);
+      const newPreviews = selectedFiles.map(file => URL.createObjectURL(file));
+      setOrganicPreviews(prev => [...prev, ...newPreviews]);
+    } else if (type === 'ads') {
+      if (adsFiles.length + selectedFiles.length > 6) {
+        toast.error('Límite máximo de 6 imágenes para ADS');
+        return;
+      }
+      setAdsFiles(prev => [...prev, ...selectedFiles]);
+      const newPreviews = selectedFiles.map(file => URL.createObjectURL(file));
+      setAdsPreviews(prev => [...prev, ...newPreviews]);
+    } else if (type === 'logo') {
+      setLogoFile(selectedFiles[0]);
+    }
     e.target.value = '';
   };
 
   const removeFile = (type, index) => {
-    if (type === 'organic') setOrganicFiles(prev => prev.filter((_, i) => i !== index));
-    else if (type === 'ads') setAdsFiles(prev => prev.filter((_, i) => i !== index));
-    else if (type === 'logo') setLogoFile(null);
-  };
-
-  const handleValueEdit = (section, index, newValue) => {
-    const key = `${section}-${index}`;
-    // Convert back to number if possible for formatting
-    const numValue = newValue.replace(/[^\d]/g, '');
-    setEditedValues(prev => ({
-      ...prev,
-      [key]: numValue ? parseInt(numValue, 10) : newValue
-    }));
-  };
-
-  const handleTextEdit = (field, value, index = null) => {
-    if (index !== null && field === 'oportunidades') {
-      const newOportunidades = [...editedTexts.oportunidades];
-      newOportunidades[index] = { ...newOportunidades[index], text: value };
-      setEditedTexts(prev => ({ ...prev, oportunidades: newOportunidades }));
-    } else {
-      setEditedTexts(prev => ({ ...prev, [field]: value }));
+    if (type === 'organic') {
+      setOrganicFiles(prev => prev.filter((_, i) => i !== index));
+      URL.revokeObjectURL(organicPreviews[index]);
+      setOrganicPreviews(prev => prev.filter((_, i) => i !== index));
+    } else if (type === 'ads') {
+      setAdsFiles(prev => prev.filter((_, i) => i !== index));
+      URL.revokeObjectURL(adsPreviews[index]);
+      setAdsPreviews(prev => prev.filter((_, i) => i !== index));
+    } else if (type === 'logo') {
+      setLogoFile(null);
     }
+  };
+
+  const handleTextEdit = (section, field, value) => {
+    if (section === 'title') {
+        setEditedTexts(prev => ({ ...prev, title: value }));
+        return;
+    }
+    setEditedTexts(prev => ({
+      ...prev,
+      [section]: {
+        ...prev[section],
+        [field]: value
+      }
+    }));
   };
 
   const generateReport = async () => {
@@ -124,10 +134,18 @@ const Reports = () => {
       toast.error('Selecciona un cliente');
       return;
     }
+    if (organicFiles.length === 0 && adsFiles.length === 0) {
+        toast.error('Sube al menos un pantallazo');
+        return;
+    }
+
     setIsGenerating(true);
     setReport(null);
-    setEditedValues({});
-    setEditedTexts({ title: '', organicAnalysis: '', performanceAnalysis: '', oportunidades: [] });
+    setEditedTexts({
+        title: '',
+        organic: { avance: '', radiografia: '', resumen: '' },
+        performance: { macro: '', micro: '' }
+    });
 
     const formData = new FormData();
     formData.append('clientId', selectedClientId);
@@ -146,9 +164,15 @@ const Reports = () => {
         setReport(response.data);
         setEditedTexts({
             title: `Reporte de Desempeño Digital de ${response.data.client.name} - 2026`,
-            organicAnalysis: response.data.analysis.organic.analysis,
-            performanceAnalysis: response.data.analysis.performance.analysis,
-            oportunidades: response.data.analysis.organic.oportunidades_aprendizaje || []
+            organic: {
+                avance: response.data.analysis.organic?.avance?.texto_analisis || '',
+                radiografia: response.data.analysis.organic?.radiografia?.texto_analisis || '',
+                resumen: response.data.analysis.organic?.resumen?.texto_analisis || ''
+            },
+            performance: {
+                macro: response.data.analysis.performance?.macro?.texto_analisis || '',
+                micro: response.data.analysis.performance?.micro?.texto_analisis || ''
+            }
         });
         toast.success('Reporte final generado');
       } else {
@@ -156,22 +180,10 @@ const Reports = () => {
       }
     } catch (error) {
       toast.error('Fallo en el análisis de IA. Reintenta.');
+      console.error(error);
     } finally {
       setIsGenerating(false);
     }
-  };
-
-  const formatCurrency = (val) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(val) + ' COP';
-  };
-
-  const formatNumber = (val) => {
-    return new Intl.NumberFormat('es-CO').format(val);
   };
 
   const downloadPDF = async () => {
@@ -184,11 +196,9 @@ const Reports = () => {
         backgroundColor: '#ffffff',
         logging: false,
         onclone: (clonedDoc) => {
-          // Robustly hide elements with no-print class
           const noPrintElements = clonedDoc.querySelectorAll('.no-print');
           noPrintElements.forEach(el => el.style.display = 'none');
 
-          // Convert textareas to divs for better PDF rendering (no scrollbars, full height)
           const textareas = clonedDoc.querySelectorAll('textarea, input');
           textareas.forEach(ta => {
             const div = clonedDoc.createElement('div');
@@ -216,8 +226,6 @@ const Reports = () => {
     }
   };
 
-  const COLORS = ['#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
-
   const Card = ({ children, className = "" }) => (
     <div className={cn("bg-white border border-[#e2e8f0] rounded-2xl shadow-sm p-6", className)}>
       {children}
@@ -238,7 +246,7 @@ const Reports = () => {
          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 pb-8">
             <div className="space-y-1">
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">Reporte de desempeño digital</h1>
-              <p className="text-sm text-slate-500 font-medium italic">Consolidación estratégica estable v6.0</p>
+              <p className="text-sm text-slate-500 font-medium italic">Análisis Multimodal con IA v7.0</p>
             </div>
             <div className="flex gap-3">
                {report && (
@@ -280,34 +288,44 @@ const Reports = () => {
             </div>
 
             <div className="space-y-4">
-               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Archivos Orgánicos</label>
+               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pantallazos Orgánicos (Máx 8)</label>
                <div className="relative group border border-dashed border-slate-200 rounded-xl p-6 hover:bg-emerald-50/20 transition-all cursor-pointer text-center">
-                 <input type="file" multiple accept=".csv, .xlsx" onChange={(e) => handleFilesChange('organic', e)} className="absolute inset-0 opacity-0 cursor-pointer" />
+                 <input type="file" multiple accept="image/png, image/jpeg, image/jpg" onChange={(e) => handleFilesChange('organic', e)} className="absolute inset-0 opacity-0 cursor-pointer" />
                  <Plus className="w-6 h-6 text-slate-300 mx-auto mb-2" />
-                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Añadir RRSS</span>
+                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">+ AÑADIR RRSS</span>
                </div>
-               <div className="flex flex-wrap gap-2">
-                 {organicFiles.map((f, i) => (
-                   <div key={i} className="flex items-center gap-2 px-3 py-1 bg-white border border-slate-100 text-slate-600 rounded-full text-[9px] font-bold">
-                      <span className="truncate max-w-[80px]">{f.name}</span>
-                      <X className="w-3 h-3 cursor-pointer" onClick={() => removeFile('organic', i)} />
+               <div className="grid grid-cols-4 gap-2">
+                 {organicPreviews.map((src, i) => (
+                   <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
+                      <img src={src} className="w-full h-full object-cover" alt={`Preview RRSS ${i}`} />
+                      <button
+                        onClick={() => removeFile('organic', i)}
+                        className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
                    </div>
                  ))}
                </div>
             </div>
 
             <div className="space-y-4">
-               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Archivos Pauta</label>
+               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pantallazos Pauta (Máx 6)</label>
                <div className="relative group border border-dashed border-slate-200 rounded-xl p-6 hover:bg-cyan-50/20 transition-all cursor-pointer text-center">
-                 <input type="file" multiple accept=".csv, .xlsx" onChange={(e) => handleFilesChange('ads', e)} className="absolute inset-0 opacity-0 cursor-pointer" />
+                 <input type="file" multiple accept="image/png, image/jpeg, image/jpg" onChange={(e) => handleFilesChange('ads', e)} className="absolute inset-0 opacity-0 cursor-pointer" />
                  <Plus className="w-6 h-6 text-slate-300 mx-auto mb-2" />
-                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Añadir Ads</span>
+                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">+ AÑADIR ADS</span>
                </div>
-               <div className="flex flex-wrap gap-2">
-                 {adsFiles.map((f, i) => (
-                   <div key={i} className="flex items-center gap-2 px-3 py-1 bg-white border border-slate-100 text-slate-600 rounded-full text-[9px] font-bold">
-                      <span className="truncate max-w-[80px]">{f.name}</span>
-                      <X className="w-3 h-3 cursor-pointer" onClick={() => removeFile('ads', i)} />
+               <div className="grid grid-cols-4 gap-2">
+                 {adsPreviews.map((src, i) => (
+                   <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
+                      <img src={src} className="w-full h-full object-cover" alt={`Preview ADS ${i}`} />
+                      <button
+                        onClick={() => removeFile('ads', i)}
+                        className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
                    </div>
                  ))}
                </div>
@@ -338,7 +356,7 @@ const Reports = () => {
                         className="w-full bg-transparent border-none text-4xl md:text-5xl font-light text-slate-900 tracking-tight leading-tight text-center resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl py-2 px-4"
                         rows={2}
                         value={editedTexts.title}
-                        onChange={(e) => handleTextEdit('title', e.target.value)}
+                        onChange={(e) => handleTextEdit('title', null, e.target.value)}
                      />
                      <div className="flex items-center justify-center gap-4 text-sm font-medium text-slate-400 uppercase tracking-widest">
                         <span>Brainstudio Agency</span>
@@ -348,260 +366,117 @@ const Reports = () => {
                   </div>
                </div>
 
-               {/* Sección: Auditoría de Datos (Oculta en Impresión) */}
-               <div className="space-y-4 no-print">
-                  <div className="px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center gap-3">
-                     <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                     </div>
-                     <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resumen de Auditoría</p>
-                        <p className="text-sm font-medium text-slate-700">{report.transparencyLog}</p>
-                     </div>
-                  </div>
-
-                  {report.sourcesAudit && report.sourcesAudit.length > 0 && (
-                     <Card className="p-0 overflow-hidden border-slate-200">
-                        <div className="bg-slate-50 px-6 py-3 border-b border-slate-100">
-                           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                              <FileText className="w-3 h-3" /> Fuentes de Datos Procesadas
-                           </h4>
-                        </div>
-                        <div className="divide-y divide-slate-50">
-                           {report.sourcesAudit.map((source, idx) => (
-                              <div key={idx} className="px-6 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
-                                 <div className="flex items-center gap-3">
-                                    <div className={cn(
-                                       "w-2 h-2 rounded-full",
-                                       source.type === 'Ads' ? "bg-cyan-400" :
-                                       source.type === 'Organic' ? "bg-emerald-400" : "bg-slate-300"
-                                    )} />
-                                    <span className="text-xs font-bold text-slate-700">{source.name}</span>
-                                 </div>
-                                 <span className={cn(
-                                    "text-[10px] font-medium px-2 py-0.5 rounded-full",
-                                    source.type === 'Desconocido' ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-500"
-                                 )}>
-                                    {source.status}
-                                 </span>
-                              </div>
-                           ))}
-                        </div>
-                     </Card>
-                  )}
-               </div>
-
                {/* Sección: Análisis orgánico (RRSS) */}
+               {report.analysis.organic && (
                <div className="space-y-12">
                   <SectionHeader title="Análisis orgánico (RRSS)" clientLogo={report.client.logoUrl} />
 
-                  {/* Widgets */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                     {(report.analysis.organic.widgets || []).map((w, i) => {
-                       const editedVal = editedValues[`organic-${i}`] !== undefined ? editedValues[`organic-${i}`] : w.value;
-                       return (
-                        <Card key={i} className="p-6">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{w.label}</span>
-                            <input
-                              className="w-full bg-transparent border-none text-3xl font-black text-slate-900 tracking-tight mt-1 outline-none focus:ring-1 focus:ring-primary/20 rounded cursor-edit"
-                              value={typeof editedVal === 'number' ? formatNumber(editedVal) : editedVal}
-                              onChange={(e) => handleValueEdit('organic', i, e.target.value)}
-                            />
-                        </Card>
-                       );
-                     })}
-                  </div>
-
-                  {/* Narrativa Full Width */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                     <Card className="md:col-span-2 bg-[#fcfcfd]">
-                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-6">Análisis de patrones y tendencias</h4>
+                  {/* Avance General */}
+                  <div className="space-y-6">
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-emerald-500" /> Avance General
+                    </h4>
+                    {report.analysis.organic.avance?.imagen_url && (
+                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto">
+                            <img src={report.analysis.organic.avance.imagen_url} className="w-full h-auto" alt="Avance General" />
+                        </div>
+                    )}
+                    <Card className="bg-[#fcfcfd]">
                         <textarea
-                           className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[200px]"
-                           value={editedTexts.organicAnalysis}
-                           onChange={(e) => handleTextEdit('organicAnalysis', e.target.value)}
+                           className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[120px]"
+                           value={editedTexts.organic.avance}
+                           onChange={(e) => handleTextEdit('organic', 'avance', e.target.value)}
                         />
-                     </Card>
-
-                     <Card className="bg-emerald-50/30 border-emerald-100">
-                        <h4 className="text-sm font-bold text-emerald-800 uppercase tracking-wider mb-6">Oportunidades y aprendizajes</h4>
-                        <div className="space-y-6">
-                           {editedTexts.oportunidades.map((item, i) => (
-                              <div key={i} className="space-y-1">
-                                 <span className={cn(
-                                    "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded",
-                                    item.type === 'Oportunidad' ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
-                                 )}>
-                                    {item.type}
-                                 </span>
-                                 <textarea
-                                    className="w-full bg-transparent border-none text-sm text-slate-600 leading-snug resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-lg"
-                                    rows={3}
-                                    value={item.text}
-                                    onChange={(e) => handleTextEdit('oportunidades', e.target.value, i)}
-                                 />
-                              </div>
-                           ))}
-                        </div>
-                     </Card>
+                    </Card>
                   </div>
 
-                  {/* Gráficas Advanced */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                     <Card>
-                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-8">Alcance por plataforma</h4>
-                        <div className="h-[250px]">
-                           <ChartErrorBoundary>
-                              <ResponsiveContainer width="100%" height="100%">
-                                 <BarChart data={report.analysis.organic.charts.platformBar} layout="vertical">
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                                    <XAxis type="number" fontSize={10} axisLine={false} tickLine={false} />
-                                    <YAxis type="category" dataKey="name" fontSize={10} axisLine={false} tickLine={false} width={80} />
-                                    <Tooltip />
-                                    <Bar dataKey="value" fill="#8b5cf6" radius={[0, 10, 10, 0]} barSize={25} />
-                                 </BarChart>
-                              </ResponsiveContainer>
-                           </ChartErrorBoundary>
+                  {/* Radiografía del Público */}
+                  <div className="space-y-6 pt-12">
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                        <User className="w-4 h-4 text-blue-500" /> Radiografía del Público
+                    </h4>
+                    {report.analysis.organic.radiografia?.imagen_url && (
+                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto">
+                            <img src={report.analysis.organic.radiografia.imagen_url} className="w-full h-auto" alt="Radiografía del Público" />
                         </div>
-                     </Card>
-                     <Card>
-                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-8">Distribución de engagement</h4>
-                        <div className="h-[250px]">
-                           <ChartErrorBoundary>
-                              <ResponsiveContainer width="100%" height="100%">
-                                 <RePieChart>
-                                    <Pie
-                                       data={report.analysis.organic.charts.engagementDonut}
-                                       cx="50%" cy="50%"
-                                       innerRadius={70} outerRadius={90}
-                                       paddingAngle={10}
-                                       dataKey="value"
-                                    >
-                                       {report.analysis.organic.charts.engagementDonut.map((entry, index) => (
-                                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                       ))}
-                                    </Pie>
-                                    <Tooltip />
-                                    <Legend iconType="circle" />
-                                 </RePieChart>
-                              </ResponsiveContainer>
-                           </ChartErrorBoundary>
-                        </div>
-                     </Card>
+                    )}
+                    <Card className="bg-[#fcfcfd]">
+                        <textarea
+                           className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[120px]"
+                           value={editedTexts.organic.radiografia}
+                           onChange={(e) => handleTextEdit('organic', 'radiografia', e.target.value)}
+                        />
+                    </Card>
                   </div>
 
-                  {/* Top Content obligatorio 5 */}
-                  {report.analysis.organic.topContent?.length > 0 && (
-                     <Card>
-                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-10 flex items-center gap-2">
-                           <Trophy className="w-4 h-4 text-amber-400" /> Contenido top del periodo
-                        </h4>
-                        <div className="space-y-10">
-                           {report.analysis.organic.topContent.map((item, i) => (
-                              <div key={i} className="flex gap-8 items-start pb-8 border-b border-slate-50 last:border-0">
-                                 <div className="w-24 h-24 bg-slate-50 rounded-2xl flex items-center justify-center shrink-0 border border-slate-100 shadow-inner">
-                                    <Monitor className="w-8 h-8 text-slate-200" />
-                                 </div>
-                                 <div className="flex-1 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                       <h5 className="font-bold text-slate-700 text-base">{item.title}</h5>
-                                       <div className="flex gap-6">
-                                          <div className="text-right">
-                                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Alcance</p>
-                                             <p className="text-sm font-black text-slate-900">{item.reach}</p>
-                                          </div>
-                                          <div className="text-right">
-                                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Interacción</p>
-                                             <p className="text-sm font-bold text-primary">{item.engagement}</p>
-                                          </div>
-                                       </div>
-                                    </div>
-                                    <div className="px-5 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm text-slate-600 leading-relaxed">
-                                       {item.aiComment}
-                                    </div>
-                                 </div>
-                              </div>
-                           ))}
+                  {/* Resumen de Contenido */}
+                  <div className="space-y-6 pt-12">
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-amber-500" /> Resumen de Contenido
+                    </h4>
+                    {report.analysis.organic.resumen?.imagen_url && (
+                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto">
+                            <img src={report.analysis.organic.resumen.imagen_url} className="w-full h-auto" alt="Resumen de Contenido" />
                         </div>
-                     </Card>
-                  )}
+                    )}
+                    <Card className="bg-[#fcfcfd]">
+                        <textarea
+                           className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[120px]"
+                           value={editedTexts.organic.resumen}
+                           onChange={(e) => handleTextEdit('organic', 'resumen', e.target.value)}
+                        />
+                    </Card>
+                  </div>
                </div>
+               )}
 
                {/* Sección: Performance digital */}
+               {report.analysis.performance && (
                <div className="space-y-12 pt-24 border-t border-slate-100">
-                  <SectionHeader title="Performance digital" clientLogo={report.client.logoUrl} />
+                  <SectionHeader title="Performance digital (Pauta ADS)" clientLogo={report.client.logoUrl} />
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                     {(report.analysis.performance.widgets || []).map((w, i) => {
-                       const editedVal = editedValues[`performance-${i}`] !== undefined ? editedValues[`performance-${i}`] : w.value;
-                       const isCurrency = w.label.toLowerCase().includes('inversión') || w.label.toLowerCase().includes('importe');
-
-                       return (
-                        <Card key={i} className="p-6">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{w.label}</span>
-                            <input
-                              className="w-full bg-transparent border-none text-3xl font-black text-slate-900 tracking-tight mt-1 outline-none focus:ring-1 focus:ring-primary/20 rounded cursor-edit"
-                              value={isCurrency && typeof editedVal === 'number' ? formatCurrency(editedVal) : (typeof editedVal === 'number' ? formatNumber(editedVal) : editedVal)}
-                              onChange={(e) => handleValueEdit('performance', i, e.target.value)}
-                            />
-                        </Card>
-                       );
-                     })}
+                  {/* Fase 1: Análisis Macro */}
+                  <div className="space-y-6">
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-cyan-500" /> Rendimiento Macro (Campaña)
+                    </h4>
+                    {report.analysis.performance.macro?.imagen_url && (
+                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-4xl mx-auto">
+                            <img src={report.analysis.performance.macro.imagen_url} className="w-full h-auto" alt="Rendimiento Macro" />
+                        </div>
+                    )}
+                    <Card className="bg-[#fcfcfd]">
+                        <textarea
+                           className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[120px]"
+                           value={editedTexts.performance.macro}
+                           onChange={(e) => handleTextEdit('performance', 'macro', e.target.value)}
+                        />
+                    </Card>
                   </div>
 
-                  <Card className="bg-[#fcfcfd]">
-                     <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-6">Rendimiento y resultados</h4>
-                     <textarea
-                        className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[150px]"
-                        value={editedTexts.performanceAnalysis}
-                        onChange={(e) => handleTextEdit('performanceAnalysis', e.target.value)}
-                     />
-                  </Card>
-
-                  <Card>
-                     <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-10">Alcance acumulado vs impresiones</h4>
-                     <div className="h-[300px]">
-                        <ChartErrorBoundary>
-                           <ResponsiveContainer width="100%" height="100%">
-                              <AreaChart data={report.analysis.performance.charts.accumulatedArea}>
-                                 <defs>
-                                    <linearGradient id="areaColorFin" x1="0" y1="0" x2="0" y2="1">
-                                       <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
-                                       <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                                    </linearGradient>
-                                 </defs>
-                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                 <XAxis dataKey="date" fontSize={10} axisLine={false} tickLine={false} />
-                                 <YAxis fontSize={10} axisLine={false} tickLine={false} />
-                                 <Tooltip />
-                                 <Area
-                                   type="monotone"
-                                   dataKey="reach"
-                                   stroke="#7c3aed"
-                                   fillOpacity={1}
-                                   fill="url(#areaColorFin)"
-                                   strokeWidth={3}
-                                   dot={{ r: 4, fill: '#7c3aed', strokeWidth: 2, stroke: '#fff' }}
-                                   activeDot={{ r: 6 }}
-                                 />
-                                 <Area
-                                   type="monotone"
-                                   dataKey="impressions"
-                                   stroke="#0891b2"
-                                   fill="none"
-                                   strokeWidth={3}
-                                   strokeDasharray="5 5"
-                                   dot={{ r: 4, fill: '#0891b2', strokeWidth: 2, stroke: '#fff' }}
-                                   activeDot={{ r: 6 }}
-                                 />
-                              </AreaChart>
-                           </ResponsiveContainer>
-                        </ChartErrorBoundary>
-                     </div>
-                  </Card>
+                  {/* Fase 2: Desglose Micro */}
+                  <div className="space-y-6 pt-12">
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                        <Target className="w-4 h-4 text-purple-500" /> Desglose Micro (Anuncios)
+                    </h4>
+                    {report.analysis.performance.micro?.imagen_url && (
+                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-4xl mx-auto">
+                            <img src={report.analysis.performance.micro.imagen_url} className="w-full h-auto" alt="Desglose Micro" />
+                        </div>
+                    )}
+                    <Card className="bg-[#fcfcfd]">
+                        <textarea
+                           className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[120px]"
+                           value={editedTexts.performance.micro}
+                           onChange={(e) => handleTextEdit('performance', 'micro', e.target.value)}
+                        />
+                    </Card>
+                  </div>
                </div>
+               )}
 
                {/* Sección: Hoja de ruta estratégica */}
+               {report.analysis.hoja_de_ruta && (
                <div className="pt-24 border-t border-slate-100">
                   <div className="bg-slate-900 rounded-[3rem] p-12 md:p-20 space-y-12 relative overflow-hidden">
                      <div className="absolute top-0 right-0 w-80 h-80 bg-primary/20 blur-[100px] rounded-full translate-x-1/2 -translate-y-1/2" />
@@ -631,6 +506,7 @@ const Reports = () => {
                      </div>
                   </div>
                </div>
+               )}
 
                {/* Footer */}
                <div className="pt-20 border-t border-slate-50 flex flex-col items-center gap-4 text-center">
@@ -646,8 +522,8 @@ const Reports = () => {
                 <Layout className="w-10 h-10 text-slate-200" />
              </div>
              <div className="text-center space-y-2">
-                <h3 className="text-xl font-bold text-slate-400">Analizador Maestro v6.0</h3>
-                <p className="text-sm text-slate-400 max-w-xs font-medium">Sube los reportes para generar una auditoría de alto nivel estratégica.</p>
+                <h3 className="text-xl font-bold text-slate-400">Analizador Multimodal v7.0</h3>
+                <p className="text-sm text-slate-400 max-w-xs font-medium">Sube los pantallazos de métricas para generar un informe de alto nivel.</p>
              </div>
           </div>
         )}
