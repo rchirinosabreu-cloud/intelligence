@@ -149,8 +149,8 @@ const authenticateToken = (req, res, next) => {
     return next();
   }
 
-  // Bypass authentication for public avatar images (used in <img> tags)
-  if (req.originalUrl.includes('/avatar-image')) {
+  // Bypass authentication for public avatar and report images (used in <img> tags)
+  if (req.originalUrl.includes('/avatar-image') || req.originalUrl.includes('/image-proxy')) {
     return next();
   }
 
