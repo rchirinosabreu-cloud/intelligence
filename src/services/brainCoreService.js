@@ -65,7 +65,9 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
         const result = await genAI.models.generateContent({
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }, imagePart] }],
-            generationConfig: { responseMimeType: 'application/json' }
+            config: {
+                generationConfig: { responseMimeType: 'application/json' }
+            }
         });
         console.log("================ DEPURACIÓN IA RAW (Extraction) ================", JSON.stringify(result, null, 2));
 
@@ -256,7 +258,9 @@ const generateOperationalPredictions = async (activeTasks, overdueTasks, triaged
         const result = await genAI.models.generateContent({
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
-            generationConfig: { responseMimeType: 'application/json' }
+            config: {
+                generationConfig: { responseMimeType: 'application/json' }
+            }
         });
 
         return JSON.parse(result.text || "[]");
@@ -295,7 +299,9 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory, pred
         const result = await genAI.models.generateContent({
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
-            generationConfig: { responseMimeType: 'application/json' }
+            config: {
+                generationConfig: { responseMimeType: 'application/json' }
+            }
         });
 
         const responseText = result.text;
@@ -477,7 +483,9 @@ export const getClientProfileFromMemory = async (clientId) => {
         const result = await genAI.models.generateContent({
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
-            generationConfig: { responseMimeType: 'application/json' }
+            config: {
+                generationConfig: { responseMimeType: 'application/json' }
+            }
         });
 
         const responseText = result.text;

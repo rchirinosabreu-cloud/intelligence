@@ -1289,7 +1289,7 @@ async function sendMessageStreamWithRetry(genAI, payload, maxAttempts = 3) {
                 model: payload.model,
                 systemInstruction: payload.systemInstruction,
                 contents: payload.contents,
-                generationConfig: payload.generationConfig
+                config: payload.config
             });
         } catch (error) {
             lastError = error;
@@ -2179,7 +2179,7 @@ app.post('/api/chat', async (req, res) => {
             model: MODEL_NAME,
             systemInstruction: finalSystemPrompt,
             contents: [...history, { role: 'user', parts: [{ text: lastMessageContent }] }],
-            generationConfig: { tools: tools }
+            config: { tools: tools }
         });
         console.log(`[DEBUG] chat.sendMessageStream returned. Starting to iterate stream...`);
 
@@ -2277,7 +2277,7 @@ app.post('/api/chat', async (req, res) => {
                                 }]
                             }
                         ],
-                        generationConfig: { tools: tools }
+                        config: { tools: tools }
                      });
                 } catch (streamErr) {
                      console.error("[API] Error calling sendMessageStream with function response:", streamErr);

@@ -175,8 +175,9 @@ const Reports = () => {
       });
       if (response.data?.analysis) {
         setReport(response.data);
+        const reportType = (organicFiles.length > 0 && adsFiles.length > 0) ? "Completo" : (adsFiles.length > 0 ? "de Performance" : "Orgánico");
         setEditedTexts({
-            title: `Reporte de Desempeño Digital de ${response.data.client.name} - 2026`,
+            title: `Reporte ${reportType} de ${response.data.client.name} - 2026`,
             organic: {
                 avance: response.data.analysis.organic?.avance?.texto_analisis || '',
                 radiografia: response.data.analysis.organic?.radiografia?.texto_analisis || '',
@@ -203,12 +204,21 @@ const Reports = () => {
     if (!reportRef.current) return;
     const toastId = toast.loading('Generando documento...');
     try {
+      // Ensure fonts are loaded
+      if (document.fonts) {
+          await document.fonts.ready;
+      }
+
+      // Small delay to allow final paint
+      await new Promise(resolve => setTimeout(resolve, 800));
+
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
         useCORS: true,
         allowTaint: false,
         backgroundColor: '#ffffff',
         logging: true,
+        imageTimeout: 15000,
         onclone: (clonedDoc) => {
           const noPrintElements = clonedDoc.querySelectorAll('.no-print');
           noPrintElements.forEach(el => el.style.display = 'none');
@@ -221,8 +231,16 @@ const Reports = () => {
             div.style.height = 'auto';
             div.style.whiteSpace = 'pre-wrap';
             div.style.border = 'none';
+            div.style.color = '#1e293b'; // slate-800
             ta.parentNode.replaceChild(div, ta);
           });
+
+          // Force layout recalculation for cloned document
+          const reportContainer = clonedDoc.getElementById('report-canvas');
+          if (reportContainer) {
+              reportContainer.style.transform = 'none';
+              reportContainer.style.opacity = '1';
+          }
         }
       });
       const imgData = canvas.toDataURL('image/png', 1.0);
@@ -236,6 +254,7 @@ const Reports = () => {
       pdf.save(`${fileName}.pdf`);
       toast.success('Descarga lista', { id: toastId });
     } catch (err) {
+      console.error('PDF Export Error:', err);
       toast.error('Error al exportar PDF', { id: toastId });
     }
   };
@@ -278,7 +297,7 @@ const Reports = () => {
                )}
                <button
                 onClick={generateReport}
-                disabled={isGenerating}
+                disabled={isGenerating || (organicFiles.length === 0 && adsFiles.length === 0)}
                 className="px-8 py-2.5 bg-primary hover:opacity-90 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg transition-all flex items-center gap-2"
                >
                 {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
@@ -361,9 +380,8 @@ const Reports = () => {
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             className="bg-white border border-[#e2e8f0] shadow-2xl rounded-[2.5rem] overflow-hidden"
-            ref={reportRef}
           >
-            <div className="p-12 md:p-20 space-y-20">
+            <div id="report-canvas" ref={reportRef} className="p-12 md:p-20 space-y-20 bg-white">
                {/* Portada */}
                <div className="flex flex-col items-center text-center space-y-12 py-20 border-b border-slate-100 relative">
                   <div className="h-40 md:h-52 w-auto">

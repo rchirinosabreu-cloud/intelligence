@@ -25,22 +25,30 @@ try {
 
 router.get('/image-proxy', async (req, res) => {
     try {
-        const { path } = req.query;
-        if (!path) return res.status(400).send("Path is required");
+        const { path: gcsPath } = req.query;
+        if (!gcsPath) return res.status(400).send("Path is required");
 
         // Basic Security: Ensure the path is not a traversal attempt
-        if (path.includes('..') || path.startsWith('/') || path.includes(':')) {
+        if (gcsPath.includes('..') || gcsPath.startsWith('/') || gcsPath.includes(':')) {
             return res.status(403).send("Invalid path");
         }
 
-        const stream = getClientFileStream(path);
+        const decodedPath = decodeURIComponent(gcsPath);
 
-        // Determine content type based on extension
-        const ext = path.split('.').pop().toLowerCase();
+        // Use standard service to get stream
+        const stream = getClientFileStream(decodedPath);
+
+        // Use extension as fallback or add a metadata helper to storageService if needed.
+        // For now, we trust extension or default to jpeg.
+        const ext = decodedPath.split('.').pop().toLowerCase();
         const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
 
         res.setHeader('Content-Type', contentType);
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+
+        // Critical for html2canvas / PDF export from frontend
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
         stream.pipe(res);
     } catch (error) {
@@ -215,10 +223,12 @@ router.post('/generate', upload.any(), async (req, res) => {
                     ...imageParts
                 ]
             }],
-            generationConfig: {
-                responseMimeType: "application/json",
-                maxOutputTokens: 8192,
-                temperature: 0.1
+            config: {
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    maxOutputTokens: 8192,
+                    temperature: 0.1
+                }
             }
         });
 

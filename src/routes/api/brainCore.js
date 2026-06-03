@@ -242,7 +242,9 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
         const result = await genAI.models.generateContent({
             model: modelName,
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json' }
+            config: {
+                generationConfig: { responseMimeType: 'application/json' }
+            }
         });
 
         const responseText = result.text;
