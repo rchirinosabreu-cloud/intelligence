@@ -367,26 +367,26 @@ const Reports = () => {
           >
             <div id="report-canvas" ref={reportRef} className="p-12 md:p-20 space-y-20 bg-white">
                {/* Portada */}
-               <div className="space-y-20 py-20 border-b border-slate-100 relative">
-                  <div className="flex flex-col md:flex-row items-center justify-between gap-12">
-                      <div className="flex-1 space-y-6 text-center md:text-left">
+               <div className="min-h-[85vh] flex flex-col justify-center py-32 border-b border-slate-50 relative">
+                  <div className="flex flex-col md:flex-row items-center justify-between gap-16">
+                      <div className="flex-1 space-y-10 text-center md:text-left">
                          <textarea
-                            className="w-full bg-transparent border-none text-4xl md:text-5xl font-light text-slate-900 tracking-tight leading-tight resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl py-2"
+                            className="w-full bg-transparent border-none text-6xl md:text-7xl font-light text-slate-900 tracking-tight leading-tight resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl py-2"
                             rows={2}
                             value={editedTexts.title}
                             onChange={(e) => handleTextEdit('title', null, e.target.value)}
                          />
-                         <div className="flex items-center justify-center md:justify-start gap-4 text-sm font-medium text-slate-400 uppercase tracking-widest">
+                         <div className="flex items-center justify-center md:justify-start gap-6 text-xs font-bold text-slate-400 uppercase tracking-[0.3em]">
                             <span>Brainstudio Agencia</span>
-                            <div className="w-1 h-1 rounded-full bg-slate-200" />
+                            <div className="w-1.5 h-1.5 rounded-full bg-primary/20" />
                             <span>{new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</span>
                          </div>
                       </div>
-                      <div className="h-32 md:h-44 w-auto flex items-center justify-center shrink-0">
+                      <div className="h-20 md:h-24 w-auto flex items-center justify-center shrink-0">
                          <img
                           src={report.client.logoUrl ? getImageUrl(report.client.logoUrl) : '/brainstudio-logo.png'}
                           alt={report.client.name}
-                          className="h-full w-full object-contain"
+                          className="h-full w-full object-contain opacity-80"
                           onError={(e) => {
                             console.warn("Client logo load failed, falling back to agency logo");
                             e.target.src = '/brainstudio-logo.png';
@@ -522,8 +522,8 @@ const Reports = () => {
 
                {/* Footer */}
                <div className="pt-20 border-t border-slate-50 flex flex-col items-center gap-4 text-center">
-                  <div className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.4em]">
-                     Brainstudio Agencia • Digital Performance Strategy • BS-REP-006
+                  <div className="text-[11px] font-bold text-slate-300 tracking-[0.2em]">
+                     Brainstudio Agencia
                   </div>
                </div>
             </div>
