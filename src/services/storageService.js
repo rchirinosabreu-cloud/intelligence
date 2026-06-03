@@ -50,7 +50,10 @@ export const uploadClientFile = async (file, clientName) => {
     // Create a clean folder name from client name
     const folderName = clientName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const timestamp = Date.now();
-    const gcsFileName = `${folderName}/${timestamp}_${file.originalname}`;
+
+    // Sanitize original filename (remove spaces, special chars)
+    const sanitizedOriginalName = file.originalname.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
+    const gcsFileName = `${folderName}/${timestamp}_${sanitizedOriginalName}`;
 
     const blob = bucket.file(gcsFileName);
     const blobStream = blob.createWriteStream({

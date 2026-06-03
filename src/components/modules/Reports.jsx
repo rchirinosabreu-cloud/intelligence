@@ -396,21 +396,26 @@ const Reports = () => {
                   <SectionHeader title="Análisis orgánico (RRSS)" clientLogo={report.client.logoUrl} />
 
                   {editedTexts.organic_analysis.map((block, i) => (
-                    <div key={i} className="space-y-6">
+                    <div key={`org-${i}`} className="space-y-6">
                         <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
                             {block.tipo === 'RADIOGRAFIA' ? <User className="w-4 h-4 text-blue-500" /> :
                              block.tipo === 'RESUMEN' ? <Trophy className="w-4 h-4 text-amber-500" /> :
                              <TrendingUp className="w-4 h-4 text-emerald-500" />}
-                            {block.tipo || "Análisis"}
+                            {block.tipo === 'AVANCE' ? 'Avance General' :
+                             block.tipo === 'RADIOGRAFIA' ? 'Radiografía del Público' :
+                             block.tipo === 'RESUMEN' ? 'Resumen de Contenido' : (block.tipo || "Análisis")}
                         </h4>
                         {block.imagen_url && (
-                            <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto">
-                                <img
-                                  src={getImageUrl(block.imagen_url)}
-                                  className="w-full h-auto"
-                                  alt={block.tipo}
-                                  onError={(e) => console.error("Error loading image:", block.imagen_url)}
-                                />
+                            <div className="space-y-2">
+                                <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto">
+                                    <img
+                                      src={getImageUrl(block.imagen_url)}
+                                      className="w-full h-auto"
+                                      alt={block.tipo}
+                                      onError={(e) => console.error("Error loading image:", block.imagen_url)}
+                                    />
+                                </div>
+                                <p className="text-[10px] text-slate-300 font-mono text-center truncate px-10 no-print">{block.imagen_url}</p>
                             </div>
                         )}
                         <Card className="bg-[#fcfcfd]">
@@ -431,20 +436,24 @@ const Reports = () => {
                   <SectionHeader title="Performance digital (Pauta ADS)" clientLogo={report.client.logoUrl} />
 
                   {editedTexts.performance_analysis.map((block, i) => (
-                    <div key={i} className="space-y-6">
+                    <div key={`ads-${i}`} className="space-y-6">
                         <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                            {block.tipo === 'MICRO' ? <Target className="w-4 h-4 text-purple-500" /> :
-                             <Zap className="w-4 h-4 text-cyan-500" />}
-                            {block.tipo === 'MACRO' ? 'Rendimiento Macro' : 'Desglose Micro'}
+                            {block.tipo === 'MACRO' ? <Zap className="w-4 h-4 text-cyan-500" /> :
+                             <Target className="w-4 h-4 text-purple-500" />}
+                            {block.tipo === 'MACRO' ? 'Rendimiento Macro' :
+                             block.tipo === 'MICRO' ? 'Desglose Micro' : (block.tipo || "Análisis de Pauta")}
                         </h4>
                         {block.imagen_url && (
-                            <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-4xl mx-auto">
-                                <img
-                                  src={getImageUrl(block.imagen_url)}
-                                  className="w-full h-auto"
-                                  alt={block.tipo}
-                                  onError={(e) => console.error("Error loading image:", block.imagen_url)}
-                                />
+                            <div className="space-y-2">
+                                <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-4xl mx-auto">
+                                    <img
+                                      src={getImageUrl(block.imagen_url)}
+                                      className="w-full h-auto"
+                                      alt={block.tipo}
+                                      onError={(e) => console.error("Error loading image:", block.imagen_url)}
+                                    />
+                                </div>
+                                <p className="text-[10px] text-slate-300 font-mono text-center truncate px-10 no-print">{block.imagen_url}</p>
                             </div>
                         )}
                         <Card className="bg-[#fcfcfd]">
