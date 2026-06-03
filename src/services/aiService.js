@@ -68,8 +68,10 @@ export const classifyTaskWithAI = async (title, comments = "") => {
             model: MODEL_NAME,
             systemInstruction: MASTER_PROMPT,
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: {
-                responseMimeType: "application/json"
+            config: {
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
             }
         });
         console.log("================ DEPURACIÓN IA RAW (Task Classification) ================", JSON.stringify(result, null, 2));
