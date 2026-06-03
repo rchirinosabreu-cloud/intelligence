@@ -55,6 +55,11 @@ router.get('/image-proxy', async (req, res) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
+        stream.on('error', (err) => {
+            console.error(`[Reports Proxy] Stream Error for ${decodedPath}:`, err.message);
+            if (!res.headersSent) res.status(404).send("Image not found");
+        });
+
         stream.pipe(res);
     } catch (error) {
         console.error("[Reports API] Proxy error:", error);
