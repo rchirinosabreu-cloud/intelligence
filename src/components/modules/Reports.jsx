@@ -365,12 +365,6 @@ const Reports = () => {
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             className="bg-white border border-[#e2e8f0] shadow-2xl rounded-[2.5rem] overflow-hidden"
           >
-            <div className="p-8 bg-slate-50 border-b border-slate-100 no-print">
-               <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Debug: Raw Backend JSON</h4>
-               <pre className="p-4 bg-white border border-slate-200 rounded-xl text-[10px] text-slate-500 overflow-auto max-h-60">
-                  {JSON.stringify(report, null, 2)}
-               </pre>
-            </div>
             <div id="report-canvas" ref={reportRef} className="p-12 md:p-20 space-y-20 bg-white">
                {/* Portada */}
                <div className="flex flex-col items-center text-center space-y-12 py-20 border-b border-slate-100 relative">
@@ -401,38 +395,40 @@ const Reports = () => {
                <div className="space-y-12">
                   <SectionHeader title="Análisis orgánico (RRSS)" clientLogo={report.client.logoUrl} />
 
+                  <div className="grid grid-cols-1 gap-16">
                   {editedTexts.organic_analysis.map((block, i) => (
-                    <div key={`org-${i}`} className="space-y-6">
-                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                            {block.tipo === 'RADIOGRAFIA' ? <User className="w-4 h-4 text-blue-500" /> :
-                             block.tipo === 'RESUMEN' ? <Trophy className="w-4 h-4 text-amber-500" /> :
-                             <TrendingUp className="w-4 h-4 text-emerald-500" />}
+                    <div key={`org-${i}`} className="relative group">
+                        <div className="absolute -top-4 -left-4 z-20 px-3 py-1 bg-white border border-slate-100 rounded-full shadow-sm text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            {block.tipo === 'RADIOGRAFIA' ? <User className="w-3 h-3 text-blue-500" /> :
+                             block.tipo === 'RESUMEN' ? <Trophy className="w-3 h-3 text-amber-500" /> :
+                             <TrendingUp className="w-3 h-3 text-emerald-500" />}
                             {block.tipo === 'AVANCE' ? 'Avance General' :
-                             block.tipo === 'RADIOGRAFIA' ? 'Radiografía del Público' :
-                             block.tipo === 'RESUMEN' ? 'Resumen de Contenido' : (block.tipo || "Análisis")}
-                        </h4>
-                        {block.imagen_url && (
-                            <div className="space-y-2">
-                                <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto">
+                             block.tipo === 'RADIOGRAFIA' ? 'Público' :
+                             block.tipo === 'RESUMEN' ? 'Contenido' : (block.tipo || "Análisis")}
+                        </div>
+
+                        <div className="space-y-8">
+                            {block.imagen_url && (
+                                <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto bg-slate-50">
                                     <img
-                                      src={block.imagen_url}
+                                      src={getImageUrl(block.imagen_url)}
                                       className="w-full h-auto"
                                       alt={block.tipo}
                                       onError={(e) => console.error("Error loading image:", block.imagen_url)}
                                     />
                                 </div>
-                                <p className="text-[10px] text-slate-300 font-mono text-center truncate px-10 no-print">{block.imagen_url}</p>
-                            </div>
-                        )}
-                        <Card className="bg-[#fcfcfd]">
-                            <textarea
-                               className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[120px]"
-                               value={block.texto_analisis}
-                               onChange={(e) => handleTextEdit('organic_analysis', 'texto_analisis', e.target.value, i)}
-                            />
-                        </Card>
+                            )}
+                            <Card className="bg-[#fcfcfd] border-slate-100 relative">
+                                <textarea
+                                   className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[100px]"
+                                   value={block.texto_analisis}
+                                   onChange={(e) => handleTextEdit('organic_analysis', 'texto_analisis', e.target.value, i)}
+                                />
+                            </Card>
+                        </div>
                     </div>
                   ))}
+                  </div>
                </div>
                )}
 
@@ -441,36 +437,38 @@ const Reports = () => {
                <div className="space-y-12 pt-24 border-t border-slate-100">
                   <SectionHeader title="Performance digital (Pauta ADS)" clientLogo={report.client.logoUrl} />
 
+                  <div className="grid grid-cols-1 gap-16">
                   {editedTexts.performance_analysis.map((block, i) => (
-                    <div key={`ads-${i}`} className="space-y-6">
-                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                            {block.tipo === 'MACRO' ? <Zap className="w-4 h-4 text-cyan-500" /> :
-                             <Target className="w-4 h-4 text-purple-500" />}
+                    <div key={`ads-${i}`} className="relative group">
+                        <div className="absolute -top-4 -left-4 z-20 px-3 py-1 bg-white border border-slate-100 rounded-full shadow-sm text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            {block.tipo === 'MACRO' ? <Zap className="w-3 h-3 text-cyan-500" /> :
+                             <Target className="w-3 h-3 text-purple-500" />}
                             {block.tipo === 'MACRO' ? 'Rendimiento Macro' :
                              block.tipo === 'MICRO' ? 'Desglose Micro' : (block.tipo || "Análisis de Pauta")}
-                        </h4>
-                        {block.imagen_url && (
-                            <div className="space-y-2">
-                                <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-4xl mx-auto">
+                        </div>
+
+                        <div className="space-y-8">
+                            {block.imagen_url && (
+                                <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-4xl mx-auto bg-slate-50">
                                     <img
-                                      src={block.imagen_url}
+                                      src={getImageUrl(block.imagen_url)}
                                       className="w-full h-auto"
                                       alt={block.tipo}
                                       onError={(e) => console.error("Error loading image:", block.imagen_url)}
                                     />
                                 </div>
-                                <p className="text-[10px] text-slate-300 font-mono text-center truncate px-10 no-print">{block.imagen_url}</p>
-                            </div>
-                        )}
-                        <Card className="bg-[#fcfcfd]">
-                            <textarea
-                               className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[120px]"
-                               value={block.texto_analisis}
-                               onChange={(e) => handleTextEdit('performance_analysis', 'texto_analisis', e.target.value, i)}
-                            />
-                        </Card>
+                            )}
+                            <Card className="bg-[#fcfcfd] border-slate-100">
+                                <textarea
+                                   className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[100px]"
+                                   value={block.texto_analisis}
+                                   onChange={(e) => handleTextEdit('performance_analysis', 'texto_analisis', e.target.value, i)}
+                                />
+                            </Card>
+                        </div>
                     </div>
                   ))}
+                  </div>
                </div>
                )}
 
