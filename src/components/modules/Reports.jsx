@@ -367,26 +367,32 @@ const Reports = () => {
           >
             <div id="report-canvas" ref={reportRef} className="p-12 md:p-20 space-y-20 bg-white">
                {/* Portada */}
-               <div className="flex flex-col items-center text-center space-y-12 py-20 border-b border-slate-100 relative">
-                  <div className="h-40 md:h-52 w-auto">
-                     <img
-                      src={getImageUrl(report.client.logoUrl) || '/brainstudio-logo.png'}
-                      alt={report.client.name}
-                      className="h-full w-full object-contain"
-                    />
-                  </div>
-                  <div className="space-y-6 w-full max-w-4xl">
-                     <textarea
-                        className="w-full bg-transparent border-none text-4xl md:text-5xl font-light text-slate-900 tracking-tight leading-tight text-center resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl py-2 px-4"
-                        rows={2}
-                        value={editedTexts.title}
-                        onChange={(e) => handleTextEdit('title', null, e.target.value)}
-                     />
-                     <div className="flex items-center justify-center gap-4 text-sm font-medium text-slate-400 uppercase tracking-widest">
-                        <span>Brainstudio Agency</span>
-                        <div className="w-1 h-1 rounded-full bg-slate-200" />
-                        <span>{new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</span>
-                     </div>
+               <div className="space-y-20 py-20 border-b border-slate-100 relative">
+                  <div className="flex flex-col md:flex-row items-center justify-between gap-12">
+                      <div className="flex-1 space-y-6 text-center md:text-left">
+                         <textarea
+                            className="w-full bg-transparent border-none text-4xl md:text-5xl font-light text-slate-900 tracking-tight leading-tight resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl py-2"
+                            rows={2}
+                            value={editedTexts.title}
+                            onChange={(e) => handleTextEdit('title', null, e.target.value)}
+                         />
+                         <div className="flex items-center justify-center md:justify-start gap-4 text-sm font-medium text-slate-400 uppercase tracking-widest">
+                            <span>Brainstudio Agencia</span>
+                            <div className="w-1 h-1 rounded-full bg-slate-200" />
+                            <span>{new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</span>
+                         </div>
+                      </div>
+                      <div className="h-32 md:h-44 w-auto flex items-center justify-center shrink-0">
+                         <img
+                          src={report.client.logoUrl ? getImageUrl(report.client.logoUrl) : '/brainstudio-logo.png'}
+                          alt={report.client.name}
+                          className="h-full w-full object-contain"
+                          onError={(e) => {
+                            console.warn("Client logo load failed, falling back to agency logo");
+                            e.target.src = '/brainstudio-logo.png';
+                          }}
+                        />
+                      </div>
                   </div>
                </div>
 
@@ -397,8 +403,8 @@ const Reports = () => {
 
                   <div className="grid grid-cols-1 gap-16">
                   {editedTexts.organic_analysis.map((block, i) => (
-                    <div key={`org-${i}`} className="relative group">
-                        <div className="absolute -top-4 -left-4 z-20 px-3 py-1 bg-white border border-slate-100 rounded-full shadow-sm text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                    <div key={`org-${i}`} className="relative group pt-4">
+                        <div className="absolute top-0 -left-4 z-20 px-3 py-1 bg-white border border-slate-100 rounded-full shadow-sm text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                             {block.tipo === 'RADIOGRAFIA' ? <User className="w-3 h-3 text-blue-500" /> :
                              block.tipo === 'RESUMEN' ? <Trophy className="w-3 h-3 text-amber-500" /> :
                              <TrendingUp className="w-3 h-3 text-emerald-500" />}
@@ -439,8 +445,8 @@ const Reports = () => {
 
                   <div className="grid grid-cols-1 gap-16">
                   {editedTexts.performance_analysis.map((block, i) => (
-                    <div key={`ads-${i}`} className="relative group">
-                        <div className="absolute -top-4 -left-4 z-20 px-3 py-1 bg-white border border-slate-100 rounded-full shadow-sm text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                    <div key={`ads-${i}`} className="relative group pt-4">
+                        <div className="absolute top-0 -left-4 z-20 px-3 py-1 bg-white border border-slate-100 rounded-full shadow-sm text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                             {block.tipo === 'MACRO' ? <Zap className="w-3 h-3 text-cyan-500" /> :
                              <Target className="w-3 h-3 text-purple-500" />}
                             {block.tipo === 'MACRO' ? 'Rendimiento Macro' :
@@ -495,7 +501,7 @@ const Reports = () => {
                                     onChange={(e) => handleTextEdit('hoja_de_ruta', 'title', e.target.value, i)}
                                  />
                                  <textarea
-                                    className="w-full bg-transparent border-none text-lg text-slate-400 font-medium leading-relaxed resize-none outline-none focus:ring-1 focus:ring-primary/30 rounded-lg px-2"
+                                    className="w-full bg-transparent border-none text-lg text-white font-medium leading-relaxed resize-none outline-none focus:ring-1 focus:ring-primary/30 rounded-lg px-2"
                                     rows={2}
                                     value={step.description}
                                     onChange={(e) => handleTextEdit('hoja_de_ruta', 'description', e.target.value, i)}
@@ -517,7 +523,7 @@ const Reports = () => {
                {/* Footer */}
                <div className="pt-20 border-t border-slate-50 flex flex-col items-center gap-4 text-center">
                   <div className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.4em]">
-                     Brainstudio Intelligent Agency • Estabilidad Final BS-REP-006
+                     Brainstudio Intelligent Agencia • Estabilidad Final BS-REP-006
                   </div>
                </div>
             </div>
