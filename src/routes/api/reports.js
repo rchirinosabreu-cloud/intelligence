@@ -25,19 +25,20 @@ try {
 
 router.get('/image-proxy', async (req, res) => {
     try {
-        const { path: gcsPath } = req.query;
-        console.log(`[Reports Proxy] Requested Path: ${gcsPath}`);
+        const { path: rawPath } = req.query;
+        console.log(`[Reports Proxy] Incoming Path: ${rawPath}`);
 
-        if (!gcsPath) return res.status(400).send("Path is required");
+        if (!rawPath) return res.status(400).send("Path is required");
 
-        // Basic Security: Ensure the path is not a traversal attempt
-        if (gcsPath.includes('..') || gcsPath.startsWith('/') || gcsPath.includes(':')) {
-            console.warn(`[Reports Proxy] Blocked potentially malicious path: ${gcsPath}`);
+        // 1. Full decoding first to handle %2F and other encoded chars correctly
+        const decodedPath = decodeURIComponent(rawPath);
+        console.log(`[Reports Proxy] Fully Decoded Path: ${decodedPath}`);
+
+        // 2. Strict Security Check on decoded path
+        if (decodedPath.includes('..') || decodedPath.startsWith('/') || decodedPath.includes(':')) {
+            console.warn(`[Reports Proxy] Blocked potentially malicious path: ${decodedPath}`);
             return res.status(403).send("Invalid path");
         }
-
-        const decodedPath = decodeURIComponent(gcsPath);
-        console.log(`[Reports Proxy] Decoded Path: ${decodedPath}`);
 
         // Use standard service to get stream
         const stream = getClientFileStream(decodedPath);
