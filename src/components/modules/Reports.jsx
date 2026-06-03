@@ -365,6 +365,12 @@ const Reports = () => {
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             className="bg-white border border-[#e2e8f0] shadow-2xl rounded-[2.5rem] overflow-hidden"
           >
+            <div className="p-8 bg-slate-50 border-b border-slate-100 no-print">
+               <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Debug: Raw Backend JSON</h4>
+               <pre className="p-4 bg-white border border-slate-200 rounded-xl text-[10px] text-slate-500 overflow-auto max-h-60">
+                  {JSON.stringify(report, null, 2)}
+               </pre>
+            </div>
             <div id="report-canvas" ref={reportRef} className="p-12 md:p-20 space-y-20 bg-white">
                {/* Portada */}
                <div className="flex flex-col items-center text-center space-y-12 py-20 border-b border-slate-100 relative">
@@ -409,7 +415,7 @@ const Reports = () => {
                             <div className="space-y-2">
                                 <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto">
                                     <img
-                                      src={getImageUrl(block.imagen_url)}
+                                      src={block.imagen_url}
                                       className="w-full h-auto"
                                       alt={block.tipo}
                                       onError={(e) => console.error("Error loading image:", block.imagen_url)}
@@ -447,7 +453,7 @@ const Reports = () => {
                             <div className="space-y-2">
                                 <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-4xl mx-auto">
                                     <img
-                                      src={getImageUrl(block.imagen_url)}
+                                      src={block.imagen_url}
                                       className="w-full h-auto"
                                       alt={block.tipo}
                                       onError={(e) => console.error("Error loading image:", block.imagen_url)}
