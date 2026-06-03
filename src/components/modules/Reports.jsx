@@ -403,7 +403,7 @@ const Reports = () => {
 
                   <div className="grid grid-cols-1 gap-16">
                   {editedTexts.organic_analysis.map((block, i) => (
-                    <div key={`org-${i}`} className="relative group pt-4">
+                    <div key={`org-${i}`} className="relative group pt-12">
                         <div className="absolute top-0 -left-4 z-20 px-3 py-1 bg-white border border-slate-100 rounded-full shadow-sm text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                             {block.tipo === 'RADIOGRAFIA' ? <User className="w-3 h-3 text-blue-500" /> :
                              block.tipo === 'RESUMEN' ? <Trophy className="w-3 h-3 text-amber-500" /> :
@@ -445,7 +445,7 @@ const Reports = () => {
 
                   <div className="grid grid-cols-1 gap-16">
                   {editedTexts.performance_analysis.map((block, i) => (
-                    <div key={`ads-${i}`} className="relative group pt-4">
+                    <div key={`ads-${i}`} className="relative group pt-12">
                         <div className="absolute top-0 -left-4 z-20 px-3 py-1 bg-white border border-slate-100 rounded-full shadow-sm text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                             {block.tipo === 'MACRO' ? <Zap className="w-3 h-3 text-cyan-500" /> :
                              <Target className="w-3 h-3 text-purple-500" />}
@@ -496,12 +496,12 @@ const Reports = () => {
                               </div>
                               <div className="space-y-2 flex-1">
                                  <input
-                                    className="w-full bg-transparent border-none text-xl font-bold text-white leading-tight outline-none focus:ring-1 focus:ring-primary/30 rounded-lg px-2"
+                                    className="w-full bg-transparent border-none text-xl font-bold text-white leading-tight outline-none focus:ring-1 focus:ring-primary/30 rounded-lg px-2 !text-white !opacity-100"
                                     value={step.title}
                                     onChange={(e) => handleTextEdit('hoja_de_ruta', 'title', e.target.value, i)}
                                  />
                                  <textarea
-                                    className="w-full bg-transparent border-none text-lg text-white font-medium leading-relaxed resize-none outline-none focus:ring-1 focus:ring-primary/30 rounded-lg px-2"
+                                    className="w-full bg-transparent border-none text-lg text-white font-medium leading-relaxed resize-none outline-none focus:ring-1 focus:ring-primary/30 rounded-lg px-2 !text-white !opacity-100"
                                     rows={2}
                                     value={step.description}
                                     onChange={(e) => handleTextEdit('hoja_de_ruta', 'description', e.target.value, i)}
@@ -523,7 +523,7 @@ const Reports = () => {
                {/* Footer */}
                <div className="pt-20 border-t border-slate-50 flex flex-col items-center gap-4 text-center">
                   <div className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.4em]">
-                     Brainstudio Intelligent Agencia • Estabilidad Final BS-REP-006
+                     Brainstudio Agencia • Digital Performance Strategy • BS-REP-006
                   </div>
                </div>
             </div>
