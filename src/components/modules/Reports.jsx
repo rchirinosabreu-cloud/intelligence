@@ -51,15 +51,8 @@ const Reports = () => {
   const [report, setReport] = useState(null);
   const [editedTexts, setEditedTexts] = useState({
     title: '',
-    organic: {
-        avance: '',
-        radiografia: '',
-        resumen: ''
-    },
-    performance: {
-        macro: '',
-        micro: ''
-    }
+    organic_analysis: [],
+    performance_analysis: []
   });
   const reportRef = useRef(null);
 
@@ -123,7 +116,6 @@ const Reports = () => {
     if (section === 'hoja_de_ruta' && index !== null) {
         const newRoadmap = [...(report?.analysis?.hoja_de_ruta || [])];
         newRoadmap[index] = { ...newRoadmap[index], [field]: value };
-        // We update the local report state for the roadmap as it's more complex than simple fields
         setReport(prev => ({
             ...prev,
             analysis: {
@@ -133,13 +125,12 @@ const Reports = () => {
         }));
         return;
     }
-    setEditedTexts(prev => ({
-      ...prev,
-      [section]: {
-        ...prev[section],
-        [field]: value
-      }
-    }));
+    if (Array.isArray(editedTexts[section]) && index !== null) {
+        const newArray = [...editedTexts[section]];
+        newArray[index] = { ...newArray[index], [field]: value };
+        setEditedTexts(prev => ({ ...prev, [section]: newArray }));
+        return;
+    }
   };
 
   const generateReport = async () => {
@@ -156,8 +147,8 @@ const Reports = () => {
     setReport(null);
     setEditedTexts({
         title: '',
-        organic: { avance: '', radiografia: '', resumen: '' },
-        performance: { macro: '', micro: '' }
+        organic_analysis: [],
+        performance_analysis: []
     });
 
     const formData = new FormData();
@@ -178,15 +169,8 @@ const Reports = () => {
         const reportType = (organicFiles.length > 0 && adsFiles.length > 0) ? "Completo" : (adsFiles.length > 0 ? "de Performance" : "Orgánico");
         setEditedTexts({
             title: `Reporte ${reportType} de ${response.data.client.name} - 2026`,
-            organic: {
-                avance: response.data.analysis.organic?.avance?.texto_analisis || '',
-                radiografia: response.data.analysis.organic?.radiografia?.texto_analisis || '',
-                resumen: response.data.analysis.organic?.resumen?.texto_analisis || ''
-            },
-            performance: {
-                macro: response.data.analysis.performance?.macro?.texto_analisis || '',
-                micro: response.data.analysis.performance?.micro?.texto_analisis || ''
-            }
+            organic_analysis: response.data.analysis.organic_analysis || [],
+            performance_analysis: response.data.analysis.performance_analysis || []
         });
         toast.success('Reporte final generado');
       } else {
@@ -407,136 +391,71 @@ const Reports = () => {
                </div>
 
                {/* Sección: Análisis orgánico (RRSS) */}
-               {report.analysis.organic && (
+               {report.analysis.organic_analysis?.length > 0 && (
                <div className="space-y-12">
                   <SectionHeader title="Análisis orgánico (RRSS)" clientLogo={report.client.logoUrl} />
 
-                  {/* Avance General */}
-                  <div className="space-y-6">
-                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-emerald-500" /> Avance General
-                    </h4>
-                    {report.analysis.organic.avance?.imagen_url && (
-                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto">
-                            <img
-                              src={getImageUrl(report.analysis.organic.avance.imagen_url)}
-                              className="w-full h-auto"
-                              alt="Avance General"
-                              onError={(e) => console.error("Error loading image:", report.analysis.organic.avance.imagen_url)}
+                  {editedTexts.organic_analysis.map((block, i) => (
+                    <div key={i} className="space-y-6">
+                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                            {block.tipo === 'RADIOGRAFIA' ? <User className="w-4 h-4 text-blue-500" /> :
+                             block.tipo === 'RESUMEN' ? <Trophy className="w-4 h-4 text-amber-500" /> :
+                             <TrendingUp className="w-4 h-4 text-emerald-500" />}
+                            {block.tipo || "Análisis"}
+                        </h4>
+                        {block.imagen_url && (
+                            <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto">
+                                <img
+                                  src={getImageUrl(block.imagen_url)}
+                                  className="w-full h-auto"
+                                  alt={block.tipo}
+                                  onError={(e) => console.error("Error loading image:", block.imagen_url)}
+                                />
+                            </div>
+                        )}
+                        <Card className="bg-[#fcfcfd]">
+                            <textarea
+                               className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[120px]"
+                               value={block.texto_analisis}
+                               onChange={(e) => handleTextEdit('organic_analysis', 'texto_analisis', e.target.value, i)}
                             />
-                        </div>
-                    )}
-                    <Card className="bg-[#fcfcfd]">
-                        <textarea
-                           className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[120px]"
-                           value={editedTexts.organic.avance}
-                           onChange={(e) => handleTextEdit('organic', 'avance', e.target.value)}
-                        />
-                    </Card>
-                  </div>
-
-                  {/* Radiografía del Público */}
-                  <div className="space-y-6 pt-12">
-                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                        <User className="w-4 h-4 text-blue-500" /> Radiografía del Público
-                    </h4>
-                    {report.analysis.organic.radiografia?.imagen_url && (
-                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto">
-                            <img
-                              src={getImageUrl(report.analysis.organic.radiografia.imagen_url)}
-                              className="w-full h-auto"
-                              alt="Radiografía del Público"
-                              onError={(e) => console.error("Error loading image:", report.analysis.organic.radiografia.imagen_url)}
-                            />
-                        </div>
-                    )}
-                    <Card className="bg-[#fcfcfd]">
-                        <textarea
-                           className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[120px]"
-                           value={editedTexts.organic.radiografia}
-                           onChange={(e) => handleTextEdit('organic', 'radiografia', e.target.value)}
-                        />
-                    </Card>
-                  </div>
-
-                  {/* Resumen de Contenido */}
-                  <div className="space-y-6 pt-12">
-                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                        <Trophy className="w-4 h-4 text-amber-500" /> Resumen de Contenido
-                    </h4>
-                    {report.analysis.organic.resumen?.imagen_url && (
-                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto">
-                            <img
-                              src={getImageUrl(report.analysis.organic.resumen.imagen_url)}
-                              className="w-full h-auto"
-                              alt="Resumen de Contenido"
-                              onError={(e) => console.error("Error loading image:", report.analysis.organic.resumen.imagen_url)}
-                            />
-                        </div>
-                    )}
-                    <Card className="bg-[#fcfcfd]">
-                        <textarea
-                           className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[120px]"
-                           value={editedTexts.organic.resumen}
-                           onChange={(e) => handleTextEdit('organic', 'resumen', e.target.value)}
-                        />
-                    </Card>
-                  </div>
+                        </Card>
+                    </div>
+                  ))}
                </div>
                )}
 
                {/* Sección: Performance digital */}
-               {report.analysis.performance && (
+               {report.analysis.performance_analysis?.length > 0 && (
                <div className="space-y-12 pt-24 border-t border-slate-100">
                   <SectionHeader title="Performance digital (Pauta ADS)" clientLogo={report.client.logoUrl} />
 
-                  {/* Fase 1: Análisis Macro */}
-                  <div className="space-y-6">
-                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-cyan-500" /> Rendimiento Macro (Campaña)
-                    </h4>
-                    {report.analysis.performance.macro?.imagen_url && (
-                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-4xl mx-auto">
-                            <img
-                              src={getImageUrl(report.analysis.performance.macro.imagen_url)}
-                              className="w-full h-auto"
-                              alt="Rendimiento Macro"
-                              onError={(e) => console.error("Error loading image:", report.analysis.performance.macro.imagen_url)}
+                  {editedTexts.performance_analysis.map((block, i) => (
+                    <div key={i} className="space-y-6">
+                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                            {block.tipo === 'MICRO' ? <Target className="w-4 h-4 text-purple-500" /> :
+                             <Zap className="w-4 h-4 text-cyan-500" />}
+                            {block.tipo === 'MACRO' ? 'Rendimiento Macro' : 'Desglose Micro'}
+                        </h4>
+                        {block.imagen_url && (
+                            <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-4xl mx-auto">
+                                <img
+                                  src={getImageUrl(block.imagen_url)}
+                                  className="w-full h-auto"
+                                  alt={block.tipo}
+                                  onError={(e) => console.error("Error loading image:", block.imagen_url)}
+                                />
+                            </div>
+                        )}
+                        <Card className="bg-[#fcfcfd]">
+                            <textarea
+                               className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[120px]"
+                               value={block.texto_analisis}
+                               onChange={(e) => handleTextEdit('performance_analysis', 'texto_analisis', e.target.value, i)}
                             />
-                        </div>
-                    )}
-                    <Card className="bg-[#fcfcfd]">
-                        <textarea
-                           className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[120px]"
-                           value={editedTexts.performance.macro}
-                           onChange={(e) => handleTextEdit('performance', 'macro', e.target.value)}
-                        />
-                    </Card>
-                  </div>
-
-                  {/* Fase 2: Desglose Micro */}
-                  <div className="space-y-6 pt-12">
-                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                        <Target className="w-4 h-4 text-purple-500" /> Desglose Micro (Anuncios)
-                    </h4>
-                    {report.analysis.performance.micro?.imagen_url && (
-                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-4xl mx-auto">
-                            <img
-                              src={getImageUrl(report.analysis.performance.micro.imagen_url)}
-                              className="w-full h-auto"
-                              alt="Desglose Micro"
-                              onError={(e) => console.error("Error loading image:", report.analysis.performance.micro.imagen_url)}
-                            />
-                        </div>
-                    )}
-                    <Card className="bg-[#fcfcfd]">
-                        <textarea
-                           className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[120px]"
-                           value={editedTexts.performance.micro}
-                           onChange={(e) => handleTextEdit('performance', 'micro', e.target.value)}
-                        />
-                    </Card>
-                  </div>
+                        </Card>
+                    </div>
+                  ))}
                </div>
                )}
 
