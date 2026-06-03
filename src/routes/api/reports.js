@@ -210,18 +210,31 @@ router.post('/generate', upload.any(), async (req, res) => {
             throw new Error("La IA no devolvió un formato de texto válido.");
         }
 
-        const responseText = result.text;
+        const rawText = result.text;
         let analysis;
         try {
-            analysis = JSON.parse(responseText);
+            // Defensive sanitization: remove markdown wrappers (```json and ```)
+            const sanitizedText = rawText.replace(/```json|```/gi, '').trim();
+            analysis = JSON.parse(sanitizedText);
         } catch (parseError) {
-            console.error("[Reports API] JSON Parse Error. Raw Text:", responseText);
-            // Fallback: try to find JSON block if AI added markdown wrappers despite the config
-            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            console.error("[Reports API] JSON Parse Error. Raw Text:", rawText);
+            // Fallback: search for the first '{' and the last '}' to extract the JSON object
+            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
-                analysis = JSON.parse(jsonMatch[0]);
+                try {
+                    analysis = JSON.parse(jsonMatch[0]);
+                } catch (secondParseError) {
+                    console.error("[Reports API] Secondary Parse Error:", secondParseError.message);
+                    return res.status(500).json({
+                        error: 'Error de estructura en el análisis de IA',
+                        details: 'La IA devolvió datos corruptos'
+                    });
+                }
             } else {
-                throw new Error("No se pudo parsear el JSON de la IA.");
+                return res.status(500).json({
+                    error: 'Fallo crítico en el procesamiento de IA',
+                    details: 'No se detectó un objeto JSON válido'
+                });
             }
         }
 
