@@ -23,7 +23,6 @@ const Sidebar = ({ isOpen, onClose }) => {
     { id: 'reports', label: 'Reportes', icon: FileBarChart, path: '/reportes' },
     { id: 'content-grids', label: 'Parrillas', icon: LayoutGrid, path: '/parrillas' },
     { id: 'minutes', label: 'Minutas', icon: FileText, path: '/minutas' },
-    { id: 'metrics', label: 'Métricas', icon: BarChart3, path: '/metricas' },
     { id: 'radar', label: 'Radar de Mérito', icon: Zap, path: '/radar', roles: ['ADMIN', 'PM'] },
     { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes' },
     { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo' },
