@@ -25,15 +25,20 @@ Instrucción Principal:
 "A continuación, recibirás el TÍTULO y la DESCRIPCIÓN de una tarea asignada a un miembro de la agencia. Debes analizar su contenido y devolver ÚNICAMENTE un objeto JSON válido con dos propiedades: category y complexity. No agregues texto adicional, explicaciones, ni formato Markdown."
 
 Reglas de Clasificación - Categoría (category):
-Elige estrictamente UNA de las siguientes cuatro categorías basándote en la naturaleza del trabajo:
+Elige estrictamente UNA de las siguientes 12 categorías basándote en la naturaleza del trabajo:
 
-"CREATIVO": Tareas de producción, diseño, redacción o edición. (Ejemplos: "Diseñar post de Instagram", "Editar video de campaña", "Redactar artículo para el blog", "Crear manual de marca", "Montar landing page"). Es el trabajo profundo y de creación pura.
-
-"ESTRATÉGICO": Tareas de planificación, análisis, reuniones o toma de decisiones a largo plazo. (Ejemplos: "Revisión de métricas mensuales con cliente", "Planificación de grilla mensual", "Definir buyer persona", "Llamada de alineación con ventas"). Es el trabajo que dirige el rumbo de la cuenta.
-
-"ADMINISTRATIVO": Tareas de gestión interna, papeleo, cobros o mantenimiento rutinario. (Ejemplos: "Enviar factura a cliente", "Actualizar base de datos de correos", "Subir archivos al Drive", "Responder correos de rutina"). Es el trabajo necesario pero repetitivo.
-
-"BOMBERO": Tareas marcadas como urgentes, correcciones de última hora, errores críticos en producción o solicitudes del cliente "para ayer". (Ejemplos: "¡URGENTE! Cambiar el logo del video ya publicado", "El sitio web del cliente está caído", "El cliente odió la propuesta, rehacer todo para mañana"). Es el trabajo reactivo y de alto estrés. Nota: Si el título incluye palabras como "Urgente", "ASAP", "Corrección rápida" o "Caído", prioriza esta categoría.
+"Marketing": Tareas de pauta ADS, SEO, SEM, estrategias de captación o análisis de embudos de venta.
+"Estratégico": Planificación de alto nivel, auditorías, roadmaps, definición de KPIs o consultoría.
+"Gestión de Oficina": Tareas operativas de la agencia, mantenimiento de herramientas o procesos internos.
+"Video Production": Edición de video, post-producción, motion graphics o guionismo audiovisual.
+"Creativo": Diseño gráfico, branding, identidad visual, ilustración o conceptualización.
+"Educación": Formación interna, investigación de tendencias, cursos o workshops.
+"Administrativo/Operacional": Facturación, gestión de archivos, carga de datos o trámites.
+"Reuniones": Llamadas con clientes, juntas internas, dailies o presentaciones.
+"Creación de Contenido": Redacción de copies, captions, artículos de blog o guiones.
+"Corrección": Ajustes, cambios solicitados por el cliente u optimizaciones post-entrega.
+"Finanzas": Presupuestos, cotizaciones, control de gastos o proyecciones.
+"Social Media": Programación de posts, community management o gestión de perfiles.
 
 Reglas de Clasificación - Complejidad (complexity):
 Elige estrictamente UNA de las siguientes tres basándote en el esfuerzo mental o técnico requerido:
@@ -48,7 +53,7 @@ Ejemplo de Entrada (Lo que enviará el servidor):
 Título: [URGENTE] Cambiar la tipografía de todos los banners de la campaña de Salsipuedes. Descripción: El cliente acaba de llamar, dice que la font no es la correcta. Necesitan esto corregido y subido a la pauta en 2 horas máximo.
 
 Ejemplo de Salida Esperada (Lo que debe responder Gemini):
-{"category": "BOMBERO", "complexity": "MEDIA"}`;
+{"category": "Corrección", "complexity": "MEDIA"}`;
 
 /**
  * Classifies a task using Gemini AI.
