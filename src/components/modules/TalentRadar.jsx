@@ -17,18 +17,14 @@ import AvatarUploader from './Radar/AvatarUploader';
 import ClientLogo from '@/components/ui/ClientLogo';
 
 const CATEGORY_COLORS = {
-    'Marketing': '#06b6d4', // Cyan
-    'Estratégico': '#8b5cf6', // Violet (Requested)
-    'Gestión de Oficina': '#10b981', // Emerald
-    'Video Production': '#ec4899', // Pink
-    'Creativo': '#6366f1', // Indigo (Requested)
-    'Educación': '#f59e0b', // Amber
-    'Administrativo/Operacional': '#71717a', // Zinc
-    'Reuniones': '#14b8a6', // Teal
+    'Estratégico': '#8b5cf6', // Violet (Morado institucional)
+    'Creativo & Diseño': '#6366f1', // Indigo (Azul/Azul-Violeta)
+    'Marketing & Social Media': '#06b6d4', // Cyan
+    'Producción Audiovisual': '#ec4899', // Pink
     'Creación de Contenido': '#f97316', // Orange
-    'Corrección': '#ef4444', // Red
-    'Finanzas': '#3b82f6', // Blue
-    'Social Media': '#84cc16' // Lime
+    'Operaciones & Reuniones': '#10b981', // Emerald
+    'Administrativo & Finanzas': '#71717a', // Zinc
+    'Educación': '#f59e0b' // Amber
 };
 
 const TalentRadar = () => {
@@ -188,15 +184,15 @@ const TalentRadar = () => {
                         </div>
                     </div>
 
-                    <div className="h-[420px] w-full">
+                    <div className="h-[320px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
                                     data={heatmapData}
                                     cx="50%"
-                                    cy="40%"
+                                    cy="45%"
                                     innerRadius={60}
-                                    outerRadius={90}
+                                    outerRadius={85}
                                     paddingAngle={5}
                                     dataKey="value"
                                 >
@@ -218,10 +214,6 @@ const TalentRadar = () => {
                                 <Legend
                                     verticalAlign="bottom"
                                     iconType="circle"
-                                    wrapperStyle={{
-                                        paddingTop: '30px',
-                                        paddingBottom: '10px'
-                                    }}
                                     formatter={(value) => <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">{value}</span>}
                                 />
                             </PieChart>
@@ -528,15 +520,15 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                     <LayoutGrid className="w-3.5 h-3.5" />
                                     Mapa de Carga Personal
                                 </h4>
-                                <div className="h-[320px] w-full">
+                                <div className="h-[280px] w-full">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie
                                                 data={heatmapData}
                                                 cx="50%"
-                                                cy="40%"
+                                                cy="45%"
                                                 innerRadius={50}
-                                                outerRadius={80}
+                                                outerRadius={75}
                                                 paddingAngle={4}
                                                 dataKey="value"
                                             >
@@ -558,10 +550,6 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                             <Legend
                                                 verticalAlign="bottom"
                                                 iconType="circle"
-                                                wrapperStyle={{
-                                                    paddingTop: '20px',
-                                                    paddingBottom: '10px'
-                                                }}
                                                 formatter={(value) => <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">{value}</span>}
                                             />
                                         </PieChart>
