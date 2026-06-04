@@ -25,20 +25,16 @@ Instrucción Principal:
 "A continuación, recibirás el TÍTULO y la DESCRIPCIÓN de una tarea asignada a un miembro de la agencia. Debes analizar su contenido y devolver ÚNICAMENTE un objeto JSON válido con dos propiedades: category y complexity. No agregues texto adicional, explicaciones, ni formato Markdown."
 
 Reglas de Clasificación - Categoría (category):
-Elige estrictamente UNA de las siguientes 12 categorías basándote en la naturaleza del trabajo:
+Elige estrictamente UNA de las siguientes 8 categorías basándote en la naturaleza del trabajo:
 
-"Marketing": Tareas de pauta ADS, SEO, SEM, estrategias de captación o análisis de embudos de venta.
-"Estratégico": Planificación de alto nivel, auditorías, roadmaps, definición de KPIs o consultoría.
-"Gestión de Oficina": Tareas operativas de la agencia, mantenimiento de herramientas o procesos internos.
-"Video Production": Edición de video, post-producción, motion graphics o guionismo audiovisual.
-"Creativo": Diseño gráfico, branding, identidad visual, ilustración o conceptualización.
-"Educación": Formación interna, investigación de tendencias, cursos o workshops.
-"Administrativo/Operacional": Facturación, gestión de archivos, carga de datos o trámites.
-"Reuniones": Llamadas con clientes, juntas internas, dailies o presentaciones.
-"Creación de Contenido": Redacción de copies, captions, artículos de blog o guiones.
-"Corrección": Ajustes, cambios solicitados por el cliente u optimizaciones post-entrega.
-"Finanzas": Presupuestos, cotizaciones, control de gastos o proyecciones.
-"Social Media": Programación de posts, community management o gestión de perfiles.
+"Estratégico": Planificación de alto nivel, auditorías, roadmaps, definición de KPIs o consultoría estratégica.
+"Creativo & Diseño": Diseño gráfico, branding, identidad visual, ilustración, conceptualización y tareas de producción visual.
+"Marketing & Social Media": Pauta ADS (Meta, Google), SEO, SEM, estrategias de captación, community management y gestión de redes sociales.
+"Producción Audiovisual": Edición de video, post-producción, motion graphics, guionismo audiovisual y producción de reels/videos.
+"Creación de Contenido": Redacción de copies, captions, artículos de blog, guiones y cualquier formato de contenido escrito.
+"Operaciones & Reuniones": Gestión de oficina, procesos internos, correcciones, ajustes, llamadas con clientes y juntas internas.
+"Administrativo & Finanzas": Facturación, gestión de archivos, carga de datos, presupuestos, cotizaciones, legal y control de gastos.
+"Educación": Formación interna, investigación de tendencias, cursos, workshops y desarrollo de nuevas habilidades.
 
 Reglas de Clasificación - Complejidad (complexity):
 Elige estrictamente UNA de las siguientes tres basándote en el esfuerzo mental o técnico requerido:
@@ -53,7 +49,7 @@ Ejemplo de Entrada (Lo que enviará el servidor):
 Título: [URGENTE] Cambiar la tipografía de todos los banners de la campaña de Salsipuedes. Descripción: El cliente acaba de llamar, dice que la font no es la correcta. Necesitan esto corregido y subido a la pauta en 2 horas máximo.
 
 Ejemplo de Salida Esperada (Lo que debe responder Gemini):
-{"category": "Corrección", "complexity": "MEDIA"}`;
+{"category": "Operaciones & Reuniones", "complexity": "MEDIA"}`;
 
 /**
  * Classifies a task using Gemini AI.
@@ -75,7 +71,30 @@ export const classifyTaskWithAI = async (title, comments = "") => {
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
                 generationConfig: {
-                    responseMimeType: "application/json"
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "object",
+                        properties: {
+                            category: {
+                                type: "string",
+                                enum: [
+                                    "Estratégico",
+                                    "Creativo & Diseño",
+                                    "Marketing & Social Media",
+                                    "Producción Audiovisual",
+                                    "Creación de Contenido",
+                                    "Operaciones & Reuniones",
+                                    "Administrativo & Finanzas",
+                                    "Educación"
+                                ]
+                            },
+                            complexity: {
+                                type: "string",
+                                enum: ["BAJA", "MEDIA", "ALTA"]
+                            }
+                        },
+                        required: ["category", "complexity"]
+                    }
                 }
             }
         });
