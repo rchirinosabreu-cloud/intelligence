@@ -51,16 +51,13 @@ const TalentRadar = () => {
     // 2. Heatmap Data Processing
     const heatmapData = useMemo(() => {
         if (!summary?.heatmap) return [];
-        // Strict Filter: Only allow the 8 official categories in the chart
-        const allowedCategories = Object.keys(CATEGORY_COLORS);
 
-        return Object.entries(summary.heatmap)
-            .filter(([name]) => allowedCategories.includes(name))
-            .map(([name, value]) => ({
-                name,
-                value,
-                fill: CATEGORY_COLORS[name]
-            }));
+        // Ensure all 8 categories are present for legend consistency
+        return Object.keys(CATEGORY_COLORS).map(name => ({
+            name,
+            value: summary.heatmap[name] || 0,
+            fill: CATEGORY_COLORS[name]
+        }));
     }, [summary?.heatmap]);
 
     // 3. Nine-Box Data Processing with Jitter
@@ -447,11 +444,11 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
             return acc;
         }, {});
 
-        const heatmap = Object.entries(stats)
-            .filter(([name]) => allowedCategories.includes(name))
-            .map(([name, value]) => ({
-                name, value, fill: CATEGORY_COLORS[name]
-            }));
+        const heatmap = allowedCategories.map(name => ({
+            name,
+            value: stats[name] || 0,
+            fill: CATEGORY_COLORS[name]
+        }));
 
         const complexityOrder = { 'ALTA': 3, 'MEDIA': 2, 'BAJA': 1 };
         const top5 = [...member.nativeTasks]
