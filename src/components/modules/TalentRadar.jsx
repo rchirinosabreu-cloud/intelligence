@@ -636,7 +636,7 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                                     <span>{task.aiComplexity}</span>
                                                 </div>
                                                 <span className="w-1 h-1 rounded-full bg-zinc-200" />
-                                                <span className="capitalize">{task.aiCategory?.toLowerCase() || 'Sin clasificar'}</span>
+                                                <span className="capitalize">{task.aiCategory || 'Sin Clasificar'}</span>
                                             </div>
                                         </div>
                                     ))}
