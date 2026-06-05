@@ -13,6 +13,34 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
+const MASTER_CATEGORIES = [
+    "Estratégico",
+    "Creativo & Diseño",
+    "Marketing & Social Media",
+    "Producción Audiovisual",
+    "Creación de Contenido",
+    "Operaciones & Reuniones",
+    "Administrativo & Finanzas",
+    "Educación"
+];
+
+const normalizeCategory = (cat) => {
+    if (!cat) return "Operaciones & Reuniones";
+    const clean = cat.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+
+    // Mapping logic
+    if (clean.includes("estrategico")) return "Estratégico";
+    if (clean.includes("creativo") || clean.includes("diseno") || clean.includes("produccion visual")) return "Creativo & Diseño";
+    if (clean.includes("marketing") || clean.includes("social media") || clean.includes("community")) return "Marketing & Social Media";
+    if (clean.includes("video") || clean.includes("audiovisual") || clean.includes("edicion")) return "Producción Audiovisual";
+    if (clean.includes("contenido") || clean.includes("redaccion") || clean.includes("copy") || clean.includes("caption")) return "Creación de Contenido";
+    if (clean.includes("operaciones") || clean.includes("reunion") || clean.includes("junta") || clean.includes("correccion") || clean.includes("oficina") || clean.includes("ajuste")) return "Operaciones & Reuniones";
+    if (clean.includes("administrativo") || clean.includes("finanzas") || clean.includes("facturacion") || clean.includes("legal") || clean.includes("presupuesto")) return "Administrativo & Finanzas";
+    if (clean.includes("educacion") || clean.includes("formacion") || clean.includes("capacitacion") || clean.includes("investigacion")) return "Educación";
+
+    return "Operaciones & Reuniones";
+};
+
 /**
  * Radar de Talento: Global Summary
  * GET /api/talent-radar/summary
@@ -76,10 +104,16 @@ router.get('/summary', async (req, res) => {
             select: { aiCategory: true, aiComplexity: true }
         });
 
-        const categoryStats = tasks.reduce((acc, task) => {
-            acc[task.aiCategory] = (acc[task.aiCategory] || 0) + 1;
+        // Initialize all categories with 0 to ensure legend consistency
+        const categoryStats = MASTER_CATEGORIES.reduce((acc, cat) => {
+            acc[cat] = 0;
             return acc;
         }, {});
+
+        tasks.forEach(task => {
+            const normalized = normalizeCategory(task.aiCategory);
+            categoryStats[normalized] = (categoryStats[normalized] || 0) + 1;
+        });
 
         // 3. Nine-Box Data: Complexity vs Quality
         // X = Avg Complexity (1-3), Y = Quality (Avg Return Count)
@@ -237,7 +271,8 @@ router.post('/member/:memberId/ai-insights', async (req, res) => {
 
         // Aggregate metrics for dynamic analysis
         const categoryStats = allTasks.reduce((acc, t) => {
-            if (t.aiCategory) acc[t.aiCategory] = (acc[t.aiCategory] || 0) + 1;
+            const normalized = normalizeCategory(t.aiCategory);
+            acc[normalized] = (acc[normalized] || 0) + 1;
             return acc;
         }, {});
 

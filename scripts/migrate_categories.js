@@ -3,87 +3,59 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-const mapping = {
-    // Legacy 4
-    'CREATIVO': 'Creativo & Diseño',
-    'ESTRATÉGICO': 'Estratégico',
-    'ADMINISTRATIVO': 'Administrativo & Finanzas',
-    'BOMBERO': 'Operaciones & Reuniones',
+const MASTER_CATEGORIES = [
+    "Estratégico",
+    "Creativo & Diseño",
+    "Marketing & Social Media",
+    "Producción Audiovisual",
+    "Creación de Contenido",
+    "Operaciones & Reuniones",
+    "Administrativo & Finanzas",
+    "Educación"
+];
 
-    // Interim 12
-    'Marketing': 'Marketing & Social Media',
-    'Estratégico': 'Estratégico',
-    'Gestión de Oficina': 'Operaciones & Reuniones',
-    'Video Production': 'Producción Audiovisual',
-    'Creativo': 'Creativo & Diseño',
-    'Educación': 'Educación',
-    'Administrativo/Operacional': 'Administrativo & Finanzas',
-    'Reuniones': 'Operaciones & Reuniones',
-    'Creación de Contenido': 'Creación de Contenido',
-    'Corrección': 'Operaciones & Reuniones',
-    'Finanzas': 'Administrativo & Finanzas',
-    'Social Media': 'Marketing & Social Media',
+const normalizeCategory = (cat) => {
+    if (!cat) return "Operaciones & Reuniones";
+    const clean = cat.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 
-    // ghost categories and fallbacks
-    'Hogar y Decoración': 'Creativo & Diseño',
-    'Sin Clasificar': 'Operaciones & Reuniones',
-    'Diseño': 'Creativo & Diseño',
-    'Producción': 'Creativo & Diseño',
-    'null': 'Operaciones & Reuniones',
-    'undefined': 'Operaciones & Reuniones'
+    // Mapping logic
+    if (clean.includes("estrategico")) return "Estratégico";
+    if (clean.includes("creativo") || clean.includes("diseno") || clean.includes("produccion visual") || clean.includes("hogar") || clean.includes("decoracion")) return "Creativo & Diseño";
+    if (clean.includes("marketing") || clean.includes("social media") || clean.includes("community")) return "Marketing & Social Media";
+    if (clean.includes("video") || clean.includes("audiovisual") || clean.includes("edicion")) return "Producción Audiovisual";
+    if (clean.includes("contenido") || clean.includes("redaccion") || clean.includes("copy") || clean.includes("caption")) return "Creación de Contenido";
+    if (clean.includes("operaciones") || clean.includes("reunion") || clean.includes("junta") || clean.includes("correccion") || clean.includes("oficina") || clean.includes("ajuste") || clean.includes("sin clasificar")) return "Operaciones & Reuniones";
+    if (clean.includes("administrativo") || clean.includes("finanzas") || clean.includes("facturacion") || clean.includes("legal") || clean.includes("presupuesto")) return "Administrativo & Finanzas";
+    if (clean.includes("educacion") || clean.includes("formacion") || clean.includes("capacitacion") || clean.includes("investigacion")) return "Educación";
+
+    return "Operaciones & Reuniones";
 };
 
 async function main() {
-    console.log("Starting forced category migration (Emergency Patch)...");
+    console.log("Starting Contingency Category Migration (Robust Normalization)...");
 
     const tasks = await prisma.task.findMany({
-        where: {
-            OR: [
-                { aiCategory: { notIn: [
-                    'Estratégico',
-                    'Creativo & Diseño',
-                    'Marketing & Social Media',
-                    'Producción Audiovisual',
-                    'Creación de Contenido',
-                    'Operaciones & Reuniones',
-                    'Administrativo & Finanzas',
-                    'Educación'
-                ] } },
-                { aiCategory: null }
-            ]
-        }
+        select: { id: true, aiCategory: true }
     });
 
-    console.log(`Found ${tasks.length} tasks needing re-classification.`);
+    console.log(`Analyzing ${tasks.length} tasks...`);
 
     let updatedCount = 0;
     for (const task of tasks) {
-        let newCategory = mapping[task.aiCategory] || 'Operaciones & Reuniones';
+        const normalized = normalizeCategory(task.aiCategory);
 
-        // Final sanity check: if it's still not in the 8 allowed, default to Operaciones
-        const allowed = [
-            'Estratégico',
-            'Creativo & Diseño',
-            'Marketing & Social Media',
-            'Producción Audiovisual',
-            'Creación de Contenido',
-            'Operaciones & Reuniones',
-            'Administrativo & Finanzas',
-            'Educación'
-        ];
-
-        if (!allowed.includes(newCategory)) {
-            newCategory = 'Operaciones & Reuniones';
+        // Only update if the current category is NOT already the normalized one
+        // Note: Strict comparison here since normalizeCategory returns from the MASTER_CATEGORIES list
+        if (task.aiCategory !== normalized) {
+            await prisma.task.update({
+                where: { id: task.id },
+                data: { aiCategory: normalized }
+            });
+            updatedCount++;
         }
-
-        await prisma.task.update({
-            where: { id: task.id },
-            data: { aiCategory: newCategory }
-        });
-        updatedCount++;
     }
 
-    console.log(`Migration complete. Updated ${updatedCount} tasks.`);
+    console.log(`Contingency Migration complete. Updated ${updatedCount} tasks to 8 Master Categories.`);
 }
 
 main()
