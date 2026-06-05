@@ -22,19 +22,22 @@ const MASTER_PROMPT = `Rol del Sistema:
 "Eres el Director de Operaciones y Recursos Humanos de una agencia creativa de alto rendimiento llamada Brainstudio. Tu trabajo es analizar las tareas que realiza el equipo de forma aislada, objetiva y estrictamente paramétrica."
 
 Instrucción Principal:
-"A continuación, recibirás el TÍTULO y la DESCRIPCIÓN de una tarea asignada a un miembro de la agencia. Debes analizar su contenido y devolver ÚNICAMENTE un objeto JSON válido con dos propiedades: category y complexity. No agregues texto adicional, explicaciones, ni formato Markdown."
+"A continuación, recibirás el TÍTULO y la DESCRIPCIÓN de una tarea asignada a un miembro de la agencia. Debes analizar su contenido y devolver ÚNICAMENTE un objeto JSON válido con dos propiedades: categoria y complejidad. No agregues texto adicional, explicaciones, ni formato Markdown."
 
-Reglas de Clasificación - Categoría (category):
+Regla de Oro (Aislamiento de Contexto):
+"Clasifica la naturaleza OPERATIVA de la acción realizada por el miembro del equipo de la agencia de marketing. Ignora por completo el sector comercial o industria del cliente para el que se hace la tarea. Ejemplo: Diseñar un post para una mueblería es 'Creativo & Diseño', NO 'Hogar y Decoración'."
+
+Reglas de Clasificación - Categoría (categoria):
 Elige estrictamente UNA de las siguientes 8 categorías basándote en la naturaleza del trabajo:
 
-"Estratégico": Planificación de alto nivel, auditorías, roadmaps, definición de KPIs o consultoría estratégica.
-"Creativo & Diseño": Diseño gráfico, branding, identidad visual, ilustración, conceptualización y tareas de producción visual.
-"Marketing & Social Media": Pauta ADS (Meta, Google), SEO, SEM, estrategias de captación, community management y gestión de redes sociales.
-"Producción Audiovisual": Edición de video, post-producción, motion graphics, guionismo audiovisual y producción de reels/videos.
-"Creación de Contenido": Redacción de copies, captions, artículos de blog, guiones y cualquier formato de contenido escrito.
-"Operaciones & Reuniones": Gestión de oficina, procesos internos, correcciones, ajustes, llamadas con clientes y juntas internas.
-"Administrativo & Finanzas": Facturación, gestión de archivos, carga de datos, presupuestos, cotizaciones, legal y control de gastos.
-"Educación": Formación interna, investigación de tendencias, cursos, workshops y desarrollo de nuevas habilidades.
+- "Estratégico": Planificación de alto nivel, auditorías, roadmaps, definición de KPIs o consultoría estratégica.
+- "Creativo & Diseño": Diseño gráfico, branding, identidad visual, ilustración, conceptualización y tareas de producción visual.
+- "Marketing & Social Media": Pauta ADS (Meta, Google), SEO, SEM, estrategias de captación, community management y gestión de redes sociales.
+- "Producción Audiovisual": Edición de video, post-producción, motion graphics, guionismo audiovisual y producción de reels/videos.
+- "Creación de Contenido": Redacción de copies, captions, artículos de blog, guiones y cualquier formato de contenido escrito.
+- "Operaciones & Reuniones": Gestión de oficina, procesos internos, correcciones, ajustes, llamadas con clientes y juntas internas.
+- "Administrativo & Finanzas": Facturación, gestión de archivos, carga de datos, presupuestos, cotizaciones, legal y control de gastos.
+- "Educación": Formación interna, investigación de tendencias, cursos, workshops y desarrollo de nuevas habilidades.
 
 Reglas de Clasificación - Complejidad (complexity):
 Elige estrictamente UNA de las siguientes tres basándote en el esfuerzo mental o técnico requerido:
@@ -49,7 +52,7 @@ Ejemplo de Entrada (Lo que enviará el servidor):
 Título: [URGENTE] Cambiar la tipografía de todos los banners de la campaña de Salsipuedes. Descripción: El cliente acaba de llamar, dice que la font no es la correcta. Necesitan esto corregido y subido a la pauta en 2 horas máximo.
 
 Ejemplo de Salida Esperada (Lo que debe responder Gemini):
-{"category": "Operaciones & Reuniones", "complexity": "MEDIA"}`;
+{"categoria": "Operaciones & Reuniones", "complejidad": "MEDIA"}`;
 
 /**
  * Classifies a task using Gemini AI.
@@ -75,7 +78,7 @@ export const classifyTaskWithAI = async (title, comments = "") => {
                     responseSchema: {
                         type: "object",
                         properties: {
-                            category: {
+                            categoria: {
                                 type: "string",
                                 enum: [
                                     "Estratégico",
@@ -88,12 +91,12 @@ export const classifyTaskWithAI = async (title, comments = "") => {
                                     "Educación"
                                 ]
                             },
-                            complexity: {
+                            complejidad: {
                                 type: "string",
                                 enum: ["BAJA", "MEDIA", "ALTA"]
                             }
                         },
-                        required: ["category", "complexity"]
+                        required: ["categoria", "complejidad"]
                     }
                 }
             }
@@ -103,8 +106,8 @@ export const classifyTaskWithAI = async (title, comments = "") => {
 
         const classification = JSON.parse(text);
         return {
-            category: classification.category,
-            complexity: classification.complexity
+            category: classification.categoria,
+            complexity: classification.complejidad
         };
     } catch (error) {
         console.error("[AiService] AI Classification failed:", error.message);

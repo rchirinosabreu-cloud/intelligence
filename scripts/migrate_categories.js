@@ -22,30 +22,65 @@ const mapping = {
     'Creación de Contenido': 'Creación de Contenido',
     'Corrección': 'Operaciones & Reuniones',
     'Finanzas': 'Administrativo & Finanzas',
-    'Social Media': 'Marketing & Social Media'
+    'Social Media': 'Marketing & Social Media',
+
+    // ghost categories and fallbacks
+    'Hogar y Decoración': 'Creativo & Diseño',
+    'Sin Clasificar': 'Operaciones & Reuniones',
+    'Diseño': 'Creativo & Diseño',
+    'Producción': 'Creativo & Diseño',
+    'null': 'Operaciones & Reuniones',
+    'undefined': 'Operaciones & Reuniones'
 };
 
 async function main() {
-    console.log("Starting category migration...");
+    console.log("Starting forced category migration (Emergency Patch)...");
 
     const tasks = await prisma.task.findMany({
         where: {
-            aiCategory: { not: null }
+            OR: [
+                { aiCategory: { notIn: [
+                    'Estratégico',
+                    'Creativo & Diseño',
+                    'Marketing & Social Media',
+                    'Producción Audiovisual',
+                    'Creación de Contenido',
+                    'Operaciones & Reuniones',
+                    'Administrativo & Finanzas',
+                    'Educación'
+                ] } },
+                { aiCategory: null }
+            ]
         }
     });
 
-    console.log(`Found ${tasks.length} tasks with categories.`);
+    console.log(`Found ${tasks.length} tasks needing re-classification.`);
 
     let updatedCount = 0;
     for (const task of tasks) {
-        const newCategory = mapping[task.aiCategory];
-        if (newCategory && newCategory !== task.aiCategory) {
-            await prisma.task.update({
-                where: { id: task.id },
-                data: { aiCategory: newCategory }
-            });
-            updatedCount++;
+        let newCategory = mapping[task.aiCategory] || 'Operaciones & Reuniones';
+
+        // Final sanity check: if it's still not in the 8 allowed, default to Operaciones
+        const allowed = [
+            'Estratégico',
+            'Creativo & Diseño',
+            'Marketing & Social Media',
+            'Producción Audiovisual',
+            'Creación de Contenido',
+            'Operaciones & Reuniones',
+            'Administrativo & Finanzas',
+            'Educación'
+        ];
+
+        if (!allowed.includes(newCategory)) {
+            newCategory = 'Operaciones & Reuniones';
         }
+
+        await prisma.task.update({
+            where: { id: task.id },
+            data: { aiCategory: newCategory }
+        });
+        updatedCount++;
     }
 
     console.log(`Migration complete. Updated ${updatedCount} tasks.`);

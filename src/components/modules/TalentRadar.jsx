@@ -51,11 +51,16 @@ const TalentRadar = () => {
     // 2. Heatmap Data Processing
     const heatmapData = useMemo(() => {
         if (!summary?.heatmap) return [];
-        return Object.entries(summary.heatmap).map(([name, value]) => ({
-            name,
-            value,
-            fill: CATEGORY_COLORS[name] || '#94a3b8'
-        }));
+        // Strict Filter: Only allow the 8 official categories in the chart
+        const allowedCategories = Object.keys(CATEGORY_COLORS);
+
+        return Object.entries(summary.heatmap)
+            .filter(([name]) => allowedCategories.includes(name))
+            .map(([name, value]) => ({
+                name,
+                value,
+                fill: CATEGORY_COLORS[name]
+            }));
     }, [summary?.heatmap]);
 
     // 3. Nine-Box Data Processing with Jitter
@@ -433,14 +438,20 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
     const { heatmapData, topImpactTasks } = useMemo(() => {
         if (!member?.nativeTasks) return { heatmapData: [], topImpactTasks: [] };
 
+        const allowedCategories = Object.keys(CATEGORY_COLORS);
+
         const stats = member.nativeTasks.reduce((acc, t) => {
-            if (t.aiCategory) acc[t.aiCategory] = (acc[t.aiCategory] || 0) + 1;
+            if (t.aiCategory && allowedCategories.includes(t.aiCategory)) {
+                acc[t.aiCategory] = (acc[t.aiCategory] || 0) + 1;
+            }
             return acc;
         }, {});
 
-        const heatmap = Object.entries(stats).map(([name, value]) => ({
-            name, value, fill: CATEGORY_COLORS[name] || '#94a3b8'
-        }));
+        const heatmap = Object.entries(stats)
+            .filter(([name]) => allowedCategories.includes(name))
+            .map(([name, value]) => ({
+                name, value, fill: CATEGORY_COLORS[name]
+            }));
 
         const complexityOrder = { 'ALTA': 3, 'MEDIA': 2, 'BAJA': 1 };
         const top5 = [...member.nativeTasks]
