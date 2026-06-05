@@ -33,9 +33,9 @@ Elige estrictamente UNA de las siguientes 8 categorías basándote en la natural
 - "Estratégico": Planificación de alto nivel, auditorías, roadmaps, definición de KPIs o consultoría estratégica.
 - "Creativo & Diseño": Diseño gráfico, branding, identidad visual, ilustración, conceptualización y tareas de producción visual.
 - "Marketing & Social Media": Pauta ADS (Meta, Google), SEO, SEM, estrategias de captación, community management y gestión de redes sociales.
-- "Producción Audiovisual": Edición de video, post-producción, motion graphics, guionismo audiovisual y producción de reels/videos.
+- "Producción Audiovisual": TODO lo relacionado con VIDEO. Incluye grabar, estructurar, hacer Reels, Shorts, edición de video, post-producción y CORRECCIONES de video. Las palabras "video" o "Reel" matan cualquier otra clasificación.
 - "Creación de Contenido": Redacción de copies, captions, artículos de blog, guiones y cualquier formato de contenido escrito.
-- "Operaciones & Reuniones": Gestión de oficina, procesos internos, correcciones, ajustes, llamadas con clientes y juntas internas.
+- "Operaciones & Reuniones": Única y exclusivamente logística interna, gestión de oficina, juntas de equipo, llamadas de seguimiento, control de asistencia o planeación de horarios. PROHIBIDO meter aquí correcciones de piezas creativas o entregables de contenido.
 - "Administrativo & Finanzas": Facturación, gestión de archivos, carga de datos, presupuestos, cotizaciones, legal y control de gastos.
 - "Educación": Formación interna, investigación de tendencias, cursos, workshops y desarrollo de nuevas habilidades.
 
