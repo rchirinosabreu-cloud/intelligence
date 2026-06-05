@@ -259,25 +259,8 @@ export const createTask = async ({
             };
         }
 
-        // Background tasks: AI Classification, Embeddings, etc.
-        // We do NOT await this, allowing the function to return immediately
-        (async () => {
-            try {
-                const classification = await classifyTaskWithAI(title, comments || "");
-                if (classification) {
-                    await prisma.task.update({
-                        where: { id: newTask.id },
-                        data: {
-                            aiCategory: normalizeCategory(classification.categoria),
-                            aiComplexity: classification.complejidad
-                        }
-                    });
-                    console.log(`[nativeTaskService] Background AI classification completed for task ${newTask.id}`);
-                }
-            } catch (aiErr) {
-                console.warn(`[nativeTaskService] Background task classification failed for task ${newTask.id}:`, aiErr.message);
-            }
-        })();
+        // Task classification is now handled asynchronously by the Batch Classification Service.
+        // This keeps task creation instant and reduces redundant AI calls.
 
         return newTask;
     } catch (error) {

@@ -22,6 +22,7 @@ import { getGeneralChatMessages, createGeneralChatMessage } from './src/services
 import { getUnreadNotificationCount, createNotification, getNotifications, markAsRead, markAllNotificationsAsRead } from './src/services/notificationService.js';
 import { getGlobalAnnouncements, createGlobalAnnouncement, deleteGlobalAnnouncement } from './src/services/globalAnnouncementService.js';
 import { getTasks, createTask, updateTask, deleteTask as deleteNativeTask, getCompletedTasks, getDashboardMetrics, getQualityStreak, auditAndDeleteTask } from './src/services/nativeTaskService.js';
+import { initTaskClassificationCron } from './src/services/taskClassificationService.js';
 import { getContentPlanByToken, updateContentItem, addClientComment } from './src/services/contentService.js';
 import teamRouter from './src/routes/api/team.js';
 import userRouter from './src/routes/api/user.js';
@@ -2468,6 +2469,9 @@ const server = app.listen(PORT, '0.0.0.0', () => {
             }
             await prisma.$connect();
             console.log("[Diagnostic] Database connection successful.");
+
+            // Initialize Background AI Classification
+            initTaskClassificationCron();
         } catch (dbError) {
             console.error("[Diagnostic] CRITICAL: Database connection failed!", dbError.message);
         }
