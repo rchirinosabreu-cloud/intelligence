@@ -2,6 +2,26 @@ import prisma from '../lib/prisma.js';
 import { createNotification } from './notificationService.js';
 import { classifyTaskWithAI } from './aiService.js';
 
+/**
+ * Normalizes a category string into one of the 8 official master labels.
+ */
+export const normalizeCategory = (cat) => {
+    if (!cat) return "Operaciones & Reuniones";
+    const clean = cat.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+
+    // Mapping logic
+    if (clean.includes("estrategico")) return "Estratégico";
+    if (clean.includes("creativo") || clean.includes("diseno") || clean.includes("produccion visual") || clean.includes("hogar") || clean.includes("decoracion")) return "Creativo & Diseño";
+    if (clean.includes("marketing") || clean.includes("social media") || clean.includes("community")) return "Marketing & Social Media";
+    if (clean.includes("video") || clean.includes("audiovisual") || clean.includes("edicion")) return "Producción Audiovisual";
+    if (clean.includes("contenido") || clean.includes("redaccion") || clean.includes("copy") || clean.includes("caption")) return "Creación de Contenido";
+    if (clean.includes("operaciones") || clean.includes("reunion") || clean.includes("junta") || clean.includes("correccion") || clean.includes("oficina") || clean.includes("ajuste") || clean.includes("sin clasificar")) return "Operaciones & Reuniones";
+    if (clean.includes("administrativo") || clean.includes("finanzas") || clean.includes("facturacion") || clean.includes("legal") || clean.includes("presupuesto")) return "Administrativo & Finanzas";
+    if (clean.includes("educacion") || clean.includes("formacion") || clean.includes("capacitacion") || clean.includes("investigacion")) return "Educación";
+
+    return "Operaciones & Reuniones";
+};
+
 export const getDashboardMetrics = async () => {
     try {
         // America/Bogota Month Boundaries
@@ -248,8 +268,8 @@ export const createTask = async ({
                     await prisma.task.update({
                         where: { id: newTask.id },
                         data: {
-                            aiCategory: classification.category,
-                            aiComplexity: classification.complexity
+                            aiCategory: normalizeCategory(classification.categoria),
+                            aiComplexity: classification.complejidad
                         }
                     });
                     console.log(`[nativeTaskService] Background AI classification completed for task ${newTask.id}`);
@@ -343,6 +363,11 @@ export const updateTask = async (id, data, updaterId = null) => {
         }
 
         const updateData = { ...data };
+
+        // Normalize category if provided in the update payload
+        if (updateData.aiCategory) {
+            updateData.aiCategory = normalizeCategory(updateData.aiCategory);
+        }
 
         // Handle explicit incoming date parsing
         if (updateData.dueDate) {

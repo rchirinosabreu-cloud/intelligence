@@ -135,6 +135,17 @@ const CLIENT_COLORS = {
     "Velvet Hotel": "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800",
 };
 
+const CATEGORY_COLORS = {
+    'Estratégico': '#8b5cf6', // Violet
+    'Creativo & Diseño': '#6366f1', // Indigo
+    'Marketing & Social Media': '#06b6d4', // Cyan
+    'Producción Audiovisual': '#ec4899', // Pink
+    'Creación de Contenido': '#f97316', // Orange
+    'Operaciones & Reuniones': '#10b981', // Emerald
+    'Administrativo & Finanzas': '#71717a', // Zinc
+    'Educación': '#f59e0b' // Amber
+};
+
 // Note: Backend strictly returns Enum values: PENDIENTE, EN_CURSO, REALIZADA, DEVUELTA.
 // Hierarchical Blindness: REALIZADA > EN_CURSO > DEVUELTA (by status or by flag)
 const getColumnId = (status, isReturned = false, comments = '') => {
@@ -217,6 +228,7 @@ const NativeTasks = () => {
           referenceUrl: task.referenceUrl,
           contentPlanId: task.contentItem?.planId,
           contentItemId: task.contentItem?.id,
+          aiCategory: task.aiCategory,
           plan: task.plan // Contains slug, month, year
       }));
     },
@@ -1053,16 +1065,27 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                         <div className="flex flex-col gap-3 p-4">
                                 {/* Header: Client Badge */}
                                 <div className="flex justify-between items-start">
-                                     <div className="flex items-center gap-2">
-                                        <span className={cn("text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md border", clientColorClass)}>
-                                            {task.clientName}
-                                        </span>
-                                        {isReturned && (
-                                            <span className="text-[9px] font-black text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 rounded flex items-center gap-1 uppercase tracking-tight">
-                                                <RotateCcw className="w-2.5 h-2.5" />
-                                                Devuelto
+                                     <div className="flex flex-col gap-1.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className={cn("text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md border", clientColorClass)}>
+                                                {task.clientName}
                                             </span>
-                                        )}
+                                            {isReturned && (
+                                                <span className="text-[9px] font-black text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 rounded flex items-center gap-1 uppercase tracking-tight">
+                                                    <RotateCcw className="w-2.5 h-2.5" />
+                                                    Devuelto
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <div
+                                                className="w-1.5 h-1.5 rounded-full"
+                                                style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }}
+                                            />
+                                            <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter">
+                                                {task.aiCategory || "Sin Clasificar"}
+                                            </span>
+                                        </div>
                                      </div>
 
                                      {/* Priority or Overdue Badge */}
