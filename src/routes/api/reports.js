@@ -165,7 +165,11 @@ router.post('/generate', upload.any(), async (req, res) => {
         2. TU OBJETIVO:
            - Por cada imagen de Redes Sociales, genera un bloque de análisis detallado. Identifica si es Avance General, Radiografía del Público o Resumen de Contenido.
            - Por cada imagen de Meta Ads, genera un bloque de análisis detallado. Identifica si es Rendimiento Macro o Desglose Micro.
-           - Mantén un tono 100% OPTIMISTA, COMERCIAL y ESTRATÉGICO. No uses palabras negativas.
+
+           REGLA DE TONO OBLIGATORIA (OPTIMISMO RADICAL):
+           - Está ESTRICTAMENTE PROHIBIDO usar palabras negativas o alarmistas: "caída", "pérdida", "mal rendimiento", "bajo", "negativo", "disminución", "problema".
+           - Si una métrica bajó, redáctalo como una "estabilización necesaria para el siguiente salto", "fase de consolidación" o una "ventana de oportunidad estratégica para optimizar".
+           - El informe siempre debe transmitir progreso, dirección y confianza comercial.
            - Los textos deben ser breves y directos (máximo 4 líneas).
 
         3. ESTRUCTURA DE RESPUESTA:
@@ -188,8 +192,9 @@ router.post('/generate', upload.any(), async (req, res) => {
           ]
         }`;
 
-        const result = await genAI.models.generateContent({
-            model: MODEL_NAME,
+        const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+
+        const result = await model.generateContent({
             contents: [{
                 role: 'user',
                 parts: [
@@ -197,7 +202,7 @@ router.post('/generate', upload.any(), async (req, res) => {
                     ...imageParts
                 ]
             }],
-            config: {
+            generationConfig: {
                 responseMimeType: "application/json",
                 maxOutputTokens: 8192,
                 temperature: 0.1
