@@ -44,6 +44,7 @@ import { toast } from 'react-hot-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Badge } from '@/components/ui/Badge';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 
 const OperationalCalendar = () => {
   const { currentUser } = useAuth();
@@ -53,7 +54,7 @@ const OperationalCalendar = () => {
   const [selectedMemberIds, setSelectedMemberIds] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
-  const [hoveredEventId, setHoveredEventId] = useState(null);
+  const [hoveredEventData, setHoveredEventData] = useState(null); // { event, rect }
   const [formData, setFormData] = useState({
     title: '',
     type: 'PRODUCTION',
@@ -283,10 +284,13 @@ const OperationalCalendar = () => {
       return (
         <div
           key={`${event.id}-${idx}`}
-          onMouseEnter={() => setHoveredEventId(event.id)}
-          onMouseLeave={() => setHoveredEventId(null)}
+          onMouseEnter={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setHoveredEventData({ event, rect });
+          }}
+          onMouseLeave={() => setHoveredEventData(null)}
           className={cn(
-            "absolute w-10 h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-10 group cursor-help hover:scale-110 active:scale-95",
+            "absolute w-10 h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-20 group cursor-help hover:scale-110 active:scale-95",
             getEventColor(event.type)
           )}
           style={{
@@ -306,74 +310,6 @@ const OperationalCalendar = () => {
                 </div>
              )}
           </div>
-
-          {/* Floating Popover on Hover */}
-          <AnimatePresence>
-            {hoveredEventId === event.id && (
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                    className="absolute bottom-full mb-4 z-[100] w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 cursor-default pointer-events-auto"
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <div className="space-y-4">
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="space-y-1.5 flex-1 min-w-0">
-                                <h4 className="text-[13px] font-bold text-zinc-900 dark:text-white leading-tight truncate">
-                                    {event.title}
-                                </h4>
-                                <div className="flex items-center gap-2">
-                                    <Badge variant="indigo" className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5">
-                                    {event.type === 'PRODUCTION' ? 'Producción' :
-                                     event.type === 'PROJECT' ? 'Proyecto' :
-                                     event.type === 'MEETING' ? 'Reunión' :
-                                     event.type === 'ABSENCE' ? 'Ausencia' :
-                                     event.type === 'WORK_DAY' ? 'Jornada' : 'Descanso'}
-                                    </Badge>
-                                </div>
-                            </div>
-                            {isAdmin && (
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDelete(event.id);
-                                    }}
-                                    className="p-2 bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 rounded-xl transition-all shadow-sm shrink-0"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
-                            )}
-                        </div>
-
-                        <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-white/5 p-2.5 rounded-xl border border-zinc-100 dark:border-white/5">
-                            <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                            {format(start, 'HH:mm')} - {format(end, 'HH:mm')}
-                        </div>
-
-                        <div className="pt-2">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-2">Involucrados</span>
-                            <div className="flex -space-x-2">
-                                {involvedMembers.map(m => (
-                                    <TeamAvatar key={m.id} member={m} className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm" />
-                                ))}
-                            </div>
-                        </div>
-
-                        {isAdmin && (
-                            <button
-                                onClick={() => handleEdit(event)}
-                                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
-                            >
-                                Editar Evento
-                            </button>
-                        )}
-                    </div>
-                    {/* Popover Arrow */}
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-[10px] border-transparent border-t-white dark:border-t-zinc-900" />
-                </motion.div>
-            )}
-          </AnimatePresence>
         </div>
       );
     });
@@ -562,19 +498,100 @@ const OperationalCalendar = () => {
                 {/* Current Time Indicator */}
                 {isWithinInterval(now, { start: timeframe.start, end: timeframe.end }) && (
                     <div
-                        className="absolute top-0 bottom-0 z-50 pointer-events-none flex flex-col items-center"
+                        className="absolute top-0 bottom-0 z-10 pointer-events-none flex flex-col items-center"
                         style={{ left: `${calculateTimePosition(now)}%` }}
                     >
-                        <div className="bg-indigo-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-lg transform -translate-y-1/2 whitespace-nowrap">
+                        <div className="bg-indigo-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-lg transform -translate-y-1/2 whitespace-nowrap">
                             {format(now, 'hh:mm aa')}
                         </div>
-                        <div className="w-px h-full bg-indigo-600 shadow-[0_0_8px_rgba(79,70,229,0.4)]" />
+                        <div className="w-[1px] h-full bg-indigo-500/40" />
                     </div>
                 )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Event Detail Popover (Portal) */}
+      <AnimatePresence>
+        {hoveredEventData && createPortal(
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 10 }}
+            className="fixed z-[9999] w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 pointer-events-auto"
+            style={{
+              left: hoveredEventData.rect.left + (hoveredEventData.rect.width / 2),
+              top: hoveredEventData.rect.top - 16,
+              transform: 'translate(-50%, -100%)'
+            }}
+            onMouseEnter={() => setHoveredEventData(hoveredEventData)}
+            onMouseLeave={() => setHoveredEventData(null)}
+          >
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <h4 className="text-[13px] font-bold text-zinc-900 dark:text-white leading-tight truncate">
+                    {hoveredEventData.event.title}
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="indigo" className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5">
+                      {hoveredEventData.event.type === 'PRODUCTION' ? 'Producción' :
+                       hoveredEventData.event.type === 'PROJECT' ? 'Proyecto' :
+                       hoveredEventData.event.type === 'MEETING' ? 'Reunión' :
+                       hoveredEventData.event.type === 'ABSENCE' ? 'Ausencia' :
+                       hoveredEventData.event.type === 'WORK_DAY' ? 'Jornada' : 'Descanso'}
+                    </Badge>
+                  </div>
+                </div>
+                {isAdmin && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(hoveredEventData.event.id);
+                    }}
+                    className="p-2 bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 rounded-xl transition-all shadow-sm shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-white/5 p-2.5 rounded-xl border border-zinc-100 dark:border-white/5">
+                <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                {format(new Date(hoveredEventData.event.startAt), 'HH:mm')} - {format(new Date(hoveredEventData.event.endAt), 'HH:mm')}
+              </div>
+
+              {hoveredEventData.event.description && (
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 line-clamp-3 leading-relaxed">
+                  {hoveredEventData.event.description}
+                </p>
+              )}
+
+              <div className="pt-2">
+                <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-2">Involucrados</span>
+                <div className="flex -space-x-2">
+                  {team.filter(m => (hoveredEventData.event.memberIds || []).includes(m.id)).map(m => (
+                    <TeamAvatar key={m.id} member={m} className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm" />
+                  ))}
+                </div>
+              </div>
+
+              {isAdmin && (
+                <button
+                  onClick={() => handleEdit(hoveredEventData.event)}
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
+                >
+                  Editar Evento
+                </button>
+              )}
+            </div>
+            {/* Popover Arrow */}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 border-[10px] border-transparent border-t-white dark:border-t-zinc-900" />
+          </motion.div>,
+          document.body
+        )}
+      </AnimatePresence>
 
       {/* Modal for Creating Event */}
       {isModalOpen && (
