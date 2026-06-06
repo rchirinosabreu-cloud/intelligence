@@ -42,6 +42,8 @@ import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
+import { Badge } from '@/components/ui/Badge';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const OperationalCalendar = () => {
   const { currentUser } = useAuth();
@@ -51,6 +53,7 @@ const OperationalCalendar = () => {
   const [selectedMemberIds, setSelectedMemberIds] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
+  const [hoveredEventId, setHoveredEventId] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
     type: 'PRODUCTION',
@@ -83,9 +86,10 @@ const OperationalCalendar = () => {
         end.setHours(18, 0, 0, 0);
         return { start, end };
     } else if (view === 'Week') {
-        return { start: startOfWeek(currentDate, { weekStartsOn: 1 }), end: endOfWeek(currentDate, { weekStartsOn: 1 }) };
+        const start = startOfWeek(currentDate, { weekStartsOn: 1 });
+        const end = endOfDay(addDays(start, 4)); // Friday 23:59
+        return { start, end };
     }
-    // Fixed: ensure Month view covers the full range correctly for timeline rendering
     return { start: startOfMonth(currentDate), end: endOfMonth(currentDate) };
   }, [currentDate, view]);
 
@@ -246,12 +250,12 @@ const OperationalCalendar = () => {
 
   const getEventColor = (type) => {
     switch (type) {
-      case 'PRODUCTION': return 'bg-fuchsia-50/50 text-fuchsia-700 border-fuchsia-200 border-l-fuchsia-500';
-      case 'ABSENCE': return 'bg-red-50/50 text-red-700 border-red-200 border-l-red-500';
-      case 'PROJECT': return 'bg-indigo-50/50 text-indigo-700 border-indigo-200 border-l-indigo-500';
-      case 'MEETING': return 'bg-slate-50/50 text-slate-700 border-slate-200 border-l-slate-500';
-      case 'BREAK': return 'bg-orange-50/50 text-orange-700 border-orange-200 border-l-orange-500';
-      default: return 'bg-zinc-50/50 text-zinc-700 border-zinc-200 border-l-zinc-500';
+      case 'PRODUCTION': return 'bg-fuchsia-500/10 text-fuchsia-700 border-fuchsia-200/50';
+      case 'ABSENCE': return 'bg-red-500/10 text-red-700 border-red-200/50';
+      case 'PROJECT': return 'bg-indigo-500/10 text-indigo-700 border-indigo-200/50';
+      case 'MEETING': return 'bg-slate-500/10 text-slate-700 border-slate-200/50';
+      case 'BREAK': return 'bg-orange-500/10 text-orange-700 border-orange-200/50';
+      default: return 'bg-zinc-500/10 text-zinc-700 border-zinc-200/50';
     }
   };
 
@@ -272,47 +276,104 @@ const OperationalCalendar = () => {
       const right = calculateTimePosition(end);
       const width = right - left;
 
-      // Only render if some part of the event is visible
       if (width <= 0 && (start > timeframe.end || end < timeframe.start)) return null;
 
-      // Group avatars of involved members
       const involvedMembers = team.filter(m => (event.memberIds || []).includes(m.id));
 
       return (
         <div
           key={`${event.id}-${idx}`}
-          onClick={() => isAdmin && handleEdit(event)}
+          onMouseEnter={() => setHoveredEventId(event.id)}
+          onMouseLeave={() => setHoveredEventId(null)}
           className={cn(
-            "absolute h-14 flex items-center gap-3 px-4 rounded-xl border border-l-4 shadow-sm hover:shadow-md transition-all z-10 group",
-            isAdmin ? "cursor-pointer hover:scale-[1.01] hover:brightness-105 active:scale-[0.98]" : "cursor-default",
+            "absolute w-10 h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-10 group cursor-help hover:scale-110 active:scale-95",
             getEventColor(event.type)
           )}
           style={{
             left: `${left}%`,
-            width: `${Math.max(width, 0.1)}%`,
-            minWidth: '60px',
             top: '50%',
             transform: 'translateY(-50%)'
           }}
         >
-          <div className="flex -space-x-3 shrink-0">
-             {involvedMembers.slice(0, 3).map(m => (
-                <TeamAvatar
-                  key={m.id}
-                  member={m}
-                  className="w-9 h-9 border-2 border-white dark:border-zinc-900 shadow-sm transition-transform group-hover:translate-x-1 first:translate-x-0"
-                />
-             ))}
+          <div className="relative">
+             <TeamAvatar
+                member={involvedMembers[0]}
+                className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm"
+             />
+             {involvedMembers.length > 1 && (
+                <div className="absolute -right-2 -bottom-1 bg-indigo-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900">
+                    +{involvedMembers.length - 1}
+                </div>
+             )}
           </div>
 
-          <div className="flex flex-col min-w-0 overflow-hidden">
-            <span className="text-sm font-bold truncate uppercase tracking-tight leading-none">
-                {event.title}
-            </span>
-            <span className="text-[10px] font-bold opacity-60 truncate uppercase tracking-widest mt-1">
-                {format(start, 'HH:mm')} - {format(end, 'HH:mm')}
-            </span>
-          </div>
+          {/* Floating Popover on Hover */}
+          <AnimatePresence>
+            {hoveredEventId === event.id && (
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                    className="absolute bottom-full mb-4 z-[100] w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 cursor-default pointer-events-auto"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="space-y-4">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1.5 flex-1 min-w-0">
+                                <h4 className="text-[13px] font-bold text-zinc-900 dark:text-white leading-tight truncate">
+                                    {event.title}
+                                </h4>
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="indigo" className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5">
+                                    {event.type === 'PRODUCTION' ? 'Producción' :
+                                     event.type === 'PROJECT' ? 'Proyecto' :
+                                     event.type === 'MEETING' ? 'Reunión' :
+                                     event.type === 'ABSENCE' ? 'Ausencia' :
+                                     event.type === 'WORK_DAY' ? 'Jornada' : 'Descanso'}
+                                    </Badge>
+                                </div>
+                            </div>
+                            {isAdmin && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDelete(event.id);
+                                    }}
+                                    className="p-2 bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 rounded-xl transition-all shadow-sm shrink-0"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-white/5 p-2.5 rounded-xl border border-zinc-100 dark:border-white/5">
+                            <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                            {format(start, 'HH:mm')} - {format(end, 'HH:mm')}
+                        </div>
+
+                        <div className="pt-2">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-2">Involucrados</span>
+                            <div className="flex -space-x-2">
+                                {involvedMembers.map(m => (
+                                    <TeamAvatar key={m.id} member={m} className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm" />
+                                ))}
+                            </div>
+                        </div>
+
+                        {isAdmin && (
+                            <button
+                                onClick={() => handleEdit(event)}
+                                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
+                            >
+                                Editar Evento
+                            </button>
+                        )}
+                    </div>
+                    {/* Popover Arrow */}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-[10px] border-transparent border-t-white dark:border-t-zinc-900" />
+                </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       );
     });
