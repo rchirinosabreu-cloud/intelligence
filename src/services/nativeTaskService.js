@@ -259,8 +259,27 @@ export const createTask = async ({
             };
         }
 
-        // Task classification is now handled asynchronously by the Batch Classification Service.
-        // This keeps task creation instant and reduces redundant AI calls.
+        // Task classification hybrid flow:
+        // 1. Instant return for UX.
+        // 2. Background individual classification for immediate feedback.
+        // 3. Hourly batch system as a safety net for any misses.
+        (async () => {
+            try {
+                const classification = await classifyTaskWithAI(title, comments || "");
+                if (classification) {
+                    await prisma.task.update({
+                        where: { id: newTask.id },
+                        data: {
+                            aiCategory: normalizeCategory(classification.category),
+                            aiComplexity: classification.complexity
+                        }
+                    });
+                    console.log(`[nativeTaskService] Background AI classification completed for task ${newTask.id}`);
+                }
+            } catch (aiErr) {
+                console.warn(`[nativeTaskService] Background task classification deferred for task ${newTask.id}:`, aiErr.message);
+            }
+        })();
 
         return newTask;
     } catch (error) {

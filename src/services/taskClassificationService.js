@@ -15,7 +15,8 @@ export const processUnclassifiedTasks = async () => {
             where: {
                 OR: [
                     { aiCategory: null },
-                    { aiCategory: "Sin Clasificar" }
+                    { aiCategory: "Sin Clasificar" },
+                    { aiComplexity: null }
                 ]
             },
             select: { id: true, title: true, comments: true },
