@@ -77,7 +77,11 @@ const OperationalCalendar = () => {
 
   const timeframe = useMemo(() => {
     if (view === 'Day') {
-        return { start: startOfDay(currentDate), end: endOfDay(currentDate) };
+        const start = new Date(currentDate);
+        start.setHours(7, 0, 0, 0);
+        const end = new Date(currentDate);
+        end.setHours(18, 0, 0, 0);
+        return { start, end };
     } else if (view === 'Week') {
         return { start: startOfWeek(currentDate, { weekStartsOn: 1 }), end: endOfWeek(currentDate, { weekStartsOn: 1 }) };
     }
@@ -242,12 +246,12 @@ const OperationalCalendar = () => {
 
   const getEventColor = (type) => {
     switch (type) {
-      case 'PRODUCTION': return 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-900/20 dark:text-fuchsia-300 dark:border-fuchsia-800';
-      case 'ABSENCE': return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800';
-      case 'PROJECT': return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-800';
-      case 'MEETING': return 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
-      case 'BREAK': return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800';
-      default: return 'bg-zinc-50 text-zinc-700 border-zinc-200';
+      case 'PRODUCTION': return 'bg-fuchsia-50/50 text-fuchsia-700 border-fuchsia-200 border-l-fuchsia-500';
+      case 'ABSENCE': return 'bg-red-50/50 text-red-700 border-red-200 border-l-red-500';
+      case 'PROJECT': return 'bg-indigo-50/50 text-indigo-700 border-indigo-200 border-l-indigo-500';
+      case 'MEETING': return 'bg-slate-50/50 text-slate-700 border-slate-200 border-l-slate-500';
+      case 'BREAK': return 'bg-orange-50/50 text-orange-700 border-orange-200 border-l-orange-500';
+      default: return 'bg-zinc-50/50 text-zinc-700 border-zinc-200 border-l-zinc-500';
     }
   };
 
@@ -279,14 +283,14 @@ const OperationalCalendar = () => {
           key={`${event.id}-${idx}`}
           onClick={() => isAdmin && handleEdit(event)}
           className={cn(
-            "absolute h-12 flex items-center gap-2.5 px-3 rounded-full border shadow-sm hover:shadow-md transition-all z-10 group",
+            "absolute h-14 flex items-center gap-3 px-4 rounded-xl border border-l-4 shadow-sm hover:shadow-md transition-all z-10 group",
             isAdmin ? "cursor-pointer hover:scale-[1.01] hover:brightness-105 active:scale-[0.98]" : "cursor-default",
             getEventColor(event.type)
           )}
           style={{
             left: `${left}%`,
             width: `${Math.max(width, 0.1)}%`,
-            minWidth: '48px',
+            minWidth: '60px',
             top: '50%',
             transform: 'translateY(-50%)'
           }}
@@ -296,16 +300,16 @@ const OperationalCalendar = () => {
                 <TeamAvatar
                   key={m.id}
                   member={m}
-                  className="w-8 h-8 border-2 border-white dark:border-zinc-900 shadow-sm transition-transform group-hover:translate-x-1 first:translate-x-0"
+                  className="w-9 h-9 border-2 border-white dark:border-zinc-900 shadow-sm transition-transform group-hover:translate-x-1 first:translate-x-0"
                 />
              ))}
           </div>
 
           <div className="flex flex-col min-w-0 overflow-hidden">
-            <span className="text-[10px] font-black truncate uppercase tracking-tight leading-none">
+            <span className="text-sm font-bold truncate uppercase tracking-tight leading-none">
                 {event.title}
             </span>
-            <span className="text-[8px] font-bold opacity-60 truncate uppercase tracking-widest mt-0.5">
+            <span className="text-[10px] font-bold opacity-60 truncate uppercase tracking-widest mt-1">
                 {format(start, 'HH:mm')} - {format(end, 'HH:mm')}
             </span>
           </div>
@@ -427,7 +431,7 @@ const OperationalCalendar = () => {
       </div>
 
       {/* --- TIMELINE GRID --- */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/5 rounded-[2rem] overflow-hidden shadow-xl flex flex-col">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/5 rounded-[2rem] overflow-hidden shadow-xl flex flex-col min-h-[750px]">
         <div className="flex-1 overflow-x-auto custom-scrollbar relative">
           <div
             className="min-w-fit"
@@ -466,7 +470,7 @@ const OperationalCalendar = () => {
             {/* Timeline Rows (Resources) */}
             <div className="relative">
                 {['PRODUCTION', 'PROJECT', 'MEETING', 'ABSENCE', 'BREAK'].map((resourceType) => (
-                    <div key={resourceType} className="flex border-b border-zinc-100 dark:border-white/5 group/row min-h-[100px]">
+                    <div key={resourceType} className="flex border-b border-zinc-100 dark:border-white/5 group/row min-h-[140px]">
                         <div className="w-48 min-w-[192px] shrink-0 bg-zinc-50/50 dark:bg-zinc-950/20 p-4 border-r border-zinc-100 dark:border-white/5 flex items-center gap-3">
                             <div className={cn("p-2 rounded-xl", getEventColor(resourceType).split(' ')[0])}>
                                 {getEventIcon(resourceType)}
