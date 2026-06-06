@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Calendar as CalendarIcon,
@@ -17,7 +17,23 @@ import {
   Coffee
 } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths } from 'date-fns';
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  isSameDay,
+  addMonths,
+  subMonths,
+  startOfWeek,
+  endOfWeek,
+  startOfDay,
+  endOfDay,
+  eachHourOfInterval,
+  isWithinInterval,
+  addDays,
+  differenceInMinutes
+} from 'date-fns';
 import { es } from 'date-fns/locale';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
@@ -25,11 +41,14 @@ registerLocale('es', es);
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
+import TeamAvatar from '@/components/ui/TeamAvatar';
 
 const OperationalCalendar = () => {
   const { currentUser } = useAuth();
   const queryClient = useQueryClient();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [view, setView] = useState('Week');
+  const [selectedMemberIds, setSelectedMemberIds] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
   const [formData, setFormData] = useState({
@@ -56,14 +75,29 @@ const OperationalCalendar = () => {
     }
   });
 
+  const timeframe = useMemo(() => {
+    if (view === 'Day') {
+        return { start: startOfDay(currentDate), end: endOfDay(currentDate) };
+    } else if (view === 'Week') {
+        return { start: startOfWeek(currentDate, { weekStartsOn: 1 }), end: endOfWeek(currentDate, { weekStartsOn: 1 }) };
+    }
+    // Fixed: ensure Month view covers the full range correctly for timeline rendering
+    return { start: startOfMonth(currentDate), end: endOfMonth(currentDate) };
+  }, [currentDate, view]);
+
+  // Update current time every minute
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Fetch Events
   const { data: apiEvents = [], isLoading } = useQuery({
-    queryKey: ['operational-events', format(currentDate, 'yyyy-MM')],
+    queryKey: ['operational-events', timeframe.start.toISOString(), timeframe.end.toISOString()],
     queryFn: async () => {
       try {
-        const start = startOfMonth(currentDate).toISOString();
-        const end = endOfMonth(currentDate).toISOString();
-        const res = await fetch(`${getApiBaseUrl()}/api/activity/events?start=${start}&end=${end}`);
+        const res = await fetch(`${getApiBaseUrl()}/api/activity/events?start=${timeframe.start.toISOString()}&end=${timeframe.end.toISOString()}`);
         if (!res.ok) throw new Error('Failed to fetch events');
         return res.json();
       } catch (err) {
@@ -181,77 +215,23 @@ const OperationalCalendar = () => {
     end: monthEnd
   });
 
-  // Function to project events (including multi-day and recurring) into the calendar grid
-  const getProjectedEvents = () => {
-    const projected = [];
-    events.forEach(event => {
-      const eventStart = new Date(event.startAt);
-      const eventEnd = new Date(event.endAt);
+  const columns = useMemo(() => {
+    if (view === 'Day') {
+        return eachHourOfInterval({ start: timeframe.start, end: timeframe.end });
+    }
+    return eachDayOfInterval({ start: timeframe.start, end: timeframe.end });
+  }, [timeframe, view]);
 
-      if (event.recurrence === 'NONE' || !event.recurrence) {
-        // Multi-day non-recurring events: Project into each day
-        let currentDay = new Date(eventStart);
-        currentDay.setHours(0, 0, 0, 0);
-
-        const lastDay = new Date(eventEnd);
-        lastDay.setHours(0, 0, 0, 0);
-
-        while (currentDay <= lastDay) {
-          if (currentDay >= monthStart && currentDay <= monthEnd) {
-            projected.push({
-              ...event,
-              // Display dates for the specific cell
-              displayStartAt: currentDay.toISOString(),
-              isMultiDay: !isSameDay(eventStart, eventEnd),
-              isFirstDay: isSameDay(currentDay, eventStart),
-              isLastDay: isSameDay(currentDay, eventEnd)
-            });
-          }
-          currentDay = new Date(currentDay.getTime() + 24 * 60 * 60 * 1000);
+  const filteredEvents = useMemo(() => {
+    return events.filter(e => {
+        // Filter by member if selection exists
+        if (selectedMemberIds.length > 0) {
+            const hasMember = (e.memberIds || []).some(id => selectedMemberIds.includes(id));
+            if (!hasMember) return false;
         }
-      } else if (event.recurrence === 'WEEKLY') {
-        let currentInstanceStart = new Date(eventStart);
-        const duration = eventEnd.getTime() - eventStart.getTime();
-        const limit = event.recurrenceEnd ? new Date(event.recurrenceEnd) : monthEnd;
-
-        // Move current to the first instance that could overlap with the visible month
-        // (Even if it started weeks ago, a multi-day instance might still overlap)
-        while (new Date(currentInstanceStart.getTime() + duration) < monthStart) {
-          currentInstanceStart = new Date(currentInstanceStart.getTime() + 7 * 24 * 60 * 60 * 1000);
-        }
-
-        const maxDate = limit < monthEnd ? limit : monthEnd;
-
-        while (currentInstanceStart <= maxDate) {
-            const instanceEnd = new Date(currentInstanceStart.getTime() + duration);
-
-            let currentDay = new Date(currentInstanceStart);
-            currentDay.setHours(0, 0, 0, 0);
-
-            const lastDay = new Date(instanceEnd);
-            lastDay.setHours(0, 0, 0, 0);
-
-            while (currentDay <= lastDay) {
-                if (currentDay >= monthStart && currentDay <= monthEnd) {
-                    projected.push({
-                        ...event,
-                        displayStartAt: currentDay.toISOString(),
-                        isProjected: true,
-                        isMultiDay: !isSameDay(currentInstanceStart, instanceEnd),
-                        isFirstDay: isSameDay(currentDay, currentInstanceStart),
-                        isLastDay: isSameDay(currentDay, lastDay)
-                    });
-                }
-                currentDay = new Date(currentDay.getTime() + 24 * 60 * 60 * 1000);
-            }
-            currentInstanceStart = new Date(currentInstanceStart.getTime() + 7 * 24 * 60 * 60 * 1000);
-        }
-      }
+        return true;
     });
-    return projected;
-  };
-
-  const projectedEvents = getProjectedEvents();
+  }, [events, selectedMemberIds]);
 
   const getEventIcon = (type) => {
     switch (type) {
@@ -277,103 +257,252 @@ const OperationalCalendar = () => {
     }
   };
 
+  const calculateTimePosition = (date) => {
+    const totalDuration = timeframe.end.getTime() - timeframe.start.getTime();
+    const elapsed = date.getTime() - timeframe.start.getTime();
+    return Math.max(0, Math.min(100, (elapsed / totalDuration) * 100));
+  };
+
+  const renderEventsForResource = (type) => {
+    const resourceEvents = filteredEvents.filter(e => e.type === type);
+
+    return resourceEvents.map((event, idx) => {
+      const start = new Date(event.startAt);
+      const end = new Date(event.endAt);
+
+      const left = calculateTimePosition(start);
+      const right = calculateTimePosition(end);
+      const width = right - left;
+
+      // Only render if some part of the event is visible
+      if (width <= 0 && (start > timeframe.end || end < timeframe.start)) return null;
+
+      // Group avatars of involved members
+      const involvedMembers = team.filter(m => (event.memberIds || []).includes(m.id));
+
+      return (
+        <div
+          key={`${event.id}-${idx}`}
+          onClick={() => isAdmin && handleEdit(event)}
+          className={cn(
+            "absolute h-10 flex items-center gap-2 px-3 rounded-full border shadow-sm transition-all z-10",
+            isAdmin ? "cursor-pointer hover:scale-[1.02] hover:z-20 active:scale-95" : "cursor-default",
+            getEventColor(event.type)
+          )}
+          style={{
+            left: `${left}%`,
+            width: `${Math.max(width, 2)}%`, // Minimum visible width
+            top: '50%',
+            transform: 'translateY(-50%)'
+          }}
+        >
+          <div className="flex -space-x-2 shrink-0">
+             {involvedMembers.slice(0, 3).map(m => (
+                <TeamAvatar key={m.id} member={m} className="w-5 h-5 border border-white dark:border-zinc-800" />
+             ))}
+          </div>
+          <span className="text-[10px] font-black truncate uppercase tracking-tighter">
+            {event.title}
+          </span>
+        </div>
+      );
+    });
+  };
+
+  const toggleMemberFilter = (id) => {
+    setSelectedMemberIds(prev =>
+      prev.includes(id) ? prev.filter(mid => mid !== id) : [...prev, id]
+    );
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <h2 className="text-xl font-bold capitalize">
-            {format(currentDate, 'MMMM yyyy', { locale: es })}
-          </h2>
-          <div className="flex items-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-sm">
-            <button
-              onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-              className="p-2 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800" />
-            <button
-              onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-              className="p-2 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {isAdmin && (
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-indigo-600/20"
-          >
-            <Plus className="w-4 h-4" />
-            Nuevo Evento
-          </button>
-        )}
-      </div>
-
-      <div className="grid grid-cols-7 gap-px bg-zinc-200 dark:bg-zinc-800 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-xl">
-        {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(day => (
-          <div key={day} className="bg-zinc-50 dark:bg-zinc-900/50 p-4 text-center">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{day}</span>
-          </div>
-        ))}
-
-        {/* Placeholder for days before start of month */}
-        {[...Array((days[0].getDay() + 6) % 7)].map((_, i) => (
-          <div key={`empty-${i}`} className="bg-white dark:bg-zinc-900/30 p-4" />
-        ))}
-
-        {days.map(day => (
-          <div key={day.toString()} className="bg-white dark:bg-zinc-900 min-h-[120px] md:min-h-[140px] transition-colors hover:bg-zinc-50/50 dark:hover:bg-white/5 border-r border-b border-zinc-100 dark:border-zinc-800">
-            <div className="p-2 md:p-4">
-               <span className={cn(
-                "text-sm font-bold",
-                isSameDay(day, new Date()) ? "text-indigo-600 dark:text-indigo-400" : "text-zinc-400 dark:text-zinc-600"
-              )}>
-                {format(day, 'd')}
-              </span>
-            </div>
-            <div className="mt-[-8px] space-y-1 pb-4 relative">
-              {projectedEvents.filter(e => isSameDay(new Date(e.displayStartAt || e.startAt), day)).map((event, idx) => (
-                <div
-                  key={`${event.id}-${idx}`}
-                  onClick={() => isAdmin && handleEdit(event)}
-                  className={cn(
-                    "group relative px-3 py-1.5 border-y text-[10px] font-bold transition-all flex items-center gap-1.5",
-                    isAdmin ? "cursor-pointer hover:brightness-95" : "cursor-default",
-                    getEventColor(event.type),
-                    // CONTINUITY FIX (BS-OPS-007): Multi-day visualization
-                    event.isMultiDay ? (
-                        event.isFirstDay ? "rounded-l-xl border-l ml-2" :
-                        event.isLastDay ? "rounded-r-xl border-r mr-2" :
-                        "rounded-none border-x-0 mx-[-1px] w-[calc(100%+2px)]"
-                    ) : "rounded-xl border-x mx-2"
-                  )}
-                >
-                  {(!event.isMultiDay || event.isFirstDay) && (
-                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                       {getEventIcon(event.type)}
-                       <span className="truncate">{event.title}</span>
+      {/* --- PREMIUM HEADER CONTROLS --- */}
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-zinc-200 dark:border-white/5 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center gap-6">
+           {/* Team Filter */}
+           <div className="flex flex-col gap-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Filtrar Equipo</span>
+              <div className="flex items-center">
+                <div className="flex -space-x-2 mr-4">
+                  {team.slice(0, 6).map((member) => (
+                    <button
+                      key={member.id}
+                      onClick={() => toggleMemberFilter(member.id)}
+                      className={cn(
+                        "relative transition-all duration-300 hover:z-10 hover:-translate-y-1",
+                        selectedMemberIds.includes(member.id) ? "ring-2 ring-indigo-600 scale-110 z-10" : "opacity-60 grayscale-[0.5]"
+                      )}
+                    >
+                      <TeamAvatar member={member} className="w-8 h-8 border-2 border-white dark:border-zinc-900" />
+                    </button>
+                  ))}
+                  {team.length > 6 && (
+                    <div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-[10px] font-bold text-zinc-500">
+                      +{team.length - 6}
                     </div>
                   )}
-
-                  {isAdmin && (!event.isMultiDay || event.isLastDay) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(event.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-500 hover:text-white rounded transition-all shrink-0 ml-auto"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
                 </div>
+                {selectedMemberIds.length > 0 && (
+                  <button
+                    onClick={() => setSelectedMemberIds([])}
+                    className="text-[10px] font-bold text-indigo-600 hover:underline"
+                  >
+                    Limpiar
+                  </button>
+                )}
+              </div>
+           </div>
+
+           <div className="hidden md:block w-px h-10 bg-zinc-100 dark:bg-white/5" />
+
+           {/* Date & View Controls */}
+           <div className="flex flex-col gap-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Periodo de Visualización</span>
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-bold capitalize min-w-[140px]">
+                  {view === 'Day' ? format(currentDate, 'd MMMM, yyyy', { locale: es }) :
+                   view === 'Week' ? `Semana ${format(currentDate, 'w, yyyy')}` :
+                   format(currentDate, 'MMMM yyyy', { locale: es })}
+                </h2>
+                <div className="flex items-center bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl overflow-hidden">
+                  <button
+                    onClick={() => {
+                        if (view === 'Day') setCurrentDate(prev => new Date(prev.setDate(prev.getDate() - 1)));
+                        else if (view === 'Week') setCurrentDate(prev => new Date(prev.setDate(prev.getDate() - 7)));
+                        else setCurrentDate(subMonths(currentDate, 1));
+                    }}
+                    className="p-2 hover:bg-zinc-200 dark:hover:bg-white/5 transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <div className="w-px h-4 bg-zinc-200 dark:bg-white/10" />
+                  <button
+                    onClick={() => {
+                        if (view === 'Day') setCurrentDate(prev => new Date(prev.setDate(prev.getDate() + 1)));
+                        else if (view === 'Week') setCurrentDate(prev => new Date(prev.setDate(prev.getDate() + 7)));
+                        else setCurrentDate(addMonths(currentDate, 1));
+                    }}
+                    className="p-2 hover:bg-zinc-200 dark:hover:bg-white/5 transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+           </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+           {/* View Selector */}
+           <div className="flex p-1 bg-zinc-100 dark:bg-white/5 rounded-xl border border-zinc-200 dark:border-white/10">
+              {['Day', 'Week', 'Month'].map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={cn(
+                    "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                    view === v ? "bg-white dark:bg-zinc-800 text-indigo-600 shadow-sm" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                  )}
+                >
+                  {v === 'Day' ? 'Día' : v === 'Week' ? 'Semana' : 'Mes'}
+                </button>
               ))}
+           </div>
+
+           {isAdmin && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              Nuevo
+            </button>
+           )}
+        </div>
+      </div>
+
+      {/* --- TIMELINE GRID --- */}
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/5 rounded-[2rem] overflow-hidden shadow-xl flex flex-col">
+        <div className="flex-1 overflow-x-auto custom-scrollbar relative">
+          <div
+            className="min-w-fit"
+            style={{ width: view === 'Month' ? '3000px' : '100%' }}
+          >
+            {/* Timeline Header (Time Scale) */}
+            <div className="flex border-b border-zinc-100 dark:border-white/5">
+                <div className="w-48 shrink-0 bg-zinc-50/50 dark:bg-zinc-950/20 p-4 border-r border-zinc-100 dark:border-white/5">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Áreas / Proyectos</span>
+                </div>
+                <div className="flex flex-1">
+                    {columns.map((col, idx) => (
+                        <div
+                            key={idx}
+                            className={cn(
+                                "flex-1 min-w-[80px] p-4 text-center border-r border-zinc-100 dark:border-white/5 flex flex-col gap-1",
+                                isSameDay(col, new Date()) && view !== 'Day' && "bg-indigo-50/30 dark:bg-indigo-900/10"
+                            )}
+                        >
+                            <span className="text-[10px] font-black uppercase tracking-tighter text-zinc-400">
+                                {view === 'Day' ? format(col, 'HH:00') : format(col, 'EEE', { locale: es })}
+                            </span>
+                            <span className={cn(
+                                "text-sm font-bold",
+                                isSameDay(col, new Date()) && view !== 'Day' ? "text-indigo-600" : "text-zinc-700 dark:text-zinc-300"
+                            )}>
+                                {format(col, 'd')}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Timeline Rows (Resources) */}
+            <div className="relative">
+                {['PRODUCTION', 'PROJECT', 'MEETING', 'WORK_DAY', 'ABSENCE', 'BREAK'].map((resourceType) => (
+                    <div key={resourceType} className="flex border-b border-zinc-100 dark:border-white/5 group/row min-h-[80px]">
+                        <div className="w-48 shrink-0 bg-zinc-50/50 dark:bg-zinc-950/20 p-4 border-r border-zinc-100 dark:border-white/5 flex items-center gap-3">
+                            <div className={cn("p-2 rounded-xl", getEventColor(resourceType).split(' ')[0])}>
+                                {getEventIcon(resourceType)}
+                            </div>
+                            <span className="text-[10px] font-bold uppercase tracking-tight text-zinc-500">
+                                {resourceType === 'PRODUCTION' ? 'Producción' :
+                                 resourceType === 'PROJECT' ? 'Proyectos' :
+                                 resourceType === 'MEETING' ? 'Reuniones' :
+                                 resourceType === 'WORK_DAY' ? 'Jornadas' :
+                                 resourceType === 'ABSENCE' ? 'Ausencias' : 'Descansos'}
+                            </span>
+                        </div>
+                        <div className="flex-1 relative">
+                            {/* Visual Grid Lines */}
+                            <div className="absolute inset-0 flex">
+                                {columns.map((_, i) => (
+                                    <div key={i} className="flex-1 border-r border-zinc-50 dark:border-white/5 pointer-events-none" />
+                                ))}
+                            </div>
+
+                            {/* Event Capsules Container */}
+                            <div className="relative h-full py-3">
+                                {renderEventsForResource(resourceType)}
+                            </div>
+                        </div>
+                    </div>
+                ))}
+
+                {/* Current Time Indicator */}
+                {isWithinInterval(now, { start: timeframe.start, end: timeframe.end }) && (
+                    <div
+                        className="absolute top-0 bottom-0 z-50 pointer-events-none flex flex-col items-center"
+                        style={{ left: `${calculateTimePosition(now)}%` }}
+                    >
+                        <div className="bg-indigo-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-lg transform -translate-y-1/2 whitespace-nowrap">
+                            {format(now, 'hh:mm aa')}
+                        </div>
+                        <div className="w-px h-full bg-indigo-600 shadow-[0_0_8px_rgba(79,70,229,0.4)]" />
+                    </div>
+                )}
             </div>
           </div>
-        ))}
+        </div>
       </div>
 
       {/* Modal for Creating Event */}
