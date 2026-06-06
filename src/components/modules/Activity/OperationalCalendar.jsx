@@ -207,13 +207,6 @@ const OperationalCalendar = () => {
     }
   };
 
-  const monthStart = startOfMonth(currentDate);
-  const monthEnd = endOfMonth(currentDate);
-
-  const days = eachDayOfInterval({
-    start: monthStart,
-    end: monthEnd
-  });
 
   const columns = useMemo(() => {
     if (view === 'Day') {
@@ -284,14 +277,16 @@ const OperationalCalendar = () => {
         <div
           key={`${event.id}-${idx}`}
           onClick={() => isAdmin && handleEdit(event)}
+          title={event.title}
           className={cn(
-            "absolute h-10 flex items-center gap-2 px-3 rounded-full border shadow-sm transition-all z-10",
+            "absolute h-10 flex items-center gap-2 px-3 rounded-full border shadow-sm transition-all z-10 overflow-hidden",
             isAdmin ? "cursor-pointer hover:scale-[1.02] hover:z-20 active:scale-95" : "cursor-default",
             getEventColor(event.type)
           )}
           style={{
             left: `${left}%`,
             width: `${Math.max(width, 2)}%`, // Minimum visible width
+            minWidth: '44px',
             top: '50%',
             transform: 'translateY(-50%)'
           }}
@@ -301,9 +296,11 @@ const OperationalCalendar = () => {
                 <TeamAvatar key={m.id} member={m} className="w-5 h-5 border border-white dark:border-zinc-800" />
              ))}
           </div>
-          <span className="text-[10px] font-black truncate uppercase tracking-tighter">
-            {event.title}
-          </span>
+          {width > 8 && (
+            <span className="text-[10px] font-black truncate uppercase tracking-tighter flex-1 min-w-0">
+                {event.title}
+            </span>
+          )}
         </div>
       );
     });
@@ -430,7 +427,7 @@ const OperationalCalendar = () => {
           >
             {/* Timeline Header (Time Scale) */}
             <div className="flex border-b border-zinc-100 dark:border-white/5">
-                <div className="w-48 shrink-0 bg-zinc-50/50 dark:bg-zinc-950/20 p-4 border-r border-zinc-100 dark:border-white/5">
+                <div className="w-48 min-w-[192px] shrink-0 bg-zinc-50/50 dark:bg-zinc-950/20 p-4 border-r border-zinc-100 dark:border-white/5">
                     <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Áreas / Proyectos</span>
                 </div>
                 <div className="flex flex-1">
@@ -445,12 +442,14 @@ const OperationalCalendar = () => {
                             <span className="text-[10px] font-black uppercase tracking-tighter text-zinc-400">
                                 {view === 'Day' ? format(col, 'HH:00') : format(col, 'EEE', { locale: es })}
                             </span>
-                            <span className={cn(
-                                "text-sm font-bold",
-                                isSameDay(col, new Date()) && view !== 'Day' ? "text-indigo-600" : "text-zinc-700 dark:text-zinc-300"
-                            )}>
-                                {format(col, 'd')}
-                            </span>
+                            {view !== 'Day' && (
+                                <span className={cn(
+                                    "text-sm font-bold",
+                                    isSameDay(col, new Date()) && view !== 'Day' ? "text-indigo-600" : "text-zinc-700 dark:text-zinc-300"
+                                )}>
+                                    {format(col, 'd')}
+                                </span>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -460,7 +459,7 @@ const OperationalCalendar = () => {
             <div className="relative">
                 {['PRODUCTION', 'PROJECT', 'MEETING', 'WORK_DAY', 'ABSENCE', 'BREAK'].map((resourceType) => (
                     <div key={resourceType} className="flex border-b border-zinc-100 dark:border-white/5 group/row min-h-[80px]">
-                        <div className="w-48 shrink-0 bg-zinc-50/50 dark:bg-zinc-950/20 p-4 border-r border-zinc-100 dark:border-white/5 flex items-center gap-3">
+                        <div className="w-48 min-w-[192px] shrink-0 bg-zinc-50/50 dark:bg-zinc-950/20 p-4 border-r border-zinc-100 dark:border-white/5 flex items-center gap-3">
                             <div className={cn("p-2 rounded-xl", getEventColor(resourceType).split(' ')[0])}>
                                 {getEventIcon(resourceType)}
                             </div>
