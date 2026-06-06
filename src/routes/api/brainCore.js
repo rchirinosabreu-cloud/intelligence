@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { GoogleGenAI } from '@google/genai';
+import { parseJsonResponse, extractModelText } from '../../services/aiService.js';
 import { addAgencyContext, performAdvancedExtraction, getIntelligenceFeed, getClientProfileFromMemory, searchContext, updateAgencyContext, deleteAgencyContext, getMemoryStats, askBrainCore } from '../../services/brainCoreService.js';
 import { getRecentEmails, readGoogleSheet, DEFAULT_IMPERSONATED_EMAIL } from '../../services/googleWorkspaceService.js';
 import { triageEmailsWithAI, onlyBasecampEmails } from '../../services/emailTriageService.js';
@@ -243,31 +244,12 @@ router.get('/client-summary/:clientId', restrictAccess, async (req, res) => {
             model: modelName,
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
-                generationConfig: { responseMimeType: 'application/json' }
+                responseMimeType: 'application/json'
             }
         });
 
-        const responseText = result.text;
-
-        let structuredData = {
-            criticalTasks: [],
-            highPriority: [],
-            blockers: ["Error parseando respuesta de IA"],
-            aiInsight: "La inteligencia no pudo estructurar los datos."
-        };
-
-        if (responseText) {
-            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                try {
-                    structuredData = JSON.parse(jsonMatch[0]);
-                } catch (parseErr) {
-                    structuredData.aiInsight = responseText;
-                }
-            } else {
-                structuredData.aiInsight = responseText;
-            }
-        }
+        const responseText = extractModelText(result);
+        const structuredData = parseJsonResponse(responseText);
 
         const triaged = await triageEmailsWithAI(rawEmails, genAI);
         const safeAlerts = onlyBasecampEmails(triaged).slice(0, 3);

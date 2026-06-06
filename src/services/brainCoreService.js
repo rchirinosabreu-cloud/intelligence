@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import prisma from '../lib/prisma.js';
 import { readGoogleSheet, getRecentEmails, readGoogleSlides, DEFAULT_IMPERSONATED_EMAIL } from './googleWorkspaceService.js';
 import { triageEmailsWithAI } from './emailTriageService.js';
+import { parseJsonResponse, extractModelText } from './aiService.js';
 
 dotenv.config();
 
@@ -66,22 +67,13 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }, imagePart] }],
             config: {
-                generationConfig: { responseMimeType: 'application/json' }
+                responseMimeType: 'application/json'
             }
         });
         console.log("================ DEPURACIÓN IA RAW (Extraction) ================", JSON.stringify(result, null, 2));
 
-        const responseText = result.text;
-
-        if (!responseText) throw new Error("Empty response from AI");
-
-        try {
-            return JSON.parse(responseText.replace(/```json|```/g, ''));
-        } catch (parseError) {
-            console.warn("⚠️ Alerta BrainCore (Extraction): La IA devolvió texto no estructurado. Reintentando limpieza.");
-            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-            return jsonMatch ? JSON.parse(jsonMatch[0]) : { content: responseText, insights: {} };
-        }
+        const responseText = extractModelText(result);
+        return parseJsonResponse(responseText);
     } catch (error) {
         console.error("[BrainCoreService] Advanced extraction failed:", error);
         return null;
@@ -259,11 +251,12 @@ const generateOperationalPredictions = async (activeTasks, overdueTasks, triaged
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
             config: {
-                generationConfig: { responseMimeType: 'application/json' }
+                responseMimeType: 'application/json'
             }
         });
 
-        return JSON.parse(result.text || "[]");
+        const responseText = extractModelText(result);
+        return parseJsonResponse(responseText);
     } catch (e) {
         console.error("[BrainCoreService] Prediction failed:", e);
         return [];
@@ -300,19 +293,12 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory, pred
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
             config: {
-                generationConfig: { responseMimeType: 'application/json' }
+                responseMimeType: 'application/json'
             }
         });
 
-        const responseText = result.text;
-        if (!responseText) return [];
-
-        try {
-            return JSON.parse(responseText.replace(/```json|```/g, ''));
-        } catch (parseError) {
-            const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-            return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-        }
+        const responseText = extractModelText(result);
+        return parseJsonResponse(responseText);
     } catch (e) {
         console.error("[BrainCoreService] Feed generation failed:", e);
         return [];
@@ -484,19 +470,12 @@ export const getClientProfileFromMemory = async (clientId) => {
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
             config: {
-                generationConfig: { responseMimeType: 'application/json' }
+                responseMimeType: 'application/json'
             }
         });
 
-        const responseText = result.text;
-        if (!responseText) return null;
-
-        try {
-            return JSON.parse(responseText.replace(/```json|```/g, ''));
-        } catch (parseError) {
-            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-            return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-        }
+        const responseText = extractModelText(result);
+        return parseJsonResponse(responseText);
     } catch (e) {
         console.error("[BrainCoreService] Radar generation failed:", e);
         return null;

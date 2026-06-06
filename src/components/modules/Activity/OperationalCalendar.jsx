@@ -212,7 +212,9 @@ const OperationalCalendar = () => {
     if (view === 'Day') {
         return eachHourOfInterval({ start: timeframe.start, end: timeframe.end });
     }
-    return eachDayOfInterval({ start: timeframe.start, end: timeframe.end });
+    const days = eachDayOfInterval({ start: timeframe.start, end: timeframe.end });
+    // Filter out weekends (6: Saturday, 0: Sunday)
+    return days.filter(d => d.getDay() !== 0 && d.getDay() !== 6);
   }, [timeframe, view]);
 
   const filteredEvents = useMemo(() => {
@@ -240,13 +242,12 @@ const OperationalCalendar = () => {
 
   const getEventColor = (type) => {
     switch (type) {
-      case 'PRODUCTION': return 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-900/30 dark:text-fuchsia-400 dark:border-fuchsia-800';
-      case 'ABSENCE': return 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
-      case 'PROJECT': return 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800';
-      case 'MEETING': return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
-      case 'WORK_DAY': return 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-400 dark:border-cyan-800';
-      case 'BREAK': return 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800';
-      default: return 'bg-zinc-100 text-zinc-700';
+      case 'PRODUCTION': return 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-900/20 dark:text-fuchsia-300 dark:border-fuchsia-800';
+      case 'ABSENCE': return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800';
+      case 'PROJECT': return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-800';
+      case 'MEETING': return 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+      case 'BREAK': return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800';
+      default: return 'bg-zinc-50 text-zinc-700 border-zinc-200';
     }
   };
 
@@ -277,30 +278,37 @@ const OperationalCalendar = () => {
         <div
           key={`${event.id}-${idx}`}
           onClick={() => isAdmin && handleEdit(event)}
-          title={event.title}
           className={cn(
-            "absolute h-10 flex items-center gap-2 px-3 rounded-full border shadow-sm transition-all z-10 overflow-hidden",
-            isAdmin ? "cursor-pointer hover:scale-[1.02] hover:z-20 active:scale-95" : "cursor-default",
+            "absolute h-12 flex items-center gap-2.5 px-3 rounded-full border shadow-sm hover:shadow-md transition-all z-10 group",
+            isAdmin ? "cursor-pointer hover:scale-[1.01] hover:brightness-105 active:scale-[0.98]" : "cursor-default",
             getEventColor(event.type)
           )}
           style={{
             left: `${left}%`,
-            width: `${Math.max(width, 2)}%`, // Minimum visible width
-            minWidth: '44px',
+            width: `${Math.max(width, 0.1)}%`,
+            minWidth: '48px',
             top: '50%',
             transform: 'translateY(-50%)'
           }}
         >
-          <div className="flex -space-x-2 shrink-0">
+          <div className="flex -space-x-3 shrink-0">
              {involvedMembers.slice(0, 3).map(m => (
-                <TeamAvatar key={m.id} member={m} className="w-5 h-5 border border-white dark:border-zinc-800" />
+                <TeamAvatar
+                  key={m.id}
+                  member={m}
+                  className="w-8 h-8 border-2 border-white dark:border-zinc-900 shadow-sm transition-transform group-hover:translate-x-1 first:translate-x-0"
+                />
              ))}
           </div>
-          {width > 8 && (
-            <span className="text-[10px] font-black truncate uppercase tracking-tighter flex-1 min-w-0">
+
+          <div className="flex flex-col min-w-0 overflow-hidden">
+            <span className="text-[10px] font-black truncate uppercase tracking-tight leading-none">
                 {event.title}
             </span>
-          )}
+            <span className="text-[8px] font-bold opacity-60 truncate uppercase tracking-widest mt-0.5">
+                {format(start, 'HH:mm')} - {format(end, 'HH:mm')}
+            </span>
+          </div>
         </div>
       );
     });
@@ -457,8 +465,8 @@ const OperationalCalendar = () => {
 
             {/* Timeline Rows (Resources) */}
             <div className="relative">
-                {['PRODUCTION', 'PROJECT', 'MEETING', 'WORK_DAY', 'ABSENCE', 'BREAK'].map((resourceType) => (
-                    <div key={resourceType} className="flex border-b border-zinc-100 dark:border-white/5 group/row min-h-[80px]">
+                {['PRODUCTION', 'PROJECT', 'MEETING', 'ABSENCE', 'BREAK'].map((resourceType) => (
+                    <div key={resourceType} className="flex border-b border-zinc-100 dark:border-white/5 group/row min-h-[100px]">
                         <div className="w-48 min-w-[192px] shrink-0 bg-zinc-50/50 dark:bg-zinc-950/20 p-4 border-r border-zinc-100 dark:border-white/5 flex items-center gap-3">
                             <div className={cn("p-2 rounded-xl", getEventColor(resourceType).split(' ')[0])}>
                                 {getEventIcon(resourceType)}
@@ -467,7 +475,6 @@ const OperationalCalendar = () => {
                                 {resourceType === 'PRODUCTION' ? 'Producción' :
                                  resourceType === 'PROJECT' ? 'Proyectos' :
                                  resourceType === 'MEETING' ? 'Reuniones' :
-                                 resourceType === 'WORK_DAY' ? 'Jornadas' :
                                  resourceType === 'ABSENCE' ? 'Ausencias' : 'Descansos'}
                             </span>
                         </div>
