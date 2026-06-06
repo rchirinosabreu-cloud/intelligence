@@ -3,6 +3,7 @@ import multer from 'multer';
 import prisma from '../../lib/prisma.js';
 import { GoogleGenAI } from '@google/genai';
 import { uploadClientFile, getSignedUrl, getClientFileStream } from '../../services/storageService.js';
+import { parseJsonResponse, extractModelText } from '../../services/aiService.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -197,46 +198,14 @@ router.post('/generate', upload.any(), async (req, res) => {
                 ]
             }],
             config: {
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    maxOutputTokens: 8192,
-                    temperature: 0.1
-                }
+                responseMimeType: "application/json",
+                maxOutputTokens: 8192,
+                temperature: 0.1
             }
         });
 
-        if (!result || !result.text) {
-            console.error("[Reports API] Raw AI Result Error:", JSON.stringify(result, null, 2));
-            throw new Error("La IA no devolvió un formato de texto válido.");
-        }
-
-        const rawText = result.text;
-        let analysis;
-        try {
-            // Defensive sanitization: remove markdown wrappers (```json and ```)
-            const sanitizedText = rawText.replace(/```json|```/gi, '').trim();
-            analysis = JSON.parse(sanitizedText);
-        } catch (parseError) {
-            console.error("[Reports API] JSON Parse Error. Raw Text:", rawText);
-            // Fallback: search for the first '{' and the last '}' to extract the JSON object
-            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                try {
-                    analysis = JSON.parse(jsonMatch[0]);
-                } catch (secondParseError) {
-                    console.error("[Reports API] Secondary Parse Error:", secondParseError.message);
-                    return res.status(500).json({
-                        error: 'Error de estructura en el análisis de IA',
-                        details: 'La IA devolvió datos corruptos'
-                    });
-                }
-            } else {
-                return res.status(500).json({
-                    error: 'Fallo crítico en el procesamiento de IA',
-                    details: 'No se detectó un objeto JSON válido'
-                });
-            }
-        }
+        const rawText = extractModelText(result);
+        const analysis = parseJsonResponse(rawText);
 
         // 4. Manual Assembly: Stitch GCS Paths to AI Text by Index
         const buildProxyUrl = (gcsPath) => `/api/reports/image-proxy?path=${encodeURIComponent(gcsPath)}`;
