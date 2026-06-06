@@ -229,6 +229,7 @@ const NativeTasks = () => {
           contentPlanId: task.contentItem?.planId,
           contentItemId: task.contentItem?.id,
           aiCategory: task.aiCategory,
+          aiComplexity: task.aiComplexity,
           plan: task.plan // Contains slug, month, year
       }));
     },
@@ -1077,14 +1078,27 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-1.5">
-                                            <div
-                                                className="w-1.5 h-1.5 rounded-full"
-                                                style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }}
-                                            />
-                                            <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter">
-                                                {task.aiCategory || "Sin Clasificar"}
-                                            </span>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-1.5">
+                                                <div
+                                                    className="w-1.5 h-1.5 rounded-full"
+                                                    style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }}
+                                                />
+                                                <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter">
+                                                    {task.aiCategory || "Sin Clasificar"}
+                                                </span>
+                                            </div>
+                                            {task.aiComplexity && (
+                                                <>
+                                                    <span className="w-1 h-1 rounded-full bg-zinc-200" />
+                                                    <span className={cn(
+                                                        "text-[9px] font-bold uppercase tracking-tighter",
+                                                        task.aiComplexity === 'ALTA' ? 'text-red-500' : task.aiComplexity === 'MEDIA' ? 'text-indigo-500' : 'text-emerald-500'
+                                                    )}>
+                                                        {task.aiComplexity}
+                                                    </span>
+                                                </>
+                                            )}
                                         </div>
                                      </div>
 

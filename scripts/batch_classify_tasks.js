@@ -10,16 +10,16 @@ async function main() {
     while (hasMore) {
         const result = await processUnclassifiedTasks();
 
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
         if (result.processed > 0) {
             totalProcessed += result.processed;
             console.log(`✅ Processed ${result.processed} tasks. Total: ${totalProcessed}`);
         } else {
             hasMore = false;
-            if (result.error) {
-                console.error(`❌ Error during batch: ${result.error}`);
-            } else {
-                console.log("🏁 No more tasks to classify.");
-            }
+            console.log("🏁 No more tasks to classify.");
         }
 
         // Small cooldown to respect rate limits if many batches are needed
