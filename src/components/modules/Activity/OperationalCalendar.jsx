@@ -296,14 +296,14 @@ const OperationalCalendar = () => {
             transform: 'translateY(-50%)'
           }}
         >
-          <div className="relative pointer-events-none">
+          <div className="relative pointer-events-none flex items-center gap-1.5 p-1.5">
              <TeamAvatar
                 member={involvedMembers[0]}
                 showTitle={false}
                 className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm"
              />
              {involvedMembers.length > 1 && (
-                <div className="absolute -right-2 -bottom-1 bg-indigo-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900">
+                <div className="bg-indigo-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900 shrink-0">
                     +{involvedMembers.length - 1}
                 </div>
              )}
@@ -489,10 +489,11 @@ const OperationalCalendar = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 10 }}
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 10 }}
-              className="w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5"
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom"
             >
             <div className="space-y-4">
               <div className="flex items-start justify-between gap-3">
@@ -536,7 +537,7 @@ const OperationalCalendar = () => {
 
               <div className="pt-2">
                 <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-2">Involucrados</span>
-                <div className="flex -space-x-2">
+                <div className="flex flex-wrap gap-1.5">
                   {team.filter(m => (hoveredEventData.event.memberIds || []).includes(m.id)).map(m => (
                     <TeamAvatar key={m.id} member={m} className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm" />
                   ))}
