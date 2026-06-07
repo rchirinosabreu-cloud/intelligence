@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
+import { getFloatingCardPosition } from '@/lib/floatingCardPosition';
 
 const Zone = ({ id, name, icon: Icon, children, className, isActive }) => (
   <div className={cn(
@@ -47,14 +48,18 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
   const isEnfocado = member.status === 'ENFOCADO';
   const isAusente = member.status === 'AUSENTE';
   const timeoutRef = React.useRef(null);
-  const [coords, setCoords] = useState({ x: 0, y: 0 });
+  const [cardPosition, setCardPosition] = useState({ left: 16, top: 16, placement: 'bottom' });
   const avatarRef = React.useRef(null);
 
   const handleMouseEnter = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     if (avatarRef.current) {
         const rect = avatarRef.current.getBoundingClientRect();
-        setCoords({ x: rect.left + rect.width / 2, y: rect.top });
+        setCardPosition(getFloatingCardPosition(
+          rect,
+          { width: 340, height: 300 },
+          { width: window.innerWidth, height: window.innerHeight }
+        ));
     }
     setHoveredMember(member.id);
   };
@@ -126,8 +131,14 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
             ease: "easeInOut"
           }
         }}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
+        onPointerEnter={handleMouseEnter}
+        onPointerLeave={handleMouseLeave}
+        onFocus={handleMouseEnter}
+        onClick={handleMouseEnter}
+        onBlur={handleMouseLeave}
+        aria-expanded={hoveredMember === member.id}
+        aria-haspopup="dialog"
+        aria-label={`Ver actividad de ${member.name}`}
         className={cn(
           "relative outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none transition-all",
           hoveredMember === member.id ? "z-[100] scale-110" : "z-30"
@@ -160,12 +171,13 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
           <div
             className="fixed z-[9999] pointer-events-auto"
             style={{
-              left: coords.x,
-              top: coords.y - 12,
-              transform: 'translate(-50%, -100%)'
+              left: cardPosition.left,
+              top: cardPosition.top
             }}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
+            onPointerEnter={handleMouseEnter}
+            onPointerLeave={handleMouseLeave}
+            role="dialog"
+            aria-label={`Actividad de ${member.name}`}
           >
             <motion.div
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
