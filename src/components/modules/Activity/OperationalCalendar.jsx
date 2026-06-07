@@ -45,6 +45,7 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Badge } from '@/components/ui/Badge';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { getFloatingCardPosition } from '@/lib/floatingCardPosition';
 
 const OperationalCalendar = () => {
   const { currentUser } = useAuth();
@@ -53,7 +54,7 @@ const OperationalCalendar = () => {
   const [view, setView] = useState('Week');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
-  const [hoveredEventData, setHoveredEventData] = useState(null); // { event, rect }
+  const [hoveredEventData, setHoveredEventData] = useState(null); // { event, position }
   const closeTimerRef = React.useRef(null);
   const [formData, setFormData] = useState({
     title: '',
@@ -275,17 +276,49 @@ const OperationalCalendar = () => {
       return (
         <button
           key={`${event.id}-${idx}`}
-          onMouseEnter={(e) => {
+          onPointerEnter={(e) => {
             e.stopPropagation();
             if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
             const rect = e.currentTarget.getBoundingClientRect();
-            setHoveredEventData({ event, rect });
+            const position = getFloatingCardPosition(
+              rect,
+              { width: 288, height: 320 },
+              { width: window.innerWidth, height: window.innerHeight }
+            );
+            setHoveredEventData({ event, position });
           }}
-          onMouseLeave={() => {
+          onPointerLeave={() => {
             closeTimerRef.current = setTimeout(() => {
                 setHoveredEventData(null);
             }, 300);
           }}
+          onFocus={(e) => {
+            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+            const rect = e.currentTarget.getBoundingClientRect();
+            const position = getFloatingCardPosition(
+              rect,
+              { width: 288, height: 320 },
+              { width: window.innerWidth, height: window.innerHeight }
+            );
+            setHoveredEventData({ event, position });
+          }}
+          onBlur={() => {
+            closeTimerRef.current = setTimeout(() => setHoveredEventData(null), 300);
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+            const rect = e.currentTarget.getBoundingClientRect();
+            const position = getFloatingCardPosition(
+              rect,
+              { width: 288, height: 320 },
+              { width: window.innerWidth, height: window.innerHeight }
+            );
+            setHoveredEventData({ event, position });
+          }}
+          aria-expanded={hoveredEventData?.event.id === event.id}
+          aria-haspopup="dialog"
+          aria-label={`Ver detalles de ${event.title}`}
           className={cn(
             "absolute w-10 h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-20 group hover:scale-110 active:scale-95 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none",
             getEventColor(event.type)
@@ -474,19 +507,20 @@ const OperationalCalendar = () => {
           <div
             className="fixed z-[9999] pointer-events-auto"
             style={{
-              left: hoveredEventData.rect.left + (hoveredEventData.rect.width / 2),
-              top: hoveredEventData.rect.top - 16,
-              transform: 'translate(-50%, -100%)'
+              left: hoveredEventData.position.left,
+              top: hoveredEventData.position.top
             }}
-            onMouseEnter={() => {
+            onPointerEnter={() => {
                 if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
             }}
-            onMouseLeave={() => {
+            onPointerLeave={() => {
                 closeTimerRef.current = setTimeout(() => {
                     setHoveredEventData(null);
                 }, 300);
             }}
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label={`Detalles de ${hoveredEventData.event.title}`}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 10 }}
