@@ -20,6 +20,7 @@ export async function getTeamActivityStatus() {
         select: {
           id: true,
           title: true,
+          comments: true,
           isPriority: true,
           isSpecial: true
         }
@@ -158,8 +159,13 @@ export function calculateMemberStatus(member, todayEvents, now) {
     desktopY: member.desktopY,
     statusMessage: member.statusMessage,
     status,
-    currentTask: currentTask ? { title: currentTask.title } : null,
+    currentTask: currentTask ? {
+      id: currentTask.id,
+      title: currentTask.title,
+      description: currentTask.comments
+    } : null,
     currentEvent: prioritizedEvent ? {
+      id: prioritizedEvent.id,
       title: prioritizedEvent.title,
       type: prioritizedEvent.type,
       meetingLink: prioritizedEvent.meetingLink,
