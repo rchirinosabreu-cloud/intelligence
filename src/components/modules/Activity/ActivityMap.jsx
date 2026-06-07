@@ -157,11 +157,7 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
       {/* Tooltip via Portal */}
       <AnimatePresence>
         {hoveredMember === member.id && createPortal(
-          <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
+          <div
             className="fixed z-[9999] pointer-events-auto"
             style={{
               left: coords.x,
@@ -171,7 +167,11 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           >
-            <div
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
               className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white p-5 rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.4)] backdrop-blur-3xl border border-white/20 dark:border-zinc-800/20 flex flex-col gap-4 min-w-[340px]"
             >
               {/* Header Info */}
@@ -225,9 +225,9 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
                   </div>
                 )}
 
-                {member.currentEvent?.description && (
+                {(member.currentEvent?.description || member.currentTask?.description) && (
                   <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-relaxed line-clamp-3 pl-1">
-                    {member.currentEvent.description}
+                    {member.currentEvent?.description || member.currentTask?.description}
                   </p>
                 )}
               </div>
@@ -246,8 +246,8 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
                   </a>
                 )}
               </div>
-            </div>
-          </motion.div>,
+            </motion.div>
+          </div>,
           document.body
         )}
       </AnimatePresence>
