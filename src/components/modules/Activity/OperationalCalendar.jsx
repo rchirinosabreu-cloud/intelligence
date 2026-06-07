@@ -43,7 +43,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Badge } from '@/components/ui/Badge';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { getFloatingCardPosition } from '@/lib/floatingCardPosition';
 
@@ -501,14 +501,22 @@ const OperationalCalendar = () => {
         </div>
       </div>
 
-      {/* Event Detail Popover (Portal) */}
-      <AnimatePresence>
-        {hoveredEventData && createPortal(
+      {/* Direct portal: always visible while hover/focus state is open. */}
+      {hoveredEventData && createPortal(
           <div
-            className="fixed z-[9999] pointer-events-auto"
+            data-activity-floating-card="event"
+            className="fixed pointer-events-auto w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5"
             style={{
               left: hoveredEventData.position.left,
               top: hoveredEventData.position.top
+            }}
+            onPointerEnter={() => {
+                if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+            }}
+            onPointerLeave={() => {
+                closeTimerRef.current = setTimeout(() => {
+                    setHoveredEventData(null);
+                }, 300);
             }}
             onPointerEnter={() => {
                 if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
@@ -522,12 +530,6 @@ const OperationalCalendar = () => {
             role="dialog"
             aria-label={`Detalles de ${hoveredEventData.event.title}`}
           >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 10 }}
-              className="w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5"
-            >
             <div className="space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1.5 flex-1 min-w-0">
@@ -588,11 +590,9 @@ const OperationalCalendar = () => {
             </div>
             {/* Popover Arrow */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 border-[10px] border-transparent border-t-white dark:border-t-zinc-900" />
-          </motion.div>
           </div>,
           document.body
         )}
-      </AnimatePresence>
 
       {/* Modal for Creating Event */}
       {isModalOpen && (
