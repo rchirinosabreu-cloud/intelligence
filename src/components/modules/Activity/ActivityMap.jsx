@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Coffee, Video, Zap, Lock, Monitor, X, User, UserX } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -42,9 +43,15 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
   const isEnfocado = member.status === 'ENFOCADO';
   const isAusente = member.status === 'AUSENTE';
   const timeoutRef = React.useRef(null);
+  const [coords, setCoords] = useState({ x: 0, y: 0 });
+  const avatarRef = React.useRef(null);
 
   const handleMouseEnter = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (avatarRef.current) {
+        const rect = avatarRef.current.getBoundingClientRect();
+        setCoords({ x: rect.left + rect.width / 2, y: rect.top });
+    }
     setHoveredMember(member.id);
   };
 
@@ -93,98 +100,110 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
   };
 
   return (
-    <motion.div
-      layoutId={`member-${member.id}`}
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{
-        opacity: isAusente ? 0.6 : 1,
-        scale: 1,
-        y: [0, -4, 0] // Floating Latido effect
-      }}
-      exit={{ opacity: 0, scale: 0.8 }}
-      transition={{
-        type: "spring",
-        stiffness: 150,
-        damping: 20,
-        y: {
-          duration: 3 + Math.random() * 2,
-          repeat: Infinity,
-          ease: "easeInOut"
-        }
-      }}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      className={cn(
-        "relative cursor-pointer transition-all",
-        hoveredMember === member.id ? "z-[100] scale-110" : "z-30"
-      )}
-    >
-      <div className="relative">
-        {/* Aura Enfoque */}
-        {isEnfocado && (
-           <motion.div
-            animate={{ scale: [1, 1.3, 1], opacity: [0.1, 0.3, 0.1] }}
-            transition={{ duration: 4, repeat: Infinity }}
-            className="absolute -inset-6 bg-purple-500/20 rounded-full blur-2xl"
-           />
+    <>
+      <motion.button
+        ref={avatarRef}
+        type="button"
+        layoutId={`member-${member.id}`}
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{
+          opacity: isAusente ? 0.6 : 1,
+          scale: 1,
+          y: [0, -4, 0] // Floating Latido effect
+        }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{
+          type: "spring",
+          stiffness: 150,
+          damping: 20,
+          y: {
+            duration: 3 + Math.random() * 2,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }
+        }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        className={cn(
+          "relative outline-none transition-all",
+          hoveredMember === member.id ? "z-[100] scale-110" : "z-30"
         )}
-
-        <TeamAvatar
-          member={member}
-          className={cn(
-            "w-14 h-14 border-[3px] transition-all duration-700 ease-in-out bg-white dark:bg-zinc-900",
-            getStatusColor(member.status)
+      >
+        <div className="relative pointer-events-none">
+          {/* Aura Enfoque */}
+          {isEnfocado && (
+             <motion.div
+              animate={{ scale: [1, 1.3, 1], opacity: [0.1, 0.3, 0.1] }}
+              transition={{ duration: 4, repeat: Infinity }}
+              className="absolute -inset-6 bg-purple-500/20 rounded-full blur-2xl"
+             />
           )}
-        />
 
-        {/* Tooltip */}
-        <AnimatePresence>
-          {hoveredMember === member.id && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              transition={{ duration: 0.2 }}
-              className="absolute bottom-full left-1/2 -translate-x-1/2 pb-6 z-[9999]"
+          <TeamAvatar
+            member={member}
+            showTitle={false}
+            className={cn(
+              "w-14 h-14 border-[3px] transition-all duration-700 ease-in-out bg-white dark:bg-zinc-900",
+              getStatusColor(member.status)
+            )}
+          />
+        </div>
+      </motion.button>
+
+      {/* Tooltip via Portal */}
+      <AnimatePresence>
+        {hoveredMember === member.id && createPortal(
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed z-[9999] pointer-events-auto"
+            style={{
+              left: coords.x,
+              top: coords.y - 12,
+              transform: 'translate(-50%, -100%)'
+            }}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+          >
+            <div
+              className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white px-5 py-4 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-2xl border border-white/20 dark:border-zinc-800/20 flex items-center gap-4 min-w-[320px]"
             >
-              <div
-                className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white px-5 py-4 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-2xl border border-white/20 dark:border-zinc-800/20 flex items-center gap-4 min-w-[320px] pointer-events-auto"
-                onMouseEnter={handleMouseEnter}
-              >
-                <div className="flex flex-col gap-0.5 flex-shrink-0">
-                   <span className="font-bold text-[12px]">{member.name}</span>
-                   <div className="flex items-center gap-1.5">
-                      <div className={cn("w-1.5 h-1.5 rounded-full", getStatusColor(member.status))} />
-                      <span className={cn("text-[8px] font-black uppercase tracking-wider", getStatusTextColorClass(member.status))}>
-                        {getStatusText(member.status)}
-                      </span>
-                   </div>
-                </div>
-                <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800" />
-                <div className="flex-1 flex items-center justify-between gap-4">
-                  <p className="text-zinc-500 dark:text-zinc-400 text-[10px] font-medium leading-snug line-clamp-2">
-                    {member.currentTask?.title || member.currentEvent?.title || member.role}
-                  </p>
-
-                  {/* UNIRSE Button for Meetings */}
-                  {member.status === 'REUNION' && member.currentEvent?.meetingLink && (
-                    <a
-                      href={member.currentEvent.meetingLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-shrink-0 px-3 py-1.5 bg-indigo-600 text-white text-[9px] font-bold rounded-xl hover:bg-indigo-700 transition-colors flex items-center gap-1.5"
-                    >
-                      <Video className="w-3 h-3" />
-                      UNIRSE
-                    </a>
-                  )}
-                </div>
+              <div className="flex flex-col gap-0.5 flex-shrink-0">
+                 <span className="font-bold text-[12px]">{member.name}</span>
+                 <div className="flex items-center gap-1.5">
+                    <div className={cn("w-1.5 h-1.5 rounded-full", getStatusColor(member.status))} />
+                    <span className={cn("text-[8px] font-black uppercase tracking-wider", getStatusTextColorClass(member.status))}>
+                      {getStatusText(member.status)}
+                    </span>
+                 </div>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </motion.div>
+              <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800" />
+              <div className="flex-1 flex items-center justify-between gap-4">
+                <p className="text-zinc-500 dark:text-zinc-400 text-[10px] font-medium leading-snug line-clamp-2">
+                  {member.currentTask?.title || member.currentEvent?.title || member.role}
+                </p>
+
+                {/* UNIRSE Button for Meetings */}
+                {member.status === 'REUNION' && member.currentEvent?.meetingLink && (
+                  <a
+                    href={member.currentEvent.meetingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-shrink-0 px-3 py-1.5 bg-indigo-600 text-white text-[9px] font-bold rounded-xl hover:bg-indigo-700 transition-colors flex items-center gap-1.5"
+                  >
+                    <Video className="w-3 h-3" />
+                    UNIRSE
+                  </a>
+                )}
+              </div>
+            </div>
+          </motion.div>,
+          document.body
+        )}
+      </AnimatePresence>
+    </>
   );
 };
 

@@ -51,7 +51,6 @@ const OperationalCalendar = () => {
   const queryClient = useQueryClient();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('Week');
-  const [selectedMemberIds, setSelectedMemberIds] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
   const [hoveredEventData, setHoveredEventData] = useState(null); // { event, rect }
@@ -226,16 +225,7 @@ const OperationalCalendar = () => {
     return days.filter(d => d.getDay() !== 0 && d.getDay() !== 6);
   }, [timeframe, view]);
 
-  const filteredEvents = useMemo(() => {
-    return events.filter(e => {
-        // Filter by member if selection exists
-        if (selectedMemberIds.length > 0) {
-            const hasMember = (e.memberIds || []).some(id => selectedMemberIds.includes(id));
-            if (!hasMember) return false;
-        }
-        return true;
-    });
-  }, [events, selectedMemberIds]);
+  const filteredEvents = events;
 
   const getEventIcon = (type) => {
     switch (type) {
@@ -282,7 +272,7 @@ const OperationalCalendar = () => {
       const involvedMembers = team.filter(m => (event.memberIds || []).includes(m.id));
 
       return (
-        <div
+        <button
           key={`${event.id}-${idx}`}
           onMouseEnter={(e) => {
             e.stopPropagation();
@@ -291,7 +281,7 @@ const OperationalCalendar = () => {
           }}
           onMouseLeave={() => setHoveredEventData(null)}
           className={cn(
-            "absolute w-10 h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-20 group cursor-help hover:scale-110 active:scale-95",
+            "absolute w-10 h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-20 group hover:scale-110 active:scale-95 outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2",
             getEventColor(event.type)
           )}
           style={{
@@ -312,77 +302,35 @@ const OperationalCalendar = () => {
                 </div>
              )}
           </div>
-        </div>
+        </button>
       );
     });
-  };
-
-  const toggleMemberFilter = (id) => {
-    setSelectedMemberIds(prev =>
-      prev.includes(id) ? prev.filter(mid => mid !== id) : [...prev, id]
-    );
   };
 
   return (
     <div className="space-y-6">
       {/* --- PREMIUM HEADER CONTROLS --- */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-zinc-200 dark:border-white/5 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center gap-6">
-           {/* Team Filter */}
-           <div className="flex flex-col gap-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Filtrar Equipo</span>
-              <div className="flex items-center">
-                <div className="flex -space-x-2 mr-4">
-                  {team.slice(0, 6).map((member) => (
-                    <button
-                      key={member.id}
-                      onClick={() => toggleMemberFilter(member.id)}
-                      className={cn(
-                        "relative transition-all duration-300 hover:z-10 hover:-translate-y-1",
-                        selectedMemberIds.includes(member.id) ? "ring-2 ring-indigo-600 scale-110 z-10" : "opacity-60 grayscale-[0.5]"
-                      )}
-                    >
-                      <TeamAvatar member={member} className="w-8 h-8 border-2 border-white dark:border-zinc-900" />
-                    </button>
-                  ))}
-                  {team.length > 6 && (
-                    <div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-[10px] font-bold text-zinc-500">
-                      +{team.length - 6}
-                    </div>
-                  )}
-                </div>
-                {selectedMemberIds.length > 0 && (
-                  <button
-                    onClick={() => setSelectedMemberIds([])}
-                    className="text-[10px] font-bold text-indigo-600 hover:underline"
-                  >
-                    Limpiar
-                  </button>
-                )}
-              </div>
-           </div>
-
-           <div className="hidden md:block w-px h-10 bg-zinc-100 dark:bg-white/5" />
-
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white dark:bg-zinc-900 p-6 rounded-[2.5rem] border border-zinc-200 dark:border-white/5 shadow-sm">
+        <div className="flex items-center gap-8">
            {/* Date & View Controls */}
-           <div className="flex flex-col gap-2">
+           <div className="flex flex-col gap-1">
               <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Periodo de Visualización</span>
-              <div className="flex items-center gap-3">
-                <h2 className="text-lg font-bold capitalize min-w-[140px]">
+              <div className="flex items-center gap-4">
+                <h2 className="text-xl font-bold capitalize text-slate-800 dark:text-white">
                   {view === 'Day' ? format(currentDate, 'd MMMM, yyyy', { locale: es }) :
                    view === 'Week' ? `Semana ${format(currentDate, 'w, yyyy')}` :
                    format(currentDate, 'MMMM yyyy', { locale: es })}
                 </h2>
-                <div className="flex items-center bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl overflow-hidden">
+                <div className="flex items-center bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl overflow-hidden">
                   <button
                     onClick={() => {
                         if (view === 'Day') setCurrentDate(prev => new Date(prev.setDate(prev.getDate() - 1)));
                         else if (view === 'Week') setCurrentDate(prev => new Date(prev.setDate(prev.getDate() - 7)));
                         else setCurrentDate(subMonths(currentDate, 1));
                     }}
-                    className="p-2 hover:bg-zinc-200 dark:hover:bg-white/5 transition-colors"
+                    className="p-2.5 hover:bg-zinc-200 dark:hover:bg-white/5 transition-colors"
                   >
-                    <ChevronLeft className="w-4 h-4" />
+                    <ChevronLeft className="w-4 h-4 text-slate-600 dark:text-zinc-400" />
                   </button>
                   <div className="w-px h-4 bg-zinc-200 dark:bg-white/10" />
                   <button
@@ -391,16 +339,16 @@ const OperationalCalendar = () => {
                         else if (view === 'Week') setCurrentDate(prev => new Date(prev.setDate(prev.getDate() + 7)));
                         else setCurrentDate(addMonths(currentDate, 1));
                     }}
-                    className="p-2 hover:bg-zinc-200 dark:hover:bg-white/5 transition-colors"
+                    className="p-2.5 hover:bg-zinc-200 dark:hover:bg-white/5 transition-colors"
                   >
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-4 h-4 text-slate-600 dark:text-zinc-400" />
                   </button>
                 </div>
               </div>
            </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
            {/* View Selector */}
            <div className="flex p-1 bg-zinc-100 dark:bg-white/5 rounded-xl border border-zinc-200 dark:border-white/10">
               {['Day', 'Week', 'Month'].map((v) => (
