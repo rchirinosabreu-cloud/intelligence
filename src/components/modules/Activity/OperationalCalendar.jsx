@@ -54,6 +54,7 @@ const OperationalCalendar = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
   const [hoveredEventData, setHoveredEventData] = useState(null); // { event, rect }
+  const closeTimerRef = React.useRef(null);
   const [formData, setFormData] = useState({
     title: '',
     type: 'PRODUCTION',
@@ -276,12 +277,17 @@ const OperationalCalendar = () => {
           key={`${event.id}-${idx}`}
           onMouseEnter={(e) => {
             e.stopPropagation();
+            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
             const rect = e.currentTarget.getBoundingClientRect();
             setHoveredEventData({ event, rect });
           }}
-          onMouseLeave={() => setHoveredEventData(null)}
+          onMouseLeave={() => {
+            closeTimerRef.current = setTimeout(() => {
+                setHoveredEventData(null);
+            }, 300);
+          }}
           className={cn(
-            "absolute w-10 h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-20 group hover:scale-110 active:scale-95 outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2",
+            "absolute w-10 h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-20 group hover:scale-110 active:scale-95 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none",
             getEventColor(event.type)
           )}
           style={{
@@ -475,8 +481,14 @@ const OperationalCalendar = () => {
               top: hoveredEventData.rect.top - 16,
               transform: 'translate(-50%, -100%)'
             }}
-            onMouseEnter={() => setHoveredEventData(hoveredEventData)}
-            onMouseLeave={() => setHoveredEventData(null)}
+            onMouseEnter={() => {
+                if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+            }}
+            onMouseLeave={() => {
+                closeTimerRef.current = setTimeout(() => {
+                    setHoveredEventData(null);
+                }, 300);
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="space-y-4">

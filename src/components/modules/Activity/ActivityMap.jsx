@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Coffee, Video, Zap, Lock, Monitor, X, User, UserX } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Coffee, Video, Zap, Lock, Monitor, X, User, UserX, Trash2, Clock, FileText } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '@/context/AuthContext';
 
 const Zone = ({ id, name, icon: Icon, children, className, isActive }) => (
   <div className={cn(
@@ -39,7 +41,9 @@ const Zone = ({ id, name, icon: Icon, children, className, isActive }) => (
   </div>
 );
 
-const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
+const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }) => {
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PM';
   const isEnfocado = member.status === 'ENFOCADO';
   const isAusente = member.status === 'AUSENTE';
   const timeoutRef = React.useRef(null);
@@ -125,7 +129,7 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className={cn(
-          "relative outline-none transition-all",
+          "relative outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none transition-all",
           hoveredMember === member.id ? "z-[100] scale-110" : "z-30"
         )}
       >
@@ -168,33 +172,77 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
             onMouseLeave={handleMouseLeave}
           >
             <div
-              className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white px-5 py-4 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-2xl border border-white/20 dark:border-zinc-800/20 flex items-center gap-4 min-w-[320px]"
+              className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white p-5 rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.4)] backdrop-blur-3xl border border-white/20 dark:border-zinc-800/20 flex flex-col gap-4 min-w-[340px]"
             >
-              <div className="flex flex-col gap-0.5 flex-shrink-0">
-                 <span className="font-bold text-[12px]">{member.name}</span>
-                 <div className="flex items-center gap-1.5">
-                    <div className={cn("w-1.5 h-1.5 rounded-full", getStatusColor(member.status))} />
-                    <span className={cn("text-[8px] font-black uppercase tracking-wider", getStatusTextColorClass(member.status))}>
-                      {getStatusText(member.status)}
-                    </span>
-                 </div>
+              {/* Header Info */}
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-1">
+                   <span className="font-bold text-sm tracking-tight">{member.name}</span>
+                   <div className="flex items-center gap-2">
+                      <div className={cn("w-2 h-2 rounded-full", getStatusColor(member.status))} />
+                      <span className={cn("text-[9px] font-black uppercase tracking-[0.1em]", getStatusTextColorClass(member.status))}>
+                        {getStatusText(member.status)}
+                      </span>
+                   </div>
+                </div>
+                {isAdmin && member.currentEvent?.id && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteEvent(member.currentEvent.id);
+                    }}
+                    className="p-2 bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 rounded-xl transition-all shadow-sm"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
-              <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800" />
-              <div className="flex-1 flex items-center justify-between gap-4">
-                <p className="text-zinc-500 dark:text-zinc-400 text-[10px] font-medium leading-snug line-clamp-2">
-                  {member.currentTask?.title || member.currentEvent?.title || member.role}
-                </p>
 
-                {/* UNIRSE Button for Meetings */}
+              <div className="h-px w-full bg-zinc-100 dark:bg-zinc-800" />
+
+              {/* Event/Task Content */}
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                   <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                      <FileText className="w-3.5 h-3.5 text-indigo-500" />
+                   </div>
+                   <div className="flex-1">
+                      <p className="text-zinc-800 dark:text-zinc-200 text-[11px] font-bold leading-tight">
+                        {member.currentTask?.title || member.currentEvent?.title || member.role}
+                      </p>
+                      {member.currentEvent?.type && (
+                         <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mt-1 block">
+                            {member.currentEvent.type}
+                         </span>
+                      )}
+                   </div>
+                </div>
+
+                {member.currentEvent && (
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800/40 p-2 rounded-xl">
+                    <Clock className="w-3 h-3" />
+                    <span>Actividad Programada</span>
+                  </div>
+                )}
+
+                {member.currentEvent?.description && (
+                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-relaxed line-clamp-3 pl-1">
+                    {member.currentEvent.description}
+                  </p>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2">
                 {member.status === 'REUNION' && member.currentEvent?.meetingLink && (
                   <a
                     href={member.currentEvent.meetingLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-shrink-0 px-3 py-1.5 bg-indigo-600 text-white text-[9px] font-bold rounded-xl hover:bg-indigo-700 transition-colors flex items-center gap-1.5"
+                    className="flex-1 px-4 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"
                   >
-                    <Video className="w-3 h-3" />
-                    UNIRSE
+                    <Video className="w-3.5 h-3.5" />
+                    Entrar a Reunión
                   </a>
                 )}
               </div>
@@ -210,6 +258,7 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember }) => {
 const ActivityMap = () => {
   const [hoveredMember, setHoveredMember] = useState(null);
 
+  const queryClient = useQueryClient();
   const { data: teamStatus = [], isLoading, refetch } = useQuery({
     queryKey: ['team-activity-status'],
     queryFn: async () => {
@@ -219,6 +268,25 @@ const ActivityMap = () => {
     },
     refetchInterval: localStorage.getItem("authToken") ? 5000 : false, // Zero latency feel
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id) => {
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/events/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete event');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['team-activity-status']);
+      queryClient.invalidateQueries(['operational-events']);
+      toast.success('Evento eliminado');
+    }
+  });
+
+  const handleDeleteEvent = (id) => {
+    if (window.confirm('¿Deseas eliminar este evento?')) {
+        deleteMutation.mutate(id);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -258,19 +326,19 @@ const ActivityMap = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start">
           <Zone id="permiso" name="Zona de Permiso" icon={User} className="h-[280px] bg-red-50/10 dark:bg-red-900/5">
             {membersByZone.permiso.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
+              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
             ))}
           </Zone>
 
           <Zone id="bunker" name="Sala de Juntas" icon={Lock} className="h-[280px] bg-zinc-50/50 dark:bg-zinc-900/50">
             {membersByZone.bunker.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
+              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
             ))}
           </Zone>
 
           <Zone id="foco" name="Zona de Foco" icon={Zap} className="h-[280px] bg-purple-50/10 dark:bg-purple-900/5">
             {membersByZone.foco.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
+              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
             ))}
           </Zone>
         </div>
@@ -279,7 +347,7 @@ const ActivityMap = () => {
         <div className="grid grid-cols-1 lg:grid-cols-[28%_40%_28%] gap-10 items-stretch justify-center">
           <Zone id="estudio" name="Producción" icon={Video} className="h-[500px]" isActive={isProductionActive}>
             {membersByZone.estudio.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
+              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
             ))}
           </Zone>
 
@@ -292,14 +360,14 @@ const ActivityMap = () => {
             </div>
             <div className="relative z-10 grid grid-cols-4 gap-8">
               {membersByZone.nave.map(m => (
-                <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
+                <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
               ))}
             </div>
           </Zone>
 
           <Zone id="cafe" name="Cafecito Time" icon={Coffee} className="h-[500px] bg-orange-50/10 dark:bg-orange-900/5">
             {membersByZone.cafe.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} />
+              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
             ))}
           </Zone>
         </div>
