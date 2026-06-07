@@ -12,8 +12,9 @@ const brainstudioColors = ["#ef4444", "#eab308", "#22c55e", "#06b6d4", "#d946ef"
  * @param {Object} props.member - The member object containing `name` and optionally `avatarUrl`.
  * @param {string} props.className - Tailwind classes to override the sizing/styling (e.g. "w-10 h-10").
  * @param {number} props.size - The size in pixels for the boring-avatar fallback. Default: 32.
+ * @param {boolean} props.showTitle - Whether to show the native HTML title tooltip. Default: true.
  */
-export default function TeamAvatar({ member, className, size = 32 }) {
+export default function TeamAvatar({ member, className, size = 32, showTitle = true }) {
   if (!member) {
     return (
       <div
@@ -22,7 +23,7 @@ export default function TeamAvatar({ member, className, size = 32 }) {
           "w-8 h-8", // Default sizing
           className
         )}
-        title="Desconocido"
+        title={showTitle ? "Desconocido" : undefined}
       >
         <Avatar
           size={size}
@@ -44,7 +45,7 @@ export default function TeamAvatar({ member, className, size = 32 }) {
       <img
         src={avatarUrl}
         alt={name}
-        title={name}
+        title={showTitle ? name : undefined}
         className={cn(
           "rounded-full object-cover shrink-0 shadow-sm border border-slate-200 dark:border-slate-800",
           "w-8 h-8", // Default sizing
@@ -71,7 +72,7 @@ export default function TeamAvatar({ member, className, size = 32 }) {
           "w-8 h-8", // Default sizing
           className
         )}
-        title={name}
+        title={showTitle ? name : undefined}
       >
         <span className="text-[10px] font-black text-white tracking-tighter">
           {initials}
@@ -88,7 +89,7 @@ export default function TeamAvatar({ member, className, size = 32 }) {
         "w-8 h-8", // Default sizing
         className
       )}
-      title={name}
+      title={showTitle ? name : undefined}
     >
       <Avatar
         size={size}

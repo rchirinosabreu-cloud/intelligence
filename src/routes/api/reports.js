@@ -192,9 +192,8 @@ router.post('/generate', upload.any(), async (req, res) => {
           ]
         }`;
 
-        const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-
-        const result = await model.generateContent({
+        const result = await genAI.models.generateContent({
+            model: MODEL_NAME,
             contents: [{
                 role: 'user',
                 parts: [
@@ -202,10 +201,12 @@ router.post('/generate', upload.any(), async (req, res) => {
                     ...imageParts
                 ]
             }],
-            generationConfig: {
-                responseMimeType: "application/json",
-                maxOutputTokens: 8192,
-                temperature: 0.1
+            config: {
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    maxOutputTokens: 8192,
+                    temperature: 0.1
+                }
             }
         });
 

@@ -285,6 +285,7 @@ const OperationalCalendar = () => {
         <div
           key={`${event.id}-${idx}`}
           onMouseEnter={(e) => {
+            e.stopPropagation();
             const rect = e.currentTarget.getBoundingClientRect();
             setHoveredEventData({ event, rect });
           }}
@@ -299,9 +300,10 @@ const OperationalCalendar = () => {
             transform: 'translateY(-50%)'
           }}
         >
-          <div className="relative">
+          <div className="relative pointer-events-none">
              <TeamAvatar
                 member={involvedMembers[0]}
+                showTitle={false}
                 className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm"
              />
              {involvedMembers.length > 1 && (
@@ -527,6 +529,7 @@ const OperationalCalendar = () => {
             }}
             onMouseEnter={() => setHoveredEventData(hoveredEventData)}
             onMouseLeave={() => setHoveredEventData(null)}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="space-y-4">
               <div className="flex items-start justify-between gap-3">
