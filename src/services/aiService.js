@@ -75,38 +75,37 @@ export const classifyTaskWithAI = async (title, comments = "") => {
     }
 
     try {
-        const prompt = `Tarea a clasificar:\n\nTítulo: ${title}\nDescripción: ${comments}`;
-        const model = genAI.getGenerativeModel({
-            model: MODEL_NAME,
-            systemInstruction: MASTER_PROMPT
-        });
+        const prompt = `${MASTER_PROMPT}\n\nTarea a clasificar:\n\nTítulo: ${title}\nDescripción: ${comments}`;
 
-        const result = await model.generateContent({
+        const result = await genAI.models.generateContent({
+            model: MODEL_NAME,
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: "object",
-                    properties: {
-                        categoria: {
-                            type: "string",
-                            enum: [
-                                "Estratégico",
-                                "Creativo & Diseño",
-                                "Marketing & Social Media",
-                                "Producción Audiovisual",
-                                "Creación de Contenido",
-                                "Operaciones & Reuniones",
-                                "Administrativo & Finanzas",
-                                "Educación"
-                            ]
+            config: {
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "object",
+                        properties: {
+                            categoria: {
+                                type: "string",
+                                enum: [
+                                    "Estratégico",
+                                    "Creativo & Diseño",
+                                    "Marketing & Social Media",
+                                    "Producción Audiovisual",
+                                    "Creación de Contenido",
+                                    "Operaciones & Reuniones",
+                                    "Administrativo & Finanzas",
+                                    "Educación"
+                                ]
+                            },
+                            complejidad: {
+                                type: "string",
+                                enum: ["BAJA", "MEDIA", "ALTA"]
+                            }
                         },
-                        complejidad: {
-                            type: "string",
-                            enum: ["BAJA", "MEDIA", "ALTA"]
-                        }
-                    },
-                    required: ["categoria", "complejidad"]
+                        required: ["categoria", "complejidad"]
+                    }
                 }
             }
         });
@@ -135,42 +134,41 @@ export const classifyTasksBatch = async (tasks) => {
 
     try {
         const tasksList = tasks.map(t => `ID: ${t.id} | Título: ${t.title} | Descripción: ${t.comments || "N/A"}`).join('\n');
-        const prompt = `Analiza y clasifica este LOTE DE TAREAS. Debes devolver un ARRAY de objetos JSON.\n\nTAREAS A PROCESAR:\n${tasksList}`;
+        const systemPrompt = MASTER_PROMPT + "\n\nINSTRUCCIÓN ADICIONAL PARA BATCH: Recibirás múltiples tareas. Debes devolver un ARRAY DE OBJETOS con 'id', 'categoria' y 'complejidad' para cada una.";
+        const prompt = `${systemPrompt}\n\nAnaliza y clasifica este LOTE DE TAREAS. Debes devolver un ARRAY de objetos JSON.\n\nTAREAS A PROCESAR:\n${tasksList}`;
 
-        const model = genAI.getGenerativeModel({
+        const result = await genAI.models.generateContent({
             model: MODEL_NAME,
-            systemInstruction: MASTER_PROMPT + "\n\nINSTRUCCIÓN ADICIONAL PARA BATCH: Recibirás múltiples tareas. Debes devolver un ARRAY DE OBJETOS con 'id', 'categoria' y 'complejidad' para cada una."
-        });
-
-        const result = await model.generateContent({
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: "array",
-                    items: {
-                        type: "object",
-                        properties: {
-                            id: { type: "string" },
-                            categoria: {
-                                type: "string",
-                                enum: [
-                                    "Estratégico",
-                                    "Creativo & Diseño",
-                                    "Marketing & Social Media",
-                                    "Producción Audiovisual",
-                                    "Creación de Contenido",
-                                    "Operaciones & Reuniones",
-                                    "Administrativo & Finanzas",
-                                    "Educación"
-                                ]
+            config: {
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: {
+                                id: { type: "string" },
+                                categoria: {
+                                    type: "string",
+                                    enum: [
+                                        "Estratégico",
+                                        "Creativo & Diseño",
+                                        "Marketing & Social Media",
+                                        "Producción Audiovisual",
+                                        "Creación de Contenido",
+                                        "Operaciones & Reuniones",
+                                        "Administrativo & Finanzas",
+                                        "Educación"
+                                    ]
+                                },
+                                complejidad: {
+                                    type: "string",
+                                    enum: ["BAJA", "MEDIA", "ALTA"]
+                                }
                             },
-                            complejidad: {
-                                type: "string",
-                                enum: ["BAJA", "MEDIA", "ALTA"]
-                            }
-                        },
-                        required: ["id", "categoria", "complejidad"]
+                            required: ["id", "categoria", "complejidad"]
+                        }
                     }
                 }
             }
