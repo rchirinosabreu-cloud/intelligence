@@ -131,8 +131,6 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
             ease: "easeInOut"
           }
         }}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
         onPointerEnter={handleMouseEnter}
         onPointerLeave={handleMouseLeave}
         onFocus={handleMouseEnter}
@@ -174,11 +172,8 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
             className="fixed pointer-events-auto bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white p-5 rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.4)] border border-zinc-200 dark:border-zinc-800 flex flex-col gap-4 min-w-[340px]"
             style={{
               left: cardPosition.left,
-              top: cardPosition.top,
-              zIndex: 2147483647
+              top: cardPosition.top
             }}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
             onPointerEnter={handleMouseEnter}
             onPointerLeave={handleMouseLeave}
             role="dialog"

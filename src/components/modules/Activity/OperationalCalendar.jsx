@@ -276,22 +276,6 @@ const OperationalCalendar = () => {
       return (
         <button
           key={`${event.id}-${idx}`}
-          onMouseEnter={(e) => {
-            e.stopPropagation();
-            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-            const rect = e.currentTarget.getBoundingClientRect();
-            const position = getFloatingCardPosition(
-              rect,
-              { width: 288, height: 320 },
-              { width: window.innerWidth, height: window.innerHeight }
-            );
-            setHoveredEventData({ event, position });
-          }}
-          onMouseLeave={() => {
-            closeTimerRef.current = setTimeout(() => {
-                setHoveredEventData(null);
-            }, 300);
-          }}
           onPointerEnter={(e) => {
             e.stopPropagation();
             if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
@@ -524,13 +508,12 @@ const OperationalCalendar = () => {
             className="fixed pointer-events-auto w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5"
             style={{
               left: hoveredEventData.position.left,
-              top: hoveredEventData.position.top,
-              zIndex: 2147483647
+              top: hoveredEventData.position.top
             }}
-            onMouseEnter={() => {
+            onPointerEnter={() => {
                 if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
             }}
-            onMouseLeave={() => {
+            onPointerLeave={() => {
                 closeTimerRef.current = setTimeout(() => {
                     setHoveredEventData(null);
                 }, 300);
