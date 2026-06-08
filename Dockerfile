@@ -1,5 +1,5 @@
 # Usar una imagen de Node ligera
-FROM node:20-slim
+FROM node:22-slim
 
 # Directorio de trabajo
 WORKDIR /app
@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 COPY package*.json ./
 
 # Instalar dependencias del proyecto
-RUN npm install --ignore-scripts
+RUN npm ci --ignore-scripts
 
 # Copiar el resto de la aplicación
 COPY . .
