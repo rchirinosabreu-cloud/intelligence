@@ -633,7 +633,7 @@ const OperationalCalendar = () => {
             </div>
             {/* Popover Arrow */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 border-[10px] border-transparent border-t-white dark:border-t-zinc-900" />
-          </div>,
+          </motion.div>,
           document.body
         )}
 

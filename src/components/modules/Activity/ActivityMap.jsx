@@ -260,7 +260,7 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
                   </a>
                 )}
               </div>
-          </div>,
+          </motion.div>,
           document.body
         )}
     </>
