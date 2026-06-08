@@ -158,10 +158,10 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
       <AnimatePresence>
         {hoveredMember === member.id && createPortal(
           <div
-            className="fixed z-[9999] pointer-events-auto transition-all duration-200 ease-out"
+            className="fixed z-[9999] pointer-events-auto"
             style={{
               left: coords.x,
-              top: coords.y - 6,
+              top: coords.y - 4,
               transform: 'translate(-50%, -100%)'
             }}
             onMouseEnter={handleMouseEnter}
@@ -171,8 +171,8 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white p-5 rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.4)] backdrop-blur-3xl border border-white/20 dark:border-zinc-800/20 flex flex-col gap-4 min-w-[320px] origin-bottom"
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white p-5 rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.4)] backdrop-blur-3xl border border-white/20 dark:border-zinc-800/20 flex flex-col gap-4 min-w-[320px] origin-bottom transition-opacity duration-200"
             >
               {/* Header Info */}
               <div className="flex items-center justify-between">
@@ -186,6 +186,17 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
                       </span>
                    </div>
                 </div>
+                {isAdmin && member.currentEvent?.id && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteEvent(member.currentEvent.id);
+                    }}
+                    className="p-2 bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 rounded-xl transition-all shadow-sm"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
 
               {/* Task Title Injection */}
@@ -202,19 +213,6 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
                   </p>
                 </div>
               )}
-                {isAdmin && member.currentEvent?.id && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteEvent(member.currentEvent.id);
-                    }}
-                    className="p-2 bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 rounded-xl transition-all shadow-sm"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-
 
               {/* Action Buttons */}
               <div className="flex gap-2">

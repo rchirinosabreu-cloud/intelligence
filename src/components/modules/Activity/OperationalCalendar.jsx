@@ -287,7 +287,7 @@ const OperationalCalendar = () => {
             }, 300);
           }}
           className={cn(
-            "absolute w-10 h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-20 group hover:scale-110 active:scale-95 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none",
+            "absolute min-w-[40px] h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-20 group hover:scale-110 active:scale-95 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none px-1.5",
             getEventColor(event.type)
           )}
           style={{
@@ -296,15 +296,17 @@ const OperationalCalendar = () => {
             transform: 'translateY(-50%)'
           }}
         >
-          <div className="relative pointer-events-none flex items-center p-1">
-             <div className="flex -space-x-1.5">
-                <TeamAvatar
-                    member={involvedMembers[0]}
-                    showTitle={false}
-                    className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm ring-1 ring-zinc-200/50 dark:ring-white/10"
-                />
+          <div className="relative pointer-events-none flex items-center justify-center">
+             <div className="flex items-center -space-x-2">
+                <div className="relative z-0">
+                   <TeamAvatar
+                      member={involvedMembers[0]}
+                      showTitle={false}
+                      className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm ring-1 ring-zinc-200/50 dark:ring-white/10"
+                   />
+                </div>
                 {involvedMembers.length > 1 && (
-                    <div className="relative z-10 bg-indigo-600 text-white text-[8px] font-black w-7 h-7 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900 shadow-sm">
+                    <div className="relative z-10 bg-indigo-600 text-white text-[8px] font-black w-7 h-7 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900 shadow-sm shrink-0">
                         +{involvedMembers.length - 1}
                     </div>
                 )}
@@ -474,10 +476,10 @@ const OperationalCalendar = () => {
       <AnimatePresence>
         {hoveredEventData && createPortal(
           <div
-            className="fixed z-[9999] pointer-events-auto transition-all duration-200 ease-out"
+            className="fixed z-[9999] pointer-events-auto"
             style={{
               left: hoveredEventData.rect.left + (hoveredEventData.rect.width / 2),
-              top: hoveredEventData.rect.top - 6,
+              top: hoveredEventData.rect.top - 4,
               transform: 'translate(-50%, -100%)'
             }}
             onMouseEnter={() => {
@@ -494,8 +496,8 @@ const OperationalCalendar = () => {
               initial={{ opacity: 0, scale: 0.95, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 8 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className="w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom"
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom transition-opacity duration-200"
             >
             <div className="space-y-4">
               <div className="flex items-start justify-between gap-3">
