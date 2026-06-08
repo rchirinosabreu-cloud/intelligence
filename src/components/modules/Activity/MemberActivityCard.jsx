@@ -47,28 +47,22 @@ const MemberActivityCard = ({
   onDeleteEvent,
   cardRef,
   cardPosition,
-  handleMouseEnter,
-  handleMouseLeave
+  handlePointerEnter,
+  handlePointerLeave
 }) => {
   if (!member) return null;
 
   return (
-    <motion.aside
+    <aside
       ref={cardRef}
       data-activity-floating-card="member"
-      initial={{ opacity: 0, scale: 0.95, y: 10 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95, y: 10 }}
-      transition={{ duration: 0.15, ease: "easeOut" }}
       className="fixed pointer-events-auto bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white p-5 rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.4)] border border-zinc-200 dark:border-zinc-800 flex flex-col gap-4 min-w-[340px] origin-bottom z-[2147483647]"
       style={{
         left: cardPosition.left,
         top: cardPosition.top,
       }}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onPointerEnter={handleMouseEnter}
-      onPointerLeave={handleMouseLeave}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
       role="dialog"
       aria-label={`Actividad de ${member.name}`}
     >
@@ -126,7 +120,7 @@ const MemberActivityCard = ({
           </a>
         )}
       </div>
-    </motion.aside>
+    </aside>
   );
 };
 
