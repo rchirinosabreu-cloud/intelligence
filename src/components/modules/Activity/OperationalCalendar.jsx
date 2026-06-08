@@ -329,14 +329,14 @@ const OperationalCalendar = () => {
             transform: 'translateY(-50%)'
           }}
         >
-          <div className="relative pointer-events-none">
+          <div className="relative pointer-events-none flex items-center gap-1.5 p-1.5">
              <TeamAvatar
                 member={involvedMembers[0]}
                 showTitle={false}
                 className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm"
              />
              {involvedMembers.length > 1 && (
-                <div className="absolute -right-2 -bottom-1 bg-indigo-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900">
+                <div className="bg-indigo-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900 shrink-0">
                     +{involvedMembers.length - 1}
                 </div>
              )}
@@ -572,7 +572,7 @@ const OperationalCalendar = () => {
 
               <div className="pt-2">
                 <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-2">Involucrados</span>
-                <div className="flex -space-x-2">
+                <div className="flex flex-wrap gap-1.5">
                   {team.filter(m => (hoveredEventData.event.memberIds || []).includes(m.id)).map(m => (
                     <TeamAvatar key={m.id} member={m} className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm" />
                   ))}
