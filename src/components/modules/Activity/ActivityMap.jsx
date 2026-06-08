@@ -54,7 +54,7 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
   const cardRef = React.useRef(null);
   const isCardOpen = hoveredMember === member.id;
 
-  const handleMouseEnter = () => {
+  const handlePointerEnter = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     if (avatarRef.current) {
         const rect = avatarRef.current.getBoundingClientRect();
@@ -67,7 +67,7 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
     setHoveredMember(member.id);
   };
 
-  const handleMouseLeave = () => {
+  const handlePointerLeave = () => {
     timeoutRef.current = setTimeout(() => {
       setHoveredMember(prev => prev === member.id ? null : prev);
     }, 300);
@@ -121,13 +121,11 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
             ease: "easeInOut"
           }
         }}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        onPointerEnter={handleMouseEnter}
-        onPointerLeave={handleMouseLeave}
-        onFocus={handleMouseEnter}
-        onClick={handleMouseEnter}
-        onBlur={handleMouseLeave}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
+        onFocus={handlePointerEnter}
+        onClick={handlePointerEnter}
+        onBlur={handlePointerLeave}
         aria-expanded={isCardOpen}
         aria-haspopup="dialog"
         aria-label={`Ver actividad de ${member.name}`}
@@ -166,8 +164,8 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
             onDeleteEvent={onDeleteEvent}
             cardRef={cardRef}
             cardPosition={cardPosition}
-            handleMouseEnter={handleMouseEnter}
-            handleMouseLeave={handleMouseLeave}
+            handlePointerEnter={handlePointerEnter}
+            handlePointerLeave={handlePointerLeave}
           />,
           document.body
         )}

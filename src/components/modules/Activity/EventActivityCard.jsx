@@ -12,23 +12,19 @@ const EventActivityCard = ({
   onEdit,
   cardRef,
   cardPosition,
-  handleMouseEnter,
-  handleMouseLeave
+  handlePointerEnter,
+  handlePointerLeave
 }) => {
   if (!event) return null;
   const involvedMembers = team.filter(m => (event.memberIds || []).includes(m.id));
   return (
-    <motion.aside
+    <aside
       ref={cardRef}
       data-activity-floating-card="event"
-      initial={{ opacity: 0, scale: 0.95, y: 10 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95, y: 10 }}
-      transition={{ duration: 0.15, ease: "easeOut" }}
       className="fixed pointer-events-auto w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom z-[2147483647]"
       style={{ left: cardPosition.left, top: cardPosition.top }}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
       role="dialog"
       aria-label={`Detalles de ${event.title}`}
     >
@@ -55,7 +51,7 @@ const EventActivityCard = ({
         {isAdmin && <button onClick={(e) => { e.stopPropagation(); onEdit(event); }} className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase">Editar Evento</button>}
       </div>
       <div className="absolute top-full left-1/2 -translate-x-1/2 border-[10px] border-transparent border-t-white dark:border-t-zinc-900" />
-    </motion.aside>
+    </aside>
   );
 };
 

@@ -34,9 +34,10 @@ import {
   eachHourOfInterval,
   isWithinInterval,
   addDays,
-  subDays,
+  differenceInMinutes,
   setHours,
-  setMinutes
+  setMinutes,
+  subDays
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import DatePicker, { registerLocale } from 'react-datepicker';
@@ -168,6 +169,7 @@ const OperationalCalendar = () => {
       return res.json();
     },
     onSuccess: () => {
+      // Invalidate both events and status to trigger immediate UI update
       queryClient.invalidateQueries(['operational-events']);
       queryClient.invalidateQueries(['team-activity-status']);
       toast.success('Evento eliminado');
@@ -254,7 +256,6 @@ const OperationalCalendar = () => {
       case 'ABSENCE': return <UserX className="w-3 h-3" />;
       case 'PROJECT': return <Zap className="w-3 h-3" />;
       case 'MEETING': return <Lock className="w-3 h-3" />;
-      case 'WORK_DAY': return <Clock className="w-3 h-3" />;
       case 'BREAK': return <Coffee className="w-3 h-3" />;
       default: return null;
     }
@@ -322,13 +323,13 @@ const OperationalCalendar = () => {
       return (
         <button
           key={`${event.id}-${idx}`}
-          onMouseEnter={(e) => {
+          onPointerEnter={(e) => {
             e.stopPropagation();
             if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
             const rect = e.currentTarget.getBoundingClientRect();
             setHoveredEventData({ event, triggerRect: rect });
           }}
-          onMouseLeave={() => {
+          onPointerLeave={() => {
             closeTimerRef.current = setTimeout(() => {
                 setHoveredEventData(null);
             }, 300);
@@ -565,10 +566,10 @@ const OperationalCalendar = () => {
             onEdit={handleEdit}
             cardRef={eventCardRef}
             cardPosition={hoveredEventData.position || { left: 0, top: 0 }}
-            handleMouseEnter={() => {
+            handlePointerEnter={() => {
               if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
             }}
-            handleMouseLeave={() => {
+            handlePointerLeave={() => {
               closeTimerRef.current = setTimeout(() => {
                 setHoveredEventData(null);
               }, 300);
@@ -617,7 +618,6 @@ const OperationalCalendar = () => {
                     <option value="ABSENCE">🏖️ Permiso/Ausencia</option>
                     <option value="PROJECT">🚀 Proyecto Especial</option>
                     <option value="MEETING">🤝 Reunión</option>
-                    <option value="WORK_DAY">💻 Jornada Laboral</option>
                     <option value="BREAK">☕ Descanso / Café</option>
                   </select>
                 </div>
