@@ -43,9 +43,8 @@ import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Badge } from '@/components/ui/Badge';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
-import { getFloatingCardPosition } from '@/lib/floatingCardPosition';
 
 const OperationalCalendar = () => {
   const { currentUser } = useAuth();
@@ -54,7 +53,7 @@ const OperationalCalendar = () => {
   const [view, setView] = useState('Week');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
-  const [hoveredEventData, setHoveredEventData] = useState(null); // { event, position }
+  const [hoveredEventData, setHoveredEventData] = useState(null); // { event, rect }
   const closeTimerRef = React.useRef(null);
   const [formData, setFormData] = useState({
     title: '',
@@ -276,49 +275,17 @@ const OperationalCalendar = () => {
       return (
         <button
           key={`${event.id}-${idx}`}
-          onPointerEnter={(e) => {
+          onMouseEnter={(e) => {
             e.stopPropagation();
             if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
             const rect = e.currentTarget.getBoundingClientRect();
-            const position = getFloatingCardPosition(
-              rect,
-              { width: 288, height: 320 },
-              { width: window.innerWidth, height: window.innerHeight }
-            );
-            setHoveredEventData({ event, position });
+            setHoveredEventData({ event, rect });
           }}
-          onPointerLeave={() => {
+          onMouseLeave={() => {
             closeTimerRef.current = setTimeout(() => {
                 setHoveredEventData(null);
             }, 300);
           }}
-          onFocus={(e) => {
-            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-            const rect = e.currentTarget.getBoundingClientRect();
-            const position = getFloatingCardPosition(
-              rect,
-              { width: 288, height: 320 },
-              { width: window.innerWidth, height: window.innerHeight }
-            );
-            setHoveredEventData({ event, position });
-          }}
-          onBlur={() => {
-            closeTimerRef.current = setTimeout(() => setHoveredEventData(null), 300);
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-            const rect = e.currentTarget.getBoundingClientRect();
-            const position = getFloatingCardPosition(
-              rect,
-              { width: 288, height: 320 },
-              { width: window.innerWidth, height: window.innerHeight }
-            );
-            setHoveredEventData({ event, position });
-          }}
-          aria-expanded={hoveredEventData?.event.id === event.id}
-          aria-haspopup="dialog"
-          aria-label={`Ver detalles de ${event.title}`}
           className={cn(
             "absolute w-10 h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-20 group hover:scale-110 active:scale-95 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none",
             getEventColor(event.type)
@@ -329,17 +296,19 @@ const OperationalCalendar = () => {
             transform: 'translateY(-50%)'
           }}
         >
-          <div className="relative pointer-events-none flex items-center gap-1.5 p-1.5">
-             <TeamAvatar
-                member={involvedMembers[0]}
-                showTitle={false}
-                className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm"
-             />
-             {involvedMembers.length > 1 && (
-                <div className="bg-indigo-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900 shrink-0">
-                    +{involvedMembers.length - 1}
-                </div>
-             )}
+          <div className="relative pointer-events-none flex items-center p-1">
+             <div className="flex -space-x-1.5">
+                <TeamAvatar
+                    member={involvedMembers[0]}
+                    showTitle={false}
+                    className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm ring-1 ring-zinc-200/50 dark:ring-white/10"
+                />
+                {involvedMembers.length > 1 && (
+                    <div className="relative z-10 bg-indigo-600 text-white text-[8px] font-black w-7 h-7 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900 shadow-sm">
+                        +{involvedMembers.length - 1}
+                    </div>
+                )}
+             </div>
           </div>
         </button>
       );
@@ -501,35 +470,33 @@ const OperationalCalendar = () => {
         </div>
       </div>
 
-      {/* Direct portal: always visible while hover/focus state is open. */}
-      {hoveredEventData && createPortal(
+      {/* Event Detail Popover (Portal) */}
+      <AnimatePresence>
+        {hoveredEventData && createPortal(
           <div
-            data-activity-floating-card="event"
-            className="fixed pointer-events-auto w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5"
+            className="fixed z-[9999] pointer-events-auto transition-all duration-200 ease-out"
             style={{
-              left: hoveredEventData.position.left,
-              top: hoveredEventData.position.top
+              left: hoveredEventData.rect.left + (hoveredEventData.rect.width / 2),
+              top: hoveredEventData.rect.top - 6,
+              transform: 'translate(-50%, -100%)'
             }}
-            onPointerEnter={() => {
+            onMouseEnter={() => {
                 if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
             }}
-            onPointerLeave={() => {
-                closeTimerRef.current = setTimeout(() => {
-                    setHoveredEventData(null);
-                }, 300);
-            }}
-            onPointerEnter={() => {
-                if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-            }}
-            onPointerLeave={() => {
+            onMouseLeave={() => {
                 closeTimerRef.current = setTimeout(() => {
                     setHoveredEventData(null);
                 }, 300);
             }}
             onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-label={`Detalles de ${hoveredEventData.event.title}`}
           >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom"
+            >
             <div className="space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1.5 flex-1 min-w-0">
@@ -590,9 +557,11 @@ const OperationalCalendar = () => {
             </div>
             {/* Popover Arrow */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 border-[10px] border-transparent border-t-white dark:border-t-zinc-900" />
+          </motion.div>
           </div>,
           document.body
         )}
+      </AnimatePresence>
 
       {/* Modal for Creating Event */}
       {isModalOpen && (
