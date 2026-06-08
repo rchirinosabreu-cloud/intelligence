@@ -56,12 +56,12 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
         const rect = avatarRef.current.getBoundingClientRect();
         setCoords({ x: rect.left + rect.width / 2, y: rect.top });
     }
-    setHoveredMember(member.id);
+    setHoveredMember({ id: member.id, isOpen: true });
   };
 
   const handleMouseLeave = () => {
     timeoutRef.current = setTimeout(() => {
-      setHoveredMember(prev => prev === member.id ? null : prev);
+      setHoveredMember(prev => ({ ...prev, isOpen: false }));
     }, 300);
   };
 
@@ -130,7 +130,7 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
         onMouseLeave={handleMouseLeave}
         className={cn(
           "relative outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none transition-all",
-          hoveredMember === member.id ? "z-[100] scale-110" : "z-30"
+          hoveredMember?.id === member.id ? "z-[100] scale-110" : "z-30"
         )}
       >
         <div className="relative pointer-events-none">
@@ -154,11 +154,13 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
         </div>
       </motion.button>
 
-      {/* Tooltip via Portal */}
-      <AnimatePresence>
-        {hoveredMember === member.id && createPortal(
+      {/* Tooltip via Portal - Fade Segura */}
+      {hoveredMember?.id === member.id && createPortal(
           <div
-            className="fixed z-[9999] pointer-events-auto"
+            className={cn(
+              "fixed z-[9999] pointer-events-auto",
+              !hoveredMember.isOpen && "pointer-events-none"
+            )}
             style={{
               left: coords.x,
               top: coords.y - 4,
@@ -167,12 +169,11 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-              className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white p-5 rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.4)] backdrop-blur-3xl border border-white/20 dark:border-zinc-800/20 flex flex-col gap-4 min-w-[320px] origin-bottom transition-opacity duration-200"
+            <div
+              className={cn(
+                "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white p-5 rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.4)] backdrop-blur-3xl border border-white/20 dark:border-zinc-800/20 flex flex-col gap-4 min-w-[320px] origin-bottom transition-all duration-150 ease-out",
+                hoveredMember.isOpen ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-95 translate-y-2"
+              )}
             >
               {/* Header Info */}
               <div className="flex items-center justify-between">
@@ -228,17 +229,16 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
                   </a>
                 )}
               </div>
-            </motion.div>
+            </div>
           </div>,
           document.body
         )}
-      </AnimatePresence>
     </>
   );
 };
 
 const ActivityMap = () => {
-  const [hoveredMember, setHoveredMember] = useState(null);
+  const [hoveredMember, setHoveredMember] = useState({ id: null, isOpen: false });
 
   const queryClient = useQueryClient();
   const { data: teamStatus = [], isLoading, refetch } = useQuery({

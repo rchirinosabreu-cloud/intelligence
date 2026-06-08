@@ -53,7 +53,7 @@ const OperationalCalendar = () => {
   const [view, setView] = useState('Week');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
-  const [hoveredEventData, setHoveredEventData] = useState(null); // { event, rect }
+  const [hoveredEventData, setHoveredEventData] = useState({ event: null, rect: null, isOpen: false });
   const closeTimerRef = React.useRef(null);
   const [formData, setFormData] = useState({
     title: '',
@@ -279,11 +279,11 @@ const OperationalCalendar = () => {
             e.stopPropagation();
             if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
             const rect = e.currentTarget.getBoundingClientRect();
-            setHoveredEventData({ event, rect });
+            setHoveredEventData({ event, rect, isOpen: true });
           }}
           onMouseLeave={() => {
             closeTimerRef.current = setTimeout(() => {
-                setHoveredEventData(null);
+                setHoveredEventData(prev => ({ ...prev, isOpen: false }));
             }, 300);
           }}
           className={cn(
@@ -472,32 +472,34 @@ const OperationalCalendar = () => {
         </div>
       </div>
 
-      {/* Event Detail Popover (Portal) */}
-      <AnimatePresence>
-        {hoveredEventData && createPortal(
+      {/* Event Detail Popover (Portal) - Fade Segura: Stay mounted once event is set */}
+      {hoveredEventData.event && createPortal(
           <div
-            className="fixed z-[9999] pointer-events-auto"
+            className={cn(
+              "fixed z-[9999] pointer-events-auto",
+              !hoveredEventData.isOpen && "pointer-events-none"
+            )}
             style={{
-              left: hoveredEventData.rect.left + (hoveredEventData.rect.width / 2),
-              top: hoveredEventData.rect.top - 4,
-              transform: 'translate(-50%, -100%)'
+              left: (hoveredEventData.rect?.left || 0) + ((hoveredEventData.rect?.width || 0) / 2),
+              top: (hoveredEventData.rect?.top || 0) - 4,
+              transform: 'translateX(-50%) translateY(-100%)'
             }}
             onMouseEnter={() => {
                 if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+                setHoveredEventData(prev => ({ ...prev, isOpen: true }));
             }}
             onMouseLeave={() => {
                 closeTimerRef.current = setTimeout(() => {
-                    setHoveredEventData(null);
+                    setHoveredEventData(prev => ({ ...prev, isOpen: false }));
                 }, 300);
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 8 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-              className="w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom transition-opacity duration-200"
+            <div
+              className={cn(
+                "w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom transition-all duration-150 ease-out",
+                hoveredEventData.isOpen ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-95 translate-y-2"
+              )}
             >
             <div className="space-y-4">
               <div className="flex items-start justify-between gap-3">
@@ -559,11 +561,10 @@ const OperationalCalendar = () => {
             </div>
             {/* Popover Arrow */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 border-[10px] border-transparent border-t-white dark:border-t-zinc-900" />
-          </motion.div>
+          </div>
           </div>,
           document.body
         )}
-      </AnimatePresence>
 
       {/* Modal for Creating Event */}
       {isModalOpen && (
