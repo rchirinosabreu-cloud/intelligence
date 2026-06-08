@@ -3,15 +3,15 @@ import { motion } from 'framer-motion';
 import { FileText, Trash2, Video, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const getStatusColor = (status) => {
+const getStatusBgColor = (status) => {
   switch (status) {
-    case 'LIBRE': return 'border-green-500';
-    case 'ENFOCADO': return 'border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.5)]';
-    case 'OCUPADO': return 'border-orange-500';
-    case 'REUNION': return 'border-zinc-400';
-    case 'PRODUCCION': return 'border-fuchsia-500';
-    case 'AUSENTE': return 'border-red-900';
-    default: return 'border-zinc-200';
+    case 'LIBRE': return 'bg-green-500';
+    case 'ENFOCADO': return 'bg-purple-500';
+    case 'OCUPADO': return 'bg-orange-500';
+    case 'REUNION': return 'bg-zinc-400';
+    case 'PRODUCCION': return 'bg-fuchsia-500';
+    case 'AUSENTE': return 'bg-red-900';
+    default: return 'bg-zinc-200';
   }
 };
 
@@ -77,7 +77,7 @@ const MemberActivityCard = ({
           <span className="font-bold text-sm tracking-tight">{member.name}</span>
           <span className="text-[10px] text-zinc-400 font-semibold">{member.role || 'Colaborador'}</span>
           <div className="flex items-center gap-2 mt-0.5">
-            <div className={cn("w-2 h-2 rounded-full", getStatusColor(member.status).split(' ')[0])} />
+            <div className={cn("w-2 h-2 rounded-full", getStatusBgColor(member.status))} />
             <span className={cn("text-[9px] font-black uppercase tracking-[0.1em]", getStatusTextColorClass(member.status))}>
               {getStatusText(member.status)}
             </span>
