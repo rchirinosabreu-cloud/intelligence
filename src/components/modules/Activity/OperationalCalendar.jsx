@@ -78,6 +78,16 @@ const OperationalCalendar = () => {
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PM';
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+  }, []);
+
   React.useLayoutEffect(() => {
     if (!hoveredEventData?.triggerRect || !eventCardRef.current) return;
 
@@ -305,6 +315,32 @@ const OperationalCalendar = () => {
     setIsModalOpen(true);
   };
 
+  const handlePointerEnterTrigger = (e, event) => {
+    e.stopPropagation();
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Interaction] Pointer Enter Trigger: ${event.title}`);
+    }
+    if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setHoveredEventData({ event, triggerRect: rect });
+  };
+
+  const handlePointerLeaveTrigger = () => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Interaction] Pointer Leave Trigger`);
+    }
+    if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+    }
+    closeTimerRef.current = setTimeout(() => {
+        setHoveredEventData(null);
+        closeTimerRef.current = null;
+    }, 300);
+  };
+
   const renderEventsForResource = (type) => {
     const resourceEvents = filteredEvents.filter(e => e.type === type);
 
@@ -323,22 +359,13 @@ const OperationalCalendar = () => {
       return (
         <button
           key={`${event.id}-${idx}`}
-          onPointerEnter={(e) => {
-            e.stopPropagation();
-            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-            const rect = e.currentTarget.getBoundingClientRect();
-            setHoveredEventData({ event, triggerRect: rect });
-          }}
-          onPointerLeave={() => {
-            closeTimerRef.current = setTimeout(() => {
-                setHoveredEventData(null);
-            }, 300);
-          }}
+          onPointerEnter={(e) => handlePointerEnterTrigger(e, event)}
+          onPointerLeave={handlePointerLeaveTrigger}
+          onFocus={(e) => handlePointerEnterTrigger(e, event)}
+          onBlur={handlePointerLeaveTrigger}
           onClick={(e) => {
             e.stopPropagation();
-            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-            const rect = e.currentTarget.getBoundingClientRect();
-            setHoveredEventData({ event, triggerRect: rect });
+            handlePointerEnterTrigger(e, event);
           }}
           aria-expanded={hoveredEventData?.event.id === event.id}
           aria-haspopup="dialog"
@@ -373,14 +400,6 @@ const OperationalCalendar = () => {
       );
     });
   };
-
-  if (isLoading) {
-    return (
-      <div className="w-full h-[600px] flex items-center justify-center bg-white dark:bg-zinc-900 rounded-[40px] border border-zinc-200">
-        <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -567,11 +586,16 @@ const OperationalCalendar = () => {
             cardRef={eventCardRef}
             cardPosition={hoveredEventData.position || { left: 0, top: 0 }}
             handlePointerEnter={() => {
-              if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+              if (closeTimerRef.current) {
+                  clearTimeout(closeTimerRef.current);
+                  closeTimerRef.current = null;
+              }
             }}
             handlePointerLeave={() => {
+              if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
               closeTimerRef.current = setTimeout(() => {
                 setHoveredEventData(null);
+                closeTimerRef.current = null;
               }, 300);
             }}
           />,

@@ -17,7 +17,6 @@ const Zone = ({ id, name, icon: Icon, children, className, isActive }) => (
     isActive ? "border-fuchsia-500 bg-fuchsia-500/5 shadow-[0_0_40px_rgba(217,70,239,0.1)]" : "border-zinc-200/40 dark:border-zinc-800/40 bg-white/40 dark:bg-zinc-900/40",
     className
   )}>
-    {/* Unified White Capsule Label - Top Left */}
     <div className="absolute -top-4 left-6 z-20">
       <div className="bg-white dark:bg-zinc-900 px-4 py-1.5 rounded-full border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm flex items-center gap-2">
         <Icon className={cn("w-3.5 h-3.5", isActive ? "text-fuchsia-500" : "text-zinc-400")} />
@@ -26,13 +25,9 @@ const Zone = ({ id, name, icon: Icon, children, className, isActive }) => (
         </span>
       </div>
     </div>
-
-    {/* Content Container */}
     <div className="relative flex-1 flex flex-wrap items-center justify-center gap-4">
       {children}
     </div>
-
-    {/* Studio Neon Pulse Effect */}
     {id === 'estudio' && isActive && (
       <motion.div
         animate={{ opacity: [0.3, 0.6, 0.3] }}
@@ -55,7 +50,13 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
   const isCardOpen = hoveredMember === member.id;
 
   const handlePointerEnter = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Interaction] Pointer Enter Member: ${member.name}`);
+    }
+    if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+    }
     if (avatarRef.current) {
         const rect = avatarRef.current.getBoundingClientRect();
         setCardPosition(getFloatingCardPosition(
@@ -68,8 +69,15 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
   };
 
   const handlePointerLeave = () => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Interaction] Pointer Leave Member: ${member.name}`);
+    }
+    if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+    }
     timeoutRef.current = setTimeout(() => {
       setHoveredMember(prev => prev === member.id ? null : prev);
+      timeoutRef.current = null;
     }, 300);
   };
 
@@ -85,6 +93,14 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
     ));
   }, [isCardOpen, member.id]);
 
+  React.useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -108,7 +124,7 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
         animate={{
           opacity: isAusente ? 0.6 : 1,
           scale: 1,
-          y: [0, -4, 0] // Floating Latido effect
+          y: [0, -4, 0]
         }}
         exit={{ opacity: 0, scale: 0.8 }}
         transition={{
@@ -135,7 +151,6 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
         )}
       >
         <div className="relative pointer-events-none">
-          {/* Aura Enfoque */}
           {isEnfocado && (
              <motion.div
               animate={{ scale: [1, 1.3, 1], opacity: [0.1, 0.3, 0.1] }}
@@ -143,7 +158,6 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
               className="absolute -inset-6 bg-purple-500/20 rounded-full blur-2xl"
              />
           )}
-
           <TeamAvatar
             member={member}
             showTitle={false}
@@ -154,8 +168,6 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
           />
         </div>
       </motion.button>
-
-      {/* Direct portal: use clean modular component */}
       <AnimatePresence>
         {isCardOpen && createPortal(
           <MemberActivityCard
@@ -176,7 +188,6 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
 
 const ActivityMap = () => {
   const [hoveredMember, setHoveredMember] = useState(null);
-
   const queryClient = useQueryClient();
   const { data: teamStatus = [], isLoading, refetch } = useQuery({
     queryKey: ['team-activity-status'],
@@ -226,47 +237,37 @@ const ActivityMap = () => {
 
   const cafeIds = membersByZone.cafe.map(m => m.id);
   membersByZone.nave = membersByZone.nave.filter(m => !cafeIds.includes(m.id));
-
   const isProductionActive = membersByZone.estudio.length > 0;
 
   return (
     <div className="relative w-full p-12 md:p-16 min-h-[1000px] bg-[#fdfdfd] dark:bg-zinc-950 rounded-[40px] border border-zinc-200/50 dark:border-zinc-800/50 shadow-2xl overflow-visible">
-      {/* Background Dotted Grid */}
       <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.08] pointer-events-none rounded-[40px] overflow-hidden"
            style={{ backgroundImage: 'radial-gradient(circle, currentColor 1.5px, transparent 1.5px)', backgroundSize: '40px 40px' }}
       />
-
       <div className="relative z-10 flex flex-col gap-8">
-
-        {/* FILA SUPERIOR: Permiso | Bunker | Foco */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start">
           <Zone id="permiso" name="Zona de Permiso" icon={User} className="h-[280px] bg-red-50/10 dark:bg-red-900/5">
             {membersByZone.permiso.map(m => (
               <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
             ))}
           </Zone>
-
           <Zone id="bunker" name="Sala de Juntas" icon={Lock} className="h-[280px] bg-zinc-50/50 dark:bg-zinc-900/50">
             {membersByZone.bunker.map(m => (
               <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
             ))}
           </Zone>
-
           <Zone id="foco" name="Zona de Foco" icon={Zap} className="h-[280px] bg-purple-50/10 dark:bg-purple-900/5">
             {membersByZone.foco.map(m => (
               <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
             ))}
           </Zone>
         </div>
-
-        {/* FILA INFERIOR: Producción | Oficina Central (40%) | Cafecito */}
         <div className="grid grid-cols-1 lg:grid-cols-[28%_40%_28%] gap-10 items-stretch justify-center">
           <Zone id="estudio" name="Producción" icon={Video} className="h-[500px]" isActive={isProductionActive}>
             {membersByZone.estudio.map(m => (
               <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
             ))}
           </Zone>
-
           <Zone id="nave" name="Oficina Central" icon={Monitor} className="h-[500px] bg-indigo-50/5 dark:bg-indigo-900/5">
              <div className="absolute inset-0 p-10 grid grid-cols-4 grid-rows-3 gap-8 opacity-[0.02] pointer-events-none">
               {[...Array(12)].map((_, i) => (
@@ -279,7 +280,6 @@ const ActivityMap = () => {
               ))}
             </div>
           </Zone>
-
           <Zone id="cafe" name="Cafecito Time" icon={Coffee} className="h-[500px] bg-orange-50/10 dark:bg-orange-900/5">
             {membersByZone.cafe.map(m => (
               <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
@@ -287,8 +287,6 @@ const ActivityMap = () => {
           </Zone>
         </div>
       </div>
-
-      {/* Legend & Controls */}
       <div className="absolute bottom-10 left-10 flex items-center gap-6 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md px-6 py-3 rounded-2xl border border-zinc-200/50 dark:border-zinc-800/50 shadow-lg z-50">
         {[
           { color: 'bg-green-500', label: 'Libre' },
@@ -304,7 +302,6 @@ const ActivityMap = () => {
           </div>
         ))}
       </div>
-
       <div className="absolute bottom-10 right-10 flex flex-col gap-3 z-50">
         <div className="flex gap-3 justify-end">
           <button onClick={() => refetch()} className="p-3.5 bg-white/80 dark:bg-zinc-900/80 hover:bg-white border border-zinc-200 rounded-2xl transition-all shadow-sm">
