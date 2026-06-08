@@ -183,14 +183,14 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
 
       {/* Direct portal: avoid animation ownership interfering with hover visibility. */}
       {isCardOpen && createPortal(
-          <aside
+          <div
             ref={cardRef}
             data-activity-floating-card="member"
             className="fixed pointer-events-auto animate-in fade-in duration-150 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white p-5 rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.4)] border border-zinc-200 dark:border-zinc-800 flex flex-col gap-4 min-w-[340px]"
             style={{
-              left: cardPosition.left,
-              top: cardPosition.top,
-              zIndex: 2147483647
+              left: coords.x,
+              top: coords.y - 4,
+              transform: 'translate(-50%, -100%)'
             }}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
@@ -199,11 +199,19 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
             role="dialog"
             aria-label={`Actividad de ${member.name}`}
           >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white p-5 rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.4)] backdrop-blur-3xl border border-white/20 dark:border-zinc-800/20 flex flex-col gap-4 min-w-[320px] origin-bottom transition-opacity duration-200"
+            >
               {/* Header Info */}
               <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-1">
                    <span className="font-bold text-sm tracking-tight">{member.name}</span>
-                   <div className="flex items-center gap-2">
+                   <span className="text-[10px] text-zinc-400 font-semibold">{member.role || 'Colaborador'}</span>
+                   <div className="flex items-center gap-2 mt-0.5">
                       <div className={cn("w-2 h-2 rounded-full", getStatusColor(member.status))} />
                       <span className={cn("text-[9px] font-black uppercase tracking-[0.1em]", getStatusTextColorClass(member.status))}>
                         {getStatusText(member.status)}
@@ -223,39 +231,20 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
                 )}
               </div>
 
-              <div className="h-px w-full bg-zinc-100 dark:bg-zinc-800" />
-
-              {/* Event/Task Content */}
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                   <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
-                      <FileText className="w-3.5 h-3.5 text-indigo-500" />
-                   </div>
-                   <div className="flex-1">
-                      <p className="text-zinc-800 dark:text-zinc-200 text-[11px] font-bold leading-tight">
-                        {member.currentTask?.title || member.currentEvent?.title || member.role}
-                      </p>
-                      {member.currentEvent?.type && (
-                         <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mt-1 block">
-                            {member.currentEvent.type}
-                         </span>
-                      )}
-                   </div>
-                </div>
-
-                {member.currentEvent && (
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800/40 p-2 rounded-xl">
-                    <Clock className="w-3 h-3" />
-                    <span>Actividad Programada</span>
+              {/* Task Title Injection */}
+              {(member.currentTask || member.currentEvent) && (
+                <div className="bg-indigo-50 dark:bg-indigo-900/10 p-3 rounded-2xl border border-indigo-100/50 dark:border-indigo-500/10">
+                  <div className="flex items-center gap-2 mb-1">
+                    <FileText className="w-3 h-3 text-indigo-500" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+                      Actividad Actual
+                    </span>
                   </div>
-                )}
-
-                {(member.currentEvent?.description || member.currentTask?.description) && (
-                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-relaxed line-clamp-3 pl-1">
-                    {member.currentEvent?.description || member.currentTask?.description}
+                  <p className="text-[11px] font-bold text-zinc-800 dark:text-zinc-100 leading-tight">
+                    {member.currentTask?.title || member.currentEvent?.title}
                   </p>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex gap-2">
@@ -271,7 +260,7 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
                   </a>
                 )}
               </div>
-          </aside>,
+          </div>,
           document.body
         )}
     </>

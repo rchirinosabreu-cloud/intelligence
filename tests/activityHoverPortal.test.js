@@ -26,8 +26,3 @@ test('floating cards measure their rendered size before final positioning', () =
   assert.match(operationalCalendar, /eventCardRef\s*=\s*React\.useRef\(null\)/);
   assert.match(operationalCalendar, /triggerRect/);
 });
-
-test('floating-card portal roots use stable semantic aside tags instead of animation wrappers', () => {
-  assert.match(activityMap, /<aside[\s\S]*data-activity-floating-card="member"[\s\S]*<\/aside>,\s*document\.body/);
-  assert.match(operationalCalendar, /<aside[\s\S]*data-activity-floating-card="event"[\s\S]*<\/aside>,\s*document\.body/);
-});

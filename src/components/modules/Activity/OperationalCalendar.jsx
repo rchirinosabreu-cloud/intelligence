@@ -350,7 +350,7 @@ const OperationalCalendar = () => {
           aria-haspopup="dialog"
           aria-label={`Ver detalles de ${event.title}`}
           className={cn(
-            "absolute w-10 h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-20 group hover:scale-110 active:scale-95 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none",
+            "absolute min-w-[40px] h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-20 group hover:scale-110 active:scale-95 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none px-1.5",
             getEventColor(event.type)
           )}
           style={{
@@ -359,17 +359,21 @@ const OperationalCalendar = () => {
             transform: 'translateY(-50%)'
           }}
         >
-          <div className="relative pointer-events-none">
-             <TeamAvatar
-                member={involvedMembers[0]}
-                showTitle={false}
-                className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm"
-             />
-             {involvedMembers.length > 1 && (
-                <div className="absolute -right-2 -bottom-1 bg-indigo-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900">
-                    +{involvedMembers.length - 1}
+          <div className="relative pointer-events-none flex items-center justify-center">
+             <div className="flex items-center -space-x-2">
+                <div className="relative z-0">
+                   <TeamAvatar
+                      member={involvedMembers[0]}
+                      showTitle={false}
+                      className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm ring-1 ring-zinc-200/50 dark:ring-white/10"
+                   />
                 </div>
-             )}
+                {involvedMembers.length > 1 && (
+                    <div className="relative z-10 bg-indigo-600 text-white text-[8px] font-black w-7 h-7 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900 shadow-sm shrink-0">
+                        +{involvedMembers.length - 1}
+                    </div>
+                )}
+             </div>
           </div>
         </button>
       );
@@ -533,14 +537,14 @@ const OperationalCalendar = () => {
 
       {/* Direct portal: always visible while hover/focus state is open. */}
       {hoveredEventData && createPortal(
-          <aside
+          <div
             ref={eventCardRef}
             data-activity-floating-card="event"
             className="fixed pointer-events-auto animate-in fade-in duration-150 w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5"
             style={{
-              left: hoveredEventData.position.left,
-              top: hoveredEventData.position.top,
-              zIndex: 2147483647
+              left: hoveredEventData.rect.left + (hoveredEventData.rect.width / 2),
+              top: hoveredEventData.rect.top - 4,
+              transform: 'translate(-50%, -100%)'
             }}
             onMouseEnter={() => {
                 if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
@@ -562,6 +566,13 @@ const OperationalCalendar = () => {
             role="dialog"
             aria-label={`Detalles de ${hoveredEventData.event.title}`}
           >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom transition-opacity duration-200"
+            >
             <div className="space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1.5 flex-1 min-w-0">
@@ -604,7 +615,7 @@ const OperationalCalendar = () => {
 
               <div className="pt-2">
                 <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 block mb-2">Involucrados</span>
-                <div className="flex -space-x-2">
+                <div className="flex flex-wrap gap-1.5">
                   {team.filter(m => (hoveredEventData.event.memberIds || []).includes(m.id)).map(m => (
                     <TeamAvatar key={m.id} member={m} className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm" />
                   ))}
@@ -622,7 +633,7 @@ const OperationalCalendar = () => {
             </div>
             {/* Popover Arrow */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 border-[10px] border-transparent border-t-white dark:border-t-zinc-900" />
-          </aside>,
+          </div>,
           document.body
         )}
 
