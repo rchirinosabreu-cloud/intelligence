@@ -14,9 +14,7 @@ import {
   Zap,
   Lock,
   Sparkles,
-  Coffee,
-  X,
-  PlusCircle
+  Coffee
 } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import {
@@ -34,10 +32,7 @@ import {
   eachHourOfInterval,
   isWithinInterval,
   addDays,
-  differenceInMinutes,
-  setHours,
-  setMinutes,
-  subDays
+  differenceInMinutes
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import DatePicker, { registerLocale } from 'react-datepicker';
@@ -47,11 +42,11 @@ import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
-import { Badge } from '@/components/ui/Badge';
 import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { getFloatingCardPosition } from '@/lib/floatingCardPosition';
-import EventActivityCard from './EventActivityCard';
+import { cancelHoverClose, scheduleHoverClose } from '@/lib/hoverCloseController';
+import EventActivityCard from './cards/EventActivityCard';
 
 const OperationalCalendar = () => {
   const { currentUser } = useAuth();
@@ -63,6 +58,8 @@ const OperationalCalendar = () => {
   const [hoveredEventData, setHoveredEventData] = useState(null); // { event, triggerRect, position }
   const closeTimerRef = React.useRef(null);
   const eventCardRef = React.useRef(null);
+
+  useEffect(() => () => cancelHoverClose(closeTimerRef), []);
   const [formData, setFormData] = useState({
     title: '',
     type: 'PRODUCTION',
@@ -77,30 +74,6 @@ const OperationalCalendar = () => {
 
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PM';
-  React.useLayoutEffect(() => {
-    if (!hoveredEventData?.triggerRect || !eventCardRef.current) return;
-
-    const cardRect = eventCardRef.current.getBoundingClientRect();
-    const position = getFloatingCardPosition(
-      hoveredEventData.triggerRect,
-      { width: cardRect.width, height: cardRect.height },
-      { width: window.innerWidth, height: window.innerHeight }
-    );
-
-    setHoveredEventData(prev => prev ? { ...prev, position } : prev);
-  }, [hoveredEventData?.event.id]);
-
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (closeTimerRef.current) {
-        clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = null;
-      }
-    };
-  }, []);
-
   React.useLayoutEffect(() => {
     if (!hoveredEventData?.triggerRect || !eventCardRef.current) return;
 
@@ -279,6 +252,7 @@ const OperationalCalendar = () => {
       case 'ABSENCE': return <UserX className="w-3 h-3" />;
       case 'PROJECT': return <Zap className="w-3 h-3" />;
       case 'MEETING': return <Lock className="w-3 h-3" />;
+      case 'WORK_DAY': return <Clock className="w-3 h-3" />;
       case 'BREAK': return <Coffee className="w-3 h-3" />;
       default: return null;
     }
@@ -301,59 +275,6 @@ const OperationalCalendar = () => {
     return Math.max(0, Math.min(100, (elapsed / totalDuration) * 100));
   };
 
-  const handleSlotClick = (date, resourceType) => {
-    if (!isAdmin) return;
-
-    let start = new Date(date);
-    if (view !== 'Day') {
-       // date is start of day, set to a default operational hour (e.g., 9:00 AM)
-       start = setHours(start, 9);
-       start = setMinutes(start, 0);
-    }
-
-    const end = new Date(start.getTime() + 60 * 60 * 1000); // +1 hour
-
-    setFormData({
-      ...formData,
-      type: resourceType || 'PRODUCTION',
-      startAt: start,
-      endAt: end,
-      title: '',
-      description: '',
-      memberIds: [],
-      meetingLink: '',
-      recurrence: 'NONE'
-    });
-    setEditingEventId(null);
-    setIsModalOpen(true);
-  };
-
-  const handlePointerEnterTrigger = (e, event) => {
-    e.stopPropagation();
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[Interaction] Pointer Enter Trigger: ${event.title}`);
-    }
-    if (closeTimerRef.current) {
-        clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = null;
-    }
-    const rect = e.currentTarget.getBoundingClientRect();
-    setHoveredEventData({ event, triggerRect: rect });
-  };
-
-  const handlePointerLeaveTrigger = () => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[Interaction] Pointer Leave Trigger`);
-    }
-    if (closeTimerRef.current) {
-        clearTimeout(closeTimerRef.current);
-    }
-    closeTimerRef.current = setTimeout(() => {
-        setHoveredEventData(null);
-        closeTimerRef.current = null;
-    }, 300);
-  };
-
   const renderEventsForResource = (type) => {
     const resourceEvents = filteredEvents.filter(e => e.type === type);
 
@@ -372,19 +293,45 @@ const OperationalCalendar = () => {
       return (
         <button
           key={`${event.id}-${idx}`}
-          onPointerEnter={(e) => handlePointerEnterTrigger(e, event)}
-          onPointerLeave={handlePointerLeaveTrigger}
-          onFocus={(e) => handlePointerEnterTrigger(e, event)}
-          onBlur={handlePointerLeaveTrigger}
+          onPointerEnter={(e) => {
+            e.stopPropagation();
+            cancelHoverClose(closeTimerRef);
+            const rect = e.currentTarget.getBoundingClientRect();
+            const position = getFloatingCardPosition(
+              rect,
+              { width: 288, height: 320 },
+              { width: window.innerWidth, height: window.innerHeight }
+            );
+            setHoveredEventData({ event, triggerRect: rect, position });
+          }}
+          onPointerLeave={() => scheduleHoverClose(closeTimerRef, () => setHoveredEventData(null))}
+          onFocus={(e) => {
+            cancelHoverClose(closeTimerRef);
+            const rect = e.currentTarget.getBoundingClientRect();
+            const position = getFloatingCardPosition(
+              rect,
+              { width: 288, height: 320 },
+              { width: window.innerWidth, height: window.innerHeight }
+            );
+            setHoveredEventData({ event, triggerRect: rect, position });
+          }}
+          onBlur={() => scheduleHoverClose(closeTimerRef, () => setHoveredEventData(null))}
           onClick={(e) => {
             e.stopPropagation();
-            handlePointerEnterTrigger(e, event);
+            cancelHoverClose(closeTimerRef);
+            const rect = e.currentTarget.getBoundingClientRect();
+            const position = getFloatingCardPosition(
+              rect,
+              { width: 288, height: 320 },
+              { width: window.innerWidth, height: window.innerHeight }
+            );
+            setHoveredEventData({ event, triggerRect: rect, position });
           }}
           aria-expanded={hoveredEventData?.event.id === event.id}
           aria-haspopup="dialog"
           aria-label={`Ver detalles de ${event.title}`}
           className={cn(
-            "absolute min-w-[40px] h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-20 group hover:scale-110 active:scale-95 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none px-1.5",
+            "absolute w-10 h-10 flex items-center justify-center rounded-full border shadow-lg transition-all z-20 group hover:scale-110 active:scale-95 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none",
             getEventColor(event.type)
           )}
           style={{
@@ -393,21 +340,17 @@ const OperationalCalendar = () => {
             transform: 'translateY(-50%)'
           }}
         >
-          <div className="relative pointer-events-none flex items-center justify-center">
-             <div className="flex items-center -space-x-2">
-                <div className="relative z-0">
-                   <TeamAvatar
-                      member={involvedMembers[0]}
-                      showTitle={false}
-                      className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm ring-1 ring-zinc-200/50 dark:ring-white/10"
-                   />
+          <div className="relative pointer-events-none">
+             <TeamAvatar
+                member={involvedMembers[0]}
+                showTitle={false}
+                className="w-7 h-7 border-2 border-white dark:border-zinc-900 shadow-sm"
+             />
+             {involvedMembers.length > 1 && (
+                <div className="absolute -right-2 -bottom-1 bg-indigo-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900">
+                    +{involvedMembers.length - 1}
                 </div>
-                {involvedMembers.length > 1 && (
-                    <div className="relative z-10 bg-indigo-600 text-white text-[8px] font-black w-7 h-7 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900 shadow-sm shrink-0">
-                        +{involvedMembers.length - 1}
-                    </div>
-                )}
-             </div>
+             )}
           </div>
         </button>
       );
@@ -431,8 +374,8 @@ const OperationalCalendar = () => {
                 <div className="flex items-center bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl overflow-hidden">
                   <button
                     onClick={() => {
-                        if (view === 'Day') setCurrentDate(prev => subDays(prev, 1));
-                        else if (view === 'Week') setCurrentDate(prev => subDays(prev, 7));
+                        if (view === 'Day') setCurrentDate(prev => new Date(prev.setDate(prev.getDate() - 1)));
+                        else if (view === 'Week') setCurrentDate(prev => new Date(prev.setDate(prev.getDate() - 7)));
                         else setCurrentDate(subMonths(currentDate, 1));
                     }}
                     className="p-2.5 hover:bg-zinc-200 dark:hover:bg-white/5 transition-colors"
@@ -442,8 +385,8 @@ const OperationalCalendar = () => {
                   <div className="w-px h-4 bg-zinc-200 dark:bg-white/10" />
                   <button
                     onClick={() => {
-                        if (view === 'Day') setCurrentDate(prev => addDays(prev, 1));
-                        else if (view === 'Week') setCurrentDate(prev => addDays(prev, 7));
+                        if (view === 'Day') setCurrentDate(prev => new Date(prev.setDate(prev.getDate() + 1)));
+                        else if (view === 'Week') setCurrentDate(prev => new Date(prev.setDate(prev.getDate() + 7)));
                         else setCurrentDate(addMonths(currentDate, 1));
                     }}
                     className="p-2.5 hover:bg-zinc-200 dark:hover:bg-white/5 transition-colors"
@@ -474,21 +417,7 @@ const OperationalCalendar = () => {
 
            {isAdmin && (
             <button
-              onClick={() => {
-                setFormData({
-                  ...formData,
-                  startAt: startOfDay(currentDate),
-                  endAt: addDays(startOfDay(currentDate), 0),
-                  title: '',
-                  description: '',
-                  memberIds: [],
-                  type: 'PRODUCTION',
-                  meetingLink: '',
-                  recurrence: 'NONE'
-                });
-                setEditingEventId(null);
-                setIsModalOpen(true);
-              }}
+              onClick={() => setIsModalOpen(true)}
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
             >
               <Plus className="w-4 h-4" />
@@ -553,12 +482,8 @@ const OperationalCalendar = () => {
                         <div className="flex-1 relative">
                             {/* Visual Grid Lines */}
                             <div className="absolute inset-0 flex">
-                                {columns.map((col, i) => (
-                                    <div
-                                      key={i}
-                                      onClick={() => handleSlotClick(col, resourceType)}
-                                      className="flex-1 border-r border-zinc-50 dark:border-white/5 cursor-pointer hover:bg-zinc-50/50 dark:hover:bg-white/5 transition-colors"
-                                    />
+                                {columns.map((_, i) => (
+                                    <div key={i} className="flex-1 border-r border-zinc-50 dark:border-white/5 pointer-events-none" />
                                 ))}
                             </div>
 
@@ -587,46 +512,28 @@ const OperationalCalendar = () => {
         </div>
       </div>
 
-      {/* Direct portal: use clean modular component */}
-      <AnimatePresence>
-        {hoveredEventData && createPortal(
+      {/* Direct portal: always visible while hover/focus state is open. */}
+      {hoveredEventData && createPortal(
           <EventActivityCard
-            event={hoveredEventData.event}
+            hoveredEventData={hoveredEventData}
+            eventCardRef={eventCardRef}
+            closeTimerRef={closeTimerRef}
+            setHoveredEventData={setHoveredEventData}
+            handleDelete={handleDelete}
+            handleEdit={handleEdit}
             team={team}
             isAdmin={isAdmin}
-            onDelete={handleDelete}
-            onEdit={handleEdit}
-            cardRef={eventCardRef}
-            cardPosition={hoveredEventData.position || { left: 0, top: 0 }}
-            handlePointerEnter={() => {
-              if (closeTimerRef.current) {
-                  clearTimeout(closeTimerRef.current);
-                  closeTimerRef.current = null;
-              }
-            }}
-            handlePointerLeave={() => {
-              if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-              closeTimerRef.current = setTimeout(() => {
-                setHoveredEventData(null);
-                closeTimerRef.current = null;
-              }, 300);
-            }}
           />,
           document.body
         )}
 
-      {/* Modal for Creating Event (Full Restored Form) */}
+      {/* Modal for Creating Event */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold">{editingEventId ? 'Editar Evento' : 'Nuevo Evento Operativo'}</h3>
-              <button
-                onClick={() => { setIsModalOpen(false); setEditingEventId(null); }}
-                className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5 text-zinc-400" />
-              </button>
+              <button onClick={() => { setIsModalOpen(false); setEditingEventId(null); }} className="text-zinc-400 hover:text-zinc-600">✕</button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -644,7 +551,7 @@ const OperationalCalendar = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Tipo / Categoría</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Tipo</label>
                   <select
                     className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
                     value={formData.type}
@@ -654,6 +561,7 @@ const OperationalCalendar = () => {
                     <option value="ABSENCE">🏖️ Permiso/Ausencia</option>
                     <option value="PROJECT">🚀 Proyecto Especial</option>
                     <option value="MEETING">🤝 Reunión</option>
+                    <option value="WORK_DAY">💻 Jornada Laboral</option>
                     <option value="BREAK">☕ Descanso / Café</option>
                   </select>
                 </div>
@@ -678,7 +586,7 @@ const OperationalCalendar = () => {
                     onChange={date => setFormData({...formData, recurrenceEnd: date})}
                     dateFormat="d MMMM, yyyy"
                     locale="es"
-                    placeholderText="Seleccionar fecha fin"
+                    placeholderText="Seleccionar fecha fin de recurrencia"
                     className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
                     wrapperClassName="w-full"
                   />
@@ -686,25 +594,25 @@ const OperationalCalendar = () => {
               )}
 
               {formData.type === 'MEETING' && (
-                <div className="space-y-2 py-2 px-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10">
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Google Meet</label>
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Link de Reunión</label>
                     <button
                       type="button"
                       onClick={generateMeetLink}
                       disabled={isGeneratingLink}
-                      className="text-[10px] font-black bg-indigo-600 text-white px-3 py-1 rounded-full hover:bg-indigo-700 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 transition-colors disabled:opacity-50"
                     >
                       {isGeneratingLink ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                      GENERAR AUTOMÁTICO
+                      Generar automático
                     </button>
                   </div>
                   <div className="relative">
-                    <Video className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500" />
+                    <Video className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                     <input
                       type="url"
                       placeholder="https://meet.google.com/..."
-                      className="w-full bg-white dark:bg-zinc-900 border border-indigo-200 dark:border-indigo-500/20 rounded-xl pl-11 pr-4 py-2 text-[11px] font-medium outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
+                      className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-11 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
                       value={formData.meetingLink}
                       onChange={e => setFormData({...formData, meetingLink: e.target.value})}
                     />
@@ -732,7 +640,7 @@ const OperationalCalendar = () => {
                     showTimeSelect
                     timeIntervals={15}
                     timeCaption="Hora"
-                    dateFormat="d MMM, HH:mm"
+                    dateFormat="d MMMM, yyyy h:mm aa"
                     locale="es"
                     className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
                     wrapperClassName="w-full"
@@ -746,7 +654,7 @@ const OperationalCalendar = () => {
                     showTimeSelect
                     timeIntervals={15}
                     timeCaption="Hora"
-                    dateFormat="d MMM, HH:mm"
+                    dateFormat="d MMMM, yyyy h:mm aa"
                     locale="es"
                     className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
                     wrapperClassName="w-full"
@@ -755,13 +663,13 @@ const OperationalCalendar = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-500 uppercase">Equipo Involucrado</label>
-                <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-800 custom-scrollbar">
+                <label className="text-xs font-bold text-zinc-500 uppercase">Involucrados</label>
+                <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto p-2 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-800">
                   {team.map(member => (
-                    <label key={member.id} className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-white dark:hover:bg-zinc-700 transition-colors border border-transparent hover:border-zinc-200 dark:hover:border-zinc-600">
+                    <label key={member.id} className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-white dark:hover:bg-zinc-700">
                       <input
                         type="checkbox"
-                        className="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-600 w-3.5 h-3.5"
+                        className="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-600"
                         checked={formData.memberIds.includes(member.id)}
                         onChange={e => {
                           const newIds = e.target.checked
@@ -770,8 +678,7 @@ const OperationalCalendar = () => {
                           setFormData({...formData, memberIds: newIds});
                         }}
                       />
-                      <TeamAvatar member={member} showTitle={false} className="w-5 h-5" />
-                      <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300 truncate">{member.name}</span>
+                      <span className="text-[10px] font-medium">{member.name}</span>
                     </label>
                   ))}
                 </div>
@@ -780,9 +687,9 @@ const OperationalCalendar = () => {
               <button
                 type="submit"
                 disabled={eventMutation.isPending}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-widest py-3 rounded-2xl transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-2xl transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2"
               >
-                {eventMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlusCircle className="w-4 h-4" />}
+                {eventMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
                 {editingEventId ? 'Actualizar Evento' : 'Guardar Evento'}
               </button>
             </form>
