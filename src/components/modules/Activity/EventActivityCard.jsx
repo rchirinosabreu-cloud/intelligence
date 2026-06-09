@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Clock, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -15,6 +15,17 @@ const EventActivityCard = ({
   handlePointerEnter,
   handlePointerLeave
 }) => {
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+        console.log(`[Lifecycle] EventActivityCard MOUNTED for ${event?.title}`);
+    }
+    return () => {
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`[Lifecycle] EventActivityCard UNMOUNTED for ${event?.title}`);
+        }
+    };
+  }, [event?.title]);
+
   if (!event) return null;
   const involvedMembers = team.filter(m => (event.memberIds || []).includes(m.id));
   return (

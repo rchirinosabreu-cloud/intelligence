@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FileText, Trash2, Video, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -50,6 +50,17 @@ const MemberActivityCard = ({
   handlePointerEnter,
   handlePointerLeave
 }) => {
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+        console.log(`[Lifecycle] MemberActivityCard MOUNTED for ${member?.name}`);
+    }
+    return () => {
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`[Lifecycle] MemberActivityCard UNMOUNTED for ${member?.name}`);
+        }
+    };
+  }, [member?.name]);
+
   if (!member) return null;
 
   return (
