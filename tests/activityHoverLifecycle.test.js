@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { cancelHoverClose, scheduleHoverClose } from '../src/lib/hoverCloseController.js';
 
-const activityMap = readFileSync(new URL('../src/components/modules/Activity/ActivityMapView.jsx', import.meta.url), 'utf8');
-const operationalCalendar = readFileSync(new URL('../src/components/modules/Activity/OperationalCalendarView.jsx', import.meta.url), 'utf8');
+const activityMap = readFileSync(new URL('../src/components/modules/Activity/ActivityMap.jsx', import.meta.url), 'utf8');
+const operationalCalendar = readFileSync(new URL('../src/components/modules/Activity/OperationalCalendar.jsx', import.meta.url), 'utf8');
 
 test('scheduling a close replaces every previous pending close', () => {
   const callbacks = new Map();
