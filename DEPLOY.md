@@ -37,22 +37,3 @@ Ahora, tu llave solo funcionará cuando las peticiones vengan desde tu aplicaci�
 
 *   **Error 404 / 400 en consola:** Verifica que el modelo en `src/lib/chatUtils.js` sea `gemini-1.5-pro`.
 *   **"VITE_GEMINI_API_KEY no está configurado":** Significa que el proceso de "Build" de Railway no tuvo acceso a la variable. Revisa el paso 1 y haz un Redeploy.
-
-
-## 4. Redeploy vs. Deploy Latest Commit
-
-**No uses `Redeploy` para publicar una corrección nueva.** Railway vuelve a construir el código exacto del deployment seleccionado, incluso si ese deployment falló y existen commits posteriores.
-
-Para publicar el código más reciente de la rama conectada:
-
-1. Confirma que el PR fue fusionado en la rama configurada en Railway.
-2. Abre el servicio `intelligence` en Railway.
-3. Usa la paleta de comandos (`CMD/Ctrl + K`).
-4. Selecciona **Deploy Latest Commit**.
-5. Confirma en el build log la línea:
-
-   ```text
-   [DeploySourceGuard] ACTIVITY_SOURCE_GENERATION=wrapper-v1
-   ```
-
-Si esa línea no aparece, Railway está construyendo un snapshot anterior. Revisa en **Service Settings → Source** la rama conectada y no vuelvas a ejecutar `Redeploy` sobre el deployment fallido.
