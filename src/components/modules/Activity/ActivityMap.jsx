@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Coffee, Video, Zap, Lock, Monitor, X, User, UserX, Trash2, Clock, FileText } from 'lucide-react';
+import { Coffee, Video, Zap, Lock, Monitor, User, Trash2 } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
@@ -43,10 +43,10 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
   const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PM';
   const isEnfocado = member.status === 'ENFOCADO';
   const isAusente = member.status === 'AUSENTE';
-  const timeoutRef = React.useRef(null);
+  const timeoutRef = useRef(null);
   const [cardPosition, setCardPosition] = useState({ left: 16, top: 16, placement: 'bottom' });
-  const avatarRef = React.useRef(null);
-  const cardRef = React.useRef(null);
+  const avatarRef = useRef(null);
+  const cardRef = useRef(null);
   const isCardOpen = hoveredMember === member.id;
 
   const handlePointerEnter = () => {
@@ -81,7 +81,7 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
     }, 300);
   };
 
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     if (!isCardOpen || !avatarRef.current || !cardRef.current) return;
 
     const triggerRect = avatarRef.current.getBoundingClientRect();
@@ -93,7 +93,7 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
     ));
   }, [isCardOpen, member.id]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
