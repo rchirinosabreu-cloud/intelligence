@@ -48,7 +48,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Badge } from '@/components/ui/Badge';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { getFloatingCardPosition } from '@/lib/floatingCardPosition';
 import EventActivityCard from './EventActivityCard';
@@ -77,6 +77,19 @@ const OperationalCalendar = () => {
 
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PM';
+  React.useLayoutEffect(() => {
+    if (!hoveredEventData?.triggerRect || !eventCardRef.current) return;
+
+    const cardRect = eventCardRef.current.getBoundingClientRect();
+    const position = getFloatingCardPosition(
+      hoveredEventData.triggerRect,
+      { width: cardRect.width, height: cardRect.height },
+      { width: window.innerWidth, height: window.innerHeight }
+    );
+
+    setHoveredEventData(prev => prev ? { ...prev, position } : prev);
+  }, [hoveredEventData?.event.id]);
+
 
   // Cleanup on unmount
   useEffect(() => {
@@ -601,7 +614,6 @@ const OperationalCalendar = () => {
           />,
           document.body
         )}
-      </AnimatePresence>
 
       {/* Modal for Creating Event (Full Restored Form) */}
       {isModalOpen && (
