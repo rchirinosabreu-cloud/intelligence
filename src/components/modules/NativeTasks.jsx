@@ -1,4 +1,5 @@
 import TeamAvatar from "../../components/ui/TeamAvatar";
+import UserAvatarPopover from "../../components/ui/UserAvatarPopover";
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -30,102 +31,61 @@ import { triggerConfetti } from '@/utils/confetti';
 const parseDate = (dateStr) => {
     if (!dateStr) return null;
     const cleanStr = dateStr.trim();
-    // Support both / and - separators
     const separator = cleanStr.includes('/') ? '/' : '-';
     const parts = cleanStr.split(separator);
 
     if (parts.length < 2) return null;
     const day = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1; // JS months are 0-based
+    const month = parseInt(parts[1], 10) - 1;
 
-    // Handle 2-digit years or full years
     let yearVal = parts[2] ? parseInt(parts[2], 10) : new Date().getFullYear();
-    if (yearVal < 100) yearVal += 2000; // Assume 20xx for 2-digit years
+    if (yearVal < 100) yearVal += 2000;
 
     if (isNaN(day) || isNaN(month)) return null;
     return new Date(yearVal, month, day);
 };
 
-// Check if task is overdue (Date < Today)
-// Used for "Solo Vencidos" and visual alerts
 const isOverdue = (dateStr) => {
     const taskDate = parseDate(dateStr);
     if (!taskDate) return false;
-
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    // Strictly less than today
     return taskDate < today;
 };
 
-// Check if task is today (Date === Today)
-const isToday = (dateStr) => {
-    const taskDate = parseDate(dateStr);
-    if (!taskDate) return false;
-
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    return taskDate.getTime() === today.getTime();
-};
-
-// Check if task is "Today + Overdue" (Date <= Today)
 const isTodayOrOverdue = (dateStr) => {
     const taskDate = parseDate(dateStr);
     if (!taskDate) return false;
-
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
     return taskDate <= today;
 };
 
-// Check if task is in current week (Monday to Sunday)
 const isThisWeek = (dateStr) => {
     const taskDate = parseDate(dateStr);
     if (!taskDate) return false;
-
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    const dayOfWeek = today.getDay(); // 0 (Sun) - 6 (Sat)
-    // Calculate Monday of this week. (If Sunday, go back 6 days. Else go back day-1)
+    const dayOfWeek = today.getDay();
     const diffToMon = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-
     const monday = new Date(today);
     monday.setDate(today.getDate() - diffToMon);
-
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
-
     return taskDate >= monday && taskDate <= sunday;
-};
-
-// Check if task is in current month
-const isThisMonth = (dateStr) => {
-    const taskDate = parseDate(dateStr);
-    if (!taskDate) return false;
-
-    const now = new Date();
-    return taskDate.getMonth() === now.getMonth() && taskDate.getFullYear() === now.getFullYear();
 };
 
 const getDaysOverdue = (dateStr) => {
     const taskDate = parseDate(dateStr);
     if (!taskDate) return 0;
-
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
     const diffTime = today - taskDate;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
 };
 
 // --- STYLES ---
-
-const STRICT_RESPONSIBLES = ['Claudia', 'Helen', 'Rodny', 'Jarlan', 'Francisco', 'Camila', 'Elisa', 'Melissa'];
 
 const CLIENT_COLORS = {
     "SunPartners": "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200 dark:border-orange-800",
@@ -136,34 +96,23 @@ const CLIENT_COLORS = {
 };
 
 const CATEGORY_COLORS = {
-    'Estratégico': '#8b5cf6', // Violet
-    'Creativo & Diseño': '#6366f1', // Indigo
-    'Marketing & Social Media': '#06b6d4', // Cyan
-    'Producción Audiovisual': '#ec4899', // Pink
-    'Creación de Contenido': '#f97316', // Orange
-    'Operaciones & Reuniones': '#10b981', // Emerald
-    'Administrativo & Finanzas': '#71717a', // Zinc
-    'Educación': '#f59e0b' // Amber
+    'Estratégico': '#8b5cf6',
+    'Creativo & Diseño': '#6366f1',
+    'Marketing & Social Media': '#06b6d4',
+    'Producción Audiovisual': '#ec4899',
+    'Creación de Contenido': '#f97316',
+    'Operaciones & Reuniones': '#10b981',
+    'Administrativo & Finanzas': '#71717a',
+    'Educación': '#f59e0b'
 };
 
-// Note: Backend strictly returns Enum values: PENDIENTE, EN_CURSO, REALIZADA, DEVUELTA.
-// Hierarchical Blindness: REALIZADA > EN_CURSO > DEVUELTA (by status or by flag)
 const getColumnId = (status, isReturned = false, comments = '') => {
     if (!status) return 'pendiente';
     const s = String(status).toUpperCase();
-
-    // High Priority: Always REALIZADA
     if (s === 'REALIZADA' || s === 'REALIZADO') return 'realizado';
-
-    // Medium Priority: EN_CURSO
     if (s === 'EN_CURSO' || s === 'EN PROCESO') return 'en-proceso';
-
-    // Shielding Logic: DEVUELTA or isReturned flag
-    // If [REINTEGRADA] appears, we trust the DB status unless isReturned is explicitly true.
     const hasReturnTag = (comments || '').includes('[DEVOLUCIÓN') && !(comments || '').includes('[REINTEGRADA');
-
     if (s === 'DEVUELTA' || isReturned || (s === 'PENDIENTE' && hasReturnTag)) return 'devuelto';
-
     return 'pendiente';
 };
 
@@ -191,12 +140,10 @@ const NativeTasks = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
 
-  // --- REACT QUERY: TASKS ---
   const {
     data: tasks = [],
     isLoading: loadingTasks,
     error: tasksError,
-    refetch: refetchTasks
   } = useQuery({
     queryKey: ['nativeTasks'],
     queryFn: async () => {
@@ -215,10 +162,12 @@ const NativeTasks = () => {
           assigneeName: task.assignee?.name || 'Sin Asignar',
           assigneeId: task.assigneeId,
           assigneeAvatar: task.assignee?.avatarUrl || null,
+          assigneeRole: task.assignee?.role || 'Colaborador',
+          assigneeStatus: task.assignee?.statusMessage || '',
           creatorId: task.creatorId,
           creatorName: task.creator?.name || 'Sistema',
           status: task.status,
-              isReturned: task.isReturned || false,
+          isReturned: task.isReturned || false,
           dueDateFormatted: task.dueDate ? task.dueDate.split('T')[0].split('-').reverse().join('-') : null,
           completedAt: task.completedAt,
           comments: task.comments,
@@ -230,7 +179,7 @@ const NativeTasks = () => {
           contentItemId: task.contentItem?.id,
           aiCategory: task.aiCategory,
           aiComplexity: task.aiComplexity,
-          plan: task.plan // Contains slug, month, year
+          plan: task.plan
       }));
     },
     enabled: !!localStorage.getItem('authToken'),
@@ -238,7 +187,6 @@ const NativeTasks = () => {
     refetchOnWindowFocus: true,
   });
 
-  // --- REACT QUERY: CLIENTS ---
   const { data: clientsList = [] } = useQuery({
     queryKey: ['clientsDropdown'],
     queryFn: async () => {
@@ -248,11 +196,9 @@ const NativeTasks = () => {
       const data = await response.json();
       return data.sort((a, b) => a.name.localeCompare(b.name));
     },
-    staleTime: 600000, // 10 minutes
+    staleTime: 600000,
   });
 
-
-  // Deep linking logic: open returned tasks sidebar and open specific task if taskId is provided
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const showReturned = params.get('showReturned') === 'true';
@@ -262,22 +208,15 @@ const NativeTasks = () => {
         setIsReturnedSidebarOpen(true);
     }
 
-    // Auto-scroll to specific task and open modal if taskId is provided
     if (taskId && tasks.length > 0) {
         setHighlightedTaskId(taskId);
-
-        // Magic touch: find the task and open it in the modal automatically
         const taskToOpen = tasks.find(t => String(t.id) === taskId);
         if (taskToOpen) {
             setEditingTask(taskToOpen);
-
-            // If the task is in the 'devuelto' column, ensure the sidebar is open
             if (getColumnId(taskToOpen.status, taskToOpen.isReturned, taskToOpen.comments) === 'devuelto') {
                 setIsReturnedSidebarOpen(true);
             }
         }
-
-        // Clean up URL parameters immediately via navigate to keep React Router state in sync
         const paramsToClean = new URLSearchParams(location.search);
         if (paramsToClean.has('taskId') || paramsToClean.has('showReturned')) {
             paramsToClean.delete('taskId');
@@ -285,41 +224,30 @@ const NativeTasks = () => {
             const newSearch = paramsToClean.toString();
             navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}`, { replace: true });
         }
-
-        // Wait for potential animations and list render
         setTimeout(() => {
             const element = document.getElementById(`task-${taskId}`);
             if (element) {
                 element.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }, showReturned ? 600 : 300);
-
-        // Turn off highlight after 3 seconds
         const timer = setTimeout(() => {
             setHighlightedTaskId(null);
         }, 3000);
-
         return () => clearTimeout(timer);
     }
-  }, [location.search, tasks]); // Only trigger when URL params or tasks change
+  }, [location.search, tasks, navigate, location.pathname]);
 
   const handleReturnTask = async () => {
       if (!returningTask || !returnReason.trim() || isSubmittingReturn) return;
-
-      // 1. Snapshot for Revert
       const previousTasks = [...tasks];
-
       try {
           setIsSubmittingReturn(true);
           const baseUrl = getApiBaseUrl();
-
-          // 2. Local State Prep (Comments tag and Exact Status)
           const returnTag = `[DEVOLUCIÓN - ${new Date().toLocaleDateString()}]: ${returnReason}`;
           const updatedComments = (returningTask.comments)
               ? `${returnTag}\n\n${returningTask.comments}`
               : returnTag;
 
-          // 3. OPTIMISTIC UPDATE
           queryClient.setQueryData(['nativeTasks'], prev => prev?.map(t =>
             t.id === returningTask.id
                 ? { ...t, status: 'DEVUELTA', isReturned: true, comments: updatedComments, comentarios: updatedComments }
@@ -341,7 +269,6 @@ const NativeTasks = () => {
                   title: "Tarea devuelta",
                   description: "Se ha cambiado el estado a Devuelto y se añadió el comentario.",
               });
-
               setReturningTask(null);
               setReturnReason('');
               queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
@@ -351,7 +278,6 @@ const NativeTasks = () => {
           }
       } catch (err) {
           console.error("Error returning task:", err);
-          // 4. REVERT on failure
           queryClient.setQueryData(['nativeTasks'], previousTasks);
           toast({
               title: "Error",
@@ -365,8 +291,6 @@ const NativeTasks = () => {
 
   const handleDeleteTask = async () => {
       if (!deletingTask || !deleteReason.trim() || isSubmittingDelete) return;
-
-      // Optimistic UI: Remove from local state
       const previousTasks = [...tasks];
       queryClient.setQueryData(['nativeTasks'], prev => prev?.filter(t => t.id !== deletingTask.id));
 
@@ -374,16 +298,13 @@ const NativeTasks = () => {
           setIsSubmittingDelete(true);
           const baseUrl = getApiBaseUrl();
           const token = localStorage.getItem('authToken');
-
           const response = await fetch(`${baseUrl}/api/tasks/${deletingTask.id}`, {
               method: 'DELETE',
               headers: {
                   'Content-Type': 'application/json',
                   'Authorization': token ? `Bearer ${token}` : ''
               },
-              body: JSON.stringify({
-                  reason: deleteReason
-              })
+              body: JSON.stringify({ reason: deleteReason })
           });
 
           if (response.ok) {
@@ -391,7 +312,6 @@ const NativeTasks = () => {
                   title: "Tarea eliminada",
                   description: "La tarea ha sido movida al registro de eliminadas.",
               });
-
               setDeletingTask(null);
               setDeleteReason('');
               queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
@@ -401,7 +321,6 @@ const NativeTasks = () => {
           }
       } catch (err) {
           console.error("Error deleting task:", err);
-          // Revert on failure
           queryClient.setQueryData(['nativeTasks'], previousTasks);
           toast({
               title: "Error",
@@ -413,13 +332,11 @@ const NativeTasks = () => {
       }
   };
 
-  // Extract unique responsibles (Names)
   const responsibles = useMemo(() => {
       const unique = [...new Set(tasks.map(t => t.assigneeName || "Desconocido"))].filter(Boolean).sort();
       return ['Todos', ...unique];
   }, [tasks]);
 
-  // Extract unique clients
   const clients = useMemo(() => {
       const unique = [...new Set(tasks.map(t => t.clientName || "Desconocido"))].filter(Boolean).sort();
       return ['Todos', ...unique];
@@ -427,63 +344,30 @@ const NativeTasks = () => {
 
   const filteredTasks = useMemo(() => {
       let filtered = tasks.filter(task => {
-        // 1. STRICT MONTH FILTER FOR "REALIZADO" COLUMN
-        // According to ticket: Only show tasks completed in the current month in the "Realizado" column.
         const columnId = getColumnId(task.status, task.isReturned, task.comments);
         if (columnId === 'realizado') {
             if (!task.completedAt) return false;
-
             const completedDate = new Date(task.completedAt);
             const now = new Date();
-
-            // Boundary check for current month (Local Client Time is fine for UI)
             const isCurrentMonth = completedDate.getMonth() === now.getMonth() &&
                                   completedDate.getFullYear() === now.getFullYear();
-
             if (!isCurrentMonth) return false;
         }
-
-        // 2. Filter by Responsible
         if (responsibleFilter !== 'Todos' && (task.assigneeName || "Desconocido") !== responsibleFilter) return false;
-
-        // 3. Filter by Client
         if (clientFilter !== 'Todos' && (task.clientName || "Desconocido") !== clientFilter) return false;
-
-        // 4. Filter by Date Logic (UI Date Filters)
-        // 'Hoy + Vencidos' (Default): Muestra fecha <= HOY.
-        // 'Solo Vencidos' (⚠️): Muestra fecha < HOY.
-        // 'Esta Semana': Muestra fecha >= Lunes Y fecha <= Domingo.
-        // 'Todos': Muestra TODO (tenga fecha o no).
-
-        if (dateFilter === 'Todos') {
-            return true;
-        }
-
-        if (dateFilter === 'Hoy + Vencidos') {
-             return isTodayOrOverdue(task.dueDateFormatted);
-        }
-
-        if (dateFilter === 'Solo Vencidos') {
-            return isOverdue(task.dueDateFormatted);
-        }
-
-        if (dateFilter === 'Esta Semana') {
-            return isThisWeek(task.dueDateFormatted);
-        }
-
+        if (dateFilter === 'Todos') return true;
+        if (dateFilter === 'Hoy + Vencidos') return isTodayOrOverdue(task.dueDateFormatted);
+        if (dateFilter === 'Solo Vencidos') return isOverdue(task.dueDateFormatted);
+        if (dateFilter === 'Esta Semana') return isThisWeek(task.dueDateFormatted);
         return true;
       });
-
-      // 5. Sorting: Always by Date Ascending (Oldest First)
       filtered.sort((a, b) => {
-          const dateA = parseDate(a.dueDateFormatted) || new Date(2100, 0, 1); // Future if null
+          const dateA = parseDate(a.dueDateFormatted) || new Date(2100, 0, 1);
           const dateB = parseDate(b.dueDateFormatted) || new Date(2100, 0, 1);
           return dateA - dateB;
       });
-
       return filtered;
   }, [tasks, responsibleFilter, clientFilter, dateFilter]);
-
 
   const columns = [
       { id: 'pendiente', title: 'Pendiente', color: 'bg-zinc-100 dark:bg-zinc-800/50' },
@@ -497,127 +381,63 @@ const NativeTasks = () => {
 
   const onDragEnd = async (result) => {
       const { destination, source, draggableId } = result;
-
-      // 1. Validation
       if (!destination) return;
-      if (
-          destination.droppableId === source.droppableId &&
-          destination.index === source.index
-      ) {
-          return;
-      }
-
-      // 2. Snapshot for reverting (Optimistic UI)
+      if (destination.droppableId === source.droppableId && destination.index === source.index) return;
       const previousTasks = [...tasks];
       const taskId = draggableId;
       const destinationColumnId = destination.droppableId;
       const sourceColumnId = source.droppableId;
-
-      // 3. Optimistic Update Logic
       const newTasks = [...tasks];
       const taskIndex = newTasks.findIndex(t => String(t.id) === taskId);
-
       if (taskIndex === -1) return;
-
-      // Get the task and remove it from original position
       const movedTask = { ...newTasks[taskIndex] };
       newTasks.splice(taskIndex, 1);
-
-      // Update internal status using the exact Enum values for visual consistency
       const newStatusEnum =
           destinationColumnId === 'pendiente' ? 'PENDIENTE' :
           destinationColumnId === 'en-proceso' ? 'EN_CURSO' :
           destinationColumnId === 'devuelto' ? 'DEVUELTA' : 'REALIZADA';
-
       movedTask.status = newStatusEnum;
-
-          // Reintegration Tag for Optimistic UI: If moving from Devuelto to Pendiente
-          if (newStatusEnum === 'PENDIENTE' && sourceColumnId === 'devuelto') {
-              const now = new Date().toLocaleString('es-CO');
-              const reintegratedTag = `[REINTEGRADA - ${now}]`;
-              movedTask.comments = `${reintegratedTag}\n${movedTask.comments || ''}`.trim();
-              movedTask.isReturned = false;
-              console.log("[onDragEnd] Optimistic UI: Added reintegrated tag and reset flag.");
+      if (newStatusEnum === 'PENDIENTE' && sourceColumnId === 'devuelto') {
+          const now = new Date().toLocaleString('es-CO');
+          const reintegratedTag = `[REINTEGRADA - ${now}]`;
+          movedTask.comments = `${reintegratedTag}\n${movedTask.comments || ''}`.trim();
+          movedTask.isReturned = false;
       }
-
-      // Calculate Insertion Position (handling filters and visibility)
-      // Filter the *remaining* tasks to match what's visible in the destination column
       const visibleTasksInDestColumn = newTasks.filter(task => {
-          // Match Column
           if (getColumnId(task.status, task.isReturned, task.comments) !== destinationColumnId) return false;
-
-          // Match Active Filters
           if (responsibleFilter !== 'Todos' && (task.assigneeName || "Desconocido") !== responsibleFilter) return false;
           if (clientFilter !== 'Todos' && (task.clientName || "Desconocido") !== clientFilter) return false;
-
-          // Match Date Filter Logic
           if (dateFilter === 'Hoy + Vencidos' && !isTodayOrOverdue(task.dueDateFormatted)) return false;
           if (dateFilter === 'Solo Vencidos' && !isOverdue(task.dueDateFormatted)) return false;
           if (dateFilter === 'Esta Semana' && !isThisWeek(task.dueDateFormatted)) return false;
           if (dateFilter === 'Todos') return true;
-
           return true;
       });
-
-      // Determine where to insert in the global 'newTasks' list
       let insertionIndexInGlobal = -1;
-
       if (visibleTasksInDestColumn.length === 0) {
-          // If column is empty, append to end
           insertionIndexInGlobal = newTasks.length;
       } else if (destination.index >= visibleTasksInDestColumn.length) {
-          // Insert after the last visible task
           const lastVisibleTask = visibleTasksInDestColumn[visibleTasksInDestColumn.length - 1];
           const lastVisibleIndex = newTasks.findIndex(t => t.id === lastVisibleTask.id);
           insertionIndexInGlobal = lastVisibleIndex + 1;
       } else {
-          // Insert before the task at destination.index
           const anchorTask = visibleTasksInDestColumn[destination.index];
           insertionIndexInGlobal = newTasks.findIndex(t => t.id === anchorTask.id);
       }
-
-      // Safe insertion
-      if (insertionIndexInGlobal !== -1) {
-           newTasks.splice(insertionIndexInGlobal, 0, movedTask);
-      } else {
-           // Fallback (should not happen if logic is correct)
-           newTasks.push(movedTask);
-      }
-
-      // Apply Optimistic Update
+      if (insertionIndexInGlobal !== -1) newTasks.splice(insertionIndexInGlobal, 0, movedTask);
+      else newTasks.push(movedTask);
       queryClient.setQueryData(['nativeTasks'], newTasks);
-
-      // 4. API Sync (Only if column changed)
-      if (sourceColumnId === destinationColumnId) {
-          return;
-      }
-
-      // Trigger confetti if moving to 'realizado' for the first time in this interaction
-      // Anti-spam: Only if it's a real status transition from another column
-      if (sourceColumnId !== 'realizado' && destinationColumnId === 'realizado') {
-          triggerConfetti();
-      }
-
-      // Para nativo usamos los IDs de columna como estado: "Pendiente", "En proceso", "Realizado", "Devuelto"
+      if (sourceColumnId === destinationColumnId) return;
+      if (sourceColumnId !== 'realizado' && destinationColumnId === 'realizado') triggerConfetti();
         const newStatusForDB =
             destinationColumnId === 'pendiente' ? 'PENDIENTE' :
             destinationColumnId === 'en-proceso' ? 'EN_CURSO' :
             destinationColumnId === 'devuelto' ? 'DEVUELTA' : 'REALIZADA';
-
       try {
           const baseUrl = getApiBaseUrl();
           const token = localStorage.getItem('authToken');
-
-          // Construct Payload
           const payload = { status: newStatusForDB };
-
-          // If moving to Pendiente from Devuelto, reset flag. Backend handles [REINTEGRADA] tag.
-          if (newStatusForDB === 'PENDIENTE' && sourceColumnId === 'devuelto') {
-              payload.isReturned = false;
-          }
-
-          console.log(`[onDragEnd] Syncing status to ${newStatusForDB}...`, payload);
-
+          if (newStatusForDB === 'PENDIENTE' && sourceColumnId === 'devuelto') payload.isReturned = false;
           const response = await fetch(`${baseUrl}/api/tasks/${taskId}`, {
               method: 'PATCH',
               headers: {
@@ -626,19 +446,11 @@ const NativeTasks = () => {
               },
               body: JSON.stringify(payload)
           });
-
-          if (!response.ok) {
-              throw new Error("Failed to update status in backend");
-          }
-
+          if (!response.ok) throw new Error("Failed to update status in backend");
           queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
       } catch (err) {
           console.error("Drag and drop failed:", err);
-          // Manually reset local tasks to previous snapshot on query fail if needed,
-          // but React Query will usually handle re-sync on next interval.
-          // For immediate visual revert:
           queryClient.setQueryData(['nativeTasks'], previousTasks);
-
           toast({
               title: "Error de sincronización",
               description: "Se revirtió el movimiento porque no se pudo actualizar el estado.",
@@ -666,9 +478,6 @@ const NativeTasks = () => {
               <p className="text-zinc-500 dark:text-zinc-400 text-sm max-w-sm text-center">
                   Hubo un problema al conectar con la base de datos.
               </p>
-              <p className="text-xs text-zinc-400 font-mono bg-zinc-100 dark:bg-zinc-900 px-2 py-1 rounded">
-                  {tasksError?.message}
-              </p>
               <button
                 onClick={() => window.location.reload()}
                 className="mt-4 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity"
@@ -684,20 +493,14 @@ const NativeTasks = () => {
       <PageHeader
         title="Gestión de Tareas"
         subtitle="Gestiona y prioriza el flujo operativo de la agencia."
-
       >
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          <Button
-            size="lg"
-            onClick={() => setIsCreating(true)}
-            className="flex-1 sm:flex-none"
-          >
+          <Button size="lg" onClick={() => setIsCreating(true)} className="flex-1 sm:flex-none">
             <Plus className="w-4 h-4 mr-2" />
             Nueva Tarea
           </Button>
 
           <div className="flex flex-wrap items-center gap-3 flex-1 sm:flex-none">
-            {/* Responsible Filter */}
             <div className="relative group">
                 <select
                     value={responsibleFilter}
@@ -714,7 +517,6 @@ const NativeTasks = () => {
                 <ChevronDown className="w-4 h-4 text-zinc-400 absolute right-3 top-2.5 pointer-events-none group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors" />
             </div>
 
-             {/* Client Filter */}
              <div className="relative group">
                 <select
                     value={clientFilter}
@@ -731,7 +533,6 @@ const NativeTasks = () => {
                 <ChevronDown className="w-4 h-4 text-zinc-400 absolute right-3 top-2.5 pointer-events-none group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors" />
             </div>
 
-             {/* Date Filter (Dropdown Updated) */}
              <div className="relative group">
                 <select
                     value={dateFilter}
@@ -748,268 +549,70 @@ const NativeTasks = () => {
                     <option value="Esta Semana">Esta Semana</option>
                     <option value="Todos">Todos</option>
                 </select>
-
-                {/* Dynamic Icon */}
                 {dateFilter === 'Solo Vencidos' ? (
                      <AlertTriangle className="w-4 h-4 text-red-500 absolute left-3 top-2.5 pointer-events-none" />
                 ) : (
                      <Calendar className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5 pointer-events-none" />
                 )}
-
                 <ChevronDown className="w-4 h-4 text-zinc-400 absolute right-3 top-2.5 pointer-events-none group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors" />
             </div>
           </div>
         </div>
       </PageHeader>
 
-      {/* Modals */}
-      <TaskCreateModal
-          isOpen={isCreating}
-          onClose={() => setIsCreating(false)}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
-            queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
-          }}
-          clientsList={clientsList}
-      />
-      <TaskEditModal
-          isOpen={!!editingTask}
-          onClose={() => {
-              setEditingTask(null);
-              // Clear taskId from URL to prevent auto-reopening if it was opened via deep link
-              const params = new URLSearchParams(location.search);
-              if (params.has('taskId')) {
-                  params.delete('taskId');
-                  const newSearch = params.toString();
-                  navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}`, { replace: true });
-              }
-          }}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
-            queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
-          }}
-          clientsList={clientsList}
-          taskData={editingTask}
-      />
+      <TaskCreateModal isOpen={isCreating} onClose={() => setIsCreating(false)} onSuccess={() => { queryClient.invalidateQueries({ queryKey: ['nativeTasks'] }); queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] }); }} clientsList={clientsList} />
+      <TaskEditModal isOpen={!!editingTask} onClose={() => { setEditingTask(null); const params = new URLSearchParams(location.search); if (params.has('taskId')) { params.delete('taskId'); const newSearch = params.toString(); navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}`, { replace: true }); } }} onSuccess={() => { queryClient.invalidateQueries({ queryKey: ['nativeTasks'] }); queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] }); }} clientsList={clientsList} taskData={editingTask} />
 
-      {/* Return Reason Modal */}
       <Dialog open={!!returningTask} onOpenChange={(open) => !open && setReturningTask(null)}>
           <DialogContent className="sm:max-w-md dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
               <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 text-red-600">
-                      <RotateCcw className="w-5 h-5" />
-                      Devolver tarea
-                  </DialogTitle>
-                  <DialogDescription>
-                      Por favor, explica por qué estás devolviendo la tarea: <strong>{returningTask?.title}</strong>
-                  </DialogDescription>
+                  <DialogTitle className="flex items-center gap-2 text-red-600"><RotateCcw className="w-5 h-5" /> Devolver tarea</DialogTitle>
+                  <DialogDescription>Por favor, explica por qué estás devolviendo la tarea: <strong>{returningTask?.title}</strong></DialogDescription>
               </DialogHeader>
-
               <div className="py-4">
-                  <textarea
-                      value={returnReason}
-                      onChange={(e) => setReturnReason(e.target.value)}
-                      placeholder="Ej: Faltan los assets de diseño, el copy no es claro..."
-                      className="w-full min-h-[120px] bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none dark:text-white"
-                      autoFocus
-                  />
+                  <textarea value={returnReason} onChange={(e) => setReturnReason(e.target.value)} placeholder="Ej: Faltan los assets de diseño, el copy no es claro..." className="w-full min-h-[120px] bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none dark:text-white" autoFocus />
               </div>
-
               <DialogFooter className="flex sm:justify-between gap-3">
-                  <button
-                      onClick={() => setReturningTask(null)}
-                      className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
-                  >
-                      Cancelar
-                  </button>
-                  <button
-                      onClick={() => handleReturnTask()}
-                      disabled={!returnReason.trim() || isSubmittingReturn}
-                      className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
-                  >
-                      {isSubmittingReturn ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                      Devolver ahora
-                  </button>
+                  <button onClick={() => setReturningTask(null)} className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors">Cancelar</button>
+                  <button onClick={() => handleReturnTask()} disabled={!returnReason.trim() || isSubmittingReturn} className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20">{isSubmittingReturn ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Devolver ahora</button>
               </DialogFooter>
           </DialogContent>
       </Dialog>
 
-      {/* Hard Delete with Audit Log Modal */}
       <Dialog open={!!deletingTask} onOpenChange={(open) => !open && setDeletingTask(null)}>
           <DialogContent className="sm:max-w-md dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
-              <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
-                      ¿Por qué quieres eliminar esta tarea?
-                  </DialogTitle>
-                  <DialogDescription>
-                      La tarea <strong>{deletingTask?.title}</strong> dejará de ser visible en el Kanban y en las métricas.
-                  </DialogDescription>
-              </DialogHeader>
-
-              <div className="py-4">
-                  <textarea
-                      value={deleteReason}
-                      onChange={(e) => setDeleteReason(e.target.value)}
-                      placeholder="Ej: Es un duplicado, el cliente canceló..."
-                      className="w-full min-h-[120px] bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none dark:text-white"
-                      autoFocus
-                      required
-                  />
-              </div>
-
-              <DialogFooter className="flex sm:justify-between gap-3">
-                  <button
-                      onClick={() => setDeletingTask(null)}
-                      className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
-                  >
-                      Cancelar
-                  </button>
-                  <button
-                      onClick={() => handleDeleteTask()}
-                      disabled={!deleteReason.trim() || isSubmittingDelete}
-                      className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
-                  >
-                      {isSubmittingDelete ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                      Eliminar Tarea
-                  </button>
-              </DialogFooter>
+              <DialogHeader><DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">¿Por qué quieres eliminar esta tarea?</DialogTitle><DialogDescription>La tarea <strong>{deletingTask?.title}</strong> dejará de ser visible en el Kanban y en las métricas.</DialogDescription></DialogHeader>
+              <div className="py-4"><textarea value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)} placeholder="Ej: Es un duplicado, el cliente canceló..." className="w-full min-h-[120px] bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none dark:text-white" autoFocus required /></div>
+              <DialogFooter className="flex sm:justify-between gap-3"><button onClick={() => setDeletingTask(null)} className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors">Cancelar</button><button onClick={() => handleDeleteTask()} disabled={!deleteReason.trim() || isSubmittingDelete} className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20">{isSubmittingDelete ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Eliminar Tarea</button></DialogFooter>
           </DialogContent>
       </Dialog>
 
-      {/* Kanban Board */}
       <DragDropContext onDragEnd={onDragEnd}>
           <div className="flex gap-6 flex-1 min-h-[500px] relative">
-
-              {/* OVERLAY / BACKDROP FOR RETURNED TASKS */}
               <AnimatePresence>
                 {isReturnedSidebarOpen && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => setIsReturnedSidebarOpen(false)}
-                        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] transition-opacity"
-                    />
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsReturnedSidebarOpen(false)} className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] transition-opacity" />
                 )}
               </AnimatePresence>
-
-              {/* DRAWER PANEL FOR RETURNED TASKS */}
-              <div className={cn(
-                  "fixed right-0 top-0 h-full w-full max-w-sm sm:max-w-md bg-white dark:bg-zinc-950 z-[110] shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col border-l border-zinc-200 dark:border-zinc-800",
-                  isReturnedSidebarOpen ? "translate-x-0" : "translate-x-full"
-              )}>
-                  <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
-                      <div className="flex flex-col">
-                        <h3 className="text-lg font-bold text-red-600 flex items-center gap-2">
-                            <RotateCcw className="w-5 h-5" />
-                            Tareas devueltas
-                        </h3>
-                        <p className="text-xs text-zinc-500 mt-1 font-medium">Estas tareas requieren tu atención inmediata.</p>
-                      </div>
-                      <button
-                        onClick={() => setIsReturnedSidebarOpen(false)}
-                        className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full text-zinc-400 transition-colors"
-                      >
-                          <X className="w-5 h-5" />
-                      </button>
-                  </div>
-
-                  <Droppable droppableId="devuelto">
-                      {(provided, snapshot) => (
-                          <div
-                              {...provided.droppableProps}
-                              ref={provided.innerRef}
-                              className={cn(
-                                  "flex-1 p-6 overflow-y-auto space-y-4",
-                                  snapshot.isDraggingOver && "bg-red-50/20 dark:bg-red-900/5"
-                              )}
-                          >
-                              {returnedTasks.length === 0 ? (
-                                  <div className="h-40 flex flex-col items-center justify-center text-zinc-400 border-2 border-dashed border-zinc-100 dark:border-zinc-800 rounded-2xl">
-                                      <CheckCircle2 className="w-8 h-8 mb-2 opacity-20" />
-                                      <p className="text-sm">No hay tareas devueltas</p>
-                                  </div>
-                              ) : (
-                                  returnedTasks.map((task, index) => (
-                                      <TaskCard
-                                          key={String(task.id)}
-                                          task={task}
-                                          index={index}
-                                          highlightedTaskId={highlightedTaskId}
-                                          onClick={(t) => setEditingTask(t)}
-                                          onReturn={(t) => setReturningTask(t)}
-                                          onDelete={(t) => setDeletingTask(t)}
-                                      />
-                                  ))
-                              )}
-                              {provided.placeholder}
-                          </div>
-                      )}
-                  </Droppable>
+              <div className={cn("fixed right-0 top-0 h-full w-full max-w-sm sm:max-w-md bg-white dark:bg-zinc-950 z-[110] shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col border-l border-zinc-200 dark:border-zinc-800", isReturnedSidebarOpen ? "translate-x-0" : "translate-x-full")}>
+                  <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50"><div className="flex flex-col"><h3 className="text-lg font-bold text-red-600 flex items-center gap-2"><RotateCcw className="w-5 h-5" /> Tareas devueltas</h3><p className="text-xs text-zinc-500 mt-1 font-medium">Estas tareas requieren tu atención inmediata.</p></div><button onClick={() => setIsReturnedSidebarOpen(false)} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full text-zinc-400 transition-colors"><X className="w-5 h-5" /></button></div>
+                  <Droppable droppableId="devuelto">{(provided, snapshot) => ( <div {...provided.droppableProps} ref={provided.innerRef} className={cn("flex-1 p-6 overflow-y-auto space-y-4", snapshot.isDraggingOver && "bg-red-50/20 dark:bg-red-900/5")}> {returnedTasks.length === 0 ? ( <div className="h-40 flex flex-col items-center justify-center text-zinc-400 border-2 border-dashed border-zinc-100 dark:border-zinc-800 rounded-2xl"> <CheckCircle2 className="w-8 h-8 mb-2 opacity-20" /> <p className="text-sm">No hay tareas devueltas</p> </div> ) : ( returnedTasks.map((task, index) => ( <TaskCard key={String(task.id)} task={task} index={index} highlightedTaskId={highlightedTaskId} onClick={(t) => setEditingTask(t)} onReturn={(t) => setReturningTask(t)} onDelete={(t) => setDeletingTask(t)} /> )) )} {provided.placeholder} </div> )}</Droppable>
               </div>
-
-              {/* Grid Column Layout Area */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1">
                   {columns.map((col) => {
                       const columnTasks = filteredTasks.filter(t => getColumnId(t.status, t.isReturned, t.comments) === col.id);
-
                       return (
                         <div key={col.id} className="flex flex-col gap-4">
-                            {/* Column Header */}
                             <div className="flex items-center justify-between px-1 h-8">
                                 <div className="flex items-center gap-2">
                                     <h3 className="font-semibold text-zinc-700 dark:text-zinc-200 text-sm">{col.title}</h3>
-                                    <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs px-2 py-0.5 rounded-full font-medium">
-                                        {columnTasks.length}
-                                    </span>
+                                    <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs px-2 py-0.5 rounded-full font-medium">{columnTasks.length}</span>
                                 </div>
-
                                 {col.id === 'pendiente' && returnedTasks.length > 0 && (
-                                    <button
-                                        onClick={() => setIsReturnedSidebarOpen(true)}
-                                        className="group/returned relative flex items-center gap-1.5 px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-all border border-red-100 dark:border-red-900/30 shadow-sm"
-                                    >
-                                        <RotateCcw className="w-3.5 h-3.5 animate-pulse" />
-                                        <span className="text-[10px] font-black uppercase tracking-tighter">
-                                            {returnedTasks.length} Devueltas
-                                        </span>
-                                    </button>
+                                    <button onClick={() => setIsReturnedSidebarOpen(true)} className="group/returned relative flex items-center gap-1.5 px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-all border border-red-100 dark:border-red-900/30 shadow-sm"><RotateCcw className="w-3.5 h-3.5 animate-pulse" /><span className="text-[10px] font-black uppercase tracking-tighter">{returnedTasks.length} Devueltas</span></button>
                                 )}
                             </div>
-
-                            {/* Column Area */}
-                            <Droppable droppableId={col.id}>
-                                {(provided, snapshot) => (
-                                    <div
-                                        {...provided.droppableProps}
-                                        ref={provided.innerRef}
-                                        className={cn(
-                                            "flex-1 rounded-xl p-2 transition-colors space-y-3 min-h-[100px]",
-                                            col.color,
-                                            "bg-opacity-50 dark:bg-opacity-20 border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-700/50",
-                                            snapshot.isDraggingOver && "ring-2 ring-indigo-600/20"
-                                        )}
-                                    >
-                                        {columnTasks.map((task, index) => (
-                                            <TaskCard
-                                                key={String(task.id)}
-                                                task={task}
-                                                index={index}
-                                                highlightedTaskId={highlightedTaskId}
-                                                onClick={(t) => setEditingTask(t)}
-                                                onReturn={(t) => setReturningTask(t)}
-                                                onDelete={(t) => setDeletingTask(t)}
-                                            />
-                                        ))}
-                                        {provided.placeholder}
-                                        {columnTasks.length === 0 && !snapshot.isDraggingOver && (
-                                            <div className="h-24 flex items-center justify-center text-zinc-400 dark:text-zinc-600 text-sm border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">
-                                                Sin tareas
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </Droppable>
+                            <Droppable droppableId={col.id}>{(provided, snapshot) => ( <div {...provided.droppableProps} ref={provided.innerRef} className={cn("flex-1 rounded-xl p-2 transition-colors space-y-3 min-h-[100px]", col.color, "bg-opacity-50 dark:bg-opacity-20 border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-700/50", snapshot.isDraggingOver && "ring-2 ring-indigo-600/20")}> {columnTasks.map((task, index) => ( <TaskCard key={String(task.id)} task={task} index={index} highlightedTaskId={highlightedTaskId} onClick={(t) => setEditingTask(t)} onReturn={(t) => setReturningTask(t)} onDelete={(t) => setDeletingTask(t)} /> ))} {provided.placeholder} {columnTasks.length === 0 && !snapshot.isDraggingOver && ( <div className="h-24 flex items-center justify-center text-zinc-400 dark:text-zinc-600 text-sm border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl"> Sin tareas </div> )} </div> )}</Droppable>
                         </div>
                       );
                   })}
@@ -1023,193 +626,50 @@ const NativeTasks = () => {
 const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete }) => {
     const navigate = useNavigate();
     const isHighlighted = highlightedTaskId === String(task.id);
-
-    // Overdue Logic for Style
     const columnId = getColumnId(task.status, task.isReturned, task.comments);
     const isDone = columnId === 'realizado';
     const isReturned = columnId === 'devuelto';
     const overdue = !isDone && isOverdue(task.dueDateFormatted);
     const daysOverdue = overdue ? getDaysOverdue(task.dueDateFormatted) : 0;
-
-    // Check if we should highlight overdue items (visual indicator logic)
-    // "Si selecciono 'Solo Vencidos', o si hay tareas vencidas en la vista 'Hoy', resáltalas"
-    // Basically, if it is overdue, we style it.
-
     const clientColorClass = CLIENT_COLORS[task.clientName] || "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
 
     return (
         <Draggable draggableId={String(task.id)} index={index}>
             {(provided, snapshot) => (
-                <div
-                    id={`task-${task.id}`}
-                    ref={provided.innerRef}
-                    {...provided.draggableProps}
-                    {...provided.dragHandleProps}
-                    className="mb-3 cursor-pointer group"
-                    onClick={() => onClick(task)}
-                    // Important: Only pass style if provided.draggableProps.style exists
-                    style={provided.draggableProps.style}
-                >
-                    <div
-                        className={cn(
-                            "rounded-xl border bg-card text-card-foreground shadow-sm",
-                            "group cursor-pointer relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm transition-shadow",
-                            "transition-all duration-700 ease-in-out",
-                            // Border priority: Dragging > Highlight > Overdue > Priority > Normal
-                            snapshot.isDragging ? "ring-2 ring-indigo-600 shadow-xl z-50 opacity-90 rotate-2 scale-105" : "",
-                            !snapshot.isDragging && isHighlighted ? "ring-2 ring-red-500 scale-[1.02] z-10" : "ring-2 ring-transparent",
-                            !snapshot.isDragging && !isHighlighted && overdue ? "border-red-500/50 ring-1 ring-red-500/20" : "",
-                            !snapshot.isDragging && !isHighlighted && !overdue && task.isPriority ? "border-l-4 border-l-red-500 border-zinc-200 dark:border-zinc-800" : "border-zinc-200 dark:border-zinc-800",
-                            isReturned && !isHighlighted && "border-red-500/30 bg-red-50/20 dark:bg-red-900/10 shadow-[inset_0_0_12px_rgba(239,68,68,0.05)]"
-                        )}
-                    >
+                <div id={`task-${task.id}`} ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} className="mb-3 cursor-pointer group" onClick={() => onClick(task)} style={provided.draggableProps.style}>
+                    <div className={cn("rounded-xl border bg-card text-card-foreground shadow-sm", "group cursor-pointer relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm transition-shadow", "transition-all duration-700 ease-in-out", snapshot.isDragging ? "ring-2 ring-indigo-600 shadow-xl z-50 opacity-90 rotate-2 scale-105" : "", !snapshot.isDragging && isHighlighted ? "ring-2 ring-red-500 scale-[1.02] z-10" : "ring-2 ring-transparent", !snapshot.isDragging && !isHighlighted && overdue ? "border-red-500/50 ring-1 ring-red-500/20" : "", !snapshot.isDragging && !isHighlighted && !overdue && task.isPriority ? "border-l-4 border-l-red-500 border-zinc-200 dark:border-zinc-800" : "border-zinc-200 dark:border-zinc-800", isReturned && !isHighlighted && "border-red-500/30 bg-red-50/20 dark:bg-red-900/10 shadow-[inset_0_0_12px_rgba(239,68,68,0.05)]")}>
                         <div className="flex flex-col gap-3 p-4">
-                                {/* Header: Client Badge */}
                                 <div className="flex justify-between items-start">
                                      <div className="flex flex-col gap-1.5">
+                                        <div className="flex items-center gap-2"><span className={cn("text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md border", clientColorClass)}>{task.clientName}</span>{isReturned && (<span className="text-[9px] font-black text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 rounded flex items-center gap-1 uppercase tracking-tight"><RotateCcw className="w-2.5 h-2.5" /> Devuelto</span>)}</div>
                                         <div className="flex items-center gap-2">
-                                            <span className={cn("text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md border", clientColorClass)}>
-                                                {task.clientName}
-                                            </span>
-                                            {isReturned && (
-                                                <span className="text-[9px] font-black text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 rounded flex items-center gap-1 uppercase tracking-tight">
-                                                    <RotateCcw className="w-2.5 h-2.5" />
-                                                    Devuelto
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex items-center gap-1.5">
-                                                <div
-                                                    className="w-1.5 h-1.5 rounded-full"
-                                                    style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }}
-                                                />
-                                                <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter">
-                                                    {task.aiCategory || "Sin Clasificar"}
-                                                </span>
-                                            </div>
-                                            {task.aiComplexity && (
-                                                <>
-                                                    <span className="w-1 h-1 rounded-full bg-zinc-200" />
-                                                    <span className={cn(
-                                                        "text-[9px] font-bold uppercase tracking-tighter",
-                                                        task.aiComplexity === 'ALTA' ? 'text-red-500' : task.aiComplexity === 'MEDIA' ? 'text-indigo-500' : 'text-emerald-500'
-                                                    )}>
-                                                        {task.aiComplexity}
-                                                    </span>
-                                                </>
-                                            )}
+                                            <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }} /><span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter">{task.aiCategory || "Sin Clasificar"}</span></div>
+                                            {task.aiComplexity && (<><span className="w-1 h-1 rounded-full bg-zinc-200" /><span className={cn("text-[9px] font-bold uppercase tracking-tighter", task.aiComplexity === 'ALTA' ? 'text-red-500' : task.aiComplexity === 'MEDIA' ? 'text-indigo-500' : 'text-emerald-500')}>{task.aiComplexity}</span></>)}
                                         </div>
                                      </div>
-
-                                     {/* Priority or Overdue Badge */}
                                      <div className="flex flex-col items-end gap-1">
                                         <div className="flex items-center gap-1">
-                                            {!isReturned && (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onReturn(task);
-                                                    }}
-                                                    className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-500 rounded-xl transition-colors group/btn"
-                                                    title="Devolver tarea"
-                                                >
-                                                    <RotateCcw className="w-3.5 h-3.5" />
-                                                </button>
-                                            )}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onDelete(task);
-                                                }}
-                                                className="p-1 text-slate-400 hover:text-red-500 rounded-xl transition-colors group/btn"
-                                                title="Eliminar tarea"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                            {!isReturned && (<button onClick={(e) => { e.stopPropagation(); onReturn(task); }} className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-500 rounded-xl transition-colors group/btn"><RotateCcw className="w-3.5 h-3.5" /></button>)}
+                                            <button onClick={(e) => { e.stopPropagation(); onDelete(task); }} className="p-1 text-slate-400 hover:text-red-500 rounded-xl transition-colors group/btn"><Trash2 className="w-3.5 h-3.5" /></button>
                                         </div>
-                                        {overdue && (
-                                            <span className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-900/30 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-800 flex items-center gap-1">
-                                                <AlertOctagon className="w-3 h-3" />
-                                                Vencido (+{daysOverdue}d)
-                                            </span>
-                                        )}
-                                        {task.isPriority && !overdue && !isReturned && (
-                                            <span className="text-[10px] font-bold text-white flex items-center gap-1 bg-orange-600 px-1.5 py-0.5 rounded border border-orange-500 shadow-sm animate-pulse">
-                                                <Zap className="w-3 h-3 fill-current" />
-                                                PRIORITARIO
-                                            </span>
-                                        )}
-                                        {task.isSpecial && !isReturned && (
-                                            <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 bg-purple-50 dark:bg-purple-900/30 px-1.5 py-0.5 rounded border border-purple-100 dark:border-purple-800">
-                                                <Star className="w-3 h-3 fill-current" />
-                                                {task.specialType || 'Especial'}
-                                            </span>
-                                        )}
+                                        {overdue && (<span className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-900/30 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-800 flex items-center gap-1"><AlertOctagon className="w-3 h-3" /> Vencido (+{daysOverdue}d)</span>)}
+                                        {task.isPriority && !overdue && !isReturned && (<span className="text-[10px] font-bold text-white flex items-center gap-1 bg-orange-600 px-1.5 py-0.5 rounded border border-orange-500 shadow-sm animate-pulse"><Zap className="w-3 h-3 fill-current" /> PRIORITARIO</span>)}
+                                        {task.isSpecial && !isReturned && (<span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 bg-purple-50 dark:bg-purple-900/30 px-1.5 py-0.5 rounded border border-purple-100 dark:border-purple-800"><Star className="w-3 h-3 fill-current" /> {task.specialType || 'Especial'}</span>)}
                                      </div>
                                 </div>
-
-                                {/* Body: Task Title */}
-                                    <div>
-                                        <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 leading-snug mb-1">
-                                            {task.title}
-                                        </h4>
-                                        <div className="flex items-center gap-1.5 opacity-60">
-                                            <span className="text-[9px] text-zinc-500 uppercase tracking-tighter font-semibold">Creado por</span>
-                                            <span className="text-[9px] text-primary font-bold uppercase tracking-tighter">{task.creatorName}</span>
-                                        </div>
-                                    </div>
-
-                                {/* Footer: Date & Avatar & Comments */}
+                                    <div><h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 leading-snug mb-1">{task.title}</h4><div className="flex items-center gap-1.5 opacity-60"><span className="text-[9px] text-zinc-500 uppercase tracking-tighter font-semibold">Creado por</span><span className="text-[9px] text-primary font-bold uppercase tracking-tighter">{task.creatorName}</span></div></div>
                                 <div className="flex items-center justify-between mt-1 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
-                                    <div className={cn(
-                                        "flex items-center gap-1.5 text-xs font-medium transition-colors",
-                                        overdue ? "text-red-600 font-bold animate-pulse" : "text-zinc-400 dark:text-zinc-500"
-                                    )}>
+                                    <div className={cn("flex items-center gap-1.5 text-xs font-medium transition-colors", overdue ? "text-red-600 font-bold animate-pulse" : "text-zinc-400 dark:text-zinc-500")}>
                                         <Calendar className={cn("w-3.5 h-3.5", overdue && "text-red-600")} />
                                         {task.dueDateFormatted || "Sin fecha"}
                                     </div>
-
                                     <div className="flex items-center gap-2">
-                                        {(task.contentPlanId || task.plan) && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    // High-priority: uses the root contentPlanId if available for direct deep linking
-                                                    if (task.contentPlanId) {
-                                                        navigate(`/parrillas/${task.contentPlanId}?item=${task.contentItemId}`);
-                                                    } else if (task.plan && task.plan.slug) {
-                                                        const monthStr = String(task.plan.month).padStart(2, '0');
-                                                        navigate(`/parrillas/${task.plan.slug}/${monthStr}-${task.plan.year}?itemId=${task.contentItemId}`);
-                                                    }
-                                                }}
-                                                className="text-indigo-600 hover:text-indigo-800 transition-colors p-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-full"
-                                                title="Ir a la Parrilla de Contenido"
-                                            >
-                                                <LayoutGrid className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
-                                        {task.referenceUrl && (
-                                            <a
-                                                href={task.referenceUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="text-primary hover:text-primary/80 transition-colors p-1 bg-primary/10 rounded-full"
-                                                title="Ver Referencia"
-                                            >
-                                                <LinkIcon className="w-3.5 h-3.5" />
-                                            </a>
-                                        )}
-                                        {task.comments && task.comments.trim() !== '' && (
-                                            <div className="text-zinc-400 dark:text-zinc-500 mr-1" title="Tiene comentarios">
-                                                <MessageSquare className="w-3.5 h-3.5" />
-                                            </div>
-                                        )}
-                                        <TeamAvatar
-                                            member={{ name: task.assigneeName, avatarUrl: task.assigneeAvatar }}
-                                            className="w-6 h-6 ring-2 ring-white dark:ring-zinc-900"
-                                        />
+                                        {(task.contentPlanId || task.plan) && (<button onClick={(e) => { e.stopPropagation(); if (task.contentPlanId) { navigate(`/parrillas/${task.contentPlanId}?item=${task.contentItemId}`); } else if (task.plan && task.plan.slug) { const monthStr = String(task.plan.month).padStart(2, '0'); navigate(`/parrillas/${task.plan.slug}/${monthStr}-${task.plan.year}?itemId=${task.contentItemId}`); } }} className="text-indigo-600 hover:text-indigo-800 transition-colors p-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-full"><LayoutGrid className="w-3.5 h-3.5" /></button>)}
+                                        {task.referenceUrl && (<a href={task.referenceUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-primary hover:text-primary/80 transition-colors p-1 bg-primary/10 rounded-full"><LinkIcon className="w-3.5 h-3.5" /></a>)}
+                                        {task.comments && task.comments.trim() !== '' && (<div className="text-zinc-400 dark:text-zinc-500 mr-1"><MessageSquare className="w-3.5 h-3.5" /></div>)}
+                                        <UserAvatarPopover user={{ name: task.assigneeName, avatarUrl: task.assigneeAvatar, role: task.assigneeRole, statusMessage: task.assigneeStatus }}>
+                                            <TeamAvatar member={{ name: task.assigneeName, avatarUrl: task.assigneeAvatar }} showTitle={false} className="w-6 h-6 ring-2 ring-white dark:ring-zinc-900" />
+                                        </UserAvatarPopover>
                                     </div>
                                 </div>
                             </div>

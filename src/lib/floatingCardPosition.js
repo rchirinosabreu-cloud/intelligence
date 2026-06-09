@@ -1,5 +1,5 @@
 const VIEWPORT_MARGIN = 16;
-const TRIGGER_GAP = 12;
+const TRIGGER_GAP = 0; // Reduced to 0px to eliminate dead zones as requested
 
 export function getFloatingCardPosition(triggerRect, cardSize, viewportSize) {
   const viewportWidth = viewportSize.width;

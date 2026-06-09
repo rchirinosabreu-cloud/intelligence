@@ -14,9 +14,10 @@
     "lint:warn": "eslint .",
     "db:fix": "node scripts/fix_content_arrays.js",
     "db:status": "node scripts/add_status_message.js",
-    "test:activity-build": "node --test tests/activity*.test.js"
+    "test:activity-build": "node --test tests/activityComponentsCompile.test.js"
   },
   "dependencies": {
+    "@floating-ui/react": "^0.27.19",
     "@google-cloud/discoveryengine": "^2.5.2",
     "@google-cloud/storage": "^7.19.0",
     "@google/genai": "^2.7.0",
