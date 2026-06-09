@@ -3,6 +3,7 @@ import { Clock, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
+import { cn } from '@/lib/utils';
 
 const EVENT_TYPE_LABELS = {
   'PRODUCTION': 'Producción',
@@ -13,6 +14,7 @@ const EVENT_TYPE_LABELS = {
 };
 
 const EventActivityCard = ({
+  isOpen,
   event,
   team,
   isAdmin,
@@ -24,14 +26,9 @@ const EventActivityCard = ({
   handlePointerLeave
 }) => {
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-        console.log(`[Lifecycle] EventActivityCard MOUNTED for ${event?.title}`);
+    if (process.env.NODE_ENV === 'development' && event) {
+        console.log(`[Lifecycle] EventActivityCard MOUNTED for ${event.title}`);
     }
-    return () => {
-        if (process.env.NODE_ENV === 'development') {
-            console.log(`[Lifecycle] EventActivityCard UNMOUNTED for ${event?.title}`);
-        }
-    };
   }, [event?.title]);
 
   if (!event) return null;
@@ -43,7 +40,10 @@ const EventActivityCard = ({
     <aside
       ref={cardRef}
       data-activity-floating-card="event"
-      className="fixed pointer-events-auto w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom z-[2147483647]"
+      className={cn(
+        "fixed w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom z-[60]",
+        isOpen ? "block pointer-events-auto" : "hidden pointer-events-none"
+      )}
       style={{ left: cardPosition.left, top: cardPosition.top }}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
@@ -74,6 +74,12 @@ const EventActivityCard = ({
           <Clock className="w-3.5 h-3.5 text-indigo-500" />
           {format(new Date(event.startAt), 'HH:mm')} - {format(new Date(event.endAt), 'HH:mm')}
         </div>
+
+        {event.description && (
+          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-relaxed italic">
+            {event.description}
+          </p>
+        )}
 
         <div className="pt-2">
           <span className="text-[9px] font-black uppercase text-zinc-400 block mb-2">Involucrados</span>

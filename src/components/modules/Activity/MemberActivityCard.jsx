@@ -1,8 +1,10 @@
 import React, { useEffect } from 'react';
 import { Clock, User, Trash2 } from 'lucide-react';
 import TeamAvatar from '@/components/ui/TeamAvatar';
+import { cn } from '@/lib/utils';
 
 const MemberActivityCard = ({
+  isOpen,
   member,
   isAdmin,
   onDeleteEvent,
@@ -12,23 +14,35 @@ const MemberActivityCard = ({
   handlePointerLeave
 }) => {
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'development' && member) {
         console.log(`[Lifecycle] MemberActivityCard MOUNTED for ${member.name}`);
     }
-    return () => {
-        if (process.env.NODE_ENV === 'development') {
-            console.log(`[Lifecycle] MemberActivityCard UNMOUNTED for ${member.name}`);
-        }
-    };
-  }, [member.name]);
+  }, [member?.name]);
+
+  if (!member) return null;
 
   const currentEvent = member.currentEvent;
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'LIBRE': return 'bg-green-500';
+      case 'ENFOCADO': return 'bg-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.5)]';
+      case 'OCUPADO': return 'bg-orange-500';
+      case 'REUNION': return 'bg-zinc-400';
+      case 'PRODUCCION': return 'bg-fuchsia-500';
+      case 'AUSENTE': return 'bg-red-900';
+      default: return 'bg-zinc-200';
+    }
+  };
 
   return (
     <aside
       ref={cardRef}
       data-activity-floating-card="member"
-      className="fixed pointer-events-auto w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom z-[2147483647]"
+      className={cn(
+        "fixed w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom z-[60]",
+        isOpen ? "block pointer-events-auto" : "hidden pointer-events-none"
+      )}
       style={{ left: cardPosition.left, top: cardPosition.top }}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
@@ -40,7 +54,12 @@ const MemberActivityCard = ({
           <TeamAvatar member={member} showTitle={false} className="w-10 h-10 border-2 border-indigo-100" />
           <div className="flex-1 min-w-0">
             <h4 className="text-[13px] font-bold text-zinc-900 dark:text-white truncate">{member.name}</h4>
-            <p className="text-[10px] text-zinc-400 font-medium truncate">{member.role}</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+                <div className={cn("w-1.5 h-1.5 rounded-full", getStatusColor(member.status))} />
+                <span className="text-[9px] font-black uppercase text-zinc-400 tracking-wider">
+                  {member.status === 'REUNION' ? 'EN REUNIÓN' : member.status}
+                </span>
+            </div>
           </div>
         </div>
 
@@ -61,12 +80,23 @@ const MemberActivityCard = ({
               {isAdmin && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onDeleteEvent(currentEvent.id); }}
-                  className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-all"
+                  className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
+
+            {currentEvent.meetingLink && (
+              <a
+                href={currentEvent.meetingLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase shadow-lg shadow-indigo-600/20"
+              >
+                Entrar a Reunión
+              </a>
+            )}
           </div>
         ) : (
           <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100 dark:border-emerald-900/20">
