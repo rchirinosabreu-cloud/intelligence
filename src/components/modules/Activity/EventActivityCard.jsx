@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { Clock, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import TeamAvatar from '@/components/ui/TeamAvatar';
+import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 
 const EventActivityCard = ({
   event,
@@ -45,7 +45,7 @@ const EventActivityCard = ({
             <h4 className="text-[13px] font-bold text-zinc-900 dark:text-white leading-tight truncate">{event.title}</h4>
             <div className="text-[9px] font-black uppercase text-indigo-600">{event.type}</div>
           </div>
-          {isAdmin && <button onClick={(e) => { e.stopPropagation(); onDelete(event.id); }} className="p-2 text-red-500 hover:bg-red-50 rounded-xl"><Trash2 className="w-4 h-4" /></button>}
+          {isAdmin && <button onClick={(e) => { e.stopPropagation(); onDelete(event.id); }} className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Trash2 className="w-4 h-4" /></button>}
         </div>
         <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-white/5 p-2.5 rounded-xl border">
           <Clock className="w-3.5 h-3.5 text-indigo-500" />
@@ -55,11 +55,13 @@ const EventActivityCard = ({
           <span className="text-[9px] font-black uppercase text-zinc-400 block mb-2">Involucrados</span>
           <div className="flex flex-wrap gap-1.5">
             {involvedMembers.map(m => (
-              <TeamAvatar key={m.id} member={m} showTitle={false} className="w-7 h-7 border-2 border-white shadow-sm" />
+              <UserAvatarPopover key={m.id} user={m}>
+                <TeamAvatar member={m} showTitle={false} className="w-7 h-7 border-2 border-white shadow-sm" />
+              </UserAvatarPopover>
             ))}
           </div>
         </div>
-        {isAdmin && <button onClick={(e) => { e.stopPropagation(); onEdit(event); }} className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase">Editar Evento</button>}
+        {isAdmin && <button onClick={(e) => { e.stopPropagation(); onEdit(event); }} className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg shadow-indigo-600/20 active:scale-95 transition-all">Editar Evento</button>}
       </div>
       <div className="absolute top-full left-1/2 -translate-x-1/2 border-[10px] border-transparent border-t-white dark:border-t-zinc-900" />
     </aside>
