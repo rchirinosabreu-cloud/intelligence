@@ -60,7 +60,7 @@ const UserAvatarPopover = ({ user, children, side = "top" }) => {
             ref={refs.setFloating}
             style={floatingStyles}
             {...getFloatingProps()}
-            className="z-[9999] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-2xl shadow-2xl min-w-[200px] animate-in fade-in zoom-in-95 duration-100"
+            className="z-[70] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-2xl shadow-2xl min-w-[200px]"
           >
             <div className="flex items-center gap-3">
               <TeamAvatar member={user} size={40} showTitle={false} className="w-10 h-10 ring-2 ring-indigo-500/20" />

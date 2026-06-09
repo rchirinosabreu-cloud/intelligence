@@ -38,69 +38,29 @@ const Zone = ({ id, name, icon: Icon, children, className, isActive }) => (
   </div>
 );
 
-const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }) => {
-  const { currentUser } = useAuth();
-  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PM';
+const MemberAvatar = ({ member, hoveredMemberId, setHoveredMemberId, onDeleteEvent, onRectUpdate }) => {
   const isEnfocado = member.status === 'ENFOCADO';
   const isAusente = member.status === 'AUSENTE';
-  const timeoutRef = useRef(null);
-  const [cardPosition, setCardPosition] = useState({ left: 16, top: 16, placement: 'bottom' });
   const avatarRef = useRef(null);
-  const cardRef = useRef(null);
-  const isCardOpen = hoveredMember === member.id;
+  const timeoutRef = useRef(null);
 
   const handlePointerEnter = () => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[Interaction] Pointer Enter Member: ${member.name}`);
-    }
     if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
     }
     if (avatarRef.current) {
-        const rect = avatarRef.current.getBoundingClientRect();
-        setCardPosition(getFloatingCardPosition(
-          rect,
-          { width: 340, height: 300 },
-          { width: window.innerWidth, height: window.innerHeight }
-        ));
+        onRectUpdate(member, avatarRef.current.getBoundingClientRect());
     }
-    setHoveredMember(member.id);
+    setHoveredMemberId(member.id);
   };
 
   const handlePointerLeave = () => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[Interaction] Pointer Leave Member: ${member.name}`);
-    }
-    if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-    }
     timeoutRef.current = setTimeout(() => {
-      setHoveredMember(prev => prev === member.id ? null : prev);
+      setHoveredMemberId(prev => prev === member.id ? null : prev);
       timeoutRef.current = null;
     }, 300);
   };
-
-  useLayoutEffect(() => {
-    if (!isCardOpen || !avatarRef.current || !cardRef.current) return;
-
-    const triggerRect = avatarRef.current.getBoundingClientRect();
-    const cardRect = cardRef.current.getBoundingClientRect();
-    setCardPosition(getFloatingCardPosition(
-      triggerRect,
-      { width: cardRect.width, height: cardRect.height },
-      { width: window.innerWidth, height: window.innerHeight }
-    ));
-  }, [isCardOpen, member.id]);
-
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-    };
-  }, []);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -115,80 +75,69 @@ const MemberAvatar = ({ member, hoveredMember, setHoveredMember, onDeleteEvent }
   };
 
   return (
-    <>
-      <motion.button
-        ref={avatarRef}
-        type="button"
-        layoutId={`member-${member.id}`}
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{
-          opacity: isAusente ? 0.6 : 1,
-          scale: 1,
-          y: [0, -4, 0]
-        }}
-        exit={{ opacity: 0, scale: 0.8 }}
-        transition={{
-          type: "spring",
-          stiffness: 150,
-          damping: 20,
-          y: {
-            duration: 3 + Math.random() * 2,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }
-        }}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-        onFocus={handlePointerEnter}
-        onClick={handlePointerEnter}
-        onBlur={handlePointerLeave}
-        aria-expanded={isCardOpen}
-        aria-haspopup="dialog"
-        aria-label={`Ver actividad de ${member.name}`}
-        className={cn(
-          "relative outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none transition-all",
-          isCardOpen ? "z-[100] scale-110" : "z-30"
+    <motion.button
+      ref={avatarRef}
+      type="button"
+      layoutId={`member-${member.id}`}
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{
+        opacity: isAusente ? 0.6 : 1,
+        scale: 1,
+        y: [0, -4, 0]
+      }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      transition={{
+        type: "spring",
+        stiffness: 150,
+        damping: 20,
+        y: {
+          duration: 3 + Math.random() * 2,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }
+      }}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+      onFocus={handlePointerEnter}
+      onClick={handlePointerEnter}
+      onBlur={handlePointerLeave}
+      className={cn(
+        "relative outline-none focus:outline-none focus:ring-0 transition-all",
+        hoveredMemberId === member.id ? "z-[100] scale-110" : "z-30"
+      )}
+    >
+      <div className="relative pointer-events-none">
+        {isEnfocado && (
+           <motion.div
+            animate={{ scale: [1, 1.3, 1], opacity: [0.1, 0.3, 0.1] }}
+            transition={{ duration: 4, repeat: Infinity }}
+            className="absolute -inset-6 bg-purple-500/20 rounded-full blur-2xl"
+           />
         )}
-      >
-        <div className="relative pointer-events-none">
-          {isEnfocado && (
-             <motion.div
-              animate={{ scale: [1, 1.3, 1], opacity: [0.1, 0.3, 0.1] }}
-              transition={{ duration: 4, repeat: Infinity }}
-              className="absolute -inset-6 bg-purple-500/20 rounded-full blur-2xl"
-             />
+        <TeamAvatar
+          member={member}
+          showTitle={false}
+          className={cn(
+            "w-14 h-14 border-[3px] transition-all duration-700 ease-in-out bg-white dark:bg-zinc-900",
+            getStatusColor(member.status)
           )}
-          <TeamAvatar
-            member={member}
-            showTitle={false}
-            className={cn(
-              "w-14 h-14 border-[3px] transition-all duration-700 ease-in-out bg-white dark:bg-zinc-900",
-              getStatusColor(member.status)
-            )}
-          />
-        </div>
-      </motion.button>
-      <AnimatePresence>
-        {isCardOpen && createPortal(
-          <MemberActivityCard
-            member={member}
-            isAdmin={isAdmin}
-            onDeleteEvent={onDeleteEvent}
-            cardRef={cardRef}
-            cardPosition={cardPosition}
-            handlePointerEnter={handlePointerEnter}
-            handlePointerLeave={handlePointerLeave}
-          />,
-          document.body
-        )}
-      </AnimatePresence>
-    </>
+        />
+      </div>
+    </motion.button>
   );
 };
 
 const ActivityMap = () => {
-  const [hoveredMember, setHoveredMember] = useState(null);
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PM';
   const queryClient = useQueryClient();
+
+  const [hoveredMemberId, setHoveredMemberId] = useState(null);
+  const [hoveredData, setHoveredData] = useState(null); // { member, rect, position }
+  const [isCardOpen, setIsCardOpen] = useState(false);
+  const cardRef = useRef(null);
+  const closeTimerRef = useRef(null);
+
   const { data: teamStatus = [], isLoading, refetch } = useQuery({
     queryKey: ['team-activity-status'],
     queryFn: async () => {
@@ -217,6 +166,28 @@ const ActivityMap = () => {
         deleteMutation.mutate(id);
     }
   };
+
+  const handleRectUpdate = (member, rect) => {
+    setHoveredData({ member, rect });
+    setIsCardOpen(true);
+    if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+    }
+  };
+
+  useLayoutEffect(() => {
+    if (!isCardOpen || !hoveredData?.rect || !cardRef.current) return;
+
+    const cardRect = cardRef.current.getBoundingClientRect();
+    const position = getFloatingCardPosition(
+      hoveredData.rect,
+      { width: cardRect.width, height: cardRect.height },
+      { width: window.innerWidth, height: window.innerHeight }
+    );
+
+    setHoveredData(prev => prev ? { ...prev, position } : prev);
+  }, [isCardOpen, hoveredData?.member.id]);
 
   if (isLoading) {
     return (
@@ -248,24 +219,24 @@ const ActivityMap = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start">
           <Zone id="permiso" name="Zona de Permiso" icon={User} className="h-[280px] bg-red-50/10 dark:bg-red-900/5">
             {membersByZone.permiso.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
+              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} />
             ))}
           </Zone>
           <Zone id="bunker" name="Sala de Juntas" icon={Lock} className="h-[280px] bg-zinc-50/50 dark:bg-zinc-900/50">
             {membersByZone.bunker.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
+              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} />
             ))}
           </Zone>
           <Zone id="foco" name="Zona de Foco" icon={Zap} className="h-[280px] bg-purple-50/10 dark:bg-purple-900/5">
             {membersByZone.foco.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
+              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} />
             ))}
           </Zone>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-[28%_40%_28%] gap-10 items-stretch justify-center">
           <Zone id="estudio" name="Producción" icon={Video} className="h-[500px]" isActive={isProductionActive}>
             {membersByZone.estudio.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
+              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} />
             ))}
           </Zone>
           <Zone id="nave" name="Oficina Central" icon={Monitor} className="h-[500px] bg-indigo-50/5 dark:bg-indigo-900/5">
@@ -276,17 +247,43 @@ const ActivityMap = () => {
             </div>
             <div className="relative z-10 grid grid-cols-4 gap-8">
               {membersByZone.nave.map(m => (
-                <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
+                <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} />
               ))}
             </div>
           </Zone>
           <Zone id="cafe" name="Cafecito Time" icon={Coffee} className="h-[500px] bg-orange-50/10 dark:bg-orange-900/5">
             {membersByZone.cafe.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMember={hoveredMember} setHoveredMember={setHoveredMember} onDeleteEvent={handleDeleteEvent} />
+              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} />
             ))}
           </Zone>
         </div>
       </div>
+
+      {hoveredData && createPortal(
+        <MemberActivityCard
+          isOpen={isCardOpen}
+          member={hoveredData.member}
+          isAdmin={isAdmin}
+          onDeleteEvent={handleDeleteEvent}
+          cardRef={cardRef}
+          cardPosition={hoveredData.position || { left: 0, top: 0 }}
+          handlePointerEnter={() => {
+            if (closeTimerRef.current) {
+                clearTimeout(closeTimerRef.current);
+                closeTimerRef.current = null;
+            }
+            setIsCardOpen(true);
+          }}
+          handlePointerLeave={() => {
+            closeTimerRef.current = setTimeout(() => {
+              setIsCardOpen(false);
+              closeTimerRef.current = null;
+            }, 300);
+          }}
+        />,
+        document.body
+      )}
+
       <div className="absolute bottom-10 left-10 flex items-center gap-6 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md px-6 py-3 rounded-2xl border border-zinc-200/50 dark:border-zinc-800/50 shadow-lg z-50">
         {[
           { color: 'bg-green-500', label: 'Libre' },

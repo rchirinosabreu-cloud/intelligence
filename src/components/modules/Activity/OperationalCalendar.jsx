@@ -60,9 +60,14 @@ const OperationalCalendar = () => {
   const [view, setView] = useState('Week');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
+
+  // Persisted state for Fade Segura
   const [hoveredEventData, setHoveredEventData] = useState(null); // { event, triggerRect, position }
+  const [isCardOpen, setIsCardOpen] = useState(false);
+
   const closeTimerRef = React.useRef(null);
   const eventCardRef = React.useRef(null);
+
   const [formData, setFormData] = useState({
     title: '',
     type: 'PRODUCTION',
@@ -326,6 +331,7 @@ const OperationalCalendar = () => {
     }
     const rect = e.currentTarget.getBoundingClientRect();
     setHoveredEventData({ event, triggerRect: rect });
+    setIsCardOpen(true);
   };
 
   const handlePointerLeaveTrigger = () => {
@@ -336,7 +342,7 @@ const OperationalCalendar = () => {
         clearTimeout(closeTimerRef.current);
     }
     closeTimerRef.current = setTimeout(() => {
-        setHoveredEventData(null);
+        setIsCardOpen(false);
         closeTimerRef.current = null;
     }, 300);
   };
@@ -574,34 +580,34 @@ const OperationalCalendar = () => {
         </div>
       </div>
 
-      {/* Direct portal: use clean modular component */}
-      <AnimatePresence>
-        {hoveredEventData && createPortal(
-          <EventActivityCard
-            event={hoveredEventData.event}
-            team={team}
-            isAdmin={isAdmin}
-            onDelete={handleDelete}
-            onEdit={handleEdit}
-            cardRef={eventCardRef}
-            cardPosition={hoveredEventData.position || { left: 0, top: 0 }}
-            handlePointerEnter={() => {
-              if (closeTimerRef.current) {
-                  clearTimeout(closeTimerRef.current);
-                  closeTimerRef.current = null;
-              }
-            }}
-            handlePointerLeave={() => {
-              if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-              closeTimerRef.current = setTimeout(() => {
-                setHoveredEventData(null);
+      {/* Direct portal: persisted for Fade Segura */}
+      {hoveredEventData && createPortal(
+        <EventActivityCard
+          isOpen={isCardOpen}
+          event={hoveredEventData.event}
+          team={team}
+          isAdmin={isAdmin}
+          onDelete={handleDelete}
+          onEdit={handleEdit}
+          cardRef={eventCardRef}
+          cardPosition={hoveredEventData.position || { left: 0, top: 0 }}
+          handlePointerEnter={() => {
+            if (closeTimerRef.current) {
+                clearTimeout(closeTimerRef.current);
                 closeTimerRef.current = null;
-              }, 300);
-            }}
-          />,
-          document.body
-        )}
-      </AnimatePresence>
+            }
+            setIsCardOpen(true);
+          }}
+          handlePointerLeave={() => {
+            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+            closeTimerRef.current = setTimeout(() => {
+              setIsCardOpen(false);
+              closeTimerRef.current = null;
+            }, 300);
+          }}
+        />,
+        document.body
+      )}
 
       {/* Modal for Creating Event (Full Restored Form) */}
       {isModalOpen && (
