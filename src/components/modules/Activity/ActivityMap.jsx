@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Coffee, Video, Zap, Lock, Monitor, X, User, UserX, Trash2, Clock, FileText } from 'lucide-react';
+import { Coffee, Video, Zap, Lock, Monitor, X, User, UserX } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
