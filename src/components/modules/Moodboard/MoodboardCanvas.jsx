@@ -40,6 +40,10 @@ const MoodboardCanvas = () => {
   const [activeTool, setActiveTool] = useState('select'); // 'select' | 'hand'
   const [isPanning, setIsPanning] = useState(false);
 
+  // Physics Refs for Panning
+  const startMouseRef = useRef({ x: 0, y: 0 });
+  const startPanRef = useRef({ x: 0, y: 0 });
+
   const canvasRef = useRef(null);
   const viewportRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -270,12 +274,17 @@ const MoodboardCanvas = () => {
   const handleCanvasMouseDown = (e) => {
     if (activeTool === 'hand') {
       setIsPanning(true);
-      const startX = e.clientX - panX;
-      const startY = e.clientY - panY;
+
+      // Store initial state in Refs to avoid stale state in closure
+      startMouseRef.current = { x: e.clientX, y: e.clientY };
+      startPanRef.current = { x: panX, y: panY };
 
       const handleCanvasMouseMove = (moveEvent) => {
-        setPanX(moveEvent.clientX - startX);
-        setPanY(moveEvent.clientY - startY);
+        const deltaX = moveEvent.clientX - startMouseRef.current.x;
+        const deltaY = moveEvent.clientY - startMouseRef.current.y;
+
+        setPanX(startPanRef.current.x + deltaX);
+        setPanY(startPanRef.current.y + deltaY);
       };
 
       const handleCanvasMouseUp = () => {
@@ -459,14 +468,14 @@ const MoodboardCanvas = () => {
            {/* Zoom and Center Controls */}
            <div className="flex bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 p-1.5 rounded-2xl shadow-2xl pointer-events-auto">
              <button
-                onClick={() => setZoom(prev => Math.min(prev + 0.1, 2.0))}
+                onClick={() => setZoom(prev => parseFloat(Math.min(prev + 0.15, 2.0).toFixed(2)))}
                 className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-all text-zinc-500 hover:text-indigo-500"
                 title="Zoom In"
              >
                 <ZoomIn className="w-4 h-4" />
              </button>
              <button
-                onClick={() => setZoom(prev => Math.max(prev - 0.1, 0.25))}
+                onClick={() => setZoom(prev => parseFloat(Math.max(prev - 0.15, 0.25).toFixed(2)))}
                 className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-all text-zinc-500 hover:text-indigo-500"
                 title="Zoom Out"
              >
