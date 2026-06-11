@@ -1727,6 +1727,17 @@ const handleClientsHealthRequest = async (req, res, routeLabel) => {
 
 // Handle GET /api/clients (Health Indicators)
 app.get('/api/clients', async (req, res) => handleClientsHealthRequest(req, res, '/api/clients'));
+
+// Handle GET /api/db/clients (List all clients from DB)
+app.get('/api/db/clients', async (req, res) => {
+    try {
+        const clients = await getClients();
+        res.json(clients);
+    } catch (error) {
+        console.error("[API] /api/db/clients error:", error);
+        res.status(500).json({ error: "Failed to list clients" });
+    }
+});
 app.get('/api/clients/health', async (req, res) => handleClientsHealthRequest(req, res, '/api/clients/health'));
 
 // Handle POST /api/clients (Create Client in DB) - Matches user request

@@ -6,7 +6,8 @@ import {
   MessageSquare,
   Check,
   X,
-  Palette
+  Palette,
+  Globe
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -98,6 +99,17 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
     document.addEventListener('mouseup', handleMouseUp);
   };
 
+  const getBrandInfo = (url) => {
+    if (!url) return null;
+    const lowerUrl = url.toLowerCase();
+    if (lowerUrl.includes('instagram.com')) return { name: 'Instagram', color: 'from-purple-600 via-pink-500 to-orange-400' };
+    if (lowerUrl.includes('facebook.com')) return { name: 'Facebook', color: 'from-blue-700 to-blue-500' };
+    if (lowerUrl.includes('tiktok.com')) return { name: 'TikTok', color: 'from-zinc-900 via-zinc-800 to-zinc-900' };
+    if (lowerUrl.includes('pinterest.com')) return { name: 'Pinterest', color: 'from-red-600 to-red-500' };
+    if (lowerUrl.includes('twitter.com') || lowerUrl.includes('x.com')) return { name: 'X', color: 'from-zinc-950 to-zinc-800' };
+    return null;
+  };
+
   const renderContent = () => {
     switch (item.type) {
       case 'image':
@@ -129,26 +141,62 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
           );
         }
         const meta = item.metadata || {};
+        const brand = getBrandInfo(item.contentUrl);
+
         return (
-          <div className="flex flex-col bg-white rounded-lg border border-slate-200 overflow-hidden min-w-[280px]">
-            {meta.image && (
-              <img src={meta.image} alt={meta.title} className="w-full h-32 object-cover" />
-            )}
-            <div className="p-3">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">
-                {meta.siteName || 'Enlace'}
+          <div className="flex flex-col bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden min-w-[300px] shadow-sm hover:shadow-2xl transition-all duration-500 group/link">
+            {/* Header Visual: Image or Brand Fallback */}
+            {meta.image ? (
+              <div className="relative h-40 overflow-hidden">
+                <img src={meta.image} alt={meta.title} className="w-full h-full object-cover group-hover/link:scale-110 transition-transform duration-700" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover/link:opacity-100 transition-opacity" />
               </div>
-              <h4 className="text-sm font-bold text-slate-800 line-clamp-2 mb-1">{meta.title}</h4>
-              <p className="text-xs text-slate-500 line-clamp-2">{meta.description}</p>
-              <a
-                href={item.contentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 flex items-center gap-1.5 text-xs text-indigo-600 font-medium hover:underline"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Visitar</span>
-              </a>
+            ) : (
+              <div className={`h-40 w-full flex items-center justify-center bg-gradient-to-br ${brand?.color || 'from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-900'}`}>
+                {brand ? (
+                   <div className="flex flex-col items-center gap-2">
+                      <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-2xl">
+                        <ExternalLink className="w-6 h-6 text-white" />
+                      </div>
+                      <span className="text-white text-[10px] font-black uppercase tracking-[0.2em] opacity-80">{brand.name}</span>
+                   </div>
+                ) : (
+                  <ExternalLink className="w-10 h-10 text-zinc-300 dark:text-zinc-600" />
+                )}
+              </div>
+            )}
+
+            <div className="p-4 relative">
+              {/* Site Badge */}
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-tighter mb-3">
+                 <Globe className="w-2.5 h-2.5" />
+                 {meta.siteName || brand?.name || 'Portal Web'}
+              </div>
+
+              <h4 className="text-sm font-black text-zinc-900 dark:text-zinc-100 line-clamp-2 leading-tight mb-2 tracking-tight">
+                {meta.title}
+              </h4>
+
+              {meta.description && (
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed mb-4">
+                  {meta.description}
+                </p>
+              )}
+
+              <div className="flex items-center justify-between mt-auto pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                <a
+                  href={item.contentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-[10px] font-black text-indigo-500 hover:text-indigo-400 transition-colors uppercase tracking-widest"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Explorar</span>
+                </a>
+                <div className="text-[9px] font-mono text-zinc-300 dark:text-zinc-600">
+                  {new URL(item.contentUrl).hostname.replace('www.', '')}
+                </div>
+              </div>
             </div>
           </div>
         );
