@@ -114,11 +114,12 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
     switch (item.type) {
       case 'image':
         return (
-          <div className="relative group overflow-hidden rounded-lg">
+          <div className="relative group overflow-hidden rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-800">
             <img
-              src={item.url || item.assetUrl}
+              src={item.url}
               alt="Reference"
-              className="w-full h-auto object-cover max-h-[400px] min-w-[200px]"
+              className="w-full h-auto object-cover max-h-[600px] min-w-[240px] block"
+              loading="lazy"
             />
           </div>
         );
@@ -185,7 +186,7 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
 
               <div className="flex items-center justify-between mt-auto pt-2 border-t border-zinc-100 dark:border-zinc-800">
                 <a
-                  href={item.contentUrl}
+                  href={item.contentUrl?.startsWith('http') ? item.contentUrl : `https://${item.contentUrl}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-[10px] font-black text-indigo-500 hover:text-indigo-400 transition-colors uppercase tracking-widest"
