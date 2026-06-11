@@ -186,8 +186,13 @@ router.get('/:boardId/storage/signed-url', async (req, res) => {
  * POST /api/boards/unfurl
  */
 router.post('/unfurl', async (req, res) => {
-    const { url } = req.body;
+    let { url } = req.body;
     if (!url) return res.status(400).json({ error: "URL is required" });
+
+    // Prepend https:// if missing
+    if (!/^https?:\/\//i.test(url)) {
+        url = `https://${url}`;
+    }
 
     try {
         const response = await axios.get(url, {
@@ -223,7 +228,14 @@ router.post('/unfurl', async (req, res) => {
         res.json(metadata);
     } catch (error) {
         console.warn(`[Unfurl] Failed to unfurl ${url}:`, error.message);
-        const domain = new URL(url).hostname;
+
+        let domain = 'Enlace';
+        try {
+            domain = new URL(url).hostname;
+        } catch (e) {
+            // If even URL parsing fails
+        }
+
         res.json({
             title: domain,
             description: '',

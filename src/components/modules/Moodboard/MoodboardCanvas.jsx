@@ -60,31 +60,38 @@ const MoodboardCanvas = () => {
   const handleAddItem = async (type, extraData = {}) => {
     if (!board) return;
 
+    // Calculate position based on current scroll
+    const scrollX = canvasRef.current?.scrollLeft || 0;
+    const scrollY = canvasRef.current?.scrollTop || 0;
+
+    const posX = Math.round((scrollX + 100) / 8) * 8;
+    const posY = Math.round((scrollY + 100) / 8) * 8;
+
     let itemData = {
       type,
-      positionX: 100,
-      positionY: 100,
+      positionX: posX,
+      positionY: posY,
       ...extraData
     };
 
-    if (type === 'link') {
-      const url = prompt("Pega el enlace aquí:");
-      if (!url) return;
-      toast.loading("Analizando enlace...");
-      try {
-        const unfurl = await axios.post('/api/boards/unfurl', { url });
-        itemData = {
-          ...itemData,
-          contentUrl: url,
-          metadata: unfurl.data
-        };
-        toast.dismiss();
-      } catch (error) {
-        toast.dismiss();
-        itemData = { ...itemData, contentUrl: url };
-      }
-    } else if (type === 'text') {
-      itemData.comment = "Nueva nota...";
+    if (type === 'link' && !extraData.contentUrl) {
+      // Create a temporary link item for inline input
+      const tempItem = {
+        id: `temp-${Date.now()}`,
+        boardId,
+        type: 'link',
+        contentUrl: '',
+        positionX: posX,
+        positionY: posY,
+        isTemp: true
+      };
+      setItems([...items, tempItem]);
+      setIsAdding(false);
+      return;
+    }
+
+    if (type === 'text') {
+      itemData.comment = ""; // Start empty
       itemData.metadata = { color: 'yellow' };
     }
 
@@ -92,7 +99,6 @@ const MoodboardCanvas = () => {
       const response = await axios.post(`/api/boards/${boardId}/items`, itemData);
       setItems([...items, response.data]);
       setIsAdding(false);
-      toast.success("Elemento añadido");
     } catch (error) {
       toast.error("Error al añadir elemento");
     }
@@ -109,16 +115,25 @@ const MoodboardCanvas = () => {
         { params: { fileName: file.name, fileType: file.type } }
       );
 
-      await axios.put(url, file, {
-        headers: { 'Content-Type': file.type }
+      // CRITICAL: Send the exact binary file and match Content-Type header
+      const uploadRes = await fetch(url, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type
+        }
       });
+
+      if (!uploadRes.ok) {
+        throw new Error(`Upload failed with status ${uploadRes.status}`);
+      }
 
       await handleAddItem('image', { assetUrl: gcsPath });
       toast.dismiss();
     } catch (error) {
-      console.error("Upload error:", error);
+      console.error("[Upload] Error details:", error);
       toast.dismiss();
-      toast.error("Error al subir imagen");
+      toast.error(`Error al subir imagen: ${error.message}`);
     }
   };
 
@@ -150,6 +165,39 @@ const MoodboardCanvas = () => {
   };
 
   const handleUpdateItem = async (itemId, data) => {
+    // Handle temp item transformation
+    const item = items.find(i => i.id === itemId);
+    if (item?.isTemp && data.contentUrl) {
+      setItems(items.filter(i => i.id !== itemId)); // Remove temp
+      toast.loading("Analizando enlace...");
+      try {
+        const unfurl = await axios.post('/api/boards/unfurl', { url: data.contentUrl });
+        const itemData = {
+          type: 'link',
+          contentUrl: data.contentUrl,
+          metadata: unfurl.data,
+          positionX: item.positionX,
+          positionY: item.positionY
+        };
+        const response = await axios.post(`/api/boards/${boardId}/items`, itemData);
+        setItems(prev => [...prev, response.data]);
+        toast.dismiss();
+        toast.success("Enlace añadido");
+      } catch (error) {
+        toast.dismiss();
+        // Fallback save
+        const itemData = {
+          type: 'link',
+          contentUrl: data.contentUrl,
+          positionX: item.positionX,
+          positionY: item.positionY
+        };
+        const response = await axios.post(`/api/boards/${boardId}/items`, itemData);
+        setItems(prev => [...prev, response.data]);
+      }
+      return;
+    }
+
     try {
       const response = await axios.patch(`/api/boards/${boardId}/items/${itemId}`, data);
       setItems(items.map(i => i.id === itemId ? response.data : i));
@@ -168,7 +216,7 @@ const MoodboardCanvas = () => {
   }
 
   return (
-    <div className="flex flex-col h-full bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative">
+    <div className="flex flex-col w-screen h-screen bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative fixed inset-0 z-[100]">
       {/* Dynamic Header */}
       <div className="flex items-center justify-between px-6 py-3 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border-b border-zinc-200 dark:border-zinc-800 z-[40]">
         <div className="flex items-center gap-4">
@@ -245,7 +293,7 @@ const MoodboardCanvas = () => {
 
       {/* Canvas Area */}
       <div
-        className={`flex-1 overflow-auto bg-zinc-100 dark:bg-zinc-900/50 ${isMobile ? 'p-4' : 'relative'}`}
+        className={`flex-1 overflow-auto bg-zinc-100 dark:bg-zinc-900/50 ${isMobile ? 'p-0' : 'relative'}`}
         ref={canvasRef}
       >
         {isMobile ? (
