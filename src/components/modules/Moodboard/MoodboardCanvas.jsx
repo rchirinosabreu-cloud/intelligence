@@ -63,24 +63,18 @@ const MoodboardCanvas = () => {
       if (e.code === 'Space' && !e.repeat) {
         if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
         e.preventDefault(); // Prevent scroll/default
-        setActiveTool('hand');
-      }
-    };
 
-    const handleKeyUp = (e) => {
-      if (e.code === 'Space') {
-        setActiveTool('select');
+        // Toggle tool
+        setActiveTool(prev => prev === 'select' ? 'hand' : 'select');
       }
     };
 
     window.addEventListener('resize', handleResize);
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
 
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
 
