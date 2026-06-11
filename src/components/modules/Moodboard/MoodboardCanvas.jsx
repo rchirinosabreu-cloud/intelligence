@@ -12,7 +12,9 @@ import {
   Save,
   MessageSquare,
   ArrowLeft,
-  Settings
+  Settings,
+  MousePointer2,
+  Hand
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -27,7 +29,16 @@ const MoodboardCanvas = () => {
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Navigation State
+  const [zoom, setZoom] = useState(1.0);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const [activeTool, setActiveTool] = useState('select'); // 'select' | 'hand'
+  const [isPanning, setIsPanning] = useState(false);
+
   const canvasRef = useRef(null);
+  const viewportRef = useRef(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -35,9 +46,32 @@ const MoodboardCanvas = () => {
       fetchBoardAndItems();
     }
     const handleResize = () => setIsMobile(window.innerWidth < 768);
+
+    // Keyboard listener for Space (Hand tool)
+    const handleKeyDown = (e) => {
+      if (e.code === 'Space' && activeTool !== 'hand' && !e.repeat) {
+        // Only trigger if not typing in an input/textarea
+        if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+        setActiveTool('hand');
+      }
+    };
+
+    const handleKeyUp = (e) => {
+      if (e.code === 'Space') {
+        setActiveTool('select');
+      }
+    };
+
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [boardId]);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [boardId, activeTool]);
 
   const fetchBoardAndItems = async () => {
     setLoading(true);
@@ -60,12 +94,13 @@ const MoodboardCanvas = () => {
   const handleAddItem = async (type, extraData = {}) => {
     if (!board) return;
 
-    // Calculate position based on current scroll
-    const scrollX = canvasRef.current?.scrollLeft || 0;
-    const scrollY = canvasRef.current?.scrollTop || 0;
+    // Calculate position based on current pan and zoom
+    // We want to place it roughly in the middle of the viewport or with a slight offset
+    const viewportWidth = viewportRef.current?.clientWidth || window.innerWidth;
+    const viewportHeight = viewportRef.current?.clientHeight || window.innerHeight;
 
-    const posX = Math.round((scrollX + 100) / 8) * 8;
-    const posY = Math.round((scrollY + 100) / 8) * 8;
+    const posX = Math.round(((viewportWidth / 2 - panX) / zoom) / 8) * 8;
+    const posY = Math.round(((viewportHeight / 2 - panY) / zoom) / 8) * 8;
 
     let itemData = {
       type,
@@ -200,7 +235,7 @@ const MoodboardCanvas = () => {
 
     try {
       const response = await axios.patch(`/api/boards/${boardId}/items/${itemId}`, data);
-      setItems(items.map(i => i.id === itemId ? response.data : i));
+      setItems(items.map(i => i.id === itemId ? { ...i, ...response.data } : i));
     } catch (error) {
       toast.error("Error al actualizar");
     }
@@ -215,8 +250,43 @@ const MoodboardCanvas = () => {
     );
   }
 
+  const handleWheel = (e) => {
+    if (isMobile) return;
+
+    // Zoom with wheel
+    const zoomSpeed = 0.05;
+    const direction = e.deltaY > 0 ? -1 : 1;
+    const newZoom = Math.min(Math.max(zoom + direction * zoomSpeed, 0.25), 2.0);
+    setZoom(parseFloat(newZoom.toFixed(2)));
+  };
+
+  const handleCanvasMouseDown = (e) => {
+    if (activeTool === 'hand') {
+      setIsPanning(true);
+      const startX = e.clientX - panX;
+      const startY = e.clientY - panY;
+
+      const handleCanvasMouseMove = (moveEvent) => {
+        setPanX(moveEvent.clientX - startX);
+        setPanY(moveEvent.clientY - startY);
+      };
+
+      const handleCanvasMouseUp = () => {
+        setIsPanning(false);
+        document.removeEventListener('mousemove', handleCanvasMouseMove);
+        document.removeEventListener('mouseup', handleCanvasMouseUp);
+      };
+
+      document.addEventListener('mousemove', handleCanvasMouseMove);
+      document.addEventListener('mouseup', handleCanvasMouseUp);
+    }
+  };
+
   return (
-    <div className="flex flex-col w-full h-[calc(100vh-64px)] lg:h-screen lg:fixed lg:top-0 lg:right-0 lg:left-64 bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative z-[40]">
+    <div
+        className="flex flex-col w-full h-[calc(100vh-64px)] lg:h-screen lg:fixed lg:top-0 lg:right-0 lg:left-64 bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative z-[40]"
+        onWheel={handleWheel}
+    >
 
       {/* GLOBAL FLOATING CONTROLS (Fixed to Viewport) */}
       {/* Top Left: Board Info & Back */}
@@ -242,10 +312,31 @@ const MoodboardCanvas = () => {
       </div>
 
       {/* Top Right: Actions & Canvas Info */}
-      <div className="fixed top-[100px] right-10 flex items-center gap-3 z-[99999] pointer-events-none animate-in fade-in slide-in-from-right-4 duration-700">
+      <div className="fixed top-[100px] right-10 flex flex-col items-end gap-3 z-[99999] pointer-events-none animate-in fade-in slide-in-from-right-4 duration-700">
+
+        {/* Tool Switcher */}
+        {!isMobile && (
+          <div className="flex bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 p-1.5 rounded-2xl shadow-2xl pointer-events-auto mb-1">
+             <button
+                onClick={() => setActiveTool('select')}
+                className={`p-2 rounded-xl transition-all ${activeTool === 'select' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                title="Herramienta de Selección (V)"
+             >
+                <MousePointer2 className="w-4 h-4" />
+             </button>
+             <button
+                onClick={() => setActiveTool('hand')}
+                className={`p-2 rounded-xl transition-all ${activeTool === 'hand' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-zinc-500 hover:bg-zinc-100'}`}
+                title="Herramienta de Mano (Espacio)"
+             >
+                <Hand className="w-4 h-4" />
+             </button>
+          </div>
+        )}
+
         {!isMobile && (
           <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 rounded-2xl shadow-2xl text-[10px] text-zinc-400 font-mono hidden md:block pointer-events-auto">
-            {items.length} items | 3000x3000px
+            {Math.round(zoom * 100)}% | {items.length} items
           </div>
         )}
 
@@ -302,8 +393,9 @@ const MoodboardCanvas = () => {
 
       {/* Canvas Area - Exclusive Internal Scroll */}
       <div
-        className="w-full h-full overflow-auto bg-zinc-100 dark:bg-zinc-900/50 relative"
-        ref={canvasRef}
+        className={`w-full h-full overflow-auto bg-zinc-100 dark:bg-zinc-900/50 relative ${activeTool === 'hand' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-auto'}`}
+        ref={viewportRef}
+        onMouseDown={handleCanvasMouseDown}
       >
         {isMobile ? (
           <div className="grid grid-cols-1 gap-4 pb-20">
@@ -324,6 +416,7 @@ const MoodboardCanvas = () => {
           </div>
         ) : (
           <div
+            ref={canvasRef}
             className="canvas-container"
             style={{
               width: '3000px',
@@ -331,7 +424,9 @@ const MoodboardCanvas = () => {
               position: 'relative',
               backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 0)',
               backgroundSize: '24px 24px',
-              backgroundColor: 'transparent'
+              backgroundColor: 'transparent',
+              transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
+              transformOrigin: 'top left'
             }}
           >
             {items.map(item => (
@@ -339,6 +434,7 @@ const MoodboardCanvas = () => {
                 key={item.id}
                 item={item}
                 isMobile={false}
+                zoom={zoom}
                 onDelete={() => handleDeleteItem(item.id)}
                 onUpdate={(data) => handleUpdateItem(item.id, data)}
                 onDragStop={(x, y) => updateItemPosition(item.id, x, y)}
