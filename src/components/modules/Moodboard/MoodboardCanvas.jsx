@@ -218,16 +218,16 @@ const MoodboardCanvas = () => {
   return (
     <div className="flex flex-col w-full h-[calc(100vh-64px)] lg:h-screen lg:fixed lg:top-0 lg:right-0 lg:left-64 bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative z-[40]">
 
-      {/* Top Left: Board Info & Back */}
-      <div className="absolute top-6 left-6 flex items-center gap-4 z-50">
+      {/* Top Left: Board Info & Back (View-Fixed) */}
+      <div className="fixed top-6 left-6 lg:left-[calc(256px+24px)] flex items-center gap-4 z-[9999] pointer-events-none">
         <button
           onClick={() => navigate('/moodboard')}
-          className="p-3 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl transition-all hover:scale-105 active:scale-95 text-zinc-500"
+          className="p-3 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl transition-all hover:scale-105 active:scale-95 text-zinc-500 pointer-events-auto"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
 
-        <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 px-5 py-2.5 rounded-2xl shadow-xl">
+        <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 px-5 py-2.5 rounded-2xl shadow-2xl pointer-events-auto">
           <div className="flex items-center gap-3">
             <h1 className="text-sm font-black text-zinc-900 dark:text-zinc-100 tracking-tighter uppercase">
               {board?.name}
@@ -240,18 +240,18 @@ const MoodboardCanvas = () => {
         </div>
       </div>
 
-      {/* Top Right: Actions & Canvas Info */}
-      <div className="absolute top-6 right-6 flex items-center gap-3 z-50">
+      {/* Top Right: Actions & Canvas Info (View-Fixed) */}
+      <div className="fixed top-6 right-6 flex items-center gap-3 z-[9999] pointer-events-none">
         {!isMobile && (
-          <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 rounded-2xl shadow-xl text-[10px] text-zinc-400 font-mono hidden md:block">
+          <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 rounded-2xl shadow-2xl text-[10px] text-zinc-400 font-mono hidden md:block pointer-events-auto">
             Canvas: 3000x3000px | {items.length} items
           </div>
         )}
 
-        <div className="relative">
+        <div className="relative pointer-events-auto">
           <button
             onClick={() => setIsAdding(!isAdding)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl text-sm font-black transition-all shadow-xl shadow-indigo-500/20 active:scale-95"
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl text-sm font-black transition-all shadow-2xl shadow-indigo-500/30 active:scale-95"
           >
             <Plus className="w-5 h-5" />
             <span>AÑADIR</span>

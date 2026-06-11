@@ -24,6 +24,10 @@ const getStorageClient = () => {
             projectId,
             credentials,
         });
+
+        // Auto-configure CORS on startup
+        configureBucketCors().catch(err => console.error("Failed to configure bucket CORS:", err));
+
         return storage;
     } catch (error) {
         console.error("Error initializing GCS Storage client:", error);
@@ -82,6 +86,31 @@ export const uploadClientFile = async (file, clientName) => {
         });
         blobStream.end(file.buffer);
     });
+};
+
+/**
+ * Programmatically configures CORS for the storage bucket.
+ */
+export const configureBucketCors = async () => {
+    const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
+    const storageClient = getStorageClient();
+    if (!storageClient) return;
+
+    try {
+        console.log(`[Storage] Configuring CORS for bucket: ${bucketName}`);
+        const [metadata] = await storageClient.bucket(bucketName).setCorsConfiguration([
+            {
+                maxAgeSeconds: 3600,
+                method: ['GET', 'PUT', 'POST', 'OPTIONS', 'DELETE'],
+                origin: ['*'], // Allow all origins or restrict to specific domain
+                responseHeader: ['Content-Type', 'Authorization', 'Content-Length', 'User-Agent', 'x-goog-resumable'],
+            },
+        ]);
+        console.log(`[Storage] CORS configuration applied successfully.`);
+    } catch (error) {
+        console.error(`[Storage] CORS configuration failed:`, error.message);
+        throw error;
+    }
 };
 
 /**
