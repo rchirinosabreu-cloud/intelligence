@@ -35,6 +35,7 @@ import talentRadarRouter from './src/routes/api/talentRadar.js';
 import activityRouter from './src/routes/api/activity.js';
 import reportsRouter from './src/routes/api/reports.js';
 import brainCoreRouter from './src/routes/api/brainCore.js';
+import boardsRouter from './src/routes/api/boards.js';
 
 console.log("[Boot] Imports loaded successfully.");
 
@@ -410,6 +411,10 @@ app.use('/api/reports', authenticateToken, reportsRouter);
 
 // Brain Core Router
 app.use('/api/brain-core', authenticateToken, brainCoreRouter);
+
+// Boards / Moodboards Router
+app.use('/api/workspaces/:clientId', authenticateToken, boardsRouter);
+app.use('/api/reference-boards', authenticateToken, boardsRouter);
 
 // User Management Endpoints
 app.post('/api/users', authenticateToken, async (req, res) => {

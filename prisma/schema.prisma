@@ -79,6 +79,38 @@ model Client {
   integrations        Integration[]
   nativeTasks         Task[]
   agencyContexts      AgencyContext[]
+  boards              Board[]
+}
+
+model Board {
+  id        String      @id @default(uuid())
+  clientId  String
+  name      String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  client    Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  items     BoardItem[]
+}
+
+model BoardItem {
+  id          String        @id @default(uuid())
+  boardId     String
+  type        BoardItemType
+  contentUrl  String?
+  assetUrl    String?
+  metadata    Json?
+  positionX   Int           @default(0)
+  positionY   Int           @default(0)
+  comment     String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  board       Board         @relation(fields: [boardId], references: [id], onDelete: Cascade)
+}
+
+enum BoardItemType {
+  image
+  link
+  text
 }
 
 model ContentPlan {
