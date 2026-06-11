@@ -84,11 +84,11 @@ model Client {
 
 model Board {
   id        String      @id @default(uuid())
-  clientId  String
+  clientId  String?
   name      String
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
-  client    Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client    Client?     @relation(fields: [clientId], references: [id], onDelete: Cascade)
   items     BoardItem[]
 }
 

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Sparkles, CheckSquare, LayoutGrid, FileText, BarChart3, Users, UserCheck, User, Moon, Sun, Bell, X, Zap, Map, FileBarChart, Brain } from 'lucide-react';
+import { LayoutDashboard, Sparkles, CheckSquare, LayoutGrid, FileText, BarChart3, Users, UserCheck, User, Moon, Sun, Bell, X, Zap, Map, FileBarChart, Brain, Palette } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
@@ -21,6 +21,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/gestion' },
     { id: 'activity', label: 'Actividad', icon: Map, path: '/actividad' },
     { id: 'reports', label: 'Reportes', icon: FileBarChart, path: '/reportes' },
+    { id: 'moodboard', label: 'Inspiración', icon: Palette, path: '/moodboard' },
     { id: 'content-grids', label: 'Parrillas', icon: LayoutGrid, path: '/parrillas' },
     { id: 'minutes', label: 'Minutas', icon: FileText, path: '/minutas' },
     { id: 'radar', label: 'Radar de Mérito', icon: Zap, path: '/radar', roles: ['ADMIN', 'PM'] },

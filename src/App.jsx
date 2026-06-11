@@ -15,6 +15,8 @@ import TalentRadar from './components/modules/TalentRadar';
 import BrainCore from './components/modules/BrainCore';
 import Activity from './components/modules/Activity';
 import Reports from './components/modules/Reports';
+import MoodboardDashboard from './components/modules/Moodboard/MoodboardDashboard';
+import MoodboardCanvas from './components/modules/Moodboard/MoodboardCanvas';
 import Login from './components/Login';
 import PrivacyPolicy from './components/public/PrivacyPolicy';
 import TermsOfService from './components/public/TermsOfService';
@@ -112,6 +114,9 @@ function AppContent() {
                     <Route path="/parrillas/:clientSlug/:period" element={<ContentPlanDetail />} />
                     <Route path="/parrillas/:planId" element={<ContentPlanDetail />} />
                     <Route path="/minutas" element={<MinutesLayout />} />
+
+                    <Route path="/moodboard" element={<MoodboardDashboard />} />
+                    <Route path="/moodboard/:boardId" element={<MoodboardCanvas />} />
 
                     <Route path="/clientes" element={<Clients />} />
                     <Route path="/cliente/:clientId" element={<ClientDetailWrapper />} />
