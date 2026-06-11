@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
+const ReferenceCard = ({ item, isMobile, zoom = 1, onDelete, onUpdate, onDragStop }) => {
   const [isEditing, setIsEditing] = useState(item.isTemp || false);
   const [comment, setComment] = useState(item.comment || '');
   const [urlInput, setUrlInput] = useState('');
@@ -72,10 +72,13 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
     const startY = e.clientY - item.positionY;
 
     const handleMouseMove = (moveEvent) => {
-      const newX = moveEvent.clientX - startX;
-      const newY = moveEvent.clientY - startY;
+      // Normalize delta by zoom
+      const deltaX = (moveEvent.clientX - e.clientX) / zoom;
+      const deltaY = (moveEvent.clientY - e.clientY) / zoom;
 
-      // Update local UI position for smooth drag
+      const newX = item.positionX + deltaX;
+      const newY = item.positionY + deltaY;
+
       if (cardRef.current) {
         cardRef.current.style.left = `${newX}px`;
         cardRef.current.style.top = `${newY}px`;
@@ -87,8 +90,11 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
       document.removeEventListener('mouseup', handleMouseUp);
       setIsDragging(false);
 
-      const finalX = upEvent.clientX - startX;
-      const finalY = upEvent.clientY - startY;
+      const deltaX = (upEvent.clientX - e.clientX) / zoom;
+      const deltaY = (upEvent.clientY - e.clientY) / zoom;
+
+      const finalX = item.positionX + deltaX;
+      const finalY = item.positionY + deltaY;
 
       if (onDragStop) {
         onDragStop(finalX, finalY);
@@ -114,11 +120,11 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
     switch (item.type) {
       case 'image':
         return (
-          <div className="relative group overflow-hidden rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-800">
+          <div className="relative group overflow-hidden rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-800 aspect-video w-full">
             <img
               src={item.url}
               alt="Reference"
-              className="w-full h-auto object-cover max-h-[600px] min-w-[240px] block"
+              className="w-full h-full object-cover block"
               loading="lazy"
             />
           </div>
@@ -145,15 +151,15 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
         const brand = getBrandInfo(item.contentUrl);
 
         return (
-          <div className="flex flex-col bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden min-w-[300px] shadow-sm hover:shadow-2xl transition-all duration-500 group/link">
+          <div className="flex flex-col bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden w-full shadow-sm hover:shadow-2xl transition-all duration-500 group/link">
             {/* Header Visual: Image or Brand Fallback */}
             {meta.image ? (
-              <div className="relative h-40 overflow-hidden">
+              <div className="relative aspect-video w-full overflow-hidden border-b border-zinc-100 dark:border-zinc-800">
                 <img src={meta.image} alt={meta.title} className="w-full h-full object-cover group-hover/link:scale-110 transition-transform duration-700" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover/link:opacity-100 transition-opacity" />
               </div>
             ) : (
-              <div className={`h-40 w-full flex items-center justify-center bg-gradient-to-br ${brand?.color || 'from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-900'}`}>
+              <div className={`aspect-video w-full flex items-center justify-center bg-gradient-to-br ${brand?.color || 'from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-900'} border-b border-zinc-100 dark:border-zinc-800`}>
                 {brand ? (
                    <div className="flex flex-col items-center gap-2">
                       <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-2xl">
@@ -245,7 +251,7 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
       ref={cardRef}
       style={cardStyle}
       onMouseDown={handleMouseDown}
-      className={`group ${isDragging ? 'cursor-grabbing' : 'cursor-grab'} ${isMobile ? 'w-full' : ''}`}
+      className={`group ${isDragging ? 'cursor-grabbing' : 'cursor-grab'} ${isMobile ? 'w-full' : 'w-[340px] max-w-full'}`}
     >
       <div className={`relative transition-all ${isDragging ? 'scale-105 rotate-2' : ''}`}>
 
