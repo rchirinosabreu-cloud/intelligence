@@ -14,7 +14,10 @@ import {
   ArrowLeft,
   Settings,
   MousePointer2,
-  Hand
+  Hand,
+  ZoomIn,
+  ZoomOut,
+  Target
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -448,14 +451,46 @@ const MoodboardCanvas = () => {
         )}
       </div>
 
-      {/* Floating Controls Placeholder */}
+      {/* GLOBAL FLOATING CONTROLS (Fixed to Viewport) */}
+      {/* Navigation Controls (Bottom Right) */}
       {!isMobile && (
-        <div className="absolute bottom-6 right-6 flex items-center gap-3 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl px-4 py-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xl z-[40]">
-           <div className="flex -space-x-2">
-              <div className="w-8 h-8 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-[10px] text-white font-bold">BS</div>
+        <div className="fixed bottom-10 right-10 flex items-center gap-3 z-[99999] pointer-events-none animate-in fade-in slide-in-from-bottom-4 duration-700">
+
+           {/* Zoom and Center Controls */}
+           <div className="flex bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 p-1.5 rounded-2xl shadow-2xl pointer-events-auto">
+             <button
+                onClick={() => setZoom(prev => Math.min(prev + 0.1, 2.0))}
+                className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-all text-zinc-500 hover:text-indigo-500"
+                title="Zoom In"
+             >
+                <ZoomIn className="w-4 h-4" />
+             </button>
+             <button
+                onClick={() => setZoom(prev => Math.max(prev - 0.1, 0.25))}
+                className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-all text-zinc-500 hover:text-indigo-500"
+                title="Zoom Out"
+             >
+                <ZoomOut className="w-4 h-4" />
+             </button>
+             <div className="h-4 w-[1px] bg-zinc-200 dark:bg-zinc-800 mx-1 self-center" />
+             <button
+                onClick={() => { setZoom(1.0); setPanX(0); setPanY(0); }}
+                className="flex items-center gap-2 px-3 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-xl transition-all text-zinc-500 hover:text-indigo-500"
+                title="🎯 Centrar Vista"
+             >
+                <Target className="w-4 h-4" />
+                <span className="text-[10px] font-black uppercase tracking-tighter">Reset</span>
+             </button>
            </div>
-           <div className="h-4 w-[1px] bg-zinc-200 dark:bg-zinc-800" />
-           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Colaborativo</span>
+
+           {/* Brand Meta Placeholder */}
+           <div className="flex items-center gap-3 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2.5 rounded-2xl shadow-2xl pointer-events-auto">
+              <div className="flex -space-x-2">
+                  <div className="w-6 h-6 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-[8px] text-white font-black">BS</div>
+              </div>
+              <div className="h-4 w-[1px] bg-zinc-200 dark:bg-zinc-800" />
+              <span className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em]">Colaborativo</span>
+           </div>
         </div>
       )}
     </div>
