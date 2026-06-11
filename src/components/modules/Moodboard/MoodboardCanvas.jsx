@@ -41,17 +41,21 @@ const MoodboardCanvas = () => {
   const viewportRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // Fetch Board Data
   useEffect(() => {
     if (boardId) {
       fetchBoardAndItems();
     }
+  }, [boardId]);
+
+  // Handle Global Listeners (Resize, Keyboard)
+  useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
 
-    // Keyboard listener for Space (Hand tool)
     const handleKeyDown = (e) => {
-      if (e.code === 'Space' && activeTool !== 'hand' && !e.repeat) {
-        // Only trigger if not typing in an input/textarea
+      if (e.code === 'Space' && !e.repeat) {
         if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+        e.preventDefault(); // Prevent scroll/default
         setActiveTool('hand');
       }
     };
@@ -71,7 +75,7 @@ const MoodboardCanvas = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [boardId, activeTool]);
+  }, []);
 
   const fetchBoardAndItems = async () => {
     setLoading(true);
