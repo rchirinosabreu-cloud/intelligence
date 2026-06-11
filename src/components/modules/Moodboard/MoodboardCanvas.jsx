@@ -216,70 +216,78 @@ const MoodboardCanvas = () => {
   }
 
   return (
-    <div className="flex flex-col w-screen h-screen bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative fixed inset-0 z-[100]">
-      {/* Dynamic Header */}
-      <div className="flex items-center justify-between px-6 py-3 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border-b border-zinc-200 dark:border-zinc-800 z-[40]">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('/moodboard')}
-            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors text-zinc-500"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
+    <div className="flex flex-col w-full h-[calc(100vh-64px)] lg:h-screen lg:fixed lg:top-0 lg:right-0 lg:left-64 bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative z-[40]">
 
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-sm font-black text-zinc-900 dark:text-zinc-100 tracking-tighter uppercase">
-                {board?.name}
-              </h1>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 uppercase tracking-widest border border-zinc-200 dark:border-zinc-700">
-                {board?.client?.name || 'Agencia'}
-              </span>
-            </div>
-            {!isMobile && (
-              <p className="text-[10px] text-zinc-400 font-mono">
-                {items.length} elementos • Snap-to-Grid: 8px
-              </p>
-            )}
+      {/* Top Left: Board Info & Back */}
+      <div className="absolute top-6 left-6 flex items-center gap-4 z-50">
+        <button
+          onClick={() => navigate('/moodboard')}
+          className="p-3 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl transition-all hover:scale-105 active:scale-95 text-zinc-500"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+
+        <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 px-5 py-2.5 rounded-2xl shadow-xl">
+          <div className="flex items-center gap-3">
+            <h1 className="text-sm font-black text-zinc-900 dark:text-zinc-100 tracking-tighter uppercase">
+              {board?.name}
+            </h1>
+            <div className="h-3 w-[1px] bg-zinc-200 dark:bg-zinc-800" />
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+              {board?.client?.name || 'Agencia'}
+            </span>
           </div>
         </div>
+      </div>
 
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <button
-              onClick={() => setIsAdding(!isAdding)}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Añadir</span>
-            </button>
-
-            {isAdding && (
-              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
-                <button
-                  onClick={() => { fileInputRef.current?.click(); setIsAdding(false); }}
-                  className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                >
-                  <ImageIcon className="w-4 h-4 text-blue-500" />
-                  Imagen
-                </button>
-                <button
-                  onClick={() => handleAddItem('link')}
-                  className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                >
-                  <LinkIcon className="w-4 h-4 text-green-500" />
-                  Enlace
-                </button>
-                <button
-                  onClick={() => handleAddItem('text')}
-                  className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                >
-                  <Type className="w-4 h-4 text-amber-500" />
-                  Nota
-                </button>
-              </div>
-            )}
+      {/* Top Right: Actions & Canvas Info */}
+      <div className="absolute top-6 right-6 flex items-center gap-3 z-50">
+        {!isMobile && (
+          <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 rounded-2xl shadow-xl text-[10px] text-zinc-400 font-mono hidden md:block">
+            Canvas: 3000x3000px | {items.length} items
           </div>
+        )}
+
+        <div className="relative">
+          <button
+            onClick={() => setIsAdding(!isAdding)}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl text-sm font-black transition-all shadow-xl shadow-indigo-500/20 active:scale-95"
+          >
+            <Plus className="w-5 h-5" />
+            <span>AÑADIR</span>
+          </button>
+
+          {isAdding && (
+            <div className="absolute right-0 mt-3 w-56 bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl border border-zinc-200 dark:border-zinc-800 py-3 z-50 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+              <button
+                onClick={() => { fileInputRef.current?.click(); setIsAdding(false); }}
+                className="flex items-center gap-4 w-full px-5 py-3 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <div className="p-2 bg-blue-500/10 rounded-xl">
+                  <ImageIcon className="w-4 h-4 text-blue-500" />
+                </div>
+                Imagen
+              </button>
+              <button
+                onClick={() => handleAddItem('link')}
+                className="flex items-center gap-4 w-full px-5 py-3 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <div className="p-2 bg-green-500/10 rounded-xl">
+                  <LinkIcon className="w-4 h-4 text-green-500" />
+                </div>
+                Enlace
+              </button>
+              <button
+                onClick={() => handleAddItem('text')}
+                className="flex items-center gap-4 w-full px-5 py-3 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <div className="p-2 bg-amber-500/10 rounded-xl">
+                  <Type className="w-4 h-4 text-amber-500" />
+                </div>
+                Nota
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -291,9 +299,9 @@ const MoodboardCanvas = () => {
         onChange={handleFileUpload}
       />
 
-      {/* Canvas Area */}
+      {/* Canvas Area - Exclusive Internal Scroll */}
       <div
-        className={`flex-1 overflow-auto bg-zinc-100 dark:bg-zinc-900/50 ${isMobile ? 'p-0' : 'relative'}`}
+        className="w-full h-full overflow-auto bg-zinc-100 dark:bg-zinc-900/50 relative"
         ref={canvasRef}
       >
         {isMobile ? (
