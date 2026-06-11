@@ -218,8 +218,9 @@ const MoodboardCanvas = () => {
   return (
     <div className="flex flex-col w-full h-[calc(100vh-64px)] lg:h-screen lg:fixed lg:top-0 lg:right-0 lg:left-64 bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative z-[40]">
 
-      {/* Top Left: Board Info & Back (View-Fixed) */}
-      <div className="fixed top-6 left-6 lg:left-[calc(256px+24px)] flex items-center gap-4 z-[9999] pointer-events-none">
+      {/* GLOBAL FLOATING CONTROLS (Fixed to Viewport) */}
+      {/* Top Left: Board Info & Back */}
+      <div className="fixed top-[100px] left-6 lg:left-[calc(256px+40px)] flex items-center gap-4 z-[99999] pointer-events-none animate-in fade-in slide-in-from-left-4 duration-700">
         <button
           onClick={() => navigate('/moodboard')}
           className="p-3 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl transition-all hover:scale-105 active:scale-95 text-zinc-500 pointer-events-auto"
@@ -240,11 +241,11 @@ const MoodboardCanvas = () => {
         </div>
       </div>
 
-      {/* Top Right: Actions & Canvas Info (View-Fixed) */}
-      <div className="fixed top-6 right-6 flex items-center gap-3 z-[9999] pointer-events-none">
+      {/* Top Right: Actions & Canvas Info */}
+      <div className="fixed top-[100px] right-10 flex items-center gap-3 z-[99999] pointer-events-none animate-in fade-in slide-in-from-right-4 duration-700">
         {!isMobile && (
           <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 rounded-2xl shadow-2xl text-[10px] text-zinc-400 font-mono hidden md:block pointer-events-auto">
-            Canvas: 3000x3000px | {items.length} items
+            {items.length} items | 3000x3000px
           </div>
         )}
 
