@@ -11,9 +11,9 @@ import {
 import { motion } from 'framer-motion';
 
 const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(item.isTemp || false);
   const [comment, setComment] = useState(item.comment || '');
-  const [showOptions, setShowOptions] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const cardRef = useRef(null);
 
@@ -31,8 +31,21 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
   }, [item.comment]);
 
   const handleSaveComment = () => {
+    if (item.isTemp) return; // Temp items handle their own save
     onUpdate({ comment });
     setIsEditing(false);
+  };
+
+  const handleLinkSubmit = async (e) => {
+    if (e.key === 'Enter' && urlInput) {
+      setIsEditing(false);
+      // We need a way to tell the parent to replace the temp item with a real one
+      // Since handleAddItem is in the parent, we'll use a special callback if provided
+      // or just call onUpdate if it's meant to be a transformation
+      // But according to my logic in MoodboardCanvas, I should probably have
+      // a way to finalize temp items.
+      onUpdate({ contentUrl: urlInput, isTemp: false });
+    }
   };
 
   const handleColorChange = (color) => {
@@ -48,7 +61,7 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
 
   // Draggable logic for desktop
   const handleMouseDown = (e) => {
-    if (isMobile || isEditing || showOptions) return;
+    if (isMobile || isEditing) return;
 
     // Prevent dragging if clicking on buttons or inputs
     if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea')) return;
@@ -98,6 +111,23 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
           </div>
         );
       case 'link':
+        if (item.isTemp) {
+          return (
+            <div className="flex flex-col bg-white rounded-xl border-2 border-indigo-500 overflow-hidden min-w-[280px] p-4 shadow-2xl animate-in zoom-in-95">
+              <div className="text-[10px] uppercase tracking-wider text-indigo-500 font-black mb-2">Pegar Enlace</div>
+              <input
+                autoFocus
+                type="text"
+                placeholder="https://..."
+                className="w-full bg-zinc-50 border-none rounded-lg p-2 text-sm focus:ring-0 outline-none"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                onKeyDown={handleLinkSubmit}
+              />
+              <div className="text-[9px] text-zinc-400 mt-2">Presiona Enter para confirmar</div>
+            </div>
+          );
+        }
         const meta = item.metadata || {};
         return (
           <div className="flex flex-col bg-white rounded-lg border border-slate-200 overflow-hidden min-w-[280px]">
@@ -140,7 +170,7 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
              {isEditing ? (
                <textarea
                   autoFocus
-                  className="w-full bg-transparent border-none focus:ring-0 text-sm resize-none h-24"
+                  className="w-full bg-transparent border-none focus:ring-0 text-sm resize-none h-24 outline-none shadow-none"
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   onBlur={handleSaveComment}
@@ -174,13 +204,13 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
         {renderContent()}
 
         {/* Comment Overlay (for Image and Link) */}
-        {item.type !== 'text' && (
+        {item.type !== 'text' && !item.isTemp && (
           <div className="mt-2 group-hover:opacity-100">
             {isEditing ? (
               <div className="bg-white border border-indigo-200 rounded-lg p-2 shadow-lg z-50">
                 <textarea
                   autoFocus
-                  className="w-full text-xs border-none focus:ring-0 resize-none"
+                  className="w-full text-xs border-none focus:ring-0 resize-none outline-none shadow-none"
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   placeholder="Añadir comentario..."
@@ -215,29 +245,15 @@ const ReferenceCard = ({ item, isMobile, onDelete, onUpdate, onDragStop }) => {
           </div>
         )}
 
-        {/* Options Menu */}
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-          <div className="relative">
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowOptions(!showOptions); }}
-              className="p-1.5 bg-white/90 backdrop-blur rounded-lg shadow-sm border border-slate-200 hover:bg-white text-slate-600"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
-
-            {showOptions && (
-              <div className="absolute right-0 mt-1 w-32 bg-white rounded-lg shadow-xl border border-slate-200 py-1 overflow-hidden z-50 animate-in fade-in zoom-in duration-150">
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDelete(); setShowOptions(false); }}
-                  className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Eliminar
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Delete Button (Hover only) */}
+        {!item.isTemp && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20 p-1.5 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
 
       </div>
     </div>
