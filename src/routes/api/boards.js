@@ -8,12 +8,13 @@ import axios from 'axios';
 const router = express.Router({ mergeParams: true });
 
 /**
- * GET /api/workspaces/:clientId/boards
- * List all boards for a client
+ * GET /api/boards
+ * List all boards, optionally filtered by clientId
  */
-router.get('/boards', async (req, res) => {
+router.get('/', async (req, res) => {
     try {
-        const boards = await boardService.getBoardsByClient(req.params.clientId);
+        const { clientId } = req.query;
+        const boards = await boardService.getBoards(clientId);
         res.json(boards);
     } catch (error) {
         console.error("[Boards API] Error listing boards:", error);
@@ -22,15 +23,29 @@ router.get('/boards', async (req, res) => {
 });
 
 /**
- * POST /api/workspaces/:clientId/boards
- * Create a new board
+ * GET /api/boards/:boardId
  */
-router.post('/boards', async (req, res) => {
+router.get('/:boardId', async (req, res) => {
     try {
-        const { name } = req.body;
+        const board = await boardService.getBoardById(req.params.boardId);
+        if (!board) return res.status(404).json({ error: "Board not found" });
+        res.json(board);
+    } catch (error) {
+        console.error("[Boards API] Error getting board:", error);
+        res.status(500).json({ error: "Failed to get board" });
+    }
+});
+
+/**
+ * POST /api/boards
+ * Create a new board (global or client-linked)
+ */
+router.post('/', async (req, res) => {
+    try {
+        const { name, clientId } = req.body;
         if (!name) return res.status(400).json({ error: "Name is required" });
 
-        const board = await boardService.createBoard(req.params.clientId, name);
+        const board = await boardService.createBoard(clientId, name);
         res.status(201).json(board);
     } catch (error) {
         console.error("[Boards API] Error creating board:", error);
@@ -39,9 +54,9 @@ router.post('/boards', async (req, res) => {
 });
 
 /**
- * DELETE /api/workspaces/:clientId/boards/:boardId
+ * DELETE /api/boards/:boardId
  */
-router.delete('/boards/:boardId', async (req, res) => {
+router.delete('/:boardId', async (req, res) => {
     try {
         await boardService.deleteBoard(req.params.boardId);
         res.json({ success: true });
@@ -52,9 +67,9 @@ router.delete('/boards/:boardId', async (req, res) => {
 });
 
 /**
- * GET /api/workspaces/:clientId/boards/:boardId/items
+ * GET /api/boards/:boardId/items
  */
-router.get('/boards/:boardId/items', async (req, res) => {
+router.get('/:boardId/items', async (req, res) => {
     try {
         const items = await boardService.getBoardItems(req.params.boardId);
 
@@ -75,9 +90,9 @@ router.get('/boards/:boardId/items', async (req, res) => {
 });
 
 /**
- * POST /api/workspaces/:clientId/boards/:boardId/items
+ * POST /api/boards/:boardId/items
  */
-router.post('/boards/:boardId/items', async (req, res) => {
+router.post('/:boardId/items', async (req, res) => {
     try {
         const item = await boardService.createBoardItem(req.params.boardId, req.body);
 
@@ -95,9 +110,9 @@ router.post('/boards/:boardId/items', async (req, res) => {
 });
 
 /**
- * PATCH /api/workspaces/:clientId/boards/:boardId/items/:itemId
+ * PATCH /api/boards/:boardId/items/:itemId
  */
-router.patch('/boards/:boardId/items/:itemId', async (req, res) => {
+router.patch('/:boardId/items/:itemId', async (req, res) => {
     try {
         const item = await boardService.updateBoardItem(req.params.itemId, req.body);
         res.json(item);
@@ -108,11 +123,10 @@ router.patch('/boards/:boardId/items/:itemId', async (req, res) => {
 });
 
 /**
- * DELETE /api/workspaces/:clientId/boards/:boardId/items/:itemId
+ * DELETE /api/boards/:boardId/items/:itemId
  */
-router.delete('/boards/:boardId/items/:itemId', async (req, res) => {
+router.delete('/:boardId/items/:itemId', async (req, res) => {
     try {
-        // Optional: If it's an image, we might want to delete from GCS too
         const item = await prisma.boardItem.findUnique({ where: { id: req.params.itemId } });
         if (item && item.type === 'image' && item.assetUrl) {
             await deleteFileFromGCS(item.assetUrl);
@@ -127,10 +141,10 @@ router.delete('/boards/:boardId/items/:itemId', async (req, res) => {
 });
 
 /**
- * GET /api/workspaces/:clientId/boards/:boardId/storage/signed-url
+ * GET /api/boards/:boardId/storage/signed-url
  */
-router.get('/boards/:boardId/storage/signed-url', async (req, res) => {
-    const { clientId, boardId } = req.params;
+router.get('/:boardId/storage/signed-url', async (req, res) => {
+    const { boardId } = req.params;
     const { fileName, fileType } = req.query;
 
     if (!fileName || !fileType) {
@@ -138,12 +152,9 @@ router.get('/boards/:boardId/storage/signed-url', async (req, res) => {
     }
 
     try {
-        // Path structure: clients/{client_id}/moodboards/{board_id}/{uuid_filename}.ext
-        // We need the client name for the storageService to work properly as it's used as prefix
-        // But our folder structure is different. Let's adjust storageService or use a different path
-
-        // Actually storageService.getUploadSignedUrl uses clientName to create a folder.
-        // We want a more specific path. Let's manually construct it.
+        // We need the clientId if it exists to keep the structure.
+        const board = await prisma.board.findUnique({ where: { id: boardId } });
+        const clientId = board.clientId || 'global';
 
         const timestamp = Date.now();
         const gcsPath = `clients/${clientId}/moodboards/${boardId}/${timestamp}_${fileName}`;
@@ -172,8 +183,7 @@ router.get('/boards/:boardId/storage/signed-url', async (req, res) => {
 });
 
 /**
- * POST /api/reference-boards/unfurl
- * Scrape Open Graph metadata from a URL
+ * POST /api/boards/unfurl
  */
 router.post('/unfurl', async (req, res) => {
     const { url } = req.body;
@@ -205,7 +215,6 @@ router.post('/unfurl', async (req, res) => {
                       new URL(url).hostname
         };
 
-        // Handle relative image URLs
         if (metadata.image && !metadata.image.startsWith('http')) {
             const baseUrl = new URL(url);
             metadata.image = new URL(metadata.image, baseUrl.origin).href;
@@ -214,8 +223,6 @@ router.post('/unfurl', async (req, res) => {
         res.json(metadata);
     } catch (error) {
         console.warn(`[Unfurl] Failed to unfurl ${url}:`, error.message);
-
-        // Fallback
         const domain = new URL(url).hostname;
         res.json({
             title: domain,

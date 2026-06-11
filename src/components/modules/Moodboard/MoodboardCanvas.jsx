@@ -10,15 +10,19 @@ import {
   X,
   Loader2,
   Save,
-  MessageSquare
+  MessageSquare,
+  ArrowLeft,
+  Settings
 } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import ReferenceCard from './ReferenceCard';
 
-const MoodboardCanvas = ({ clientId }) => {
-  const [boards, setBoards] = useState([]);
-  const [currentBoard, setCurrentBoard] = useState(null);
+const MoodboardCanvas = () => {
+  const { boardId } = useParams();
+  const navigate = useNavigate();
+  const [board, setBoard] = useState(null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -27,82 +31,38 @@ const MoodboardCanvas = ({ clientId }) => {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    fetchBoards();
+    if (boardId) {
+      fetchBoardAndItems();
+    }
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [clientId]);
+  }, [boardId]);
 
-  useEffect(() => {
-    if (currentBoard) {
-      fetchItems(currentBoard.id);
-    }
-  }, [currentBoard]);
-
-  const fetchBoards = async () => {
-    try {
-      const response = await axios.get(`/api/workspaces/${clientId}/boards`);
-      setBoards(response.data);
-      if (response.data.length > 0 && !currentBoard) {
-        setCurrentBoard(response.data[0]);
-      } else if (response.data.length === 0) {
-        setLoading(false);
-      }
-    } catch (error) {
-      console.error("Error fetching boards:", error);
-      toast.error("Error al cargar los tableros");
-      setLoading(false);
-    }
-  };
-
-  const fetchItems = async (boardId) => {
+  const fetchBoardAndItems = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`/api/workspaces/${clientId}/boards/${boardId}/items`);
-      setItems(response.data);
+      const [boardRes, itemsRes] = await Promise.all([
+        axios.get(`/api/boards/${boardId}`),
+        axios.get(`/api/boards/${boardId}/items`)
+      ]);
+      setBoard(boardRes.data);
+      setItems(itemsRes.data);
     } catch (error) {
-      console.error("Error fetching items:", error);
-      toast.error("Error al cargar los elementos");
+      console.error("Error fetching board data:", error);
+      toast.error("Error al cargar el tablero");
+      navigate('/moodboard');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCreateBoard = async () => {
-    const name = prompt("Nombre del nuevo tablero:");
-    if (!name) return;
-    try {
-      const response = await axios.post(`/api/workspaces/${clientId}/boards`, { name });
-      setBoards([response.data, ...boards]);
-      setCurrentBoard(response.data);
-      toast.success("Tablero creado");
-    } catch (error) {
-      toast.error("Error al crear tablero");
-    }
-  };
-
-  const handleDeleteBoard = async (boardId) => {
-    if (!confirm("¿Estás seguro de eliminar este tablero y todo su contenido?")) return;
-    try {
-      await axios.delete(`/api/workspaces/${clientId}/boards/${boardId}`);
-      const updatedBoards = boards.filter(b => b.id !== boardId);
-      setBoards(updatedBoards);
-      if (currentBoard?.id === boardId) {
-        setCurrentBoard(updatedBoards[0] || null);
-        if (updatedBoards.length === 0) setItems([]);
-      }
-      toast.success("Tablero eliminado");
-    } catch (error) {
-      toast.error("Error al eliminar tablero");
-    }
-  };
-
   const handleAddItem = async (type, extraData = {}) => {
-    if (!currentBoard) return;
+    if (!board) return;
 
     let itemData = {
       type,
-      positionX: 100, // Default position
+      positionX: 100,
       positionY: 100,
       ...extraData
     };
@@ -112,7 +72,7 @@ const MoodboardCanvas = ({ clientId }) => {
       if (!url) return;
       toast.loading("Analizando enlace...");
       try {
-        const unfurl = await axios.post('/api/reference-boards/unfurl', { url });
+        const unfurl = await axios.post('/api/boards/unfurl', { url });
         itemData = {
           ...itemData,
           contentUrl: url,
@@ -129,7 +89,7 @@ const MoodboardCanvas = ({ clientId }) => {
     }
 
     try {
-      const response = await axios.post(`/api/workspaces/${clientId}/boards/${currentBoard.id}/items`, itemData);
+      const response = await axios.post(`/api/boards/${boardId}/items`, itemData);
       setItems([...items, response.data]);
       setIsAdding(false);
       toast.success("Elemento añadido");
@@ -140,22 +100,19 @@ const MoodboardCanvas = ({ clientId }) => {
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
-    if (!file || !currentBoard) return;
+    if (!file || !board) return;
 
     toast.loading("Subiendo imagen...");
     try {
-      // 1. Get signed URL
       const { data: { url, gcsPath } } = await axios.get(
-        `/api/workspaces/${clientId}/boards/${currentBoard.id}/storage/signed-url`,
+        `/api/boards/${boardId}/storage/signed-url`,
         { params: { fileName: file.name, fileType: file.type } }
       );
 
-      // 2. Upload to GCS
       await axios.put(url, file, {
         headers: { 'Content-Type': file.type }
       });
 
-      // 3. Create item record
       await handleAddItem('image', { assetUrl: gcsPath });
       toast.dismiss();
     } catch (error) {
@@ -166,12 +123,11 @@ const MoodboardCanvas = ({ clientId }) => {
   };
 
   const updateItemPosition = async (itemId, x, y) => {
-    // Snap to 8px
     const snappedX = Math.round(x / 8) * 8;
     const snappedY = Math.round(y / 8) * 8;
 
     try {
-      await axios.patch(`/api/workspaces/${clientId}/boards/${currentBoard.id}/items/${itemId}`, {
+      await axios.patch(`/api/boards/${boardId}/items/${itemId}`, {
         positionX: snappedX,
         positionY: snappedY
       });
@@ -185,7 +141,7 @@ const MoodboardCanvas = ({ clientId }) => {
 
   const handleDeleteItem = async (itemId) => {
     try {
-      await axios.delete(`/api/workspaces/${clientId}/boards/${currentBoard.id}/items/${itemId}`);
+      await axios.delete(`/api/boards/${boardId}/items/${itemId}`);
       setItems(items.filter(i => i.id !== itemId));
       toast.success("Eliminado");
     } catch (error) {
@@ -195,92 +151,80 @@ const MoodboardCanvas = ({ clientId }) => {
 
   const handleUpdateItem = async (itemId, data) => {
     try {
-      const response = await axios.patch(`/api/workspaces/${clientId}/boards/${currentBoard.id}/items/${itemId}`, data);
+      const response = await axios.patch(`/api/boards/${boardId}/items/${itemId}`, data);
       setItems(items.map(i => i.id === itemId ? response.data : i));
     } catch (error) {
       toast.error("Error al actualizar");
     }
   };
 
-  if (loading && boards.length === 0) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      <div className="flex flex-col items-center justify-center h-full text-zinc-400 gap-4 animate-pulse">
+        <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
+        <p className="font-bold tracking-tighter">Cargando lienzo creativo...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 rounded-xl overflow-hidden border border-slate-200">
-      {/* Header / Board Selector */}
-      <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200">
+    <div className="flex flex-col h-full bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative">
+      {/* Dynamic Header */}
+      <div className="flex items-center justify-between px-6 py-3 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border-b border-zinc-200 dark:border-zinc-800 z-[40]">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <select
-              className="bg-slate-100 border-none rounded-lg px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500"
-              value={currentBoard?.id || ''}
-              onChange={(e) => setCurrentBoard(boards.find(b => b.id === e.target.value))}
-            >
-              {boards.map(board => (
-                <option key={board.id} value={board.id}>{board.name}</option>
-              ))}
-              {boards.length === 0 && <option value="">Sin tableros</option>}
-            </select>
-            <button
-              onClick={handleCreateBoard}
-              className="p-1.5 hover:bg-slate-100 rounded-md transition-colors text-slate-600"
-              title="Nuevo Tablero"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-          </div>
+          <button
+            onClick={() => navigate('/moodboard')}
+            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors text-zinc-500"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
 
-          {currentBoard && (
-            <button
-              onClick={() => handleDeleteBoard(currentBoard.id)}
-              className="p-1.5 hover:bg-red-50 text-red-500 rounded-md transition-colors"
-              title="Eliminar Tablero"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-black text-zinc-900 dark:text-zinc-100 tracking-tighter uppercase">
+                {board?.name}
+              </h1>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 uppercase tracking-widest border border-zinc-200 dark:border-zinc-700">
+                {board?.client?.name || 'Agencia'}
+              </span>
+            </div>
+            {!isMobile && (
+              <p className="text-[10px] text-zinc-400 font-mono">
+                {items.length} elementos • Snap-to-Grid: 8px
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {!isMobile && (
-            <div className="text-xs text-slate-400 font-mono mr-4">
-              Canvas: 3000x3000px | Snap: 8px
-            </div>
-          )}
-
           <div className="relative">
             <button
               onClick={() => setIsAdding(!isAdding)}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm active:scale-95"
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
             >
               <Plus className="w-4 h-4" />
               <span>Añadir</span>
             </button>
 
             {isAdding && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in duration-200">
+              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
                 <button
                   onClick={() => { fileInputRef.current?.click(); setIsAdding(false); }}
-                  className="flex items-center gap-3 w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                 >
                   <ImageIcon className="w-4 h-4 text-blue-500" />
                   Imagen
                 </button>
                 <button
                   onClick={() => handleAddItem('link')}
-                  className="flex items-center gap-3 w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                 >
                   <LinkIcon className="w-4 h-4 text-green-500" />
                   Enlace
                 </button>
                 <button
                   onClick={() => handleAddItem('text')}
-                  className="flex items-center gap-3 w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                 >
                   <Type className="w-4 h-4 text-amber-500" />
                   Nota
@@ -301,22 +245,10 @@ const MoodboardCanvas = ({ clientId }) => {
 
       {/* Canvas Area */}
       <div
-        className={`flex-1 overflow-auto bg-slate-100 ${isMobile ? 'p-4' : 'relative'}`}
+        className={`flex-1 overflow-auto bg-zinc-100 dark:bg-zinc-900/50 ${isMobile ? 'p-4' : 'relative'}`}
         ref={canvasRef}
       >
-        {!currentBoard ? (
-          <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-4">
-            <Maximize2 className="w-12 h-12 opacity-20" />
-            <p>Crea tu primer tablero para empezar a añadir referencias</p>
-            <button
-              onClick={handleCreateBoard}
-              className="text-indigo-600 font-medium hover:underline"
-            >
-              Crear Tablero
-            </button>
-          </div>
-        ) : isMobile ? (
-          // Mobile Grid View
+        {isMobile ? (
           <div className="grid grid-cols-1 gap-4 pb-20">
             {items.map(item => (
               <ReferenceCard
@@ -328,13 +260,12 @@ const MoodboardCanvas = ({ clientId }) => {
               />
             ))}
             {items.length === 0 && (
-               <div className="text-center py-10 text-slate-400">
-                  No hay elementos en este tablero.
+               <div className="text-center py-20 text-zinc-400 font-medium">
+                  Este lienzo está vacío.
                </div>
             )}
           </div>
         ) : (
-          // Desktop Absolute Canvas
           <div
             className="canvas-container"
             style={{
@@ -342,8 +273,8 @@ const MoodboardCanvas = ({ clientId }) => {
               height: '3000px',
               position: 'relative',
               backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 0)',
-              backgroundSize: '24px 24px', // Dot grid
-              backgroundColor: '#f8fafc'
+              backgroundSize: '24px 24px',
+              backgroundColor: 'transparent'
             }}
           >
             {items.map(item => (
@@ -360,11 +291,14 @@ const MoodboardCanvas = ({ clientId }) => {
         )}
       </div>
 
-      {/* Footer / Stats */}
-      {currentBoard && (
-        <div className="px-6 py-2 bg-white border-t border-slate-200 text-[10px] text-slate-400 flex justify-between">
-          <div>{items.length} elementos en "{currentBoard.name}"</div>
-          <div>Cualquier cambio se guarda automáticamente</div>
+      {/* Floating Controls Placeholder */}
+      {!isMobile && (
+        <div className="absolute bottom-6 right-6 flex items-center gap-3 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl px-4 py-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xl z-[40]">
+           <div className="flex -space-x-2">
+              <div className="w-8 h-8 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-[10px] text-white font-bold">BS</div>
+           </div>
+           <div className="h-4 w-[1px] bg-zinc-200 dark:bg-zinc-800" />
+           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Colaborativo</span>
         </div>
       )}
     </div>

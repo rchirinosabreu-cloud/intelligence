@@ -413,8 +413,7 @@ app.use('/api/reports', authenticateToken, reportsRouter);
 app.use('/api/brain-core', authenticateToken, brainCoreRouter);
 
 // Boards / Moodboards Router
-app.use('/api/workspaces/:clientId', authenticateToken, boardsRouter);
-app.use('/api/reference-boards', authenticateToken, boardsRouter);
+app.use('/api/boards', authenticateToken, boardsRouter);
 
 // User Management Endpoints
 app.post('/api/users', authenticateToken, async (req, res) => {

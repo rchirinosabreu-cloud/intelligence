@@ -1,16 +1,34 @@
 import prisma from '../lib/prisma.js';
 
 /**
- * Get all boards for a specific client.
+ * Get all boards, optionally filtered by client.
  */
-export const getBoardsByClient = async (clientId) => {
+export const getBoards = async (clientId = null) => {
+  const where = clientId ? { clientId } : {};
   return await prisma.board.findMany({
-    where: { clientId },
+    where,
     orderBy: { createdAt: 'desc' },
     include: {
         _count: {
             select: { items: true }
+        },
+        client: {
+            select: { name: true, logoUrl: true }
         }
+    }
+  });
+};
+
+/**
+ * Get a single board by ID.
+ */
+export const getBoardById = async (boardId) => {
+  return await prisma.board.findUnique({
+    where: { id: boardId },
+    include: {
+      client: {
+        select: { name: true }
+      }
     }
   });
 };
