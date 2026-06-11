@@ -240,11 +240,29 @@ router.post('/unfurl', async (req, res) => {
             // If even URL parsing fails
         }
 
+        // Attempt to extract social media handle from URL
+        let handleTitle = domain;
+        let siteName = domain;
+
+        if (url.includes('instagram.com')) {
+            siteName = 'Instagram';
+            const igMatch = url.match(/instagram\.com\/([a-zA-Z0-9._]+)/);
+            if (igMatch && igMatch[1] && igMatch[1] !== 'p' && igMatch[1] !== 'reels') {
+                handleTitle = `Perfil: @${igMatch[1]}`;
+            }
+        } else if (url.includes('facebook.com')) {
+            siteName = 'Facebook';
+            const fbMatch = url.match(/facebook\.com\/([a-zA-Z0-9._]+)/);
+            if (fbMatch && fbMatch[1]) {
+                handleTitle = `Perfil: ${fbMatch[1]}`;
+            }
+        }
+
         res.status(200).json({
-            title: domain,
+            title: handleTitle,
             description: 'Vista previa no disponible por restricciones de la plataforma origen.',
             image: '',
-            siteName: domain
+            siteName: siteName
         });
     }
 });

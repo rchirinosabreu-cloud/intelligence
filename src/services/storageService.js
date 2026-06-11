@@ -101,9 +101,9 @@ export const configureBucketCors = async () => {
         const [metadata] = await storageClient.bucket(bucketName).setCorsConfiguration([
             {
                 maxAgeSeconds: 3600,
-                method: ['GET', 'PUT', 'POST', 'OPTIONS', 'DELETE'],
-                origin: ['*'], // Allow all origins or restrict to specific domain
-                responseHeader: ['Content-Type', 'Authorization', 'Content-Length', 'User-Agent', 'x-goog-resumable'],
+                method: ['GET', 'PUT', 'POST', 'OPTIONS', 'DELETE', 'HEAD'],
+                origin: ['https://labs.brainstudioagencia.com', 'http://localhost:3000', 'http://localhost:5173'],
+                responseHeader: ['Content-Type', 'Authorization', 'Content-Length', 'User-Agent', 'x-goog-resumable', 'x-goog-meta-*'],
             },
         ]);
         console.log(`[Storage] CORS configuration applied successfully.`);
