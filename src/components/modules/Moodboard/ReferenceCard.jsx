@@ -201,7 +201,13 @@ const ReferenceCard = ({ item, isMobile, zoom = 1, onDelete, onUpdate, onDragSto
                   <span>Explorar</span>
                 </a>
                 <div className="text-[9px] font-mono text-zinc-300 dark:text-zinc-600">
-                  {new URL(item.contentUrl).hostname.replace('www.', '')}
+                  {(() => {
+                    try {
+                      return new URL(item.contentUrl).hostname.replace('www.', '');
+                    } catch (e) {
+                      return item.contentUrl || '';
+                    }
+                  })()}
                 </div>
               </div>
             </div>

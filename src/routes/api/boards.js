@@ -227,7 +227,11 @@ router.post('/unfurl', async (req, res) => {
 
         res.json(metadata);
     } catch (error) {
-        console.warn(`[Unfurl] Failed to unfurl ${url}:`, error.message);
+        // Log the error but return 200 with fallback to prevent frontend crashes
+        console.warn(`[Unfurl] External error for ${url}:`, error.message);
+        if (error.response) {
+            console.warn(`[Unfurl] Status: ${error.response.status}`);
+        }
 
         let domain = 'Enlace';
         try {
@@ -236,9 +240,9 @@ router.post('/unfurl', async (req, res) => {
             // If even URL parsing fails
         }
 
-        res.json({
+        res.status(200).json({
             title: domain,
-            description: '',
+            description: 'Vista previa no disponible por restricciones de la plataforma origen.',
             image: '',
             siteName: domain
         });
