@@ -4,33 +4,6 @@ import App from '@/App';
 import '@/index.css';
 import axios from 'axios';
 
-// Initialize Meta SDK
-// We use VITE_ prefix for Vite environment variables.
-// Fallback to the provided App ID (947130437684926) if env var is not set.
-const META_APP_ID = import.meta.env.VITE_META_APP_ID || '947130437684926';
-
-if (typeof window !== 'undefined' && META_APP_ID) {
-  window.fbAsyncInit = function() {
-    console.log(`[Meta SDK] Initializing with App ID: ${META_APP_ID}`);
-    window.FB.init({
-      appId      : META_APP_ID,
-      cookie     : true,
-      xfbml      : true,
-      version    : 'v21.0'
-    });
-  };
-
-  (function(d, s, id) {
-    var js, fjs = d.getElementsByTagName(s)[0];
-    if (d.getElementById(id)) return;
-    js = d.createElement(s); js.id = id;
-    js.src = "https://connect.facebook.net/es_LA/sdk.js";
-    fjs.parentNode.insertBefore(js, fjs);
-  }(document, 'script', 'facebook-jssdk'));
-} else {
-  console.warn('[Meta SDK] App ID missing. SDK will not be initialized.');
-}
-
 // Global Axios Interceptor
 axios.interceptors.request.use((config) => {
     const token = localStorage.getItem('authToken');
