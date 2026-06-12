@@ -41,6 +41,42 @@ axios.interceptors.request.use((config) => {
     return config;
 }, (error) => Promise.reject(error));
 
+// Global Axios Response Interceptor to handle session expiration
+axios.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        const status = error.response ? error.response.status : null;
+        const errorData = error.response ? error.response.data : null;
+
+        // Handle 401/403 globally
+        if (status === 401 || status === 403) {
+            const url = error.config ? error.config.url : '';
+
+            // Skip global logout/error handling for specific routes (auth and external proxies like Gemini)
+            const isAuthRoute = url.includes('/api/login');
+            const isGeminiRoute = url.includes('/api/gemini');
+
+            if (!isAuthRoute && !isGeminiRoute) {
+                if (status === 401 || errorData?.code === 'TokenExpiredError' || errorData?.message === 'TokenExpiredError') {
+                    console.warn(`[Axios] 401 Unauthorized or Token Expired on ${url}. Triggering logout.`);
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('currentUser');
+                    window.dispatchEvent(new Event('auth-error'));
+
+                    if (!window.location.pathname.includes('/login')) {
+                        window.location.href = '/login?expired=true';
+                    }
+                } else if (status === 403) {
+                    console.warn(`[Axios] 403 Forbidden on ${url}. Triggering toast event.`);
+                    window.dispatchEvent(new Event('auth-forbidden'));
+                }
+            }
+        }
+
+        return Promise.reject(error);
+    }
+);
+
 // Global Fetch Interceptor to inject JWT Auth Token into every request
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
@@ -88,7 +124,7 @@ window.fetch = async (...args) => {
 
                 // Optional: Redirect to login if on a protected route and NOT already on login page
                 if (!window.location.pathname.includes('/login')) {
-                    window.location.href = '/login';
+                    window.location.href = '/login?expired=true';
                 }
             } else if (response.status === 403) {
                 console.warn(`[Auth] 403 Forbidden on ${urlStr}. Triggering toast event.`);
