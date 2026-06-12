@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { getApiBaseUrl } from '../lib/apiBaseUrl';
 
 const Login = ({ onLogin }) => {
@@ -7,6 +7,15 @@ const Login = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [infoMsg, setInfoMsg] = useState('');
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('expired') === 'true') {
+      setInfoMsg('Tu sesión ha expirado por seguridad, por favor ingresa nuevamente.');
+    }
+  }, [location]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -57,8 +66,13 @@ const Login = ({ onLogin }) => {
 
         <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
           {errorMsg && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm text-center">
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm text-center animate-in fade-in zoom-in duration-300">
                   {errorMsg}
+              </div>
+          )}
+          {infoMsg && (
+              <div className="p-3 bg-primary/10 border border-primary/20 rounded-xl text-primary text-sm text-center animate-in fade-in zoom-in duration-300">
+                  {infoMsg}
               </div>
           )}
           <div>
