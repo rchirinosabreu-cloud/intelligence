@@ -11,6 +11,12 @@ const router = express.Router();
 router.get('/public/:uuid_slug', quotationController.getPublicQuotation);
 
 /**
+ * GET /api/quotations/catalog
+ * Public or semi-public route to get services
+ */
+router.get('/catalog', quotationController.getCatalog);
+
+/**
  * PROTECTED ROUTES: Management and creation
  */
 router.use(authenticateToken);

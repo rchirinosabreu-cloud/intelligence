@@ -32,6 +32,11 @@ const router = express.Router();
 router.get('/public/parrilla/:token', publicController.getPublicPlan);
 router.post('/public/items/:id/approve', publicController.approvePublicItem);
 router.post('/public/items/:id/comment', publicController.commentPublicItem);
+router.use('/quotations', quotationsRouter);
+
+// Aliases for services catalog (ensuring compatibility with various frontend versions)
+router.get('/services-catalog', (req, res) => res.redirect(307, '/api/quotations/catalog'));
+router.get('/services', (req, res) => res.redirect(307, '/api/quotations/catalog'));
 
 // --- Auth Routes ---
 router.post('/login', authController.login);
@@ -123,6 +128,5 @@ router.use('/activity', activityRouter);
 router.use('/reports', reportsRouter);
 router.use('/brain-core', brainCoreRouter);
 router.use('/boards', boardsRouter);
-router.use('/quotations', quotationsRouter);
 
 export default router;

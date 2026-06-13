@@ -36,7 +36,7 @@ const QuotationForm = () => {
     const { data: catalog = [] } = useQuery({
         queryKey: ['service-catalog'],
         queryFn: async () => {
-            const res = await fetch(`${getApiBaseUrl()}/api/db/service-catalog`);
+            const res = await fetch(`${getApiBaseUrl()}/api/quotations/catalog`);
             if (!res.ok) throw new Error("Failed to fetch catalog");
             return await res.json();
         }
