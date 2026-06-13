@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { Search, Plus, Trash2, Copy, Check, DollarSign, FileText, Globe, Building2, User as UserIcon } from 'lucide-react';
+import { Search, Plus, Trash2, Copy, Check, DollarSign, FileText, Globe, Building2, User as UserIcon, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/Card';
 import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 import SuccessModal from './SuccessModal';
 
 const QuotationForm = () => {
     // State
     const [emisorType, setEmisorType] = useState('BRAIN_STUDIO');
+    const [clientCompany, setClientCompany] = useState('');
     const [clientName, setClientName] = useState('');
     const [clientEmail, setClientEmail] = useState('');
+    const [clientPhone, setClientPhone] = useState('');
     const [clientType, setClientType] = useState('EMPRESA');
     const [currency, setCurrency] = useState('COP');
     const [isTaxExempt, setIsTaxExempt] = useState(false);
@@ -21,7 +24,6 @@ const QuotationForm = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [generatedLink, setGeneratedLink] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [termsAndConditions, setTermsAndConditions] = useState('Este documento representa una propuesta formal de servicios. Los valores expresados tienen una vigencia de 15 días calendario.');
 
     // Auto-toggle tax exempt based on emisor/client
     useEffect(() => {
@@ -49,11 +51,12 @@ const QuotationForm = () => {
 
     const addItem = (service) => {
         setSelectedItems([...selectedItems, {
-            id_servicio: service.id,
-            nombre: service.name,
-            descripcion: service.description,
-            precio: service.valor_neto_actual,
-            cantidad: 1
+            serviceId: service.id,
+            name: service.name,
+            description: service.description,
+            price: service.valor_neto_actual,
+            quantity: 1,
+            note: ''
         }]);
         setSearchText('');
     };
@@ -69,7 +72,7 @@ const QuotationForm = () => {
     };
 
     const calculateTotals = () => {
-        const subtotal = selectedItems.reduce((sum, item) => sum + (Number(item.precio) * Number(item.cantidad)), 0);
+        const subtotal = selectedItems.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
         const tax = isTaxExempt ? 0 : subtotal * 0.19;
         return { subtotal, tax, total: subtotal + tax };
     };
@@ -82,8 +85,10 @@ const QuotationForm = () => {
         }).format(val);
     };
 
+    const navigate = useNavigate();
+
     const handleSubmit = async () => {
-        if (!clientName || selectedItems.length === 0) {
+        if (!clientName || !clientPhone || selectedItems.length === 0) {
             toast.error("Por favor completa los campos obligatorios");
             return;
         }
@@ -99,12 +104,13 @@ const QuotationForm = () => {
                 body: JSON.stringify({
                     emisor_type: emisorType,
                     client_name: clientName,
+                    client_company: clientCompany,
                     client_email: clientEmail,
+                    client_phone: clientPhone,
                     client_type: clientType,
                     items: selectedItems,
                     currency,
-                    is_tax_exempt: isTaxExempt,
-                    terms_and_conditions: termsAndConditions
+                    is_tax_exempt: isTaxExempt
                 })
             });
 
@@ -137,9 +143,14 @@ const QuotationForm = () => {
                 link={generatedLink}
             />
             <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Sistema de Cotizaciones</h1>
-                    <p className="text-zinc-500 mt-1 text-sm">Crea propuestas comerciales elegantes y dinámicas.</p>
+                <div className="flex items-center gap-4">
+                    <Button variant="ghost" size="icon" onClick={() => navigate('/cotizaciones')} className="rounded-xl">
+                        <ArrowLeft className="w-5 h-5" />
+                    </Button>
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight">Nueva Propuesta</h1>
+                        <p className="text-zinc-500 mt-1 text-sm">Crea propuestas comerciales elegantes y dinámicas.</p>
+                    </div>
                 </div>
             </div>
 
@@ -190,27 +201,73 @@ const QuotationForm = () => {
                             </div>
 
                             {/* Client Data */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-zinc-500 uppercase">Nombre del Cliente</label>
-                                    <input
-                                        type="text"
-                                        value={clientName}
-                                        onChange={(e) => setClientName(e.target.value)}
-                                        className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20"
-                                        placeholder="Ej: Juan Pérez o Empresa SAS"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-zinc-500 uppercase">Tipo de Cliente</label>
+                                    <label className="text-xs font-bold text-zinc-500 uppercase">Tipo de Propuesta</label>
                                     <select
                                         value={clientType}
                                         onChange={(e) => setClientType(e.target.value)}
                                         className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none"
                                     >
-                                        <option value="EMPRESA">Empresa (Aplica IVA 19%)</option>
-                                        <option value="PERSONA_NATURAL">Persona Natural (Exento)</option>
+                                        <option value="EMPRESA">Para Empresa (Aplica IVA 19%)</option>
+                                        <option value="PERSONA_NATURAL">Para Persona Natural (Exento)</option>
                                     </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-zinc-500 uppercase">Fecha de Emisión</label>
+                                    <input
+                                        type="text"
+                                        disabled
+                                        value={new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                        className="w-full bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-500"
+                                    />
+                                </div>
+
+                                {clientType === 'EMPRESA' && (
+                                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <label className="text-xs font-bold text-zinc-500 uppercase">Nombre de la Empresa</label>
+                                        <input
+                                            type="text"
+                                            value={clientCompany}
+                                            onChange={(e) => setClientCompany(e.target.value)}
+                                            className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20"
+                                            placeholder="Ej: Acme Corp SAS"
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-zinc-500 uppercase">Nombre del Cliente (Contacto)</label>
+                                    <input
+                                        type="text"
+                                        value={clientName}
+                                        onChange={(e) => setClientName(e.target.value)}
+                                        className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20"
+                                        placeholder="Ej: Juan Pérez"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-zinc-500 uppercase">Correo Electrónico</label>
+                                    <input
+                                        type="email"
+                                        value={clientEmail}
+                                        onChange={(e) => setClientEmail(e.target.value)}
+                                        className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20"
+                                        placeholder="juan@empresa.com"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-zinc-500 uppercase">Celular / WhatsApp</label>
+                                    <input
+                                        type="text"
+                                        value={clientPhone}
+                                        onChange={(e) => setClientPhone(e.target.value)}
+                                        className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20"
+                                        placeholder="+57 300 0000000"
+                                    />
                                 </div>
                             </div>
 
@@ -261,8 +318,8 @@ const QuotationForm = () => {
                                                 <div className="flex justify-between items-start">
                                                     <input
                                                         className="flex-1 bg-transparent font-bold text-sm outline-none border-b border-transparent focus:border-primary/20"
-                                                        value={item.nombre}
-                                                        onChange={(e) => updateItem(idx, 'nombre', e.target.value)}
+                                                        value={item.name}
+                                                        onChange={(e) => updateItem(idx, 'name', e.target.value)}
                                                     />
                                                     <button onClick={() => removeItem(idx)} className="text-zinc-400 hover:text-red-500 transition-colors">
                                                         <Trash2 className="w-4 h-4" />
@@ -270,16 +327,25 @@ const QuotationForm = () => {
                                                 </div>
                                                 <textarea
                                                     className="w-full bg-transparent text-xs text-zinc-500 outline-none resize-none border-none p-0 h-16"
-                                                    value={item.descripcion}
-                                                    onChange={(e) => updateItem(idx, 'descripcion', e.target.value)}
+                                                    value={item.description}
+                                                    onChange={(e) => updateItem(idx, 'description', e.target.value)}
                                                 />
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-bold text-zinc-400 uppercase">Nota o aclaración sobre este servicio</label>
+                                                    <textarea
+                                                        placeholder="Ej: Incluye 2 rondas de ajustes..."
+                                                        className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 text-xs outline-none focus:ring-1 ring-primary/30 min-h-[60px]"
+                                                        value={item.note}
+                                                        onChange={(e) => updateItem(idx, 'note', e.target.value)}
+                                                    />
+                                                </div>
                                                 <div className="flex items-center gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/50">
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[10px] font-bold text-zinc-400 uppercase">Cant.</span>
                                                         <input
                                                             type="number"
-                                                            value={item.cantidad}
-                                                            onChange={(e) => updateItem(idx, 'cantidad', e.target.value)}
+                                                            value={item.quantity}
+                                                            onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
                                                             className="w-12 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2 py-1 text-xs text-center"
                                                         />
                                                     </div>
@@ -287,8 +353,8 @@ const QuotationForm = () => {
                                                         <span className="text-[10px] font-bold text-zinc-400 uppercase">Precio</span>
                                                         <input
                                                             type="number"
-                                                            value={item.precio}
-                                                            onChange={(e) => updateItem(idx, 'precio', e.target.value)}
+                                                            value={item.price}
+                                                            onChange={(e) => updateItem(idx, 'price', e.target.value)}
                                                             className="w-24 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2 py-1 text-xs text-right font-medium"
                                                         />
                                                     </div>
@@ -301,14 +367,6 @@ const QuotationForm = () => {
                         </div>
                     </Card>
 
-                    <Card className="p-6 space-y-4">
-                        <label className="text-xs font-bold text-zinc-500 uppercase block">Términos y Condiciones</label>
-                        <textarea
-                            value={termsAndConditions}
-                            onChange={(e) => setTermsAndConditions(e.target.value)}
-                            className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 text-xs outline-none focus:ring-2 ring-primary/20 min-h-[120px]"
-                        />
-                    </Card>
                 </div>
 
                 {/* Preview / Settings Column */}
