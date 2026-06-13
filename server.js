@@ -103,4 +103,5 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     })();
 });
 
+// Aumentar el timeout global del servidor a 5 minutos para procesar análisis largos de IA
 server.timeout = 300000;

@@ -25,9 +25,6 @@ const getStorageClient = () => {
             credentials,
         });
 
-        // Auto-configure CORS on startup
-        configureBucketCors().catch(err => console.error("Failed to configure bucket CORS:", err));
-
         return storage;
     } catch (error) {
         console.error("Error initializing GCS Storage client:", error);
@@ -112,6 +109,13 @@ export const configureBucketCors = async () => {
         throw error;
     }
 };
+
+// Initialize CORS configuration once at module load
+if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+  setTimeout(() => {
+    configureBucketCors().catch(err => console.error("[Storage] Auto-CORS initialization failed:", err.message));
+  }, 1000);
+}
 
 /**
  * Generates a V4 Signed URL for uploading a file directly to GCS.
