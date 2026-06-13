@@ -48,7 +48,7 @@ const Dashboard = () => {
   };
 
   const getFirstName = () => {
-    if (!currentUser || !currentUser.name) return 'Equipo Brain';
+    if (!currentUser?.name) return 'Equipo Brain';
     return currentUser.name.split(' ')[0];
   };
 
