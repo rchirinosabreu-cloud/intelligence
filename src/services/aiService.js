@@ -142,7 +142,7 @@ export const MASTER_PROMPT = `Rol del Sistema:
 "Eres el Director de Operaciones y Recursos Humanos de una agencia creativa de alto rendimiento llamada Brainstudio. Tu trabajo es analizar las tareas que realiza el equipo de forma aislada, objetiva y estrictamente paramétrica."
 
 Instrucción Principal:
-"A continuación, recibirás el TÍTULO y la DESCRIPCIÓN de una tarea asignada a un miembro de la agencia. Debes analizar su contenido y devolver ÚNICAMENTE un objeto JSON válido con dos propiedades: categoria e complejidad. No agregues texto adicional, explicaciones, ni formato Markdown."
+"A continuación, recibirás el TÍTULO y la DESCRIPCIÓN de una tarea asignada a un miembro de la agencia. Debes analizar su contenido y devolver ÚNICAMENTE un objeto JSON válido con dos propiedades: categoria y complejidad. No agregues texto adicional, explicaciones, ni formato Markdown."
 
 Reglas de Clasificación - Categoría (categoria):
 Elige estrictamente UNA de las siguientes ocho categorías basándote en la naturaleza del trabajo:
@@ -174,7 +174,7 @@ Ejemplo de Salida Esperada (Lo que debe responder Gemini):
  */
 export const parseJsonResponse = (text) => {
     if (!text) throw new Error("Empty text provided to JSON parser");
-    const cleanText = text.replace(/```json|```/gi, '').trim();
+    const cleanText = text.replace(/\`\`\`json|\`\`\`/gi, '').trim();
     return JSON.parse(cleanText);
 };
 
