@@ -117,3 +117,18 @@ export const listQuotations = async (req, res) => {
         res.status(500).json({ error: "Error al listar cotizaciones" });
     }
 };
+
+/**
+ * Get the full service catalog for quotations.
+ */
+export const getCatalog = async (req, res) => {
+    try {
+        const catalog = await prisma.serviceCatalog.findMany({
+            orderBy: { category: 'asc' }
+        });
+        res.json(catalog);
+    } catch (error) {
+        console.error("[QuotationController] Catalog fetch failed:", error);
+        res.status(500).json({ error: "Error al obtener el catálogo de servicios" });
+    }
+};
