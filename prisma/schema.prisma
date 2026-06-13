@@ -407,10 +407,13 @@ model ServiceCatalog {
 
 model Quotation {
   id                   String       @id @default(uuid())
+  consecutive          Int          @default(autoincrement())
   uuid_slug            String       @unique
   emisor_type          EmisorType
   client_name          String
+  client_company       String?
   client_email         String
+  client_phone         String
   is_tax_exempt        Boolean      @default(false)
   items                Json
   currency             CurrencyType @default(COP)

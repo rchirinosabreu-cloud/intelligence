@@ -78,7 +78,7 @@ const PublicQuotation = () => {
                     <div className="pt-4 flex flex-col sm:flex-row gap-4">
                         <Button
                             className="flex-1 h-14 rounded-2xl bg-zinc-900 dark:bg-white dark:text-zinc-950 hover:opacity-90 transition-all font-bold text-base"
-                            onClick={() => window.open(`https://wa.me/573014101903?text=Hola! Mi propuesta comercial ha expirado y me gustaría actualizarla.`, '_blank')}
+                            onClick={() => window.open(`https://wa.me/573004329276?text=Hola! Mi propuesta comercial ha expirado y me gustaría actualizarla.`, '_blank')}
                         >
                             <MessageCircle className="w-5 h-5 mr-2" />
                             Contactar por WhatsApp
@@ -106,16 +106,58 @@ const PublicQuotation = () => {
                                 </div>
                                 <div>
                                     <h1 className="text-2xl font-black tracking-tighter uppercase">Brainstudio</h1>
-                                    <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">Agencia de Crecimiento</p>
+                                    <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">
+                                        {quotation.emisor_data?.razonSocial} · NIT {quotation.emisor_data?.nit}
+                                    </p>
                                 </div>
                             </div>
                         ) : (
                             <div className="space-y-1">
-                                <h1 className="text-2xl font-black tracking-tight">Francisco Villa Zúñiga</h1>
-                                <p className="text-xs text-zinc-500 font-bold uppercase">Persona Natural · NIT 1.235.038.569</p>
+                                <h1 className="text-2xl font-black tracking-tight">{quotation.emisor_data?.nombre}</h1>
+                                <p className="text-xs text-zinc-500 font-bold uppercase">
+                                    Persona Natural · {quotation.emisor_data?.identificacion}
+                                </p>
                             </div>
                         )}
                     </div>
+
+                    <div className="text-right">
+                        <div className="bg-primary/5 px-4 py-2 rounded-2xl border border-primary/10">
+                            <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-1">Consecutivo</p>
+                            <p className="text-2xl font-black text-zinc-900 dark:text-white tracking-tighter">
+                                {quotation.consecutive_formatted}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <main className="max-w-5xl mx-auto px-6 lg:px-12 pt-12 space-y-12">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <Card className="lg:col-span-2 p-8 bg-white dark:bg-zinc-900 border-zinc-100 dark:border-zinc-800 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full -mr-12 -mt-12" />
+                        <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Información del Cliente</h4>
+                        <div className="space-y-4">
+                             <div>
+                                <h2 className="text-3xl font-black tracking-tight text-zinc-900 dark:text-white">
+                                    {quotation.client_company || quotation.client_name}
+                                </h2>
+                                {quotation.client_company && (
+                                    <p className="text-sm font-bold text-zinc-500 uppercase mt-1">Atn: {quotation.client_name}</p>
+                                )}
+                             </div>
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                                 <div className="space-y-1">
+                                     <p className="text-[10px] font-bold text-zinc-400 uppercase">Correo Electrónico</p>
+                                     <p className="text-sm font-medium">{quotation.client_email || 'No proporcionado'}</p>
+                                 </div>
+                                 <div className="space-y-1">
+                                     <p className="text-[10px] font-bold text-zinc-400 uppercase">Teléfono de Contacto</p>
+                                     <p className="text-sm font-medium">{quotation.client_phone}</p>
+                                 </div>
+                             </div>
+                        </div>
+                    </Card>
 
                     <div className="flex items-center gap-3">
                         <Button disabled variant="outline" className="h-12 px-6 rounded-2xl bg-zinc-50 dark:bg-zinc-800 border-none font-bold text-zinc-400">
@@ -182,16 +224,21 @@ const PublicQuotation = () => {
                                             <span className="w-6 h-6 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-black text-zinc-400">
                                                 {idx + 1}
                                             </span>
-                                            <h4 className="text-lg font-bold group-hover:text-primary transition-colors">{item.nombre}</h4>
+                                            <h4 className="text-lg font-bold group-hover:text-primary transition-colors">{item.name}</h4>
                                         </div>
                                         <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed pl-8">
-                                            {item.descripcion}
+                                            {item.description}
                                         </p>
+                                        {item.note && (
+                                            <p className="text-xs italic text-zinc-400 pl-8 pt-2">
+                                                * {item.note}
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="md:text-right space-y-1 shrink-0 flex flex-row md:flex-col justify-between items-center md:items-end">
-                                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Inversión x {item.cantidad}</p>
+                                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Inversión x {item.quantity}</p>
                                         <p className="text-xl font-black text-zinc-900 dark:text-white">
-                                            {formatCurrency(Number(item.precio) * Number(item.cantidad))}
+                                            {formatCurrency(Number(item.price) * Number(item.quantity))}
                                         </p>
                                     </div>
                                 </div>
@@ -242,7 +289,7 @@ const PublicQuotation = () => {
 
                         <Button
                             className="w-full h-16 rounded-[1.5rem] bg-primary hover:scale-[1.02] active:scale-[0.98] transition-all font-black text-lg shadow-xl shadow-primary/20"
-                            onClick={() => window.open(`https://wa.me/573014101903?text=Hola! Acabo de ver la propuesta para ${quotation.client_name} y me gustaría proceder.`, '_blank')}
+                            onClick={() => window.open(`https://wa.me/573004329276?text=Hola! Acabo de ver la propuesta para ${quotation.client_name} y me gustaría proceder.`, '_blank')}
                         >
                             Aceptar & Comenzar Ahora
                             <ChevronRight className="w-5 h-5 ml-2" />
