@@ -40,12 +40,12 @@ export const processUnclassifiedTasks = async () => {
         let updatedCount = 0;
         for (const item of classifications) {
             try {
-                if (item.id && item.categoria) {
+                if (item.id && item.category) {
                     await prisma.task.update({
                         where: { id: item.id },
                         data: {
-                            aiCategory: normalizeCategory(item.categoria),
-                            aiComplexity: item.complejidad || "MEDIA"
+                            aiCategory: normalizeCategory(item.category),
+                            aiComplexity: item.complexity || "MEDIA"
                         }
                     });
                     updatedCount++;

@@ -138,6 +138,179 @@ export const tools = [
     }
 ];
 
+export const MASTER_PROMPT = `Rol del Sistema:
+"Eres el Director de Operaciones y Recursos Humanos de una agencia creativa de alto rendimiento llamada Brainstudio. Tu trabajo es analizar las tareas que realiza el equipo de forma aislada, objetiva y estrictamente paramétrica."
+
+Instrucción Principal:
+"A continuación, recibirás el TÍTULO y la DESCRIPCIÓN de una tarea asignada a un miembro de la agencia. Debes analizar su contenido y devolver ÚNICAMENTE un objeto JSON válido con dos propiedades: categoria e complejidad. No agregues texto adicional, explicaciones, ni formato Markdown."
+
+Reglas de Clasificación - Categoría (categoria):
+Elige estrictamente UNA de las siguientes ocho categorías basándote en la naturaleza del trabajo:
+
+"Estratégico": Tareas de planificación de alto nivel, análisis de métricas de negocio, o definición de rumbo de marca.
+"Creativo & Diseño": Diseño gráfico, creación de conceptos visuales, branding y dirección de arte.
+"Marketing & Social Media": Gestión de comunidades, pauta publicitaria, planificación de grillas y analítica de redes.
+"Producción Audiovisual": Edición de video, post-producción, guionismo técnico y motion graphics.
+"Creación de Contenido": Redacción de copies, captions, artículos de blog y storytelling.
+"Operaciones & Reuniones": Gestión de proyectos, llamadas de alineación, correcciones rutinarias y logística.
+"Administrativo & Finanzas": Facturación, contratos, reportes administrativos y gestión de recursos humanos.
+"Educación": Investigación de mercado, capacitación técnica y aprendizaje de nuevas herramientas.
+
+Reglas de Clasificación - Complejidad (complejidad):
+Elige estrictamente UNA de las siguientes tres basándote en el esfuerzo mental o técnico requerido:
+
+"BAJA": Cambios menores, tareas repetitivas, de ejecución rápida (menos de 1 hora) o que no requieren validación profunda.
+"MEDIA": Trabajo estándar que requiere enfoque, aplicación de lineamientos y tiempo de ejecución moderado.
+"ALTA": Tareas que requieren investigación profunda, conceptualización desde cero o resolución de problemas técnicos complejos.
+
+Ejemplo de Entrada (Lo que enviará el servidor):
+Título: [URGENTE] Cambiar la tipografía de todos los banners de la campaña de Salsipuedes. Descripción: El cliente acaba de llamar, dice que la font no es la correcta. Necesitan esto corregido y subido a la pauta en 2 horas máximo.
+
+Ejemplo de Salida Esperada (Lo que debe responder Gemini):
+{"categoria": "Operaciones & Reuniones", "complejidad": "MEDIA"}`;
+
+/**
+ * Defensive JSON parser that cleans Markdown code blocks and whitespace.
+ */
+export const parseJsonResponse = (text) => {
+    if (!text) throw new Error("Empty text provided to JSON parser");
+    const cleanText = text.replace(/```json|```/gi, '').trim();
+    return JSON.parse(cleanText);
+};
+
+/**
+ * Classifies a task using Gemini AI.
+ * @param {string} title - Task title
+ * @param {string} comments - Task description/comments
+ * @returns {Promise<Object>} - { category, complexity }
+ */
+export const classifyTaskWithAI = async (title, comments = "") => {
+    if (!genAI) {
+        throw new Error("[AiService] AI client not initialized.");
+    }
+
+    try {
+        const model = genAI.getGenerativeModel({
+            model: MODEL_NAME,
+            systemInstruction: MASTER_PROMPT
+        });
+
+        const prompt = `Tarea a clasificar:\n\nTítulo: ${title}\nDescripción: ${comments}`;
+
+        const result = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: "object",
+                    properties: {
+                        categoria: {
+                            type: "string",
+                            enum: [
+                                "Estratégico",
+                                "Creativo & Diseño",
+                                "Marketing & Social Media",
+                                "Producción Audiovisual",
+                                "Creación de Contenido",
+                                "Operaciones & Reuniones",
+                                "Administrativo & Finanzas",
+                                "Educación"
+                            ]
+                        },
+                        complejidad: {
+                            type: "string",
+                            enum: ["BAJA", "MEDIA", "ALTA"]
+                        }
+                    },
+                    required: ["categoria", "complejidad"]
+                }
+            }
+        });
+
+        console.log("================ DEPURACIÓN IA RAW (Task Classification) ================", JSON.stringify(result, null, 2));
+        const text = extractModelText(result);
+
+        const classification = parseJsonResponse(text);
+        return {
+            category: classification.categoria,
+            complexity: classification.complejidad
+        };
+    } catch (error) {
+        console.error("[AiService] AI Classification failed:", error.message);
+        throw error;
+    }
+};
+
+/**
+ * Classifies multiple tasks in a single batch call.
+ * @param {Array<Object>} tasks - List of { id, title, comments }
+ * @returns {Promise<Array<Object>>} - List of { id, category, complexity }
+ */
+export const classifyTasksBatch = async (tasks) => {
+    if (!genAI) throw new Error("[AiService] AI client not initialized.");
+    if (!tasks || tasks.length === 0) return [];
+
+    try {
+        const tasksList = tasks.map(t => `ID: ${t.id} | Título: ${t.title} | Descripción: ${t.comments || "N/A"}`).join('\n');
+        const systemPrompt = MASTER_PROMPT + "\n\nINSTRUCCIÓN ADICIONAL PARA BATCH: Recibirás múltiples tareas. Debes devolver un ARRAY DE OBJETOS con 'id', 'categoria' y 'complejidad' para cada una.";
+
+        const model = genAI.getGenerativeModel({
+            model: MODEL_NAME,
+            systemInstruction: systemPrompt
+        });
+
+        const prompt = `Analiza y clasifica este LOTE DE TAREAS. Debes devolver un ARRAY de objetos JSON.\n\nTAREAS A PROCESAR:\n${tasksList}`;
+
+        const result = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            id: { type: "string" },
+                            categoria: {
+                                type: "string",
+                                enum: [
+                                    "Estratégico",
+                                    "Creativo & Diseño",
+                                    "Marketing & Social Media",
+                                    "Producción Audiovisual",
+                                    "Creación de Contenido",
+                                    "Operaciones & Reuniones",
+                                    "Administrativo & Finanzas",
+                                    "Educación"
+                                ]
+                            },
+                            complejidad: {
+                                type: "string",
+                                enum: ["BAJA", "MEDIA", "ALTA"]
+                            }
+                        },
+                        required: ["id", "categoria", "complejidad"]
+                    }
+                }
+            }
+        });
+
+        console.log("================ DEPURACIÓN IA RAW (Batch Classification) ================", JSON.stringify(result, null, 2));
+        const text = extractModelText(result);
+        const rawBatch = parseJsonResponse(text);
+
+        // Normalize to English keys for internal consistency
+        return rawBatch.map(item => ({
+            id: item.id,
+            category: item.categoria,
+            complexity: item.complejidad
+        }));
+    } catch (error) {
+        console.error("[AiService] Batch AI Classification failed:", error.message);
+        throw error;
+    }
+};
+
 export function extractTextFromParts(parts = []) {
     return parts
         .filter(part => typeof part.text === 'string')
@@ -247,6 +420,26 @@ export function createThinkingFilter() {
         return output;
     };
 }
+
+export const extractModelText = (result) => {
+    // Priority: property .text in SDK
+    if (result.text && String(result.text).trim()) return result.text;
+
+    // Fallback logic for safety across SDK versions
+    const directText = typeof result?.response?.text === 'function'
+        ? result.response.text()
+        : result?.response?.text;
+
+    if (directText && String(directText).trim()) return directText;
+
+    const candidates = result?.response?.candidates || result?.candidates;
+    const firstPart = candidates?.[0]?.content?.parts?.[0];
+
+    if (firstPart?.text && String(firstPart.text).trim()) return firstPart.text;
+    if (firstPart?.functionCall?.args) return JSON.stringify(firstPart.functionCall.args);
+
+    throw new Error('Empty AI response');
+};
 
 export const getAIInstance = () => genAI;
 export { MODEL_NAME };
