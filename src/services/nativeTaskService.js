@@ -266,7 +266,7 @@ export const createTask = async ({
         (async () => {
             try {
                 const classification = await classifyTaskWithAI(title, comments || "");
-                if (classification) {
+                if (classification && classification.category) {
                     await prisma.task.update({
                         where: { id: newTask.id },
                         data: {
