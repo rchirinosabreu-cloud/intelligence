@@ -250,3 +250,138 @@ export function createThinkingFilter() {
 
 export const getAIInstance = () => genAI;
 export { MODEL_NAME };
+
+/**
+ * Extracts text from a model response object.
+ */
+export const extractModelText = (response) => {
+    try {
+        if (typeof response.text === 'function') return response.text();
+        if (typeof response.text === 'string') return response.text;
+        return response.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    } catch (e) {
+        return "";
+    }
+};
+
+/**
+ * Safely parses a JSON response from the AI.
+ */
+export const parseJsonResponse = (rawText) => {
+    if (!rawText) return null;
+    try {
+        const cleaned = rawText.replace(/```json|```/gi, '').trim();
+        const start = cleaned.indexOf('{');
+        const end = cleaned.lastIndexOf('}');
+        const startArr = cleaned.indexOf('[');
+        const endArr = cleaned.lastIndexOf(']');
+
+        let jsonStr = cleaned;
+        if (start !== -1 && end !== -1 && (startArr === -1 || start < startArr)) {
+            jsonStr = cleaned.substring(start, end + 1);
+        } else if (startArr !== -1 && endArr !== -1) {
+            jsonStr = cleaned.substring(startArr, endArr + 1);
+        }
+
+        return JSON.parse(jsonStr);
+    } catch (e) {
+        console.error("[AI Service] JSON Parse Error:", e.message);
+        throw e;
+    }
+};
+
+const MASTER_CATEGORIES = [
+    "Estratégico",
+    "Creativo & Diseño",
+    "Marketing & Social Media",
+    "Producción Audiovisual",
+    "Creación de Contenido",
+    "Operaciones & Reuniones",
+    "Administrativo & Finanzas",
+    "Educación"
+];
+
+const CLASSIFICATION_PROMPT = `Actúa como un Director de Operaciones (COO) experto en agencias de marketing digital.
+Tu tarea es clasificar tareas operativas en una de las 8 categorías maestras y asignar un nivel de complejidad.
+
+CATEGORÍAS MAESTRAS:
+1. Estratégico: Planeación de alto nivel, auditorías, proyecciones, research profundo.
+2. Creativo & Diseño: Diseño gráfico, branding, artes para posts, retoque fotográfico, UI/UX.
+3. Marketing & Social Media: Pauta digital, segmentación, configuración de campañas, community management, analítica.
+4. Producción Audiovisual: ¡PRIORIDAD! Cualquier tarea que mencione "video", "Reel", "TikTok", "grabación", "edición", "corrección de video".
+5. Creación de Contenido: Redacción de copys, captions, guiones (no de video), blogs, newsletters.
+6. Operaciones & Reuniones: Reuniones internas, llamadas con clientes, gestión administrativa, asistencia, correcciones menores (no video).
+7. Administrativo & Finanzas: Facturación, pagos, presupuestos, legal, reportes financieros.
+8. Educación: Capacitación, formación interna, investigación de herramientas.
+
+REGLAS CRÍTICAS:
+- IGNORA el sector del cliente. Clasifica por la NATURALEZA de la acción.
+- Si dice "video" o "Reel" -> SIEMPRE 'Producción Audiovisual'.
+- Si dice "reunión", "llamada" o "corrección" -> 'Operaciones & Reuniones'.
+- Responde ESTRICTAMENTE en formato JSON.`;
+
+/**
+ * Classifies a single task using AI.
+ */
+export const classifyTaskWithAI = async (title, comments = "") => {
+    if (!genAI) return null;
+
+    try {
+        const model = genAI.getGenerativeModel({
+            model: MODEL_NAME,
+            systemInstruction: CLASSIFICATION_PROMPT
+        });
+
+        const prompt = `Clasifica esta tarea:
+        Título: ${title}
+        Comentarios: ${comments}`;
+
+        const result = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+                responseMimeType: "application/json",
+            }
+        });
+
+        const response = await result.response;
+        const data = parseJsonResponse(extractModelText(response));
+
+        return {
+            category: data.categoria,
+            complexity: data.complejidad
+        };
+    } catch (error) {
+        console.error("[AI Service] Single classification error:", error.message);
+        return null;
+    }
+};
+
+/**
+ * Classifies a batch of tasks using AI.
+ */
+export const classifyTasksBatch = async (tasks) => {
+    if (!genAI || !tasks || tasks.length === 0) return [];
+
+    try {
+        const model = genAI.getGenerativeModel({
+            model: MODEL_NAME,
+            systemInstruction: CLASSIFICATION_PROMPT
+        });
+
+        const tasksData = tasks.map(t => ({ id: t.id, title: t.title, comments: t.comments || "" }));
+        const prompt = `Clasifica el siguiente arreglo de tareas en formato JSON: ${JSON.stringify(tasksData)}`;
+
+        const result = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+                responseMimeType: "application/json",
+            }
+        });
+
+        const response = await result.response;
+        return parseJsonResponse(extractModelText(response));
+    } catch (error) {
+        console.error("[AI Service] Batch classification error:", error.message);
+        return [];
+    }
+};
