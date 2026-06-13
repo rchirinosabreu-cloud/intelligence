@@ -313,7 +313,7 @@ const Profile = () => {
                     </div>
                     <div>
                         <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
-                            {isOwnProfile ? 'Mi Espacio' : `Perfil de ${profileData.name.split(' ')[0]}`}
+                            {isOwnProfile ? 'Mi Espacio' : `Perfil de ${(profileData.name || '').split(' ')[0]}`}
                         </h1>
                         <p className="text-zinc-500 dark:text-zinc-400 font-medium">
                             {isOwnProfile
