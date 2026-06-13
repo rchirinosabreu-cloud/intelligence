@@ -26,4 +26,16 @@ router.get('/clients', async (req, res) => {
     }
 });
 
+// Get service catalog for quotations
+router.get('/service-catalog', async (req, res) => {
+    try {
+        const catalog = await prisma.serviceCatalog.findMany({
+            orderBy: { category: 'asc' }
+        });
+        return res.json(catalog);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;
