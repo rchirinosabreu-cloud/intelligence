@@ -413,7 +413,7 @@ model Quotation {
   client_name          String
   client_company       String?
   client_email         String
-  client_phone         String
+  client_phone         String       @default("")
   is_tax_exempt        Boolean      @default(false)
   items                Json
   currency             CurrencyType @default(COP)
