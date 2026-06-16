@@ -39,7 +39,12 @@ const QuotationForm = () => {
     const fetchQuotation = async () => {
         setIsLoadingData(true);
         try {
-            const res = await fetch(`${getApiBaseUrl()}/api/quotations/public/${id}`); // We can use public view to get data
+            // Using admin endpoint for authenticated edit
+            const res = await fetch(`${getApiBaseUrl()}/api/quotations/${id}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
             if (!res.ok) throw new Error("Failed to load quotation");
             const data = await res.json();
             console.log("DEBUG - Datos de cotización recibidos (Edit):", data);
