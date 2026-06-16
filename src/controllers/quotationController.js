@@ -1,7 +1,7 @@
 import prisma from '../lib/prisma.js';
 import crypto from 'crypto';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 const MANDATORY_TERMS = `● El cliente tendrá un delegado quien será el contacto directo con la empresa prestadora del servicio BRAIN STUDIO, y se encargará de brindar la información necesaria para el desarrollo de los servicios.
 ● Las modificaciones de productos deben cumplir con un estándar mínimo de 2 correcciones con el fin de optimizar tiempo y recursos. Si el cliente requiere corregir un contenido luego de estar aprobado tiene un costo adicional.
@@ -214,6 +214,32 @@ export const getPublicQuotation = async (req, res) => {
 /**
  * List all quotations (Admin view).
  */
+/**
+ * GET /api/quotations/:id
+ * Admin endpoint to retrieve a single quotation for editing
+ */
+export const getQuotation = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const quotation = await prisma.quotation.findUnique({
+            where: { id }
+        });
+
+        if (!quotation) {
+            return res.status(404).json({ error: "Cotización no encontrada" });
+        }
+
+        res.json({
+            ...quotation,
+            consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`,
+            isExpired: new Date() > quotation.expires_at
+        });
+    } catch (error) {
+        console.error("[QuotationController] Fetch failed:", error);
+        res.status(500).json({ error: "Error al obtener la cotización" });
+    }
+};
+
 export const listQuotations = async (req, res) => {
     try {
         const quotations = await prisma.quotation.findMany({
@@ -277,15 +303,15 @@ export const generateQuotationPDF = async (req, res) => {
             new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(item.price * item.quantity)
         ]);
 
-        doc.autoTable({
+        autoTable(doc, {
             startY: 95,
             head: [['#', 'Servicio', 'Cant.', 'Precio Unit.', 'Subtotal']],
             body: tableData,
             theme: 'grid',
-            headStyles: { fillStyle: [79, 70, 229] }
+            headStyles: { fillColor: [79, 70, 229] }
         });
 
-        const finalY = doc.lastAutoTable.finalY + 10;
+        const finalY = doc.previousAutoTable.finalY + 10;
         doc.text(`Subtotal: ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(quotation.subtotal)}`, 140, finalY);
         if (!quotation.is_tax_exempt) {
             doc.text(`IVA (19%): ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(quotation.tax_amount)}`, 140, finalY + 5);

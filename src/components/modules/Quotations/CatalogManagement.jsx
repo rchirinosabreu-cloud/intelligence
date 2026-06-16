@@ -59,8 +59,11 @@ const CatalogManagement = () => {
         }
     });
 
+    const [formError, setFormError] = useState(null);
+
     const mutation = useMutation({
         mutationFn: async (data) => {
+            setFormError(null);
             const url = editingService
                 ? `${getApiBaseUrl()}/api/services/${editingService.id}`
                 : `${getApiBaseUrl()}/api/services`;
@@ -73,7 +76,12 @@ const CatalogManagement = () => {
                 },
                 body: JSON.stringify(data)
             });
-            if (!res.ok) throw new Error("Operation failed");
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || "Operation failed");
+            }
+
             return await res.json();
         },
         onSuccess: () => {
@@ -81,7 +89,10 @@ const CatalogManagement = () => {
             toast.success(editingService ? "Servicio actualizado" : "Servicio creado");
             closeModal();
         },
-        onError: () => toast.error("Hubo un error en la operación")
+        onError: (error) => {
+            setFormError(error.message);
+            toast.error(error.message);
+        }
     });
 
     const deleteMutation = useMutation({
@@ -262,6 +273,15 @@ const CatalogManagement = () => {
                         </DialogTitle>
                     </DialogHeader>
                     <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+                        {formError && (
+                            <div className="bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/30 p-3 rounded-xl flex items-start gap-2 animate-in fade-in slide-in-from-top-1">
+                                <Tag className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                                <div className="space-y-1">
+                                    <p className="text-xs font-bold text-red-600 dark:text-red-400">Error de Guardado</p>
+                                    <p className="text-[10px] text-red-500 dark:text-red-400/80 leading-tight">{formError}</p>
+                                </div>
+                            </div>
+                        )}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="col-span-2 space-y-1.5">
                                 <label className="text-xs font-bold uppercase text-zinc-500">Nombre del Servicio</label>

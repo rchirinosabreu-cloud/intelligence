@@ -8,7 +8,15 @@ export const listServices = async (req, res) => {
         const services = await prisma.serviceCatalog.findMany({
             orderBy: [{ category: 'asc' }, { name: 'asc' }]
         });
-        res.json(services);
+
+        // Strict mapping to convert Prisma Decimal to JS Number
+        const serialized = services.map(service => ({
+            ...service,
+            valor_neto: Number(service.valor_neto),
+            valor_neto_actual: Number(service.valor_neto_actual)
+        }));
+
+        res.json(serialized);
     } catch (error) {
         console.error("[ServiceController] List failed:", error);
         res.status(500).json({ error: "Error al listar servicios" });
@@ -39,6 +47,15 @@ export const createService = async (req, res) => {
         res.status(201).json(service);
     } catch (error) {
         console.error("[ServiceController] Create failed:", error);
+
+        // P2002: Unique constraint failed
+        if (error.code === 'P2002') {
+            return res.status(400).json({
+                error: "Duplicidad detectada",
+                details: "Ya existe un servicio con este nombre en el catálogo."
+            });
+        }
+
         res.status(500).json({ error: "Error al crear el servicio" });
     }
 };

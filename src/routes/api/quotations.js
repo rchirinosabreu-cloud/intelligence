@@ -40,6 +40,12 @@ router.put('/:id', quotationController.updateQuotation);
 router.get('/:id/pdf', quotationController.generateQuotationPDF);
 
 /**
+ * GET /api/quotations/:id
+ * Retrieves a single quotation (admin)
+ */
+router.get('/:id', quotationController.getQuotation);
+
+/**
  * GET /api/quotations
  * Lists all quotations for admin view
  */
