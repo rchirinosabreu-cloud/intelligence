@@ -41,7 +41,7 @@ const EventActivityCard = ({
       ref={cardRef}
       data-activity-floating-card="event"
       className={cn(
-        "fixed w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl p-3 z-[60]",
+        "fixed w-64 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl p-3 z-[60]",
         isOpen ? "block pointer-events-auto" : "hidden pointer-events-none"
       )}
       style={{ left: cardPosition.left, top: cardPosition.top }}
