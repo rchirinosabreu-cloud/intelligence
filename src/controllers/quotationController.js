@@ -304,7 +304,8 @@ export const generateQuotationPDF = async (req, res) => {
         const pdfOutput = doc.output('arraybuffer');
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename=Propuesta_${consecutive}.pdf`);
-        res.send(Buffer.from(pdfOutput));
+        res.setHeader('Content-Length', pdfOutput.byteLength);
+        res.end(Buffer.from(pdfOutput));
 
     } catch (error) {
         console.error("[QuotationController] PDF gen failed:", error);
