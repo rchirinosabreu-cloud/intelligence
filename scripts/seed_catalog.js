@@ -88,8 +88,19 @@ async function seedCatalog() {
                 return cleaned || "0";
             };
 
+            const CATEGORY_MAP = {
+                'Branding': 'BRANDING',
+                'Diseño': 'DISENO',
+                'Producción audiovisual': 'PRODUCCION_AUDIOVISUAL',
+                'Marketing': 'MARKETING',
+                'Ads': 'ADS',
+                'Editorial': 'EDITORIAL',
+                'Web': 'WEB',
+                'Desarrollo web y tecnología': 'DESARROLLO'
+            };
+
             servicesToInsert.push({
-                category: currentCategory,
+                category: CATEGORY_MAP[currentCategory] || 'WEB',
                 name: nombreServicio.replace(/^"|"$/g, ''),
                 description: descripcion.replace(/^"|"$/g, ''),
                 valor_neto: cleanNumber(valorNeto),

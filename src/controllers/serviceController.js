@@ -26,12 +26,18 @@ export const listServices = async (req, res) => {
 /**
  * Creates a new service in the catalog.
  */
+const VALID_CATEGORIES = ['BRANDING', 'DISENO', 'PRODUCCION_AUDIOVISUAL', 'MARKETING', 'ADS', 'EDITORIAL', 'WEB', 'DESARROLLO'];
+
 export const createService = async (req, res) => {
     try {
         const { category, name, description, valor_neto, valor_neto_actual } = req.body;
 
         if (!category || !name || !valor_neto_actual) {
             return res.status(400).json({ error: "Faltan campos obligatorios" });
+        }
+
+        if (!VALID_CATEGORIES.includes(category)) {
+            return res.status(400).json({ error: "Categoría inválida", details: `La categoría debe ser una de: ${VALID_CATEGORIES.join(', ')}` });
         }
 
         const service = await prisma.serviceCatalog.create({
@@ -67,6 +73,10 @@ export const updateService = async (req, res) => {
     try {
         const { id } = req.params;
         const { category, name, description, valor_neto, valor_neto_actual } = req.body;
+
+        if (category && !VALID_CATEGORIES.includes(category)) {
+            return res.status(400).json({ error: "Categoría inválida" });
+        }
 
         const service = await prisma.serviceCatalog.update({
             where: { id },

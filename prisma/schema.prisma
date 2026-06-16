@@ -401,9 +401,20 @@ enum QuotationStatus {
   ACTIVA
 }
 
+enum ServiceCategory {
+  BRANDING
+  DISENO
+  PRODUCCION_AUDIOVISUAL
+  MARKETING
+  ADS
+  EDITORIAL
+  WEB
+  DESARROLLO
+}
+
 model ServiceCatalog {
-  id                String  @id @default(uuid())
-  category          String
+  id                String          @id @default(uuid())
+  category          ServiceCategory
   name              String  @unique
   description       String
   valor_neto        Decimal
