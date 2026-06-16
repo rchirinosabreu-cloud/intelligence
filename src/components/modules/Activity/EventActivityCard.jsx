@@ -41,7 +41,7 @@ const EventActivityCard = ({
       ref={cardRef}
       data-activity-floating-card="event"
       className={cn(
-        "fixed w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom z-[60]",
+        "fixed w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl p-3 z-[60]",
         isOpen ? "block pointer-events-auto" : "hidden pointer-events-none"
       )}
       style={{ left: cardPosition.left, top: cardPosition.top }}
@@ -50,13 +50,13 @@ const EventActivityCard = ({
       role="dialog"
       aria-label={`Detalles de ${event.title}`}
     >
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1.5 flex-1 min-w-0">
-            <h4 className="text-[13px] font-bold text-zinc-900 dark:text-white leading-tight truncate">
+          <div className="space-y-1 flex-1 min-w-0">
+            <h4 className="text-[12px] font-black text-zinc-900 dark:text-white leading-tight truncate uppercase tracking-tight">
               {event.title}
             </h4>
-            <div className="text-[9px] font-black uppercase text-indigo-600">
+            <div className="text-[9px] font-black uppercase text-indigo-600 tracking-widest">
               {typeLabel}
             </div>
           </div>
@@ -81,17 +81,12 @@ const EventActivityCard = ({
           </p>
         )}
 
-        <div className="pt-2">
-          <span className="text-[9px] font-black uppercase text-zinc-400 block mb-2">Involucrados</span>
-          <div className="flex flex-wrap gap-1.5">
+        <div className="pt-1">
+          <div className="flex flex-wrap gap-1">
             {involvedMembers.map(m => (
-              <UserAvatarPopover key={m.id} user={m}>
-                <TeamAvatar
-                  member={m}
-                  showTitle={false}
-                  className="w-7 h-7 border-2 border-white shadow-sm"
-                />
-              </UserAvatarPopover>
+              <div key={m.id} className="text-[9px] font-bold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded-md">
+                {m.name.split(' ')[0]}
+              </div>
             ))}
           </div>
         </div>
