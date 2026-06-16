@@ -87,9 +87,9 @@ const QuotationForm = () => {
 
     const navigate = useNavigate();
 
-    const handleSubmit = async () => {
-        if (!clientName || !clientPhone || selectedItems.length === 0) {
-            toast.error("Por favor completa los campos obligatorios");
+    const handleSubmit = async (targetStatus = 'ACTIVA') => {
+        if (targetStatus === 'ACTIVA' && (!clientName || !clientPhone || selectedItems.length === 0)) {
+            toast.error("Por favor completa los campos obligatorios para emitir");
             return;
         }
 
@@ -110,6 +110,7 @@ const QuotationForm = () => {
                     client_type: clientType,
                     items: selectedItems,
                     currency,
+                    status: targetStatus,
                     is_tax_exempt: isTaxExempt
                 })
             });
@@ -414,13 +415,23 @@ const QuotationForm = () => {
                             </div>
                         </div>
 
-                        <Button
-                            className="w-full h-12 rounded-xl"
-                            onClick={handleSubmit}
-                            disabled={isSaving}
-                        >
-                            {isSaving ? "Generando..." : "Generar Propuesta"}
-                        </Button>
+                        <div className="grid grid-cols-1 gap-3">
+                            <Button
+                                className="w-full h-12 rounded-xl"
+                                onClick={() => handleSubmit('ACTIVA')}
+                                disabled={isSaving}
+                            >
+                                {isSaving ? "Generando..." : "Emitir Propuesta"}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="w-full h-12 rounded-xl border-zinc-200 dark:border-zinc-800"
+                                onClick={() => handleSubmit('BORRADOR')}
+                                disabled={isSaving}
+                            >
+                                {isSaving ? "Guardando..." : "Guardar como Borrador"}
+                            </Button>
+                        </div>
 
                         {generatedLink && (
                             <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl space-y-3">
