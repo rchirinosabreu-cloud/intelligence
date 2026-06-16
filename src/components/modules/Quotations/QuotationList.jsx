@@ -18,7 +18,7 @@ import {
     Download,
     Filter,
     Loader2,
-    Edit2
+    Pencil
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -202,7 +202,7 @@ const QuotationList = () => {
                                                     className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-zinc-500 transition-colors"
                                                     title="Editar cotización"
                                                 >
-                                                    <Edit2 className="w-4 h-4" />
+                                                    <Pencil className="w-4 h-4" />
                                                 </button>
                                                 <button
                                                     onClick={() => downloadPDF(q.id, q.consecutive_formatted)}

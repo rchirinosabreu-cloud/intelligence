@@ -6,13 +6,13 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const MODEL_NAME = process.env.GEMINI_MODEL || process.env.VERTEX_MODEL || "gemini-3.5-flash";
+const MODEL_NAME = process.env.MODEL_NAME;
 
 let genAI;
 try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
-        genAI = new GoogleGenAI(apiKey);
+        genAI = new GoogleGenAI({ apiKey });
         console.log("[GoogleGenAI] Client initialized successfully.");
     } else {
         console.warn("[GoogleGenAI] GEMINI_API_KEY is missing.");
@@ -190,16 +190,11 @@ export const classifyTaskWithAI = async (title, comments = "") => {
     }
 
     try {
-        const model = genAI.getGenerativeModel({
-            model: MODEL_NAME,
-            systemInstruction: MASTER_PROMPT
-        });
-
         const prompt = `Tarea a clasificar:\n\nTítulo: ${title}\nDescripción: ${comments}`;
 
-        const result = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: {
+        const result = await genAI.models.generateContent(MODEL_NAME, prompt, {
+            systemInstruction: MASTER_PROMPT,
+            config: {
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: "object",
@@ -252,18 +247,13 @@ export const classifyTasksBatch = async (tasks) => {
 
     try {
         const tasksList = tasks.map(t => `ID: ${t.id} | Título: ${t.title} | Descripción: ${t.comments || "N/A"}`).join('\n');
-        const systemPrompt = MASTER_PROMPT + "\n\nINSTRUCCIÓN ADICIONAL PARA BATCH: Recibirás múltiples tareas. Debes devolver un ARRAY DE OBJETOS con 'id', 'categoria' y 'complejidad' para cada una.";
-
-        const model = genAI.getGenerativeModel({
-            model: MODEL_NAME,
-            systemInstruction: systemPrompt
-        });
+        const systemPromptBatch = MASTER_PROMPT + "\n\nINSTRUCCIÓN ADICIONAL PARA BATCH: Recibirás múltiples tareas. Debes devolver un ARRAY DE OBJETOS con 'id', 'categoria' y 'complejidad' para cada una.";
 
         const prompt = `Analiza y clasifica este LOTE DE TAREAS. Debes devolver un ARRAY de objetos JSON.\n\nTAREAS A PROCESAR:\n${tasksList}`;
 
-        const result = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: {
+        const result = await genAI.models.generateContent(MODEL_NAME, prompt, {
+            systemInstruction: systemPromptBatch,
+            config: {
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: "array",
@@ -337,10 +327,8 @@ export async function sendMessageStreamWithRetry(genAIInstance, payload, maxAtte
     while (attempt < maxAttempts) {
         attempt += 1;
         try {
-            return await genAIInstance.models.generateContentStream({
-                model: payload.model,
+            return await genAIInstance.models.generateContentStream(payload.model, payload.contents, {
                 systemInstruction: payload.systemInstruction,
-                contents: payload.contents,
                 config: payload.config
             });
         } catch (error) {
@@ -422,8 +410,16 @@ export function createThinkingFilter() {
 }
 
 export const extractModelText = (result) => {
-    // Priority: property .text in SDK
-    if (result.text && String(result.text).trim()) return result.text;
+    // In @google/genai, result.text() is the standard way to get text
+    if (typeof result.text === 'function') {
+        const text = result.text();
+        if (text && String(text).trim()) return text;
+    }
+
+    // Direct property access as fallback
+    if (result.text && typeof result.text === 'string' && result.text.trim()) {
+        return result.text;
+    }
 
     // Fallback logic for safety across SDK versions
     const directText = typeof result?.response?.text === 'function'
