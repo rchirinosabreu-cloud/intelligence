@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { Search, Plus, Trash2, Copy, Check, DollarSign, FileText, Globe, Building2, User as UserIcon, ArrowLeft } from 'lucide-react';
+import { Search, Plus, Trash2, Copy, Check, DollarSign, FileText, Globe, Building2, User as UserIcon, ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/Card';
 import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import SuccessModal from './SuccessModal';
 
 const QuotationForm = () => {
+    const { id } = useParams();
+    const isEditing = !!id;
+
     // State
     const [emisorType, setEmisorType] = useState('BRAIN_STUDIO');
     const [clientCompany, setClientCompany] = useState('');
@@ -24,15 +27,49 @@ const QuotationForm = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [generatedLink, setGeneratedLink] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isLoadingData, setIsLoadingData] = useState(false);
+
+    // Fetch existing data if editing
+    useEffect(() => {
+        if (isEditing) {
+            fetchQuotation();
+        }
+    }, [id]);
+
+    const fetchQuotation = async () => {
+        setIsLoadingData(true);
+        try {
+            const res = await fetch(`${getApiBaseUrl()}/api/quotations/public/${id}`); // We can use public view to get data
+            if (!res.ok) throw new Error("Failed to load quotation");
+            const data = await res.json();
+
+            setEmisorType(data.emisor_type);
+            setClientCompany(data.client_company || '');
+            setClientName(data.client_name);
+            setClientEmail(data.client_email);
+            setClientPhone(data.client_phone);
+            setClientType(data.client_company ? 'EMPRESA' : 'PERSONA_NATURAL');
+            setCurrency(data.currency);
+            setIsTaxExempt(data.is_tax_exempt);
+            setSelectedItems(data.items || []);
+        } catch (error) {
+            toast.error("No se pudo cargar la cotización");
+            navigate('/cotizaciones');
+        } finally {
+            setIsLoadingData(false);
+        }
+    };
 
     // Auto-toggle tax exempt based on emisor/client
     useEffect(() => {
-        if (emisorType === 'FRANCISCO_VILLA' || clientType === 'PERSONA_NATURAL') {
-            setIsTaxExempt(true);
-        } else {
-            setIsTaxExempt(false);
+        if (!isEditing) {
+            if (emisorType === 'FRANCISCO_VILLA' || clientType === 'PERSONA_NATURAL') {
+                setIsTaxExempt(true);
+            } else {
+                setIsTaxExempt(false);
+            }
         }
-    }, [emisorType, clientType]);
+    }, [emisorType, clientType, isEditing]);
 
     // Fetch catalog
     const { data: catalog = [] } = useQuery({
@@ -95,8 +132,11 @@ const QuotationForm = () => {
 
         setIsSaving(true);
         try {
-            const res = await fetch(`${getApiBaseUrl()}/api/quotations`, {
-                method: 'POST',
+            const url = isEditing ? `${getApiBaseUrl()}/api/quotations/${id}` : `${getApiBaseUrl()}/api/quotations`;
+            const method = isEditing ? 'PUT' : 'POST';
+
+            const res = await fetch(url, {
+                method: method,
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -115,13 +155,13 @@ const QuotationForm = () => {
                 })
             });
 
-            if (!res.ok) throw new Error("Error creating quotation");
+            if (!res.ok) throw new Error("Error saving quotation");
             const data = await res.json();
 
             const link = `${window.location.origin}/cotizaciones/ver/${data.uuid_slug}`;
             setGeneratedLink(link);
             setIsModalOpen(true);
-            toast.success("Cotización generada con éxito");
+            toast.success(isEditing ? "Cotización actualizada" : "Cotización generada con éxito");
         } catch (error) {
             toast.error("Fallo al guardar la cotización");
         } finally {
