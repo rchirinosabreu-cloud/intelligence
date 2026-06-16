@@ -360,14 +360,14 @@ const QuotationForm = () => {
                             {/* Selected Items */}
                             <div className="space-y-4">
                                 <label className="text-xs font-bold text-zinc-500 uppercase">Servicios Incluidos</label>
-                                {selectedItems.length === 0 ? (
+                                {!Array.isArray(selectedItems) || selectedItems.length === 0 ? (
                                     <div className="p-12 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl text-center">
                                         <FileText className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
                                         <p className="text-xs text-zinc-400">No has seleccionado servicios aún.</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-3">
-                                        {selectedItems.map((item, idx) => (
+                                        {Array.isArray(selectedItems) && selectedItems.map((item, idx) => (
                                             <div key={idx} className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-100 dark:border-zinc-800 space-y-3">
                                                 <div className="flex justify-between items-start">
                                                     <input

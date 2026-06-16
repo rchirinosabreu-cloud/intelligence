@@ -54,20 +54,31 @@ const QuotationList = () => {
     const downloadPDF = async (id, consecutive) => {
         setDownloadingId(id);
         try {
-            const res = await fetch(`${getApiBaseUrl()}/api/quotations/${id}/pdf`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            const response = await fetch(`${getApiBaseUrl()}/api/quotations/${id}/pdf`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
             });
-            if (!res.ok) throw new Error("Failed to generate PDF");
 
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Propuesta_${consecutive}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            toast.success("PDF descargado");
+            if (!response.ok) throw new Error("Failed to generate PDF");
+
+            // explicitly get blob to avoid JSON parsing crashes
+            const blob = await response.blob();
+            if (blob.size === 0) throw new Error("Empty PDF received");
+
+            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Propuesta_${consecutive}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+
+            // Cleanup
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+            toast.success("PDF descargado con éxito");
         } catch (error) {
             toast.error("Error al generar PDF");
         } finally {

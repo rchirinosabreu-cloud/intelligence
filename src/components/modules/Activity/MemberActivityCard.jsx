@@ -41,7 +41,7 @@ const MemberActivityCard = ({
       ref={cardRef}
       data-activity-floating-card="member"
       className={cn(
-        "fixed w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom z-[60]",
+        "fixed w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl p-3 z-[60]",
         isOpen ? "block pointer-events-auto" : "hidden pointer-events-none"
       )}
       style={{ left: cardPosition?.left || 0, top: cardPosition?.top || 0 }}
@@ -50,11 +50,10 @@ const MemberActivityCard = ({
       role="dialog"
       aria-label={`Detalles de ${member.name}`}
     >
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <TeamAvatar member={member} showTitle={false} className="w-10 h-10 border-2 border-indigo-100" />
+      <div className="space-y-3">
+        <div className="flex items-center">
           <div className="flex-1 min-w-0">
-            <h4 className="text-[13px] font-bold text-zinc-900 dark:text-white truncate">{member.name}</h4>
+            <h4 className="text-[12px] font-black text-zinc-900 dark:text-white truncate uppercase tracking-tight">{member.name}</h4>
           </div>
         </div>
 
