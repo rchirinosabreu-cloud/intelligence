@@ -62,7 +62,8 @@ const OperationalCalendar = () => {
   const [editingEventId, setEditingEventId] = useState(null);
 
   // Persisted state for Fade Segura
-  const [hoveredEventData, setHoveredEventData] = useState(null); // { event, triggerRect, position }
+  const [hoveredEventData, setHoveredEventData] = useState(null); // { event, triggerRect }
+  const [activeEventCardData, setActiveEventCardData] = useState(null); // { event, position }
   const [isCardOpen, setIsCardOpen] = useState(false);
 
   const closeTimerRef = React.useRef(null);
@@ -94,17 +95,22 @@ const OperationalCalendar = () => {
   }, []);
 
   React.useLayoutEffect(() => {
-    if (!hoveredEventData?.triggerRect || !eventCardRef.current) return;
+    if (!isCardOpen) return;
 
-    const cardRect = eventCardRef.current.getBoundingClientRect();
-    const position = getFloatingCardPosition(
-      hoveredEventData.triggerRect,
-      { width: cardRect.width, height: cardRect.height },
-      { width: window.innerWidth, height: window.innerHeight }
-    );
+    if (hoveredEventData?.triggerRect && eventCardRef.current) {
+        const cardRect = eventCardRef.current.getBoundingClientRect();
+        const position = getFloatingCardPosition(
+          hoveredEventData.triggerRect,
+          { width: cardRect.width, height: cardRect.height },
+          { width: window.innerWidth, height: window.innerHeight }
+        );
 
-    setHoveredEventData(prev => prev ? { ...prev, position } : prev);
-  }, [hoveredEventData?.event.id]);
+        setActiveEventCardData({
+            event: hoveredEventData.event,
+            position
+        });
+    }
+  }, [isCardOpen, hoveredEventData?.event.id, hoveredEventData?.triggerRect]);
 
 
   // Fetch Team for assignment
@@ -330,7 +336,18 @@ const OperationalCalendar = () => {
         closeTimerRef.current = null;
     }
     const rect = e.currentTarget.getBoundingClientRect();
+
+    // Immediate calculation to prevent jumps
+    const cardWidth = 288; // 72 * 4
+    const cardHeight = 200;
+    const position = getFloatingCardPosition(
+      rect,
+      { width: cardWidth, height: cardHeight },
+      { width: window.innerWidth, height: window.innerHeight }
+    );
+
     setHoveredEventData({ event, triggerRect: rect });
+    setActiveEventCardData({ event, position });
     setIsCardOpen(true);
   };
 
@@ -581,31 +598,51 @@ const OperationalCalendar = () => {
       </div>
 
       {/* Direct portal: persisted for Fade Segura */}
-      {hoveredEventData && createPortal(
-        <EventActivityCard
-          isOpen={isCardOpen}
-          event={hoveredEventData.event}
-          team={team}
-          isAdmin={isAdmin}
-          onDelete={handleDelete}
-          onEdit={handleEdit}
-          cardRef={eventCardRef}
-          cardPosition={hoveredEventData.position || { left: 0, top: 0 }}
-          handlePointerEnter={() => {
-            if (closeTimerRef.current) {
-                clearTimeout(closeTimerRef.current);
-                closeTimerRef.current = null;
-            }
-            setIsCardOpen(true);
-          }}
-          handlePointerLeave={() => {
-            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-            closeTimerRef.current = setTimeout(() => {
-              setIsCardOpen(false);
-              closeTimerRef.current = null;
-            }, 300);
-          }}
-        />,
+      {activeEventCardData && createPortal(
+        <AnimatePresence>
+          {isCardOpen && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              style={{
+                position: 'fixed',
+                left: 0,
+                top: 0,
+                width: '100%',
+                height: '100%',
+                zIndex: 2147483647,
+                pointerEvents: 'none'
+              }}
+            >
+              <EventActivityCard
+                isOpen={true}
+                event={activeEventCardData.event}
+                team={team}
+                isAdmin={isAdmin}
+                onDelete={handleDelete}
+                onEdit={handleEdit}
+                cardRef={eventCardRef}
+                cardPosition={activeEventCardData.position}
+                handlePointerEnter={() => {
+                  if (closeTimerRef.current) {
+                      clearTimeout(closeTimerRef.current);
+                      closeTimerRef.current = null;
+                  }
+                  setIsCardOpen(true);
+                }}
+                handlePointerLeave={() => {
+                  if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+                  closeTimerRef.current = setTimeout(() => {
+                    setIsCardOpen(false);
+                    closeTimerRef.current = null;
+                  }, 300);
+                }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>,
         document.body
       )}
 

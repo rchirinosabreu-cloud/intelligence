@@ -38,28 +38,16 @@ const Zone = ({ id, name, icon: Icon, children, className, isActive }) => (
   </div>
 );
 
-const MemberAvatar = ({ member, hoveredMemberId, setHoveredMemberId, onDeleteEvent, onRectUpdate }) => {
+const MemberAvatar = ({ member, hoveredMemberId, setHoveredMemberId, onDeleteEvent, onRectUpdate, handlePointerLeave }) => {
   const isEnfocado = member.status === 'ENFOCADO';
   const isAusente = member.status === 'AUSENTE';
   const avatarRef = useRef(null);
-  const timeoutRef = useRef(null);
 
   const handlePointerEnter = () => {
-    if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-    }
     if (avatarRef.current) {
         onRectUpdate(member, avatarRef.current.getBoundingClientRect());
     }
     setHoveredMemberId(member.id);
-  };
-
-  const handlePointerLeave = () => {
-    timeoutRef.current = setTimeout(() => {
-      setHoveredMemberId(prev => prev === member.id ? null : prev);
-      timeoutRef.current = null;
-    }, 300);
   };
 
   const getStatusColor = (status) => {
@@ -168,6 +156,15 @@ const ActivityMap = () => {
     }
   };
 
+  const handlePointerLeave = () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
+        setIsCardOpen(false);
+        setHoveredMemberId(null);
+        closeTimerRef.current = null;
+    }, 300);
+  };
+
   const handleRectUpdate = (member, rect) => {
     // Immediate position calculation to break the loop and prevent jumps
     const cardWidth = 320; // Estimated or standard width
@@ -241,24 +238,24 @@ const ActivityMap = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start">
           <Zone id="permiso" name="Zona de Permiso" icon={User} className="h-[280px] bg-red-50/10 dark:bg-red-900/5">
             {membersByZone.permiso.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} />
+              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} handlePointerLeave={handlePointerLeave} />
             ))}
           </Zone>
           <Zone id="bunker" name="Sala de Juntas" icon={Lock} className="h-[280px] bg-zinc-50/50 dark:bg-zinc-900/50">
             {membersByZone.bunker.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} />
+              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} handlePointerLeave={handlePointerLeave} />
             ))}
           </Zone>
           <Zone id="foco" name="Zona de Foco" icon={Zap} className="h-[280px] bg-purple-50/10 dark:bg-purple-900/5">
             {membersByZone.foco.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} />
+              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} handlePointerLeave={handlePointerLeave} />
             ))}
           </Zone>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-[28%_40%_28%] gap-10 items-stretch justify-center">
           <Zone id="estudio" name="Producción" icon={Video} className="h-[500px]" isActive={isProductionActive}>
             {membersByZone.estudio.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} />
+              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} handlePointerLeave={handlePointerLeave} />
             ))}
           </Zone>
           <Zone id="nave" name="Oficina Central" icon={Monitor} className="h-[500px] bg-indigo-50/5 dark:bg-indigo-900/5">
@@ -269,13 +266,13 @@ const ActivityMap = () => {
             </div>
             <div className="relative z-10 grid grid-cols-4 gap-8">
               {membersByZone.nave.map(m => (
-                <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} />
+                <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} handlePointerLeave={handlePointerLeave} />
               ))}
             </div>
           </Zone>
           <Zone id="cafe" name="Cafecito Time" icon={Coffee} className="h-[500px] bg-orange-50/10 dark:bg-orange-900/5">
             {membersByZone.cafe.map(m => (
-              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} />
+              <MemberAvatar key={m.id} member={m} hoveredMemberId={hoveredMemberId} setHoveredMemberId={setHoveredMemberId} onDeleteEvent={handleDeleteEvent} onRectUpdate={handleRectUpdate} handlePointerLeave={handlePointerLeave} />
             ))}
           </Zone>
         </div>
