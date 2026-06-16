@@ -100,16 +100,27 @@ async function seedCatalog() {
         console.log(`Upserteando ${servicesToInsert.length} servicios...`);
 
         for (const service of servicesToInsert) {
-            await prisma.serviceCatalog.upsert({
-                where: { name: service.name },
-                update: {
-                    category: service.category,
-                    description: service.description,
-                    valor_neto: service.valor_neto,
-                    valor_neto_actual: service.valor_neto_actual
-                },
-                create: service
+            // Defensive approach: check if exists first to avoid PrismaClientValidationError
+            // if @unique were somehow missing or not recognized.
+            const existing = await prisma.serviceCatalog.findUnique({
+                where: { name: service.name }
             });
+
+            if (existing) {
+                await prisma.serviceCatalog.update({
+                    where: { id: existing.id },
+                    data: {
+                        category: service.category,
+                        description: service.description,
+                        valor_neto: service.valor_neto,
+                        valor_neto_actual: service.valor_neto_actual
+                    }
+                });
+            } else {
+                await prisma.serviceCatalog.create({
+                    data: service
+                });
+            }
         }
 
         console.log("--- SEEDING COMPLETADO EXITOSAMENTE ---");
