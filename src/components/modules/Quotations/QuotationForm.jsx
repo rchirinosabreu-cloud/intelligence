@@ -51,7 +51,20 @@ const QuotationForm = () => {
             setClientType(data.client_company ? 'EMPRESA' : 'PERSONA_NATURAL');
             setCurrency(data.currency);
             setIsTaxExempt(data.is_tax_exempt);
-            setSelectedItems(data.items || []);
+
+            // Robust parsing for items to prevent crash
+            let parsedItems = [];
+            if (Array.isArray(data.items)) {
+                parsedItems = data.items;
+            } else if (typeof data.items === 'string') {
+                try {
+                    parsedItems = JSON.parse(data.items);
+                } catch (e) {
+                    console.error("Failed to parse items:", e);
+                    parsedItems = [];
+                }
+            }
+            setSelectedItems(Array.isArray(parsedItems) ? parsedItems : []);
         } catch (error) {
             toast.error("No se pudo cargar la cotización");
             navigate('/cotizaciones');
