@@ -17,7 +17,8 @@ import {
     Clock,
     Download,
     Filter,
-    Loader2
+    Loader2,
+    Edit2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';

@@ -12,7 +12,7 @@ let genAI;
 try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
-        genAI = new GoogleGenAI({ apiKey });
+        genAI = new GoogleGenAI(apiKey);
         console.log("[GoogleGenAI] Client initialized successfully.");
     } else {
         console.warn("[GoogleGenAI] GEMINI_API_KEY is missing.");
