@@ -302,10 +302,16 @@ export const generateQuotationPDF = async (req, res) => {
         doc.text(splitTerms, 20, termsY + 7);
 
         const pdfOutput = doc.output('arraybuffer');
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=Propuesta_${consecutive}.pdf`);
-        res.setHeader('Content-Length', pdfOutput.byteLength);
-        res.end(Buffer.from(pdfOutput));
+        const buffer = Buffer.from(pdfOutput);
+
+        res.writeHead(200, {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="Propuesta_${consecutive}.pdf"`,
+            'Content-Length': buffer.length,
+            'Cache-Control': 'no-cache'
+        });
+
+        res.end(buffer);
 
     } catch (error) {
         console.error("[QuotationController] PDF gen failed:", error);

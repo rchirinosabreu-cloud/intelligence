@@ -42,6 +42,8 @@ const QuotationForm = () => {
             const res = await fetch(`${getApiBaseUrl()}/api/quotations/public/${id}`); // We can use public view to get data
             if (!res.ok) throw new Error("Failed to load quotation");
             const data = await res.json();
+            console.log("DEBUG - Datos de cotización recibidos (Edit):", data);
+            console.log("DEBUG - Items a mapear (Edit):", data?.items);
 
             setEmisorType(data.emisor_type);
             setClientCompany(data.client_company || '');
@@ -378,7 +380,7 @@ const QuotationForm = () => {
                                     </div>
                                 ) : (
                                     <div className="space-y-3">
-                                        {Array.isArray(selectedItems) && selectedItems.map((item, idx) => (
+                                        {(selectedItems || []).map((item, idx) => (
                                             <div key={idx} className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-100 dark:border-zinc-800 space-y-3">
                                                 <div className="flex justify-between items-start">
                                                     <input
