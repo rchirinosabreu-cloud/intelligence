@@ -24,14 +24,14 @@ import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 
 const CATEGORIES = [
-    'Branding',
-    'Diseño',
-    'Producción audiovisual',
-    'Marketing',
-    'Ads',
-    'Editorial',
-    'Web',
-    'Desarrollo'
+    { id: 'BRANDING', label: 'Branding' },
+    { id: 'DISENO', label: 'Diseño' },
+    { id: 'PRODUCCION_AUDIOVISUAL', label: 'Producción Audiovisual' },
+    { id: 'MARKETING', label: 'Marketing' },
+    { id: 'ADS', label: 'Ads' },
+    { id: 'EDITORIAL', label: 'Editorial' },
+    { id: 'WEB', label: 'Web' },
+    { id: 'DESARROLLO', label: 'Desarrollo' }
 ];
 
 const CatalogManagement = () => {
@@ -44,7 +44,7 @@ const CatalogManagement = () => {
     // Form State
     const [formData, setFormData] = useState({
         name: '',
-        category: CATEGORIES[0],
+        category: CATEGORIES[0].id,
         description: '',
         valor_neto: '',
         valor_neto_actual: ''
@@ -152,8 +152,8 @@ const CatalogManagement = () => {
     });
 
     const groupedServices = CATEGORIES.reduce((acc, cat) => {
-        const catServices = filteredServices.filter(s => s.category === cat);
-        if (catServices.length > 0) acc[cat] = catServices;
+        const catServices = filteredServices.filter(s => s.category === cat.id);
+        if (catServices.length > 0) acc[cat.label] = catServices;
         return acc;
     }, {});
 
@@ -194,16 +194,16 @@ const CatalogManagement = () => {
                     </button>
                     {CATEGORIES.map(cat => (
                         <button
-                            key={cat}
-                            onClick={() => setSelectedCategory(cat)}
+                            key={cat.id}
+                            onClick={() => setSelectedCategory(cat.id)}
                             className={cn(
                                 "px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap border",
-                                selectedCategory === cat
+                                selectedCategory === cat.id
                                     ? "bg-primary text-white border-primary"
                                     : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-zinc-300"
                             )}
                         >
-                            {cat}
+                            {cat.label}
                         </button>
                     ))}
                 </div>
@@ -300,7 +300,7 @@ const CatalogManagement = () => {
                                     value={formData.category}
                                     onChange={e => setFormData({...formData, category: e.target.value})}
                                 >
-                                    {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                    {CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.label}</option>)}
                                 </select>
                             </div>
                             <div className="space-y-1.5">
