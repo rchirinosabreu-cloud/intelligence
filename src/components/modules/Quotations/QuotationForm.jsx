@@ -189,6 +189,17 @@ const QuotationForm = () => {
 
     const totals = calculateTotals();
 
+    if (isEditing && isLoadingData) {
+        return (
+            <div className="w-full h-[400px] flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                    <p className="text-zinc-500 text-sm font-medium">Hidratando propuesta...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-8 pb-20">
             <SuccessModal

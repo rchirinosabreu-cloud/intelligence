@@ -97,16 +97,20 @@ async function seedCatalog() {
             });
         }
 
-        console.log(`Limpiando tabla ServiceCatalog...`);
-        await prisma.serviceCatalog.deleteMany({});
+        console.log(`Upserteando ${servicesToInsert.length} servicios...`);
 
-        console.log(`Insertando ${servicesToInsert.length} servicios...`);
-
-        // We use createMany if supported, otherwise loop (Decimal type needs special care in some versions)
-        // Since we are using Prisma 6.x, createMany is standard.
-        await prisma.serviceCatalog.createMany({
-            data: servicesToInsert
-        });
+        for (const service of servicesToInsert) {
+            await prisma.serviceCatalog.upsert({
+                where: { name: service.name },
+                update: {
+                    category: service.category,
+                    description: service.description,
+                    valor_neto: service.valor_neto,
+                    valor_neto_actual: service.valor_neto_actual
+                },
+                create: service
+            });
+        }
 
         console.log("--- SEEDING COMPLETADO EXITOSAMENTE ---");
 
