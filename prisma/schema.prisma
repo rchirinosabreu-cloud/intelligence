@@ -404,7 +404,7 @@ enum QuotationStatus {
 model ServiceCatalog {
   id                String  @id @default(uuid())
   category          String
-  name              String  @unique
+  name              String
   description       String
   valor_neto        Decimal
   valor_neto_actual Decimal
