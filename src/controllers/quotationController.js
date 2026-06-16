@@ -113,6 +113,73 @@ export const createQuotation = async (req, res) => {
 };
 
 /**
+ * Updates an existing quotation regardless of status.
+ */
+export const updateQuotation = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            emisor_type,
+            client_name,
+            client_company,
+            client_email,
+            client_phone,
+            client_type,
+            items,
+            currency = 'COP',
+            status,
+            is_tax_exempt: manual_tax_exempt
+        } = req.body;
+
+        const isDraft = status === 'BORRADOR';
+        if (!isDraft && (!emisor_type || !client_name || !client_phone || !items || !Array.isArray(items))) {
+            return res.status(400).json({ error: "Faltan campos obligatorios para emitir" });
+        }
+
+        let is_tax_exempt = (emisor_type === 'FRANCISCO_VILLA' || client_type === 'PERSONA_NATURAL');
+        if (manual_tax_exempt !== undefined) is_tax_exempt = manual_tax_exempt;
+
+        const subtotal = (items || []).reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
+        const tax_amount = is_tax_exempt ? 0 : (subtotal * 0.19);
+        const total_amount = subtotal + tax_amount;
+
+        let final_terms = MANDATORY_TERMS;
+        if (emisor_type === 'FRANCISCO_VILLA') {
+            final_terms = final_terms.replace(/BRAIN STUDIO/gi, "El Prestador");
+            final_terms = final_terms.replace(/Brain Studio/gi, "El Prestador");
+        }
+
+        const quotation = await prisma.quotation.update({
+            where: { id },
+            data: {
+                emisor_type,
+                status,
+                client_name,
+                client_company: client_type === 'EMPRESA' ? client_company : null,
+                client_email,
+                client_phone,
+                is_tax_exempt,
+                items,
+                currency,
+                subtotal,
+                tax_amount,
+                total_amount,
+                terms_and_conditions: final_terms
+            }
+        });
+
+        res.json({
+            ...quotation,
+            consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`
+        });
+
+    } catch (error) {
+        console.error("[QuotationController] Update failed:", error);
+        res.status(500).json({ error: "Error al actualizar la cotización" });
+    }
+};
+
+/**
  * Public endpoint to retrieve a quotation by its token.
  */
 export const getPublicQuotation = async (req, res) => {

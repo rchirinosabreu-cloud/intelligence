@@ -133,7 +133,8 @@ const ActivityMap = () => {
   const queryClient = useQueryClient();
 
   const [hoveredMemberId, setHoveredMemberId] = useState(null);
-  const [hoveredData, setHoveredData] = useState(null); // { member, rect, position }
+  const [hoveredData, setHoveredData] = useState(null); // Working data for calculation
+  const [activeCardData, setActiveCardData] = useState(null); // Data currently being rendered
   const [isCardOpen, setIsCardOpen] = useState(false);
   const cardRef = useRef(null);
   const closeTimerRef = useRef(null);
@@ -176,6 +177,8 @@ const ActivityMap = () => {
     }
   };
 
+  // Synchronize activeCardData ONLY when we have a valid position
+  // This prevents jumps to (0,0) and content switching during exit animations
   useLayoutEffect(() => {
     if (!isCardOpen || !hoveredData?.rect || !cardRef.current) return;
 
@@ -186,8 +189,11 @@ const ActivityMap = () => {
       { width: window.innerWidth, height: window.innerHeight }
     );
 
-    setHoveredData(prev => prev ? { ...prev, position } : prev);
-  }, [isCardOpen, hoveredData?.member.id]);
+    setActiveCardData({
+        member: hoveredData.member,
+        position
+    });
+  }, [isCardOpen, hoveredData?.member.id, hoveredData?.rect]);
 
   if (isLoading) {
     return (
@@ -259,28 +265,46 @@ const ActivityMap = () => {
         </div>
       </div>
 
-      {hoveredData && createPortal(
-        <MemberActivityCard
-          isOpen={isCardOpen}
-          member={hoveredData.member}
-          isAdmin={isAdmin}
-          onDeleteEvent={handleDeleteEvent}
-          cardRef={cardRef}
-          cardPosition={hoveredData.position || { left: 0, top: 0 }}
-          handlePointerEnter={() => {
-            if (closeTimerRef.current) {
-                clearTimeout(closeTimerRef.current);
-                closeTimerRef.current = null;
-            }
-            setIsCardOpen(true);
-          }}
-          handlePointerLeave={() => {
-            closeTimerRef.current = setTimeout(() => {
-              setIsCardOpen(false);
-              closeTimerRef.current = null;
-            }, 300);
-          }}
-        />,
+      {activeCardData && createPortal(
+        <AnimatePresence>
+          {isCardOpen && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              style={{
+                position: 'fixed',
+                left: activeCardData.position?.left || 0,
+                top: activeCardData.position?.top || 0,
+                zIndex: 2147483647,
+                pointerEvents: 'auto'
+              }}
+            >
+              <MemberActivityCard
+                isOpen={true}
+                member={activeCardData.member}
+                isAdmin={isAdmin}
+                onDeleteEvent={handleDeleteEvent}
+                cardRef={cardRef}
+                cardPosition={{ left: 0, top: 0 }} // Position handled by motion.div
+                handlePointerEnter={() => {
+                  if (closeTimerRef.current) {
+                      clearTimeout(closeTimerRef.current);
+                      closeTimerRef.current = null;
+                  }
+                  setIsCardOpen(true);
+                }}
+                handlePointerLeave={() => {
+                  closeTimerRef.current = setTimeout(() => {
+                    setIsCardOpen(false);
+                    closeTimerRef.current = null;
+                  }, 300);
+                }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>,
         document.body
       )}
 

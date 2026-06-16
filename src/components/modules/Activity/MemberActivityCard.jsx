@@ -22,6 +22,7 @@ const MemberActivityCard = ({
   if (!member) return null;
 
   const currentEvent = member.currentEvent;
+  const currentTask = member.currentTask;
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -43,7 +44,7 @@ const MemberActivityCard = ({
         "fixed w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-3xl shadow-2xl p-5 origin-bottom z-[60]",
         isOpen ? "block pointer-events-auto" : "hidden pointer-events-none"
       )}
-      style={{ left: cardPosition.left, top: cardPosition.top }}
+      style={{ left: cardPosition?.left || 0, top: cardPosition?.top || 0 }}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       role="dialog"
@@ -98,6 +99,18 @@ const MemberActivityCard = ({
               </a>
             )}
           </div>
+        ) : currentTask ? (
+           <div className="space-y-2 pt-2">
+              <span className="text-[9px] font-black uppercase text-zinc-400 tracking-wider">Tarea en Proceso</span>
+              <div className="p-3 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/20">
+                  <h5 className="text-[12px] font-bold text-zinc-900 dark:text-white leading-tight mb-1">
+                    {currentTask.title}
+                  </h5>
+                  <p className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider">
+                    {currentTask.clientName || 'Agencia'}
+                  </p>
+              </div>
+           </div>
         ) : (
           <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100 dark:border-emerald-900/20">
             <User className="w-4 h-4 text-emerald-500" />

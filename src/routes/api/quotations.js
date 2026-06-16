@@ -28,6 +28,12 @@ router.use(authenticateToken);
 router.post('/', quotationController.createQuotation);
 
 /**
+ * PUT /api/quotations/:id
+ * Updates an existing quotation
+ */
+router.put('/:id', quotationController.updateQuotation);
+
+/**
  * GET /api/quotations/:id/pdf
  * Generates and downloads the PDF version
  */

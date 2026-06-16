@@ -120,6 +120,7 @@ function AppContent() {
                     <Route path="/minutas" element={<MinutesLayout />} />
                     <Route path="/cotizaciones" element={<QuotationsLayout />} />
                     <Route path="/cotizaciones/nueva" element={<QuotationForm />} />
+                    <Route path="/cotizaciones/editar/:id" element={<QuotationForm />} />
 
                     <Route path="/moodboard" element={<MoodboardDashboard />} />
                     <Route path="/moodboard/:boardId" element={<MoodboardCanvas />} />

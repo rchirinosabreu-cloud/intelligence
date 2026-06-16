@@ -197,6 +197,13 @@ const QuotationList = () => {
                                         <td className="px-6 py-4 whitespace-nowrap text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 <button
+                                                    onClick={() => navigate(`/cotizaciones/editar/${q.id}`)}
+                                                    className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-zinc-500 transition-colors"
+                                                    title="Editar cotización"
+                                                >
+                                                    <Edit2 className="w-4 h-4" />
+                                                </button>
+                                                <button
                                                     onClick={() => downloadPDF(q.id, q.consecutive_formatted)}
                                                     disabled={downloadingId === q.id}
                                                     className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-zinc-500 transition-colors disabled:opacity-50"
