@@ -15,7 +15,10 @@ const PublicQuotation = () => {
         queryFn: async () => {
             const res = await fetch(`${getApiBaseUrl()}/api/quotations/public/${slug}`);
             if (!res.ok) throw new Error("Propuesta no encontrada");
-            return await res.json();
+            const data = await res.json();
+            console.log("DEBUG - Datos de cotización recibidos (Public):", data);
+            console.log("DEBUG - Items a mapear (Public):", data?.items);
+            return data;
         }
     });
 
@@ -214,7 +217,7 @@ const PublicQuotation = () => {
                         Desglose de Servicios
                     </h3>
                     <div className="space-y-4">
-                        {quotation.items?.map((item, idx) => (
+                        {(quotation?.items || []).map((item, idx) => (
                             <div key={idx} className="group p-6 bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-100 dark:border-zinc-800 hover:border-primary/20 transition-all shadow-sm">
                                 <div className="flex flex-col md:flex-row justify-between gap-6">
                                     <div className="space-y-2 flex-1">
