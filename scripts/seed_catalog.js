@@ -97,6 +97,28 @@ async function seedCatalog() {
             });
         }
 
+        // --- PRE-CLEANUP FOR UNIQUENESS ---
+        // Identify and remove duplicates based on name to allow index creation
+        console.log("Revisando integridad de unicidad en ServiceCatalog...");
+        const allExisting = await prisma.serviceCatalog.findMany({ select: { id: true, name: true } });
+        const nameMap = new Map();
+        const duplicates = [];
+
+        for (const s of allExisting) {
+            if (nameMap.has(s.name)) {
+                duplicates.push(s.id);
+            } else {
+                nameMap.set(s.name, s.id);
+            }
+        }
+
+        if (duplicates.length > 0) {
+            console.log(`Eliminando ${duplicates.length} registros duplicados para asegurar restricción única...`);
+            await prisma.serviceCatalog.deleteMany({
+                where: { id: { in: duplicates } }
+            });
+        }
+
         console.log(`Upserteando ${servicesToInsert.length} servicios...`);
 
         for (const service of servicesToInsert) {
