@@ -6,20 +6,48 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const MODEL_NAME = process.env.MODEL_NAME;
+let genAI = null;
 
-let genAI;
-try {
+/**
+ * Checks if the AI service has the necessary configuration.
+ */
+export const isInitialized = () => {
+    return !!genAI && !!process.env.MODEL_NAME;
+};
+
+/**
+ * Lazy initialization of the Google GenAI client.
+ * Throws descriptive errors if configuration is missing.
+ */
+export const initialize = async () => {
+    if (genAI) return genAI;
+
     const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
-        genAI = new GoogleGenAI({ apiKey });
-        console.log("[GoogleGenAI] Client initialized successfully.");
-    } else {
-        console.warn("[GoogleGenAI] GEMINI_API_KEY is missing.");
+    const modelName = process.env.MODEL_NAME;
+
+    if (!apiKey || !modelName) {
+        throw new Error("Error: La configuración de IA no se ha inicializado correctamente. Verifique las variables de entorno (GEMINI_API_KEY, MODEL_NAME).");
     }
-} catch (e) {
-    console.error("[GoogleGenAI] Failed to initialize client:", e);
-}
+
+    try {
+        genAI = new GoogleGenAI({ apiKey });
+        console.log(`[GoogleGenAI] Client initialized successfully with model: ${modelName}`);
+        return genAI;
+    } catch (e) {
+        console.error("[GoogleGenAI] Failed to initialize client:", e);
+        throw new Error(`[AiService] Failed to initialize GoogleGenAI: ${e.message}`);
+    }
+};
+
+/**
+ * Internal helper to ensure the instance is ready before any call.
+ */
+const getAI = async () => {
+    if (!genAI) {
+        await initialize();
+    }
+    return genAI;
+};
 
 export const systemPrompt = `Eres Brain Core, la Copywriter Senior y Analista de Datos experta de Brainstudio (Brain OS).
 Tu misión es transformar datos crudos, documentos y lineamientos de marca en contenido que convierta, operando con omnisciencia sobre los clientes de la agencia.
@@ -185,14 +213,13 @@ export const parseJsonResponse = (text) => {
  * @returns {Promise<Object>} - { category, complexity }
  */
 export const classifyTaskWithAI = async (title, comments = "") => {
-    if (!genAI) {
-        throw new Error("[AiService] AI client not initialized.");
-    }
+    const ai = await getAI();
+    const modelName = process.env.MODEL_NAME;
 
     try {
         const prompt = `Tarea a clasificar:\n\nTítulo: ${title}\nDescripción: ${comments}`;
 
-        const result = await genAI.models.generateContent(MODEL_NAME, prompt, {
+        const result = await ai.models.generateContent(modelName, prompt, {
             systemInstruction: MASTER_PROMPT,
             config: {
                 responseMimeType: "application/json",
@@ -242,7 +269,8 @@ export const classifyTaskWithAI = async (title, comments = "") => {
  * @returns {Promise<Array<Object>>} - List of { id, category, complexity }
  */
 export const classifyTasksBatch = async (tasks) => {
-    if (!genAI) throw new Error("[AiService] AI client not initialized.");
+    const ai = await getAI();
+    const modelName = process.env.MODEL_NAME;
     if (!tasks || tasks.length === 0) return [];
 
     try {
@@ -251,7 +279,7 @@ export const classifyTasksBatch = async (tasks) => {
 
         const prompt = `Analiza y clasifica este LOTE DE TAREAS. Debes devolver un ARRAY de objetos JSON.\n\nTAREAS A PROCESAR:\n${tasksList}`;
 
-        const result = await genAI.models.generateContent(MODEL_NAME, prompt, {
+        const result = await ai.models.generateContent(modelName, prompt, {
             systemInstruction: systemPromptBatch,
             config: {
                 responseMimeType: "application/json",
@@ -438,4 +466,3 @@ export const extractModelText = (result) => {
 };
 
 export const getAIInstance = () => genAI;
-export { MODEL_NAME };
