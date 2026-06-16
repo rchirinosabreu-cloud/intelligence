@@ -55,12 +55,6 @@ const MemberActivityCard = ({
           <TeamAvatar member={member} showTitle={false} className="w-10 h-10 border-2 border-indigo-100" />
           <div className="flex-1 min-w-0">
             <h4 className="text-[13px] font-bold text-zinc-900 dark:text-white truncate">{member.name}</h4>
-            <div className="flex items-center gap-1.5 mt-0.5">
-                <div className={cn("w-1.5 h-1.5 rounded-full", getStatusColor(member.status))} />
-                <span className="text-[9px] font-black uppercase text-zinc-400 tracking-wider">
-                  {member.status === 'REUNION' ? 'EN REUNIÓN' : member.status}
-                </span>
-            </div>
           </div>
         </div>
 
@@ -101,7 +95,6 @@ const MemberActivityCard = ({
           </div>
         ) : currentTask ? (
            <div className="space-y-2 pt-2">
-              <span className="text-[9px] font-black uppercase text-zinc-400 tracking-wider">Tarea en Proceso</span>
               <div className="p-3 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/20">
                   <h5 className="text-[12px] font-bold text-zinc-900 dark:text-white leading-tight mb-1">
                     {currentTask.title}
@@ -114,7 +107,7 @@ const MemberActivityCard = ({
         ) : (
           <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100 dark:border-emerald-900/20">
             <User className="w-4 h-4 text-emerald-500" />
-            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-tight">Sin actividad programada</span>
+            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-tight">Activo en Oficina</span>
           </div>
         )}
       </div>
