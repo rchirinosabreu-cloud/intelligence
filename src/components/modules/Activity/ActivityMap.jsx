@@ -169,30 +169,46 @@ const ActivityMap = () => {
   };
 
   const handleRectUpdate = (member, rect) => {
+    // Immediate position calculation to break the loop and prevent jumps
+    const cardWidth = 320; // Estimated or standard width
+    const cardHeight = 200; // Estimated or standard height
+
+    const position = getFloatingCardPosition(
+      rect,
+      { width: cardWidth, height: cardHeight },
+      { width: window.innerWidth, height: window.innerHeight }
+    );
+
     setHoveredData({ member, rect });
+    setActiveCardData({ member, position });
     setIsCardOpen(true);
+
     if (closeTimerRef.current) {
         clearTimeout(closeTimerRef.current);
         closeTimerRef.current = null;
     }
   };
 
-  // Synchronize activeCardData ONLY when we have a valid position
-  // This prevents jumps to (0,0) and content switching during exit animations
+  // Keep activeCardData stable during exit
   useLayoutEffect(() => {
-    if (!isCardOpen || !hoveredData?.rect || !cardRef.current) return;
+    if (!isCardOpen) {
+      // We keep activeCardData as is so the exit animation has valid coordinates
+      return;
+    }
 
-    const cardRect = cardRef.current.getBoundingClientRect();
-    const position = getFloatingCardPosition(
-      hoveredData.rect,
-      { width: cardRect.width, height: cardRect.height },
-      { width: window.innerWidth, height: window.innerHeight }
-    );
+    if (hoveredData?.rect && cardRef.current) {
+      const cardRect = cardRef.current.getBoundingClientRect();
+      const position = getFloatingCardPosition(
+        hoveredData.rect,
+        { width: cardRect.width, height: cardRect.height },
+        { width: window.innerWidth, height: window.innerHeight }
+      );
 
-    setActiveCardData({
-        member: hoveredData.member,
-        position
-    });
+      setActiveCardData({
+          member: hoveredData.member,
+          position
+      });
+    }
   }, [isCardOpen, hoveredData?.member.id, hoveredData?.rect]);
 
   if (isLoading) {
@@ -275,10 +291,12 @@ const ActivityMap = () => {
               transition={{ duration: 0.2, ease: "easeOut" }}
               style={{
                 position: 'fixed',
-                left: activeCardData.position?.left || 0,
-                top: activeCardData.position?.top || 0,
+                left: 0,
+                top: 0,
+                width: '100%',
+                height: '100%',
                 zIndex: 2147483647,
-                pointerEvents: 'auto'
+                pointerEvents: 'none'
               }}
             >
               <MemberActivityCard
@@ -287,7 +305,7 @@ const ActivityMap = () => {
                 isAdmin={isAdmin}
                 onDeleteEvent={handleDeleteEvent}
                 cardRef={cardRef}
-                cardPosition={{ left: 0, top: 0 }} // Position handled by motion.div
+                cardPosition={activeCardData.position}
                 handlePointerEnter={() => {
                   if (closeTimerRef.current) {
                       clearTimeout(closeTimerRef.current);
