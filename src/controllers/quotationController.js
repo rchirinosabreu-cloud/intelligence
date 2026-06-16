@@ -1,5 +1,7 @@
 import prisma from '../lib/prisma.js';
 import crypto from 'crypto';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
 const MANDATORY_TERMS = `● El cliente tendrá un delegado quien será el contacto directo con la empresa prestadora del servicio BRAIN STUDIO, y se encargará de brindar la información necesaria para el desarrollo de los servicios.
 ● Las modificaciones de productos deben cumplir con un estándar mínimo de 2 correcciones con el fin de optimizar tiempo y recursos. Si el cliente requiere corregir un contenido luego de estar aprobado tiene un costo adicional.
@@ -40,11 +42,13 @@ export const createQuotation = async (req, res) => {
             client_type, // "EMPRESA" or "PERSONA_NATURAL"
             items, // Array: [{ serviceId, name, description, price, quantity, note }]
             currency = 'COP',
+            status = 'ACTIVA',
             is_tax_exempt: manual_tax_exempt
         } = req.body;
 
         // 1. Validation
-        if (!emisor_type || !client_name || !client_phone || !items || !Array.isArray(items)) {
+        const isDraft = status === 'BORRADOR';
+        if (!isDraft && (!emisor_type || !client_name || !client_phone || !items || !Array.isArray(items))) {
             return res.status(400).json({ error: "Faltan campos obligatorios" });
         }
 
@@ -77,13 +81,14 @@ export const createQuotation = async (req, res) => {
         const quotation = await prisma.quotation.create({
             data: {
                 uuid_slug,
-                emisor_type,
-                client_name,
+                emisor_type: emisor_type || 'BRAIN_STUDIO',
+                status: status || 'ACTIVA',
+                client_name: client_name || 'Borrador',
                 client_company: client_type === 'EMPRESA' ? client_company : null,
-                client_email,
-                client_phone,
+                client_email: client_email || '',
+                client_phone: client_phone || '',
                 is_tax_exempt,
-                items,
+                items: items || [],
                 currency,
                 subtotal,
                 tax_amount,
@@ -158,6 +163,85 @@ export const listQuotations = async (req, res) => {
     } catch (error) {
         console.error("[QuotationController] List failed:", error);
         res.status(500).json({ error: "Error al listar cotizaciones" });
+    }
+};
+
+/**
+ * Generates a PDF for a quotation.
+ */
+export const generateQuotationPDF = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const quotation = await prisma.quotation.findUnique({ where: { id } });
+
+        if (!quotation) return res.status(404).json({ error: "Cotización no encontrada" });
+
+        const doc = new jsPDF();
+        const emisor = EMISORES_DATA[quotation.emisor_type];
+        const consecutive = `COT-${String(quotation.consecutive).padStart(4, '0')}`;
+
+        // Header
+        doc.setFontSize(20);
+        doc.text(quotation.emisor_type === 'BRAIN_STUDIO' ? 'BRAIN STUDIO' : emisor.nombre, 105, 20, { align: 'center' });
+        doc.setFontSize(10);
+        doc.text(quotation.emisor_type === 'BRAIN_STUDIO' ? `NIT: ${emisor.nit}` : emisor.identificacion, 105, 26, { align: 'center' });
+        doc.text(emisor.email, 105, 31, { align: 'center' });
+
+        doc.setFontSize(14);
+        doc.text(`PROPUESTA COMERCIAL: ${consecutive}`, 20, 45);
+        doc.setFontSize(10);
+        doc.text(`Fecha: ${new Date(quotation.created_at).toLocaleDateString()}`, 20, 52);
+
+        // Client Info
+        doc.setFontSize(12);
+        doc.text('INFORMACIÓN DEL CLIENTE', 20, 65);
+        doc.setFontSize(10);
+        doc.text(`Cliente: ${quotation.client_name}`, 20, 72);
+        if (quotation.client_company) doc.text(`Empresa: ${quotation.client_company}`, 20, 77);
+        doc.text(`Email: ${quotation.client_email}`, 20, 82);
+        doc.text(`Teléfono: ${quotation.client_phone}`, 20, 87);
+
+        // Services Table
+        const tableData = (quotation.items || []).map((item, index) => [
+            index + 1,
+            item.name,
+            item.quantity,
+            new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(item.price),
+            new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(item.price * item.quantity)
+        ]);
+
+        doc.autoTable({
+            startY: 95,
+            head: [['#', 'Servicio', 'Cant.', 'Precio Unit.', 'Subtotal']],
+            body: tableData,
+            theme: 'grid',
+            headStyles: { fillStyle: [79, 70, 229] }
+        });
+
+        const finalY = doc.lastAutoTable.finalY + 10;
+        doc.text(`Subtotal: ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(quotation.subtotal)}`, 140, finalY);
+        if (!quotation.is_tax_exempt) {
+            doc.text(`IVA (19%): ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(quotation.tax_amount)}`, 140, finalY + 5);
+        }
+        doc.setFontSize(12);
+        doc.text(`TOTAL: ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(quotation.total_amount)}`, 140, finalY + 12);
+
+        // T&C
+        const termsY = finalY + 30;
+        doc.setFontSize(10);
+        doc.text('TÉRMINOS Y CONDICIONES', 20, termsY);
+        const splitTerms = doc.splitTextToSize(quotation.terms_and_conditions, 170);
+        doc.setFontSize(8);
+        doc.text(splitTerms, 20, termsY + 7);
+
+        const pdfOutput = doc.output('arraybuffer');
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=Propuesta_${consecutive}.pdf`);
+        res.send(Buffer.from(pdfOutput));
+
+    } catch (error) {
+        console.error("[QuotationController] PDF gen failed:", error);
+        res.status(500).json({ error: "Error al generar el PDF" });
     }
 };
 

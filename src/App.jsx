@@ -22,7 +22,7 @@ import PrivacyPolicy from './components/public/PrivacyPolicy';
 import TermsOfService from './components/public/TermsOfService';
 import SharedContentPlan from './components/public/SharedContentPlan';
 import QuotationForm from './components/modules/Quotations/QuotationForm';
-import QuotationList from './components/modules/Quotations/QuotationList';
+import QuotationsLayout from './components/modules/Quotations/QuotationsLayout';
 import PublicQuotation from './components/public/Quotations/PublicQuotation';
 import MinutesLayout from './components/modules/Minutes/MinutesLayout';
 import { ThemeProvider } from './context/ThemeContext';
@@ -118,7 +118,7 @@ function AppContent() {
                     <Route path="/parrillas/:clientSlug/:period" element={<ContentPlanDetail />} />
                     <Route path="/parrillas/:planId" element={<ContentPlanDetail />} />
                     <Route path="/minutas" element={<MinutesLayout />} />
-                    <Route path="/cotizaciones" element={<QuotationList />} />
+                    <Route path="/cotizaciones" element={<QuotationsLayout />} />
                     <Route path="/cotizaciones/nueva" element={<QuotationForm />} />
 
                     <Route path="/moodboard" element={<MoodboardDashboard />} />

@@ -396,6 +396,11 @@ enum CurrencyType {
   USD
 }
 
+enum QuotationStatus {
+  BORRADOR
+  ACTIVA
+}
+
 model ServiceCatalog {
   id                String  @id @default(uuid())
   category          String
@@ -403,24 +408,27 @@ model ServiceCatalog {
   description       String
   valor_neto        Decimal
   valor_neto_actual Decimal
+
+  @@index([category])
 }
 
 model Quotation {
-  id                   String       @id @default(uuid())
-  consecutive          Int          @default(autoincrement())
-  uuid_slug            String       @unique
+  id                   String          @id @default(uuid())
+  consecutive          Int             @default(autoincrement())
+  uuid_slug            String          @unique
   emisor_type          EmisorType
+  status               QuotationStatus @default(ACTIVA)
   client_name          String
   client_company       String?
   client_email         String
-  client_phone         String       @default("")
-  is_tax_exempt        Boolean      @default(false)
+  client_phone         String          @default("")
+  is_tax_exempt        Boolean         @default(false)
   items                Json
-  currency             CurrencyType @default(COP)
+  currency             CurrencyType    @default(COP)
   subtotal             Decimal
   tax_amount           Decimal
   total_amount         Decimal
   terms_and_conditions String
-  created_at           DateTime     @default(now())
+  created_at           DateTime        @default(now())
   expires_at           DateTime
 }

@@ -17,6 +17,7 @@ import feedbackRouter from './api/feedback.js';
 import integrationsRouter from './api/integrations.js';
 import contentRouter from './api/content.js';
 import dbRouter from './api/db.js';
+import servicesRouter from './api/services.js';
 import clientFileRouter from './api/clientFiles.js';
 import talentRadarRouter from './api/talentRadar.js';
 import activityRouter from './api/activity.js';
@@ -33,10 +34,10 @@ router.get('/public/parrilla/:token', publicController.getPublicPlan);
 router.post('/public/items/:id/approve', publicController.approvePublicItem);
 router.post('/public/items/:id/comment', publicController.commentPublicItem);
 router.use('/quotations', quotationsRouter);
+router.use('/services', servicesRouter);
 
 // Aliases for services catalog (ensuring compatibility with various frontend versions)
-router.get('/services-catalog', (req, res) => res.redirect(307, '/api/quotations/catalog'));
-router.get('/services', (req, res) => res.redirect(307, '/api/quotations/catalog'));
+router.get('/services-catalog', (req, res) => res.redirect(307, '/api/services'));
 
 // --- Auth Routes ---
 router.post('/login', authController.login);

@@ -245,53 +245,55 @@ const PublicQuotation = () => {
                     </div>
                 </div>
 
-                {/* Summary Section */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 pt-8 border-t border-zinc-100 dark:border-zinc-800">
-                    <div className="space-y-4">
-                        <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Términos & Condiciones</h4>
-                        <div className="p-6 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-2xl text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed whitespace-pre-line border border-zinc-100 dark:border-zinc-800">
-                            {quotation.terms_and_conditions}
-                        </div>
-                    </div>
+                {/* Redesigned Summary Section */}
+                <div className="pt-12 border-t border-zinc-100 dark:border-zinc-800 flex flex-col items-center">
+                    <div className="w-full max-w-md space-y-6 text-center">
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center text-zinc-500 text-sm font-medium">
+                                <span>Subtotal Neto</span>
+                                <span className="text-zinc-900 dark:text-white">{formatCurrency(quotation.subtotal)}</span>
+                            </div>
 
-                    <div className="space-y-6">
-                        <div className="p-8 bg-zinc-900 dark:bg-zinc-900 text-white rounded-[2rem] shadow-2xl relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-primary/30 transition-all duration-700" />
-
-                            <div className="relative space-y-4">
-                                <div className="flex justify-between items-center pb-4 border-b border-white/10">
-                                    <span className="text-zinc-400 text-sm font-medium">Subtotal Neto</span>
-                                    <span className="text-xl font-bold">{formatCurrency(quotation.subtotal)}</span>
+                            {!quotation.is_tax_exempt && (
+                                <div className="flex justify-between items-center text-zinc-500 text-sm font-medium">
+                                    <span>IVA (19%)</span>
+                                    <span className="text-zinc-900 dark:text-white">{formatCurrency(quotation.tax_amount)}</span>
                                 </div>
+                            )}
 
-                                {!quotation.is_tax_exempt && (
-                                    <div className="flex justify-between items-center pb-4 border-b border-white/10">
-                                        <span className="text-zinc-400 text-sm font-medium">IVA (19%)</span>
-                                        <span className="text-xl font-bold">{formatCurrency(quotation.tax_amount)}</span>
-                                    </div>
-                                )}
-
-                                <div className="flex justify-between items-end pt-2">
-                                    <div className="space-y-1">
-                                        <p className="text-primary text-[10px] font-black uppercase tracking-[0.2em]">Inversión Total</p>
-                                        <p className="text-4xl font-black tracking-tighter">
-                                            {formatCurrency(quotation.total_amount)}
-                                        </p>
-                                    </div>
-                                    <div className="bg-white/10 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">
-                                        {quotation.currency}
-                                    </div>
+                            <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-between items-end">
+                                <div className="text-left">
+                                    <p className="text-primary text-[10px] font-black uppercase tracking-[0.2em]">Inversión Total</p>
+                                    <p className="text-4xl font-black tracking-tighter text-zinc-900 dark:text-white">
+                                        {formatCurrency(quotation.total_amount)}
+                                    </p>
+                                </div>
+                                <div className="bg-zinc-100 dark:bg-zinc-800 px-3 py-1 rounded-full text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                                    {quotation.currency}
                                 </div>
                             </div>
                         </div>
 
                         <Button
-                            className="w-full h-16 rounded-[1.5rem] bg-primary hover:scale-[1.02] active:scale-[0.98] transition-all font-black text-lg shadow-xl shadow-primary/20"
+                            className="w-full h-12 rounded-xl bg-primary hover:opacity-90 transition-all font-bold text-sm shadow-lg shadow-primary/20"
                             onClick={() => window.open(`https://wa.me/573004329276?text=Hola! Acabo de ver la propuesta para ${quotation.client_name} y me gustaría proceder.`, '_blank')}
                         >
                             Aceptar & Comenzar Ahora
-                            <ChevronRight className="w-5 h-5 ml-2" />
+                            <ChevronRight className="w-4 h-4 ml-2" />
                         </Button>
+                    </div>
+                </div>
+
+                {/* Terms and Conditions in 2 columns */}
+                <div className="pt-16 space-y-6">
+                    <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400 text-center">Términos & Condiciones</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                        {quotation.terms_and_conditions?.split('\n').map((line, i) => (
+                            <div key={i} className="flex gap-3">
+                                <span className="text-primary shrink-0">•</span>
+                                <p>{line.replace('● ', '')}</p>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </main>
