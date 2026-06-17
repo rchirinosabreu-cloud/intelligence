@@ -202,9 +202,18 @@ Ejemplo de Salida Esperada (Lo que debe responder Gemini):
  * Defensive JSON parser that cleans Markdown code blocks and whitespace.
  */
 export const parseJsonResponse = (text) => {
-    if (!text) throw new Error("Empty text provided to JSON parser");
-    const cleanText = text.replace(/\`\`\`json|\`\`\`/gi, '').trim();
-    return JSON.parse(cleanText);
+    if (!text || typeof text !== 'string') {
+        console.error("[AiService] parseJsonResponse failed: invalid input type", typeof text);
+        throw new Error("Empty or invalid text provided to JSON parser");
+    }
+
+    try {
+        const cleanText = text.replace(/\`\`\`json|\`\`\`/gi, '').trim();
+        return JSON.parse(cleanText);
+    } catch (e) {
+        console.error("[AiService] JSON Parse Error. Raw text snippet:", text.substring(0, 100));
+        throw new Error(`Failed to parse AI response as JSON: ${e.message}`);
+    }
 };
 
 /**
@@ -439,31 +448,40 @@ export function createThinkingFilter() {
 }
 
 export const extractModelText = (result) => {
-    // In @google/genai, result.text() is the standard way to get text
-    if (typeof result.text === 'function') {
-        const text = result.text();
-        if (text && String(text).trim()) return text;
+    if (!result) throw new Error("Null result provided to text extractor");
+
+    try {
+        // In @google/genai, result.text() is the standard way to get text
+        if (typeof result.text === 'function') {
+            const text = result.text();
+            if (text && String(text).trim()) return text;
+        }
+
+        // Direct property access as fallback
+        if (result.text && typeof result.text === 'string' && result.text.trim()) {
+            return result.text;
+        }
+
+        // Fallback logic for safety across SDK versions
+        const directText = typeof result?.response?.text === 'function'
+            ? result.response.text()
+            : result?.response?.text;
+
+        if (directText && String(directText).trim()) return directText;
+
+        const candidates = result?.response?.candidates || result?.candidates || [];
+        const firstCandidate = candidates[0];
+        const parts = firstCandidate?.content?.parts || firstCandidate?.parts || [];
+        const firstPart = parts[0];
+
+        if (firstPart?.text && String(firstPart.text).trim()) return firstPart.text;
+        if (firstPart?.functionCall?.args) return JSON.stringify(firstPart.functionCall.args);
+
+    } catch (e) {
+        console.error("[AiService] Model text extraction failed:", e.message);
     }
 
-    // Direct property access as fallback
-    if (result.text && typeof result.text === 'string' && result.text.trim()) {
-        return result.text;
-    }
-
-    // Fallback logic for safety across SDK versions
-    const directText = typeof result?.response?.text === 'function'
-        ? result.response.text()
-        : result?.response?.text;
-
-    if (directText && String(directText).trim()) return directText;
-
-    const candidates = result?.response?.candidates || result?.candidates;
-    const firstPart = candidates?.[0]?.content?.parts?.[0];
-
-    if (firstPart?.text && String(firstPart.text).trim()) return firstPart.text;
-    if (firstPart?.functionCall?.args) return JSON.stringify(firstPart.functionCall.args);
-
-    throw new Error('Empty AI response');
+    throw new Error('Empty or malformed AI response');
 };
 
 export const getAIInstance = () => genAI;
