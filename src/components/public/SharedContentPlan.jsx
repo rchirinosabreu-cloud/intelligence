@@ -8,6 +8,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import ClientAvatar from '@/components/ui/ClientAvatar';
 
 const SharedContentPlan = () => {
   const { token } = useParams();
@@ -118,9 +119,7 @@ const SharedContentPlan = () => {
       <header className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-white/5 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 h-24 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {plan.client.logoUrl && (
-              <img src={plan.client.logoUrl} alt={plan.client.name} className="h-10 w-10 object-contain rounded-xl" />
-            )}
+            <ClientAvatar client={plan.client} size={40} className="rounded-xl" />
             <div>
               <h1 className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tighter">
                 {plan.client.name}

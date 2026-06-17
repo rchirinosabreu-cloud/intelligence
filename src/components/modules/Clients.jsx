@@ -10,6 +10,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useNavigate } from 'react-router-dom';
+import ClientAvatar from '@/components/ui/ClientAvatar';
 
 const Clients = () => {
   const navigate = useNavigate();
@@ -360,15 +361,7 @@ const Clients = () => {
                   <Card className="h-full flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:border-primary/30 dark:hover:border-primary/30">
                     <div className="flex items-start justify-between mb-4">
                       <div className="relative">
-                          <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700">
-                              {client.logoUrl ? (
-                                  <img src={client.logoUrl} alt={client.name} className="w-full h-full object-cover" />
-                              ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-slate-400">
-                                      <Users className="w-6 h-6" />
-                                  </div>
-                              )}
-                          </div>
+                          <ClientAvatar client={client} size={48} className="w-12 h-12" />
                           <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white dark:border-slate-900 ${client.status === 'active' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                       </div>
 
