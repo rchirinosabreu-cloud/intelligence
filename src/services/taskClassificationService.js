@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma.js';
-import { classifyTasksBatch } from './aiService.js';
+import * as aiService from './aiService.js';
 import { normalizeCategory } from './nativeTaskService.js';
 
 const BATCH_SIZE = 50;
@@ -9,6 +9,11 @@ const BATCH_SIZE = 50;
  */
 export const processUnclassifiedTasks = async () => {
     try {
+        if (!aiService.isInitialized()) {
+            console.log(`[ClassificationService] AI not initialized. Attempting initialization...`);
+            await aiService.initialize();
+        }
+
         console.log(`[ClassificationService] Checking for unclassified tasks...`);
 
         const unclassifiedTasks = await prisma.task.findMany({
@@ -30,7 +35,7 @@ export const processUnclassifiedTasks = async () => {
 
         console.log(`[ClassificationService] Processing batch of ${unclassifiedTasks.length} tasks...`);
 
-        const classifications = await classifyTasksBatch(unclassifiedTasks);
+        const classifications = await aiService.classifyTasksBatch(unclassifiedTasks);
 
         if (!classifications || !Array.isArray(classifications)) {
             console.warn(`[ClassificationService] Invalid response from AI service.`);
