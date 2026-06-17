@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma.js';
 import { createNotification } from './notificationService.js';
-import { classifyTaskWithAI } from './aiService.js';
+import { enqueueTaskClassification } from './taskClassificationService.js';
 
 /**
  * Normalizes a category string into one of the 8 official master labels.
@@ -244,6 +244,14 @@ export const createTask = async ({
             }
         });
 
+        // Task classification hybrid flow:
+        // 1. Instant return for UX.
+        // 2. Background individual classification for immediate feedback.
+        // 3. Hourly batch system as a safety net for any misses.
+        enqueueTaskClassification(newTask.id, title, comments || "").catch(err =>
+            console.error("[nativeTaskService] Deferred classification trigger failed:", err.message)
+        );
+
         // Map for frontend compatibility
         if (newTask.contentItem && newTask.contentItem.plan) {
             return {
@@ -258,28 +266,6 @@ export const createTask = async ({
                 }
             };
         }
-
-        // Task classification hybrid flow:
-        // 1. Instant return for UX.
-        // 2. Background individual classification for immediate feedback.
-        // 3. Hourly batch system as a safety net for any misses.
-        (async () => {
-            try {
-                const classification = await classifyTaskWithAI(title, comments || "");
-                if (classification && classification.category) {
-                    await prisma.task.update({
-                        where: { id: newTask.id },
-                        data: {
-                            aiCategory: normalizeCategory(classification.category),
-                            aiComplexity: classification.complexity
-                        }
-                    });
-                    console.log(`[nativeTaskService] Background AI classification completed for task ${newTask.id}`);
-                }
-            } catch (aiErr) {
-                console.warn(`[nativeTaskService] Background task classification deferred for task ${newTask.id}:`, aiErr.message);
-            }
-        })();
 
         return newTask;
     } catch (error) {
