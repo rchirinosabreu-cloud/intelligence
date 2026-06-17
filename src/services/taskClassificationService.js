@@ -74,6 +74,47 @@ export const processUnclassifiedTasks = async () => {
 };
 
 /**
+ * Enqueues a single task for classification.
+ * Optimized for non-blocking execution during creation.
+ */
+export const enqueueTaskClassification = async (taskId, title, comments = "") => {
+    try {
+        const apiKey = process.env.GEMINI_API_KEY;
+        const modelName = process.env.MODEL_NAME;
+
+        if (!apiKey || !modelName) {
+            console.warn(`[ClassificationService] IA_DESACTIVADA: Missing config for task ${taskId}`);
+            await prisma.task.update({
+                where: { id: taskId },
+                data: {
+                    aiCategory: "IA_DESACTIVADA",
+                    aiComplexity: "MEDIA"
+                }
+            });
+            return;
+        }
+
+        if (!aiService.isInitialized()) {
+            await aiService.initialize();
+        }
+
+        const classification = await aiService.classifyTaskWithAI(title, comments);
+        if (classification && classification.category) {
+            await prisma.task.update({
+                where: { id: taskId },
+                data: {
+                    aiCategory: normalizeCategory(classification.category),
+                    aiComplexity: classification.complexity || "MEDIA"
+                }
+            });
+            console.log(`[ClassificationService] Individual classification completed for task ${taskId}`);
+        }
+    } catch (error) {
+        console.error(`[ClassificationService] Failed individual classification for task ${taskId}:`, error.message);
+    }
+};
+
+/**
  * Initializes the automated classification cron job.
  * Runs every hour.
  */
