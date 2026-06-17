@@ -88,22 +88,73 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
-// --- START SERVER ---
-const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running on port ${PORT} (Bound to 0.0.0.0)`);
-    console.log("Configuración de IA cargada:", !!process.env.GEMINI_API_KEY || !!process.env.OPENAI_API_KEY);
+// --- RESILIENT STARTUP (BOOTSTRAP) ---
+async function bootstrap() {
+    console.log("--- INICIANDO BRAINSTUDIO INTELLIGENCE BACKEND ---");
 
-    (async () => {
-        try {
-            await prisma.$connect();
-            console.log("[Diagnostic] Database connection successful.");
-            initTaskClassificationCron();
-        } catch (dbError) {
-            console.error("[Diagnostic] CRITICAL: Database connection failed!", dbError.message);
-        }
-    })();
+    // 1. System Checklist & Configuration
+    const ESSENTIAL_KEYS = ['DATABASE_URL', 'GEMINI_API_KEY', 'MODEL_NAME'];
+    const missingKeys = ESSENTIAL_KEYS.filter(key => !process.env[key]);
+
+    if (missingKeys.length > 0) {
+        console.error(`[System Checklist] ERROR: Faltan variables de entorno esenciales: ${missingKeys.join(', ')}`);
+        // We don't exit here to allow manual intervention/logs to be visible in Railway
+    } else {
+        console.log("[System Checklist] Configuración básica verificada.");
+    }
+
+    // 2. Database Connection
+    try {
+        await prisma.$connect();
+        console.log("[Service: DB] Conexión a PostgreSQL exitosa.");
+    } catch (dbError) {
+        console.error("[Service: DB] CRITICAL: Falló la conexión a la base de datos:", dbError.message);
+        process.exit(1); // Cannot run without DB
+    }
+
+    // 3. AI Service Initialization (Non-blocking)
+    try {
+        const { initialize } = await import('./src/services/aiService.js');
+        await initialize();
+        console.log("[Service: AI] Google GenAI iniciado correctamente.");
+    } catch (aiError) {
+        console.error("[Service: AI] ADVERTENCIA: No se pudo inicializar el servicio de IA:", aiError.message);
+        console.info("[Service: AI] El servidor continuará sin capacidades de IA activas.");
+    }
+
+    // 4. Background Tasks & Cron
+    try {
+        initTaskClassificationCron();
+        console.log("[Service: Cron] Tareas en segundo plano inicializadas.");
+    } catch (cronError) {
+        console.error("[Service: Cron] Fallo al iniciar tareas programadas:", cronError.message);
+    }
+
+    // 5. Start Express Server
+    const PORT = process.env.PORT || 3000;
+    const server = app.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 [Service: API] Servidor escuchando en puerto ${PORT} (Bound to 0.0.0.0)`);
+    });
+
+    // Aumentar el timeout global del servidor a 5 minutos para procesar análisis largos de IA
+    server.timeout = 300000;
+}
+
+// --- GLOBAL PROMISE MANAGEMENT ---
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('⚠️ [Runtime] Promesa no controlada (Unhandled Rejection):', reason);
 });
 
-// Aumentar el timeout global del servidor a 5 minutos para procesar análisis largos de IA
-server.timeout = 300000;
+process.on('uncaughtException', (error) => {
+    console.error('❌ [Runtime] Excepción no controlada (Uncaught Exception):', error);
+    // Decision: Maintain server alive if possible, or restart if it's a critical corruption
+    if (error.message.includes('EADDRINUSE')) {
+        process.exit(1);
+    }
+});
+
+// Run Bootstrap
+bootstrap().catch(err => {
+    console.error("Fallo catastrófico en el arranque:", err);
+    process.exit(1);
+});
