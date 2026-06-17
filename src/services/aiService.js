@@ -1,54 +1,77 @@
 import { GoogleGenAI } from '@google/genai';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import aiConfig from '../config/aiConfig.js';
 
 let genAI = null;
-export const MODEL_NAME = process.env.MODEL_NAME;
 
 /**
- * Checks if the AI service has the necessary configuration.
+ * BrainstudioAI Adapter - Encapsulates Google GenAI SDK logic and provides a stable interface.
  */
-export const isInitialized = () => {
-    return !!genAI && !!process.env.MODEL_NAME;
+export const BrainstudioAI = {
+    isReady: aiConfig.isReady,
+
+    /**
+     * Initializes the underlying SDK client.
+     */
+    async initialize() {
+        if (genAI) return genAI;
+        if (!aiConfig.apiKey) {
+            console.error("[BrainstudioAI] CRITICAL: GEMINI_API_KEY is missing.");
+            this.isReady = false;
+            return null;
+        }
+
+        try {
+            genAI = new GoogleGenAI({ apiKey: aiConfig.apiKey });
+
+            // Bootstrap Sanity Check (Ping)
+            console.log(`[BrainstudioAI] Performing sanity check with model: ${aiConfig.modelName}...`);
+            await genAI.models.generateContent({
+                model: aiConfig.modelName,
+                contents: [{ role: 'user', parts: [{ text: "ping" }] }]
+            });
+
+            console.log(`[BrainstudioAI] Client initialized successfully.`);
+            this.isReady = true;
+            return genAI;
+        } catch (e) {
+            console.error("[BrainstudioAI] CRITICAL: Initialization or Sanity Check failed:", e.message);
+            this.isReady = false;
+            return null;
+        }
+    },
+
+    /**
+     * Safe wrapper to generate content with structured config and error handling.
+     */
+    async generateStructuredContent(prompt, systemInstruction, schema) {
+        if (!this.isReady && !genAI) {
+            const initialized = await this.initialize();
+            if (!initialized) throw new Error("IA_DESACTIVADA: Service not ready.");
+        }
+
+        try {
+            // SDK v2.7.0 Unified Signature
+            const result = await genAI.models.generateContent({
+                model: aiConfig.modelName,
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                systemInstruction: systemInstruction,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema
+                }
+            });
+            return result;
+        } catch (error) {
+            console.error("[BrainstudioAI] Content generation failed:", error.message);
+            throw error;
+        }
+    }
 };
 
-/**
- * Lazy initialization of the Google GenAI client.
- * Throws descriptive errors if configuration is missing.
- */
-export const initialize = async () => {
-    if (genAI) return genAI;
-
-    const apiKey = process.env.GEMINI_API_KEY;
-    const modelName = process.env.MODEL_NAME;
-
-    if (!apiKey || !modelName) {
-        throw new Error("Error: La configuración de IA no se ha inicializado correctamente. Verifique las variables de entorno (GEMINI_API_KEY, MODEL_NAME).");
-    }
-
-    try {
-        genAI = new GoogleGenAI({ apiKey });
-        console.log(`[GoogleGenAI] Client initialized successfully with model: ${modelName}`);
-        return genAI;
-    } catch (e) {
-        console.error("[GoogleGenAI] Failed to initialize client:", e);
-        throw new Error(`[AiService] Failed to initialize GoogleGenAI: ${e.message}`);
-    }
-};
-
-/**
- * Internal helper to ensure the instance is ready before any call.
- */
-const getAI = async () => {
-    if (!genAI) {
-        await initialize();
-    }
-    return genAI;
-};
+// Legacy compatibility exports (mapped to the new adapter)
+export const isInitialized = () => BrainstudioAI.isReady;
+export const initialize = () => BrainstudioAI.initialize();
+export const MODEL_NAME = aiConfig.modelName;
 
 export const systemPrompt = `Eres Brain Core, la Copywriter Senior y Analista de Datos experta de Brainstudio (Brain OS).
 Tu misión es transformar datos crudos, documentos y lineamientos de marca en contenido que convierta, operando con omnisciencia sobre los clientes de la agencia.
@@ -222,50 +245,45 @@ export const parseJsonResponse = (text) => {
  * @param {string} comments - Task description/comments
  * @returns {Promise<Object>} - { category, complexity }
  */
+/**
+ * Classifies a task using Gemini AI.
+ */
 export const classifyTaskWithAI = async (title, comments = "") => {
-    const ai = await getAI();
-    const modelName = process.env.MODEL_NAME;
-
     try {
         const prompt = `Tarea a clasificar:\n\nTítulo: ${title}\nDescripción: ${comments}`;
-
-        const result = await ai.models.generateContent(modelName, prompt, {
-            systemInstruction: MASTER_PROMPT,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: "object",
-                    properties: {
-                        categoria: {
-                            type: "string",
-                            enum: [
-                                "Estratégico",
-                                "Creativo & Diseño",
-                                "Marketing & Social Media",
-                                "Producción Audiovisual",
-                                "Creación de Contenido",
-                                "Operaciones & Reuniones",
-                                "Administrativo & Finanzas",
-                                "Educación"
-                            ]
-                        },
-                        complejidad: {
-                            type: "string",
-                            enum: ["BAJA", "MEDIA", "ALTA"]
-                        }
-                    },
-                    required: ["categoria", "complejidad"]
+        const schema = {
+            type: "object",
+            properties: {
+                categoria: {
+                    type: "string",
+                    enum: [
+                        "Estratégico",
+                        "Creativo & Diseño",
+                        "Marketing & Social Media",
+                        "Producción Audiovisual",
+                        "Creación de Contenido",
+                        "Operaciones & Reuniones",
+                        "Administrativo & Finanzas",
+                        "Educación"
+                    ]
+                },
+                complejidad: {
+                    type: "string",
+                    enum: ["BAJA", "MEDIA", "ALTA"]
                 }
-            }
-        });
+            },
+            required: ["categoria", "complejidad"]
+        };
 
+        const result = await BrainstudioAI.generateStructuredContent(prompt, MASTER_PROMPT, schema);
         console.log("================ DEPURACIÓN IA RAW (Task Classification) ================", JSON.stringify(result, null, 2));
-        const text = extractModelText(result);
 
+        const text = extractModelText(result);
         const classification = parseJsonResponse(text);
+
         return {
-            category: classification.categoria,
-            complexity: classification.complejidad
+            category: classification?.categoria || "Operaciones & Reuniones",
+            complexity: classification?.complejidad || "MEDIA"
         };
     } catch (error) {
         console.error("[AiService] AI Classification failed:", error.message);
@@ -278,60 +296,55 @@ export const classifyTaskWithAI = async (title, comments = "") => {
  * @param {Array<Object>} tasks - List of { id, title, comments }
  * @returns {Promise<Array<Object>>} - List of { id, category, complexity }
  */
+/**
+ * Classifies multiple tasks in a single batch call.
+ */
 export const classifyTasksBatch = async (tasks) => {
-    const ai = await getAI();
-    const modelName = process.env.MODEL_NAME;
     if (!tasks || tasks.length === 0) return [];
 
     try {
         const tasksList = tasks.map(t => `ID: ${t.id} | Título: ${t.title} | Descripción: ${t.comments || "N/A"}`).join('\n');
         const systemPromptBatch = MASTER_PROMPT + "\n\nINSTRUCCIÓN ADICIONAL PARA BATCH: Recibirás múltiples tareas. Debes devolver un ARRAY DE OBJETOS con 'id', 'categoria' y 'complejidad' para cada una.";
-
         const prompt = `Analiza y clasifica este LOTE DE TAREAS. Debes devolver un ARRAY de objetos JSON.\n\nTAREAS A PROCESAR:\n${tasksList}`;
 
-        const result = await ai.models.generateContent(modelName, prompt, {
-            systemInstruction: systemPromptBatch,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: "array",
-                    items: {
-                        type: "object",
-                        properties: {
-                            id: { type: "string" },
-                            categoria: {
-                                type: "string",
-                                enum: [
-                                    "Estratégico",
-                                    "Creativo & Diseño",
-                                    "Marketing & Social Media",
-                                    "Producción Audiovisual",
-                                    "Creación de Contenido",
-                                    "Operaciones & Reuniones",
-                                    "Administrativo & Finanzas",
-                                    "Educación"
-                                ]
-                            },
-                            complejidad: {
-                                type: "string",
-                                enum: ["BAJA", "MEDIA", "ALTA"]
-                            }
-                        },
-                        required: ["id", "categoria", "complejidad"]
+        const schema = {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    id: { type: "string" },
+                    categoria: {
+                        type: "string",
+                        enum: [
+                            "Estratégico",
+                            "Creativo & Diseño",
+                            "Marketing & Social Media",
+                            "Producción Audiovisual",
+                            "Creación de Contenido",
+                            "Operaciones & Reuniones",
+                            "Administrativo & Finanzas",
+                            "Educación"
+                        ]
+                    },
+                    complejidad: {
+                        type: "string",
+                        enum: ["BAJA", "MEDIA", "ALTA"]
                     }
-                }
+                },
+                required: ["id", "categoria", "complejidad"]
             }
-        });
+        };
 
+        const result = await BrainstudioAI.generateStructuredContent(prompt, systemPromptBatch, schema);
         console.log("================ DEPURACIÓN IA RAW (Batch Classification) ================", JSON.stringify(result, null, 2));
+
         const text = extractModelText(result);
         const rawBatch = parseJsonResponse(text);
 
-        // Normalize to English keys for internal consistency
-        return rawBatch.map(item => ({
-            id: item.id,
-            category: item.categoria,
-            complexity: item.complejidad
+        return (rawBatch || []).map(item => ({
+            id: item?.id,
+            category: item?.categoria || "Operaciones & Reuniones",
+            complexity: item?.complejidad || "MEDIA"
         }));
     } catch (error) {
         console.error("[AiService] Batch AI Classification failed:", error.message);
@@ -365,7 +378,9 @@ export async function sendMessageStreamWithRetry(genAIInstance, payload, maxAtte
     while (attempt < maxAttempts) {
         attempt += 1;
         try {
-            return await genAIInstance.models.generateContentStream(payload.model, payload.contents, {
+            return await genAIInstance.models.generateContentStream({
+                model: payload.model,
+                contents: payload.contents,
                 systemInstruction: payload.systemInstruction,
                 config: payload.config
             });
