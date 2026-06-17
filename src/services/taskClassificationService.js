@@ -37,30 +37,36 @@ export const processUnclassifiedTasks = async () => {
 
         const classifications = await aiService.classifyTasksBatch(unclassifiedTasks);
 
+        // Defensive Check: Validate classifications structure
         if (!classifications || !Array.isArray(classifications)) {
-            console.warn(`[ClassificationService] Invalid response from AI service.`);
+            console.warn(`[ClassificationService] Batch result is not an array or is null.`);
             return { processed: 0 };
         }
 
         let updatedCount = 0;
         for (const item of classifications) {
+            // Safe access using optional chaining
+            const taskId = item?.id;
+            const taskCategory = item?.category;
+            const taskComplexity = item?.complexity;
+
             try {
-                if (item.id && item.category) {
+                if (taskId && taskCategory) {
                     // Normalize category to match Enum if necessary
                     // (Assuming normalizeCategory already handles mapping or we do it here)
                     const normalizedCat = item.category.toUpperCase().replace(/\s+/g, '_');
 
                     await prisma.task.update({
-                        where: { id: item.id },
+                        where: { id: taskId },
                         data: {
-                            aiCategory: normalizeCategory(item.category),
-                            aiComplexity: item.complexity || "MEDIA"
+                            aiCategory: normalizeCategory(taskCategory),
+                            aiComplexity: taskComplexity || "MEDIA"
                         }
                     });
                     updatedCount++;
                 }
             } catch (updateErr) {
-                console.error(`[ClassificationService] Failed to update task ${item.id}:`, updateErr.message);
+                console.error(`[ClassificationService] Failed to update task ${taskId || 'unknown'}:`, updateErr.message);
             }
         }
 
