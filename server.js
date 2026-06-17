@@ -92,6 +92,8 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT} (Bound to 0.0.0.0)`);
+    console.log("Configuración de IA cargada:", !!process.env.GEMINI_API_KEY || !!process.env.OPENAI_API_KEY);
+
     (async () => {
         try {
             await prisma.$connect();

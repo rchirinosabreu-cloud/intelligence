@@ -46,6 +46,10 @@ export const processUnclassifiedTasks = async () => {
         for (const item of classifications) {
             try {
                 if (item.id && item.category) {
+                    // Normalize category to match Enum if necessary
+                    // (Assuming normalizeCategory already handles mapping or we do it here)
+                    const normalizedCat = item.category.toUpperCase().replace(/\s+/g, '_');
+
                     await prisma.task.update({
                         where: { id: item.id },
                         data: {
