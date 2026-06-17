@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let genAI = null;
+export const MODEL_NAME = process.env.MODEL_NAME;
 
 /**
  * Checks if the AI service has the necessary configuration.

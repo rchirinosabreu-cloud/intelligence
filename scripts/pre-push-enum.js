@@ -36,15 +36,17 @@ async function prePushEnum() {
             ALTER COLUMN "category" TYPE "ServiceCategory"
             USING (
                 CASE
-                    WHEN "category" = 'Branding' THEN 'BRANDING'::"ServiceCategory"
-                    WHEN "category" = 'Diseño' THEN 'DISENO'::"ServiceCategory"
-                    WHEN "category" = 'Producción audiovisual' THEN 'PRODUCCION_AUDIOVISUAL'::"ServiceCategory"
-                    WHEN "category" = 'Marketing' THEN 'MARKETING'::"ServiceCategory"
-                    WHEN "category" = 'Ads' THEN 'ADS'::"ServiceCategory"
-                    WHEN "category" = 'Editorial' THEN 'EDITORIAL'::"ServiceCategory"
-                    WHEN "category" = 'Web' THEN 'WEB'::"ServiceCategory"
-                    WHEN "category" = 'Desarrollo web y tecnología' THEN 'DESARROLLO'::"ServiceCategory"
-                    WHEN "category" = 'Desarrollo' THEN 'DESARROLLO'::"ServiceCategory"
+                    WHEN UPPER(TRIM("category")) = 'BRANDING' THEN 'BRANDING'::"ServiceCategory"
+                    WHEN UPPER(TRIM("category")) = 'DISEÑO' THEN 'DISENO'::"ServiceCategory"
+                    WHEN UPPER(TRIM("category")) = 'PRODUCCIÓN AUDIOVISUAL' THEN 'PRODUCCION_AUDIOVISUAL'::"ServiceCategory"
+                    WHEN UPPER(TRIM("category")) = 'MARKETING' THEN 'MARKETING'::"ServiceCategory"
+                    WHEN UPPER(TRIM("category")) = 'ADS' THEN 'ADS'::"ServiceCategory"
+                    WHEN UPPER(TRIM("category")) = 'EDITORIAL' THEN 'EDITORIAL'::"ServiceCategory"
+                    WHEN UPPER(TRIM("category")) = 'WEB' THEN 'WEB'::"ServiceCategory"
+                    WHEN UPPER(TRIM("category")) = 'DESARROLLO WEB Y TECNOLOGÍA' THEN 'DESARROLLO'::"ServiceCategory"
+                    WHEN UPPER(TRIM("category")) = 'DESARROLLO' THEN 'DESARROLLO'::"ServiceCategory"
+                    WHEN UPPER(TRIM("category")) = 'DISENO' THEN 'DISENO'::"ServiceCategory"
+                    WHEN UPPER(TRIM("category")) = 'PRODUCCION_AUDIOVISUAL' THEN 'PRODUCCION_AUDIOVISUAL'::"ServiceCategory"
                     ELSE 'WEB'::"ServiceCategory"
                 END
             );
