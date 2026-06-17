@@ -6,6 +6,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { LayoutGrid, Plus, Calendar, Filter, Search, MoreHorizontal, ChevronRight, Loader2, Trash2, Eye, Table2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
+import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Button } from '@/components/ui/button';
 import CreatePlanModal from './ContentGrids/CreatePlanModal';
 import {
@@ -174,19 +175,7 @@ const ContentGrids = () => {
                     >
                       <td className="px-6 py-5">
                         <div className="flex items-center gap-3">
-                          {plan.client?.logoUrl ? (
-                            <img
-                              src={plan.client.logoUrl.includes('ui-avatars.com')
-                                ? plan.client.logoUrl
-                                : `/api/clients/${plan.client.id}/logo-image`}
-                              alt={plan.client.name}
-                              className="w-8 h-8 rounded-xl object-cover border border-zinc-200 dark:border-white/10"
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded-xl bg-indigo-600/10 flex items-center justify-center text-indigo-600 font-bold text-xs uppercase">
-                              {plan.client?.name?.substring(0, 2)}
-                            </div>
-                          )}
+                          <ClientAvatar client={plan.client} size={32} className="rounded-xl border border-zinc-200 dark:border-white/10" />
                           <span className="font-semibold text-zinc-900 dark:text-zinc-100">{plan.client?.name}</span>
                         </div>
                       </td>

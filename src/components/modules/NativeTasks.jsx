@@ -46,6 +46,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import ClientAvatar from "../../components/ui/ClientAvatar";
 import TaskCreateModal from './TaskCreateModal';
 import TaskEditModal from './TaskEditModal';
 import { triggerConfetti } from '@/utils/confetti';
@@ -825,7 +826,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
     const isReturned = columnId === 'devuelto';
     const overdue = !isDone && isOverdue(task.dueDateFormatted);
     const daysOverdue = overdue ? getDaysOverdue(task.dueDateFormatted) : 0;
-    const clientColorClass = CLIENT_COLORS[task.clientName] || "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
+    // Client Color Logic handled by ClientAvatar component now
 
     return (
         <Draggable draggableId={String(task.id)} index={index}>
@@ -853,7 +854,15 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                             <div className="flex justify-between items-start">
                                 <div className="flex flex-col gap-1.5">
                                     <div className="flex items-center gap-2">
-                                        <span className={cn("text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md border", clientColorClass)}>
+                                        <ClientAvatar
+                                            client={{
+                                                id: task.clientId,
+                                                name: task.clientName,
+                                                logoUrl: task.client?.logoUrl
+                                            }}
+                                            size={20}
+                                        />
+                                        <span className="text-[10px] uppercase tracking-wider font-black text-zinc-600 dark:text-zinc-400 truncate max-w-[120px]">
                                             {task.clientName}
                                         </span>
                                         {isReturned && (

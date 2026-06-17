@@ -34,6 +34,7 @@ import axios from 'axios';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
+import ClientAvatar from '@/components/ui/ClientAvatar';
 
 const Reports = () => {
   const { currentUser } = useAuth();
@@ -257,10 +258,10 @@ const Reports = () => {
     return url;
   };
 
-  const SectionHeader = ({ title, clientLogo }) => (
+  const SectionHeader = ({ title, client }) => (
     <div className="flex items-center justify-between mb-8 border-b border-slate-100 pb-4">
        <h3 className="text-xl font-bold tracking-tight text-slate-800">{title}</h3>
-       {clientLogo && <img src={getImageUrl(clientLogo)} className="h-10 w-auto object-contain" />}
+       {client && <ClientAvatar client={client} size={40} className="rounded-xl shadow-sm border border-slate-100" />}
     </div>
   );
 
@@ -399,7 +400,7 @@ const Reports = () => {
                {/* Sección: Análisis orgánico (RRSS) */}
                {report.analysis.organic_analysis?.length > 0 && (
                <div className="space-y-12">
-                  <SectionHeader title="Análisis orgánico (RRSS)" clientLogo={report.client.logoUrl} />
+                  <SectionHeader title="Análisis orgánico (RRSS)" client={report.client} />
 
                   <div className="grid grid-cols-1 gap-16">
                   {editedTexts.organic_analysis.map((block, i) => (
@@ -441,7 +442,7 @@ const Reports = () => {
                {/* Sección: Performance digital */}
                {report.analysis.performance_analysis?.length > 0 && (
                <div className="space-y-12 pt-24 border-t border-slate-100">
-                  <SectionHeader title="Performance digital (Pauta ADS)" clientLogo={report.client.logoUrl} />
+                  <SectionHeader title="Performance digital (Pauta ADS)" client={report.client} />
 
                   <div className="grid grid-cols-1 gap-16">
                   {editedTexts.performance_analysis.map((block, i) => (

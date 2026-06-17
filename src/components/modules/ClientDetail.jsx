@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Layout } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
+import ClientAvatar from '@/components/ui/ClientAvatar';
 import FlowWidget from './FlowWidget';
 import DigitalIdentityWidget from './DigitalIdentityWidget';
 import DeliverablesWidget from './DeliverablesWidget';
@@ -31,7 +32,12 @@ const ClientDetail = ({ client, onBack }) => {
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300 pb-20">
       <PageHeader
-        title={client.name}
+        title={
+          <div className="flex items-center gap-4">
+             <ClientAvatar client={client} size={48} className="shadow-lg border-2 border-white dark:border-zinc-800" />
+             <span>{client.name}</span>
+          </div>
+        }
         subtitle={`/${client.slug} • Espacio Activo de Trabajo`}
 
         breadcrumbs={[

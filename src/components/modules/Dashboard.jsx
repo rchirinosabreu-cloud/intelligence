@@ -10,6 +10,7 @@ import AnnouncementWidget from './AnnouncementWidget';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
 import TeamAvatar from '@/components/ui/TeamAvatar';
+import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Button } from '@/components/ui/button';
 import ChatWidget from './ChatWidget';
 import { useAuth } from '@/context/AuthContext';
@@ -242,13 +243,18 @@ const Dashboard = () => {
                         <h4 className="text-zinc-700 hover:text-zinc-900 dark:text-zinc-200 text-sm font-medium mb-1 dark:group-hover:text-white transition-colors line-clamp-2">
                             {task.title}
                         </h4>
-                        <div className="flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
-                          <Clock className="w-3 h-3" />
-                          {new Date(task.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {new Date(task.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
                           {task.client && (
                             <>
-                                <span className="mx-1">•</span>
-                                <span>{task.client.name}</span>
+                                <span className="mx-0.5 opacity-40">•</span>
+                                <div className="flex items-center gap-1.5">
+                                    <ClientAvatar client={task.client} size={14} />
+                                    <span className="truncate max-w-[80px] font-bold text-zinc-500">{task.client.name}</span>
+                                </div>
                             </>
                           )}
                         </div>
