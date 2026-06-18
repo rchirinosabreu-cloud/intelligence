@@ -311,7 +311,8 @@ export const generateQuotationPDF = async (req, res) => {
             headStyles: { fillColor: [79, 70, 229] }
         });
 
-        const finalY = doc.previousAutoTable.finalY + 10;
+        // jspdf-autotable uses doc.lastAutoTable to store metadata about the last rendered table
+        const finalY = doc.lastAutoTable.finalY + 10;
         doc.text(`Subtotal: ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(quotation.subtotal)}`, 140, finalY);
         if (!quotation.is_tax_exempt) {
             doc.text(`IVA (19%): ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(quotation.tax_amount)}`, 140, finalY + 5);

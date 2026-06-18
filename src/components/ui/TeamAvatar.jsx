@@ -1,102 +1,54 @@
 import React from 'react';
-import Avatar from 'boring-avatars';
 import { cn } from '../../lib/utils';
-
-// Vibrant, high-contrast palette for easy identification
-const brainstudioColors = ["#ef4444", "#eab308", "#22c55e", "#06b6d4", "#d946ef", "#f97316"];
+import { getDeterministicColor, getClientInitials } from '../../utils/avatarUtils';
 
 /**
- * TeamAvatar - A globally consistent avatar component for team members.
- *
- * @param {Object} props
- * @param {Object} props.member - The member object containing `name` and optionally `avatarUrl`.
- * @param {string} props.className - Tailwind classes to override the sizing/styling (e.g. "w-10 h-10").
- * @param {number} props.size - The size in pixels for the boring-avatar fallback. Default: 32.
- * @param {boolean} props.showTitle - Whether to show the native HTML title tooltip. Default: true.
+ * TeamAvatar - "Zero Image" Style.
+ * Renders exclusively using deterministic initials and corporate colors.
+ * Protocol: Initials (Deterministic BG) > Fallback Beam.
  */
-export default function TeamAvatar({ member, className, size = 32, showTitle = true }) {
+export default function TeamAvatar({ member, className, size: customSize = 32, showTitle = true }) {
+
+  // Guard against missing member
   if (!member) {
     return (
       <div
         className={cn(
-          "rounded-full flex items-center justify-center text-white shrink-0 shadow-sm overflow-hidden",
-          "w-8 h-8", // Default sizing
+          "rounded-full flex items-center justify-center bg-zinc-100 text-zinc-400 shrink-0 shadow-sm border border-zinc-200",
+          "w-8 h-8",
           className
         )}
-        title={showTitle ? "Desconocido" : undefined}
       >
-        <Avatar
-          size={size}
-          name="Desconocido"
-          variant="beam"
-          colors={brainstudioColors}
-        />
+        <span className="text-[10px] font-black">??</span>
       </div>
     );
   }
 
-  // Ensure member is an object (in case some old code passes just a string name)
   const name = typeof member === 'string' ? member : member.name || 'Desconocido';
-  const avatarUrl = typeof member === 'string' ? null : member.avatarUrl;
+  const id = typeof member === 'string' ? name : member.id || name;
 
-  // Use the image if provided AND not empty string
-  if (avatarUrl && avatarUrl.trim() !== '' && !avatarUrl.includes('null')) {
-    return (
-      <img
-        src={avatarUrl}
-        alt={name}
-        title={showTitle ? name : undefined}
-        className={cn(
-          "rounded-full object-cover shrink-0 shadow-sm border border-slate-200 dark:border-slate-800",
-          "w-8 h-8", // Default sizing
-          className
-        )}
-      />
-    );
-  }
+  const initials = getClientInitials(name);
+  const bgColor = getDeterministicColor(id);
 
-  // Fallback with initials (Max 2 letters) - Exclusive logic
-  const initials = name
-    .split(' ')
-    .filter(Boolean)
-    .map(n => n[0])
-    .join('')
-    .substring(0, 2)
-    .toUpperCase();
-
-  if (initials && initials.length > 0) {
-    return (
-      <div
-        className={cn(
-          "rounded-full shrink-0 shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center bg-indigo-600",
-          "w-8 h-8", // Default sizing
-          className
-        )}
-        title={showTitle ? name : undefined}
-      >
-        <span className="text-[10px] font-black text-white tracking-tighter">
-          {initials}
-        </span>
-      </div>
-    );
-  }
-
-  // Final fallback to clean boring-avatar (no text)
+  // Standardizing sizes for team avatars too if needed,
+  // but for now keeping compatibility with the existing w-8 h-8 default.
   return (
     <div
       className={cn(
-        "rounded-full shrink-0 shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center bg-white",
-        "w-8 h-8", // Default sizing
+        "rounded-full shrink-0 shadow-sm border border-white/10 overflow-hidden flex items-center justify-center transition-all",
+        "w-8 h-8", // Default
         className
       )}
+      style={{
+        backgroundColor: bgColor,
+        width: className?.includes('w-') ? undefined : customSize,
+        height: className?.includes('h-') ? undefined : customSize
+      }}
       title={showTitle ? name : undefined}
     >
-      <Avatar
-        size={size}
-        name={name}
-        variant="beam"
-        colors={brainstudioColors}
-      />
+      <span className="text-white font-black tracking-tighter select-none font-sans" style={{ fontSize: '11px' }}>
+        {initials}
+      </span>
     </div>
   );
 }
