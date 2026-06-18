@@ -30,7 +30,7 @@ export const BrainstudioAI = {
                 contents: [{ role: 'user', parts: [{ text: "ping" }] }]
             });
 
-            console.log(`[BrainstudioAI] Client initialized successfully.`);
+            console.log(`[BrainstudioAI] Client initialized successfully with model: ${aiConfig.modelName}`);
             this.isReady = true;
             return genAI;
         } catch (e) {
@@ -50,12 +50,12 @@ export const BrainstudioAI = {
         }
 
         try {
-            // SDK v2.7.0 Unified Signature
+            // SDK v2.7.0 Unified Signature - systemInstruction inside config
             const result = await genAI.models.generateContent({
                 model: aiConfig.modelName,
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                systemInstruction: systemInstruction,
                 config: {
+                    systemInstruction: systemInstruction,
                     responseMimeType: "application/json",
                     responseSchema: schema
                 }
@@ -378,11 +378,16 @@ export async function sendMessageStreamWithRetry(genAIInstance, payload, maxAtte
     while (attempt < maxAttempts) {
         attempt += 1;
         try {
+            // Unified Signature - Move systemInstruction inside config
+            const unifiedConfig = {
+                ...(payload.config || {}),
+                systemInstruction: payload.systemInstruction
+            };
+
             return await genAIInstance.models.generateContentStream({
                 model: payload.model,
                 contents: payload.contents,
-                systemInstruction: payload.systemInstruction,
-                config: payload.config
+                config: unifiedConfig
             });
         } catch (error) {
             lastError = error;

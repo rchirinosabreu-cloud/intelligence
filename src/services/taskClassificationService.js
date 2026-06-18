@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma.js';
 import * as aiService from './aiService.js';
 import { normalizeCategory } from './nativeTaskService.js';
+import aiConfig from '../config/aiConfig.js';
 
 const BATCH_SIZE = 50;
 
@@ -85,8 +86,7 @@ export const processUnclassifiedTasks = async () => {
  */
 export const enqueueTaskClassification = async (taskId, title, comments = "") => {
     try {
-        const apiKey = process.env.GEMINI_API_KEY;
-        const modelName = process.env.MODEL_NAME;
+        const { apiKey, modelName } = aiConfig;
 
         if (!apiKey || !modelName) {
             console.warn(`[ClassificationService] IA_DESACTIVADA: Missing config for task ${taskId}`);
