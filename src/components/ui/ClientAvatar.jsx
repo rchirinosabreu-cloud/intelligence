@@ -27,6 +27,8 @@ const ClientAvatar = ({ client, className, size = 40 }) => {
     }
 
     const initials = getClientInitials(client.name);
+
+    // Deterministic Rule: Strictly use ID as the primary hash seed for perpetual color consistency.
     const bgColor = getDeterministicColor(client.id || client.name);
 
     const isPlaceholder = client.logoUrl?.includes('ui-avatars.com');

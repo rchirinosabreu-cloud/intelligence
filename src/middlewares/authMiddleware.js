@@ -8,8 +8,12 @@ export const authenticateToken = (req, res, next) => {
     return next();
   }
 
-  // Bypass authentication for public avatar and report images (used in <img> tags)
-  if (req.originalUrl.includes('/avatar-image') || req.originalUrl.includes('/image-proxy')) {
+  // Bypass authentication for public avatar, report images, and client logos (used in <img> tags)
+  if (
+    req.originalUrl.includes('/avatar-image') ||
+    req.originalUrl.includes('/image-proxy') ||
+    /\/api\/clients\/.*\/logo-image/.test(req.originalUrl)
+  ) {
     return next();
   }
 

@@ -16,14 +16,17 @@ export const BRAIN_COLORS = [
 ];
 
 /**
- * Generates a consistent hexadecimal color based on a string (ID or Name).
+ * Generates a consistent hexadecimal color based on a string (strictly ID or Name).
  */
 export const getDeterministicColor = (input) => {
     if (!input) return BRAIN_COLORS[0];
 
+    // Ensure input is a string
+    const str = String(input);
+
     let hash = 0;
-    for (let i = 0; i < input.length; i++) {
-        hash = input.charCodeAt(i) + ((hash << 5) - hash);
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
     }
 
     const index = Math.abs(hash) % BRAIN_COLORS.length;
