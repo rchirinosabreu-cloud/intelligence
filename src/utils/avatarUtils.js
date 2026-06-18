@@ -1,22 +1,19 @@
 
 /**
  * BRAIN_COLORS - A professional and vibrant palette for deterministic client branding.
+ * Limited to 5 primary corporate colors for consistent "Zero Image" style.
  */
 export const BRAIN_COLORS = [
     "#F59E0B", // Amber 500
     "#3B82F6", // Blue 500
     "#10B981", // Emerald 500
-    "#E11D48", // Rose 600
     "#8B5CF6", // Violet 500
-    "#06B6D4", // Cyan 500
-    "#EC4899", // Pink 500
-    "#6366F1", // Indigo 500
-    "#14B8A6", // Teal 500
-    "#F43F5E", // Rose 500
+    "#E11D48", // Rose 600
 ];
 
 /**
  * Generates a consistent hexadecimal color based on a string (strictly ID or Name).
+ * Uses a modulo of 5 to align with the refined palette.
  */
 export const getDeterministicColor = (input) => {
     if (!input) return BRAIN_COLORS[0];
