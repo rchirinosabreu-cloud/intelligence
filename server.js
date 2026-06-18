@@ -63,12 +63,24 @@ app.use('/api/gemini', geminiProxy);
 app.use('/api', apiRouter);
 
 // --- STATIC FILES & SPA ---
-app.use(express.static(path.join(__dirname, 'dist')));
+// Optimized static delivery for HTTP/2 stability and asset shielding
+app.use(express.static(path.join(__dirname, 'dist'), {
+  maxAge: '1y',
+  immutable: true,
+  setHeaders: (res, path) => {
+    if (path.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  }
+}));
 
 app.get('*', (req, res) => {
     if (req.originalUrl.startsWith('/api')) return res.status(404).json({ error: "API endpoint not found" });
     const indexPath = path.join(__dirname, 'dist', 'index.html');
-    if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+    if (fs.existsSync(indexPath)) {
+        res.setHeader('Cache-Control', 'no-cache');
+        return res.sendFile(indexPath);
+    }
     res.status(200).send("Brainstudio Intelligence Backend is running.");
 });
 
