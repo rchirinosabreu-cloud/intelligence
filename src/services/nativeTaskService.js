@@ -352,6 +352,11 @@ export const updateTask = async (id, data, updaterId = null) => {
 
         const updateData = { ...data };
 
+        // Critical Fix: Sanitize updateData to prevent nested relational updates
+        // that cause duplication or unlinking of records (e.g. "New Pueblito" bug)
+        const relationsToStrip = ['client', 'assignee', 'creator', 'contentItem', 'plan'];
+        relationsToStrip.forEach(key => delete updateData[key]);
+
         // Normalize category if provided in the update payload
         if (updateData.aiCategory) {
             updateData.aiCategory = normalizeCategory(updateData.aiCategory);

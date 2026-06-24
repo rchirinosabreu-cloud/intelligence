@@ -57,6 +57,7 @@ export const processUnclassifiedTasks = async () => {
                     // (Assuming normalizeCategory already handles mapping or we do it here)
                     const normalizedCat = item.category.toUpperCase().replace(/\s+/g, '_');
 
+                    // Critical: Use explicit primitive data to avoid relational duplication/unlinking
                     await prisma.task.update({
                         where: { id: taskId },
                         data: {
@@ -106,6 +107,7 @@ export const enqueueTaskClassification = async (taskId, title, comments = "") =>
 
         const classification = await aiService.classifyTaskWithAI(title, comments);
         if (classification && classification.category) {
+            // Critical: Use explicit primitive data to avoid relational duplication/unlinking
             await prisma.task.update({
                 where: { id: taskId },
                 data: {
