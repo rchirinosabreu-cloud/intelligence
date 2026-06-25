@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -6,13 +6,14 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import {
   Plus, Calendar, Filter, Search, MoreHorizontal,
   ChevronRight, ChevronDown, Loader2, Trash2, Eye,
-  Folder, FolderOpen, Grid, List, Clock
+  Folder, Grid, List, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Button } from '@/components/ui/button';
 import CreatePlanModal from './ContentGrids/CreatePlanModal';
+import { useAuth } from '@/context/AuthContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,9 +26,13 @@ import { toast } from 'react-hot-toast';
 const ContentGrids = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { currentUser } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [expandedClients, setExpandedClients] = useState({});
+  const [activeClientId, setActiveClientId] = useState(null);
+  const gridRef = useRef(null);
+
+  const isAdmin = currentUser?.role === 'ADMIN';
 
   const { data: plans, isLoading } = useQuery({
     queryKey: ['content-plans'],
@@ -39,27 +44,25 @@ const ContentGrids = () => {
     }
   });
 
+  // Click Outside Behavior
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (gridRef.current && !gridRef.current.contains(event.target)) {
+        setActiveClientId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const getMonthName = (monthNumber) => {
     const date = new Date();
     date.setMonth(monthNumber - 1);
     return date.toLocaleString('es-ES', { month: 'long' });
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'PLANIFICACION': return 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400';
-      case 'EN_APROBACION': return 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400';
-      case 'ACTIVO': return 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400';
-      case 'FINALIZADO': return 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400';
-      default: return 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400';
-    }
-  };
-
   const toggleClient = (clientId) => {
-    setExpandedClients(prev => ({
-      ...prev,
-      [clientId]: !prev[clientId]
-    }));
+    setActiveClientId(prev => (prev === clientId ? null : clientId));
   };
 
   const deleteMutation = useMutation({
@@ -102,7 +105,7 @@ const ContentGrids = () => {
       });
     });
 
-    // Sort clients alphabetically or by most recent activity? Let's do most recent activity
+    // Sort clients by most recent activity
     return Object.values(grouped).sort((a, b) => {
       const aDate = new Date(a.plans[0].updatedAt);
       const bDate = new Date(b.plans[0].updatedAt);
@@ -174,9 +177,6 @@ const ContentGrids = () => {
             <Folder className="w-3 h-3" />
             {filteredClientGroups.length} Clientes
           </div>
-          <button className="p-2.5 rounded-xl bg-zinc-100 dark:bg-white/5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
-            <Filter className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
@@ -187,7 +187,7 @@ const ContentGrids = () => {
           <p className="text-zinc-500 animate-pulse">Cargando carpetas de clientes...</p>
         </div>
       ) : filteredClientGroups.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div ref={gridRef} className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           <AnimatePresence mode="popLayout">
             {filteredClientGroups.map((group) => (
               <motion.div
@@ -198,50 +198,39 @@ const ContentGrids = () => {
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="group flex flex-col h-fit"
               >
-                {/* Client Folder Card */}
+                {/* Client Card (Accordion Trigger) */}
                 <div
                   onClick={() => toggleClient(group.id)}
                   className={`
                     p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden
-                    ${expandedClients[group.id]
+                    ${activeClientId === group.id
                       ? 'bg-white dark:bg-zinc-900 border-indigo-600/30 ring-1 ring-indigo-600/20 shadow-xl'
                       : 'bg-white/50 dark:bg-zinc-900/50 border-zinc-200/50 dark:border-white/5 hover:border-indigo-600/30 shadow-sm'}
                   `}
                 >
                   <div className="flex items-center justify-between relative z-10">
                     <div className="flex items-center gap-4">
-                      <div className="relative">
-                        <ClientAvatar client={group.client} size={48} className="rounded-2xl border border-zinc-200 dark:border-white/10 shadow-sm" />
-                        <div className="absolute -bottom-1 -right-1 bg-indigo-600 text-white text-[10px] font-bold h-5 w-5 rounded-lg flex items-center justify-center border-2 border-white dark:border-zinc-900">
-                          {group.plans.length}
-                        </div>
-                      </div>
+                      <ClientAvatar client={group.client} size={48} className="rounded-2xl border border-zinc-200 dark:border-white/10 shadow-sm" />
                       <div>
                         <h3 className="font-bold text-zinc-900 dark:text-white leading-tight">
                           {group.client?.name}
                         </h3>
-                        <p className="text-xs text-zinc-500 flex items-center gap-1 mt-1">
-                          <Clock className="w-3 h-3" />
-                          Actividad: {new Date(group.plans[0].updatedAt).toLocaleDateString()}
+                        <p className="text-xs text-zinc-500 flex items-center gap-1 mt-1 font-medium tracking-tight">
+                          {group.plans.length} Planes • Actividad: {new Date(group.plans[0].updatedAt).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
-                    {expandedClients[group.id] ? (
+                    {activeClientId === group.id ? (
                       <ChevronDown className="w-5 h-5 text-indigo-600" />
                     ) : (
                       <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-indigo-600 transition-colors" />
                     )}
                   </div>
-
-                  {/* Decorative Folder Icons in background */}
-                  <div className="absolute top-0 right-0 p-4 opacity-[0.03] dark:opacity-[0.05] -mr-4 -mt-4">
-                    {expandedClients[group.id] ? <FolderOpen className="w-24 h-24" /> : <Folder className="w-24 h-24" />}
-                  </div>
                 </div>
 
-                {/* Expanded Plan List (Sub-Periodos) */}
+                {/* Expanded Plan List */}
                 <AnimatePresence>
-                  {expandedClients[group.id] && (
+                  {activeClientId === group.id && (
                     <motion.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
@@ -272,30 +261,32 @@ const ContentGrids = () => {
                             </div>
 
                             <div className="flex items-center gap-2">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                  <button className="p-1.5 opacity-0 group-hover/item:opacity-100 hover:bg-zinc-200 dark:hover:bg-white/10 rounded-lg transition-all text-zinc-500">
-                                    <MoreHorizontal className="w-3.5 h-3.5" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 shadow-xl">
-                                  <DropdownMenuItem onClick={() => navigateToPlan(plan)} className="flex items-center gap-2 cursor-pointer py-2 text-zinc-600 dark:text-zinc-300">
-                                    <Eye className="w-4 h-4" />
-                                    <span>Ver Plan</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator className="bg-zinc-100 dark:bg-white/5" />
-                                  <DropdownMenuItem
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDelete(plan.id, group.client?.name);
-                                    }}
-                                    className="flex items-center gap-2 cursor-pointer py-2 text-red-600 dark:text-red-400 focus:bg-red-50 dark:focus:bg-red-900/10"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                    <span>Eliminar</span>
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              {isAdmin && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                    <button className="p-1.5 opacity-0 group-hover/item:opacity-100 hover:bg-zinc-200 dark:hover:bg-white/10 rounded-lg transition-all text-zinc-500">
+                                      <MoreHorizontal className="w-3.5 h-3.5" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 shadow-xl">
+                                    <DropdownMenuItem onClick={() => navigateToPlan(plan)} className="flex items-center gap-2 cursor-pointer py-2 text-zinc-600 dark:text-zinc-300">
+                                      <Eye className="w-4 h-4" />
+                                      <span>Ver Plan</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator className="bg-zinc-100 dark:bg-white/5" />
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDelete(plan.id, group.client?.name);
+                                      }}
+                                      className="flex items-center gap-2 cursor-pointer py-2 text-red-600 dark:text-red-400 focus:bg-red-50 dark:focus:bg-red-900/10"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                      <span>Eliminar</span>
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
                               <ChevronRight className="w-4 h-4 text-zinc-300 dark:text-zinc-600" />
                             </div>
                           </div>
