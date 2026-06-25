@@ -51,8 +51,8 @@ const ContentGrids = () => {
         setActiveClientId(null);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
   const getMonthName = (monthNumber) => {
@@ -216,7 +216,7 @@ const ContentGrids = () => {
                           {group.client?.name}
                         </h3>
                         <p className="text-xs text-zinc-500 flex items-center gap-1 mt-1 font-medium tracking-tight">
-                          {group.plans.length} Planes • Actividad: {new Date(group.plans[0].updatedAt).toLocaleDateString()}
+                          {group.plans.length} {group.plans.length === 1 ? 'Plan' : 'Planes'} • Actividad: {new Date(group.plans[0].updatedAt).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
