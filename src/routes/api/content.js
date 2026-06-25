@@ -96,6 +96,11 @@ router.post('/plans/:id/share-token', async (req, res) => {
 
 router.delete('/plans/:id', async (req, res) => {
   try {
+    // RBAC: Only ADMIN can delete content plans
+    if (req.user?.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Forbidden: Only administrators can delete content plans' });
+    }
+
     await deleteContentPlan(req.params.id);
     return res.json({ success: true });
   } catch (error) {
