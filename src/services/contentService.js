@@ -90,6 +90,7 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
       year: parsedYear,
       deletedAt: null
     },
+    orderBy: { updatedAt: 'desc' },
     include: {
       client: true,
       owner: true,
@@ -118,6 +119,31 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
 
 export const createContentPlan = async (data) => {
   const { clientId, month, year, status } = data;
+
+  // Idempotency Shield: Check for existing plans for this period
+  const existingPlan = await prisma.contentPlan.findFirst({
+    where: { clientId, month, year },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  if (existingPlan) {
+    // Case A: Plan is soft-deleted -> Restore it
+    if (existingPlan.deletedAt) {
+      console.log(`[Service] createContentPlan: Restoring soft-deleted plan ${existingPlan.id}`);
+      return await prisma.contentPlan.update({
+        where: { id: existingPlan.id },
+        data: { deletedAt: null, status: status || 'PLANIFICACION' },
+        include: { client: true }
+      });
+    }
+    // Case B: Plan is active -> Return it (idempotency)
+    console.log(`[Service] createContentPlan: Returning existing active plan ${existingPlan.id}`);
+    return await prisma.contentPlan.findUnique({
+      where: { id: existingPlan.id },
+      include: { client: true }
+    });
+  }
+
   return await prisma.contentPlan.create({
     data: {
       clientId,
