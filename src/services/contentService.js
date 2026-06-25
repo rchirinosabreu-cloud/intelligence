@@ -144,17 +144,29 @@ export const createContentPlan = async (data) => {
     });
   }
 
-  return await prisma.contentPlan.create({
-    data: {
-      clientId,
-      month,
-      year,
-      status: status || 'PLANIFICACION'
-    },
-    include: {
-      client: true
+  try {
+    return await prisma.contentPlan.create({
+      data: {
+        clientId,
+        month,
+        year,
+        status: status || 'PLANIFICACION'
+      },
+      include: {
+        client: true
+      }
+    });
+  } catch (error) {
+    // P2002: Unique constraint violation (Race Condition)
+    if (error.code === 'P2002') {
+      console.warn(`[Service] createContentPlan: Conflict detected (P2002). Returning existing plan.`);
+      return await prisma.contentPlan.findFirst({
+        where: { clientId, month, year, deletedAt: null },
+        include: { client: true }
+      });
     }
-  });
+    throw error;
+  }
 };
 
 export const updateContentPlan = async (id, data) => {
