@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { LayoutGrid, Plus, Calendar, Filter, Search, MoreHorizontal, ChevronRight, Loader2, Trash2, Eye, Table2 } from 'lucide-react';
+import {
+  Plus, Calendar, Filter, Search, MoreHorizontal,
+  ChevronRight, ChevronDown, Loader2, Trash2, Eye,
+  Folder, FolderOpen, Grid, List, Clock
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import ClientAvatar from '@/components/ui/ClientAvatar';
@@ -23,8 +27,9 @@ const ContentGrids = () => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [expandedClients, setExpandedClients] = useState({});
 
-  const { data: plans, isLoading, error } = useQuery({
+  const { data: plans, isLoading } = useQuery({
     queryKey: ['content-plans'],
     queryFn: async () => {
       const response = await axios.get(`${getApiBaseUrl()}/api/content/plans`, {
@@ -50,6 +55,13 @@ const ContentGrids = () => {
     }
   };
 
+  const toggleClient = (clientId) => {
+    setExpandedClients(prev => ({
+      ...prev,
+      [clientId]: !prev[clientId]
+    }));
+  };
+
   const deleteMutation = useMutation({
     mutationFn: async (id) => {
       await axios.delete(`${getApiBaseUrl()}/api/content/plans/${id}`, {
@@ -65,18 +77,53 @@ const ContentGrids = () => {
     }
   });
 
-  const filteredPlans = useMemo(() => {
-    if (!plans) return [];
-    if (!searchTerm) return plans;
+  // Master Grouping: Client -> Plans (Ordered by Year/Month DESC)
+  const plansGroupedByClient = useMemo(() => {
+    if (!plans) return {};
 
-    const term = searchTerm.toLowerCase();
-    return plans.filter(plan => {
-      const clientName = plan.client?.name?.toLowerCase() || '';
-      const monthName = getMonthName(plan.month).toLowerCase();
-      const period = `${monthName} ${plan.year}`;
-      return clientName.includes(term) || period.includes(term);
+    const grouped = plans.reduce((acc, plan) => {
+      const clientId = plan.clientId;
+      if (!acc[clientId]) {
+        acc[clientId] = {
+          id: clientId,
+          client: plan.client,
+          plans: []
+        };
+      }
+      acc[clientId].plans.push(plan);
+      return acc;
+    }, {});
+
+    // Sort plans within each client (Desc chronological)
+    Object.values(grouped).forEach(clientGroup => {
+      clientGroup.plans.sort((a, b) => {
+        if (b.year !== a.year) return b.year - a.year;
+        return b.month - a.month;
+      });
     });
-  }, [plans, searchTerm]);
+
+    // Sort clients alphabetically or by most recent activity? Let's do most recent activity
+    return Object.values(grouped).sort((a, b) => {
+      const aDate = new Date(a.plans[0].updatedAt);
+      const bDate = new Date(b.plans[0].updatedAt);
+      return bDate - aDate;
+    });
+  }, [plans]);
+
+  const filteredClientGroups = useMemo(() => {
+    if (!searchTerm) return plansGroupedByClient;
+    const term = searchTerm.toLowerCase();
+
+    return plansGroupedByClient.filter(group => {
+      const clientName = group.client?.name?.toLowerCase() || '';
+      const matchesClient = clientName.includes(term);
+      const matchesPlan = group.plans.some(p =>
+        getMonthName(p.month).toLowerCase().includes(term) ||
+        p.year.toString().includes(term)
+      );
+      return matchesClient || matchesPlan;
+    });
+  }, [plansGroupedByClient, searchTerm]);
 
   const navigateToPlan = (plan) => {
     if (plan.client?.slug) {
@@ -89,7 +136,7 @@ const ContentGrids = () => {
   };
 
   const handleDelete = (id, clientName) => {
-    if (window.confirm(`¿Estás seguro de que deseas eliminar la parrilla de ${clientName}? Esta acción ocultará la parrilla y sus ítems.`)) {
+    if (window.confirm(`¿Estás seguro de que deseas eliminar la parrilla de ${clientName}? Esta acción ocultará la parrilla.`)) {
       deleteMutation.mutate(id);
     }
   };
@@ -98,163 +145,194 @@ const ContentGrids = () => {
     <div className="space-y-6 animate-in fade-in duration-500">
       <PageHeader
         title="Parrillas de Contenido"
-        subtitle="Gestiona y planifica la presencia digital de tus clientes."
-
+        subtitle="Estructura jerárquica organizada por clientes."
       >
         <Button
           size="lg"
           onClick={() => setIsModalOpen(true)}
-          className="w-full sm:w-auto"
+          className="w-full sm:w-auto shadow-lg shadow-indigo-500/20"
         >
           <Plus className="w-4 h-4 mr-2" />
           Nuevo Plan
         </Button>
       </PageHeader>
 
-      {/* Stats/Filters Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-4 rounded-2xl bg-white/50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/5 backdrop-blur-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
-              <Calendar className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 uppercase font-bold tracking-wider">Total Planes</p>
-              <p className="text-xl font-bold text-zinc-900 dark:text-white">{plans?.length || 0}</p>
-            </div>
-          </div>
+      {/* Control Bar */}
+      <div className="p-4 rounded-2xl bg-white/50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/5 backdrop-blur-sm flex flex-col md:flex-row items-center gap-4">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <input
+            type="text"
+            placeholder="Buscar por cliente, mes o año..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-zinc-100 dark:bg-white/5 border-transparent focus:border-indigo-600/50 focus:ring-0 rounded-xl text-sm transition-all text-zinc-900 dark:text-zinc-100"
+          />
         </div>
-
-        {/* Search & Filter */}
-        <div className="md:col-span-2 p-4 rounded-2xl bg-white/50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/5 backdrop-blur-sm flex items-center gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-            <input
-              type="text"
-              placeholder="Buscar por cliente, mes o año..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-zinc-100 dark:bg-white/5 border-transparent focus:border-indigo-600/50 focus:ring-0 rounded-xl text-sm transition-all text-zinc-900 dark:text-zinc-100"
-            />
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <div className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 whitespace-nowrap">
+            <Folder className="w-3 h-3" />
+            {filteredClientGroups.length} Clientes
           </div>
-          <button className="p-2 rounded-xl bg-zinc-100 dark:bg-white/5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+          <button className="p-2.5 rounded-xl bg-zinc-100 dark:bg-white/5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
             <Filter className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Content Section */}
-      <div className="bg-white/50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/5 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl shadow-black/5">
-        {isLoading ? (
-          <div className="p-20 flex flex-col items-center justify-center gap-4">
-            <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
-            <p className="text-zinc-500 animate-pulse">Cargando planes de contenido...</p>
-          </div>
-        ) : filteredPlans.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-zinc-200/50 dark:border-white/5 bg-zinc-50/50 dark:bg-white/2">
-                  <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Cliente</th>
-                  <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Periodo</th>
-                  <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Estado</th>
-                  <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200/50 dark:divide-white/5">
-                <AnimatePresence mode="popLayout">
-                  {filteredPlans.map((plan) => (
-                    <motion.tr
-                      layout
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      key={plan.id}
-                      onClick={() => navigateToPlan(plan)}
-                      className="group hover:bg-zinc-100/30 dark:hover:bg-white/2 transition-colors cursor-pointer"
+      {/* Main Folder View */}
+      {isLoading ? (
+        <div className="p-20 flex flex-col items-center justify-center gap-4">
+          <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+          <p className="text-zinc-500 animate-pulse">Cargando carpetas de clientes...</p>
+        </div>
+      ) : filteredClientGroups.length > 0 ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          <AnimatePresence mode="popLayout">
+            {filteredClientGroups.map((group) => (
+              <motion.div
+                key={group.id}
+                layout
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="group flex flex-col h-fit"
+              >
+                {/* Client Folder Card */}
+                <div
+                  onClick={() => toggleClient(group.id)}
+                  className={`
+                    p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden
+                    ${expandedClients[group.id]
+                      ? 'bg-white dark:bg-zinc-900 border-indigo-600/30 ring-1 ring-indigo-600/20 shadow-xl'
+                      : 'bg-white/50 dark:bg-zinc-900/50 border-zinc-200/50 dark:border-white/5 hover:border-indigo-600/30 shadow-sm'}
+                  `}
+                >
+                  <div className="flex items-center justify-between relative z-10">
+                    <div className="flex items-center gap-4">
+                      <div className="relative">
+                        <ClientAvatar client={group.client} size={48} className="rounded-2xl border border-zinc-200 dark:border-white/10 shadow-sm" />
+                        <div className="absolute -bottom-1 -right-1 bg-indigo-600 text-white text-[10px] font-bold h-5 w-5 rounded-lg flex items-center justify-center border-2 border-white dark:border-zinc-900">
+                          {group.plans.length}
+                        </div>
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-zinc-900 dark:text-white leading-tight">
+                          {group.client?.name}
+                        </h3>
+                        <p className="text-xs text-zinc-500 flex items-center gap-1 mt-1">
+                          <Clock className="w-3 h-3" />
+                          Actividad: {new Date(group.plans[0].updatedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    {expandedClients[group.id] ? (
+                      <ChevronDown className="w-5 h-5 text-indigo-600" />
+                    ) : (
+                      <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-indigo-600 transition-colors" />
+                    )}
+                  </div>
+
+                  {/* Decorative Folder Icons in background */}
+                  <div className="absolute top-0 right-0 p-4 opacity-[0.03] dark:opacity-[0.05] -mr-4 -mt-4">
+                    {expandedClients[group.id] ? <FolderOpen className="w-24 h-24" /> : <Folder className="w-24 h-24" />}
+                  </div>
+                </div>
+
+                {/* Expanded Plan List (Sub-Periodos) */}
+                <AnimatePresence>
+                  {expandedClients[group.id] && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
                     >
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-3">
-                          <ClientAvatar client={plan.client} size={32} className="rounded-xl border border-zinc-200 dark:border-white/10" />
-                          <span className="font-semibold text-zinc-900 dark:text-zinc-100">{plan.client?.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5 capitalize text-zinc-600 dark:text-zinc-400">
-                        {getMonthName(plan.month)} {plan.year}
-                      </td>
-                      <td className="px-6 py-5">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${getStatusColor(plan.status)}`}>
-                          {plan.status.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="px-6 py-5 text-right">
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <button className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-xl transition-colors text-zinc-500">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 shadow-xl">
-                              <DropdownMenuItem onClick={() => navigate(`/parrillas/${plan.id}`)} className="flex items-center gap-2 cursor-pointer py-2 text-zinc-600 dark:text-zinc-300">
-                                <Eye className="w-4 h-4" />
-                                <span>Ver Detalle</span>
-                              </DropdownMenuItem>
-                              {/*
-                                Future: Add Edit metadata modal
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); }} className="flex items-center gap-2 cursor-pointer py-2 text-zinc-600 dark:text-zinc-300">
-                                <Edit className="w-4 h-4" />
-                                <span>Editar</span>
-                              </DropdownMenuItem>
-                              */}
-                              <DropdownMenuSeparator className="bg-zinc-100 dark:bg-white/5" />
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(plan.id, plan.client?.name);
-                                }}
-                                className="flex items-center gap-2 cursor-pointer py-2 text-red-600 dark:text-red-400 focus:bg-red-50 dark:focus:bg-red-900/10"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                <span>Eliminar</span>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                          <ChevronRight className="w-4 h-4 text-zinc-300 dark:text-zinc-600" />
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
+                      <div className="mt-2 space-y-2 px-3 pb-2 border-l-2 border-indigo-600/10 ml-6 pt-2">
+                        {group.plans.map((plan) => (
+                          <div
+                            key={plan.id}
+                            onClick={() => navigateToPlan(plan)}
+                            className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-white/2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 border border-transparent hover:border-indigo-600/20 transition-all cursor-pointer group/item"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/5 shadow-sm">
+                                <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 capitalize">
+                                  {getMonthName(plan.month)} {plan.year}
+                                </span>
+                                <span className={`text-[9px] font-bold uppercase tracking-widest mt-0.5 ${
+                                  plan.status === 'FINALIZADO' ? 'text-emerald-500' : 'text-zinc-400'
+                                }`}>
+                                  {plan.status.replace('_', ' ')}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                  <button className="p-1.5 opacity-0 group-hover/item:opacity-100 hover:bg-zinc-200 dark:hover:bg-white/10 rounded-lg transition-all text-zinc-500">
+                                    <MoreHorizontal className="w-3.5 h-3.5" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 shadow-xl">
+                                  <DropdownMenuItem onClick={() => navigateToPlan(plan)} className="flex items-center gap-2 cursor-pointer py-2 text-zinc-600 dark:text-zinc-300">
+                                    <Eye className="w-4 h-4" />
+                                    <span>Ver Plan</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator className="bg-zinc-100 dark:bg-white/5" />
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDelete(plan.id, group.client?.name);
+                                    }}
+                                    className="flex items-center gap-2 cursor-pointer py-2 text-red-600 dark:text-red-400 focus:bg-red-50 dark:focus:bg-red-900/10"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    <span>Eliminar</span>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                              <ChevronRight className="w-4 h-4 text-zinc-300 dark:text-zinc-600" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
                 </AnimatePresence>
-              </tbody>
-            </table>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      ) : (
+        <div className="p-20 flex flex-col items-center justify-center gap-6 text-center bg-white/50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/5 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl shadow-black/5">
+          <div className="w-20 h-20 rounded-full bg-zinc-100 dark:bg-white/5 flex items-center justify-center">
+            <Search className="w-10 h-10 text-zinc-300 dark:text-zinc-600" />
           </div>
-        ) : (
-          <div className="p-20 flex flex-col items-center justify-center gap-6 text-center">
-            <div className="w-20 h-20 rounded-full bg-zinc-100 dark:bg-white/5 flex items-center justify-center">
-              <LayoutGrid className="w-10 h-10 text-zinc-300 dark:text-zinc-600" />
-            </div>
-            <div className="space-y-2 max-w-sm">
-              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
-                {searchTerm ? 'No se encontraron resultados' : 'No hay planes de contenido'}
-              </h3>
-              <p className="text-zinc-500 dark:text-zinc-400 text-sm">
-                {searchTerm
-                  ? `No pudimos encontrar parrillas que coincidan con "${searchTerm}".`
-                  : 'Inicia la migración creando tu primer plan para un cliente. Aquí aparecerán todos los grids de la agencia.'
-                }
-              </p>
-            </div>
-            <Button
-              size="lg"
-              onClick={() => setIsModalOpen(true)}
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              Crear primer plan
-            </Button>
+          <div className="space-y-2 max-w-sm">
+            <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
+              {searchTerm ? 'Sin coincidencias' : 'Comienza con tu primera parrilla'}
+            </h3>
+            <p className="text-zinc-500 dark:text-zinc-400 text-sm">
+              {searchTerm
+                ? `No pudimos encontrar carpetas o periodos que coincidan con "${searchTerm}".`
+                : 'Organiza la estrategia de contenido por carpetas de clientes. Crea una nueva para verla aquí.'
+              }
+            </p>
           </div>
-        )}
-      </div>
+          <Button
+            size="lg"
+            onClick={() => setIsModalOpen(true)}
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Crear primera carpeta
+          </Button>
+        </div>
+      )}
 
       <CreatePlanModal
         isOpen={isModalOpen}
