@@ -340,10 +340,33 @@ export const updateContentItem = async (id, data) => {
     }
   }
 
-  return await prisma.contentItem.update({
+  const updatedItem = await prisma.contentItem.update({
     where: { id },
     data
   });
+
+  // --- AUTOMATION: Auto-finalize ContentPlan ---
+  if (data.status === 'PUBLICADO') {
+    try {
+        const planItems = await prisma.contentItem.findMany({
+            where: { planId: updatedItem.planId, deletedAt: null }
+        });
+
+        const allPublished = planItems.length > 0 && planItems.every(item => item.status === 'PUBLICADO');
+
+        if (allPublished) {
+            console.log(`[Service] updateContentItem: All items published. Auto-finalizing plan ${updatedItem.planId}`);
+            await prisma.contentPlan.update({
+                where: { id: updatedItem.planId },
+                data: { status: 'FINALIZADO' }
+            });
+        }
+    } catch (automationErr) {
+        console.error("[Service] ContentPlan Auto-finalization failed:", automationErr);
+    }
+  }
+
+  return updatedItem;
 };
 
 export const deleteContentItem = async (id) => {
