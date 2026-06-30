@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, Loader2, Save, Activity, Settings2, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Loader2, Save, Activity, Settings2, Clock, CheckCircle2, AlertCircle, MessageSquare } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
