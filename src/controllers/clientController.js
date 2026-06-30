@@ -109,10 +109,8 @@ export const updateHealthHandler = async (req, res) => {
         let finalScore = score;
 
         if (mode === 'auto') {
-            // Recalculate based on real data
-            // For now, setting a default if auto to avoid 0 if no plans exist yet
-            // Logic can be expanded here to count tasks/items.
-            finalScore = 85;
+            // Logic to be handled by service if needed, for now setting default
+            finalScore = score || 85;
         }
 
         // 1. Upsert Health Record

@@ -2,7 +2,9 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Plus, Search, MoreVertical, Loader2, Edit,
   Archive, RotateCcw, ChevronDown, ChevronUp,
-  Thermometer, User as UserIcon, MessageSquare, Activity
+  Thermometer, User as UserIcon, MessageSquare, Activity,
+  ExternalLink, CheckCircle2, Settings2, Layout, ShieldCheck,
+  AlertTriangle, Clock, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -20,7 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { toast } from 'react-hot-toast';
 import { Badge } from '@/components/ui/Badge';
-import HealthModal from './Clients/HealthModal';
+import ClientExpandedDetail from './Clients/ClientExpandedDetail';
 
 const Clients = () => {
   const navigate = useNavigate();
@@ -31,11 +33,10 @@ const Clients = () => {
   const [selectedPmId, setSelectedPmId] = useState('all');
   const [selectedTemperature, setSelectedTemperature] = useState('all'); // Verde, Amarillo, Rojo
   const [showArchived, setShowArchived] = useState(false);
+  const [expandedClientId, setExpandedClientId] = useState(null);
 
   // Modal States
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isHealthModalOpen, setIsHealthModalOpen] = useState(false);
-  const [selectedClient, setSelectedClient] = useState(null);
 
   const [newClientName, setNewClientName] = useState('');
   const [newClientSlug, setNewClientSlug] = useState('');
@@ -90,6 +91,7 @@ const Clients = () => {
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (gridRef.current && !gridRef.current.contains(event.target)) {
+        setExpandedClientId(null);
         setShowArchived(false);
       }
     };
@@ -101,6 +103,10 @@ const Clients = () => {
     fetchClients();
     fetchPms();
   }, [selectedPmId]);
+
+  const toggleExpand = (clientId) => {
+    setExpandedClientId(prev => (prev === clientId ? null : clientId));
+  };
 
   const handleArchiveToggle = async (client) => {
     try {
@@ -297,15 +303,20 @@ const Clients = () => {
                     const score = client.healthRecords?.[0]?.score || 0;
                     const lastComment = client.agencyContexts?.[0]?.content || "Sin observaciones recientes.";
 
+                    const isExpanded = expandedClientId === client.id;
+
                     return (
+                      <React.Fragment key={client.id}>
                       <motion.tr
                         layout
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0, x: -20 }}
-                        key={client.id}
-                        className="group hover:bg-zinc-100/30 dark:hover:bg-white/2 transition-colors cursor-pointer"
-                        onClick={() => navigate(`/cliente/${client.slug}`)}
+                        className={cn(
+                          "group hover:bg-zinc-100/30 dark:hover:bg-white/2 transition-all cursor-pointer border-l-4",
+                          isExpanded ? "border-indigo-600 bg-indigo-50/10" : "border-transparent"
+                        )}
+                        onClick={() => toggleExpand(client.id)}
                       >
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
@@ -341,38 +352,61 @@ const Clients = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-xl transition-colors text-zinc-500 opacity-0 group-hover:opacity-100">
-                                <MoreVertical className="w-4 h-4" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 shadow-xl">
-                              <DropdownMenuItem
-                                className="gap-2 py-2.5"
-                                onClick={() => {
-                                  setSelectedClient(client);
-                                  setIsHealthModalOpen(true);
-                                }}
-                              >
-                                <Activity className="w-4 h-4" />
-                                <span>Configurar Salud</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2 py-2.5">
-                                <Edit className="w-4 h-4" />
-                                <span>Editar Cliente</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleArchiveToggle(client)}
-                                className="gap-2 py-2.5 text-amber-600 dark:text-amber-400"
-                              >
-                                <Archive className="w-4 h-4" />
-                                <span>Archivar Cliente</span>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <div className="flex items-center justify-end gap-2">
+                             <button
+                               onClick={() => navigate(`/cliente/${client.slug}`)}
+                               className="p-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-xl text-indigo-600 opacity-0 group-hover:opacity-100 transition-all"
+                             >
+                               <ExternalLink className="w-4 h-4" />
+                             </button>
+                             <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-xl transition-colors text-zinc-500 opacity-0 group-hover:opacity-100">
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 shadow-xl">
+                                <DropdownMenuItem className="gap-2 py-2.5" onClick={() => toggleExpand(client.id)}>
+                                  <Activity className="w-4 h-4" />
+                                  <span>{isExpanded ? 'Cerrar Detalle' : 'Configurar Salud'}</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="gap-2 py-2.5">
+                                  <Edit className="w-4 h-4" />
+                                  <span>Editar Cliente</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleArchiveToggle(client)}
+                                  className="gap-2 py-2.5 text-amber-600 dark:text-amber-400"
+                                >
+                                  <Archive className="w-4 h-4" />
+                                  <span>Archivar Cliente</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            {isExpanded ? <ChevronUp className="w-4 h-4 text-indigo-600" /> : <ChevronDown className="w-4 h-4 text-zinc-300" />}
+                          </div>
                         </td>
                       </motion.tr>
+
+                      {/* Expanded Section */}
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.tr
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="bg-zinc-50/50 dark:bg-white/[0.01]"
+                          >
+                            <td colSpan={5} className="p-0 border-b border-zinc-200 dark:border-white/5 shadow-inner">
+                               <ClientExpandedDetail
+                                 client={client}
+                                 onUpdate={handleUpdateClientData}
+                               />
+                            </td>
+                          </motion.tr>
+                        )}
+                      </AnimatePresence>
+                      </React.Fragment>
                     );
                   })}
                 </AnimatePresence>
@@ -476,16 +510,6 @@ const Clients = () => {
       </div>
 
       {/* Create Client Modal */}
-      <HealthModal
-        isOpen={isHealthModalOpen}
-        onClose={() => {
-          setIsHealthModalOpen(false);
-          setSelectedClient(null);
-        }}
-        client={selectedClient}
-        onUpdate={handleUpdateClientData}
-      />
-
       <Dialog.Root open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-200" />

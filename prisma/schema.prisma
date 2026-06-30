@@ -94,7 +94,7 @@ model ClientHealth {
   year          Int      // Ej: 2026
   score         Int      // Puntaje final calculado (0 - 100)
   contentStatus String   // APROBADA, EN_PROCESO, SIN_PARRILLA (Manual o Auto)
-  reportStatus  String   // COMPLETA, EN_PROCESO, CHUECO
+  reportStatus  String   // COMPLETA, EN_PROCESO, CRITICO
   isExternal    Boolean  @default(false) // Flag si se gestiona fuera de la app (Excel)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

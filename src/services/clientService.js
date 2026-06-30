@@ -92,15 +92,62 @@ export async function getClients(filters = {}) {
             take: 1
         },
         agencyContexts: {
-            orderBy: { createdAt: 'desc' },
-            take: 1
+            orderBy: { createdAt: 'desc' }
         },
         responsible: {
             select: { id: true, name: true, avatarUrl: true }
+        },
+        contentPlans: {
+            where: {
+                month: currentMonth,
+                year: currentYear,
+                deletedAt: null
+            },
+            include: {
+                contentItems: {
+                    select: { format: true }
+                }
+            },
+            take: 1
+        },
+        nativeTasks: {
+            where: {
+                createdAt: {
+                    gte: new Date(currentYear, currentMonth - 1, 1),
+                    lt: new Date(currentYear, currentMonth, 1)
+                }
+            },
+            select: { status: true }
         }
       }
     });
-    return clients;
+
+    // Post-process to inject telemetry
+    return clients.map(client => {
+        // 1. Content Quotas
+        const activePlan = client.contentPlans?.[0];
+        let contentsText = "0 contenidos";
+        if (activePlan) {
+            const items = activePlan.contentItems || [];
+            const reels = items.filter(i => (i.format || '').toLowerCase().includes('reel')).length;
+            const pieces = items.length - reels;
+            contentsText = `${items.length} contenidos (${reels} reels y ${pieces} piezas)`;
+        }
+
+        // 2. Kanban Telemetry
+        const tasks = client.nativeTasks || [];
+        const completed = tasks.filter(t => t.status === 'REALIZADA' || t.status === 'PUBLISHED').length;
+        const total = tasks.length;
+        const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+        return {
+            ...client,
+            telemetry: {
+                planning: contentsText,
+                kanbanProgress: progress
+            }
+        };
+    });
   } catch (error) {
     console.error(`[${new Date().toISOString()}] [ClientService] Error fetching clients:`, error?.message || error);
     throw new Error("Failed to fetch clients");
