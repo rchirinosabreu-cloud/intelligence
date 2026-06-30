@@ -68,8 +68,7 @@ export async function getClients(filters = {}) {
     };
 
     if (responsibleId) {
-        // Implementation note: if responsibleId is added to Client model later, filter here.
-        // For now, keeping it extensible.
+        where.responsibleId = responsibleId;
     }
 
     const clients = await prisma.client.findMany({
@@ -95,6 +94,9 @@ export async function getClients(filters = {}) {
         agencyContexts: {
             orderBy: { createdAt: 'desc' },
             take: 1
+        },
+        responsible: {
+            select: { id: true, name: true, avatarUrl: true }
         }
       }
     });
