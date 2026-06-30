@@ -56,11 +56,26 @@ export async function getClientByIdentifier(identifier) {
   }
 }
 
-export async function getClients() {
+export async function getClients(filters = {}) {
   try {
+    const { isArchived = false, responsibleId } = filters;
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    const where = {
+        isArchived: isArchived === 'true' || isArchived === true
+    };
+
+    if (responsibleId) {
+        // Implementation note: if responsibleId is added to Client model later, filter here.
+        // For now, keeping it extensible.
+    }
+
     const clients = await prisma.client.findMany({
+      where,
       orderBy: {
-        createdAt: 'desc',
+        name: 'asc',
       },
       include: {
         _count: {
@@ -69,6 +84,17 @@ export async function getClients() {
               links: true,
               tasks: true
             }
+        },
+        healthRecords: {
+            where: {
+                month: currentMonth,
+                year: currentYear
+            },
+            take: 1
+        },
+        agencyContexts: {
+            orderBy: { createdAt: 'desc' },
+            take: 1
         }
       }
     });
@@ -168,4 +194,26 @@ export async function removeClientLink(linkId) {
          console.error("[ClientService] Error deleting link:", error);
          throw new Error("Failed to delete link");
     }
+}
+
+export async function toggleClientArchive(clientId, archiveStatus) {
+    return await prisma.client.update({
+        where: { id: clientId },
+        data: { isArchived: archiveStatus }
+    });
+}
+
+export async function addHealthComment(clientId, content, authorId) {
+    return await prisma.agencyContext.create({
+        data: {
+            clientId,
+            content,
+            type: 'TEXT',
+            status: 'APPROVED',
+            metadata: {
+                authorId,
+                category: 'HEALTH_COMMENT'
+            }
+        }
+    });
 }
