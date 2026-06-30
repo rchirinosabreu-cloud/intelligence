@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Plus, Search, MoreVertical, Loader2, Edit,
   Archive, RotateCcw, ChevronDown, ChevronUp,
-  Thermometer, User as UserIcon, MessageSquare
+  Thermometer, User as UserIcon, MessageSquare, Activity
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -20,6 +20,7 @@ import { useNavigate } from 'react-router-dom';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { toast } from 'react-hot-toast';
 import { Badge } from '@/components/ui/Badge';
+import HealthModal from './Clients/HealthModal';
 
 const Clients = () => {
   const navigate = useNavigate();
@@ -33,6 +34,9 @@ const Clients = () => {
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isHealthModalOpen, setIsHealthModalOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null);
+
   const [newClientName, setNewClientName] = useState('');
   const [newClientSlug, setNewClientSlug] = useState('');
   const [isManualSlugCreate, setIsManualSlugCreate] = useState(false);
@@ -57,7 +61,9 @@ const Clients = () => {
       });
       const archivedData = await resArchived.json();
 
-      setClients([...activeData, ...archivedData]);
+      // Combined and Sorted by Score ASC (Critical first)
+      const combined = [...activeData, ...archivedData];
+      setClients(combined);
     } catch (err) {
       toast.error("Error al cargar clientes");
     } finally {
@@ -143,9 +149,67 @@ const Clients = () => {
       });
   }, [clients, searchQuery, selectedTemperature]);
 
+  const handleUpdateClientData = (updatedClient) => {
+    setClients(prev => prev.map(c => c.id === updatedClient.id ? updatedClient : c));
+  };
+
   const archivedClients = useMemo(() => {
-    return clients.filter(c => c.isArchived);
-  }, [clients]);
+    return clients
+      .filter(c => c.isArchived)
+      .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [clients, searchQuery]);
+
+  const generateSlug = (name) => {
+    return name
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove accents
+      .replace(/[^a-z0-9\s-]/g, '') // remove invalid chars
+      .trim()
+      .replace(/\s+/g, '-'); // replace spaces with dashes
+  };
+
+  // Auto-complete slug when typing name (Create)
+  useEffect(() => {
+    if (!isManualSlugCreate && newClientName) {
+      setNewClientSlug(generateSlug(newClientName));
+    } else if (!newClientName) {
+      setNewClientSlug('');
+    }
+  }, [newClientName, isManualSlugCreate]);
+
+  const handleCreateClient = async (e) => {
+    e.preventDefault();
+    if (!newClientName.trim() || !newClientSlug.trim()) return;
+
+    try {
+      setIsCreating(true);
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/api/clients`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify({ name: newClientName, slug: newClientSlug }),
+      });
+
+      if (!res.ok) throw new Error('Error al crear el cliente en el servidor');
+
+      const newClient = await res.json();
+      setClients(prev => [newClient, ...prev]);
+
+      setNewClientName('');
+      setNewClientSlug('');
+      setIsManualSlugCreate(false);
+      setIsModalOpen(false);
+      toast.success("Cliente creado correctamente");
+    } catch (err) {
+      console.error("Error creating client:", err);
+      toast.error(err.message);
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-500">
@@ -284,6 +348,16 @@ const Clients = () => {
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 shadow-xl">
+                              <DropdownMenuItem
+                                className="gap-2 py-2.5"
+                                onClick={() => {
+                                  setSelectedClient(client);
+                                  setIsHealthModalOpen(true);
+                                }}
+                              >
+                                <Activity className="w-4 h-4" />
+                                <span>Configurar Salud</span>
+                              </DropdownMenuItem>
                               <DropdownMenuItem className="gap-2 py-2.5">
                                 <Edit className="w-4 h-4" />
                                 <span>Editar Cliente</span>
@@ -335,27 +409,59 @@ const Clients = () => {
               <div className="bg-zinc-50/50 dark:bg-white/1 border border-zinc-200/50 dark:border-white/5 rounded-3xl overflow-hidden opacity-60 grayscale-[0.5]">
                 <table className="w-full text-left border-collapse">
                   <tbody className="divide-y divide-zinc-200/50 dark:divide-white/5">
-                    {archivedClients.map((client) => (
-                      <tr key={client.id} className="hover:bg-zinc-100/50 dark:hover:bg-white/2 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <ClientAvatar client={client} size={32} className="rounded-lg border border-zinc-200 dark:border-white/10" />
-                            <span className="font-bold text-zinc-900 dark:text-zinc-100">{client.name}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="gap-2 text-indigo-600 dark:text-indigo-400"
-                            onClick={() => handleArchiveToggle(client)}
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                            Reactivar
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+                    {archivedClients.map((client) => {
+                       const score = client.healthRecords?.[0]?.score || 0;
+                       const lastComment = client.agencyContexts?.[0]?.content || "Sin observaciones recientes.";
+
+                       return (
+                        <tr key={client.id} className="hover:bg-zinc-100/50 dark:hover:bg-white/2 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <ClientAvatar client={client} size={32} className="rounded-lg border border-zinc-200 dark:border-white/10" />
+                              <span className="font-bold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{client.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 min-w-[180px]">
+                            <div className="flex items-center gap-3">
+                              <div className="flex-1 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden max-w-[100px]">
+                                <div className={cn("h-full", getScoreColor(score))} style={{ width: `${score}%` }} />
+                              </div>
+                              <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300">{score}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            {client.responsible?.name ? (
+                              <Badge variant="outline" className="bg-indigo-50/50 dark:bg-indigo-900/10 text-indigo-600 dark:text-indigo-400 border-indigo-200/50 dark:border-indigo-500/20">
+                                {client.responsible.name}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-zinc-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 max-w-xs text-sm italic truncate">
+                             "{lastComment}"
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-xl transition-colors text-zinc-500">
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 shadow-xl">
+                                <DropdownMenuItem
+                                  onClick={() => handleArchiveToggle(client)}
+                                  className="gap-2 py-2.5 text-indigo-600 dark:text-indigo-400"
+                                >
+                                  <RotateCcw className="w-4 h-4" />
+                                  <span>Reactivar Cliente</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                       );
+                    })}
                     {archivedClients.length === 0 && (
                       <tr>
                         <td className="p-10 text-center text-zinc-400 text-sm">No hay clientes archivados.</td>
@@ -369,7 +475,80 @@ const Clients = () => {
         </AnimatePresence>
       </div>
 
-      {/* Modals placeholders - to be implemented/refactored if needed */}
+      {/* Create Client Modal */}
+      <HealthModal
+        isOpen={isHealthModalOpen}
+        onClose={() => {
+          setIsHealthModalOpen(false);
+          setSelectedClient(null);
+        }}
+        client={selectedClient}
+        onUpdate={handleUpdateClientData}
+      />
+
+      <Dialog.Root open={isModalOpen} onOpenChange={setIsModalOpen}>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
+              <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 p-6 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95 duration-200">
+                <Dialog.Title className="text-xl font-semibold text-zinc-900 dark:text-white mb-4">
+                  Crear nuevo cliente
+                </Dialog.Title>
+
+                <form onSubmit={handleCreateClient} className="space-y-4">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                        Nombre del cliente
+                      </label>
+                      <input
+                        type="text"
+                        value={newClientName}
+                        onChange={(e) => {
+                          setNewClientName(e.target.value);
+                          setIsManualSlugCreate(false);
+                        }}
+                        placeholder="Ej. SunPartners"
+                        className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-zinc-900 dark:text-white"
+                        autoFocus
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                        URL (Slug)
+                      </label>
+                      <input
+                        type="text"
+                        value={newClientSlug}
+                        onChange={(e) => {
+                          setNewClientSlug(e.target.value);
+                          setIsManualSlugCreate(true);
+                        }}
+                        placeholder="ej-sunpartners"
+                        className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all font-mono text-sm text-zinc-900 dark:text-white"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-4">
+                    <Dialog.Close asChild>
+                      <button type="button" className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 rounded-xl transition-colors font-medium text-sm">
+                        Cancelar
+                      </button>
+                    </Dialog.Close>
+                    <button
+                      type="submit"
+                      disabled={isCreating || !newClientName.trim() || !newClientSlug.trim()}
+                      className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors shadow-lg shadow-primary/20 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear espacio'}
+                    </button>
+                  </div>
+                </form>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
     </div>
   );
 };
