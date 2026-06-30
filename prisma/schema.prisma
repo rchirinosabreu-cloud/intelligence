@@ -82,6 +82,8 @@ model Client {
   agencyContexts      AgencyContext[]
   boards              Board[]
   healthRecords       ClientHealth[]
+  responsibleId       String?
+  responsible         TeamMember?          @relation("ClientResponsible", fields: [responsibleId], references: [id])
 }
 
 model ClientHealth {
@@ -198,6 +200,7 @@ model TeamMember {
   contentPlans ContentPlan[]
   flowMessages FlowMessage[]
   nativeTasks  Task[]
+  responsibleClients Client[]    @relation("ClientResponsible")
 }
 
 model OperationalEvent {
