@@ -47,7 +47,8 @@ const ContentGrids = () => {
   // Click Outside Behavior
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (gridRef.current && !gridRef.current.contains(event.target)) {
+      // Close if clicking outside the grid OR exactly on the grid container (between cards)
+      if (gridRef.current && (!gridRef.current.contains(event.target) || event.target === gridRef.current)) {
         setActiveClientId(null);
       }
     };

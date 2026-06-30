@@ -19,7 +19,11 @@ router.get('/clients/:id', async (req, res) => {
 // Get all clients
 router.get('/clients', async (req, res) => {
     try {
-        const clients = await getClients();
+        const filters = {
+            isArchived: req.query.isArchived,
+            responsibleId: req.query.responsibleId
+        };
+        const clients = await getClients(filters);
         return res.json(clients);
     } catch (error) {
         return res.status(500).json({ error: error.message });

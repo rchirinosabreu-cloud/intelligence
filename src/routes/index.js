@@ -75,7 +75,7 @@ router.delete('/db/links/:linkId', clientController.deleteLink);
 router.get('/clients/:clientId/logo-image', clientController.getLogoProxy);
 
 // Clients
-router.get('/clients', clientController.getHealth);
+router.get('/clients', clientController.listClients);
 router.get('/db/clients', clientController.listClients);
 router.get('/clients/health', clientController.getHealth);
 router.post('/clients', clientController.createNewClient);

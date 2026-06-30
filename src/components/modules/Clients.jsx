@@ -28,7 +28,7 @@ const Clients = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPmId, setSelectedPmId] = useState('all');
-  const [selectedTemperature, setSelectedPmTemperature] = useState('all'); // Verde, Amarillo, Rojo
+  const [selectedTemperature, setSelectedTemperature] = useState('all'); // Verde, Amarillo, Rojo
   const [isArchivedExpanded, setIsArchivedExpanded] = useState(false);
 
   // Modal States
@@ -78,6 +78,18 @@ const Clients = () => {
       console.error("Error fetching PMs:", err);
     }
   };
+
+  // Click Outside Behavior
+  const gridRef = useRef(null);
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (gridRef.current && !gridRef.current.contains(event.target)) {
+        setIsArchivedExpanded(false);
+      }
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     fetchClients();
@@ -182,7 +194,7 @@ const Clients = () => {
             <Thermometer className="w-4 h-4 ml-2 text-zinc-400" />
             <select
               value={selectedTemperature}
-              onChange={(e) => setSelectedPmTemperature(e.target.value)}
+              onChange={(e) => setSelectedTemperature(e.target.value)}
               className="bg-transparent border-none focus:ring-0 text-sm py-1.5 pr-8 text-zinc-700 dark:text-zinc-300"
             >
               <option value="all">Cualquier Temperatura</option>
@@ -195,7 +207,7 @@ const Clients = () => {
       </div>
 
       {/* Active Clients Table */}
-      <div className="bg-white/50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/5 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl shadow-black/5">
+      <div ref={gridRef} className="bg-white/50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/5 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl shadow-black/5">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -250,7 +262,7 @@ const Clients = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          {client.responsible ? (
+                          {client.responsible?.name ? (
                             <Badge variant="outline" className="bg-indigo-50/50 dark:bg-indigo-900/10 text-indigo-600 dark:text-indigo-400 border-indigo-200/50 dark:border-indigo-500/20">
                               {client.responsible.name}
                             </Badge>
