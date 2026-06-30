@@ -30,10 +30,10 @@ const Clients = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPmId, setSelectedPmId] = useState('all');
   const [selectedTemperature, setSelectedTemperature] = useState('all'); // Verde, Amarillo, Rojo
-  const [isArchivedExpanded, setIsArchivedExpanded] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   // Modal States
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isHealthModalOpen, setIsHealthModalOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
 
@@ -90,7 +90,7 @@ const Clients = () => {
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (gridRef.current && !gridRef.current.contains(event.target)) {
-        setIsArchivedExpanded(false);
+        setShowArchived(false);
       }
     };
     document.addEventListener("click", handleClickOutside);
@@ -201,7 +201,7 @@ const Clients = () => {
       setNewClientName('');
       setNewClientSlug('');
       setIsManualSlugCreate(false);
-      setIsModalOpen(false);
+      setIsCreateModalOpen(false);
       toast.success("Cliente creado correctamente");
     } catch (err) {
       console.error("Error creating client:", err);
@@ -217,7 +217,7 @@ const Clients = () => {
         title="Clientes"
         subtitle="Tablero de salud y gestión de espacios de trabajo."
       >
-        <Button onClick={() => setIsModalOpen(true)} size="lg" className="shadow-lg shadow-indigo-500/20">
+        <Button onClick={() => setIsCreateModalOpen(true)} size="lg" className="shadow-lg shadow-indigo-500/20">
           <Plus className="w-4 h-4 mr-2" />
           Nuevo Cliente
         </Button>
@@ -391,15 +391,15 @@ const Clients = () => {
       {/* Archived Section */}
       <div className="mt-12 pt-6 border-t border-zinc-200 dark:border-white/5">
         <button
-          onClick={() => setIsArchivedExpanded(!isArchivedExpanded)}
+          onClick={() => setShowArchived(!showArchived)}
           className="flex items-center gap-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors font-bold text-sm uppercase tracking-widest"
         >
-          {isArchivedExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          {showArchived ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           Clientes Inactivos / Archivados ({archivedClients.length})
         </button>
 
         <AnimatePresence>
-          {isArchivedExpanded && (
+          {showArchived && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -486,7 +486,7 @@ const Clients = () => {
         onUpdate={handleUpdateClientData}
       />
 
-      <Dialog.Root open={isModalOpen} onOpenChange={setIsModalOpen}>
+      <Dialog.Root open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
               <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 p-6 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95 duration-200">
