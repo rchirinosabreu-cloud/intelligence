@@ -4,7 +4,11 @@ import { fetchClientHealth } from '../services/healthService.js';
 
 export const listClients = async (req, res) => {
     try {
-        const clients = await getClients();
+        const filters = {
+            isArchived: req.query.isArchived,
+            responsibleId: req.query.responsibleId
+        };
+        const clients = await getClients(filters);
         res.json(clients);
     } catch (error) {
         res.status(500).json({ error: "Failed to list clients" });
@@ -39,6 +43,56 @@ export const updateClient = async (req, res) => {
         res.json(updatedClient);
     } catch (error) {
         res.status(500).json({ error: "Failed to update client" });
+    }
+};
+
+export const archiveClientHandler = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { isArchived } = req.body;
+
+        // If isArchived is not provided in body, we could toggle,
+        // but explicit is better for APIs. Fallback to toggle if missing.
+        let targetStatus = isArchived;
+        if (targetStatus === undefined) {
+            const current = await prisma.client.findUnique({ where: { id }, select: { isArchived: true } });
+            targetStatus = !current.isArchived;
+        }
+
+        const client = await prisma.client.update({
+            where: { id },
+            data: { isArchived: !!targetStatus }
+        });
+        res.json(client);
+    } catch (error) {
+        res.status(500).json({ error: "Failed to archive client" });
+    }
+};
+
+export const addHealthCommentHandler = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { comment } = req.body;
+        const authorId = req.user?.userId;
+
+        if (!comment) return res.status(400).json({ error: "Comment is required" });
+
+        const agencyContext = await prisma.agencyContext.create({
+            data: {
+                clientId: id,
+                content: comment,
+                type: 'TEXT',
+                status: 'APPROVED',
+                metadata: {
+                    authorId,
+                    category: 'HEALTH_COMMENT'
+                }
+            }
+        });
+        res.json(agencyContext);
+    } catch (error) {
+        console.error("Health comment error:", error);
+        res.status(500).json({ error: "Failed to add health comment" });
     }
 };
 

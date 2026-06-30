@@ -62,6 +62,7 @@ model Client {
   name                String
   slug                String               @unique
   status              String               @default("active")
+  isArchived          Boolean              @default(false)
   logoUrl             String?
   createdAt           DateTime             @default(now())
   aiInstructions      String?
@@ -80,6 +81,23 @@ model Client {
   nativeTasks         Task[]
   agencyContexts      AgencyContext[]
   boards              Board[]
+  healthRecords       ClientHealth[]
+}
+
+model ClientHealth {
+  id            String   @id @default(uuid())
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  month         Int      // 1 - 12
+  year          Int      // Ej: 2026
+  score         Int      // Puntaje final calculado (0 - 100)
+  contentStatus String   // APROBADA, EN_PROCESO, SIN_PARRILLA (Manual o Auto)
+  reportStatus  String   // COMPLETA, EN_PROCESO, CHUECO
+  isExternal    Boolean  @default(false) // Flag si se gestiona fuera de la app (Excel)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([clientId, month, year])
 }
 
 model Board {
