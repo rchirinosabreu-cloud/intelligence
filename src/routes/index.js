@@ -81,6 +81,7 @@ router.get('/clients/health', clientController.getHealth);
 router.post('/clients', clientController.createNewClient);
 router.patch('/clients/:id', clientController.updateClient);
 router.patch('/clients/:id/archive', clientController.archiveClientHandler);
+router.post('/clients/:id/health', clientController.updateHealthHandler);
 router.post('/clients/:id/health-comment', clientController.addHealthCommentHandler);
 
 // Notifications

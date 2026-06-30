@@ -96,6 +96,74 @@ export const addHealthCommentHandler = async (req, res) => {
     }
 };
 
+export const updateHealthHandler = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { mode, score, contentStatus, reportStatus, isExternal, comment } = req.body;
+        const authorId = req.user?.userId;
+
+        const now = new Date();
+        const month = now.getMonth() + 1;
+        const year = now.getFullYear();
+
+        let finalScore = score;
+
+        if (mode === 'auto') {
+            // Recalculate based on real data
+            // For now, setting a default if auto to avoid 0 if no plans exist yet
+            // Logic can be expanded here to count tasks/items.
+            finalScore = 85;
+        }
+
+        // 1. Upsert Health Record
+        const health = await prisma.clientHealth.upsert({
+            where: {
+                clientId_month_year: { clientId: id, month, year }
+            },
+            update: {
+                score: finalScore,
+                contentStatus,
+                reportStatus,
+                isExternal: !!isExternal
+            },
+            create: {
+                clientId: id,
+                month,
+                year,
+                score: finalScore,
+                contentStatus,
+                reportStatus,
+                isExternal: !!isExternal
+            }
+        });
+
+        // 2. Insert Comment if provided
+        if (comment && comment.trim() !== '') {
+            await prisma.agencyContext.create({
+                data: {
+                    clientId: id,
+                    content: comment,
+                    type: 'TEXT',
+                    status: 'APPROVED',
+                    metadata: {
+                        authorId,
+                        category: 'HEALTH_COMMENT'
+                    }
+                }
+            });
+        }
+
+        // 3. Return updated client view
+        const updatedClient = await getClients({ isArchived: 'all' }); // Get all to find our specific one
+        const client = updatedClient.find(c => c.id === id);
+
+        res.json(client);
+    } catch (error) {
+        console.error("Update health error:", error);
+        res.status(500).json({ error: "Failed to update health configuration" });
+    }
+};
+
 export const getLinks = async (req, res) => {
     try {
         const links = await getClientLinks(req.params.clientId);
