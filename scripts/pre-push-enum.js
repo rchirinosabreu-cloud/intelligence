@@ -36,17 +36,17 @@ async function prePushEnum() {
             ALTER COLUMN "category" TYPE "ServiceCategory"
             USING (
                 CASE
-                    WHEN UPPER(TRIM("category")) = 'BRANDING' THEN 'BRANDING'::"ServiceCategory"
-                    WHEN UPPER(TRIM("category")) = 'DISEÑO' THEN 'DISENO'::"ServiceCategory"
-                    WHEN UPPER(TRIM("category")) = 'PRODUCCIÓN AUDIOVISUAL' THEN 'PRODUCCION_AUDIOVISUAL'::"ServiceCategory"
-                    WHEN UPPER(TRIM("category")) = 'MARKETING' THEN 'MARKETING'::"ServiceCategory"
-                    WHEN UPPER(TRIM("category")) = 'ADS' THEN 'ADS'::"ServiceCategory"
-                    WHEN UPPER(TRIM("category")) = 'EDITORIAL' THEN 'EDITORIAL'::"ServiceCategory"
-                    WHEN UPPER(TRIM("category")) = 'WEB' THEN 'WEB'::"ServiceCategory"
-                    WHEN UPPER(TRIM("category")) = 'DESARROLLO WEB Y TECNOLOGÍA' THEN 'DESARROLLO'::"ServiceCategory"
-                    WHEN UPPER(TRIM("category")) = 'DESARROLLO' THEN 'DESARROLLO'::"ServiceCategory"
-                    WHEN UPPER(TRIM("category")) = 'DISENO' THEN 'DISENO'::"ServiceCategory"
-                    WHEN UPPER(TRIM("category")) = 'PRODUCCION_AUDIOVISUAL' THEN 'PRODUCCION_AUDIOVISUAL'::"ServiceCategory"
+                    WHEN UPPER(BTRIM("category"::text)) = 'BRANDING' THEN 'BRANDING'::"ServiceCategory"
+                    WHEN UPPER(BTRIM("category"::text)) = 'DISEÑO' THEN 'DISENO'::"ServiceCategory"
+                    WHEN UPPER(BTRIM("category"::text)) = 'PRODUCCIÓN AUDIOVISUAL' THEN 'PRODUCCION_AUDIOVISUAL'::"ServiceCategory"
+                    WHEN UPPER(BTRIM("category"::text)) = 'MARKETING' THEN 'MARKETING'::"ServiceCategory"
+                    WHEN UPPER(BTRIM("category"::text)) = 'ADS' THEN 'ADS'::"ServiceCategory"
+                    WHEN UPPER(BTRIM("category"::text)) = 'EDITORIAL' THEN 'EDITORIAL'::"ServiceCategory"
+                    WHEN UPPER(BTRIM("category"::text)) = 'WEB' THEN 'WEB'::"ServiceCategory"
+                    WHEN UPPER(BTRIM("category"::text)) = 'DESARROLLO WEB Y TECNOLOGÍA' THEN 'DESARROLLO'::"ServiceCategory"
+                    WHEN UPPER(BTRIM("category"::text)) = 'DESARROLLO' THEN 'DESARROLLO'::"ServiceCategory"
+                    WHEN UPPER(BTRIM("category"::text)) = 'DISENO' THEN 'DISENO'::"ServiceCategory"
+                    WHEN UPPER(BTRIM("category"::text)) = 'PRODUCCION_AUDIOVISUAL' THEN 'PRODUCCION_AUDIOVISUAL'::"ServiceCategory"
                     ELSE 'WEB'::"ServiceCategory"
                 END
             );
