@@ -16,8 +16,8 @@ const Sidebar = ({ isOpen, onClose }) => {
   const { currentUser } = useAuth();
 
   const menuItems = [
-    { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, path: '/' },
-    { id: 'brain-core', label: 'Manager', icon: Brain, path: '/brain-core', allowedEmails: ['chrodny@gmail.com', 'fvilladigital@gmail.com'] },
+    { id: 'brain-core', label: 'Manager', icon: Brain, path: '/', allowedEmails: ['chrodny@gmail.com', 'fvilladigital@gmail.com'] },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
     { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/gestion' },
     { id: 'activity', label: 'Actividad', icon: Map, path: '/actividad' },
     { id: 'reports', label: 'Reportes', icon: FileBarChart, path: '/reportes' },
