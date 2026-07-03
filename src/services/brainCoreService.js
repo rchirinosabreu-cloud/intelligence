@@ -138,7 +138,7 @@ export const getIntelligenceFeed = async (statusFilter = 'APPROVED') => {
         const now = new Date();
         const fourDaysAgo = new Date(now.getTime() - (4 * 24 * 60 * 60 * 1000));
 
-        const [activeTasks, recentHistory, overdueTasks, recentEmails] = await Promise.all([
+        const [activeTasks, recentHistory, overdueTasks] = await Promise.all([
             prisma.task.findMany({
                 where: { status: { in: ['PENDIENTE', 'EN_CURSO'] } },
                 take: 30,
@@ -157,14 +157,13 @@ export const getIntelligenceFeed = async (statusFilter = 'APPROVED') => {
                     dueDate: { lt: fourDaysAgo }
                 },
                 include: { client: true, assignee: true }
-            }),
-            getRecentEmails(20, 'is:unread newer_than:2d', DEFAULT_IMPERSONATED_EMAIL)
+            })
         ]);
 
-        // 2. Perform Triaged Email Analysis
-        const triagedEmails = await triageEmailsWithAI(recentEmails, genAI);
+        // 2. Perform Triaged Email Analysis (DEPRECATED for background sync)
+        const triagedEmails = [];
 
-        // 3. Predictive Operational Analysis
+        // 3. Predictive Operational Analysis (Internal only)
         const predictions = await generateOperationalPredictions(activeTasks, overdueTasks, triagedEmails);
 
         if (statusFilter === 'PENDING') {
