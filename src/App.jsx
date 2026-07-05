@@ -99,18 +99,18 @@ function AppContent() {
               element={
                 <AppLayout onLogout={logout}>
                   <Routes>
-                    {/* Rutas Principales - Manager (BrainCore) es ahora la central */}
+                    {/* Rutas Principales */}
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/inicio" element={<Navigate to="/" replace />} />
+                    <Route path="/dashboard" element={<Navigate to="/" replace />} />
                     <Route
-                      path="/"
+                      path="/manager"
                       element={
                         <BrainCoreGuard>
                           <BrainCore />
                         </BrainCoreGuard>
                       }
                     />
-                    <Route path="/inicio" element={<Navigate to="/" replace />} />
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/brain-core" element={<Navigate to="/" replace />} />
                     <Route path="/gestion" element={<NativeTasks />} />
                     <Route path="/actividad" element={<Activity />} />
                     <Route path="/reportes" element={<Reports />} />
