@@ -204,6 +204,7 @@ const NativeTasks = () => {
                 referenceUrl: task.referenceUrl,
                 contentPlanId: task.contentItem?.planId,
                 contentItemId: task.contentItem?.id,
+                contentItem: task.contentItem,
                 aiCategory: task.aiCategory,
                 aiComplexity: task.aiComplexity,
                 plan: task.plan,
