@@ -48,8 +48,8 @@ export const uploadClientFile = async (file, clientName) => {
 
     const bucket = storageClient.bucket(bucketName);
 
-    // Create a clean folder name from client name
-    const folderName = clientName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    // Create a clean folder name from client name (allow slashes for structured paths)
+    const folderName = clientName.replace(/[^a-z0-9/]/gi, '_').toLowerCase();
     const timestamp = Date.now();
 
     // Sanitize original filename (remove spaces, special chars)
@@ -132,7 +132,7 @@ export const getUploadSignedUrl = async (clientName, fileName, contentType) => {
         throw new Error("Storage client not initialized");
     }
 
-    const folderName = clientName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const folderName = clientName.replace(/[^a-z0-9/]/gi, '_').toLowerCase();
     const timestamp = Date.now();
     const gcsFileName = `${folderName}/${timestamp}_${fileName}`;
 

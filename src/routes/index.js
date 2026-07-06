@@ -9,6 +9,7 @@ import * as flowController from '../controllers/flowController.js';
 import * as proxyController from '../controllers/proxyController.js';
 import * as publicController from '../controllers/publicController.js';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
+import multer from 'multer';
 
 // Import existing modular routers
 import teamRouter from './api/team.js';
@@ -28,6 +29,7 @@ import quotationsRouter from './api/quotations.js';
 import { getUpcomingEvents } from '../services/calendarService.js';
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // --- Public Routes (No Auth) ---
 router.get('/public/parrilla/:token', publicController.getPublicPlan);
@@ -61,7 +63,7 @@ router.get('/tasks', taskController.getAllTasks);
 router.post('/tasks', taskController.createNewTask);
 router.patch('/tasks/:taskId', taskController.updateExistingTask);
 router.delete('/tasks/:taskId', taskController.deleteExistingTask);
-router.post('/tasks/:taskId/comments', taskController.addTaskComment);
+router.post('/tasks/:taskId/comments', upload.single('file'), taskController.addTaskComment);
 
 // Client Specific (Tasks, Links, Logo)
 router.get('/db/clients/:clientId/tasks', taskController.getClientTasksHandler);

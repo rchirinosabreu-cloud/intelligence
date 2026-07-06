@@ -13,6 +13,15 @@ test('src/components/modules/TaskSidePanel.jsx compiles as JSX', (t) => {
     assert.ok(result.code, 'Should compile successfully');
 });
 
+test('src/utils/chatUtils.jsx compiles as JSX', (t) => {
+    const code = readFileSync('src/utils/chatUtils.jsx', 'utf8');
+    const result = transformSync(code, {
+        presets: ['@babel/preset-react'],
+        filename: 'chatUtils.jsx'
+    });
+    assert.ok(result.code, 'Should compile successfully');
+});
+
 test('src/components/ui/LinkDropdown.jsx compiles as JSX', (t) => {
     const code = readFileSync('src/components/ui/LinkDropdown.jsx', 'utf8');
     const result = transformSync(code, {

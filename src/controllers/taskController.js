@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma.js';
 import { getDashboardMetrics, getQualityStreak, getCompletedTasks, getTasks, createTask, updateTask, auditAndDeleteTask } from '../services/nativeTaskService.js';
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from '../services/clientTaskService.js';
+import { uploadClientFile, getSignedUrl } from '../services/storageService.js';
 import { createNotification } from '../services/notificationService.js';
 
 export const getMetrics = async (req, res) => {
@@ -110,13 +111,39 @@ export const addTaskComment = async (req, res) => {
         const { taskId } = req.params;
         const authorId = req.user.userId;
 
-        if (!content) return res.status(400).json({ error: "Content is required" });
+        if (!content && !req.file) return res.status(400).json({ error: "Content or file is required" });
+
+        let finalContent = content || "";
+
+        if (req.file) {
+            const task = await prisma.task.findUnique({
+                where: { id: taskId },
+                select: { clientId: true, client: { select: { name: true } } }
+            });
+
+            if (!task) return res.status(404).json({ error: "Task not found" });
+
+            // Structure path: clientes/{client_id}/tareas/{task_id}/imagenes/{nombre_archivo}
+            // We'll use the client name for the folder structure to stay consistent with storageService
+            const folderPrefix = `clientes/${task.clientId}/tareas/${taskId}/imagenes`;
+
+            // Mocking a customized version of uploadClientFile or just using it
+            // Actually, storageService.uploadClientFile uses clientName as prefix.
+            // Let's implement a specific one for tasks if needed, or adapt.
+
+            const uploadResult = await uploadClientFile(req.file, folderPrefix);
+            const signedUrl = await getSignedUrl(uploadResult.gcsPath);
+
+            // If there's already content, append the image URL. If not, just the URL.
+            // But better: if it's an image, maybe we want a specific type or just the URL in content.
+            finalContent = content ? `${content}\n\n${signedUrl}` : signedUrl;
+        }
 
         const comment = await prisma.taskComment.create({
             data: {
                 taskId,
                 authorId,
-                content,
+                content: finalContent,
                 type: type || 'human'
             },
             include: { author: true }
@@ -124,6 +151,7 @@ export const addTaskComment = async (req, res) => {
 
         res.status(201).json(comment);
     } catch (error) {
+        console.error("Error adding comment:", error);
         res.status(500).json({ error: "Failed to add comment", details: error.message });
     }
 };
