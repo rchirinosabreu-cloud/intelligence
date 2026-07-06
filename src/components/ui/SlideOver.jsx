@@ -41,6 +41,16 @@ const SlideOver = ({
                 <Dialog.Content
                     ref={contentRef}
                     onOpenAutoFocus={(e) => e.preventDefault()}
+                    onPointerDownOutside={(e) => {
+                        if (e.target.closest('.ignore-panel-close')) {
+                            e.preventDefault();
+                        }
+                    }}
+                    onInteractOutside={(e) => {
+                        if (e.target.closest('.ignore-panel-close')) {
+                            e.preventDefault();
+                        }
+                    }}
                     tabIndex={-1}
                     className={cn(
                         "fixed right-0 top-0 h-full w-full max-w-2xl bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800 shadow-2xl z-50 animate-in slide-in-from-right duration-300 flex flex-col focus:outline-none overscroll-contain",

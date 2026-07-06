@@ -4,7 +4,7 @@ import React from 'react';
  * Utility to convert URLs in text to interactive <a> tags or image previews.
  * Handles http, https, and www prefixes.
  */
-export const linkify = (text) => {
+export const linkify = (text, onImageClick = null) => {
     if (!text) return text;
 
     // Regex for URLs
@@ -22,22 +22,38 @@ export const linkify = (text) => {
             if (isImage) {
                 return (
                     <div key={index} className="my-2">
-                        <a
-                            href={href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                        >
+                        {onImageClick ? (
                             <img
                                 src={href}
                                 alt="Shared image"
-                                className="max-w-full rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm hover:opacity-90 transition-opacity"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onImageClick(href);
+                                }}
+                                className="max-w-full rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
                                 onError={(e) => {
                                     e.target.onerror = null;
                                     e.target.style.display = 'none';
                                 }}
                             />
-                        </a>
+                        ) : (
+                            <a
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <img
+                                    src={href}
+                                    alt="Shared image"
+                                    className="max-w-full rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm hover:opacity-90 transition-opacity"
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.style.display = 'none';
+                                    }}
+                                />
+                            </a>
+                        )}
                     </div>
                 );
             }
