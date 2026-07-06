@@ -36,6 +36,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         specialType: '',
         hasReference: false,
         referenceUrl: '',
+        referenceLinks: [],
         assetsLinks: []
     });
 
@@ -81,6 +82,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     } catch(e) {}
                 }
 
+                const referenceLinks = (taskData.contentItem?.mediaUrl && taskData.contentItem.mediaUrl.length > 0)
+                    ? taskData.contentItem.mediaUrl
+                    : (taskData.referenceUrl || '');
+
                 setFormData({
                     id: taskData.id,
                     title: taskData.title || '',
@@ -96,11 +101,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     specialType: taskData.specialType || '',
                     hasReference: !!taskData.referenceUrl,
                     referenceUrl: taskData.referenceUrl || '',
+                    referenceLinks: referenceLinks,
                     assetsLinks: taskData.contentItem?.assetsLinks || [],
                     taskComments: taskData.taskComments || [],
+                    creator: taskData.creator || { name: taskData.creatorName || 'Sistema' },
                     plan: taskData.plan,
-                    contentItemId: taskData.contentItemId,
-                    creator: taskData.creator || { name: taskData.creatorName || 'Sistema' }
+                    contentItemId: taskData.contentItemId
                 });
             } else {
                 setFormData({
@@ -115,6 +121,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     specialType: '',
                     hasReference: false,
                     referenceUrl: '',
+                    referenceLinks: [],
                     assetsLinks: []
                 });
             }
@@ -552,7 +559,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         <div className="flex gap-2">
                                             <LinkDropdown
                                                 label="Referencia"
-                                                links={formData.contentItem?.mediaUrl || formData.referenceUrl}
+                                                links={formData.referenceLinks}
                                                 icon={FileText}
                                             />
                                             <LinkDropdown
