@@ -432,10 +432,12 @@ export const updateTask = async (id, data, updaterId = null) => {
                     data: {
                         taskId: id,
                         authorId: updaterId,
-                        content: "Tarea reintegrada al flujo operativo.",
+                        content: updateData.comments || "Tarea reintegrada al flujo operativo.",
                         type: 'system_reintegrate'
                     }
                 });
+                // Clear comments from main task table
+                updateData.comments = "";
             }
 
             if (newStatus === 'REALIZADA') {
