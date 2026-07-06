@@ -3,7 +3,7 @@ import {
     Loader2, Zap, Star, Link as LinkIcon, ExternalLink,
     X, Send, MessageSquare, RotateCcw, CheckCircle2,
     LayoutGrid, Calendar, User, Trash2, Plus, ClipboardList,
-    FileText, Database, Paperclip, ImageIcon
+    FileText, Database, Paperclip, ImageIcon, Eye, Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -44,9 +44,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [selectedFile, setSelectedFile] = useState(null);
     const [showReintegratePrompt, setShowReintegratePrompt] = useState(false);
     const [reintegrateReason, setReintegrateReason] = useState("");
+    const [isDragging, setIsDragging] = useState(false);
+    const [previewImage, setPreviewImage] = useState(null);
 
     const commentInputRef = useRef(null);
     const scrollRef = useRef(null);
+    const chatContainerRef = useRef(null);
 
     // Fetch team members
     useEffect(() => {
@@ -223,8 +226,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
     };
 
-    const handleAddComment = async () => {
-        if ((!newComment.trim() && !selectedFile) || isSendingComment || !isEdition) return;
+    const handleAddComment = async (fileToUpload = null) => {
+        const file = fileToUpload || selectedFile;
+        if ((!newComment.trim() && !file) || isSendingComment || !isEdition) return;
 
         setIsSendingComment(true);
         try {
@@ -234,8 +238,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             const commentFormData = new FormData();
             commentFormData.append('content', newComment);
             commentFormData.append('type', 'human');
-            if (selectedFile) {
-                commentFormData.append('file', selectedFile);
+            if (file) {
+                commentFormData.append('file', file);
             }
 
             const res = await fetch(`${baseUrl}/api/tasks/${formData.id}/comments`, {
@@ -288,9 +292,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             <span className="text-[9px] text-zinc-400">•</span>
                             <span className="text-[9px] text-zinc-400">{new Date(comment.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short'})}</span>
                         </div>
-                        <p className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed italic">
-                            "{linkify(cleanContent)}"
-                        </p>
+                        <div className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed italic">
+                            "{linkify(cleanContent, setPreviewImage)}"
+                        </div>
                     </div>
                 </div>
             );
@@ -309,9 +313,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         <span className="text-[9px] text-zinc-400">{new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                     <div className="bg-zinc-100 dark:bg-zinc-900 p-2.5 rounded-xl rounded-tl-none inline-block max-w-full shadow-sm">
-                        <p className="text-[11px] text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                            {linkify(comment.content)}
-                        </p>
+                        <div className="text-[11px] text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                            {linkify(comment.content, setPreviewImage)}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -371,56 +375,58 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 />
                              </UserAvatarPopover>
                              <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-tighter">De:</span>
-                             <span className="text-[9px] text-zinc-900 dark:text-zinc-100 font-black uppercase tracking-tighter truncate max-w-[100px]">{formData.creatorName}</span>
+                             <span className="text-[9px] text-zinc-900 dark:text-zinc-100 font-black uppercase tracking-tighter truncate max-w-[100px]">{formData.creator?.name || formData.creatorName}</span>
                         </div>
                     </div>
                 )}
 
                 {/* Main Content Area */}
-                <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar">
-                    {showReintegratePrompt && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="m-5 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/30 rounded-2xl shadow-xl"
-                        >
-                            <div className="flex items-center gap-2 mb-3">
-                                <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center rounded-full text-emerald-600">
-                                    <RotateCcw size={14} />
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                    {/* Top Form Section (Fixed height/Adaptive scroll) */}
+                    <div className="shrink-0 overflow-y-auto max-h-[60%] border-b border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-transparent">
+                        {showReintegratePrompt && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="m-5 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/30 rounded-2xl shadow-xl"
+                            >
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center rounded-full text-emerald-600">
+                                        <RotateCcw size={14} />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-[11px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Reintegración de Tarea</h4>
+                                        <p className="text-[9px] text-emerald-600/70 font-medium">Explica brevemente el motivo para el responsable</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h4 className="text-[11px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Reintegración de Tarea</h4>
-                                    <p className="text-[9px] text-emerald-600/70 font-medium">Explica brevemente el motivo para el responsable</p>
+                                <textarea
+                                    autoFocus
+                                    value={reintegrateReason}
+                                    onChange={e => setReintegrateReason(e.target.value)}
+                                    placeholder="Ej: Ya se corrigieron los artes solicitados..."
+                                    className="w-full bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 text-[11px] font-medium focus:ring-2 ring-emerald-500/20 outline-none resize-none h-24 mb-3"
+                                />
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setShowReintegratePrompt(false)}
+                                        className="flex-1 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition-all"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        onClick={handleReintegrate}
+                                        className="flex-[2] bg-emerald-500 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 active:scale-[0.98] transition-all"
+                                    >
+                                        Confirmar Reintegración
+                                    </button>
                                 </div>
-                            </div>
-                            <textarea
-                                autoFocus
-                                value={reintegrateReason}
-                                onChange={e => setReintegrateReason(e.target.value)}
-                                placeholder="Ej: Ya se corrigieron los artes solicitados..."
-                                className="w-full bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 text-[11px] font-medium focus:ring-2 ring-emerald-500/20 outline-none resize-none h-24 mb-3"
-                            />
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setShowReintegratePrompt(false)}
-                                    className="flex-1 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition-all"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    onClick={handleReintegrate}
-                                    className="flex-[2] bg-emerald-500 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 active:scale-[0.98] transition-all"
-                                >
-                                    Confirmar Reintegración
-                                </button>
-                            </div>
-                        </motion.div>
-                    )}
+                            </motion.div>
+                        )}
 
-                    <form
-                        onSubmit={handleSave}
-                        className="p-5 space-y-6"
-                    >
+                        <form
+                            onSubmit={handleSave}
+                            className="p-5 space-y-6"
+                        >
                                 {/* Title Section */}
                                 <div className="space-y-1.5">
                                     <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2">
@@ -567,44 +573,82 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     </div>
                                 )}
 
-                                {/* General Context / Static Comments */}
-                                <div className="space-y-1.5">
-                                    <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Descripción / Contexto General</label>
-                                    <textarea
-                                        value={formData.comments}
-                                        onChange={e => setFormData({...formData, comments: e.target.value})}
-                                        placeholder="Detalles base para el responsable..."
-                                        className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium focus:ring-2 ring-primary/10 outline-none transition-all resize-none h-20 shadow-sm"
-                                    />
-                                </div>
-                            </form>
+                            {/* General Context / Static Comments */}
+                            <div className="space-y-1.5 pb-4">
+                                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Descripción / Contexto General</label>
+                                <textarea
+                                    value={formData.comments}
+                                    onChange={e => setFormData({...formData, comments: e.target.value})}
+                                    placeholder="Detalles base para el responsable..."
+                                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium focus:ring-2 ring-primary/10 outline-none transition-all resize-none h-20 shadow-sm"
+                                />
+                            </div>
+                        </form>
+                    </div>
 
-                            {/* Divider & History Section */}
-                            {isEdition && (
-                                <div className="px-5 pb-20">
-                                    <div className="flex items-center gap-4 mb-6">
-                                        <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800/50" />
-                                        <div className="flex items-center gap-2 px-3 py-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-full">
-                                            <MessageSquare size={10} className="text-zinc-400" />
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Conversación & Eventos</span>
-                                        </div>
-                                        <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800/50" />
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        {(!formData.taskComments || formData.taskComments.length === 0) ? (
-                                            <div className="py-10 flex flex-col items-center justify-center text-center px-8">
-                                                <div className="w-10 h-10 bg-zinc-50 dark:bg-zinc-900/50 rounded-full flex items-center justify-center mb-2 text-zinc-200 dark:text-zinc-800">
-                                                    <MessageSquare size={20} />
-                                                </div>
-                                                <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Sin comentarios aún</h4>
+                    {/* Bottom Chat Section (Elastic/Independent Scroll) */}
+                    {isEdition && (
+                        <div
+                            ref={chatContainerRef}
+                            onDragOver={(e) => {
+                                e.preventDefault();
+                                setIsDragging(true);
+                            }}
+                            onDragLeave={() => setIsDragging(false)}
+                            onDrop={(e) => {
+                                e.preventDefault();
+                                setIsDragging(false);
+                                const file = e.dataTransfer.files[0];
+                                if (file && file.type.startsWith('image/')) {
+                                    handleAddComment(file);
+                                }
+                            }}
+                            className="flex-1 overflow-y-auto custom-scrollbar relative bg-zinc-50/50 dark:bg-transparent"
+                        >
+                            {/* Drag & Drop Overlay */}
+                            <AnimatePresence>
+                                {isDragging && (
+                                    <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        className="absolute inset-0 z-50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-8 transition-all"
+                                    >
+                                        <div className="w-full h-full border-2 border-dashed border-primary/40 rounded-3xl flex flex-col items-center justify-center gap-4 animate-in zoom-in-95">
+                                            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center text-primary">
+                                                <ImageIcon size={32} />
                                             </div>
-                                        ) : (
-                                            formData.taskComments.map(renderComment)
-                                        )}
+                                            <p className="text-sm font-black uppercase tracking-widest text-primary">Suelta tus imágenes aquí</p>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
+                            <div className="px-5 py-6">
+                                <div className="flex items-center gap-4 mb-6">
+                                    <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800/50" />
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-full">
+                                        <MessageSquare size={10} className="text-zinc-400" />
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Conversación & Eventos</span>
                                     </div>
+                                    <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800/50" />
                                 </div>
-                            )}
+
+                                <div className="space-y-3 pb-4">
+                                    {(!formData.taskComments || formData.taskComments.length === 0) ? (
+                                        <div className="py-10 flex flex-col items-center justify-center text-center px-8">
+                                            <div className="w-10 h-10 bg-zinc-50 dark:bg-zinc-900/50 rounded-full flex items-center justify-center mb-2 text-zinc-200 dark:text-zinc-800">
+                                                <MessageSquare size={20} />
+                                            </div>
+                                            <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Sin comentarios aún</h4>
+                                        </div>
+                                    ) : (
+                                        formData.taskComments.map(renderComment)
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Bottom Actions Area - Split for unified view */}
@@ -693,6 +737,53 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     </div>
                 </div>
             </div>
+
+            {/* Media Viewer Lightbox */}
+            {previewImage && (
+                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/90 backdrop-blur-xl p-4 md:p-10 animate-in fade-in duration-300">
+                    <div className="absolute inset-0" onClick={() => setPreviewImage(null)} />
+                    <div className="w-full h-full max-w-6xl flex flex-col z-[105] relative animate-in zoom-in-95 duration-300">
+                        <div className="flex items-center justify-between mb-4 bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl">
+                            <div className="flex items-center gap-3 pl-2">
+                                <div className="p-2 bg-primary/20 rounded-xl">
+                                    <ImageIcon className="w-4 h-4 text-primary" />
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-bold text-white">Vista previa de imagen</span>
+                                    <span className="text-[10px] text-zinc-400 font-medium uppercase tracking-tighter">Archivo de tarea</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <a
+                                    href={previewImage}
+                                    download
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 rounded-xl text-white text-xs font-bold transition-all shadow-lg"
+                                >
+                                    <Download className="w-3.5 h-3.5" />
+                                    ABRIR ORIGINAL
+                                </a>
+                                <button
+                                    onClick={() => setPreviewImage(null)}
+                                    className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all border border-white/10"
+                                    title="Cerrar"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 bg-white/5 dark:bg-zinc-900/50 rounded-2xl border border-white/5 overflow-hidden shadow-2xl relative flex items-center justify-center">
+                            <img
+                                src={previewImage}
+                                alt="Preview"
+                                className="max-w-full max-h-full object-contain rounded-xl shadow-xl"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </SlideOver>
     );
 };
