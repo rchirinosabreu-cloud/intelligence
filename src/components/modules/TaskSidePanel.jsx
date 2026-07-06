@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     Loader2, Zap, Star, Link as LinkIcon, ExternalLink,
     X, Send, MessageSquare, RotateCcw, CheckCircle2,
-    LayoutGrid, Calendar, User, Trash2
+    LayoutGrid, Calendar, User, Trash2, Plus, ClipboardList
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
