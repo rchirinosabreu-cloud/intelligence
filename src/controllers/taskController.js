@@ -104,6 +104,30 @@ export const deleteExistingTask = async (req, res) => {
     }
 };
 
+export const addTaskComment = async (req, res) => {
+    try {
+        const { content, type } = req.body;
+        const { taskId } = req.params;
+        const authorId = req.user.userId;
+
+        if (!content) return res.status(400).json({ error: "Content is required" });
+
+        const comment = await prisma.taskComment.create({
+            data: {
+                taskId,
+                authorId,
+                content,
+                type: type || 'human'
+            },
+            include: { author: true }
+        });
+
+        res.status(201).json(comment);
+    } catch (error) {
+        res.status(500).json({ error: "Failed to add comment", details: error.message });
+    }
+};
+
 export const getClientTasksHandler = async (req, res) => {
     try {
         const tasks = await getClientTasks(req.params.clientId);

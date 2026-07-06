@@ -61,6 +61,7 @@ router.get('/tasks', taskController.getAllTasks);
 router.post('/tasks', taskController.createNewTask);
 router.patch('/tasks/:taskId', taskController.updateExistingTask);
 router.delete('/tasks/:taskId', taskController.deleteExistingTask);
+router.post('/tasks/:taskId/comments', taskController.addTaskComment);
 
 // Client Specific (Tasks, Links, Logo)
 router.get('/db/clients/:clientId/tasks', taskController.getClientTasksHandler);
