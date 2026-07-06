@@ -191,6 +191,7 @@ const NativeTasks = () => {
                 assigneeRole: task.assignee?.role || 'Colaborador',
                 assigneeStatus: task.assignee?.statusMessage || '',
                 creatorId: task.creatorId,
+                creator: task.creator,
                 creatorName: task.creator?.name || 'Sistema',
                 status: task.status,
                 isReturned: task.isReturned || false,

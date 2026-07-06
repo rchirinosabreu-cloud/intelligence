@@ -552,7 +552,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         <div className="flex gap-2">
                                             <LinkDropdown
                                                 label="Referencia"
-                                                links={formData.referenceUrl}
+                                                links={formData.contentItem?.mediaUrl || formData.referenceUrl}
                                                 icon={FileText}
                                             />
                                             <LinkDropdown
