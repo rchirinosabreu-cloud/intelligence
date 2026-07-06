@@ -42,12 +42,12 @@ const SlideOver = ({
                     ref={contentRef}
                     onOpenAutoFocus={(e) => e.preventDefault()}
                     onPointerDownOutside={(e) => {
-                        if (e.target.closest('.ignore-panel-close')) {
+                        if (e.target.closest('[data-side-panel-ignore="true"]') || e.target.closest('.ignore-panel-close')) {
                             e.preventDefault();
                         }
                     }}
                     onInteractOutside={(e) => {
-                        if (e.target.closest('.ignore-panel-close')) {
+                        if (e.target.closest('[data-side-panel-ignore="true"]') || e.target.closest('.ignore-panel-close')) {
                             e.preventDefault();
                         }
                     }}
