@@ -42,17 +42,10 @@ const LinkDropdown = ({ label, links = [], icon: Icon = LinkIcon }) => {
             className="relative flex-1"
             data-side-panel-ignore="true"
             onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => {
-                e.stopPropagation();
-                // We don't preventDefault here to allow the button click to happen
-            }}
         >
             <button
                 data-side-panel-ignore="true"
-                onPointerDown={(e) => {
-                    e.stopPropagation();
-                    // Don't preventDefault to allow the button to trigger onClick
-                }}
+                type="button"
                 onClick={(e) => {
                     e.stopPropagation();
                     setIsOpen(!isOpen);
@@ -70,7 +63,6 @@ const LinkDropdown = ({ label, links = [], icon: Icon = LinkIcon }) => {
                     <div
                         className="fixed inset-0 z-[60]"
                         data-side-panel-ignore="true"
-                        onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                             e.stopPropagation();
                             setIsOpen(false);
