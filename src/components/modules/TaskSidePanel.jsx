@@ -40,9 +40,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
     const [newComment, setNewComment] = useState("");
     const [isSendingComment, setIsSendingComment] = useState(false);
-    const [activeTab, setActiveTab] = useState('details'); // 'details' | 'history'
+    const [showReintegratePrompt, setShowReintegratePrompt] = useState(false);
+    const [reintegrateReason, setReintegrateReason] = useState("");
 
     const commentInputRef = useRef(null);
+    const scrollRef = useRef(null);
 
     // Fetch team members
     useEffect(() => {
@@ -112,7 +114,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     assetsLinks: []
                 });
             }
-            setActiveTab('details');
+            setShowReintegratePrompt(false);
+            setReintegrateReason("");
         }
     }, [isOpen, taskData, isEdition, defaultClientId, clientsList]);
 
@@ -137,9 +140,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 let cleanDate = formData.dueDate.split('T')[0];
                 isoDate = `${cleanDate}T12:00:00.000Z`;
             }
-
-            // Check for Reintegration
-            const isReintegrating = isEdition && formData.originalStatus === 'DEVUELTA' && (formData.status === 'PENDIENTE' || formData.status === 'EN_CURSO');
 
             const payload = {
                 title: formData.title,
@@ -170,23 +170,59 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             });
 
             if (res.ok) {
-                if (isReintegrating) {
-                    setActiveTab('history');
-                    setTimeout(() => commentInputRef.current?.focus(), 500);
-                    toast({ title: 'Tarea reintegrada', description: 'Por favor, deja un comentario explicando el motivo.' });
-                    onSuccess(); // Refresh list to reflect status change
-                    setFormData(prev => ({ ...prev, originalStatus: formData.status }));
-                } else {
-                    toast({ title: isEdition ? 'Tarea actualizada' : 'Tarea creada', description: 'Los cambios se guardaron correctamente.' });
-                    onSuccess();
-                    onClose();
-                }
+                toast({ title: isEdition ? 'Tarea actualizada' : 'Tarea creada', description: 'Los cambios se guardaron correctamente.' });
+                onSuccess();
+                onClose();
             } else {
                 throw new Error("Failed to save task");
             }
         } catch (err) {
             console.error("Save failed:", err);
             toast({ title: 'Error', description: 'No se pudo guardar la tarea.', variant: 'destructive' });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleReintegrate = async () => {
+        if (!reintegrateReason.trim()) {
+            toast({ variant: "destructive", title: "Motivo obligatorio", description: "Por favor explica por qué estás reintegrando la tarea." });
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+
+            // 1. Update status
+            const statusRes = await fetch(`${baseUrl}/api/tasks/${formData.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({ status: 'PENDIENTE' })
+            });
+
+            if (!statusRes.ok) throw new Error("Failed to update status");
+
+            // 2. Add system_reintegrate comment
+            await fetch(`${baseUrl}/api/tasks/${formData.id}/comments`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({ content: reintegrateReason, type: 'system_reintegrate' })
+            });
+
+            toast({ title: 'Tarea reintegrada', description: 'El estado se cambió a PENDIENTE.' });
+            onSuccess();
+            onClose();
+        } catch (err) {
+            console.error("Reintegration failed:", err);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo reintegrar la tarea." });
         } finally {
             setIsSubmitting(false);
         }
@@ -286,26 +322,37 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             title={isEdition ? "Editar Tarea" : "Nueva Tarea"}
             description={isEdition ? `ID: ${formData.id?.split('-')[0]}` : "Crea un nuevo pendiente operativo"}
             icon={headerIcon}
-            className="max-w-[450px]"
+            className="w-[45vw] max-w-3xl"
         >
             <div className="flex flex-col h-full bg-zinc-50/30 dark:bg-transparent">
                 {/* Quick Access Toolbar (Edition Only) */}
                 {isEdition && (
                     <div className="flex items-center justify-between px-5 py-2.5 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
-                        {(formData.plan || formData.contentPlanId) && (
-                            <button
-                                onClick={() => {
-                                    if (formData.plan?.id) {
-                                        window.open(`/parrillas/${formData.plan.id}?item=${formData.contentItemId}`, '_blank');
-                                    } else {
-                                        window.open(`/parrillas/${formData.contentPlanId}?item=${formData.contentItemId}`, '_blank');
-                                    }
-                                }}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all border border-indigo-100 dark:border-indigo-900/30 shadow-sm"
-                            >
-                                <LayoutGrid size={11} /> Abrir Parrilla
-                            </button>
-                        )}
+                        <div className="flex items-center gap-3">
+                            {(formData.plan || formData.contentPlanId) && (
+                                <button
+                                    onClick={() => {
+                                        if (formData.plan?.id) {
+                                            window.open(`/parrillas/${formData.plan.id}?item=${formData.contentItemId}`, '_blank');
+                                        } else {
+                                            window.open(`/parrillas/${formData.contentPlanId}?item=${formData.contentItemId}`, '_blank');
+                                        }
+                                    }}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all border border-indigo-100 dark:border-indigo-900/30 shadow-sm"
+                                >
+                                    <LayoutGrid size={11} /> Abrir Parrilla
+                                </button>
+                            )}
+
+                            {formData.status === 'DEVUELTA' && !showReintegratePrompt && (
+                                <button
+                                    onClick={() => setShowReintegratePrompt(true)}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-emerald-600 transition-all shadow-md shadow-emerald-500/20"
+                                >
+                                    <RotateCcw size={11} /> Reintegrar Tarea
+                                </button>
+                            )}
+                        </div>
 
                         <div className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900 px-2 py-1 rounded-full border border-zinc-200 dark:border-zinc-800 shadow-inner">
                              <UserAvatarPopover user={formData.creator}>
@@ -321,47 +368,51 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     </div>
                 )}
 
-                {/* Internal Tabs */}
-                {isEdition && (
-                    <div className="px-5 pt-3 shrink-0 flex gap-5 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
-                        <button
-                            onClick={() => setActiveTab('details')}
-                            className={cn(
-                                "pb-2 text-[10px] font-black uppercase tracking-wider transition-all relative",
-                                activeTab === 'details' ? "text-primary" : "text-zinc-400 hover:text-zinc-600"
-                            )}
-                        >
-                            Detalles
-                            {activeTab === 'details' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('history')}
-                            className={cn(
-                                "pb-2 text-[10px] font-black uppercase tracking-wider transition-all relative flex items-center gap-2",
-                                activeTab === 'history' ? "text-primary" : "text-zinc-400 hover:text-zinc-600"
-                            )}
-                        >
-                            Comentarios
-                            {(formData.taskComments?.length > 0) && (
-                                <span className="bg-zinc-100 dark:bg-zinc-800 text-[9px] px-1.5 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700">{formData.taskComments.length}</span>
-                            )}
-                            {activeTab === 'history' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />}
-                        </button>
-                    </div>
-                )}
-
                 {/* Main Content Area */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    <AnimatePresence mode="wait">
-                        {activeTab === 'details' ? (
-                            <motion.form
-                                key="details-tab"
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: 10 }}
-                                onSubmit={handleSave}
-                                className="p-5 space-y-5"
-                            >
+                <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar">
+                    {showReintegratePrompt && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="m-5 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/30 rounded-2xl shadow-xl"
+                        >
+                            <div className="flex items-center gap-2 mb-3">
+                                <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center rounded-full text-emerald-600">
+                                    <RotateCcw size={14} />
+                                </div>
+                                <div>
+                                    <h4 className="text-[11px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Reintegración de Tarea</h4>
+                                    <p className="text-[9px] text-emerald-600/70 font-medium">Explica brevemente el motivo para el responsable</p>
+                                </div>
+                            </div>
+                            <textarea
+                                autoFocus
+                                value={reintegrateReason}
+                                onChange={e => setReintegrateReason(e.target.value)}
+                                placeholder="Ej: Ya se corrigieron los artes solicitados..."
+                                className="w-full bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 text-[11px] font-medium focus:ring-2 ring-emerald-500/20 outline-none resize-none h-24 mb-3"
+                            />
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setShowReintegratePrompt(false)}
+                                    className="flex-1 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleReintegrate}
+                                    className="flex-[2] bg-emerald-500 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 active:scale-[0.98] transition-all"
+                                >
+                                    Confirmar Reintegración
+                                </button>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    <form
+                        onSubmit={handleSave}
+                        className="p-5 space-y-6"
+                    >
                                 {/* Title Section */}
                                 <div className="space-y-1.5">
                                     <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2">
@@ -515,85 +566,89 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         value={formData.comments}
                                         onChange={e => setFormData({...formData, comments: e.target.value})}
                                         placeholder="Detalles base para el responsable..."
-                                        className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium focus:ring-2 ring-primary/10 outline-none transition-all resize-none h-24 shadow-sm"
+                                        className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium focus:ring-2 ring-primary/10 outline-none transition-all resize-none h-20 shadow-sm"
                                     />
                                 </div>
+                            </form>
 
-                                <div className="h-10" /> {/* Spacer */}
-                            </motion.form>
-                        ) : (
-                            <motion.div
-                                key="history-tab"
-                                initial={{ opacity: 0, x: 10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -10 }}
-                                className="p-5"
-                            >
-                                <div className="space-y-3">
-                                    {(!formData.taskComments || formData.taskComments.length === 0) ? (
-                                        <div className="py-16 flex flex-col items-center justify-center text-center px-8">
-                                            <div className="w-12 h-12 bg-zinc-100 dark:bg-zinc-900 rounded-full flex items-center justify-center mb-3 text-zinc-300">
-                                                <MessageSquare size={24} />
-                                            </div>
-                                            <h4 className="text-[12px] font-bold text-zinc-900 dark:text-white mb-1">Sin comentarios</h4>
-                                            <p className="text-[10px] text-zinc-500">Inicia una conversación sobre esta tarea.</p>
+                            {/* Divider & History Section */}
+                            {isEdition && (
+                                <div className="px-5 pb-20">
+                                    <div className="flex items-center gap-4 mb-6">
+                                        <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800/50" />
+                                        <div className="flex items-center gap-2 px-3 py-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-full">
+                                            <MessageSquare size={10} className="text-zinc-400" />
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Conversación & Eventos</span>
                                         </div>
-                                    ) : (
-                                        formData.taskComments.map(renderComment)
-                                    )}
+                                        <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800/50" />
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        {(!formData.taskComments || formData.taskComments.length === 0) ? (
+                                            <div className="py-10 flex flex-col items-center justify-center text-center px-8">
+                                                <div className="w-10 h-10 bg-zinc-50 dark:bg-zinc-900/50 rounded-full flex items-center justify-center mb-2 text-zinc-200 dark:text-zinc-800">
+                                                    <MessageSquare size={20} />
+                                                </div>
+                                                <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Sin comentarios aún</h4>
+                                            </div>
+                                        ) : (
+                                            formData.taskComments.map(renderComment)
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="h-32" /> {/* Spacer for chat input */}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                            )}
                 </div>
 
-                {/* Bottom Actions Area */}
-                <div className="shrink-0 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3.5 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
-                    {activeTab === 'details' ? (
-                        <div className="flex gap-2.5">
+                {/* Bottom Actions Area - Split for unified view */}
+                <div className="shrink-0 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 shadow-[0_-4px_30px_-10px_rgba(0,0,0,0.1)]">
+                    <div className="flex flex-col gap-4">
+                        {/* Chat Input Field (Edition Only) */}
+                        {isEdition && (
+                            <div className="relative group">
+                                <textarea
+                                    ref={commentInputRef}
+                                    value={newComment}
+                                    onChange={e => setNewComment(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleAddComment();
+                                        }
+                                    }}
+                                    placeholder="Escribe un mensaje al equipo..."
+                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary/30 rounded-xl px-4 py-3 pr-12 text-[11px] font-medium outline-none transition-all resize-none h-[48px] no-scrollbar shadow-inner"
+                                />
+                                <button
+                                    onClick={handleAddComment}
+                                    disabled={!newComment.trim() || isSendingComment}
+                                    className={cn(
+                                        "absolute right-1.5 top-1.5 p-2 rounded-lg transition-all",
+                                        newComment.trim() ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
+                                    )}
+                                >
+                                    {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Save/Cancel Buttons */}
+                        <div className="flex gap-3">
                             <button
                                 onClick={onClose}
-                                className="flex-1 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-zinc-900 transition-all rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                                className="flex-1 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-zinc-900 transition-all rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-900 border border-transparent"
                             >
-                                Cancelar
+                                Cerrar Panel
                             </button>
                             <button
                                 onClick={handleSave}
                                 disabled={isSubmitting}
-                                className="flex-[2] bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/10 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                                className="flex-[2] bg-primary text-primary-foreground px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                             >
                                 {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                                 {isEdition ? "Guardar Cambios" : "Crear Tarea"}
                             </button>
                         </div>
-                    ) : (
-                        <div className="relative group">
-                            <textarea
-                                ref={commentInputRef}
-                                value={newComment}
-                                onChange={e => setNewComment(e.target.value)}
-                                onKeyDown={e => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault();
-                                        handleAddComment();
-                                    }
-                                }}
-                                placeholder="Escribe un comentario..."
-                                className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary/30 rounded-xl px-4 py-3 pr-12 text-[11px] font-medium outline-none transition-all resize-none h-[48px] no-scrollbar shadow-inner"
-                            />
-                            <button
-                                onClick={handleAddComment}
-                                disabled={!newComment.trim() || isSendingComment}
-                                className={cn(
-                                    "absolute right-1.5 top-1.5 p-2 rounded-lg transition-all",
-                                    newComment.trim() ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
-                                )}
-                            >
-                                {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                            </button>
-                        </div>
-                    )}
+                    </div>
                 </div>
             </div>
         </SlideOver>
