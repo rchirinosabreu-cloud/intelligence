@@ -47,8 +47,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import ClientAvatar from "../../components/ui/ClientAvatar";
-import TaskCreateModal from './TaskCreateModal';
-import TaskEditModal from './TaskEditModal';
+import TaskSidePanel from './TaskSidePanel';
 import { triggerConfetti } from '@/utils/confetti';
 
 // --- DATE HELPERS ---
@@ -183,6 +182,8 @@ const NativeTasks = () => {
             return safeData.map(task => ({
                 id: task.id,
                 title: task.title,
+                clientId: task.clientId,
+                client: task.client,
                 clientName: task.client?.name || 'Sin Cliente',
                 assigneeName: task.assignee?.name || 'Sin Asignar',
                 assigneeId: task.assigneeId,
@@ -193,6 +194,7 @@ const NativeTasks = () => {
                 creatorName: task.creator?.name || 'Sistema',
                 status: task.status,
                 isReturned: task.isReturned || false,
+                dueDate: task.dueDate,
                 dueDateFormatted: task.dueDate ? task.dueDate.split('T')[0].split('-').reverse().join('-') : null,
                 completedAt: task.completedAt,
                 comments: task.comments,
@@ -204,7 +206,8 @@ const NativeTasks = () => {
                 contentItemId: task.contentItem?.id,
                 aiCategory: task.aiCategory,
                 aiComplexity: task.aiComplexity,
-                plan: task.plan
+                plan: task.plan,
+                taskComments: task.taskComments || []
             }));
         },
         enabled: !!localStorage.getItem('authToken'),
@@ -585,19 +588,10 @@ const NativeTasks = () => {
                 </div>
             </PageHeader>
 
-            <TaskCreateModal
-                isOpen={isCreating}
-                onClose={() => setIsCreating(false)}
-                onSuccess={() => {
-                    queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
-                    queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
-                }}
-                clientsList={clientsList}
-            />
-
-            <TaskEditModal
-                isOpen={!!editingTask}
+            <TaskSidePanel
+                isOpen={isCreating || !!editingTask}
                 onClose={() => {
+                    setIsCreating(false);
                     setEditingTask(null);
                     const params = new URLSearchParams(location.search);
                     if (params.has('taskId')) {

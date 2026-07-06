@@ -24,6 +24,7 @@ model User {
   notifications       Notification[]
   createdTasks        Task[]               @relation("CreatedTasks")
   notes               UserNote[]
+  taskComments        TaskComment[]
 }
 
 model UserNote {
@@ -255,6 +256,19 @@ model Task {
   client        Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
   contentItem   ContentItem? @relation(fields: [contentItemId], references: [id])
   creator       User?        @relation("CreatedTasks", fields: [creatorId], references: [id])
+  taskComments  TaskComment[]
+}
+
+model TaskComment {
+  id        String   @id @default(uuid())
+  taskId    String
+  authorId  String?
+  content   String
+  type      String   @default("human") // human, system_return, system_reintegrate
+  createdAt DateTime @default(now())
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
 }
 
 model BrandAsset {

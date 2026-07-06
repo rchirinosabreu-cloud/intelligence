@@ -250,15 +250,15 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
   const { assigneeId, dueDate, isPriority, isSpecial } = executionData;
 
   // Create Task
-  // We include a clean comment for the creator to see deep links if needed
-  const commentText = `Pieza generada desde Parrilla. Referencia: ${item.mediaUrl || 'N/A'}`;
+  // Clean description for production pieces
+  const staticDescription = "Pieza generada desde Parrilla.";
 
   const task = await createTask({
     title: `[Producción] ${item.format}: ${item.objective}`,
     dueDate: dueDate ? new Date(dueDate) : item.publishDate,
     assigneeId: assigneeId || null,
     creatorId,
-    comments: commentText,
+    comments: staticDescription,
     status: 'PENDIENTE',
     clientId: item.plan.clientId,
     referenceUrl: Array.isArray(item.mediaUrl) ? item.mediaUrl[0] : item.mediaUrl,

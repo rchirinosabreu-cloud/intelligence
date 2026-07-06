@@ -153,6 +153,10 @@ export const getTasks = async (clientId) => {
                 },
                 assignee: true,
                 creator: true,
+                taskComments: {
+                    include: { author: true },
+                    orderBy: { createdAt: 'desc' }
+                },
                 contentItem: {
                     include: {
                         plan: {
@@ -232,6 +236,10 @@ export const createTask = async ({
                 },
                 assignee: true,
                 creator: true,
+                taskComments: {
+                    include: { author: true },
+                    orderBy: { createdAt: 'desc' }
+                },
                 contentItem: {
                     include: {
                         plan: {
@@ -383,6 +391,20 @@ export const updateTask = async (id, data, updaterId = null) => {
                 updateData.returnCount = (currentTask.returnCount || 0) + 1;
                 updateData.isReturned = true;
                 updateData.returnedAt = new Date();
+
+                // Create System Comment for Return
+                if (updateData.comments) {
+                    await prisma.taskComment.create({
+                        data: {
+                            taskId: id,
+                            authorId: updaterId,
+                            content: updateData.comments,
+                            type: 'system_return'
+                        }
+                    });
+                    // Clean up comments from main task table to keep it tidy
+                    updateData.comments = "";
+                }
             }
 
             // Radar de Mérito: Initial startedAt logic
@@ -404,18 +426,16 @@ export const updateTask = async (id, data, updaterId = null) => {
                 updateData.returnedAt = null;
             }
 
-            // Fix Reintegration: Add [REINTEGRADA] tag
+            // Fix Reintegration: Create system_reintegrate comment
             if (isCorrected) {
-                const now = new Intl.DateTimeFormat('es-CO', {
-                    timeZone: 'America/Bogota',
-                    year: 'numeric', month: '2-digit', day: '2-digit',
-                    hour: '2-digit', minute: '2-digit'
-                }).format(new Date());
-                const reintegratedTag = `[REINTEGRADA - ${now}]`;
-
-                // Add tag to comments if not already present after last DEVOLUCIÓN
-                const currentComments = updateData.comments || currentTask.comments || '';
-                updateData.comments = `${reintegratedTag}\n${currentComments}`.trim();
+                await prisma.taskComment.create({
+                    data: {
+                        taskId: id,
+                        authorId: updaterId,
+                        content: "Tarea reintegrada al flujo operativo.",
+                        type: 'system_reintegrate'
+                    }
+                });
             }
 
             if (newStatus === 'REALIZADA') {
@@ -526,6 +546,10 @@ export const updateTask = async (id, data, updaterId = null) => {
                 },
                 assignee: true,
                 creator: true,
+                taskComments: {
+                    include: { author: true },
+                    orderBy: { createdAt: 'desc' }
+                },
                 contentItem: {
                     include: {
                         plan: {
