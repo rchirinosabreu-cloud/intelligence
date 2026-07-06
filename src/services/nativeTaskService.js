@@ -152,7 +152,9 @@ export const getTasks = async (clientId) => {
                     select: { name: true, logoUrl: true, slug: true }
                 },
                 assignee: true,
-                creator: true,
+                creator: {
+                    select: { id: true, name: true, avatarUrl: true, email: true, role: true }
+                },
                 taskComments: {
                     include: { author: true },
                     orderBy: { createdAt: 'desc' }
@@ -235,7 +237,9 @@ export const createTask = async ({
                     select: { name: true, logoUrl: true, slug: true }
                 },
                 assignee: true,
-                creator: true,
+                creator: {
+                    select: { id: true, name: true, avatarUrl: true, email: true, role: true }
+                },
                 taskComments: {
                     include: { author: true },
                     orderBy: { createdAt: 'desc' }
@@ -318,7 +322,9 @@ export const getCompletedTasks = async (dateString) => {
                     select: { name: true, logoUrl: true }
                 },
                 assignee: true,
-                creator: true
+                creator: {
+                    select: { id: true, name: true, avatarUrl: true, email: true, role: true }
+                }
             },
             orderBy: {
                 completedAt: 'desc'
@@ -547,7 +553,9 @@ export const updateTask = async (id, data, updaterId = null) => {
                     select: { name: true, logoUrl: true, slug: true }
                 },
                 assignee: true,
-                creator: true,
+                creator: {
+                    select: { id: true, name: true, avatarUrl: true, email: true, role: true }
+                },
                 taskComments: {
                     include: { author: true },
                     orderBy: { createdAt: 'desc' }

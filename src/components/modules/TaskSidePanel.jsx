@@ -90,8 +90,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     originalStatus: taskData.status,
                     dueDate: formattedDate,
                     comments: taskData.comments || '',
-                    creatorName: taskData.creatorName || 'Sistema',
-                    creatorAvatar: taskData.assigneeAvatar,
+                    creatorName: taskData.creator?.name || taskData.creatorName || 'Sistema',
                     isPriority: taskData.isPriority || false,
                     isSpecial: taskData.isSpecial || false,
                     specialType: taskData.specialType || '',
@@ -366,10 +365,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         <div className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900 px-2 py-1 rounded-full border border-zinc-200 dark:border-zinc-800 shadow-inner">
                              <UserAvatarPopover user={formData.creator}>
                                 <TeamAvatar
-                                    member={{
-                                        name: formData.creator?.name,
-                                        avatarUrl: formData.creator?.avatarUrl || formData.creator?.photo
-                                    }}
+                                    member={formData.creator}
                                     size={18}
                                     className="ring-1 ring-white dark:ring-zinc-800"
                                 />
