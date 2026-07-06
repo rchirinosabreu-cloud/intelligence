@@ -427,12 +427,12 @@ export const updateTask = async (id, data, updaterId = null) => {
             }
 
             // Fix Reintegration: Create system_reintegrate comment
-            if (isCorrected) {
+            if (isCorrected && updateData.comments) {
                 await prisma.taskComment.create({
                     data: {
                         taskId: id,
                         authorId: updaterId,
-                        content: updateData.comments || "Tarea reintegrada al flujo operativo.",
+                        content: updateData.comments,
                         type: 'system_reintegrate'
                     }
                 });

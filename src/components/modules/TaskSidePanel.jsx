@@ -3,7 +3,7 @@ import {
     Loader2, Zap, Star, Link as LinkIcon, ExternalLink,
     X, Send, MessageSquare, RotateCcw, CheckCircle2,
     LayoutGrid, Calendar, User, Trash2, Plus, ClipboardList,
-    FileText, Database
+    FileText, Database, Paperclip, ImageIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -16,6 +16,7 @@ import SlideOver from '@/components/ui/SlideOver';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 import LinkDropdown from '@/components/ui/LinkDropdown';
+import { linkify, cleanSystemMessage } from '@/utils/chatUtils.jsx';
 
 const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = null, defaultClientId = null }) => {
     const { toast } = useToast();
@@ -40,6 +41,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
     const [newComment, setNewComment] = useState("");
     const [isSendingComment, setIsSendingComment] = useState(false);
+    const [selectedFile, setSelectedFile] = useState(null);
     const [showReintegratePrompt, setShowReintegratePrompt] = useState(false);
     const [reintegrateReason, setReintegrateReason] = useState("");
 
@@ -195,27 +197,20 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
 
-            // 1. Update status
+            // 1. Update status with justification in comments field for backend processing
             const statusRes = await fetch(`${baseUrl}/api/tasks/${formData.id}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': token ? `Bearer ${token}` : ''
                 },
-                body: JSON.stringify({ status: 'PENDIENTE' })
+                body: JSON.stringify({
+                    status: 'PENDIENTE',
+                    comments: reintegrateReason // Backend will pick this up for the system_reintegrate comment
+                })
             });
 
             if (!statusRes.ok) throw new Error("Failed to update status");
-
-            // 2. Add system_reintegrate comment
-            await fetch(`${baseUrl}/api/tasks/${formData.id}/comments`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': token ? `Bearer ${token}` : ''
-                },
-                body: JSON.stringify({ content: reintegrateReason, type: 'system_reintegrate' })
-            });
 
             toast({ title: 'Tarea reintegrada', description: 'El estado se cambió a PENDIENTE.' });
             onSuccess();
@@ -229,19 +224,26 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     };
 
     const handleAddComment = async () => {
-        if (!newComment.trim() || isSendingComment || !isEdition) return;
+        if ((!newComment.trim() && !selectedFile) || isSendingComment || !isEdition) return;
 
         setIsSendingComment(true);
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
+
+            const commentFormData = new FormData();
+            commentFormData.append('content', newComment);
+            commentFormData.append('type', 'human');
+            if (selectedFile) {
+                commentFormData.append('file', selectedFile);
+            }
+
             const res = await fetch(`${baseUrl}/api/tasks/${formData.id}/comments`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': token ? `Bearer ${token}` : ''
                 },
-                body: JSON.stringify({ content: newComment, type: 'human' })
+                body: commentFormData
             });
 
             if (res.ok) {
@@ -251,6 +253,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     taskComments: [comment, ...(prev.taskComments || [])]
                 }));
                 setNewComment("");
+                setSelectedFile(null);
             }
         } catch (err) {
             toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el comentario." });
@@ -264,6 +267,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
         if (isSystem) {
             const isReturn = comment.type === 'system_return';
+            const cleanContent = cleanSystemMessage(comment.content);
+
             return (
                 <div key={comment.id} className={cn(
                     "p-3 rounded-xl mb-3 border flex gap-3 items-start",
@@ -284,7 +289,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             <span className="text-[9px] text-zinc-400">{new Date(comment.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short'})}</span>
                         </div>
                         <p className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed italic">
-                            "{comment.content}"
+                            "{linkify(cleanContent)}"
                         </p>
                     </div>
                 </div>
@@ -305,7 +310,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     </div>
                     <div className="bg-zinc-100 dark:bg-zinc-900 p-2.5 rounded-xl rounded-tl-none inline-block max-w-full shadow-sm">
                         <p className="text-[11px] text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                            {comment.content}
+                            {linkify(comment.content)}
                         </p>
                     </div>
                 </div>
@@ -357,7 +362,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         <div className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900 px-2 py-1 rounded-full border border-zinc-200 dark:border-zinc-800 shadow-inner">
                              <UserAvatarPopover user={formData.creator}>
                                 <TeamAvatar
-                                    member={{ name: formData.creator?.name, avatarUrl: formData.creator?.avatarUrl }}
+                                    member={{
+                                        name: formData.creator?.name,
+                                        avatarUrl: formData.creator?.avatarUrl || formData.creator?.photo
+                                    }}
                                     size={18}
                                     className="ring-1 ring-white dark:ring-zinc-800"
                                 />
@@ -604,30 +612,64 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     <div className="flex flex-col gap-4">
                         {/* Chat Input Field (Edition Only) */}
                         {isEdition && (
-                            <div className="relative group">
-                                <textarea
-                                    ref={commentInputRef}
-                                    value={newComment}
-                                    onChange={e => setNewComment(e.target.value)}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter' && !e.shiftKey) {
-                                            e.preventDefault();
-                                            handleAddComment();
-                                        }
-                                    }}
-                                    placeholder="Escribe un mensaje al equipo..."
-                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary/30 rounded-xl px-4 py-3 pr-12 text-[11px] font-medium outline-none transition-all resize-none h-[48px] no-scrollbar shadow-inner"
-                                />
-                                <button
-                                    onClick={handleAddComment}
-                                    disabled={!newComment.trim() || isSendingComment}
-                                    className={cn(
-                                        "absolute right-1.5 top-1.5 p-2 rounded-lg transition-all",
-                                        newComment.trim() ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
-                                    )}
-                                >
-                                    {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                                </button>
+                            <div className="flex flex-col gap-2">
+                                {selectedFile && (
+                                    <div className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/10 rounded-lg animate-in fade-in slide-in-from-bottom-1">
+                                        <div className="w-8 h-8 bg-primary/10 rounded flex items-center justify-center text-primary">
+                                            <ImageIcon size={14} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[10px] font-bold text-primary truncate">{selectedFile.name}</p>
+                                            <p className="text-[8px] text-primary/60">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                                        </div>
+                                        <button
+                                            onClick={() => setSelectedFile(null)}
+                                            className="p-1 hover:bg-primary/10 rounded text-primary"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                )}
+                                <div className="relative group">
+                                    <textarea
+                                        ref={commentInputRef}
+                                        value={newComment}
+                                        onChange={e => setNewComment(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleAddComment();
+                                            }
+                                        }}
+                                        placeholder="Escribe un mensaje al equipo..."
+                                        className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary/30 rounded-xl px-12 py-3 pr-12 text-[11px] font-medium outline-none transition-all resize-none h-[48px] no-scrollbar shadow-inner"
+                                    />
+                                    <div className="absolute left-1.5 top-1.5">
+                                        <input
+                                            type="file"
+                                            id="task-file-upload"
+                                            className="hidden"
+                                            accept="image/*"
+                                            onChange={(e) => setSelectedFile(e.target.files[0])}
+                                        />
+                                        <label
+                                            htmlFor="task-file-upload"
+                                            className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-primary transition-all cursor-pointer block"
+                                        >
+                                            <Paperclip size={16} />
+                                        </label>
+                                    </div>
+                                    <button
+                                        onClick={handleAddComment}
+                                        disabled={(!newComment.trim() && !selectedFile) || isSendingComment}
+                                        className={cn(
+                                            "absolute right-1.5 top-1.5 p-2 rounded-lg transition-all",
+                                            (newComment.trim() || selectedFile) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
+                                        )}
+                                    >
+                                        {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                                    </button>
+                                </div>
                             </div>
                         )}
 

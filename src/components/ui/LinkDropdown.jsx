@@ -7,7 +7,14 @@ const LinkDropdown = ({ label, links = [], icon: Icon = LinkIcon }) => {
     const [isOpen, setIsOpen] = useState(false);
 
     // Normalize links to array and sanitize
-    const linkArray = Array.isArray(links) ? links.filter(Boolean) : [links].filter(Boolean);
+    let linkArray = [];
+    if (Array.isArray(links)) {
+        linkArray = links.filter(Boolean);
+    } else if (typeof links === 'string' && links.trim()) {
+        // Split by common separators (comma, newline, space)
+        linkArray = links.split(/[\s,\n]+/).filter(Boolean);
+    }
+
     const hasMultiple = linkArray.length > 1;
     const hasAny = linkArray.length > 0;
 
