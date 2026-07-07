@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, PutBucketCorsCommand } from "@aws-sdk/client-s3";
 
 /**
  * S3-Compatible Storage Service (Railway / T3)
@@ -25,6 +25,42 @@ const getS3Client = () => {
         forcePathStyle: true, // Required for many S3-compatible providers
     });
 };
+
+/**
+ * Programmatically configures CORS for the S3 bucket.
+ */
+export const configureS3Cors = async () => {
+    const s3Client = getS3Client();
+    const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
+    if (!s3Client) return;
+
+    try {
+        console.log(`[S3 Storage] Configuring CORS for bucket: ${bucketName}`);
+        const command = new PutBucketCorsCommand({
+            Bucket: bucketName,
+            CORSConfiguration: {
+                CORSRules: [
+                    {
+                        AllowedHeaders: ["*"],
+                        AllowedMethods: ["GET", "HEAD", "OPTIONS"],
+                        AllowedOrigins: ["https://labs.brainstudioagencia.com", "http://localhost:3000", "http://localhost:5173"],
+                        ExposeHeaders: ["Content-Length", "Content-Type"],
+                        MaxAgeSeconds: 3600
+                    }
+                ]
+            }
+        });
+        await s3Client.send(command);
+        console.log(`[S3 Storage] CORS configuration applied successfully.`);
+    } catch (error) {
+        console.error(`[S3 Storage] CORS configuration failed:`, error.message);
+    }
+};
+
+// Initialize CORS configuration if credentials exist
+if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+    configureS3Cors().catch(err => console.error("[S3 Storage] Auto-CORS initialization failed:", err.message));
+}
 
 /**
  * Uploads a file to the S3-compatible bucket.

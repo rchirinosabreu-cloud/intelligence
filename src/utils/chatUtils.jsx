@@ -9,14 +9,15 @@ export const linkify = (text, onImageClick = null) => {
 
     // Regex for URLs
     const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
-    // Regex for common image extensions
+    // Regex for common image extensions OR our S3 bucket domain
     const imageRegex = /\.(jpeg|jpg|gif|png|webp)($|\?)/i;
+    const isS3Bucket = (url) => url.includes('t3.storageapi.dev');
 
     const parts = text.split(urlRegex);
 
     return parts.map((part, index) => {
         if (part.match(urlRegex)) {
-            const isImage = part.match(imageRegex);
+            const isImage = part.match(imageRegex) || isS3Bucket(part);
             const href = part.startsWith('www.') ? `https://${part}` : part;
 
             if (isImage) {
