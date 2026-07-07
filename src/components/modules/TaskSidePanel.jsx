@@ -52,49 +52,20 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const scrollRef = useRef(null);
     const chatContainerRef = useRef(null);
 
-    const handleDownloadImage = async (url) => {
+    const handleDownloadImage = (url) => {
         if (!url) return;
-        const toastId = toast.loading("Iniciando descarga...");
-        try {
-            // Force fetch with mode: 'cors' and allow credentials if needed
-            // This requires the S3 bucket to have correct CORS headers (GET, HEAD, OPTIONS)
-            const response = await fetch(url, {
-                method: 'GET',
-                mode: 'cors',
-                cache: 'no-cache'
-            });
 
-            if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
+        // Since we are using a Backend Proxy with Content-Disposition: attachment,
+        // we can simply use window.location.assign or a simple <a> click.
+        // This is safer and avoids CORS/Blob complexities in the frontend.
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', '');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
 
-            const blob = await response.blob();
-            const blobUrl = window.URL.createObjectURL(blob);
-
-            // Extract filename from URL or use default
-            const urlPath = url.split('?')[0];
-            const fileName = urlPath.split('/').pop() || 'archivo_adjunto';
-
-            const link = document.createElement('a');
-            link.style.display = 'none';
-            link.href = blobUrl;
-            link.setAttribute('download', fileName);
-
-            document.body.appendChild(link);
-            link.click();
-
-            // Clean up
-            setTimeout(() => {
-                document.body.removeChild(link);
-                window.URL.revokeObjectURL(blobUrl);
-            }, 100);
-
-            toast.success("Descarga completada", { id: toastId });
-        } catch (error) {
-            console.error("Error downloading file:", error);
-            toast.error("No se pudo descargar el archivo. Intenta abrirlo en una nueva pestaña.", { id: toastId });
-
-            // Fallback: Open in new tab if programmatic download fails
-            window.open(url, '_blank', 'noopener,noreferrer');
-        }
+        toast({ title: "Descarga iniciada", description: "El archivo se descargará en breve." });
     };
 
     // Fetch team members
@@ -321,6 +292,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 }));
                 setNewComment("");
                 setSelectedFile(null);
+                toast({ title: "Comentario enviado" });
             }
         } catch (err) {
             toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el comentario." });
@@ -329,8 +301,25 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
     };
 
+    const handleImagePreview = (imgData) => {
+        // imgData is { direct, proxy, commentId }
+        if (imgData.proxy && imgData.commentId) {
+            setPreviewImage({
+                displayUrl: imgData.proxy,
+                downloadUrl: `${getApiBaseUrl()}/api/tasks/${formData.id}/comments/${imgData.commentId}/download`
+            });
+        } else {
+            // Fallback for non-proxy images (legacy or external)
+            setPreviewImage({
+                displayUrl: imgData.direct || imgData,
+                downloadUrl: imgData.direct || imgData
+            });
+        }
+    };
+
     const renderComment = (comment) => {
         const isSystem = comment.type === 'system_return' || comment.type === 'system_reintegrate';
+        const contextData = { taskId: formData.id, commentId: comment.id };
 
         if (isSystem) {
             const isReturn = comment.type === 'system_return';
@@ -356,7 +345,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             <span className="text-[9px] text-zinc-400">{new Date(comment.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short'})}</span>
                         </div>
                         <div className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed italic">
-                            "{linkify(cleanContent, setPreviewImage)}"
+                            "{linkify(cleanContent, handleImagePreview, contextData)}"
                         </div>
                     </div>
                 </div>
@@ -377,7 +366,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     </div>
                     <div className="bg-zinc-100 dark:bg-zinc-900 p-2.5 rounded-xl rounded-tl-none inline-block max-w-full shadow-sm">
                         <div className="text-[11px] text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                            {linkify(comment.content, setPreviewImage)}
+                            {linkify(comment.content, handleImagePreview, contextData)}
                         </div>
                     </div>
                 </div>
@@ -819,7 +808,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => handleDownloadImage(previewImage)}
+                                    onClick={() => handleDownloadImage(previewImage?.downloadUrl)}
                                     className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 rounded-xl text-white text-xs font-bold transition-all shadow-lg"
                                 >
                                     <Download className="w-3.5 h-3.5" />
@@ -837,7 +826,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                         <div className="flex-1 bg-white/5 dark:bg-zinc-900/50 rounded-2xl border border-white/5 overflow-hidden shadow-2xl relative flex items-center justify-center">
                             <img
-                                src={previewImage}
+                                src={previewImage?.displayUrl}
                                 alt="Preview"
                                 className="max-w-full max-h-full object-contain rounded-xl shadow-xl"
                             />

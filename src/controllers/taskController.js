@@ -1,7 +1,7 @@
 import prisma from '../lib/prisma.js';
 import { getDashboardMetrics, getQualityStreak, getCompletedTasks, getTasks, createTask, updateTask, auditAndDeleteTask } from '../services/nativeTaskService.js';
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from '../services/clientTaskService.js';
-import { uploadToS3 } from '../services/s3Service.js';
+import { uploadToS3, getFromS3Stream } from '../services/s3Service.js';
 import { createNotification } from '../services/notificationService.js';
 
 export const getMetrics = async (req, res) => {
@@ -102,6 +102,69 @@ export const deleteExistingTask = async (req, res) => {
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: "Failed to delete task", details: error.message });
+    }
+};
+
+export const getCommentFileProxy = async (req, res) => {
+    try {
+        const { taskId, commentId } = req.params;
+        const comment = await prisma.taskComment.findUnique({
+            where: { id: commentId },
+            select: { content: true, taskId: true }
+        });
+
+        if (!comment || comment.taskId !== taskId) {
+            return res.status(404).json({ error: "Comment not found or doesn't belong to this task" });
+        }
+
+        // Extract key from URL in content
+        // URL format: {endpoint}/{bucket}/{key}
+        const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
+        const regex = new RegExp(`${bucketName}/(.+)$`);
+        const match = comment.content.match(regex);
+
+        if (!match) return res.status(404).json({ error: "No storage key found in comment" });
+        const key = match[1];
+
+        const s3Response = await getFromS3Stream(key);
+
+        res.setHeader('Content-Type', s3Response.ContentType || 'image/jpeg');
+        res.setHeader('Content-Disposition', 'inline');
+        s3Response.Body.pipe(res);
+    } catch (error) {
+        console.error("Proxy error:", error);
+        res.status(500).json({ error: "Failed to proxy file", details: error.message });
+    }
+};
+
+export const getCommentFileDownloadProxy = async (req, res) => {
+    try {
+        const { taskId, commentId } = req.params;
+        const comment = await prisma.taskComment.findUnique({
+            where: { id: commentId },
+            select: { content: true, taskId: true }
+        });
+
+        if (!comment || comment.taskId !== taskId) {
+            return res.status(404).json({ error: "Comment not found or doesn't belong to this task" });
+        }
+
+        const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
+        const regex = new RegExp(`${bucketName}/(.+)$`);
+        const match = comment.content.match(regex);
+
+        if (!match) return res.status(404).json({ error: "No storage key found in comment" });
+        const key = match[1];
+        const fileName = key.split('/').pop() || 'adjunto_tarea.jpg';
+
+        const s3Response = await getFromS3Stream(key);
+
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        s3Response.Body.pipe(res);
+    } catch (error) {
+        console.error("Download proxy error:", error);
+        res.status(500).json({ error: "Failed to download file", details: error.message });
     }
 };
 
