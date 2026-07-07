@@ -21,6 +21,7 @@
     "seed": "node scripts/seed_catalog.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1080.0",
     "@floating-ui/react": "^0.27.19",
     "@google-cloud/discoveryengine": "^2.5.2",
     "@google-cloud/storage": "^7.19.0",

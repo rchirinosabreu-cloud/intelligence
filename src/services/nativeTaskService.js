@@ -97,10 +97,7 @@ export const getQualityStreak = async () => {
     try {
         const lastReturnedTask = await prisma.task.findFirst({
             where: {
-                OR: [
-                    { status: 'DEVUELTA' },
-                    { isReturned: true }
-                ]
+                status: 'DEVUELTA'
             },
             orderBy: { updatedAt: 'desc' },
             select: { updatedAt: true }
@@ -108,10 +105,7 @@ export const getQualityStreak = async () => {
 
         const currentReturnedTasksCount = await prisma.task.count({
             where: {
-                OR: [
-                    { status: 'DEVUELTA' },
-                    { isReturned: true }
-                ]
+                status: 'DEVUELTA'
             }
         });
 

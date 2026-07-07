@@ -130,13 +130,12 @@ const CATEGORY_COLORS = {
     'Educación': '#f59e0b'
 };
 
-const getColumnId = (status, isReturned = false, comments = '') => {
+const getColumnId = (status) => {
     if (!status) return 'pendiente';
     const s = String(status).toUpperCase();
     if (s === 'REALIZADA' || s === 'REALIZADO') return 'realizado';
     if (s === 'EN_CURSO' || s === 'EN PROCESO') return 'en-proceso';
-    const hasReturnTag = (comments || '').includes('[DEVOLUCIÓN') && !(comments || '').includes('[REINTEGRADA');
-    if (s === 'DEVUELTA' || isReturned || (s === 'PENDIENTE' && hasReturnTag)) return 'devuelto';
+    if (s === 'DEVUELTA') return 'devuelto';
     return 'pendiente';
 };
 
@@ -243,7 +242,7 @@ const NativeTasks = () => {
             const taskToOpen = tasks.find(t => String(t.id) === taskId);
             if (taskToOpen) {
                 setEditingTask(taskToOpen);
-                if (getColumnId(taskToOpen.status, taskToOpen.isReturned, taskToOpen.comments) === 'devuelto') {
+                if (getColumnId(taskToOpen.status) === 'devuelto') {
                     setIsReturnedSidebarOpen(true);
                 }
             }
@@ -303,6 +302,7 @@ const NativeTasks = () => {
                 setReturnReason('');
                 queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
                 queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+                queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
             } else {
                 throw new Error("Failed to return task");
             }
@@ -346,6 +346,7 @@ const NativeTasks = () => {
                 setDeleteReason('');
                 queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
                 queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+                queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
             } else {
                 throw new Error("Failed to delete task");
             }
@@ -374,7 +375,7 @@ const NativeTasks = () => {
 
     const filteredTasks = useMemo(() => {
         let filtered = tasks.filter(task => {
-            const columnId = getColumnId(task.status, task.isReturned, task.comments);
+            const columnId = getColumnId(task.status);
             if (columnId === 'realizado') {
                 if (!task.completedAt) return false;
                 const completedDate = new Date(task.completedAt);
@@ -406,7 +407,7 @@ const NativeTasks = () => {
     ];
 
     const returnedTasks = useMemo(() => {
-        return tasks.filter(t => getColumnId(t.status, t.isReturned, t.comments) === 'devuelto');
+        return tasks.filter(t => getColumnId(t.status) === 'devuelto');
     }, [tasks]);
 
     const onDragEnd = async (result) => {
@@ -434,7 +435,7 @@ const NativeTasks = () => {
             movedTask.isReturned = false;
         }
         const visibleTasksInDestColumn = newTasks.filter(task => {
-            if (getColumnId(task.status, task.isReturned, task.comments) !== destinationColumnId) return false;
+            if (getColumnId(task.status) !== destinationColumnId) return false;
             if (responsibleFilter !== 'Todos' && (task.assigneeName || "Desconocido") !== responsibleFilter) return false;
             if (clientFilter !== 'Todos' && (task.clientName || "Desconocido") !== clientFilter) return false;
             if (dateFilter === 'Hoy + Vencidos' && !isTodayOrOverdue(task.dueDateFormatted)) return false;
@@ -478,6 +479,7 @@ const NativeTasks = () => {
             });
             if (!response.ok) throw new Error("Failed to update status in backend");
             queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+            queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
         } catch (err) {
             console.error("Drag and drop failed:", err);
             queryClient.setQueryData(['nativeTasks'], previousTasks);
@@ -605,6 +607,7 @@ const NativeTasks = () => {
                 onSuccess={() => {
                     queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
                     queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+                queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
                 }}
                 clientsList={clientsList}
                 taskData={editingTask}
@@ -750,7 +753,7 @@ const NativeTasks = () => {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1">
                         {columns.map((col) => {
-                            const columnTasks = filteredTasks.filter(t => getColumnId(t.status, t.isReturned, t.comments) === col.id);
+                            const columnTasks = filteredTasks.filter(t => getColumnId(t.status) === col.id);
                             return (
                                 <div key={col.id} className="flex flex-col gap-4">
                                     <div className="flex items-center justify-between px-1 h-8">
@@ -817,7 +820,7 @@ const NativeTasks = () => {
 const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete }) => {
     const navigate = useNavigate();
     const isHighlighted = highlightedTaskId === String(task.id);
-    const columnId = getColumnId(task.status, task.isReturned, task.comments);
+    const columnId = getColumnId(task.status);
     const isDone = columnId === 'realizado';
     const isReturned = columnId === 'devuelto';
     const overdue = !isDone && isOverdue(task.dueDateFormatted);
