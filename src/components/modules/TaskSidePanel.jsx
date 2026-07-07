@@ -52,6 +52,30 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const scrollRef = useRef(null);
     const chatContainerRef = useRef(null);
 
+    const handleDownloadImage = async (url) => {
+        if (!url) return;
+        const toastId = toast.loading("Iniciando descarga...");
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error("Download failed");
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+
+            const fileName = url.split('/').pop().split('?')[0] || 'imagen_tarea.png';
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.setAttribute('download', fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+            toast.success("Imagen descargada", { id: toastId });
+        } catch (error) {
+            console.error("Error downloading image:", error);
+            toast.error("Error al descargar la imagen", { id: toastId });
+        }
+    };
+
     // Fetch team members
     useEffect(() => {
         if (isOpen) {
@@ -64,7 +88,19 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
     // Populate or Reset Form
     useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') setPreviewImage(null);
+        };
+        if (previewImage) {
+            window.addEventListener('keydown', handleEsc);
+        }
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [previewImage]);
+
+    // Populate or Reset Form
+    useEffect(() => {
         if (isOpen) {
+            setPreviewImage(null); // Clear image viewer state when opening a task
             if (isEdition && taskData) {
                 let cId = taskData.clientId || '';
                 if (!cId && taskData.clientName) {
@@ -328,12 +364,17 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         );
     };
 
+    const handleClosePanel = () => {
+        setPreviewImage(null);
+        onClose();
+    };
+
     const headerIcon = isEdition ? <ClipboardList className="text-primary" size={18} /> : <Plus className="text-primary" size={18} />;
 
     return (
         <SlideOver
             open={isOpen}
-            onOpenChange={(open) => !open && onClose()}
+            onOpenChange={(open) => !open && handleClosePanel()}
             title={isEdition ? "Editar Tarea" : "Nueva Tarea"}
             description={isEdition ? `ID: ${formData.id?.split('-')[0]}` : "Crea un nuevo pendiente operativo"}
             icon={headerIcon}
@@ -428,25 +469,23 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                         <form
                             onSubmit={handleSave}
-                            className="p-5 space-y-6"
+                            className="p-5 space-y-4"
                         >
-                                {/* Title Section */}
-                                <div className="space-y-1.5">
-                                    <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2">
-                                        Título de la tarea <span className="text-red-500">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={formData.title}
-                                        onChange={e => setFormData({...formData, title: e.target.value})}
-                                        placeholder="Ej: Revisión de artes..."
-                                        className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-[13px] font-bold focus:ring-2 ring-primary/10 outline-none transition-all shadow-sm"
-                                    />
-                                </div>
-
-                                {/* Context Section */}
-                                <div className="grid grid-cols-2 gap-3">
+                                {/* Fila 1: Title & Client */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+                                            Título de la tarea <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={formData.title}
+                                            onChange={e => setFormData({...formData, title: e.target.value})}
+                                            placeholder="Ej: Revisión de artes..."
+                                            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-[13px] font-bold focus:ring-2 ring-primary/10 outline-none transition-all shadow-sm h-[38px]"
+                                        />
+                                    </div>
                                     <div className="space-y-1.5">
                                         <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Cliente</label>
                                         <select
@@ -460,6 +499,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             {clientsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                         </select>
                                     </div>
+                                </div>
+
+                                {/* Fila 2: Assignee, Deadline & Status */}
+                                <div className="grid grid-cols-3 gap-4">
                                     <div className="space-y-1.5">
                                         <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Responsable</label>
                                         <select
@@ -469,23 +512,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         >
                                             <option value="">Sin asignar</option>
                                             {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                {/* Status & Date */}
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Estado Actual</label>
-                                        <select
-                                            value={formData.status}
-                                            onChange={e => setFormData({...formData, status: e.target.value})}
-                                            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest focus:ring-2 ring-primary/10 outline-none shadow-sm h-[38px]"
-                                        >
-                                            <option value="PENDIENTE">PENDIENTE</option>
-                                            <option value="EN_CURSO">EN PROCESO</option>
-                                            <option value="REALIZADA">REALIZADO</option>
-                                            <option value="DEVUELTA">DEVUELTO</option>
                                         </select>
                                     </div>
                                     <div className="space-y-1.5">
@@ -504,6 +530,19 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 isClearable
                                             />
                                         </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Estado Actual</label>
+                                        <select
+                                            value={formData.status}
+                                            onChange={e => setFormData({...formData, status: e.target.value})}
+                                            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest focus:ring-2 ring-primary/10 outline-none shadow-sm h-[38px]"
+                                        >
+                                            <option value="PENDIENTE">PENDIENTE</option>
+                                            <option value="EN_CURSO">EN PROCESO</option>
+                                            <option value="REALIZADA">REALIZADO</option>
+                                            <option value="DEVUELTA">DEVUELTO</option>
+                                        </select>
                                     </div>
                                 </div>
 
@@ -723,7 +762,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         {/* Save/Cancel Buttons */}
                         <div className="flex gap-3">
                             <button
-                                onClick={onClose}
+                                onClick={handleClosePanel}
                                 className="flex-1 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-zinc-900 transition-all rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-900 border border-transparent"
                             >
                                 Cerrar Panel
@@ -757,16 +796,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
-                                <a
-                                    href={previewImage}
-                                    download
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                <button
+                                    onClick={() => handleDownloadImage(previewImage)}
                                     className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 rounded-xl text-white text-xs font-bold transition-all shadow-lg"
                                 >
                                     <Download className="w-3.5 h-3.5" />
-                                    ABRIR ORIGINAL
-                                </a>
+                                    DESCARGAR ARCHIVO
+                                </button>
                                 <button
                                     onClick={() => setPreviewImage(null)}
                                     className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all border border-white/10"

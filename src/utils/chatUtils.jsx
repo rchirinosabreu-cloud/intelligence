@@ -30,7 +30,7 @@ export const linkify = (text, onImageClick = null) => {
                                     e.stopPropagation();
                                     onImageClick(href);
                                 }}
-                                className="max-w-full rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
+                                className="max-w-[160px] max-h-[120px] object-cover rounded-md border border-zinc-200 dark:border-zinc-800 shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
                                 onError={(e) => {
                                     e.target.onerror = null;
                                     e.target.style.display = 'none';
@@ -46,7 +46,7 @@ export const linkify = (text, onImageClick = null) => {
                                 <img
                                     src={href}
                                     alt="Shared image"
-                                    className="max-w-full rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm hover:opacity-90 transition-opacity"
+                                    className="max-w-[160px] max-h-[120px] object-cover rounded-md border border-zinc-200 dark:border-zinc-800 shadow-sm hover:opacity-90 transition-opacity"
                                     onError={(e) => {
                                         e.target.onerror = null;
                                         e.target.style.display = 'none';
