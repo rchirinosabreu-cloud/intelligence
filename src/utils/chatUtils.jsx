@@ -17,6 +17,8 @@ export const linkify = (text, onImageClick = null, contextData = {}) => {
 
     const parts = text.split(urlRegex);
 
+    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+
     return parts.map((part, index) => {
         if (part.match(urlRegex)) {
             const isImage = part.match(imageRegex) || isS3Bucket(part);
@@ -26,6 +28,7 @@ export const linkify = (text, onImageClick = null, contextData = {}) => {
             let displaySrc = href;
             if (isS3Bucket(part) && contextData.taskId && contextData.commentId) {
                 displaySrc = `${getApiBaseUrl()}/api/tasks/${contextData.taskId}/comments/${contextData.commentId}/file`;
+                if (token) displaySrc += `?token=${token}`;
             }
 
             if (isImage) {
