@@ -64,6 +64,8 @@ router.post('/tasks', taskController.createNewTask);
 router.patch('/tasks/:taskId', taskController.updateExistingTask);
 router.delete('/tasks/:taskId', taskController.deleteExistingTask);
 router.post('/tasks/:taskId/comments', upload.single('file'), taskController.addTaskComment);
+router.get('/tasks/:taskId/comments/:commentId/file', taskController.getCommentFileProxy);
+router.get('/tasks/:taskId/comments/:commentId/download', taskController.getCommentFileDownloadProxy);
 
 // Client Specific (Tasks, Links, Logo)
 router.get('/db/clients/:clientId/tasks', taskController.getClientTasksHandler);

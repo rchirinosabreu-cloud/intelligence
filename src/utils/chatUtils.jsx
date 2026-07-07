@@ -1,10 +1,12 @@
 import React from 'react';
 
+import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+
 /**
  * Utility to convert URLs in text to interactive <a> tags or image previews.
  * Handles http, https, and www prefixes.
  */
-export const linkify = (text, onImageClick = null) => {
+export const linkify = (text, onImageClick = null, contextData = {}) => {
     if (!text) return text;
 
     // Regex for URLs
@@ -18,18 +20,26 @@ export const linkify = (text, onImageClick = null) => {
     return parts.map((part, index) => {
         if (part.match(urlRegex)) {
             const isImage = part.match(imageRegex) || isS3Bucket(part);
-            const href = part.startsWith('www.') ? `https://${part}` : part;
+            let href = part.startsWith('www.') ? `https://${part}` : part;
+
+            // Proxy logic for S3 images if metadata is available
+            let displaySrc = href;
+            if (isS3Bucket(part) && contextData.taskId && contextData.commentId) {
+                displaySrc = `${getApiBaseUrl()}/api/tasks/${contextData.taskId}/comments/${contextData.commentId}/file`;
+            }
 
             if (isImage) {
                 return (
                     <div key={index} className="my-2">
                         {onImageClick ? (
                             <img
-                                src={href}
+                                src={displaySrc}
                                 alt="Shared image"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    onImageClick(href);
+                                    // We pass the direct URL or the proxy?
+                                    // Let's pass an object so the handler can decide.
+                                    onImageClick({ direct: href, proxy: displaySrc, commentId: contextData.commentId });
                                 }}
                                 className="max-w-[160px] max-h-[120px] object-cover rounded-md border border-zinc-200 dark:border-zinc-800 shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
                                 onError={(e) => {
@@ -45,7 +55,7 @@ export const linkify = (text, onImageClick = null) => {
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 <img
-                                    src={href}
+                                    src={displaySrc}
                                     alt="Shared image"
                                     className="max-w-[160px] max-h-[120px] object-cover rounded-md border border-zinc-200 dark:border-zinc-800 shadow-sm hover:opacity-90 transition-opacity"
                                     onError={(e) => {

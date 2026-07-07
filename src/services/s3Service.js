@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, PutBucketCorsCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, PutBucketCorsCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 
 /**
  * S3-Compatible Storage Service (Railway / T3)
@@ -43,7 +43,7 @@ export const configureS3Cors = async () => {
                     {
                         AllowedHeaders: ["*"],
                         AllowedMethods: ["GET", "HEAD", "OPTIONS"],
-                        AllowedOrigins: ["https://labs.brainstudioagencia.com", "http://localhost:3000", "http://localhost:5173"],
+                        AllowedOrigins: ["https://labs.brainstudioagencia.com", "http://localhost:3000", "http://localhost:5173", "https://intelligence.brainstudioagencia.com"],
                         ExposeHeaders: ["Content-Length", "Content-Type"],
                         MaxAgeSeconds: 3600
                     }
@@ -68,6 +68,25 @@ if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
  * @param {string} folder - Virtual folder/prefix.
  * @returns {Promise<Object>} - Uploaded file details.
  */
+/**
+ * Streams an object from S3.
+ * @param {string} key - S3 object key.
+ */
+export const getFromS3Stream = async (key) => {
+    const s3Client = getS3Client();
+    const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
+
+    if (!s3Client) throw new Error("S3 client not initialized");
+
+    const command = new GetObjectCommand({
+        Bucket: bucketName,
+        Key: key,
+    });
+
+    const response = await s3Client.send(command);
+    return response;
+};
+
 export const uploadToS3 = async (file, folder = "chat") => {
     const s3Client = getS3Client();
     const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
