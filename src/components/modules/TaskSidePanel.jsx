@@ -472,7 +472,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             className="p-5 space-y-4"
                         >
                                 {/* Fila 1: Title & Client */}
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 gap-4 items-end">
                                     <div className="space-y-1.5">
                                         <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2">
                                             Título de la tarea <span className="text-red-500">*</span>
@@ -503,7 +503,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                                 {/* Fila 2: Assignee, Deadline & Status */}
                                 <div className="grid grid-cols-3 gap-4">
-                                    <div className="space-y-1.5">
+                                    <div className="col-span-1 space-y-1.5">
                                         <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Responsable</label>
                                         <select
                                             value={formData.assigneeId}
@@ -514,9 +514,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                         </select>
                                     </div>
-                                    <div className="space-y-1.5">
+                                    <div className="col-span-1 space-y-1.5">
                                         <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Deadline</label>
-                                        <div className="relative">
+                                        <div className="relative w-full">
                                             <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none z-10" />
                                             <DatePicker
                                                 selected={formData.dueDate ? new Date(`${formData.dueDate.split('T')[0]}T12:00:00.000Z`) : null}
@@ -526,12 +526,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 }}
                                                 dateFormat="dd/MM/yyyy"
                                                 className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-[11px] font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[38px]"
+                                                wrapperClassName="w-full"
                                                 placeholderText="Elegir fecha..."
                                                 isClearable
                                             />
                                         </div>
                                     </div>
-                                    <div className="space-y-1.5">
+                                    <div className="col-span-1 space-y-1.5">
                                         <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Estado Actual</label>
                                         <select
                                             value={formData.status}
@@ -622,7 +623,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     value={formData.comments}
                                     onChange={e => setFormData({...formData, comments: e.target.value})}
                                     placeholder="Detalles base para el responsable..."
-                                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium focus:ring-2 ring-primary/10 outline-none transition-all resize-none h-20 shadow-sm"
+                                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium focus:ring-2 ring-primary/10 outline-none transition-all resize-none h-28 shadow-sm"
                                 />
                             </div>
                         </form>
