@@ -22,14 +22,14 @@ export const authenticateToken = (req, res, next) => {
 
   // Fallback to query parameter for browser-native requests (<img> tags, downloads, etc)
   if (!token && req.query.token) {
-    token = req.query.token;
+    token = Array.isArray(req.query.token) ? req.query.token[0] : req.query.token;
   }
 
   if (!token) {
     console.warn(`[Auth] No token provided for ${req.method} ${req.originalUrl}`);
     return res.status(401).json({
       error: "Unauthorized",
-      message: "No bearer token provided in Authorization header",
+      message: "Authentication token missing (Authorization header or token query parameter)",
       path: req.originalUrl
     });
   }
