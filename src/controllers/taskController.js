@@ -1,7 +1,7 @@
 import prisma from '../lib/prisma.js';
 import { getDashboardMetrics, getQualityStreak, getCompletedTasks, getTasks, createTask, updateTask, auditAndDeleteTask } from '../services/nativeTaskService.js';
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from '../services/clientTaskService.js';
-import { uploadClientFile, getSignedUrl } from '../services/storageService.js';
+import { uploadToS3 } from '../services/s3Service.js';
 import { createNotification } from '../services/notificationService.js';
 
 export const getMetrics = async (req, res) => {
@@ -123,20 +123,14 @@ export const addTaskComment = async (req, res) => {
 
             if (!task) return res.status(404).json({ error: "Task not found" });
 
-            // Structure path: clientes/{client_id}/tareas/{task_id}/imagenes/{nombre_archivo}
-            // We'll use the client name for the folder structure to stay consistent with storageService
+            // Structure path: clientes/{client_id}/tareas/{task_id}/imagenes
             const folderPrefix = `clientes/${task.clientId}/tareas/${taskId}/imagenes`;
 
-            // Mocking a customized version of uploadClientFile or just using it
-            // Actually, storageService.uploadClientFile uses clientName as prefix.
-            // Let's implement a specific one for tasks if needed, or adapt.
-
-            const uploadResult = await uploadClientFile(req.file, folderPrefix);
-            const signedUrl = await getSignedUrl(uploadResult.gcsPath);
+            const uploadResult = await uploadToS3(req.file, folderPrefix);
+            const publicUrl = uploadResult.url;
 
             // If there's already content, append the image URL. If not, just the URL.
-            // But better: if it's an image, maybe we want a specific type or just the URL in content.
-            finalContent = content ? `${content}\n\n${signedUrl}` : signedUrl;
+            finalContent = content ? `${content}\n\n${publicUrl}` : publicUrl;
         }
 
         const comment = await prisma.taskComment.create({
