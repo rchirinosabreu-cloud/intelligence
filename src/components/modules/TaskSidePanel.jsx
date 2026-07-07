@@ -56,23 +56,44 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         if (!url) return;
         const toastId = toast.loading("Iniciando descarga...");
         try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error("Download failed");
+            // Force fetch with mode: 'cors' and allow credentials if needed
+            // This requires the S3 bucket to have correct CORS headers (GET, HEAD, OPTIONS)
+            const response = await fetch(url, {
+                method: 'GET',
+                mode: 'cors',
+                cache: 'no-cache'
+            });
+
+            if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
+
             const blob = await response.blob();
             const blobUrl = window.URL.createObjectURL(blob);
 
-            const fileName = url.split('/').pop().split('?')[0] || 'imagen_tarea.png';
+            // Extract filename from URL or use default
+            const urlPath = url.split('?')[0];
+            const fileName = urlPath.split('/').pop() || 'archivo_adjunto';
+
             const link = document.createElement('a');
+            link.style.display = 'none';
             link.href = blobUrl;
             link.setAttribute('download', fileName);
+
             document.body.appendChild(link);
             link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(blobUrl);
-            toast.success("Imagen descargada", { id: toastId });
+
+            // Clean up
+            setTimeout(() => {
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(blobUrl);
+            }, 100);
+
+            toast.success("Descarga completada", { id: toastId });
         } catch (error) {
-            console.error("Error downloading image:", error);
-            toast.error("Error al descargar la imagen", { id: toastId });
+            console.error("Error downloading file:", error);
+            toast.error("No se pudo descargar el archivo. Intenta abrirlo en una nueva pestaña.", { id: toastId });
+
+            // Fallback: Open in new tab if programmatic download fails
+            window.open(url, '_blank', 'noopener,noreferrer');
         }
     };
 
