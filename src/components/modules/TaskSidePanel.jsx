@@ -303,10 +303,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
     const handleImagePreview = (imgData) => {
         // imgData is { direct, proxy, commentId }
+        const token = localStorage.getItem('authToken');
         if (imgData.proxy && imgData.commentId) {
+            let downloadUrl = `${getApiBaseUrl()}/api/tasks/${formData.id}/comments/${imgData.commentId}/download`;
+            if (token) downloadUrl += `?token=${token}`;
+
             setPreviewImage({
-                displayUrl: imgData.proxy,
-                downloadUrl: `${getApiBaseUrl()}/api/tasks/${formData.id}/comments/${imgData.commentId}/download`
+                displayUrl: imgData.proxy, // already includes token from linkify
+                downloadUrl: downloadUrl
             });
         } else {
             // Fallback for non-proxy images (legacy or external)

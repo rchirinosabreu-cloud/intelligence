@@ -18,7 +18,12 @@ export const authenticateToken = (req, res, next) => {
   }
 
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  let token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  // Fallback to query parameter for browser-native requests (<img> tags, downloads, etc)
+  if (!token && req.query.token) {
+    token = req.query.token;
+  }
 
   if (!token) {
     console.warn(`[Auth] No token provided for ${req.method} ${req.originalUrl}`);
