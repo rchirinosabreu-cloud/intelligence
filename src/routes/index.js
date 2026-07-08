@@ -26,6 +26,7 @@ import reportsRouter from './api/reports.js';
 import brainCoreRouter from './api/brainCore.js';
 import boardsRouter from './api/boards.js';
 import quotationsRouter from './api/quotations.js';
+import operativeIntelligenceRouter from './api/operativeIntelligence.js';
 import { getUpcomingEvents } from '../services/calendarService.js';
 
 const router = express.Router();
@@ -137,5 +138,6 @@ router.use('/activity', activityRouter);
 router.use('/reports', reportsRouter);
 router.use('/brain-core', brainCoreRouter);
 router.use('/boards', boardsRouter);
+router.use('/operative-intelligence', operativeIntelligenceRouter);
 
 export default router;
