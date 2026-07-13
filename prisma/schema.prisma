@@ -48,6 +48,7 @@ model Notification {
   type       String?
   resourceId String?
   url        String?
+  taskId     String?
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 

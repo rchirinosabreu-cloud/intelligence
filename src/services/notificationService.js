@@ -10,7 +10,8 @@ export const createNotification = async (data) => {
                 type: data.type,
                 relatedId: data.relatedId,
                 resourceId: data.resourceId || data.relatedId,
-                url: data.url || null
+                url: data.url || null,
+                taskId: data.taskId || (data.type?.startsWith('TASK_') ? data.relatedId : null)
             }
         });
         return notification;
