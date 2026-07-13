@@ -41,12 +41,7 @@ const CATEGORY_LABELS = {
 const FinancialDashboard = () => {
     const { currentUser } = useAuth();
 
-    // Route Guard in Frontend
-    if (!currentUser || currentUser.hasFinancialAccess !== true) {
-        console.warn(`[Financial Guard] User not authorized. Redirecting...`);
-        return <Navigate to="/" replace />;
-    }
-
+    // 1. React Hook Declarations (Inconditional - at the absolute top)
     const [selectedYear, setSelectedYear] = useState(2026);
     const [selectedQuarter, setSelectedQuarter] = useState('ALL');
     const [activeTab, setActiveTab] = useState('flow');
@@ -63,7 +58,8 @@ const FinancialDashboard = () => {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             return res.data;
-        }
+        },
+        enabled: !!(currentUser && currentUser.hasFinancialAccess === true) // Dynamic safeguard to prevent 401s
     });
 
     const toggleClientExpand = (clientId) => {
@@ -106,6 +102,12 @@ const FinancialDashboard = () => {
             }))
             .filter(item => item.value > 0);
     }, [data?.categoriesDistribution]);
+
+    // 2. Route Guard Security Check (After ALL Hook Declarations)
+    if (!currentUser || currentUser.hasFinancialAccess !== true) {
+        console.warn(`[Financial Guard] User not authorized. Redirecting...`);
+        return <Navigate to="/" replace />;
+    }
 
     if (isLoading) {
         return <SkeletonLoader />;
@@ -213,7 +215,7 @@ const FinancialDashboard = () => {
                         )}>
                             {kpis.netFlow >= 0 ? "EXCEDENTE" : "DÉFICIT"}
                         </span>
-                        <span className="text-[10px] text-violet-600/80 dark:text-violet-400/80">margen real calculado</span>
+                        <span className="text-[10px] text-violet-600/80 dark:text-violet-400/80">margen real calculated</span>
                     </div>
                 </Card>
 
@@ -230,7 +232,7 @@ const FinancialDashboard = () => {
                     </p>
                     <div className="flex items-center gap-1.5 mt-2">
                         <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
-                            {data.accountsReceivable?.length || 0} deudores
+                            {data?.accountsReceivable?.length || 0} deudores
                         </span>
                         <span className="text-[10px] text-zinc-400">pendiente por cobrar</span>
                     </div>
@@ -283,7 +285,7 @@ const FinancialDashboard = () => {
                             </div>
                             <div className="h-[320px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={data.cashFlow} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
+                                    <LineChart data={data?.cashFlow || []} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
                                         <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.05} />
                                         <XAxis
                                             dataKey="month"
@@ -391,7 +393,7 @@ const FinancialDashboard = () => {
                             </div>
                         </div>
 
-                        {data.accountsReceivable?.length > 0 ? (
+                        {data?.accountsReceivable?.length > 0 ? (
                             <div className="space-y-3">
                                 {data.accountsReceivable.map((client) => {
                                     const isExpanded = !!expandedClients[client.clientId];
@@ -432,7 +434,7 @@ const FinancialDashboard = () => {
                                                 <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-white/5 space-y-3 animate-in fade-in duration-300">
                                                     <p className="text-[10px] font-black uppercase text-zinc-400 tracking-wider mb-2">Desglose de Facturas Mensuales (Antigüedad)</p>
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        {client.debts.map((debt) => (
+                                                        {client.debts?.map((debt) => (
                                                             <div key={debt.id} className="p-3 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5 flex flex-col justify-between">
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <span className="text-[10px] font-bold text-zinc-400">
@@ -485,11 +487,11 @@ const FinancialDashboard = () => {
                                 </p>
                             </div>
                             <div className="px-3 py-1.5 bg-violet-600/10 text-violet-600 rounded-xl text-[10px] font-bold">
-                                Costo Total Nómina: {formatCurrency(data.payroll?.totalPayrollCost || 0)}
+                                Costo Total Nómina: {formatCurrency(data?.payroll?.totalPayrollCost || 0)}
                             </div>
                         </div>
 
-                        {data.payroll?.collaborators?.length > 0 ? (
+                        {data?.payroll?.collaborators?.length > 0 ? (
                             <Card className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left border-collapse">
@@ -499,7 +501,7 @@ const FinancialDashboard = () => {
                                                 <th className="p-4">Contrato (Base)</th>
                                                 <th className="p-4">Seguridad Social</th>
                                                 <th className="p-4">Modificadores/Ajustes</th>
-                                                <th className="p-4 text-right">Total Neto Paid</th>
+                                                <th className="p-4 text-right">Total Neto Pagado</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
