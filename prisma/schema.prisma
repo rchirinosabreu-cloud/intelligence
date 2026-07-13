@@ -18,6 +18,7 @@ model User {
   avatarUrl           String?
   isActive            Boolean              @default(true)
   bio                 String?
+  hasFinancialAccess  Boolean              @default(false)
   authoredFeedback    FeedbackRecord[]     @relation("AuthoredFeedback")
   receivedFeedback    FeedbackRecord[]     @relation("ReceivedFeedback")
   generalChatMessages GeneralChatMessage[]
@@ -506,6 +507,10 @@ model FinancialRecord {
   description String?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+
+  @@index([date])
+  @@index([category])
+  @@index([type])
 }
 
 model PayrollContract {
@@ -572,6 +577,10 @@ model AccountsReceivable {
   notes     String?
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
+
+  @@index([clientId])
+  @@index([period])
+  @@index([status])
 }
 
 model ServiceCatalog {
