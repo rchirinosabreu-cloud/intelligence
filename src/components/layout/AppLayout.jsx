@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
-import { Menu, User, LogOut, Settings, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star } from 'lucide-react';
+import { Menu, User, LogOut, Settings, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Link, useNavigate } from 'react-router-dom';
@@ -254,14 +254,17 @@ const AppLayout = ({ children }) => {
                                 <DropdownMenuItem
                                     key={notif.id}
                                     onClick={() => handleNotificationClick(notif)}
-                                    className="p-4 focus:bg-zinc-50 dark:focus:bg-zinc-800/50 cursor-pointer border-b border-zinc-50 dark:border-zinc-800/30 last:border-0"
+                                    className={cn(
+                                        "p-4 focus:bg-zinc-50 dark:focus:bg-zinc-800/50 cursor-pointer border-b border-zinc-50 dark:border-zinc-800/30 last:border-0 relative group/item",
+                                        notif.isRead && "opacity-50"
+                                    )}
                                 >
-                                    <div className="flex gap-3 items-start w-full">
+                                    <div className="flex gap-3 items-start w-full pr-12">
                                         <div className={cn("p-1.5 rounded-xl shrink-0 mt-0.5", bgColor)}>
                                             <Icon className={cn("w-3.5 h-3.5", iconColor)} />
                                         </div>
                                         <div className="flex-1">
-                                            <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                                            <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium">
                                                 {notif.message}
                                             </p>
                                             <span className="text-[10px] text-zinc-400 mt-1 block">
@@ -270,6 +273,48 @@ const AppLayout = ({ children }) => {
                                         </div>
                                         {!notif.isRead && (
                                             <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-2" />
+                                        )}
+                                    </div>
+
+                                    {/* Inline Actions */}
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                        {notif.taskId && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="w-7 h-7 rounded-full bg-white dark:bg-zinc-800 shadow-sm border border-zinc-100 dark:border-zinc-700"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    e.preventDefault();
+                                                    navigate(`/gestion?taskId=${notif.taskId}`);
+                                                }}
+                                                title="Ver tarea"
+                                            >
+                                                <Eye className="w-3.5 h-3.5 text-zinc-500" />
+                                            </Button>
+                                        )}
+                                        {!notif.isRead && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="w-7 h-7 rounded-full bg-white dark:bg-zinc-800 shadow-sm border border-zinc-100 dark:border-zinc-700"
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    e.preventDefault();
+                                                    try {
+                                                        await fetch(`${getApiBaseUrl()}/api/notifications/${notif.id}/read`, { method: 'PATCH' });
+                                                        queryClient.invalidateQueries({ queryKey: ['unreadNotificationsCount'] });
+                                                        queryClient.setQueryData(['notifications'], (prev) =>
+                                                            prev?.map(n => n.id === notif.id ? { ...n, isRead: true } : n)
+                                                        );
+                                                    } catch (err) {
+                                                        console.error("Error marking as read:", err);
+                                                    }
+                                                }}
+                                                title="Marcar como leída"
+                                            >
+                                                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                            </Button>
                                         )}
                                     </div>
                                 </DropdownMenuItem>
