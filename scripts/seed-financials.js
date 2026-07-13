@@ -464,7 +464,8 @@ async function processNomina(rows, hasDB) {
                         email,
                         password: 'password_hashed_seeded',
                         role: 'EDITOR',
-                        isActive: true
+                        isActive: true,
+                        hasFinancialAccess: email.includes('admin') || email.includes('rodny')
                     }
                 });
                 console.log(`Seeded placeholder user: ${email}`);
@@ -532,7 +533,8 @@ async function processAjustesNomina(rows, hasDB) {
                         email,
                         password: 'password_hashed_seeded',
                         role: 'EDITOR',
-                        isActive: true
+                        isActive: true,
+                        hasFinancialAccess: email.includes('admin') || email.includes('rodny')
                     }
                 });
                 console.log(`Seeded placeholder user for Adjustments: ${email}`);
