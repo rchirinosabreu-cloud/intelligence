@@ -147,14 +147,32 @@ export const getCommentFileProxy = async (req, res) => {
 
         if (!key) return res.status(404).json({ error: "No storage key found in comment" });
 
-        const s3Response = await getFromS3Stream(key);
+        try {
+            const s3Response = await getFromS3Stream(key);
 
-        res.setHeader('Content-Type', s3Response.ContentType || 'image/jpeg');
-        res.setHeader('Content-Disposition', 'inline');
-        s3Response.Body.pipe(res);
+            res.setHeader('Content-Type', s3Response.ContentType || 'image/jpeg');
+            res.setHeader('Content-Disposition', 'inline');
+
+            // Attach error listener to stream to prevent crashes on network issues
+            s3Response.Body.on('error', (err) => {
+                console.error("S3 Stream Error:", err);
+                if (!res.headersSent) {
+                    res.status(500).json({ error: "Stream error" });
+                }
+            });
+
+            s3Response.Body.pipe(res);
+        } catch (s3Error) {
+            if (s3Error.name === 'NoSuchKey') {
+                return res.status(404).json({ error: "Resource not found in storage (NoSuchKey)" });
+            }
+            throw s3Error;
+        }
     } catch (error) {
         console.error("Proxy error:", error);
-        res.status(500).json({ error: "Failed to proxy file", details: error.message });
+        if (!res.headersSent) {
+            res.status(500).json({ error: "Failed to proxy file", details: error.message });
+        }
     }
 };
 
@@ -195,14 +213,31 @@ export const getCommentFileDownloadProxy = async (req, res) => {
         if (!key) return res.status(404).json({ error: "No storage key found in comment" });
         const fileName = key.split('/').pop() || 'adjunto_tarea.jpg';
 
-        const s3Response = await getFromS3Stream(key);
+        try {
+            const s3Response = await getFromS3Stream(key);
 
-        res.setHeader('Content-Type', 'application/octet-stream');
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-        s3Response.Body.pipe(res);
+            res.setHeader('Content-Type', 'application/octet-stream');
+            res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+
+            s3Response.Body.on('error', (err) => {
+                console.error("S3 Download Stream Error:", err);
+                if (!res.headersSent) {
+                    res.status(500).json({ error: "Stream error during download" });
+                }
+            });
+
+            s3Response.Body.pipe(res);
+        } catch (s3Error) {
+            if (s3Error.name === 'NoSuchKey') {
+                return res.status(404).json({ error: "File not found in storage (NoSuchKey)" });
+            }
+            throw s3Error;
+        }
     } catch (error) {
         console.error("Download proxy error:", error);
-        res.status(500).json({ error: "Failed to download file", details: error.message });
+        if (!res.headersSent) {
+            res.status(500).json({ error: "Failed to download file", details: error.message });
+        }
     }
 };
 
