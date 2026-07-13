@@ -93,6 +93,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     useEffect(() => {
         if (isOpen) {
             setPreviewImage(null); // Clear image viewer state when opening a task
+            setSelectedFile(null); // Clear pending attachment
+            setNewComment("");    // Clear pending comment draft
             if (isEdition && taskData) {
                 let cId = taskData.clientId || '';
                 if (!cId && taskData.clientName) {
@@ -270,7 +272,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             const token = localStorage.getItem('authToken');
 
             const commentFormData = new FormData();
-            commentFormData.append('content', newComment);
+            commentFormData.append('content', newComment || "");
             commentFormData.append('type', 'human');
             if (file) {
                 commentFormData.append('file', file);
