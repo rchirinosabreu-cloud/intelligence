@@ -25,6 +25,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { id: 'content-grids', label: 'Parrillas', icon: LayoutGrid, path: '/parrillas' },
     { id: 'minutes', label: 'Minutas', icon: FileText, path: '/minutas' },
     { id: 'quotations', label: 'Cotizaciones', icon: DollarSign, path: '/cotizaciones', roles: ['ADMIN', 'PM'] },
+    { id: 'financials', label: 'Financiero', icon: DollarSign, path: '/financiero', hasFinancialAccess: true },
     { id: 'radar', label: 'Radar de Mérito', icon: Zap, path: '/radar', roles: ['ADMIN', 'PM'] },
     { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes' },
     { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo' },
@@ -33,6 +34,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const filteredMenuItems = menuItems.filter(item => {
     if (item.allowedEmails && !item.allowedEmails.includes(currentUser?.email)) return false;
     if (item.roles && !item.roles.includes(currentUser?.role)) return false;
+    if (item.hasFinancialAccess && currentUser?.hasFinancialAccess !== true) return false;
     return true;
   });
 
