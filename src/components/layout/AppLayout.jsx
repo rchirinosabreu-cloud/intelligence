@@ -13,6 +13,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
 const AppLayout = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const { currentUser, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -96,11 +97,18 @@ const AppLayout = ({ children }) => {
   };
 
   const handleNotificationClick = async (notif) => {
-    try {
-        await fetch(`${getApiBaseUrl()}/api/notifications/${notif.id}/read`, { method: 'PATCH' });
-        window.dispatchEvent(new Event('notifications-read'));
-    } catch (e) {
-        console.error("Error marking notification as read:", e);
+    setIsNotificationsOpen(false);
+
+    if (!notif.isRead) {
+        try {
+            await fetch(`${getApiBaseUrl()}/api/notifications/${notif.id}/read`, { method: 'PATCH' });
+            queryClient.invalidateQueries({ queryKey: ['unreadNotificationsCount'] });
+            queryClient.setQueryData(['notifications'], (prev) =>
+                prev?.map(n => n.id === notif.id ? { ...n, isRead: true } : n)
+            );
+        } catch (e) {
+            console.error("Error marking notification as read:", e);
+        }
     }
 
     if (notif.type === 'GENERAL_CHAT_MENTION') {
@@ -181,10 +189,10 @@ const AppLayout = ({ children }) => {
                 {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </Button>
 
-            <DropdownMenu onOpenChange={async (open) => {
+            <DropdownMenu open={isNotificationsOpen} onOpenChange={async (open) => {
+                setIsNotificationsOpen(open);
                 if (open) {
                     await refetchNotifications();
-                    markAllAsRead();
                 }
             }}>
               <DropdownMenuTrigger asChild>
@@ -256,24 +264,27 @@ const AppLayout = ({ children }) => {
                                     onClick={() => handleNotificationClick(notif)}
                                     className={cn(
                                         "p-4 focus:bg-zinc-50 dark:focus:bg-zinc-800/50 cursor-pointer border-b border-zinc-50 dark:border-zinc-800/30 last:border-0 relative group/item",
-                                        notif.isRead && "opacity-50"
+                                        notif.isRead ? "opacity-60" : "bg-primary/[0.02]"
                                     )}
                                 >
                                     <div className="flex gap-3 items-start w-full pr-12">
+                                        {!notif.isRead && (
+                                            <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-2 animate-pulse" />
+                                        )}
                                         <div className={cn("p-1.5 rounded-xl shrink-0 mt-0.5", bgColor)}>
                                             <Icon className={cn("w-3.5 h-3.5", iconColor)} />
                                         </div>
                                         <div className="flex-1">
-                                            <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium">
+                                            <p className={cn(
+                                                "text-xs leading-relaxed transition-colors",
+                                                notif.isRead ? "text-zinc-500 font-normal" : "text-zinc-900 dark:text-white font-bold"
+                                            )}>
                                                 {notif.message}
                                             </p>
-                                            <span className="text-[10px] text-zinc-400 mt-1 block">
+                                            <span className="text-[10px] text-zinc-400 mt-1 block font-medium">
                                                 {new Date(notif.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                             </span>
                                         </div>
-                                        {!notif.isRead && (
-                                            <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-2" />
-                                        )}
                                     </div>
 
                                     {/* Inline Actions */}
@@ -286,6 +297,7 @@ const AppLayout = ({ children }) => {
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     e.preventDefault();
+                                                    setIsNotificationsOpen(false);
                                                     navigate(`/gestion?taskId=${notif.taskId}`);
                                                 }}
                                                 title="Ver tarea"

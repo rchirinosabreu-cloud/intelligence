@@ -446,18 +446,20 @@ const Profile = () => {
 
                                 <div className="ml-4 h-10 w-px bg-zinc-200 dark:bg-zinc-800 mx-4 hidden md:block" />
 
-                                <select
-                                    value={activeSimulationUserId}
-                                    onChange={(e) => setActiveSimulationUserId(e.target.value)}
-                                    className="appearance-none bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 pr-10 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
-                                >
-                                    {teamMembers.map(member => (
-                                        <option key={member.userId} value={member.userId}>
-                                            {member.name} {member.userId === currentUser.id ? '(Tú)' : ''}
-                                        </option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400" />
+                                <div className="relative">
+                                    <select
+                                        value={activeSimulationUserId}
+                                        onChange={(e) => setActiveSimulationUserId(e.target.value)}
+                                        className="appearance-none bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 pr-10 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
+                                    >
+                                        {teamMembers.map(member => (
+                                            <option key={member.userId} value={member.userId}>
+                                                {member.name} {member.userId === currentUser.id ? '(Tú)' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400" />
+                                </div>
                             </div>
                         </div>
 
