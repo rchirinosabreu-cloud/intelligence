@@ -155,6 +155,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     contentItemId: taskData.contentItemId
                 });
             } else {
+                setIsFollowing(false);
                 setFormData({
                     title: '',
                     clientId: defaultClientId || '',
@@ -207,7 +208,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 status: formData.status,
                 isPriority: formData.isPriority,
                 isSpecial: formData.isSpecial,
-                specialType: formData.isSpecial ? formData.specialType : null
+            specialType: formData.isSpecial ? formData.specialType : null,
+            followOnCreate: !isEdition ? isFollowing : undefined
             };
 
             const token = localStorage.getItem('authToken');
@@ -242,7 +244,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     };
 
     const handleToggleFollow = async () => {
-        if (!isEdition || isTogglingFollow) return;
+        if (isTogglingFollow) return;
+
+        if (!isEdition) {
+            setIsFollowing(!isFollowing);
+            return;
+        }
 
         setIsTogglingFollow(true);
         try {
@@ -442,49 +449,49 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             className="w-[45vw] max-w-3xl"
         >
             <div className="flex flex-col h-full bg-zinc-50/30 dark:bg-transparent">
-                {/* Quick Access Toolbar (Edition Only) */}
-                {isEdition && (
-                    <div className="flex items-center justify-between px-5 py-2.5 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
-                        <div className="flex items-center gap-3">
-                            {(formData.plan || formData.contentPlanId) && (
-                                <button
-                                    onClick={() => {
-                                        if (formData.plan?.id) {
-                                            window.open(`/parrillas/${formData.plan.id}?item=${formData.contentItemId}`, '_blank');
-                                        } else {
-                                            window.open(`/parrillas/${formData.contentPlanId}?item=${formData.contentItemId}`, '_blank');
-                                        }
-                                    }}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all border border-indigo-100 dark:border-indigo-900/30 shadow-sm"
-                                >
-                                    <LayoutGrid size={11} /> Abrir Parrilla
-                                </button>
-                            )}
-
-                            {formData.status === 'DEVUELTA' && !showReintegratePrompt && (
-                                <button
-                                    onClick={() => setShowReintegratePrompt(true)}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-emerald-600 transition-all shadow-md shadow-emerald-500/20"
-                                >
-                                    <RotateCcw size={11} /> Reintegrar Tarea
-                                </button>
-                            )}
-
+                {/* Quick Access Toolbar */}
+                <div className="flex items-center justify-between px-5 py-2.5 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+                    <div className="flex items-center gap-3">
+                        {isEdition && (formData.plan || formData.contentPlanId) && (
                             <button
-                                onClick={handleToggleFollow}
-                                disabled={isTogglingFollow}
-                                className={cn(
-                                    "flex items-center justify-center p-1.5 rounded-lg transition-all border shadow-sm",
-                                    isFollowing
-                                        ? "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400"
-                                        : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:bg-zinc-50"
-                                )}
-                                title={isFollowing ? "Dejar de seguir" : "Seguir tarea"}
+                                onClick={() => {
+                                    if (formData.plan?.id) {
+                                        window.open(`/parrillas/${formData.plan.id}?item=${formData.contentItemId}`, '_blank');
+                                    } else {
+                                        window.open(`/parrillas/${formData.contentPlanId}?item=${formData.contentItemId}`, '_blank');
+                                    }
+                                }}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all border border-indigo-100 dark:border-indigo-900/30 shadow-sm"
                             >
-                                <Bell size={14} className={cn(isFollowing && "fill-current animate-in zoom-in-50")} />
+                                <LayoutGrid size={11} /> Abrir Parrilla
                             </button>
-                        </div>
+                        )}
 
+                        {isEdition && formData.status === 'DEVUELTA' && !showReintegratePrompt && (
+                            <button
+                                onClick={() => setShowReintegratePrompt(true)}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-emerald-600 transition-all shadow-md shadow-emerald-500/20"
+                            >
+                                <RotateCcw size={11} /> Reintegrar Tarea
+                            </button>
+                        )}
+
+                        <button
+                            onClick={handleToggleFollow}
+                            disabled={isTogglingFollow}
+                            className={cn(
+                                "flex items-center justify-center p-1.5 rounded-lg transition-all border shadow-sm",
+                                isFollowing
+                                    ? "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400"
+                                    : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:bg-zinc-50"
+                            )}
+                            title={isFollowing ? "Dejar de seguir" : "Seguir tarea"}
+                        >
+                            <Bell size={14} className={cn(isFollowing && "fill-current animate-in zoom-in-50")} />
+                        </button>
+                    </div>
+
+                    {isEdition && (
                         <div className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900 px-2 py-1 rounded-full border border-zinc-200 dark:border-zinc-800 shadow-inner">
                              <UserAvatarPopover user={formData.creator}>
                                 <TeamAvatar
@@ -496,8 +503,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                              <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-tighter">De:</span>
                              <span className="text-[9px] text-zinc-900 dark:text-zinc-100 font-black uppercase tracking-tighter truncate max-w-[100px]">{formData.creator?.name || formData.creatorName}</span>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
 
                 {/* Main Content Area */}
                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
