@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma.js';
-import { getDashboardMetrics, getQualityStreak, getCompletedTasks, getTasks, createTask, updateTask, auditAndDeleteTask } from '../services/nativeTaskService.js';
+import { getDashboardMetrics, getQualityStreak, getCompletedTasks, getTasks, createTask, updateTask, auditAndDeleteTask, toggleTaskFollow, checkIsFollowing } from '../services/nativeTaskService.js';
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from '../services/clientTaskService.js';
 import { uploadToS3, getFromS3Stream } from '../services/s3Service.js';
 import { createNotification } from '../services/notificationService.js';
@@ -102,6 +102,24 @@ export const deleteExistingTask = async (req, res) => {
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: "Failed to delete task", details: error.message });
+    }
+};
+
+export const toggleFollow = async (req, res) => {
+    try {
+        const isFollowing = await toggleTaskFollow(req.params.taskId, req.user.userId);
+        res.json({ isFollowing });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to toggle follow status" });
+    }
+};
+
+export const getFollowStatus = async (req, res) => {
+    try {
+        const isFollowing = await checkIsFollowing(req.params.taskId, req.user.userId);
+        res.json({ isFollowing });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to get follow status" });
     }
 };
 
