@@ -26,6 +26,9 @@ model User {
   notes               UserNote[]
   taskComments        TaskComment[]
   taskFollowing       TaskFollower[]
+  payrollContracts    PayrollContract[]
+  payrollTransactions PayrollTransaction[]
+  financialRecords    FinancialRecord[]
 }
 
 model UserNote {
@@ -60,11 +63,21 @@ model GeneralChatMessage {
   author    User     @relation(fields: [authorId], references: [id])
 }
 
+enum ClientStatus {
+  PROPUESTA_ENVIADA
+  CONTRATO_PENDIENTE
+  RECOPILANDO_ACCESOS
+  ACTIVO
+  ALERTA_RENOVACION
+  CERRADO
+}
+
 model Client {
   id                  String               @id @default(uuid())
   name                String
   slug                String               @unique
-  status              String               @default("active")
+  status              ClientStatus         @default(ACTIVO)
+  monthlyFee          Decimal?
   isArchived          Boolean              @default(false)
   logoUrl             String?
   createdAt           DateTime             @default(now())
@@ -87,6 +100,8 @@ model Client {
   healthRecords       ClientHealth[]
   responsibleId       String?
   responsible         TeamMember?          @relation("ClientResponsible", fields: [responsibleId], references: [id])
+  financialRecords    FinancialRecord[]
+  accountsReceivables AccountsReceivable[]
 }
 
 model ClientHealth {
@@ -460,6 +475,103 @@ enum ServiceCategory {
   EDITORIAL
   WEB
   DESARROLLO
+}
+
+enum FinancialCategory {
+  MEMBRESIA
+  PAUTA
+  NOMINA
+  LOGISTICA
+  ADMINISTRATIVO
+  TAX
+  FINANCIAL
+  OPERATIVO
+}
+
+enum FinancialType {
+  INCOME
+  EXPENSE
+}
+
+model FinancialRecord {
+  id          String            @id @default(uuid())
+  amount      Decimal
+  category    FinancialCategory
+  type        FinancialType
+  date        DateTime          // Accounting date (usually 1st day of month or exact transaction date)
+  clientId    String?
+  client      Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  userId      String?
+  user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  description String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model PayrollContract {
+  id             String               @id @default(uuid())
+  userId         String
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  baseSalary     Decimal
+  socialSecurity Decimal              // Fixed absolute value
+  startDate      DateTime
+  endDate        DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  transactions   PayrollTransaction[]
+}
+
+model PayrollTransaction {
+  id          String              @id @default(uuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contractId  String
+  contract    PayrollContract     @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  month       Int                 // 1 - 12
+  year        Int                 // e.g. 2026
+  paidAt      DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  adjustments PayrollAdjustment[]
+
+  @@unique([userId, month, year])
+}
+
+enum AdjustmentType {
+  BONUS
+  COMMISSION
+  DEDUCTION
+  NOVELTY
+}
+
+model PayrollAdjustment {
+  id            String             @id @default(uuid())
+  transactionId String
+  transaction   PayrollTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  type          AdjustmentType
+  amount        Decimal
+  description   String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+}
+
+enum ReceivableStatus {
+  DEBE
+  PAGADO
+  PROMESADO
+}
+
+model AccountsReceivable {
+  id        String           @id @default(uuid())
+  clientId  String
+  client    Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  amount    Decimal
+  period    DateTime         // First day of month (e.g. 2026-04-01)
+  dueDate   DateTime?
+  status    ReceivableStatus @default(DEBE)
+  notes     String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
 }
 
 model ServiceCatalog {
