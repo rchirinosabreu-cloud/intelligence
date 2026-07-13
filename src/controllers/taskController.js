@@ -117,14 +117,35 @@ export const getCommentFileProxy = async (req, res) => {
             return res.status(404).json({ error: "Comment not found or doesn't belong to this task" });
         }
 
-        // Extract key from URL in content
-        // URL format: {endpoint}/{bucket}/{key}
+        // Extract key from URL in content robustly
         const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
-        const regex = new RegExp(`${bucketName}/(.+)$`);
-        const match = comment.content.match(regex);
+        let key = null;
 
-        if (!match) return res.status(404).json({ error: "No storage key found in comment" });
-        const key = match[1];
+        try {
+            // Find the URL within the content (it's usually at the end)
+            const lines = comment.content.split('\n');
+            const lastLine = lines[lines.length - 1].trim();
+
+            if (lastLine.includes(bucketName)) {
+                const url = new URL(lastLine);
+                // Pathname usually is /{bucket}/{key}
+                const parts = url.pathname.split('/');
+                const bucketIndex = parts.indexOf(bucketName);
+                if (bucketIndex !== -1 && parts.length > bucketIndex + 1) {
+                    key = parts.slice(bucketIndex + 1).join('/');
+                }
+            }
+        } catch (e) {
+            console.error("URL parsing failed, falling back to regex", e);
+        }
+
+        if (!key) {
+            const regex = new RegExp(`${bucketName}/([^\\s\\n?]+)`);
+            const match = comment.content.match(regex);
+            if (match) key = match[1].trim();
+        }
+
+        if (!key) return res.status(404).json({ error: "No storage key found in comment" });
 
         const s3Response = await getFromS3Stream(key);
 
@@ -150,11 +171,28 @@ export const getCommentFileDownloadProxy = async (req, res) => {
         }
 
         const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
-        const regex = new RegExp(`${bucketName}/(.+)$`);
-        const match = comment.content.match(regex);
+        let key = null;
 
-        if (!match) return res.status(404).json({ error: "No storage key found in comment" });
-        const key = match[1];
+        try {
+            const lines = comment.content.split('\n');
+            const lastLine = lines[lines.length - 1].trim();
+            if (lastLine.includes(bucketName)) {
+                const url = new URL(lastLine);
+                const parts = url.pathname.split('/');
+                const bucketIndex = parts.indexOf(bucketName);
+                if (bucketIndex !== -1 && parts.length > bucketIndex + 1) {
+                    key = parts.slice(bucketIndex + 1).join('/');
+                }
+            }
+        } catch (e) {}
+
+        if (!key) {
+            const regex = new RegExp(`${bucketName}/([^\\s\\n?]+)`);
+            const match = comment.content.match(regex);
+            if (match) key = match[1].trim();
+        }
+
+        if (!key) return res.status(404).json({ error: "No storage key found in comment" });
         const fileName = key.split('/').pop() || 'adjunto_tarea.jpg';
 
         const s3Response = await getFromS3Stream(key);
@@ -174,7 +212,10 @@ export const addTaskComment = async (req, res) => {
         const { taskId } = req.params;
         const authorId = req.user.userId;
 
-        if (!content && !req.file) return res.status(400).json({ error: "Content or file is required" });
+        // Allow empty content if a file is present
+        if (!content?.trim() && !req.file) {
+            return res.status(400).json({ error: "Content or file is required" });
+        }
 
         let finalContent = content || "";
 
