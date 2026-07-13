@@ -303,7 +303,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     };
 
     const handleAddComment = async (fileToUpload = null) => {
-        const file = fileToUpload || selectedFile;
+        // Defensive check: ensure fileToUpload is a File instance, not a React event
+        const validFile = (fileToUpload instanceof File) ? fileToUpload : null;
+        const file = validFile || selectedFile;
+
         if ((!newComment.trim() && !file) || isSendingComment || !isEdition) return;
 
         setIsSendingComment(true);
@@ -819,7 +822,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         </label>
                                     </div>
                                     <button
-                                        onClick={handleAddComment}
+                                        onClick={() => handleAddComment()}
                                         disabled={(!newComment.trim() && !selectedFile) || isSendingComment}
                                         className={cn(
                                             "absolute right-1.5 top-1.5 p-2 rounded-lg transition-all",
