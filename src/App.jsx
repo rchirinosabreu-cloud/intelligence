@@ -11,6 +11,7 @@ import Team from './components/modules/Team';
 import Profile from './components/modules/Profile';
 import ContentGrids from './components/modules/ContentGrids';
 import ContentPlanDetail from './components/modules/ContentPlanDetail';
+import FinancialDashboard from './components/modules/FinancialDashboard';
 import TalentRadar from './components/modules/TalentRadar';
 import BrainCore from './components/modules/BrainCore';
 import Activity from './components/modules/Activity';
@@ -128,6 +129,7 @@ function AppContent() {
                     <Route path="/clientes" element={<Clients />} />
                     <Route path="/cliente/:clientId" element={<ClientDetailWrapper />} />
                     <Route path="/radar" element={(currentUser?.role === 'ADMIN' || currentUser?.role === 'PM') ? <TalentRadar /> : <Navigate to="/" replace />} />
+                    <Route path="/financiero" element={<FinancialDashboard />} />
                     <Route path="/equipo" element={<Team />} />
                     <Route path="/perfil" element={<Profile />} />
                     <Route path="/perfil/:userId" element={<Profile />} />
