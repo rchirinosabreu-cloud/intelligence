@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
-import { Menu, User, LogOut, Settings, Bell, Search, Sun, Moon, MessageSquare, Loader2 } from 'lucide-react';
+import { Menu, User, LogOut, Settings, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Link, useNavigate } from 'react-router-dom';
@@ -195,7 +195,7 @@ const AppLayout = ({ children }) => {
                 >
                     <Bell className="w-4 h-4" />
                     {unreadCount > 0 && (
-                      <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-white dark:border-zinc-950" />
+                      <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-white dark:border-zinc-950 animate-pulse shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
                     )}
                 </Button>
               </DropdownMenuTrigger>
@@ -217,30 +217,64 @@ const AppLayout = ({ children }) => {
                             <p className="text-xs text-zinc-400">No hay notificaciones nuevas</p>
                         </div>
                     ) : (
-                        notifications.map((notif) => (
-                            <DropdownMenuItem
-                                key={notif.id}
-                                onClick={() => handleNotificationClick(notif)}
-                                className="p-4 focus:bg-zinc-50 dark:focus:bg-zinc-800/50 cursor-pointer border-b border-zinc-50 dark:border-zinc-800/30 last:border-0"
-                            >
-                                <div className="flex gap-3 items-start w-full">
-                                    <div className="p-1.5 bg-primary/10 rounded-xl shrink-0 mt-0.5">
-                                        <MessageSquare className="w-3.5 h-3.5 text-primary" />
+                        notifications.map((notif) => {
+                            let Icon = MessageSquare;
+                            let bgColor = "bg-primary/10";
+                            let iconColor = "text-primary";
+
+                            if (notif.type === 'TASK_RETURNED') {
+                                Icon = RotateCcw;
+                                bgColor = "bg-red-500/10";
+                                iconColor = "text-red-500";
+                            } else if (notif.type === 'TASK_CORRECTED' || notif.type === 'TASK_COMPLETED') {
+                                Icon = CheckCircle2;
+                                bgColor = "bg-emerald-500/10";
+                                iconColor = "text-emerald-500";
+                            } else if (notif.type === 'TASK_ASSIGNED' && notif.message.includes('PRIORITARIA')) {
+                                Icon = Zap;
+                                bgColor = "bg-orange-500/10";
+                                iconColor = "text-orange-500";
+                            } else if (notif.type === 'TASK_ASSIGNED' && notif.message.includes('ESPECIAL')) {
+                                Icon = Star;
+                                bgColor = "bg-purple-500/10";
+                                iconColor = "text-purple-500";
+                            } else if (notif.type === 'TASK_UPDATED') {
+                                if (notif.message.includes('PRIORITARIA')) {
+                                    Icon = Zap;
+                                    bgColor = "bg-orange-500/10";
+                                    iconColor = "text-orange-500";
+                                } else if (notif.message.includes('ESPECIAL')) {
+                                    Icon = Star;
+                                    bgColor = "bg-purple-500/10";
+                                    iconColor = "text-purple-500";
+                                }
+                            }
+
+                            return (
+                                <DropdownMenuItem
+                                    key={notif.id}
+                                    onClick={() => handleNotificationClick(notif)}
+                                    className="p-4 focus:bg-zinc-50 dark:focus:bg-zinc-800/50 cursor-pointer border-b border-zinc-50 dark:border-zinc-800/30 last:border-0"
+                                >
+                                    <div className="flex gap-3 items-start w-full">
+                                        <div className={cn("p-1.5 rounded-xl shrink-0 mt-0.5", bgColor)}>
+                                            <Icon className={cn("w-3.5 h-3.5", iconColor)} />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                                                {notif.message}
+                                            </p>
+                                            <span className="text-[10px] text-zinc-400 mt-1 block">
+                                                {new Date(notif.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                        </div>
+                                        {!notif.isRead && (
+                                            <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-2" />
+                                        )}
                                     </div>
-                                    <div className="flex-1">
-                                        <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">
-                                            {notif.message}
-                                        </p>
-                                        <span className="text-[10px] text-zinc-400 mt-1 block">
-                                            {new Date(notif.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                    </div>
-                                    {!notif.isRead && (
-                                        <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-2" />
-                                    )}
-                                </div>
-                            </DropdownMenuItem>
-                        ))
+                                </DropdownMenuItem>
+                            );
+                        })
                     )}
                 </div>
               </DropdownMenuContent>

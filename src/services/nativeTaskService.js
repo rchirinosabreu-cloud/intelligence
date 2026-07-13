@@ -644,6 +644,30 @@ export const updateTask = async (id, data, updaterId = null) => {
              }
         }
 
+        // --- Notificación a Seguidores (Tarea Completada) ---
+        if ('status' in data && (statusMapper[data.status] || data.status) === 'REALIZADA' && currentTask.status !== 'REALIZADA') {
+            try {
+                const followers = await prisma.taskFollower.findMany({
+                    where: { taskId: id },
+                    select: { userId: true }
+                });
+
+                for (const follower of followers) {
+                    // Don't notify the person who completed it
+                    if (follower.userId !== updaterId) {
+                        await createNotification({
+                            userId: follower.userId,
+                            message: `La tarea que sigues ha sido COMPLETADA: ${updatedTask.title}`,
+                            type: 'TASK_COMPLETED',
+                            relatedId: id
+                        });
+                    }
+                }
+            } catch (followNotifyErr) {
+                console.error("[nativeTaskService] Follower notification failed:", followNotifyErr);
+            }
+        }
+
         // --- Cierre de Ciclo: Notificación de Corrección (Post-DB Success) ---
         // Solo si la transición fue exitosa y cumplía los criterios de corrección
         if (isCorrected) {
@@ -748,6 +772,47 @@ export const deleteTask = async (id) => {
         return { success: true };
     } catch (error) {
         console.error("Error deleting native task:", error);
+        throw error;
+    }
+};
+
+export const toggleTaskFollow = async (taskId, userId) => {
+    try {
+        const existingFollower = await prisma.taskFollower.findUnique({
+            where: {
+                taskId_userId: { taskId, userId }
+            }
+        });
+
+        if (existingFollower) {
+            await prisma.taskFollower.delete({
+                where: {
+                    taskId_userId: { taskId, userId }
+                }
+            });
+            return false; // Unfollowed
+        } else {
+            await prisma.taskFollower.create({
+                data: { taskId, userId }
+            });
+            return true; // Followed
+        }
+    } catch (error) {
+        console.error("Error toggling task follow:", error);
+        throw error;
+    }
+};
+
+export const checkIsFollowing = async (taskId, userId) => {
+    try {
+        const follower = await prisma.taskFollower.findUnique({
+            where: {
+                taskId_userId: { taskId, userId }
+            }
+        });
+        return !!follower;
+    } catch (error) {
+        console.error("Error checking follow status:", error);
         throw error;
     }
 };

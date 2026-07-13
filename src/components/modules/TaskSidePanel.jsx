@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     Loader2, Zap, Star, Link as LinkIcon, ExternalLink,
-    X, Send, MessageSquare, RotateCcw, CheckCircle2,
+    X, Send, MessageSquare, RotateCcw, CheckCircle2, Bell,
     LayoutGrid, Calendar, User, Trash2, Plus, ClipboardList,
     FileText, Database, Paperclip, ImageIcon, Eye, Download
 } from 'lucide-react';
@@ -42,6 +42,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
     const [newComment, setNewComment] = useState("");
     const [isSendingComment, setIsSendingComment] = useState(false);
+    const [isFollowing, setIsFollowing] = useState(false);
+    const [isTogglingFollow, setIsTogglingFollow] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
     const [showReintegratePrompt, setShowReintegratePrompt] = useState(false);
     const [reintegrateReason, setReintegrateReason] = useState("");
@@ -96,6 +98,20 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             setSelectedFile(null); // Clear pending attachment
             setNewComment("");    // Clear pending comment draft
             if (isEdition && taskData) {
+                // Fetch follow status
+                const fetchFollowStatus = async () => {
+                    try {
+                        const res = await fetch(`${getApiBaseUrl()}/api/tasks/${taskData.id}/follow-status`, {
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+                        });
+                        const data = await res.json();
+                        setIsFollowing(data.isFollowing);
+                    } catch (err) {
+                        console.error("Error fetching follow status:", err);
+                    }
+                };
+                fetchFollowStatus();
+                setIsFollowing(false); // Reset while fetching
                 let cId = taskData.clientId || '';
                 if (!cId && taskData.clientName) {
                     const clientMatch = clientsList.find(c => c.name === taskData.clientName);
@@ -222,6 +238,30 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             toast({ title: 'Error', description: 'No se pudo guardar la tarea.', variant: 'destructive' });
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleToggleFollow = async () => {
+        if (!isEdition || isTogglingFollow) return;
+
+        setIsTogglingFollow(true);
+        try {
+            const res = await fetch(`${getApiBaseUrl()}/api/tasks/${formData.id}/toggle-follow`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setIsFollowing(data.isFollowing);
+                toast({
+                    title: data.isFollowing ? "Siguiendo tarea" : "Ya no sigues esta tarea",
+                    description: data.isFollowing ? "Recibirás una notificación cuando se complete." : "Ya no recibirás alertas de finalización."
+                });
+            }
+        } catch (err) {
+            console.error("Error toggling follow:", err);
+        } finally {
+            setIsTogglingFollow(false);
         }
     };
 
@@ -426,6 +466,20 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     <RotateCcw size={11} /> Reintegrar Tarea
                                 </button>
                             )}
+
+                            <button
+                                onClick={handleToggleFollow}
+                                disabled={isTogglingFollow}
+                                className={cn(
+                                    "flex items-center justify-center p-1.5 rounded-lg transition-all border shadow-sm",
+                                    isFollowing
+                                        ? "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400"
+                                        : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:bg-zinc-50"
+                                )}
+                                title={isFollowing ? "Dejar de seguir" : "Seguir tarea"}
+                            >
+                                <Bell size={14} className={cn(isFollowing && "fill-current animate-in zoom-in-50")} />
+                            </button>
                         </div>
 
                         <div className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900 px-2 py-1 rounded-full border border-zinc-200 dark:border-zinc-800 shadow-inner">
