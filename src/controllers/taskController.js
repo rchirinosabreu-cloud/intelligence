@@ -42,7 +42,9 @@ export const getAllTasks = async (req, res) => {
 
 export const createNewTask = async (req, res) => {
     try {
-        const taskData = { ...req.body, creatorId: req.user.userId };
+        const { followOnCreate, ...rest } = req.body;
+        const taskData = { ...rest, creatorId: req.user.userId, followOnCreate };
+
         if (!taskData.title || !taskData.clientId) {
             return res.status(400).json({ error: "Missing required fields (title, clientId)" });
         }

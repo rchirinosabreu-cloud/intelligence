@@ -205,7 +205,7 @@ const statusMapper = {
 export const createTask = async ({
     title, dueDate, assigneeId, creatorId, comments, status, clientId,
     isPriority = false, isSpecial = false, specialType = null, referenceUrl = null,
-    contentItemId = null
+    contentItemId = null, followOnCreate = false
 }) => {
     try {
         const mappedStatus = statusMapper[status] || 'PENDIENTE';
@@ -257,6 +257,17 @@ export const createTask = async ({
         enqueueTaskClassification(newTask.id, title, comments || "").catch(err =>
             console.error("[nativeTaskService] Deferred classification trigger failed:", err.message)
         );
+
+        // Subscribe creator if requested
+        if (followOnCreate && creatorId) {
+            try {
+                await prisma.taskFollower.create({
+                    data: { taskId: newTask.id, userId: creatorId }
+                });
+            } catch (followErr) {
+                console.error("[nativeTaskService] Auto-follow failed:", followErr.message);
+            }
+        }
 
         // Map for frontend compatibility
         if (newTask.contentItem && newTask.contentItem.plan) {
