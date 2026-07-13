@@ -24,7 +24,8 @@ export const login = async (req, res) => {
                   name: 'System Admin',
                   email: defaultAdminEmail,
                   password: hashedAdminPassword,
-                  role: 'ADMIN'
+                  role: 'ADMIN',
+                  hasFinancialAccess: true
               }
           });
       }
@@ -48,13 +49,14 @@ export const login = async (req, res) => {
               userId: user.id,
               name: user.name,
               email: user.email,
-              role: user.role
+              role: user.role,
+              hasFinancialAccess: user.hasFinancialAccess
           },
           JWT_SECRET,
           { expiresIn: '30d' }
       );
 
-      return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+      return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, hasFinancialAccess: user.hasFinancialAccess } });
 
   } catch (error) {
       console.error('Error during login:', error);
@@ -147,9 +149,10 @@ export const createUser = async (req, res) => {
                 name,
                 email,
                 password: hashedPassword,
-                role: role || 'EDITOR'
+                role: role || 'EDITOR',
+                hasFinancialAccess: req.body.hasFinancialAccess || false
             },
-            select: { id: true, name: true, email: true, role: true }
+            select: { id: true, name: true, email: true, role: true, hasFinancialAccess: true }
         });
 
         return res.status(201).json(newUser);
