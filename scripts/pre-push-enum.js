@@ -52,6 +52,71 @@ async function prePushEnum() {
             );
         `);
 
+        // 3. Register ClientStatus Enum type
+        console.log("Registrando tipo Enum ClientStatus...");
+        await client.query(`
+            DO $$ BEGIN
+                CREATE TYPE "ClientStatus" AS ENUM (
+                    'PROPUESTA_ENVIADA', 'CONTRATO_PENDIENTE', 'RECOPILANDO_ACCESOS',
+                    'ACTIVO', 'ALERTA_RENOVACION', 'CERRADO'
+                );
+            EXCEPTION
+                WHEN duplicate_object THEN null;
+            END $$;
+        `);
+
+        // 4. Alter Client.status column to ClientStatus
+        console.log("Transformando columna status en Client...");
+        await client.query(`
+            ALTER TABLE "Client"
+            ALTER COLUMN "status" TYPE "ClientStatus"
+            USING (
+                CASE
+                    WHEN BTRIM(LOWER("status"::text)) = 'active' THEN 'ACTIVO'::"ClientStatus"
+                    WHEN BTRIM(LOWER("status"::text)) = 'activo' THEN 'ACTIVO'::"ClientStatus"
+                    WHEN BTRIM(LOWER("status"::text)) = 'paused' THEN 'CERRADO'::"ClientStatus"
+                    WHEN BTRIM(LOWER("status"::text)) = 'archived' THEN 'CERRADO'::"ClientStatus"
+                    ELSE 'ACTIVO'::"ClientStatus"
+                END
+            );
+        `);
+
+        // 5. Register FinancialCategory, FinancialType, AdjustmentType, ReceivableStatus
+        console.log("Registrando tipos Enums Financieros...");
+        await client.query(`
+            DO $$ BEGIN
+                CREATE TYPE "FinancialCategory" AS ENUM (
+                    'MEMBRESIA', 'PAUTA', 'NOMINA', 'LOGISTICA', 'ADMINISTRATIVO', 'TAX', 'FINANCIAL', 'OPERATIVO'
+                );
+            EXCEPTION
+                WHEN duplicate_object THEN null;
+            END $$;
+
+            DO $$ BEGIN
+                CREATE TYPE "FinancialType" AS ENUM (
+                    'INCOME', 'EXPENSE'
+                );
+            EXCEPTION
+                WHEN duplicate_object THEN null;
+            END $$;
+
+            DO $$ BEGIN
+                CREATE TYPE "AdjustmentType" AS ENUM (
+                    'BONUS', 'COMMISSION', 'DEDUCTION', 'NOVELTY'
+                );
+            EXCEPTION
+                WHEN duplicate_object THEN null;
+            END $$;
+
+            DO $$ BEGIN
+                CREATE TYPE "ReceivableStatus" AS ENUM (
+                    'DEBE', 'PAGADO', 'PROMESADO'
+                );
+            EXCEPTION
+                WHEN duplicate_object THEN null;
+            END $$;
+        `);
+
         console.log("--- MIGRACIÓN NATIVA COMPLETADA EXITOSAMENTE ---");
     } catch (err) {
         console.error("Fallo crítico en migración nativa:", err.message);
