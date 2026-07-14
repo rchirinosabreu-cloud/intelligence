@@ -248,34 +248,46 @@ model DeletedTaskLog {
 }
 
 model Task {
-  id            String       @id @default(uuid())
-  title         String
-  dueDate       DateTime?
-  assigneeId    String?
-  comments      String?
-  clientId      String
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  completedAt   DateTime?
-  creatorId     String?
-  status        TaskStatus   @default(PENDIENTE)
-  isPriority    Boolean      @default(false)
-  isSpecial     Boolean      @default(false)
-  referenceUrl  String?
-  specialType   String?
-  contentItemId String?
-  aiCategory    String?
-  aiComplexity  String?
-  returnCount   Int          @default(0)
-  isReturned    Boolean      @default(false)
-  returnedAt    DateTime?
-  startedAt     DateTime?
-  assignee      TeamMember?  @relation(fields: [assigneeId], references: [id])
-  client        Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  contentItem   ContentItem? @relation(fields: [contentItemId], references: [id])
-  creator       User?        @relation("CreatedTasks", fields: [creatorId], references: [id])
-  taskComments  TaskComment[]
-  followers     TaskFollower[]
+  id              String           @id @default(uuid())
+  title           String
+  dueDate         DateTime?
+  assigneeId      String?
+  comments        String?
+  clientId        String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  completedAt     DateTime?
+  creatorId       String?
+  status          TaskStatus       @default(PENDIENTE)
+  isPriority      Boolean          @default(false)
+  isSpecial       Boolean          @default(false)
+  referenceUrl    String?
+  specialType     String?
+  contentItemId   String?
+  aiCategory      String?
+  aiComplexity    String?
+  returnCount     Int              @default(0)
+  isReturned      Boolean          @default(false)
+  returnedAt      DateTime?
+  startedAt       DateTime?
+  assignee        TeamMember?      @relation(fields: [assigneeId], references: [id])
+  client          Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contentItem     ContentItem?     @relation(fields: [contentItemId], references: [id])
+  creator         User?            @relation("CreatedTasks", fields: [creatorId], references: [id])
+  taskComments    TaskComment[]
+  followers       TaskFollower[]
+  taskAttachments TaskAttachment[]
+}
+
+model TaskAttachment {
+  id        String   @id @default(uuid())
+  taskId    String
+  url       String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 }
 
 model TaskFollower {

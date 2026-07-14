@@ -50,6 +50,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [isDragging, setIsDragging] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
 
+    // States for Task Creation mode
+    const [tempInsumos, setTempInsumos] = useState([]); // Array of { url, name }
+    const [tempComments, setTempComments] = useState([]); // Array of { content, createdAt, id }
+    const [newInsumoUrl, setNewInsumoUrl] = useState("");
+    const [newInsumoName, setNewInsumoName] = useState("");
+
     const commentInputRef = useRef(null);
     const scrollRef = useRef(null);
     const chatContainerRef = useRef(null);
@@ -97,6 +103,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             setPreviewImage(null); // Clear image viewer state when opening a task
             setSelectedFile(null); // Clear pending attachment
             setNewComment("");    // Clear pending comment draft
+            setTempInsumos([]);   // Clear creation mode temporary links
+            setTempComments([]);  // Clear creation mode temporary comments
+            setNewInsumoUrl("");
+            setNewInsumoName("");
             if (isEdition && taskData) {
                 // Fetch follow status
                 const fetchFollowStatus = async () => {
@@ -208,8 +218,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 status: formData.status,
                 isPriority: formData.isPriority,
                 isSpecial: formData.isSpecial,
-            specialType: formData.isSpecial ? formData.specialType : null,
-            followOnCreate: !isEdition ? isFollowing : undefined
+                specialType: formData.isSpecial ? formData.specialType : null,
+                followOnCreate: !isEdition ? isFollowing : undefined,
+                initial_insumos: !isEdition ? tempInsumos : undefined,
+                initial_comments: !isEdition ? tempComments.map(c => ({ content: c.content })) : undefined
             };
 
             const token = localStorage.getItem('authToken');
@@ -314,7 +326,26 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         const validFile = (fileToUpload instanceof File) ? fileToUpload : null;
         const file = validFile || selectedFile;
 
-        if ((!newComment.trim() && !file) || isSendingComment || !isEdition) return;
+        if (!newComment.trim() && !file) return;
+
+        // If in creation mode, simulate adding comment to local state
+        if (!isEdition) {
+            if (!newComment.trim()) return;
+            const newTempComment = {
+                id: `temp-comment-${Date.now()}`,
+                content: newComment,
+                createdAt: new Date().toISOString(),
+                author: {
+                    name: "Tú",
+                    avatarUrl: null
+                }
+            };
+            setTempComments(prev => [...prev, newTempComment]);
+            setNewComment("");
+            return;
+        }
+
+        if (isSendingComment) return;
 
         setIsSendingComment(true);
         try {
@@ -669,8 +700,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     </motion.div>
                                 )}
 
-                                {/* Links Section (Read-Only Dropdowns) */}
-                                {isEdition && (
+                                {/* Links Section (Read-Only Dropdowns for Edition, Interactive list for Creation) */}
+                                {isEdition ? (
                                     <div className="space-y-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
                                         <div className="flex items-center justify-between">
                                             <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
@@ -696,6 +727,68 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             </div>
                                         )}
                                     </div>
+                                ) : (
+                                    <div className="space-y-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
+                                        <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 block">
+                                            Insumos & Referencias
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <input
+                                                type="text"
+                                                placeholder="Nombre del link (ej: Figma...)"
+                                                value={newInsumoName}
+                                                onChange={e => setNewInsumoName(e.target.value)}
+                                                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                            />
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="URL (https://...)"
+                                                    value={newInsumoUrl}
+                                                    onChange={e => setNewInsumoUrl(e.target.value)}
+                                                    className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (!newInsumoUrl.trim()) return;
+                                                        let finalUrl = newInsumoUrl.trim();
+                                                        if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+                                                            finalUrl = 'https://' + finalUrl;
+                                                        }
+                                                        setTempInsumos(prev => [...prev, { url: finalUrl, name: newInsumoName.trim() || finalUrl }]);
+                                                        setNewInsumoUrl("");
+                                                        setNewInsumoName("");
+                                                    }}
+                                                    className="bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                                >
+                                                    Agregar
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {tempInsumos.length > 0 ? (
+                                            <div className="flex flex-wrap gap-2 pt-2">
+                                                {tempInsumos.map((insumo, index) => (
+                                                    <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
+                                                        <ExternalLink size={12} className="text-zinc-400 shrink-0" />
+                                                        <span className="truncate max-w-[150px]">{insumo.name}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setTempInsumos(prev => prev.filter((_, i) => i !== index))}
+                                                            className="text-zinc-400 hover:text-red-500 transition-colors"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-[10px] text-zinc-400 italic text-center py-2 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800">
+                                                No has agregado enlaces temporales todavía.
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
 
                             {/* General Context / Static Comments */}
@@ -712,55 +805,60 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     </div>
 
                     {/* Bottom Chat Section (Elastic/Independent Scroll) */}
-                    {isEdition && (
-                        <div
-                            ref={chatContainerRef}
-                            onDragOver={(e) => {
-                                e.preventDefault();
-                                setIsDragging(true);
-                            }}
-                            onDragLeave={() => setIsDragging(false)}
-                            onDrop={(e) => {
-                                e.preventDefault();
-                                setIsDragging(false);
-                                const file = e.dataTransfer.files[0];
-                                if (file && file.type.startsWith('image/')) {
-                                    handleAddComment(file);
-                                }
-                            }}
-                            className="flex-1 overflow-y-auto custom-scrollbar relative bg-zinc-50/50 dark:bg-transparent"
-                        >
-                            {/* Drag & Drop Overlay */}
-                            <AnimatePresence>
-                                {isDragging && (
-                                    <motion.div
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        className="absolute inset-0 z-50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-8 transition-all"
-                                    >
-                                        <div className="w-full h-full border-2 border-dashed border-primary/40 rounded-3xl flex flex-col items-center justify-center gap-4 animate-in zoom-in-95">
-                                            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center text-primary">
-                                                <ImageIcon size={32} />
-                                            </div>
-                                            <p className="text-sm font-black uppercase tracking-widest text-primary">Suelta tus imágenes aquí</p>
+                    <div
+                        ref={chatContainerRef}
+                        onDragOver={(e) => {
+                            if (!isEdition) return;
+                            e.preventDefault();
+                            setIsDragging(true);
+                        }}
+                        onDragLeave={() => {
+                            if (!isEdition) return;
+                            setIsDragging(false);
+                        }}
+                        onDrop={(e) => {
+                            if (!isEdition) return;
+                            e.preventDefault();
+                            setIsDragging(false);
+                            const file = e.dataTransfer.files[0];
+                            if (file && file.type.startsWith('image/')) {
+                                handleAddComment(file);
+                            }
+                        }}
+                        className="flex-1 overflow-y-auto custom-scrollbar relative bg-zinc-50/50 dark:bg-transparent"
+                    >
+                        {/* Drag & Drop Overlay */}
+                        <AnimatePresence>
+                            {isDragging && isEdition && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    className="absolute inset-0 z-50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-8 transition-all"
+                                >
+                                    <div className="w-full h-full border-2 border-dashed border-primary/40 rounded-3xl flex flex-col items-center justify-center gap-4 animate-in zoom-in-95">
+                                        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center text-primary">
+                                            <ImageIcon size={32} />
                                         </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-
-                            <div className="px-5 py-6">
-                                <div className="flex items-center gap-4 mb-6">
-                                    <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800/50" />
-                                    <div className="flex items-center gap-2 px-3 py-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-full">
-                                        <MessageSquare size={10} className="text-zinc-400" />
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Conversación & Eventos</span>
+                                        <p className="text-sm font-black uppercase tracking-widest text-primary">Suelta tus imágenes aquí</p>
                                     </div>
-                                    <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800/50" />
-                                </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
 
-                                <div className="space-y-3 pb-4">
-                                    {(!formData.taskComments || formData.taskComments.length === 0) ? (
+                        <div className="px-5 py-6">
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800/50" />
+                                <div className="flex items-center gap-2 px-3 py-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-full">
+                                    <MessageSquare size={10} className="text-zinc-400" />
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Conversación & Eventos</span>
+                                </div>
+                                <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800/50" />
+                            </div>
+
+                            <div className="space-y-3 pb-4">
+                                {isEdition ? (
+                                    (!formData.taskComments || formData.taskComments.length === 0) ? (
                                         <div className="py-10 flex flex-col items-center justify-center text-center px-8">
                                             <div className="w-10 h-10 bg-zinc-50 dark:bg-zinc-900/50 rounded-full flex items-center justify-center mb-2 text-zinc-200 dark:text-zinc-800">
                                                 <MessageSquare size={20} />
@@ -769,78 +867,94 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         </div>
                                     ) : (
                                         formData.taskComments.map(renderComment)
-                                    )}
-                                </div>
+                                    )
+                                ) : (
+                                    tempComments.length === 0 ? (
+                                        <div className="py-10 flex flex-col items-center justify-center text-center px-8">
+                                            <div className="w-10 h-10 bg-zinc-50 dark:bg-zinc-900/50 rounded-full flex items-center justify-center mb-2 text-zinc-200 dark:text-zinc-800">
+                                                <MessageSquare size={20} />
+                                            </div>
+                                            <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Agrega comentarios iniciales para el equipo...</h4>
+                                        </div>
+                                    ) : (
+                                        tempComments.map(renderComment)
+                                    )
+                                )}
                             </div>
                         </div>
-                    )}
+                    </div>
                 </div>
 
                 {/* Bottom Actions Area - Split for unified view */}
                 <div className="shrink-0 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 shadow-[0_-4px_30px_-10px_rgba(0,0,0,0.1)]">
                     <div className="flex flex-col gap-4">
-                        {/* Chat Input Field (Edition Only) */}
-                        {isEdition && (
-                            <div className="flex flex-col gap-2">
-                                {selectedFile && (
-                                    <div className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/10 rounded-lg animate-in fade-in slide-in-from-bottom-1">
-                                        <div className="w-8 h-8 bg-primary/10 rounded flex items-center justify-center text-primary">
-                                            <ImageIcon size={14} />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-[10px] font-bold text-primary truncate">{selectedFile.name}</p>
-                                            <p className="text-[8px] text-primary/60">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                                        </div>
-                                        <button
-                                            onClick={() => setSelectedFile(null)}
-                                            className="p-1 hover:bg-primary/10 rounded text-primary"
-                                        >
-                                            <X size={14} />
-                                        </button>
+                        {/* Chat Input Field */}
+                        <div className="flex flex-col gap-2">
+                            {selectedFile && isEdition && (
+                                <div className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/10 rounded-lg animate-in fade-in slide-in-from-bottom-1">
+                                    <div className="w-8 h-8 bg-primary/10 rounded flex items-center justify-center text-primary">
+                                        <ImageIcon size={14} />
                                     </div>
-                                )}
-                                <div className="relative group">
-                                    <textarea
-                                        ref={commentInputRef}
-                                        value={newComment}
-                                        onChange={e => setNewComment(e.target.value)}
-                                        onKeyDown={e => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                handleAddComment();
-                                            }
-                                        }}
-                                        placeholder="Escribe un mensaje al equipo..."
-                                        className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary/30 rounded-xl px-12 py-3 pr-12 text-[11px] font-medium outline-none transition-all resize-none h-[48px] no-scrollbar shadow-inner"
-                                    />
-                                    <div className="absolute left-1.5 top-1.5">
-                                        <input
-                                            type="file"
-                                            id="task-file-upload"
-                                            className="hidden"
-                                            accept="image/*"
-                                            onChange={(e) => setSelectedFile(e.target.files[0])}
-                                        />
-                                        <label
-                                            htmlFor="task-file-upload"
-                                            className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-primary transition-all cursor-pointer block"
-                                        >
-                                            <Paperclip size={16} />
-                                        </label>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[10px] font-bold text-primary truncate">{selectedFile.name}</p>
+                                        <p className="text-[8px] text-primary/60">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
                                     </div>
                                     <button
-                                        onClick={() => handleAddComment()}
-                                        disabled={(!newComment.trim() && !selectedFile) || isSendingComment}
-                                        className={cn(
-                                            "absolute right-1.5 top-1.5 p-2 rounded-lg transition-all",
-                                            (newComment.trim() || selectedFile) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
-                                        )}
+                                        onClick={() => setSelectedFile(null)}
+                                        className="p-1 hover:bg-primary/10 rounded text-primary"
                                     >
-                                        {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                                        <X size={14} />
                                     </button>
                                 </div>
+                            )}
+                            <div className="relative group">
+                                <textarea
+                                    ref={commentInputRef}
+                                    value={newComment}
+                                    onChange={e => setNewComment(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleAddComment();
+                                        }
+                                    }}
+                                    placeholder={isEdition ? "Escribe un mensaje al equipo..." : "Escribe comentarios/mensajes iniciales..."}
+                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary/30 rounded-xl px-12 py-3 pr-12 text-[11px] font-medium outline-none transition-all resize-none h-[48px] no-scrollbar shadow-inner"
+                                />
+                                <div className="absolute left-1.5 top-1.5">
+                                    <input
+                                        type="file"
+                                        id="task-file-upload"
+                                        className="hidden"
+                                        accept="image/*"
+                                        disabled={!isEdition}
+                                        onChange={(e) => setSelectedFile(e.target.files[0])}
+                                    />
+                                    <label
+                                        htmlFor="task-file-upload"
+                                        className={cn(
+                                            "p-2 rounded-lg text-zinc-400 block transition-all",
+                                            isEdition
+                                                ? "hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary cursor-pointer"
+                                                : "opacity-40 cursor-not-allowed"
+                                        )}
+                                        title={isEdition ? "Adjuntar archivo" : "Los adjuntos de S3 se habilitan una vez creada la tarea."}
+                                    >
+                                        <Paperclip size={16} />
+                                    </label>
+                                </div>
+                                <button
+                                    onClick={() => handleAddComment()}
+                                    disabled={isEdition ? ((!newComment.trim() && !selectedFile) || isSendingComment) : !newComment.trim()}
+                                    className={cn(
+                                        "absolute right-1.5 top-1.5 p-2 rounded-lg transition-all",
+                                        (newComment.trim() || (selectedFile && isEdition)) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
+                                    )}
+                                >
+                                    {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                                </button>
                             </div>
-                        )}
+                        </div>
 
                         {/* Save/Cancel Buttons */}
                         <div className="flex gap-3">

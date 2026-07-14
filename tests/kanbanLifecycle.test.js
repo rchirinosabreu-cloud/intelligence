@@ -96,4 +96,86 @@ test('Kanban Critical Flow Integration', async (t) => {
 
         assert.strictEqual(dbTask.status, 'EN_CURSO');
     });
+
+    await t.test('Prueba 4: Creación Unificada con Insumos y Comentarios', async () => {
+        if (!process.env.DATABASE_URL) return;
+
+        const unifiedTaskData = {
+            title: 'Unified Task Creation',
+            comments: 'Unified body description',
+            clientId: testClient.id,
+            creatorId: testUser.id,
+            status: 'PENDIENTE',
+            initial_insumos: [
+                { url: 'https://figma.com/design-file', name: 'Figma de la Campaña' },
+                { url: 'https://docs.google.com/doc', name: 'Brief de Contenido' }
+            ],
+            initial_comments: [
+                { content: 'Este es el primer comentario inicial' },
+                { content: 'Segundo comentario inicial automatizado' }
+            ]
+        };
+
+        const createdTask = await createTask(unifiedTaskData);
+
+        assert.ok(createdTask.id);
+        assert.strictEqual(createdTask.title, unifiedTaskData.title);
+
+        // Fetch task from database to verify all attachments and comments were saved
+        const dbTask = await prisma.task.findUnique({
+            where: { id: createdTask.id },
+            include: {
+                taskAttachments: true,
+                taskComments: true
+            }
+        });
+
+        assert.strictEqual(dbTask.taskAttachments.length, 2);
+        assert.strictEqual(dbTask.taskComments.length, 2);
+
+        // Verify content
+        const attachmentUrls = dbTask.taskAttachments.map(a => a.url);
+        assert.ok(attachmentUrls.includes('https://figma.com/design-file'));
+        assert.ok(attachmentUrls.includes('https://docs.google.com/doc'));
+
+        const commentContents = dbTask.taskComments.map(c => c.content);
+        assert.ok(commentContents.includes('Este es el primer comentario inicial'));
+        assert.ok(commentContents.includes('Segundo comentario inicial automatizado'));
+
+        // Clean up
+        await prisma.task.delete({ where: { id: createdTask.id } }).catch(() => {});
+    });
+
+    await t.test('Prueba 5: Transaccionalidad de Base de Datos (Atomicidad/Rollback en Fallo)', async () => {
+        if (!process.env.DATABASE_URL) return;
+
+        const invalidUnifiedTaskData = {
+            title: 'Should Rollback Task',
+            comments: 'This creation must completely fail and rollback',
+            clientId: testClient.id,
+            creatorId: testUser.id,
+            status: 'PENDIENTE',
+            initial_insumos: [
+                // Providing invalid fields (url is required, name can be null but url must be present)
+                // We pass null for url to trigger database exception / validation error
+                { url: null, name: 'Invalid Link' }
+            ]
+        };
+
+        let didThrow = false;
+        try {
+            await createTask(invalidUnifiedTaskData);
+        } catch (error) {
+            didThrow = true;
+        }
+
+        assert.strictEqual(didThrow, true);
+
+        // Verify no task was created with title 'Should Rollback Task'
+        const dbTasks = await prisma.task.findMany({
+            where: { title: 'Should Rollback Task' }
+        });
+
+        assert.strictEqual(dbTasks.length, 0);
+    });
 });
