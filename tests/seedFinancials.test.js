@@ -56,4 +56,15 @@ test('Financial Seeding & Horizontal Parsing Engine', async (t) => {
         assert.strictEqual(rowsMorosos[1][0], 'Muebles Nuva');
         assert.strictEqual(rowsMorosos[1][4], 'DEBE');
     });
+
+    await t.test('Prueba 4: Estructura de Personal (NOMINA Sheet Column check)', () => {
+        const wb = xlsx.readFile(file2026);
+        const wsNomina = wb.Sheets['NOMINA'];
+        const rowsNomina = xlsx.utils.sheet_to_json(wsNomina, { header: 1 });
+        const headersNomina = rowsNomina[0].map(h => String(h).trim().toUpperCase());
+
+        assert.ok(headersNomina.includes('COLABORADOR/EMAIL'), 'La hoja de NOMINA debe contener la columna Colaborador/Email');
+        assert.ok(headersNomina.includes('SALARIO BASE'), 'La hoja de NOMINA debe contener la columna Salario Base');
+        assert.ok(headersNomina.includes('SEGURIDAD SOCIAL'), 'La hoja de NOMINA debe contener la columna Seguridad Social');
+    });
 });
