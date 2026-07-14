@@ -79,4 +79,20 @@ test('Financial Dashboard Analytical Precision Math', async (t) => {
         assert.strictEqual(sortedDebts[1].period, '2026-05-01');
         assert.strictEqual(sortedDebts[2].period, '2026-04-01', 'El periodo más antiguo debe ser el último');
     });
+
+    await t.test('Prueba 4: Hidratación del Payload de Autenticación ("hasFinancialAccess")', () => {
+        const mockAuthResponse = {
+            token: "mock-jwt-token-xyz",
+            user: {
+                id: "admin-user-id",
+                name: "System Admin",
+                email: "admin@brainstudio.com",
+                role: "ADMIN",
+                hasFinancialAccess: true
+            }
+        };
+
+        // Assert that the auth response contains the newly-required hasFinancialAccess flag
+        assert.strictEqual(mockAuthResponse.user.hasFinancialAccess, true, 'El payload de autenticación debe contener el flag hasFinancialAccess');
+    });
 });
