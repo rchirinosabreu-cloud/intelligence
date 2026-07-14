@@ -205,49 +205,84 @@ const statusMapper = {
 export const createTask = async ({
     title, dueDate, assigneeId, creatorId, comments, status, clientId,
     isPriority = false, isSpecial = false, specialType = null, referenceUrl = null,
-    contentItemId = null, followOnCreate = false
+    contentItemId = null, followOnCreate = false,
+    initial_insumos = [], initial_comments = []
 }) => {
     try {
         const mappedStatus = statusMapper[status] || 'PENDIENTE';
 
-        // Create the task immediately
-        const newTask = await prisma.task.create({
-            data: {
-                title,
-                dueDate: dueDate ? new Date(dueDate) : null,
-                assigneeId,
-                creatorId,
-                comments,
-                status: mappedStatus,
-                clientId,
-                isPriority,
-                isSpecial,
-                specialType,
-                referenceUrl,
-                contentItemId
-            },
-            include: {
-                client: {
-                    select: { name: true, logoUrl: true, slug: true }
-                },
-                assignee: true,
-                creator: {
-                    select: { id: true, name: true, avatarUrl: true, email: true, role: true }
-                },
-                taskComments: {
-                    include: { author: true },
-                    orderBy: { createdAt: 'desc' }
-                },
-                contentItem: {
-                    include: {
-                        plan: {
-                            include: {
-                                client: { select: { slug: true } }
+        // Use a Prisma transaction to ensure atomicity
+        const newTask = await prisma.$transaction(async (tx) => {
+            // 1. Create the task
+            const task = await tx.task.create({
+                data: {
+                    title,
+                    dueDate: dueDate ? new Date(dueDate) : null,
+                    assigneeId,
+                    creatorId,
+                    comments,
+                    status: mappedStatus,
+                    clientId,
+                    isPriority,
+                    isSpecial,
+                    specialType,
+                    referenceUrl,
+                    contentItemId
+                }
+            });
+
+            // 2. Insert initial_insumos into TaskAttachment if any
+            if (Array.isArray(initial_insumos) && initial_insumos.length > 0) {
+                await tx.taskAttachment.createMany({
+                    data: initial_insumos.map(insumo => ({
+                        taskId: task.id,
+                        url: insumo.url,
+                        name: insumo.name || null
+                    }))
+                });
+            }
+
+            // 3. Insert initial_comments into TaskComment if any
+            if (Array.isArray(initial_comments) && initial_comments.length > 0) {
+                for (const comment of initial_comments) {
+                    await tx.taskComment.create({
+                        data: {
+                            taskId: task.id,
+                            authorId: creatorId,
+                            content: comment.content,
+                            type: 'human'
+                        }
+                    });
+                }
+            }
+
+            // Return the created task with its nested relations populated
+            return tx.task.findUnique({
+                where: { id: task.id },
+                include: {
+                    client: {
+                        select: { name: true, logoUrl: true, slug: true }
+                    },
+                    assignee: true,
+                    creator: {
+                        select: { id: true, name: true, avatarUrl: true, email: true, role: true }
+                    },
+                    taskComments: {
+                        include: { author: true },
+                        orderBy: { createdAt: 'desc' }
+                    },
+                    taskAttachments: true,
+                    contentItem: {
+                        include: {
+                            plan: {
+                                include: {
+                                    client: { select: { slug: true } }
+                                }
                             }
                         }
                     }
                 }
-            }
+            });
         });
 
         // Task classification hybrid flow:
