@@ -14,6 +14,7 @@
     "lint:warn": "eslint .",
     "db:fix": "node scripts/fix_content_arrays.js",
     "db:status": "node scripts/add_status_message.js",
+    "db:seed:financials": "node scripts/seed-financials.js",
     "test": "node --test tests/kanbanLifecycle.test.js",
     "test:activity-build": "node --test tests/activityComponentsCompile.test.js"
   },
