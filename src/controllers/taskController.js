@@ -42,11 +42,13 @@ export const getAllTasks = async (req, res) => {
 
 export const createNewTask = async (req, res) => {
     try {
-        const { followOnCreate, initial_insumos, initial_comments, ...rest } = req.body;
+        const { followOnCreate, initial_references, initial_inputs, initial_insumos, initial_comments, ...rest } = req.body;
         const taskData = {
             ...rest,
             creatorId: req.user.userId,
             followOnCreate,
+            initial_references: initial_references || [],
+            initial_inputs: initial_inputs || [],
             initial_insumos: initial_insumos || [],
             initial_comments: initial_comments || []
         };

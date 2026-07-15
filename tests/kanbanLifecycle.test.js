@@ -106,8 +106,10 @@ test('Kanban Critical Flow Integration', async (t) => {
             clientId: testClient.id,
             creatorId: testUser.id,
             status: 'PENDIENTE',
-            initial_insumos: [
-                { url: 'https://figma.com/design-file', name: 'Figma de la Campaña' },
+            initial_references: [
+                { url: 'https://figma.com/design-file', name: 'Figma de la Campaña' }
+            ],
+            initial_inputs: [
                 { url: 'https://docs.google.com/doc', name: 'Brief de Contenido' }
             ],
             initial_comments: [
@@ -133,10 +135,15 @@ test('Kanban Critical Flow Integration', async (t) => {
         assert.strictEqual(dbTask.taskAttachments.length, 2);
         assert.strictEqual(dbTask.taskComments.length, 2);
 
-        // Verify content
-        const attachmentUrls = dbTask.taskAttachments.map(a => a.url);
-        assert.ok(attachmentUrls.includes('https://figma.com/design-file'));
-        assert.ok(attachmentUrls.includes('https://docs.google.com/doc'));
+        // Verify categories
+        const refAttachment = dbTask.taskAttachments.find(a => a.category === 'REFERENCIA');
+        const inpAttachment = dbTask.taskAttachments.find(a => a.category === 'INSUMO');
+
+        assert.ok(refAttachment);
+        assert.strictEqual(refAttachment.url, 'https://figma.com/design-file');
+
+        assert.ok(inpAttachment);
+        assert.strictEqual(inpAttachment.url, 'https://docs.google.com/doc');
 
         const commentContents = dbTask.taskComments.map(c => c.content);
         assert.ok(commentContents.includes('Este es el primer comentario inicial'));
@@ -155,7 +162,7 @@ test('Kanban Critical Flow Integration', async (t) => {
             clientId: testClient.id,
             creatorId: testUser.id,
             status: 'PENDIENTE',
-            initial_insumos: [
+            initial_references: [
                 // Providing invalid fields (url is required, name can be null but url must be present)
                 // We pass null for url to trigger database exception / validation error
                 { url: null, name: 'Invalid Link' }
