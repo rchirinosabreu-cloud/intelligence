@@ -90,10 +90,35 @@ async function seedTeam() {
 
     const hasDB = !!process.env.DATABASE_URL;
     if (!hasDB) {
-        console.warn("WARNING: DATABASE_URL not found. Skipping live database mutations (upsert/insert), but running full local Excel parser dry-run for validation!");
+        console.warn("WARNING: DATABASE_URL not found. Skipping live database mutations, but running full local Excel parser dry-run for validation!");
     }
 
     try {
+        // --- STEP 1: HOT DATA CORRECTIONS (SURGICAL CLEANUP) ---
+        if (hasDB) {
+            console.log("Executing surgical identity data cleaning...");
+
+            // a) Restore chrodny's name to "Rodny Chirinos"
+            const chrodny = await prisma.user.findUnique({ where: { email: 'chrodny@gmail.com' } });
+            if (chrodny) {
+                await prisma.user.update({
+                    where: { id: chrodny.id },
+                    data: { name: "Rodny Chirinos" }
+                });
+                console.log("Restored Rodny Chirinos' identity name.");
+            }
+
+            // b) Purge admin@brainstudio.com from TeamMember
+            const adminUser = await prisma.user.findUnique({ where: { email: 'admin@brainstudio.com' } });
+            if (adminUser) {
+                await prisma.teamMember.deleteMany({
+                    where: { userId: adminUser.id }
+                });
+                console.log("Successfully purged admin@brainstudio.com from public TeamMember listings.");
+            }
+        }
+
+        // --- STEP 2: PARSE NOMINA SHEET ---
         console.log(`Loading NOMINA sheet from ${file2026Local}...`);
         const wb = xlsx.readFile(file2026Local);
         const wsNomina = wb.Sheets['NOMINA'] || wb.Sheets[wb.SheetNames[0]];
@@ -113,6 +138,8 @@ async function seedTeam() {
             return;
         }
 
+        const blacklistedEmails = ['admin@brainstudio.com', 'test@brainstudio.com'];
+
         for (let r = 1; r < rowsNomina.length; r++) {
             const row = rowsNomina[r];
             if (!row || row.length === 0) continue;
@@ -120,9 +147,15 @@ async function seedTeam() {
             const email = cleanString(row[emailIdx]).toLowerCase();
             if (!email) continue;
 
+            // Skip blacklist items to block mock users or admin rows from public TeamMember
+            if (blacklistedEmails.includes(email)) {
+                console.log(`Skipping blacklisted user row: ${email}`);
+                continue;
+            }
+
             // Generate clean human-readable names
             let name = email.split('@')[0].split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
-            if (email === 'chrodny@gmail.com') name = 'Rodny';
+            if (email === 'chrodny@gmail.com') name = 'Rodny Chirinos';
 
             let role = 'EDITOR';
             if (email.includes('admin') || email.includes('rodny') || email.includes('villa') || email.includes('mestra')) {
@@ -134,12 +167,11 @@ async function seedTeam() {
             console.log(`Parsed team member: Name: ${name}, Email: ${email}, Role: ${role}, Financial Access: ${hasFinancialAccess}`);
 
             if (hasDB) {
-                // 1. Upsert User
+                // 1. Upsert User (NON-DESTRUCTIVE for name, role, avatarUrl)
                 const user = await prisma.user.upsert({
                     where: { email },
                     update: {
-                        name,
-                        role,
+                        // We do NOT overwrite name, role or avatarUrl here to prevent wiping production custom modifications
                         hasFinancialAccess
                     },
                     create: {
@@ -163,7 +195,7 @@ async function seedTeam() {
                     await prisma.teamMember.update({
                         where: { id: existingMember.id },
                         data: {
-                            name,
+                            // Non-destructive update pattern
                             role: memberRole,
                             email
                         }
@@ -179,7 +211,7 @@ async function seedTeam() {
                         }
                     });
                 }
-                console.log(`Successfully seeded user & team member in PostgreSQL: ${email}`);
+                console.log(`Successfully seeded/synced user & team member in PostgreSQL: ${email}`);
             }
         }
 
