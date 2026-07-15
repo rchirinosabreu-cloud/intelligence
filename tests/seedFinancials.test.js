@@ -36,7 +36,7 @@ test('Financial Seeding & Horizontal Parsing Engine', async (t) => {
         const concepts = rows.map(r => r[0]);
         assert.ok(concepts.includes('INGRESOS'), 'Debe existir la sección de ingresos');
         assert.ok(concepts.includes('EGRESOS'), 'Debe existir la sección de egresos');
-        assert.ok(concepts.includes('Bonsai CTG'), 'Debe existir el cliente Bonsai CTG');
+        assert.ok(concepts.includes('Gobernación de Bolívar'), 'Debe existir el cliente Gobernación de Bolívar');
     });
 
     await t.test('Prueba 3: Estructura interna de FINANZAS BRAIN STUDIO 2026', () => {
@@ -66,5 +66,19 @@ test('Financial Seeding & Horizontal Parsing Engine', async (t) => {
         assert.ok(headersNomina.includes('COLABORADOR/EMAIL'), 'La hoja de NOMINA debe contener la columna Colaborador/Email');
         assert.ok(headersNomina.includes('SALARIO BASE'), 'La hoja de NOMINA debe contener la columna Salario Base');
         assert.ok(headersNomina.includes('SEGURIDAD SOCIAL'), 'La hoja de NOMINA debe contener la columna Seguridad Social');
+    });
+
+    await t.test('Prueba 5: Validación de Cartera Morosa Real sumando exactamente $38,755,614 COP', () => {
+        const wb = xlsx.readFile(file2026);
+        const wsMorosos = wb.Sheets['MOROSOS'];
+        const rowsMorosos = xlsx.utils.sheet_to_json(wsMorosos, { header: 1 });
+
+        let sum = 0;
+        for (let i = 1; i < rowsMorosos.length; i++) {
+            const amt = parseFloat(rowsMorosos[i][2]);
+            if (!isNaN(amt)) sum += amt;
+        }
+
+        assert.strictEqual(sum, 38755614, 'La sumatoria de deudas de morosos debe ser exactamente 38,755,614 COP');
     });
 });

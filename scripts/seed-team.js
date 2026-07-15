@@ -68,13 +68,20 @@ async function seedTeam() {
     }
 
     if (!fs.existsSync(file2026Local)) {
-        console.warn("WARNING: FINANZAS_BRAIN_STUDIO_2026.xlsx not found. Creating default mock file to proceed offline...");
-        // Auto generate to allow offline local sandbox runs
+        console.warn("WARNING: FINANZAS_BRAIN_STUDIO_2026.xlsx not found. Creating real-template mock file to proceed offline...");
+        // Auto generate to allow offline local sandbox runs with the actual required staff
         const wb = xlsx.utils.book_new();
         const rowsNomina = [
             ['Colaborador/Email', 'Salario Base', 'Seguridad Social', 'Fecha Inicio', 'Fecha Fin'],
-            ['admin@brainstudio.com', 3000000, 400000, '2021-01-01', ''],
-            ['chrodny@gmail.com', 4500000, 550000, '2021-01-01', '']
+            ['francisco.villa@brainstudio.com', 6000000, 800000, '2021-01-01', ''],
+            ['claudia@brainstudio.com', 3500000, 500000, '2021-01-01', ''],
+            ['elisa.mestra@brainstudio.com', 4000000, 550000, '2021-01-01', ''],
+            ['melissa.castano@brainstudio.com', 3800000, 520000, '2021-01-01', ''],
+            ['camila@brainstudio.com', 3200000, 450000, '2021-01-01', ''],
+            ['jarlan@brainstudio.com', 3000000, 420000, '2021-01-01', ''],
+            ['helen@brainstudio.com', 2800000, 400000, '2021-01-01', ''],
+            ['kamila.del.toro@brainstudio.com', 4500000, 600000, '2021-01-01', ''],
+            ['practicante@brainstudio.com', 1300000, 150000, '2021-01-01', '']
         ];
         const ws_nomina = xlsx.utils.aoa_to_sheet(rowsNomina);
         xlsx.utils.book_append_sheet(wb, ws_nomina, 'NOMINA');
@@ -113,12 +120,16 @@ async function seedTeam() {
             const email = cleanString(row[emailIdx]).toLowerCase();
             if (!email) continue;
 
-            const name = email.split('@')[0];
-            let role = 'EDITOR';
-            if (email.includes('admin')) role = 'ADMIN';
-            if (email.includes('rodny')) role = 'ADMIN'; // Rodny is admin
+            // Generate clean human-readable names
+            let name = email.split('@')[0].split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+            if (email === 'chrodny@gmail.com') name = 'Rodny';
 
-            const hasFinancialAccess = email.includes('admin') || email.includes('rodny');
+            let role = 'EDITOR';
+            if (email.includes('admin') || email.includes('rodny') || email.includes('villa') || email.includes('mestra')) {
+                role = 'ADMIN'; // Key admins
+            }
+
+            const hasFinancialAccess = email.includes('admin') || email.includes('rodny') || email.includes('villa') || email.includes('mestra');
 
             console.log(`Parsed team member: Name: ${name}, Email: ${email}, Role: ${role}, Financial Access: ${hasFinancialAccess}`);
 
@@ -146,12 +157,14 @@ async function seedTeam() {
                     where: { userId: user.id }
                 });
 
+                const memberRole = role === 'ADMIN' ? 'Project Manager' : 'Editor de Video';
+
                 if (existingMember) {
                     await prisma.teamMember.update({
                         where: { id: existingMember.id },
                         data: {
                             name,
-                            role: role === 'ADMIN' ? 'Project Manager' : 'Editor de Video',
+                            role: memberRole,
                             email
                         }
                     });
@@ -159,7 +172,7 @@ async function seedTeam() {
                     await prisma.teamMember.create({
                         data: {
                             name,
-                            role: role === 'ADMIN' ? 'Project Manager' : 'Editor de Video',
+                            role: memberRole,
                             email,
                             userId: user.id,
                             isActive: true
