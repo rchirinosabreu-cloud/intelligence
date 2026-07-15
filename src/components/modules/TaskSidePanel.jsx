@@ -899,9 +899,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                             setNewRefUrl("");
                                                             setNewRefName("");
                                                         }}
-                                                        className="bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                                        className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-xl transition-all shrink-0 flex items-center justify-center h-[38px] w-[38px]"
+                                                        title="Agregar Referencia"
                                                     >
-                                                        Agregar
+                                                        <Plus size={16} />
                                                     </button>
                                                 </div>
                                             </div>
@@ -958,9 +959,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                             setNewInpUrl("");
                                                             setNewInpName("");
                                                         }}
-                                                        className="bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                                        className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-xl transition-all shrink-0 flex items-center justify-center h-[38px] w-[38px]"
+                                                        title="Agregar Insumo"
                                                     >
-                                                        Agregar
+                                                        <Plus size={16} />
                                                     </button>
                                                 </div>
                                             </div>
