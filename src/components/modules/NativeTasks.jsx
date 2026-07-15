@@ -208,7 +208,8 @@ const NativeTasks = () => {
                 aiCategory: task.aiCategory,
                 aiComplexity: task.aiComplexity,
                 plan: task.plan,
-                taskComments: task.taskComments || []
+                taskComments: task.taskComments || [],
+                taskAttachments: task.taskAttachments || []
             }));
         },
         enabled: !!localStorage.getItem('authToken'),
@@ -285,7 +286,7 @@ const NativeTasks = () => {
                 body: JSON.stringify({
                     status: 'DEVUELTA',
                     isReturned: true,
-                    comments: returnReason
+                    returnReason: returnReason
                 })
             });
 

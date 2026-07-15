@@ -185,4 +185,71 @@ test('Kanban Critical Flow Integration', async (t) => {
 
         assert.strictEqual(dbTasks.length, 0);
     });
+
+    await t.test('Prueba 6: Preservación de Descripción e Historial en Transiciones de Estado', async () => {
+        if (!process.env.DATABASE_URL) return;
+
+        // Create task with base description and initial comment
+        const transitionTaskData = {
+            title: 'Transition Lifecycle Task',
+            comments: 'Original Description',
+            clientId: testClient.id,
+            creatorId: testUser.id,
+            status: 'PENDIENTE',
+            initial_comments: [
+                { content: 'Primer comentario humano' }
+            ]
+        };
+
+        const task = await createTask(transitionTaskData);
+
+        assert.ok(task.id);
+        assert.strictEqual(task.comments, 'Original Description');
+
+        // Execute Devolución with decoupled returnReason
+        const returned = await updateTask(task.id, {
+            status: 'DEVUELTA',
+            returnReason: 'Invalid Asset Link'
+        }, testUser.id);
+
+        assert.strictEqual(returned.status, 'DEVUELTA');
+        // Assert description comments in Task table remains untouched
+        assert.strictEqual(returned.comments, 'Original Description');
+
+        // Fetch task from DB with comments
+        const dbReturned = await prisma.task.findUnique({
+            where: { id: task.id },
+            include: { taskComments: true }
+        });
+
+        // Should have 2 comments: 1 human, 1 system_return
+        assert.strictEqual(dbReturned.taskComments.length, 2);
+        const commentTypes = dbReturned.taskComments.map(c => c.type);
+        assert.ok(commentTypes.includes('human'));
+        assert.ok(commentTypes.includes('system_return'));
+
+        // Execute Reintegración with decoupled reintegrateReason
+        const reintegrated = await updateTask(task.id, {
+            status: 'PENDIENTE',
+            reintegrateReason: 'Fixed Asset Link'
+        }, testUser.id);
+
+        assert.strictEqual(reintegrated.status, 'PENDIENTE');
+        // Assert description comments in Task table remains untouched
+        assert.strictEqual(reintegrated.comments, 'Original Description');
+
+        // Fetch task from DB with comments
+        const dbReintegrated = await prisma.task.findUnique({
+            where: { id: task.id },
+            include: { taskComments: true }
+        });
+
+        // Should have 3 comments: 1 human, 1 system_return, 1 system_reintegrate
+        assert.strictEqual(dbReintegrated.taskComments.length, 3);
+        const finalCommentTypes = dbReintegrated.taskComments.map(c => c.type);
+        assert.ok(finalCommentTypes.includes('system_reintegrate'));
+
+        // Clean up
+        await prisma.task.delete({ where: { id: task.id } }).catch(() => {});
+    });
 });

@@ -438,6 +438,11 @@ export const updateTask = async (id, data, updaterId = null) => {
 
         const updateData = { ...data };
 
+        // Extract and isolate returnReason and reintegrateReason
+        const { returnReason, reintegrateReason } = updateData;
+        delete updateData.returnReason;
+        delete updateData.reintegrateReason;
+
         // Handle adding a single new attachment in edition mode
         if (updateData.newAttachment) {
             const { name, url, category } = updateData.newAttachment;
@@ -492,18 +497,16 @@ export const updateTask = async (id, data, updaterId = null) => {
                 updateData.isReturned = true;
                 updateData.returnedAt = new Date();
 
-                // Create System Comment for Return
-                if (updateData.comments) {
+                // Create System Comment for Return using the decoupled returnReason
+                if (returnReason) {
                     await prisma.taskComment.create({
                         data: {
                             taskId: id,
                             authorId: updaterId,
-                            content: updateData.comments,
+                            content: returnReason,
                             type: 'system_return'
                         }
                     });
-                    // Clean up comments from main task table to keep it tidy
-                    updateData.comments = "";
                 }
             }
 
@@ -526,18 +529,16 @@ export const updateTask = async (id, data, updaterId = null) => {
                 updateData.returnedAt = null;
             }
 
-            // Fix Reintegration: Create system_reintegrate comment
-            if (isCorrected && updateData.comments) {
+            // Fix Reintegration: Create system_reintegrate comment using the decoupled reintegrateReason
+            if (isCorrected && reintegrateReason) {
                 await prisma.taskComment.create({
                     data: {
                         taskId: id,
                         authorId: updaterId,
-                        content: updateData.comments,
+                        content: reintegrateReason,
                         type: 'system_reintegrate'
                     }
                 });
-                // Clear comments from main task table
-                updateData.comments = "";
             }
 
             if (newStatus === 'REALIZADA') {

@@ -315,7 +315,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
 
-            // 1. Update status with justification in comments field for backend processing
+            // 1. Update status with justification in reintegrateReason field for backend processing
             const statusRes = await fetch(`${baseUrl}/api/tasks/${formData.id}`, {
                 method: 'PATCH',
                 headers: {
@@ -324,7 +324,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 },
                 body: JSON.stringify({
                     status: 'PENDIENTE',
-                    comments: reintegrateReason // Backend will pick this up for the system_reintegrate comment
+                    reintegrateReason: reintegrateReason
                 })
             });
 
