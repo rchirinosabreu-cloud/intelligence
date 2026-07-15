@@ -8,6 +8,36 @@ import prisma from '../src/lib/prisma.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Real identity mapping dictionary for production-grade syncing
+const IDENTITY_MAP = {
+    "claudia": "claudiam.munozgil@gmail.com",
+    "claudia/keila": "claudiam.munozgil@gmail.com",
+    "elisa mestra": "elisamestravargas@gmail.com",
+    "elisa": "elisamestravargas@gmail.com",
+    "francisco villa": "fvilladigital@gmail.com",
+    "francisco": "fvilladigital@gmail.com",
+    "melissa castaño": "melissacastanobrain@gmail.com",
+    "melissa": "melissacastanobrain@gmail.com",
+    "jarlan": "espinosajarlan@gmail.com",
+    "kamila": "kamila.del.toro@brainstudio.com",
+    "gabriel/kamila": "kamila.del.toro@brainstudio.com",
+    "camila": "camila@brainstudio.com",
+    "helen": "helen@brainstudio.com",
+    "practicante": "practicante@brainstudio.com",
+    "rodny": "chrodny@gmail.com"
+};
+
+function resolveEmail(rawName) {
+    const key = String(rawName || '').trim().toLowerCase();
+    if (IDENTITY_MAP[key]) return IDENTITY_MAP[key];
+
+    // If it's already an email, return it directly
+    if (key.includes('@')) return key;
+
+    // Default fallback to prevent crash
+    return `${key.replace(/\s+/g, '')}@brainstudio.com`;
+}
+
 // Download file from S3 bucket
 async function downloadFromS3(key, localPath) {
     const endpoint = process.env.AWS_ENDPOINT_URL || "https://t3.storageapi.dev";
@@ -144,8 +174,11 @@ async function seedTeam() {
             const row = rowsNomina[r];
             if (!row || row.length === 0) continue;
 
-            const email = cleanString(row[emailIdx]).toLowerCase();
-            if (!email) continue;
+            const rawEmailOrName = cleanString(row[emailIdx]);
+            if (!rawEmailOrName) continue;
+
+            // Resolve real production email using IDENTITY_MAP
+            const email = resolveEmail(rawEmailOrName);
 
             // Skip blacklist items to block mock users or admin rows from public TeamMember
             if (blacklistedEmails.includes(email)) {
@@ -156,13 +189,18 @@ async function seedTeam() {
             // Generate clean human-readable names
             let name = email.split('@')[0].split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
             if (email === 'chrodny@gmail.com') name = 'Rodny Chirinos';
+            if (email === 'claudiam.munozgil@gmail.com') name = 'Claudia';
+            if (email === 'elisamestravargas@gmail.com') name = 'Elisa Mestra';
+            if (email === 'fvilladigital@gmail.com') name = 'Francisco Villa';
+            if (email === 'melissacastanobrain@gmail.com') name = 'Melissa Castaño';
+            if (email === 'espinosajarlan@gmail.com') name = 'Jarlan';
 
             let role = 'EDITOR';
-            if (email.includes('admin') || email.includes('rodny') || email.includes('villa') || email.includes('mestra')) {
+            if (email === 'chrodny@gmail.com' || email === 'fvilladigital@gmail.com' || email === 'elisamestravargas@gmail.com') {
                 role = 'ADMIN'; // Key admins
             }
 
-            const hasFinancialAccess = email.includes('admin') || email.includes('rodny') || email.includes('villa') || email.includes('mestra');
+            const hasFinancialAccess = email === 'chrodny@gmail.com' || email === 'fvilladigital@gmail.com' || email === 'elisamestravargas@gmail.com';
 
             console.log(`Parsed team member: Name: ${name}, Email: ${email}, Role: ${role}, Financial Access: ${hasFinancialAccess}`);
 
