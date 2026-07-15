@@ -8,6 +8,11 @@ import prisma from '../src/lib/prisma.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Helper to convert floats securely
+const roundFloat = (val) => {
+    return Math.round((val + Number.EPSILON) * 100) / 100;
+};
+
 // Helper to slugify client names
 function slugify(text) {
     if (!text) return '';
@@ -110,7 +115,7 @@ async function downloadFromS3(key, localPath) {
 
 // Programmatic mock Excel generator for development/testing if no files are found
 function generateMockExcels(dataDir) {
-    console.log("Generating mock Excel files for testing/development...");
+    console.log("Generating real-template mock Excel files for testing/development...");
 
     // 1. FINANZAS_BRAIN_STUDIO_2021_2025.xlsx
     const wb1 = xlsx.utils.book_new();
@@ -126,9 +131,13 @@ function generateMockExcels(dataDir) {
     const rows1 = [
         headers1,
         ['INGRESOS'],
-        ['Bonsai CTG', ...Array(60).fill(1500000)],
-        ['Muebles Nuva', ...Array(60).fill(2500000)],
-        ['New Client 2025', ...Array(48).fill(0), ...Array(12).fill(1800000)],
+        ['Gobernación de Bolívar', ...Array(60).fill(6000000)],
+        ['Mio Agencia', ...Array(60).fill(4000000)],
+        ['Unimudanzas', ...Array(60).fill(3000000)],
+        ['Grupo Brieva', ...Array(60).fill(3500000)],
+        ['Elvira', ...Array(60).fill(2500000)],
+        ['Muebles Nuva', ...Array(60).fill(3000000)],
+        ['SunPartners', ...Array(60).fill(3000000)],
         ['EGRESOS'],
         ['Nómina', ...Array(60).fill(10000000)],
         ['Pauta', ...Array(60).fill(4000000)],
@@ -154,8 +163,13 @@ function generateMockExcels(dataDir) {
     const rows2 = [
         headers2,
         ['INGRESOS'],
-        ['Bonsai CTG', ...Array(12).fill(2000000)],
+        ['Gobernación de Bolívar', ...Array(12).fill(6000000)],
+        ['Mio Agencia', ...Array(12).fill(4000000)],
+        ['Unimudanzas', ...Array(12).fill(3000000)],
+        ['Grupo Brieva', ...Array(12).fill(3500000)],
+        ['Elvira', ...Array(12).fill(2500000)],
         ['Muebles Nuva', ...Array(12).fill(3000000)],
+        ['SunPartners', ...Array(12).fill(3000000)],
         ['EGRESOS'],
         ['Nómina', ...Array(12).fill(12000000)],
         ['Pauta', ...Array(12).fill(5000000)],
@@ -168,11 +182,16 @@ function generateMockExcels(dataDir) {
     const ws2_main = xlsx.utils.aoa_to_sheet(rows2);
     xlsx.utils.book_append_sheet(wb2, ws2_main, 'FINANZAS BRAIN STUDIO 2026');
 
-    // MOROSOS sheet
+    // MOROSOS sheet - Sums exactly to $38,755,614
     const rowsMorosos = [
         ['Cliente', 'Mes', 'Monto', 'Fecha Vence', 'Estado', 'Notas'],
-        ['Muebles Nuva', '2026-04-01', 1500000, '2026-04-15', 'DEBE', 'dijo que pagaba el viernes'],
-        ['SunPartners', '2026-05-01', 2000000, '2026-05-15', 'PROMESADO', 'pendiente confirmacion'],
+        ['Muebles Nuva', '2026-04-01', 6500000, '2026-04-15', 'DEBE', 'factura pendiente abril'],
+        ['SunPartners', '2026-05-01', 7200000, '2026-05-15', 'DEBE', 'factura pendiente mayo'],
+        ['Salsipuedes', '2026-05-01', 5400000, '2026-05-15', 'DEBE', 'cuenta vencida'],
+        ['Colegio Las Américas', '2026-05-01', 4800000, '2026-05-15', 'DEBE', 'pendiente cobro'],
+        ['Alestructurar', '2026-05-01', 5200000, '2026-05-15', 'DEBE', 'promesa de pago'],
+        ['New Pueblito', '2026-05-01', 6100000, '2026-05-15', 'DEBE', 'pendiente transferencia'],
+        ['Elvira Utria', '2026-05-01', 3555614, '2026-05-15', 'DEBE', 'saldo conciliado a pagar']
     ];
     const ws2_morosos = xlsx.utils.aoa_to_sheet(rowsMorosos);
     xlsx.utils.book_append_sheet(wb2, ws2_morosos, 'MOROSOS');
@@ -180,8 +199,15 @@ function generateMockExcels(dataDir) {
     // NOMINA sheet
     const rowsNomina = [
         ['Colaborador/Email', 'Salario Base', 'Seguridad Social', 'Fecha Inicio', 'Fecha Fin'],
-        ['admin@brainstudio.com', 3000000, 400000, '2021-01-01', ''],
-        ['chrodny@gmail.com', 4500000, 550000, '2021-01-01', '']
+        ['francisco.villa@brainstudio.com', 6000000, 800000, '2021-01-01', ''],
+        ['claudia@brainstudio.com', 3500000, 500000, '2021-01-01', ''],
+        ['elisa.mestra@brainstudio.com', 4000000, 550000, '2021-01-01', ''],
+        ['melissa.castano@brainstudio.com', 3800000, 520000, '2021-01-01', ''],
+        ['camila@brainstudio.com', 3200000, 450000, '2021-01-01', ''],
+        ['jarlan@brainstudio.com', 3000000, 420000, '2021-01-01', ''],
+        ['helen@brainstudio.com', 2800000, 400000, '2021-01-01', ''],
+        ['kamila.del.toro@brainstudio.com', 4500000, 600000, '2021-01-01', ''],
+        ['practicante@brainstudio.com', 1300000, 150000, '2021-01-01', '']
     ];
     const ws2_nomina = xlsx.utils.aoa_to_sheet(rowsNomina);
     xlsx.utils.book_append_sheet(wb2, ws2_nomina, 'NOMINA');
@@ -189,8 +215,8 @@ function generateMockExcels(dataDir) {
     // AJUSTES_NOMINA sheet
     const rowsAjustes = [
         ['Colaborador/Email', 'Mes', 'Tipo', 'Monto', 'Descripción'],
-        ['chrodny@gmail.com', '2026-01-01', 'BONUS', 500000, 'Bono por desempeño'],
-        ['admin@brainstudio.com', '2026-01-01', 'COMMISSION', 300000, 'Comisión de ventas']
+        ['kamila.del.toro@brainstudio.com', '2026-01-01', 'BONUS', 500000, 'Bono por desempeño extraordinario'],
+        ['francisco.villa@brainstudio.com', '2026-01-01', 'COMMISSION', 300000, 'Comisión de ventas']
     ];
     const ws2_ajustes = xlsx.utils.aoa_to_sheet(rowsAjustes);
     xlsx.utils.book_append_sheet(wb2, ws2_ajustes, 'AJUSTES_NOMINA');
@@ -446,7 +472,7 @@ async function processNomina(rows, hasDB) {
         const row = rows[r];
         if (!row || row.length === 0) continue;
 
-        const email = cleanString(row[emailIdx]);
+        const email = cleanString(row[emailIdx]).toLowerCase();
         if (!email) continue;
 
         const baseSalary = cleanNumber(row[salaryIdx]);
@@ -455,17 +481,21 @@ async function processNomina(rows, hasDB) {
         const endDate = endIdx !== -1 && row[endIdx] ? parseDate(row[endIdx]) : null;
 
         if (hasDB) {
-            // Upsert User with email or name to prevent relational foreign key crash
+            // Lookup or create user
             let user = await prisma.user.findUnique({ where: { email } });
             if (!user) {
+                // Generate clean human-readable names
+                let name = email.split('@')[0].split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+                if (email === 'chrodny@gmail.com') name = 'Rodny';
+
                 user = await prisma.user.create({
                     data: {
-                        name: email.split('@')[0],
+                        name,
                         email,
                         password: 'password_hashed_seeded',
-                        role: 'EDITOR',
+                        role: email.includes('admin') || email.includes('rodny') || email.includes('villa') || email.includes('mestra') ? 'ADMIN' : 'EDITOR',
                         isActive: true,
-                        hasFinancialAccess: email.includes('admin') || email.includes('rodny')
+                        hasFinancialAccess: email.includes('admin') || email.includes('rodny') || email.includes('villa') || email.includes('mestra')
                     }
                 });
                 console.log(`Seeded placeholder user: ${email}`);
@@ -505,7 +535,7 @@ async function processAjustesNomina(rows, hasDB) {
         const row = rows[r];
         if (!row || row.length === 0) continue;
 
-        const email = cleanString(row[emailIdx]);
+        const email = cleanString(row[emailIdx]).toLowerCase();
         if (!email) continue;
 
         const amount = cleanNumber(row[montoIdx]);
@@ -527,14 +557,18 @@ async function processAjustesNomina(rows, hasDB) {
             // Lookup User
             let user = await prisma.user.findUnique({ where: { email } });
             if (!user) {
+                // Generate clean human-readable names
+                let name = email.split('@')[0].split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+                if (email === 'chrodny@gmail.com') name = 'Rodny';
+
                 user = await prisma.user.create({
                     data: {
-                        name: email.split('@')[0],
+                        name,
                         email,
                         password: 'password_hashed_seeded',
-                        role: 'EDITOR',
+                        role: email.includes('admin') || email.includes('rodny') || email.includes('villa') || email.includes('mestra') ? 'ADMIN' : 'EDITOR',
                         isActive: true,
-                        hasFinancialAccess: email.includes('admin') || email.includes('rodny')
+                        hasFinancialAccess: email.includes('admin') || email.includes('rodny') || email.includes('villa') || email.includes('mestra')
                     }
                 });
                 console.log(`Seeded placeholder user for Adjustments: ${email}`);
