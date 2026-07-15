@@ -272,14 +272,10 @@ const NativeTasks = () => {
         try {
             setIsSubmittingReturn(true);
             const baseUrl = getApiBaseUrl();
-            const returnTag = `[DEVOLUCIÓN - ${new Date().toLocaleDateString()}]: ${returnReason}`;
-            const updatedComments = (returningTask.comments)
-                ? `${returnTag}\n\n${returningTask.comments}`
-                : returnTag;
 
             queryClient.setQueryData(['nativeTasks'], prev => prev?.map(t =>
                 t.id === returningTask.id
-                    ? { ...t, status: 'DEVUELTA', isReturned: true, comments: updatedComments, comentarios: updatedComments }
+                    ? { ...t, status: 'DEVUELTA', isReturned: true }
                     : t
             ));
 
@@ -289,7 +285,7 @@ const NativeTasks = () => {
                 body: JSON.stringify({
                     status: 'DEVUELTA',
                     isReturned: true,
-                    comments: updatedComments
+                    comments: returnReason
                 })
             });
 
@@ -429,9 +425,6 @@ const NativeTasks = () => {
             destinationColumnId === 'devuelto' ? 'DEVUELTA' : 'REALIZADA';
         movedTask.status = newStatusEnum;
         if (newStatusEnum === 'PENDIENTE' && sourceColumnId === 'devuelto') {
-            const now = new Date().toLocaleString('es-CO');
-            const reintegratedTag = `[REINTEGRADA - ${now}]`;
-            movedTask.comments = `${reintegratedTag}\n${movedTask.comments || ''}`.trim();
             movedTask.isReturned = false;
         }
         const visibleTasksInDestColumn = newTasks.filter(task => {
