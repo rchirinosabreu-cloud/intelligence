@@ -153,6 +153,7 @@ export const getTasks = async (clientId) => {
                     include: { author: true },
                     orderBy: { createdAt: 'desc' }
                 },
+                taskAttachments: true,
                 contentItem: {
                     include: {
                         plan: {
@@ -206,7 +207,7 @@ export const createTask = async ({
     title, dueDate, assigneeId, creatorId, comments, status, clientId,
     isPriority = false, isSpecial = false, specialType = null, referenceUrl = null,
     contentItemId = null, followOnCreate = false,
-    initial_insumos = [], initial_comments = []
+    initial_references = [], initial_inputs = [], initial_insumos = [], initial_comments = []
 }) => {
     try {
         const mappedStatus = statusMapper[status] || 'PENDIENTE';
@@ -231,14 +232,45 @@ export const createTask = async ({
                 }
             });
 
-            // 2. Insert initial_insumos into TaskAttachment if any
+            // 2. Insert initial_references, initial_inputs, and initial_insumos if any
+            const attachmentsToCreate = [];
+
+            if (Array.isArray(initial_references) && initial_references.length > 0) {
+                initial_references.forEach(ref => {
+                    attachmentsToCreate.push({
+                        taskId: task.id,
+                        url: ref.url,
+                        name: ref.name || null,
+                        category: 'REFERENCIA'
+                    });
+                });
+            }
+
+            if (Array.isArray(initial_inputs) && initial_inputs.length > 0) {
+                initial_inputs.forEach(input => {
+                    attachmentsToCreate.push({
+                        taskId: task.id,
+                        url: input.url,
+                        name: input.name || null,
+                        category: 'INSUMO'
+                    });
+                });
+            }
+
             if (Array.isArray(initial_insumos) && initial_insumos.length > 0) {
-                await tx.taskAttachment.createMany({
-                    data: initial_insumos.map(insumo => ({
+                initial_insumos.forEach(insumo => {
+                    attachmentsToCreate.push({
                         taskId: task.id,
                         url: insumo.url,
-                        name: insumo.name || null
-                    }))
+                        name: insumo.name || null,
+                        category: 'INSUMO'
+                    });
+                });
+            }
+
+            if (attachmentsToCreate.length > 0) {
+                await tx.taskAttachment.createMany({
+                    data: attachmentsToCreate
                 });
             }
 
@@ -406,9 +438,31 @@ export const updateTask = async (id, data, updaterId = null) => {
 
         const updateData = { ...data };
 
+        // Handle adding a single new attachment in edition mode
+        if (updateData.newAttachment) {
+            const { name, url, category } = updateData.newAttachment;
+            await prisma.taskAttachment.create({
+                data: {
+                    taskId: id,
+                    name: name || null,
+                    url,
+                    category: category || 'REFERENCIA'
+                }
+            });
+            delete updateData.newAttachment;
+        }
+
+        // Handle deleting an attachment in edition mode
+        if (updateData.deleteAttachmentId) {
+            await prisma.taskAttachment.delete({
+                where: { id: updateData.deleteAttachmentId }
+            });
+            delete updateData.deleteAttachmentId;
+        }
+
         // Critical Fix: Sanitize updateData to prevent nested relational updates
         // that cause duplication or unlinking of records (e.g. "New Pueblito" bug)
-        const relationsToStrip = ['client', 'assignee', 'creator', 'contentItem', 'plan'];
+        const relationsToStrip = ['client', 'assignee', 'creator', 'contentItem', 'plan', 'taskAttachments'];
         relationsToStrip.forEach(key => delete updateData[key]);
 
         // Normalize category if provided in the update payload
@@ -600,6 +654,7 @@ export const updateTask = async (id, data, updaterId = null) => {
                     include: { author: true },
                     orderBy: { createdAt: 'desc' }
                 },
+                taskAttachments: true,
                 contentItem: {
                     include: {
                         plan: {

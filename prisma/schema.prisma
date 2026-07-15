@@ -279,13 +279,19 @@ model Task {
   taskAttachments TaskAttachment[]
 }
 
+enum AttachmentCategory {
+  REFERENCIA
+  INSUMO
+}
+
 model TaskAttachment {
-  id        String   @id @default(uuid())
+  id        String             @id @default(uuid())
   taskId    String
   url       String
   name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  category  AttachmentCategory @default(REFERENCIA)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 }

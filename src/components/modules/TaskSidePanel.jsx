@@ -51,10 +51,20 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [previewImage, setPreviewImage] = useState(null);
 
     // States for Task Creation mode
-    const [tempInsumos, setTempInsumos] = useState([]); // Array of { url, name }
-    const [tempComments, setTempComments] = useState([]); // Array of { content, createdAt, id }
-    const [newInsumoUrl, setNewInsumoUrl] = useState("");
-    const [newInsumoName, setNewInsumoName] = useState("");
+    const [tempReferences, setTempReferences] = useState([]); // Array of { url, name }
+    const [tempInputs, setTempInputs] = useState([]);         // Array of { url, name }
+    const [tempComments, setTempComments] = useState([]);     // Array of { content, createdAt, id }
+
+    const [newRefUrl, setNewRefUrl] = useState("");
+    const [newRefName, setNewRefName] = useState("");
+    const [newInpUrl, setNewInpUrl] = useState("");
+    const [newInpName, setNewInpName] = useState("");
+
+    // States for Task Edition mode attachments
+    const [editRefUrl, setEditRefUrl] = useState("");
+    const [editRefName, setEditRefName] = useState("");
+    const [editInpUrl, setEditInpUrl] = useState("");
+    const [editInpName, setEditInpName] = useState("");
 
     const commentInputRef = useRef(null);
     const scrollRef = useRef(null);
@@ -103,10 +113,17 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             setPreviewImage(null); // Clear image viewer state when opening a task
             setSelectedFile(null); // Clear pending attachment
             setNewComment("");    // Clear pending comment draft
-            setTempInsumos([]);   // Clear creation mode temporary links
-            setTempComments([]);  // Clear creation mode temporary comments
-            setNewInsumoUrl("");
-            setNewInsumoName("");
+            setTempReferences([]); // Clear creation mode temporary references
+            setTempInputs([]);     // Clear creation mode temporary inputs
+            setTempComments([]);   // Clear creation mode temporary comments
+            setNewRefUrl("");
+            setNewRefName("");
+            setNewInpUrl("");
+            setNewInpName("");
+            setEditRefUrl("");
+            setEditRefName("");
+            setEditInpUrl("");
+            setEditInpName("");
             if (isEdition && taskData) {
                 // Fetch follow status
                 const fetchFollowStatus = async () => {
@@ -160,6 +177,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     referenceLinks: referenceLinks,
                     assetsLinks: taskData.contentItem?.assetsLinks || [],
                     taskComments: taskData.taskComments || [],
+                    taskAttachments: taskData.taskAttachments || [],
                     creator: taskData.creator || { name: taskData.creatorName || 'Sistema' },
                     plan: taskData.plan,
                     contentItemId: taskData.contentItemId
@@ -179,7 +197,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     hasReference: false,
                     referenceUrl: '',
                     referenceLinks: [],
-                    assetsLinks: []
+                    assetsLinks: [],
+                    taskAttachments: []
                 });
             }
             setShowReintegratePrompt(false);
@@ -220,7 +239,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 isSpecial: formData.isSpecial,
                 specialType: formData.isSpecial ? formData.specialType : null,
                 followOnCreate: !isEdition ? isFollowing : undefined,
-                initial_insumos: !isEdition ? tempInsumos : undefined,
+                initial_references: !isEdition ? tempReferences : undefined,
+                initial_inputs: !isEdition ? tempInputs : undefined,
                 initial_comments: !isEdition ? tempComments.map(c => ({ content: c.content })) : undefined
             };
 
@@ -318,6 +338,82 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             toast({ variant: "destructive", title: "Error", description: "No se pudo reintegrar la tarea." });
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleCreateAttachment = async (name, url, category) => {
+        if (!url || !url.trim()) return;
+        let finalUrl = url.trim();
+        if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+            finalUrl = 'https://' + finalUrl;
+        }
+
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+
+            const res = await fetch(`${baseUrl}/api/tasks/${formData.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({
+                    newAttachment: {
+                        name: name.trim() || finalUrl,
+                        url: finalUrl,
+                        category
+                    }
+                })
+            });
+
+            if (res.ok) {
+                const updatedTask = await res.json();
+                setFormData(prev => ({
+                    ...prev,
+                    taskAttachments: updatedTask.taskAttachments || []
+                }));
+                toast({ title: "Enlace agregado" });
+                onSuccess(); // Refresh Kanban board
+            } else {
+                throw new Error("Failed to add attachment");
+            }
+        } catch (err) {
+            console.error("Error adding attachment:", err);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo guardar el enlace." });
+        }
+    };
+
+    const handleDeleteAttachment = async (attachmentId) => {
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+
+            const res = await fetch(`${baseUrl}/api/tasks/${formData.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({
+                    deleteAttachmentId: attachmentId
+                })
+            });
+
+            if (res.ok) {
+                const updatedTask = await res.json();
+                setFormData(prev => ({
+                    ...prev,
+                    taskAttachments: updatedTask.taskAttachments || []
+                }));
+                toast({ title: "Enlace eliminado" });
+                onSuccess(); // Refresh Kanban board
+            } else {
+                throw new Error("Failed to delete attachment");
+            }
+        } catch (err) {
+            console.error("Error deleting attachment:", err);
+            toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar el enlace." });
         }
     };
 
@@ -700,94 +796,285 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     </motion.div>
                                 )}
 
-                                {/* Links Section (Read-Only Dropdowns for Edition, Interactive list for Creation) */}
+                                {/* Links Section (Interactive columns for Edition, Interactive list for Creation) */}
                                 {isEdition ? (
-                                    <div className="space-y-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
-                                        <div className="flex items-center justify-between">
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                                                Insumos & Referencias
-                                            </label>
-                                            <span className="text-[8px] text-zinc-400 font-bold uppercase tracking-tight opacity-60">Gestión en Parrilla</span>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <LinkDropdown
-                                                label="Referencia"
-                                                links={formData.referenceLinks}
-                                                icon={FileText}
-                                            />
-                                            <LinkDropdown
-                                                label="Insumo"
-                                                links={formData.assetsLinks}
-                                                icon={Database}
-                                            />
-                                        </div>
-                                        {(!formData.referenceUrl && (!formData.assetsLinks || formData.assetsLinks.length === 0)) && (
-                                            <div className="text-[10px] text-zinc-400 italic text-center py-2 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800">
-                                                No hay enlaces vinculados a esta tarea.
+                                    <div className="space-y-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
+                                        {/* Legacy Links dropdowns (only shown if present to maintain backward compatibility with legacy Content Plans) */}
+                                        {(formData.referenceLinks?.length > 0 || formData.assetsLinks?.length > 0) && (
+                                            <div className="space-y-2 pb-3 border-b border-zinc-100 dark:border-zinc-800/10">
+                                                <div className="flex items-center justify-between">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                                                        Enlaces de Parrilla (Legados)
+                                                    </label>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    {formData.referenceLinks?.length > 0 && (
+                                                        <LinkDropdown
+                                                            label="Referencia"
+                                                            links={formData.referenceLinks}
+                                                            icon={FileText}
+                                                        />
+                                                    )}
+                                                    {formData.assetsLinks?.length > 0 && (
+                                                        <LinkDropdown
+                                                            label="Insumo"
+                                                            links={formData.assetsLinks}
+                                                            icon={Database}
+                                                        />
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
-                                        <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 block">
-                                            Insumos & Referencias
-                                        </label>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <input
-                                                type="text"
-                                                placeholder="Nombre del link (ej: Figma...)"
-                                                value={newInsumoName}
-                                                onChange={e => setNewInsumoName(e.target.value)}
-                                                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
-                                            />
-                                            <div className="flex gap-2">
+
+                                        {/* Columnas Interactivas para Referencias */}
+                                        <div className="space-y-2">
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 block">
+                                                Referencias
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-2">
                                                 <input
                                                     type="text"
-                                                    placeholder="URL (https://...)"
-                                                    value={newInsumoUrl}
-                                                    onChange={e => setNewInsumoUrl(e.target.value)}
-                                                    className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                                    placeholder="Nombre..."
+                                                    value={editRefName}
+                                                    onChange={e => setEditRefName(e.target.value)}
+                                                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
                                                 />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (!newInsumoUrl.trim()) return;
-                                                        let finalUrl = newInsumoUrl.trim();
-                                                        if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
-                                                            finalUrl = 'https://' + finalUrl;
-                                                        }
-                                                        setTempInsumos(prev => [...prev, { url: finalUrl, name: newInsumoName.trim() || finalUrl }]);
-                                                        setNewInsumoUrl("");
-                                                        setNewInsumoName("");
-                                                    }}
-                                                    className="bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-                                                >
-                                                    Agregar
-                                                </button>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="URL (https://...)"
+                                                        value={editRefUrl}
+                                                        onChange={e => setEditRefUrl(e.target.value)}
+                                                        className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (!editRefUrl.trim()) return;
+                                                            handleCreateAttachment(editRefName, editRefUrl, 'REFERENCIA');
+                                                            setEditRefUrl("");
+                                                            setEditRefName("");
+                                                        }}
+                                                        className="bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                                    >
+                                                        Agregar
+                                                    </button>
+                                                </div>
                                             </div>
+
+                                            {formData.taskAttachments?.filter(a => a.category === 'REFERENCIA').length > 0 ? (
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    {formData.taskAttachments?.filter(a => a.category === 'REFERENCIA').map((ref) => (
+                                                        <div key={ref.id} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
+                                                            <ExternalLink size={12} className="text-zinc-400 shrink-0" />
+                                                            <a href={ref.url} target="_blank" rel="noopener noreferrer" className="truncate max-w-[150px] hover:underline hover:text-primary">
+                                                                {ref.name || ref.url}
+                                                            </a>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteAttachment(ref.id)}
+                                                                className="text-zinc-400 hover:text-red-500 transition-colors"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="text-[10px] text-zinc-400 italic py-1 pl-1">
+                                                    No hay referencias vinculadas.
+                                                </div>
+                                            )}
                                         </div>
 
-                                        {tempInsumos.length > 0 ? (
-                                            <div className="flex flex-wrap gap-2 pt-2">
-                                                {tempInsumos.map((insumo, index) => (
-                                                    <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
-                                                        <ExternalLink size={12} className="text-zinc-400 shrink-0" />
-                                                        <span className="truncate max-w-[150px]">{insumo.name}</span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setTempInsumos(prev => prev.filter((_, i) => i !== index))}
-                                                            className="text-zinc-400 hover:text-red-500 transition-colors"
-                                                        >
-                                                            <X size={12} />
-                                                        </button>
-                                                    </div>
-                                                ))}
+                                        {/* Columnas Interactivas para Insumos */}
+                                        <div className="space-y-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/10">
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 block">
+                                                Insumos
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Nombre..."
+                                                    value={editInpName}
+                                                    onChange={e => setEditInpName(e.target.value)}
+                                                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="URL (https://...)"
+                                                        value={editInpUrl}
+                                                        onChange={e => setEditInpUrl(e.target.value)}
+                                                        className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (!editInpUrl.trim()) return;
+                                                            handleCreateAttachment(editInpName, editInpUrl, 'INSUMO');
+                                                            setEditInpUrl("");
+                                                            setEditInpName("");
+                                                        }}
+                                                        className="bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                                    >
+                                                        Agregar
+                                                    </button>
+                                                </div>
                                             </div>
-                                        ) : (
-                                            <div className="text-[10px] text-zinc-400 italic text-center py-2 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800">
-                                                No has agregado enlaces temporales todavía.
+
+                                            {formData.taskAttachments?.filter(a => a.category === 'INSUMO').length > 0 ? (
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    {formData.taskAttachments?.filter(a => a.category === 'INSUMO').map((inp) => (
+                                                        <div key={inp.id} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
+                                                            <ExternalLink size={12} className="text-zinc-400 shrink-0" />
+                                                            <a href={inp.url} target="_blank" rel="noopener noreferrer" className="truncate max-w-[150px] hover:underline hover:text-primary">
+                                                                {inp.name || inp.url}
+                                                            </a>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteAttachment(inp.id)}
+                                                                className="text-zinc-400 hover:text-red-500 transition-colors"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="text-[10px] text-zinc-400 italic py-1 pl-1">
+                                                    No hay insumos vinculados.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
+                                        {/* Sección de Referencias */}
+                                        <div className="space-y-2">
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 block">
+                                                Referencias iniciales
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Nombre de la referencia (ej: Figma...)"
+                                                    value={newRefName}
+                                                    onChange={e => setNewRefName(e.target.value)}
+                                                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="URL (https://...)"
+                                                        value={newRefUrl}
+                                                        onChange={e => setNewRefUrl(e.target.value)}
+                                                        className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (!newRefUrl.trim()) return;
+                                                            let finalUrl = newRefUrl.trim();
+                                                            if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+                                                                finalUrl = 'https://' + finalUrl;
+                                                            }
+                                                            setTempReferences(prev => [...prev, { url: finalUrl, name: newRefName.trim() || finalUrl }]);
+                                                            setNewRefUrl("");
+                                                            setNewRefName("");
+                                                        }}
+                                                        className="bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                                    >
+                                                        Agregar
+                                                    </button>
+                                                </div>
                                             </div>
-                                        )}
+
+                                            {tempReferences.length > 0 ? (
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    {tempReferences.map((ref, index) => (
+                                                        <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
+                                                            <ExternalLink size={12} className="text-zinc-400 shrink-0" />
+                                                            <span className="truncate max-w-[150px]">{ref.name}</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setTempReferences(prev => prev.filter((_, i) => i !== index))}
+                                                                className="text-zinc-400 hover:text-red-500 transition-colors"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="text-[10px] text-zinc-400 italic text-center py-2 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800">
+                                                    No hay referencias temporales agregadas.
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Sección de Insumos */}
+                                        <div className="space-y-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/10">
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 block">
+                                                Insumos iniciales
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Nombre del insumo (ej: Assets...)"
+                                                    value={newInpName}
+                                                    onChange={e => setNewInpName(e.target.value)}
+                                                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="URL (https://...)"
+                                                        value={newInpUrl}
+                                                        onChange={e => setNewInpUrl(e.target.value)}
+                                                        className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (!newInpUrl.trim()) return;
+                                                            let finalUrl = newInpUrl.trim();
+                                                            if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+                                                                finalUrl = 'https://' + finalUrl;
+                                                            }
+                                                            setTempInputs(prev => [...prev, { url: finalUrl, name: newInpName.trim() || finalUrl }]);
+                                                            setNewInpUrl("");
+                                                            setNewInpName("");
+                                                        }}
+                                                        className="bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                                    >
+                                                        Agregar
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {tempInputs.length > 0 ? (
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    {tempInputs.map((inp, index) => (
+                                                        <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
+                                                            <ExternalLink size={12} className="text-zinc-400 shrink-0" />
+                                                            <span className="truncate max-w-[150px]">{inp.name}</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setTempInputs(prev => prev.filter((_, i) => i !== index))}
+                                                                className="text-zinc-400 hover:text-red-500 transition-colors"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="text-[10px] text-zinc-400 italic text-center py-2 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800">
+                                                    No hay insumos temporales agregados.
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
 
