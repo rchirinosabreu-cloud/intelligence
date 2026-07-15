@@ -514,7 +514,7 @@ async function processNomina(rows, hasDB) {
         const endDate = endIdx !== -1 && row[endIdx] ? parseDate(row[endIdx]) : null;
 
         if (hasDB) {
-            // Lookup existing User
+            // Lookup existing User strictly - NO CREATION/MUTATION allowed
             let user = await prisma.user.findUnique({ where: { email } });
             if (!user) {
                 console.warn(`[NOMINA] Warning: User with email ${email} not found in database. Skipping contract creation for safety.`);
@@ -577,7 +577,7 @@ async function processAjustesNomina(rows, hasDB) {
         const description = descIdx !== -1 ? cleanString(row[descIdx]) : null;
 
         if (hasDB) {
-            // Lookup User
+            // Lookup User strictly - NO CREATION/MUTATION allowed
             let user = await prisma.user.findUnique({ where: { email } });
             if (!user) {
                 console.warn(`[AJUSTES] Warning: User with email ${email} not found in database. Skipping adjustments.`);
@@ -669,15 +669,15 @@ async function seedFinancials() {
             await prisma.accountsReceivable.deleteMany({});
             await prisma.financialRecord.deleteMany({});
 
-            // Surgical cleanup: delete legacy dummy/placeholder accounts to prevent duplications
-            const legacyDummyEmails = [
-                'claudia@brainstudio.com', 'elisa.mestra@brainstudio.com',
-                'melissa.castano@brainstudio.com', 'jarlan@brainstudio.com',
-                'helen@brainstudio.com', 'practicante@brainstudio.com',
-                'kamila.del.toro@brainstudio.com', 'francisco.villa@brainstudio.com'
-            ];
+            // Surgical cleanup: delete legacy dummy/placeholder accounts ending in @brainstudio.com to prevent duplications
+            console.log("Purging legacy cloned/placeholder accounts ending in @brainstudio.com...");
             await prisma.user.deleteMany({
-                where: { email: { in: legacyDummyEmails } }
+                where: {
+                    email: {
+                        endsWith: '@brainstudio.com',
+                        not: 'admin@brainstudio.com'
+                    }
+                }
             });
             console.log("Successfully purged legacy dummy accounts from database.");
         }
@@ -693,16 +693,16 @@ async function seedFinancials() {
 
         // --- STEP 2: PARSE 2026 FINANCES EXCEL ---
         console.log(`Loading 2026 workbook from ${file2026Local}...`);
-        const wb2026 = xlsx.readFile(file2026Local);
+        const wb22026 = xlsx.readFile(file2026Local);
 
         // Parse 2026 main sheet
-        const ws2026Main = wb2026.Sheets['FINANZAS BRAIN STUDIO 2026'] || wb2026.Sheets[wb2026.SheetNames[0]];
+        const ws2026Main = wb22026.Sheets['FINANZAS BRAIN STUDIO 2026'] || wb22026.Sheets[wb22026.SheetNames[0]];
         const rows2026Main = xlsx.utils.sheet_to_json(ws2026Main, { header: 1 });
         console.log(`Parsed ${rows2026Main.length} rows from 2026 finances.`);
         await processHorizontalFinances(rows2026Main, hasDB);
 
         // Parse MOROSOS
-        const wsMorosos = wb2026.Sheets['MOROSOS'];
+        const wsMorosos = wb22026.Sheets['MOROSOS'];
         if (wsMorosos) {
             const rowsMorosos = xlsx.utils.sheet_to_json(wsMorosos, { header: 1 });
             console.log(`Parsed ${rowsMorosos.length} rows from MOROSOS.`);
@@ -712,7 +712,7 @@ async function seedFinancials() {
         }
 
         // Parse NOMINA
-        const wsNomina = wb2026.Sheets['NOMINA'];
+        const wsNomina = wb22026.Sheets['NOMINA'];
         if (wsNomina) {
             const rowsNomina = xlsx.utils.sheet_to_json(wsNomina, { header: 1 });
             console.log(`Parsed ${rowsNomina.length} rows from NOMINA.`);
@@ -722,7 +722,7 @@ async function seedFinancials() {
         }
 
         // Parse AJUSTES_NOMINA
-        const wsAjustes = wb2026.Sheets['AJUSTES_NOMINA'];
+        const wsAjustes = wb22026.Sheets['AJUSTES_NOMINA'];
         if (wsAjustes) {
             const rowsAjustes = xlsx.utils.sheet_to_json(wsAjustes, { header: 1 });
             console.log(`Parsed ${rowsAjustes.length} rows from AJUSTES_NOMINA.`);
