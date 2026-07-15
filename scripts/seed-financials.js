@@ -8,6 +8,36 @@ import prisma from '../src/lib/prisma.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Real identity mapping dictionary for production-grade syncing
+const IDENTITY_MAP = {
+    "claudia": "claudiam.munozgil@gmail.com",
+    "claudia/keila": "claudiam.munozgil@gmail.com",
+    "elisa mestra": "elisamestravargas@gmail.com",
+    "elisa": "elisamestravargas@gmail.com",
+    "francisco villa": "fvilladigital@gmail.com",
+    "francisco": "fvilladigital@gmail.com",
+    "melissa castaño": "melissacastanobrain@gmail.com",
+    "melissa": "melissacastanobrain@gmail.com",
+    "jarlan": "espinosajarlan@gmail.com",
+    "kamila": "kamila.del.toro@brainstudio.com",
+    "gabriel/kamila": "kamila.del.toro@brainstudio.com",
+    "camila": "camila@brainstudio.com",
+    "helen": "helen@brainstudio.com",
+    "practicante": "practicante@brainstudio.com",
+    "rodny": "chrodny@gmail.com"
+};
+
+function resolveEmail(rawName) {
+    const key = String(rawName || '').trim().toLowerCase();
+    if (IDENTITY_MAP[key]) return IDENTITY_MAP[key];
+
+    // If it's already an email, return it directly
+    if (key.includes('@')) return key;
+
+    // Default fallback to prevent crash
+    return `${key.replace(/\s+/g, '')}@brainstudio.com`;
+}
+
 // Helper to convert floats securely
 const roundFloat = (val) => {
     return Math.round((val + Number.EPSILON) * 100) / 100;
@@ -472,8 +502,11 @@ async function processNomina(rows, hasDB) {
         const row = rows[r];
         if (!row || row.length === 0) continue;
 
-        const email = cleanString(row[emailIdx]).toLowerCase();
-        if (!email) continue;
+        const rawEmailOrName = cleanString(row[emailIdx]);
+        if (!rawEmailOrName) continue;
+
+        // Resolve real production email using IDENTITY_MAP
+        const email = resolveEmail(rawEmailOrName);
 
         const baseSalary = cleanNumber(row[salaryIdx]);
         const socialSecurity = socSecIdx !== -1 ? cleanNumber(row[socSecIdx]) : 0;
@@ -481,24 +514,11 @@ async function processNomina(rows, hasDB) {
         const endDate = endIdx !== -1 && row[endIdx] ? parseDate(row[endIdx]) : null;
 
         if (hasDB) {
-            // Lookup or create user
+            // Lookup existing User
             let user = await prisma.user.findUnique({ where: { email } });
             if (!user) {
-                // Generate clean human-readable names
-                let name = email.split('@')[0].split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
-                if (email === 'chrodny@gmail.com') name = 'Rodny';
-
-                user = await prisma.user.create({
-                    data: {
-                        name,
-                        email,
-                        password: 'password_hashed_seeded',
-                        role: email.includes('admin') || email.includes('rodny') || email.includes('villa') || email.includes('mestra') ? 'ADMIN' : 'EDITOR',
-                        isActive: true,
-                        hasFinancialAccess: email.includes('admin') || email.includes('rodny') || email.includes('villa') || email.includes('mestra')
-                    }
-                });
-                console.log(`Seeded placeholder user: ${email}`);
+                console.warn(`[NOMINA] Warning: User with email ${email} not found in database. Skipping contract creation for safety.`);
+                continue;
             }
 
             await prisma.payrollContract.create({
@@ -535,8 +555,11 @@ async function processAjustesNomina(rows, hasDB) {
         const row = rows[r];
         if (!row || row.length === 0) continue;
 
-        const email = cleanString(row[emailIdx]).toLowerCase();
-        if (!email) continue;
+        const rawEmailOrName = cleanString(row[emailIdx]);
+        if (!rawEmailOrName) continue;
+
+        // Resolve real production email using IDENTITY_MAP
+        const email = resolveEmail(rawEmailOrName);
 
         const amount = cleanNumber(row[montoIdx]);
         if (amount <= 0) continue;
@@ -557,21 +580,8 @@ async function processAjustesNomina(rows, hasDB) {
             // Lookup User
             let user = await prisma.user.findUnique({ where: { email } });
             if (!user) {
-                // Generate clean human-readable names
-                let name = email.split('@')[0].split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
-                if (email === 'chrodny@gmail.com') name = 'Rodny';
-
-                user = await prisma.user.create({
-                    data: {
-                        name,
-                        email,
-                        password: 'password_hashed_seeded',
-                        role: email.includes('admin') || email.includes('rodny') || email.includes('villa') || email.includes('mestra') ? 'ADMIN' : 'EDITOR',
-                        isActive: true,
-                        hasFinancialAccess: email.includes('admin') || email.includes('rodny') || email.includes('villa') || email.includes('mestra')
-                    }
-                });
-                console.log(`Seeded placeholder user for Adjustments: ${email}`);
+                console.warn(`[AJUSTES] Warning: User with email ${email} not found in database. Skipping adjustments.`);
+                continue;
             }
 
             // Get contract
@@ -581,15 +591,8 @@ async function processAjustesNomina(rows, hasDB) {
             });
 
             if (!contract) {
-                contract = await prisma.payrollContract.create({
-                    data: {
-                        userId: user.id,
-                        baseSalary: 3000000,
-                        socialSecurity: 400000,
-                        startDate: new Date('2021-01-01')
-                    }
-                });
-                console.log(`Seeded default contract for: ${email}`);
+                console.warn(`[AJUSTES] Warning: Active payroll contract not found for email ${email}. Skipping adjustments.`);
+                continue;
             }
 
             // Get/Create Transaction
@@ -659,13 +662,24 @@ async function seedFinancials() {
 
     try {
         if (hasDB) {
-            // Clear previous financials and payroll data for seed clean-state
             console.log("Purging old financial/payroll tables for safe seed...");
             await prisma.payrollAdjustment.deleteMany({});
             await prisma.payrollTransaction.deleteMany({});
             await prisma.payrollContract.deleteMany({});
             await prisma.accountsReceivable.deleteMany({});
             await prisma.financialRecord.deleteMany({});
+
+            // Surgical cleanup: delete legacy dummy/placeholder accounts to prevent duplications
+            const legacyDummyEmails = [
+                'claudia@brainstudio.com', 'elisa.mestra@brainstudio.com',
+                'melissa.castano@brainstudio.com', 'jarlan@brainstudio.com',
+                'helen@brainstudio.com', 'practicante@brainstudio.com',
+                'kamila.del.toro@brainstudio.com', 'francisco.villa@brainstudio.com'
+            ];
+            await prisma.user.deleteMany({
+                where: { email: { in: legacyDummyEmails } }
+            });
+            console.log("Successfully purged legacy dummy accounts from database.");
         }
 
         // --- STEP 1: PARSE HISTORICAL EXCEL (2021-2025) ---
