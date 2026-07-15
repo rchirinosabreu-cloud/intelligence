@@ -796,156 +796,72 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     </motion.div>
                                 )}
 
-                                {/* Links Section (Interactive columns for Edition, Interactive list for Creation) */}
+                                {/* Links Section (Dropdowns for Edition, Interactive list for Creation) */}
                                 {isEdition ? (
-                                    <div className="space-y-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
-                                        {/* Legacy Links dropdowns (only shown if present to maintain backward compatibility with legacy Content Plans) */}
-                                        {(formData.referenceLinks?.length > 0 || formData.assetsLinks?.length > 0) && (
-                                            <div className="space-y-2 pb-3 border-b border-zinc-100 dark:border-zinc-800/10">
-                                                <div className="flex items-center justify-between">
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                                                        Enlaces de Parrilla (Legados)
-                                                    </label>
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    {formData.referenceLinks?.length > 0 && (
-                                                        <LinkDropdown
-                                                            label="Referencia"
-                                                            links={formData.referenceLinks}
-                                                            icon={FileText}
-                                                        />
-                                                    )}
-                                                    {formData.assetsLinks?.length > 0 && (
-                                                        <LinkDropdown
-                                                            label="Insumo"
-                                                            links={formData.assetsLinks}
-                                                            icon={Database}
-                                                        />
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Columnas Interactivas para Referencias */}
-                                        <div className="space-y-2">
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 block">
-                                                Referencias
+                                    <div className="space-y-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                                                Insumos & Referencias
                                             </label>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Nombre..."
-                                                    value={editRefName}
-                                                    onChange={e => setEditRefName(e.target.value)}
-                                                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
-                                                />
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="URL (https://...)"
-                                                        value={editRefUrl}
-                                                        onChange={e => setEditRefUrl(e.target.value)}
-                                                        className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            if (!editRefUrl.trim()) return;
-                                                            handleCreateAttachment(editRefName, editRefUrl, 'REFERENCIA');
-                                                            setEditRefUrl("");
-                                                            setEditRefName("");
-                                                        }}
-                                                        className="bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-                                                    >
-                                                        Agregar
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {formData.taskAttachments?.filter(a => a.category === 'REFERENCIA').length > 0 ? (
-                                                <div className="flex flex-wrap gap-2 pt-1">
-                                                    {formData.taskAttachments?.filter(a => a.category === 'REFERENCIA').map((ref) => (
-                                                        <div key={ref.id} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
-                                                            <ExternalLink size={12} className="text-zinc-400 shrink-0" />
-                                                            <a href={ref.url} target="_blank" rel="noopener noreferrer" className="truncate max-w-[150px] hover:underline hover:text-primary">
-                                                                {ref.name || ref.url}
-                                                            </a>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleDeleteAttachment(ref.id)}
-                                                                className="text-zinc-400 hover:text-red-500 transition-colors"
-                                                            >
-                                                                <X size={12} />
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <div className="text-[10px] text-zinc-400 italic py-1 pl-1">
-                                                    No hay referencias vinculadas.
-                                                </div>
-                                            )}
                                         </div>
+                                        <div className="flex gap-2">
+                                            {(() => {
+                                                const referenceUrls = [];
+                                                if (formData.referenceUrl) referenceUrls.push(formData.referenceUrl);
+                                                if (Array.isArray(formData.referenceLinks)) {
+                                                    formData.referenceLinks.forEach(u => referenceUrls.push(u));
+                                                } else if (typeof formData.referenceLinks === 'string' && formData.referenceLinks.trim()) {
+                                                    formData.referenceLinks.split(/[\s,\n;]+/).forEach(u => referenceUrls.push(u));
+                                                }
+                                                if (formData.taskAttachments) {
+                                                    formData.taskAttachments
+                                                        .filter(a => a.category === 'REFERENCIA')
+                                                        .forEach(a => referenceUrls.push(a.url));
+                                                }
 
-                                        {/* Columnas Interactivas para Insumos */}
-                                        <div className="space-y-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/10">
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 block">
-                                                Insumos
-                                            </label>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Nombre..."
-                                                    value={editInpName}
-                                                    onChange={e => setEditInpName(e.target.value)}
-                                                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
-                                                />
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="URL (https://...)"
-                                                        value={editInpUrl}
-                                                        onChange={e => setEditInpUrl(e.target.value)}
-                                                        className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            if (!editInpUrl.trim()) return;
-                                                            handleCreateAttachment(editInpName, editInpUrl, 'INSUMO');
-                                                            setEditInpUrl("");
-                                                            setEditInpName("");
-                                                        }}
-                                                        className="bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-                                                    >
-                                                        Agregar
-                                                    </button>
-                                                </div>
-                                            </div>
+                                                const uniqueReferences = [...new Set(referenceUrls)].filter(Boolean);
 
-                                            {formData.taskAttachments?.filter(a => a.category === 'INSUMO').length > 0 ? (
-                                                <div className="flex flex-wrap gap-2 pt-1">
-                                                    {formData.taskAttachments?.filter(a => a.category === 'INSUMO').map((inp) => (
-                                                        <div key={inp.id} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
-                                                            <ExternalLink size={12} className="text-zinc-400 shrink-0" />
-                                                            <a href={inp.url} target="_blank" rel="noopener noreferrer" className="truncate max-w-[150px] hover:underline hover:text-primary">
-                                                                {inp.name || inp.url}
-                                                            </a>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleDeleteAttachment(inp.id)}
-                                                                className="text-zinc-400 hover:text-red-500 transition-colors"
-                                                            >
-                                                                <X size={12} />
-                                                            </button>
+                                                const inputUrls = [];
+                                                if (Array.isArray(formData.assetsLinks)) {
+                                                    formData.assetsLinks.forEach(u => inputUrls.push(u));
+                                                } else if (typeof formData.assetsLinks === 'string' && formData.assetsLinks.trim()) {
+                                                    formData.assetsLinks.split(/[\s,\n;]+/).forEach(u => inputUrls.push(u));
+                                                }
+                                                if (formData.taskAttachments) {
+                                                    formData.taskAttachments
+                                                        .filter(a => a.category === 'INSUMO')
+                                                        .forEach(a => inputUrls.push(a.url));
+                                                }
+
+                                                const uniqueInputs = [...new Set(inputUrls)].filter(Boolean);
+
+                                                if (uniqueReferences.length === 0 && uniqueInputs.length === 0) {
+                                                    return (
+                                                        <div className="text-[10px] text-zinc-400 italic text-center py-2 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 w-full">
+                                                            No hay enlaces vinculados a esta tarea.
                                                         </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <div className="text-[10px] text-zinc-400 italic py-1 pl-1">
-                                                    No hay insumos vinculados.
-                                                </div>
-                                            )}
+                                                    );
+                                                }
+
+                                                return (
+                                                    <>
+                                                        {uniqueReferences.length > 0 && (
+                                                            <LinkDropdown
+                                                                label="Referencia"
+                                                                links={uniqueReferences}
+                                                                icon={FileText}
+                                                            />
+                                                        )}
+                                                        {uniqueInputs.length > 0 && (
+                                                            <LinkDropdown
+                                                                label="Insumo"
+                                                                links={uniqueInputs}
+                                                                icon={Database}
+                                                            />
+                                                        )}
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
                                     </div>
                                 ) : (
@@ -990,7 +906,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 </div>
                                             </div>
 
-                                            {tempReferences.length > 0 ? (
+                                            {tempReferences.length > 0 && (
                                                 <div className="flex flex-wrap gap-2 pt-1">
                                                     {tempReferences.map((ref, index) => (
                                                         <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
@@ -1005,10 +921,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                             </button>
                                                         </div>
                                                     ))}
-                                                </div>
-                                            ) : (
-                                                <div className="text-[10px] text-zinc-400 italic text-center py-2 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800">
-                                                    No hay referencias temporales agregadas.
                                                 </div>
                                             )}
                                         </div>
@@ -1053,7 +965,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 </div>
                                             </div>
 
-                                            {tempInputs.length > 0 ? (
+                                            {tempInputs.length > 0 && (
                                                 <div className="flex flex-wrap gap-2 pt-1">
                                                     {tempInputs.map((inp, index) => (
                                                         <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
@@ -1068,10 +980,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                             </button>
                                                         </div>
                                                     ))}
-                                                </div>
-                                            ) : (
-                                                <div className="text-[10px] text-zinc-400 italic text-center py-2 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800">
-                                                    No hay insumos temporales agregados.
                                                 </div>
                                             )}
                                         </div>
