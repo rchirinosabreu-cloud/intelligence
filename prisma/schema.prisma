@@ -403,6 +403,15 @@ model AgencyContext {
   client           Client?                   @relation(fields: [clientId], references: [id])
 }
 
+model SystemStreak {
+  id                String    @id @default("global")
+  currentStreak     Int       @default(0)
+  highestStreak     Int       @default(0)
+  lastResetAt       DateTime?
+  lastIncrementedAt DateTime?
+  updatedAt         DateTime  @updatedAt
+}
+
 model AutomationConfig {
   id             String   @id @default("global")
   storageState   Json?
