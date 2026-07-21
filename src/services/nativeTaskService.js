@@ -93,88 +93,167 @@ export const getDashboardMetrics = async () => {
     }
 };
 
-export const getQualityStreak = async () => {
-    try {
-        const now = new Date();
+export const initSystemStreakCron = () => {
+    console.log("[SystemStreak] Automated daily increment check initialized.");
 
-        // 1. Identify Last Return Event (last_returned_at)
-        const aggregateResult = await prisma.task.aggregate({
-            _max: {
-                returnedAt: true
+    // Initial check after 3 seconds
+    const startupTimeout = setTimeout(() => {
+        processSystemStreakDailyIncrement().catch(err => {
+            console.error("[SystemStreak] Initial daily increment check failed:", err.message);
+        });
+    }, 3000);
+    if (startupTimeout.unref) startupTimeout.unref();
+
+    // Check every hour for calendar day change
+    const intervalId = setInterval(() => {
+        processSystemStreakDailyIncrement().catch(err => {
+            console.error("[SystemStreak] Periodic daily increment check failed:", err.message);
+        });
+    }, 1000 * 60 * 60);
+    if (intervalId.unref) intervalId.unref();
+};
+
+// Auto start on module load if not in test env
+if (process.env.NODE_ENV !== 'test') {
+    try {
+        initSystemStreakCron();
+    } catch (err) {
+        console.error("[SystemStreak] Failed to auto-start SystemStreak cron:", err.message);
+    }
+}
+
+export const getOrCreateSystemStreak = async (tx = prisma) => {
+    let streak = await tx.systemStreak.findUnique({
+        where: { id: 'global' }
+    });
+    if (!streak) {
+        try {
+            streak = await tx.systemStreak.create({
+                data: {
+                    id: 'global',
+                    currentStreak: 0,
+                    highestStreak: 0
+                }
+            });
+        } catch (err) {
+            // Concurrent creation fallback
+            streak = await tx.systemStreak.findUnique({
+                where: { id: 'global' }
+            });
+        }
+    }
+    return streak;
+};
+
+export const resetSystemStreak = async (tx = prisma) => {
+    try {
+        const streak = await getOrCreateSystemStreak(tx);
+        await tx.systemStreak.update({
+            where: { id: streak.id },
+            data: {
+                currentStreak: 0,
+                lastResetAt: new Date()
             }
         });
-        const last_returned_at = aggregateResult._max?.returnedAt || null;
+        console.log(`[SystemStreak] Reset current streak to 0 due to task devolution event at ${new Date().toISOString()}`);
+    } catch (err) {
+        console.error(`[SystemStreak] Error resetting system streak:`, err.message);
+    }
+};
 
-        // 2. Retrieve Workspace Creation Date (workspaceCreatedAt)
-        const oldestAdmin = await prisma.user.findFirst({
-            where: { role: 'ADMIN' },
-            orderBy: { createdAt: 'asc' },
-            select: { createdAt: true }
+const isSameDayUTC = (d1, d2) => {
+    if (!d1 || !d2) return false;
+    return d1.getUTCFullYear() === d2.getUTCFullYear() &&
+           d1.getUTCMonth() === d2.getUTCMonth() &&
+           d1.getUTCDate() === d2.getUTCDate();
+};
+
+export const processSystemStreakDailyIncrement = async (tx = prisma) => {
+    try {
+        const streak = await getOrCreateSystemStreak(tx);
+        const now = new Date();
+
+        let lastInc = streak.lastIncrementedAt;
+        if (!lastInc) {
+            // Initialize to yesterday so we can start counting
+            lastInc = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        }
+
+        // Find completed UTC dates between lastInc and now
+        let currentCheckDate = new Date(Date.UTC(
+            lastInc.getUTCFullYear(),
+            lastInc.getUTCMonth(),
+            lastInc.getUTCDate()
+        ));
+
+        // Advance by 1 day to get the first day to check
+        currentCheckDate.setUTCDate(currentCheckDate.getUTCDate() + 1);
+
+        let updatedCurrentStreak = streak.currentStreak;
+        let updatedHighestStreak = streak.highestStreak;
+        let didUpdate = false;
+
+        const todayUTC = new Date(Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth(),
+            now.getUTCDate()
+        ));
+
+        // We check every completed day (any day strictly before today in UTC)
+        while (currentCheckDate < todayUTC) {
+            didUpdate = true;
+
+            // Did we have any resets on currentCheckDate?
+            const hadResetOnThisDay = streak.lastResetAt ? isSameDayUTC(streak.lastResetAt, currentCheckDate) : false;
+
+            if (!hadResetOnThisDay) {
+                updatedCurrentStreak += 1;
+                if (updatedCurrentStreak > updatedHighestStreak) {
+                    updatedHighestStreak = updatedCurrentStreak;
+                }
+            } else {
+                updatedCurrentStreak = 0;
+            }
+
+            // Move to next day
+            currentCheckDate.setUTCDate(currentCheckDate.getUTCDate() + 1);
+        }
+
+        if (didUpdate || !streak.lastIncrementedAt) {
+            await tx.systemStreak.update({
+                where: { id: streak.id },
+                data: {
+                    currentStreak: updatedCurrentStreak,
+                    highestStreak: updatedHighestStreak,
+                    lastIncrementedAt: now
+                }
+            });
+            console.log(`[SystemStreak] Daily closure check executed. Streak updated to ${updatedCurrentStreak} days (highest: ${updatedHighestStreak}).`);
+        }
+    } catch (err) {
+        console.error(`[SystemStreak] Error in processSystemStreakDailyIncrement:`, err.message);
+    }
+};
+
+export const getQualityStreak = async () => {
+    try {
+        // Run catch-up daily increment logic
+        await processSystemStreakDailyIncrement().catch(err => {
+            console.error("[SystemStreak] Failed to run catch-up daily increment:", err.message);
         });
 
-        let workspaceCreatedAt = oldestAdmin?.createdAt || null;
-        if (!workspaceCreatedAt) {
-            const oldestTask = await prisma.task.findFirst({
-                orderBy: { createdAt: 'asc' },
-                select: { createdAt: true }
-            });
-            workspaceCreatedAt = oldestTask?.createdAt || null;
-        }
-        if (!workspaceCreatedAt) {
-            workspaceCreatedAt = now;
-        }
+        const streak = await getOrCreateSystemStreak();
 
-        // 3. Current Active Returned Tasks Count
+        // Fast count of active returned tasks
         const currentReturnedTasksCount = await prisma.task.count({
             where: {
                 status: 'DEVUELTA'
             }
         });
 
-        // 4. Calculate currentStreak
-        let currentStreak = 0;
-
-        const isSameDayUTC = (d1, d2) => {
-            return d1.getUTCFullYear() === d2.getUTCFullYear() &&
-                   d1.getUTCMonth() === d2.getUTCMonth() &&
-                   d1.getUTCDate() === d2.getUTCDate();
-        };
-
-        if (currentReturnedTasksCount > 0) {
-            currentStreak = 0;
-        } else if (last_returned_at && isSameDayUTC(last_returned_at, now)) {
-            currentStreak = 0;
-        } else {
-            const baseDate = last_returned_at || workspaceCreatedAt;
-            const diffTime = Math.max(0, now.getTime() - baseDate.getTime());
-            currentStreak = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-        }
-
-        // 5. Retrieve global historical maximum streak (maxStreak) from AgencyContext
-        let streakRecord = await prisma.agencyContext.findFirst({
-            where: { type: 'STREAK_RECORD' }
-        });
-
-        let maxStreak = streakRecord ? (streakRecord.maxStreak || 0) : 0;
-
-        // 6. Evaluate and update maxStreak in database if currentStreak is higher
-        if (currentStreak > maxStreak) {
-            maxStreak = currentStreak;
-            if (streakRecord) {
-                await prisma.agencyContext.update({
-                    where: { id: streakRecord.id },
-                    data: { maxStreak }
-                });
-            } else {
-                streakRecord = await prisma.agencyContext.create({
-                    data: {
-                        type: 'STREAK_RECORD',
-                        content: 'Historical Maximum Quality Streak Record',
-                        maxStreak
-                    }
-                });
-            }
-        }
+        // AC2 & AC3 Check: If there are active returned tasks right now, current streak is forced to 0
+        const currentStreak = currentReturnedTasksCount > 0 ? 0 : streak.currentStreak;
+        const maxStreak = streak.highestStreak;
 
         return {
             currentStreak,
@@ -284,6 +363,10 @@ export const createTask = async ({
                     contentItemId
                 }
             });
+
+            if (mappedStatus === 'DEVUELTA') {
+                await resetSystemStreak(tx);
+            }
 
             // 2. Insert initial_references, initial_inputs, and initial_insumos if any
             const attachmentsToCreate = [];
@@ -549,6 +632,8 @@ export const updateTask = async (id, data, updaterId = null) => {
                 updateData.returnCount = (currentTask.returnCount || 0) + 1;
                 updateData.isReturned = true;
                 updateData.returnedAt = new Date();
+
+                await resetSystemStreak(prisma);
 
                 // Create System Comment for Return using the decoupled returnReason
                 if (returnReason) {

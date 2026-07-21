@@ -1,159 +1,195 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import prisma from '../src/lib/prisma.js';
-import { getQualityStreak, updateTask } from '../src/services/nativeTaskService.js';
+import {
+    getOrCreateSystemStreak,
+    resetSystemStreak,
+    processSystemStreakDailyIncrement,
+    getQualityStreak,
+    createTask,
+    updateTask
+} from '../src/services/nativeTaskService.js';
 
-test('Quality Streak Unit Tests with Prisma Mocks', async (t) => {
-    // Save original update method
+test('SystemStreak Decoupled Quality Streak Tests', async (t) => {
+    // Backup and restore Prisma methods
+    const originalFindUniqueSystemStreak = prisma.systemStreak.findUnique;
+    const originalCreateSystemStreak = prisma.systemStreak.create;
+    const originalUpdateSystemStreak = prisma.systemStreak.update;
+    const originalCountTask = prisma.task.count;
+    const originalCreateTask = prisma.task.create;
     const originalUpdateTask = prisma.task.update;
     const originalFindUniqueTask = prisma.task.findUnique;
-    // Save original prisma methods
-    const originalAggregate = prisma.task.aggregate;
-    const originalFindFirstUser = prisma.user.findFirst;
-    const originalFindFirstTask = prisma.task.findFirst;
-    const originalCount = prisma.task.count;
-    const originalFindFirstContext = prisma.agencyContext.findFirst;
-    const originalUpdateContext = prisma.agencyContext.update;
-    const originalCreateContext = prisma.agencyContext.create;
 
     t.after(() => {
-        // Restore original prisma methods
-        prisma.task.aggregate = originalAggregate;
-        prisma.user.findFirst = originalFindFirstUser;
-        prisma.task.findFirst = originalFindFirstTask;
-        prisma.task.count = originalCount;
-        prisma.agencyContext.findFirst = originalFindFirstContext;
-        prisma.agencyContext.update = originalUpdateContext;
-        prisma.agencyContext.create = originalCreateContext;
+        prisma.systemStreak.findUnique = originalFindUniqueSystemStreak;
+        prisma.systemStreak.create = originalCreateSystemStreak;
+        prisma.systemStreak.update = originalUpdateSystemStreak;
+        prisma.task.count = originalCountTask;
+        prisma.task.create = originalCreateTask;
         prisma.task.update = originalUpdateTask;
         prisma.task.findUnique = originalFindUniqueTask;
     });
 
-    await t.test('Case A: Empty database (No task returned, no admins, no tasks)', async () => {
-        prisma.task.aggregate = async () => ({ _max: { returnedAt: null } });
-        prisma.user.findFirst = async () => null;
-        prisma.task.findFirst = async () => null;
-        prisma.task.count = async () => 0;
-        prisma.agencyContext.findFirst = async () => null;
-
+    await t.test('Test 1: getOrCreateSystemStreak creates record if not exists', async () => {
         let createdRecord = null;
-        prisma.agencyContext.create = async ({ data }) => {
+        prisma.systemStreak.findUnique = async () => null;
+        prisma.systemStreak.create = async ({ data }) => {
             createdRecord = data;
-            return { id: 'new-id', ...data };
+            return { id: 'global', ...data };
         };
 
-        const result = await getQualityStreak();
-
-        // Since everything is empty, workspaceCreatedAt falls back to NOW, so currentStreak is 0
+        const result = await getOrCreateSystemStreak();
+        assert.ok(result);
+        assert.strictEqual(result.id, 'global');
         assert.strictEqual(result.currentStreak, 0);
-        assert.strictEqual(result.maxStreak, 0);
-        assert.strictEqual(result.currentReturnedTasksCount, 0);
+        assert.strictEqual(result.highestStreak, 0);
+        assert.strictEqual(createdRecord.id, 'global');
     });
 
-    await t.test('Case B: Active returned tasks force streak to 0', async () => {
-        prisma.task.aggregate = async () => ({ _max: { returnedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) } }); // last return 5 days ago
-        prisma.user.findFirst = async () => ({ createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000) });
-        prisma.task.count = async () => 1; // 1 active returned task
-        prisma.agencyContext.findFirst = async () => ({ id: 'record-id', maxStreak: 12 });
-
-        const result = await getQualityStreak();
-
-        assert.strictEqual(result.currentStreak, 0); // Forced to 0 due to active count > 0
-        assert.strictEqual(result.maxStreak, 12); // Remains at 12
-        assert.strictEqual(result.currentReturnedTasksCount, 1);
-    });
-
-    await t.test('Case C: Same-day return event forces streak to 0', async () => {
-        prisma.task.aggregate = async () => ({ _max: { returnedAt: new Date() } }); // last return today
-        prisma.user.findFirst = async () => ({ createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000) });
-        prisma.task.count = async () => 0; // 0 active returned tasks
-        prisma.agencyContext.findFirst = async () => ({ id: 'record-id', maxStreak: 12 });
-
-        const result = await getQualityStreak();
-
-        assert.strictEqual(result.currentStreak, 0); // Forced to 0 due to same-day return
-        assert.strictEqual(result.maxStreak, 12);
-    });
-
-    await t.test('Case D: Return event in the past (e.g., 6 days ago) calculates streak correctly and updates maxStreak', async () => {
-        const sixDaysAgo = new Date();
-        sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
-
-        prisma.task.aggregate = async () => ({ _max: { returnedAt: sixDaysAgo } });
-        prisma.user.findFirst = async () => ({ createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000) });
-        prisma.task.count = async () => 0;
-        prisma.agencyContext.findFirst = async () => ({ id: 'record-id', maxStreak: 4 });
-
+    await t.test('Test 2: resetSystemStreak resets currentStreak and sets lastResetAt', async () => {
         let updatedRecord = null;
-        prisma.agencyContext.update = async ({ where, data }) => {
-            updatedRecord = { where, data };
-            return { id: 'record-id', ...data };
+        prisma.systemStreak.findUnique = async () => ({
+            id: 'global',
+            currentStreak: 12,
+            highestStreak: 15,
+            lastResetAt: null,
+            lastIncrementedAt: null
+        });
+        prisma.systemStreak.update = async ({ where, data }) => {
+            updatedRecord = data;
+            return { id: 'global', ...data };
         };
 
-        const result = await getQualityStreak();
-
-        assert.strictEqual(result.currentStreak, 6);
-        assert.strictEqual(result.maxStreak, 6); // Updated because 6 > 4
+        await resetSystemStreak();
         assert.ok(updatedRecord);
-        assert.strictEqual(updatedRecord.data.maxStreak, 6);
+        assert.strictEqual(updatedRecord.currentStreak, 0);
+        assert.ok(updatedRecord.lastResetAt);
     });
 
-    await t.test('Case E: Clean history (never returned), calculates streak since workspace creation', async () => {
-        const fifteenDaysAgo = new Date();
-        fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+    await t.test('Test 3: Daily increment processes completed days cleanly', async () => {
+        const lastInc = new Date(Date.UTC(2026, 6, 15, 12, 0, 0)); // July 15, 2026
+        const now = new Date(Date.UTC(2026, 6, 18, 12, 0, 0)); // July 18, 2026 (3 completed days: July 15, 16, 17)
 
-        prisma.task.aggregate = async () => ({ _max: { returnedAt: null } });
-        prisma.user.findFirst = async () => ({ createdAt: fifteenDaysAgo });
-        prisma.task.count = async () => 0;
-        prisma.agencyContext.findFirst = async () => ({ id: 'record-id', maxStreak: 10 });
-
-        let updatedRecord = null;
-        prisma.agencyContext.update = async ({ where, data }) => {
-            updatedRecord = { where, data };
-            return { id: 'record-id', ...data };
+        // Mock current time
+        const originalDate = Date;
+        global.Date = class extends originalDate {
+            constructor(...args) {
+                if (args.length === 0) return new originalDate(now.getTime());
+                return new originalDate(...args);
+            }
+            static now() {
+                return now.getTime();
+            }
         };
 
-        const result = await getQualityStreak();
+        try {
+            let updatedRecord = null;
+            prisma.systemStreak.findUnique = async () => ({
+                id: 'global',
+                currentStreak: 5,
+                highestStreak: 10,
+                lastResetAt: null,
+                lastIncrementedAt: lastInc
+            });
+            prisma.systemStreak.update = async ({ data }) => {
+                updatedRecord = data;
+                return { id: 'global', ...data };
+            };
 
-        assert.strictEqual(result.currentStreak, 15);
-        assert.strictEqual(result.maxStreak, 15); // Updated because 15 > 10
-        assert.ok(updatedRecord);
-        assert.strictEqual(updatedRecord.data.maxStreak, 15);
+            await processSystemStreakDailyIncrement();
+
+            assert.ok(updatedRecord);
+            // From July 15 to July 18 is 2 full UTC days completed: July 16, 17.
+            // No resetAt was set, so currentStreak increases by 2 (from 5 to 7).
+            assert.strictEqual(updatedRecord.currentStreak, 7);
+            assert.strictEqual(updatedRecord.highestStreak, 10); // Still 10 since 8 < 10
+        } finally {
+            global.Date = originalDate;
+        }
     });
 
-    await t.test('Case F: updateTask preserves returnedAt when transitioning out of DEVUELTA state', async () => {
-        const returnTimestamp = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000); // returned 4 days ago
+    await t.test('Test 4: Daily increment respects reset day', async () => {
+        const lastInc = new Date(Date.UTC(2026, 6, 15, 12, 0, 0)); // July 15
+        const lastReset = new Date(Date.UTC(2026, 6, 16, 10, 0, 0)); // Reset on July 16
+        const now = new Date(Date.UTC(2026, 6, 18, 12, 0, 0)); // July 18 (Completed days: July 15, 16, 17)
 
+        const originalDate = Date;
+        global.Date = class extends originalDate {
+            constructor(...args) {
+                if (args.length === 0) return new originalDate(now.getTime());
+                return new originalDate(...args);
+            }
+            static now() {
+                return now.getTime();
+            }
+        };
+
+        try {
+            let updatedRecord = null;
+            prisma.systemStreak.findUnique = async () => ({
+                id: 'global',
+                currentStreak: 5,
+                highestStreak: 10,
+                lastResetAt: lastReset,
+                lastIncrementedAt: lastInc
+            });
+            prisma.systemStreak.update = async ({ data }) => {
+                updatedRecord = data;
+                return { id: 'global', ...data };
+            };
+
+            await processSystemStreakDailyIncrement();
+
+            assert.ok(updatedRecord);
+            // Day 15: completed, no resets -> Streak = 5 + 1 = 6
+            // Day 16: completed, reset on 16 -> Streak reset to 0
+            // Day 17: completed, no resets -> Streak = 0 + 1 = 1
+            assert.strictEqual(updatedRecord.currentStreak, 1);
+        } finally {
+            global.Date = originalDate;
+        }
+    });
+
+    await t.test('Test 5: updateTask to DEVUELTA triggers streak reset', async () => {
         prisma.task.findUnique = async () => ({
             id: 'task-123',
-            title: 'Transition Task',
-            status: 'DEVUELTA',
-            isReturned: true,
-            returnedAt: returnTimestamp,
+            status: 'PENDIENTE',
+            isReturned: false,
             comments: '',
             contentItemId: null
         });
 
         let updatedTaskPayload = null;
-        prisma.task.update = async ({ where, data }) => {
+        prisma.task.update = async ({ data }) => {
             updatedTaskPayload = data;
             return {
                 id: 'task-123',
-                status: 'EN_CURSO',
-                isReturned: false,
-                returnedAt: returnTimestamp, // mock response returning intact timestamp
+                status: 'DEVUELTA',
+                isReturned: true,
                 title: 'Transition Task'
             };
         };
 
-        // Transition task out of DEVUELTA state to EN_CURSO
-        const result = await updateTask('task-123', { status: 'EN_CURSO' }, 'user-456');
+        let streakUpdated = null;
+        prisma.systemStreak.findUnique = async () => ({
+            id: 'global',
+            currentStreak: 10,
+            highestStreak: 12
+        });
+        prisma.systemStreak.update = async ({ data }) => {
+            streakUpdated = data;
+            return { id: 'global', ...data };
+        };
 
-        assert.strictEqual(result.status, 'EN_CURSO');
-        assert.strictEqual(result.isReturned, false);
-        // Ensure that update payload did NOT contain `returnedAt: null` or `returnedAt: undefined`
+        await updateTask('task-123', { status: 'DEVUELTA' }, 'user-456');
+
         assert.ok(updatedTaskPayload);
-        assert.strictEqual(updatedTaskPayload.returnedAt, undefined); // Should not try to write null/overwrite it
-        assert.strictEqual(updatedTaskPayload.isReturned, false);
+        assert.strictEqual(updatedTaskPayload.status, 'DEVUELTA');
+        assert.strictEqual(updatedTaskPayload.isReturned, true);
+
+        // Confirm streak was reset to 0 immediately
+        assert.ok(streakUpdated);
+        assert.strictEqual(streakUpdated.currentStreak, 0);
+        assert.ok(streakUpdated.lastResetAt);
     });
 });
