@@ -95,40 +95,93 @@ export const getDashboardMetrics = async () => {
 
 export const getQualityStreak = async () => {
     try {
-        const lastReturnedTask = await prisma.task.findFirst({
-            where: {
-                status: 'DEVUELTA'
-            },
-            orderBy: { updatedAt: 'desc' },
-            select: { updatedAt: true }
+        const now = new Date();
+
+        // 1. Identify Last Return Event (last_returned_at)
+        const aggregateResult = await prisma.task.aggregate({
+            _max: {
+                returnedAt: true
+            }
+        });
+        const last_returned_at = aggregateResult._max?.returnedAt || null;
+
+        // 2. Retrieve Workspace Creation Date (workspaceCreatedAt)
+        const oldestAdmin = await prisma.user.findFirst({
+            where: { role: 'ADMIN' },
+            orderBy: { createdAt: 'asc' },
+            select: { createdAt: true }
         });
 
+        let workspaceCreatedAt = oldestAdmin?.createdAt || null;
+        if (!workspaceCreatedAt) {
+            const oldestTask = await prisma.task.findFirst({
+                orderBy: { createdAt: 'asc' },
+                select: { createdAt: true }
+            });
+            workspaceCreatedAt = oldestTask?.createdAt || null;
+        }
+        if (!workspaceCreatedAt) {
+            workspaceCreatedAt = now;
+        }
+
+        // 3. Current Active Returned Tasks Count
         const currentReturnedTasksCount = await prisma.task.count({
             where: {
                 status: 'DEVUELTA'
             }
         });
 
-        const now = new Date();
+        // 4. Calculate currentStreak
+        let currentStreak = 0;
 
-        if (!lastReturnedTask) {
-            // If no task has EVER been returned, we count since the first task was created
-            const firstTask = await prisma.task.findFirst({
-                orderBy: { createdAt: 'asc' },
-                select: { createdAt: true }
-            });
+        const isSameDayUTC = (d1, d2) => {
+            return d1.getUTCFullYear() === d2.getUTCFullYear() &&
+                   d1.getUTCMonth() === d2.getUTCMonth() &&
+                   d1.getUTCDate() === d2.getUTCDate();
+        };
 
-            if (!firstTask) return { currentStreakDays: 0, currentReturnedTasksCount: 0 };
-
-            const diffTime = Math.abs(now - firstTask.createdAt);
-            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-            return { currentStreakDays: diffDays, currentReturnedTasksCount };
+        if (currentReturnedTasksCount > 0) {
+            currentStreak = 0;
+        } else if (last_returned_at && isSameDayUTC(last_returned_at, now)) {
+            currentStreak = 0;
+        } else {
+            const baseDate = last_returned_at || workspaceCreatedAt;
+            const diffTime = Math.max(0, now.getTime() - baseDate.getTime());
+            currentStreak = Math.floor(diffTime / (1000 * 60 * 60 * 24));
         }
 
-        const diffTime = Math.abs(now - lastReturnedTask.updatedAt);
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        // 5. Retrieve global historical maximum streak (maxStreak) from AgencyContext
+        let streakRecord = await prisma.agencyContext.findFirst({
+            where: { type: 'STREAK_RECORD' }
+        });
 
-        return { currentStreakDays: diffDays, currentReturnedTasksCount };
+        let maxStreak = streakRecord ? (streakRecord.maxStreak || 0) : 0;
+
+        // 6. Evaluate and update maxStreak in database if currentStreak is higher
+        if (currentStreak > maxStreak) {
+            maxStreak = currentStreak;
+            if (streakRecord) {
+                await prisma.agencyContext.update({
+                    where: { id: streakRecord.id },
+                    data: { maxStreak }
+                });
+            } else {
+                streakRecord = await prisma.agencyContext.create({
+                    data: {
+                        type: 'STREAK_RECORD',
+                        content: 'Historical Maximum Quality Streak Record',
+                        maxStreak
+                    }
+                });
+            }
+        }
+
+        return {
+            currentStreak,
+            maxStreak,
+            currentStreakDays: currentStreak, // Backward compatibility
+            currentReturnedTasksCount
+        };
     } catch (error) {
         console.error("Error calculating quality streak:", error);
         throw error;

@@ -398,6 +398,7 @@ model AgencyContext {
   status           String                    @default("APPROVED") // PENDING, APPROVED, DISCARDED
   clientId         String?
   metadata         Json?
+  maxStreak        Int?                       @default(0)
   createdAt        DateTime                  @default(now())
   client           Client?                   @relation(fields: [clientId], references: [id])
 }

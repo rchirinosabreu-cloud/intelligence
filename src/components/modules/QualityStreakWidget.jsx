@@ -5,7 +5,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
 
 const QualityStreakWidget = () => {
-    const [data, setData] = useState({ currentStreakDays: 0, currentReturnedTasksCount: 0 });
+    const [data, setData] = useState({ currentStreak: 0, maxStreak: 0, currentStreakDays: 0, currentReturnedTasksCount: 0 });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -27,8 +27,9 @@ const QualityStreakWidget = () => {
         fetchStreak();
     }, []);
 
-    const historicalRecord = 4;
     const isAlertMode = data.currentReturnedTasksCount > 0;
+    const currentStreak = data.currentStreak !== undefined ? data.currentStreak : data.currentStreakDays;
+    const maxStreak = data.maxStreak !== undefined ? data.maxStreak : 0;
 
     return (
         <Card className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 py-4 px-6 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors shadow-sm overflow-hidden relative">
@@ -63,7 +64,7 @@ const QualityStreakWidget = () => {
                     <div className="flex flex-col">
                         <div className="flex items-baseline gap-2">
                             <span className="text-4xl font-black tracking-tighter text-zinc-900 dark:text-white leading-none">
-                                {loading ? '...' : (isAlertMode ? data.currentReturnedTasksCount : data.currentStreakDays)}
+                                {loading ? '...' : (isAlertMode ? data.currentReturnedTasksCount : currentStreak)}
                             </span>
                             <span className="text-base font-bold text-zinc-900 dark:text-white leading-none">
                                 {isAlertMode ? 'Aún tenemos tareas devueltas por corregir' : 'días sin devoluciones'}
@@ -85,7 +86,7 @@ const QualityStreakWidget = () => {
                             Récord
                         </p>
                         <p className="text-sm font-black text-zinc-900 dark:text-zinc-100 tracking-tight leading-tight">
-                            {historicalRecord} días
+                            {maxStreak} {maxStreak === 1 ? 'día' : 'días'}
                         </p>
                     </div>
                 </div>
