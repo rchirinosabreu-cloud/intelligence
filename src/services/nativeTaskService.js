@@ -579,7 +579,6 @@ export const updateTask = async (id, data, updaterId = null) => {
 
             if (isCorrected) {
                 updateData.isReturned = false;
-                updateData.returnedAt = null;
             }
 
             // Fix Reintegration: Create system_reintegrate comment using the decoupled reintegrateReason

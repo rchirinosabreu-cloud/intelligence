@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import prisma from '../src/lib/prisma.js';
-import { getQualityStreak } from '../src/services/nativeTaskService.js';
+import { getQualityStreak, updateTask } from '../src/services/nativeTaskService.js';
 
 test('Quality Streak Unit Tests with Prisma Mocks', async (t) => {
+    // Save original update method
+    const originalUpdateTask = prisma.task.update;
+    const originalFindUniqueTask = prisma.task.findUnique;
     // Save original prisma methods
     const originalAggregate = prisma.task.aggregate;
     const originalFindFirstUser = prisma.user.findFirst;
@@ -22,6 +25,8 @@ test('Quality Streak Unit Tests with Prisma Mocks', async (t) => {
         prisma.agencyContext.findFirst = originalFindFirstContext;
         prisma.agencyContext.update = originalUpdateContext;
         prisma.agencyContext.create = originalCreateContext;
+        prisma.task.update = originalUpdateTask;
+        prisma.task.findUnique = originalFindUniqueTask;
     });
 
     await t.test('Case A: Empty database (No task returned, no admins, no tasks)', async () => {
@@ -114,5 +119,41 @@ test('Quality Streak Unit Tests with Prisma Mocks', async (t) => {
         assert.strictEqual(result.maxStreak, 15); // Updated because 15 > 10
         assert.ok(updatedRecord);
         assert.strictEqual(updatedRecord.data.maxStreak, 15);
+    });
+
+    await t.test('Case F: updateTask preserves returnedAt when transitioning out of DEVUELTA state', async () => {
+        const returnTimestamp = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000); // returned 4 days ago
+
+        prisma.task.findUnique = async () => ({
+            id: 'task-123',
+            title: 'Transition Task',
+            status: 'DEVUELTA',
+            isReturned: true,
+            returnedAt: returnTimestamp,
+            comments: '',
+            contentItemId: null
+        });
+
+        let updatedTaskPayload = null;
+        prisma.task.update = async ({ where, data }) => {
+            updatedTaskPayload = data;
+            return {
+                id: 'task-123',
+                status: 'EN_CURSO',
+                isReturned: false,
+                returnedAt: returnTimestamp, // mock response returning intact timestamp
+                title: 'Transition Task'
+            };
+        };
+
+        // Transition task out of DEVUELTA state to EN_CURSO
+        const result = await updateTask('task-123', { status: 'EN_CURSO' }, 'user-456');
+
+        assert.strictEqual(result.status, 'EN_CURSO');
+        assert.strictEqual(result.isReturned, false);
+        // Ensure that update payload did NOT contain `returnedAt: null` or `returnedAt: undefined`
+        assert.ok(updatedTaskPayload);
+        assert.strictEqual(updatedTaskPayload.returnedAt, undefined); // Should not try to write null/overwrite it
+        assert.strictEqual(updatedTaskPayload.isReturned, false);
     });
 });
