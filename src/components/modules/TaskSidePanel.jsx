@@ -32,6 +32,27 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [editingField, setEditingField] = useState(null); // 'title' | 'assigneeId' | 'dueDate' | 'status' | null
     const [inlineVal, setInlineVal] = useState("");
 
+    const hasRealDraft = () => {
+        const saved = sessionStorage.getItem('task_focus_draft');
+        if (!saved) return false;
+        try {
+            const parsed = JSON.parse(saved);
+            return !!(
+                (parsed.title && parsed.title.trim() !== '') ||
+                (parsed.clientId && parsed.clientId.trim() !== '') ||
+                (parsed.assigneeId && parsed.assigneeId.trim() !== '') ||
+                (parsed.dueDate && parsed.dueDate.trim() !== '') ||
+                (parsed.specialType && parsed.specialType.trim() !== '') ||
+                (Array.isArray(parsed.tempReferences) && parsed.tempReferences.length > 0) ||
+                (Array.isArray(parsed.tempInputs) && parsed.tempInputs.length > 0) ||
+                (Array.isArray(parsed.tempComments) && parsed.tempComments.length > 0) ||
+                (Array.isArray(parsed.tempAttachments) && parsed.tempAttachments.length > 0)
+            );
+        } catch(e) {
+            return false;
+        }
+    };
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [teamMembers, setTeamMembers] = useState([]);
     const [formData, setFormData] = useState({
@@ -64,6 +85,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [tempReferences, setTempReferences] = useState([]); // Array of { url, name }
     const [tempInputs, setTempInputs] = useState([]);         // Array of { url, name }
     const [tempComments, setTempComments] = useState([]);     // Array of { content, createdAt, id }
+    const [tempAttachments, setTempAttachments] = useState([]); // Array of { url, name, category }
+
+    const [isUploadingTemp, setIsUploadingTemp] = useState(false);
+    const [showMentions, setShowMentions] = useState(false);
+    const [mentionFilter, setMentionFilter] = useState("");
+    const [mentionIndex, setMentionIndex] = useState(-1);
 
     const [newRefUrl, setNewRefUrl] = useState("");
     const [newRefName, setNewRefName] = useState("");
@@ -114,7 +141,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
     // sessionStorage draft logic for Creation mode
     useEffect(() => {
-        if (isOpen && !isEdition) {
+        if (isOpen && !isEdition && hasRealDraft()) {
             const savedDraft = sessionStorage.getItem('task_focus_draft');
             if (savedDraft) {
                 try {
@@ -133,6 +160,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     if (Array.isArray(parsed.tempReferences)) setTempReferences(parsed.tempReferences);
                     if (Array.isArray(parsed.tempInputs)) setTempInputs(parsed.tempInputs);
                     if (Array.isArray(parsed.tempComments)) setTempComments(parsed.tempComments);
+                    if (Array.isArray(parsed.tempAttachments)) setTempAttachments(parsed.tempAttachments);
 
                     toast({
                         title: "Borrador restaurado",
@@ -159,11 +187,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 status: formData.status,
                 tempReferences,
                 tempInputs,
-                tempComments
+                tempComments,
+                tempAttachments
             };
             sessionStorage.setItem('task_focus_draft', JSON.stringify(draftData));
         }
-    }, [formData, tempReferences, tempInputs, tempComments, isOpen, isEdition]);
+    }, [formData, tempReferences, tempInputs, tempComments, tempAttachments, isOpen, isEdition]);
 
     const clearDraft = () => {
         sessionStorage.removeItem('task_focus_draft');
@@ -186,6 +215,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         setTempReferences([]);
         setTempInputs([]);
         setTempComments([]);
+        setTempAttachments([]);
         toast({ title: "Borrador descartado" });
     };
 
@@ -393,7 +423,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 specialType: formData.isSpecial ? formData.specialType : null,
                 followOnCreate: !isEdition ? isFollowing : undefined,
                 initial_references: !isEdition ? tempReferences : undefined,
-                initial_inputs: !isEdition ? tempInputs : undefined,
+                initial_inputs: !isEdition ? [...tempInputs, ...tempAttachments] : undefined,
                 initial_comments: !isEdition ? tempComments.map(c => ({ content: c.content })) : undefined
             };
 
@@ -637,6 +667,75 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
     };
 
+    const handleUploadTempFile = async (file) => {
+        if (!file) return;
+        setIsUploadingTemp(true);
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const fileFormData = new FormData();
+            fileFormData.append('file', file);
+
+            const res = await fetch(`${baseUrl}/api/tasks/upload-temp`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: fileFormData
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setTempAttachments(prev => [...prev, { url: data.url, name: data.name, category: 'INSUMO' }]);
+                toast({ title: "Archivo adjuntado al borrador", description: data.name });
+            } else {
+                throw new Error("Failed to upload temp file");
+            }
+        } catch (err) {
+            console.error("Temp upload failed:", err);
+            toast({ variant: "destructive", title: "Error de carga", description: "No se pudo subir el archivo temporal." });
+        } finally {
+            setIsUploadingTemp(false);
+        }
+    };
+
+    const handleCommentChange = (e) => {
+        const val = e.target.value;
+        setNewComment(val);
+
+        const selectionStart = e.target.selectionStart;
+        const textBeforeCursor = val.slice(0, selectionStart);
+        const atIndex = textBeforeCursor.lastIndexOf('@');
+
+        if (atIndex !== -1 && (atIndex === 0 || /\s/.test(textBeforeCursor[atIndex - 1]))) {
+            const query = textBeforeCursor.slice(atIndex + 1);
+            if (!/\s/.test(query)) {
+                setShowMentions(true);
+                setMentionFilter(query);
+                setMentionIndex(atIndex);
+                return;
+            }
+        }
+        setShowMentions(false);
+    };
+
+    const handleSelectMention = (user) => {
+        const textBeforeMention = newComment.slice(0, mentionIndex);
+        const textAfterMention = newComment.slice(commentInputRef.current.selectionStart);
+        const updatedComment = `${textBeforeMention}@${user.name} ${textAfterMention}`;
+
+        setNewComment(updatedComment);
+        setShowMentions(false);
+
+        setTimeout(() => {
+            if (commentInputRef.current) {
+                commentInputRef.current.focus();
+                const newPos = textBeforeMention.length + user.name.length + 2; // +1 for @, +1 for space
+                commentInputRef.current.setSelectionRange(newPos, newPos);
+            }
+        }, 50);
+    };
+
     const handleImagePreview = (imgData) => {
         const accessToken = localStorage.getItem('authToken');
         if (imgData.proxy && imgData.commentId) {
@@ -680,7 +779,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
             return (
                 <div key={comment.id} className={cn(
-                    "p-4 rounded-2xl mb-4 border flex gap-3.5 items-start shadow-sm",
+                    "p-3.5 rounded-2xl mb-3 border flex gap-3.5 items-start shadow-sm",
                     isReturn ? "bg-red-50/40 border-red-100 dark:bg-red-900/10 dark:border-red-900/20" : "bg-emerald-50/40 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900/20"
                 )}>
                     <div className={cn(
@@ -706,7 +805,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
 
         return (
-            <div key={comment.id} className="flex gap-4 mb-5 group">
+            <div key={comment.id} className="flex gap-4 mb-3 group">
                 <TeamAvatar
                     member={{ name: comment.author?.name, avatarUrl: comment.author?.avatarUrl }}
                     size={36}
@@ -717,7 +816,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         <span className="text-xs font-black text-zinc-900 dark:text-zinc-100">{comment.author?.name || "Usuario"}</span>
                         <span className="text-[10px] text-zinc-400 font-medium">{new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
-                    <div className="bg-white dark:bg-zinc-900 p-4.5 rounded-2xl rounded-tl-none inline-block max-w-full shadow-sm border border-zinc-100 dark:border-zinc-800">
+                    <div className="bg-white dark:bg-zinc-900 p-3.5 rounded-2xl rounded-tl-none inline-block max-w-full shadow-sm border border-zinc-100 dark:border-zinc-800">
                         <div className="text-sm font-medium text-zinc-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
                             {linkify(comment.content, handleImagePreview, contextData)}
                         </div>
@@ -749,7 +848,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         </div>
                         <div>
                             <DialogTitle className="text-base font-black text-zinc-900 dark:text-white uppercase tracking-wider">
-                                {isEdition ? "Focus View: Tarea" : "Nueva Tarea"}
+                                {isEdition ? `Tarea #${formData.id?.split('-')[0] || ''}` : "Nueva Tarea"}
                             </DialogTitle>
                             <DialogDescription className="text-xs text-zinc-500 font-medium mt-0.5">
                                 {isEdition ? `ID: ${formData.id?.split('-')[0]} • Gestiona los metadatos y la conversación en tiempo real` : "Crea un nuevo pendiente operativo en el tablero Kanban"}
@@ -813,7 +912,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 </div>
 
                 {/* Restore Draft Banner in Creation mode */}
-                {!isEdition && sessionStorage.getItem('task_focus_draft') && (
+                {!isEdition && hasRealDraft() && (
                     <div className="bg-amber-50 dark:bg-amber-900/10 border-b border-amber-200 dark:border-amber-900/20 px-6 py-2 flex items-center justify-between text-amber-800 dark:text-amber-300 text-xs font-semibold">
                         <div className="flex items-center gap-2">
                             <Star className="w-4 h-4 fill-current text-amber-500" />
@@ -829,10 +928,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 )}
 
                 {/* Main Double Column Layout */}
-                <div className="flex-1 flex overflow-hidden">
+                <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
 
-                    {/* Left Column (60%): Metadata / Edit Grid */}
-                    <div className="w-[60%] border-r border-zinc-200 dark:border-zinc-800 overflow-y-auto p-6 bg-white dark:bg-zinc-900 flex flex-col gap-6">
+                    {/* Left Column (50%): Metadata / Edit Grid */}
+                    <div className="w-full md:w-1/2 border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-800 overflow-y-auto p-6 bg-white dark:bg-zinc-900 flex flex-col gap-6">
 
                         {showReintegratePrompt && (
                             <motion.div
@@ -905,7 +1004,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             setEditingField('title');
                                             setInlineVal(formData.title);
                                         }}
-                                        className="text-xl font-extrabold text-zinc-900 dark:text-white hover:bg-zinc-50 dark:hover:bg-zinc-950 px-2 py-1 rounded-xl cursor-pointer transition-colors leading-tight"
+                                        className="text-lg font-bold text-zinc-900 dark:text-white hover:bg-zinc-50 dark:hover:bg-zinc-950 px-2 py-1 rounded-xl cursor-pointer transition-colors leading-tight"
                                     >
                                         {formData.title}
                                     </h1>
@@ -1447,14 +1546,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     onClick={handleClosePanel}
                                     className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl transition-all"
                                 >
-                                    Cerrar Focus Modal
+                                    Cerrar
                                 </button>
                             </div>
                         )}
                     </div>
 
-                    {/* Right Column (40%): Chronological Chat (Oldest Top, Newest Bottom) */}
-                    <div className="w-[40%] flex flex-col h-full bg-zinc-100 dark:bg-zinc-950/30 overflow-hidden">
+                    {/* Right Column (50%): Chronological Chat */}
+                    <div className="w-full md:w-1/2 flex flex-col h-full bg-zinc-100 dark:bg-zinc-950/30 overflow-hidden">
 
                         {/* Chat Container */}
                         <div
@@ -1542,11 +1641,58 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         </button>
                                     </div>
                                 )}
+
+                                {/* Temp attachments for creation mode */}
+                                {!isEdition && tempAttachments.length > 0 && (
+                                    <div className="flex flex-col gap-1.5 p-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl max-h-[120px] overflow-y-auto">
+                                        <span className="text-[9px] font-black uppercase tracking-wider text-zinc-450 px-1">Adjuntos en borrador</span>
+                                        {tempAttachments.map((file, i) => (
+                                            <div key={i} className="flex items-center justify-between gap-2 p-1.5 bg-primary/5 border border-primary/10 rounded-lg">
+                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                    <div className="w-6 h-6 bg-primary/10 rounded flex items-center justify-center text-primary shrink-0">
+                                                        <ImageIcon size={12} />
+                                                    </div>
+                                                    <p className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 truncate">{file.name}</p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTempAttachments(prev => prev.filter((_, idx) => idx !== i))}
+                                                    className="p-1 hover:bg-red-50 dark:hover:bg-red-900/10 rounded text-red-500 shrink-0"
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
                                 <div className="relative group">
+                                    {showMentions && (
+                                        <div className="absolute bottom-[105%] left-4 z-[90] w-52 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1.5 flex flex-col gap-0.5 animate-in slide-in-from-bottom-2 duration-150">
+                                            <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400 px-2.5 py-1">
+                                                Mencionar miembro
+                                            </div>
+                                            {teamMembers
+                                                .filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase()))
+                                                .map((member) => (
+                                                    <button
+                                                        key={member.id}
+                                                        type="button"
+                                                        onClick={() => handleSelectMention(member)}
+                                                        className="w-full text-left px-2.5 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-xs font-bold text-zinc-700 dark:text-zinc-200 flex items-center gap-2 transition-all"
+                                                    >
+                                                        <TeamAvatar member={member} size={18} />
+                                                        <span className="truncate">{member.name}</span>
+                                                    </button>
+                                                ))
+                                            }
+                                        </div>
+                                    )}
+
                                     <textarea
                                         ref={commentInputRef}
                                         value={newComment}
-                                        onChange={e => setNewComment(e.target.value)}
+                                        onChange={handleCommentChange}
                                         onKeyDown={e => {
                                             if (e.key === 'Enter' && !e.shiftKey) {
                                                 e.preventDefault();
@@ -1562,20 +1708,28 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             id="task-file-upload-focus"
                                             className="hidden"
                                             accept="image/*"
-                                            disabled={!isEdition}
-                                            onChange={(e) => setSelectedFile(e.target.files[0])}
+                                            onChange={(e) => {
+                                                const file = e.target.files[0];
+                                                if (!file) return;
+                                                if (isEdition) {
+                                                    setSelectedFile(file);
+                                                } else {
+                                                    handleUploadTempFile(file);
+                                                }
+                                            }}
                                         />
                                         <label
                                             htmlFor="task-file-upload-focus"
                                             className={cn(
-                                                "p-2 rounded-lg text-zinc-400 block transition-all",
-                                                isEdition
-                                                    ? "hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary cursor-pointer"
-                                                    : "opacity-40 cursor-not-allowed"
+                                                "p-2 rounded-lg text-zinc-400 block transition-all hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary cursor-pointer"
                                             )}
-                                            title={isEdition ? "Adjuntar archivo" : "Adjuntos S3 habilitados tras crear la tarea."}
+                                            title="Adjuntar archivo"
                                         >
-                                            <Paperclip size={16} />
+                                            {isUploadingTemp ? (
+                                                <Loader2 size={16} className="animate-spin text-primary" />
+                                            ) : (
+                                                <Paperclip size={16} />
+                                            )}
                                         </label>
                                     </div>
                                     <button

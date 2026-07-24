@@ -21,6 +21,81 @@ export const createNotification = async (data) => {
     }
 };
 
+export const processMentionsAndNotifications = async (taskId, commentContent, authorId) => {
+    try {
+        const task = await prisma.task.findUnique({
+            where: { id: taskId },
+            select: { id: true, title: true, assigneeId: true }
+        });
+        if (!task) return;
+
+        // Resolve assignee User ID
+        let assigneeUserId = null;
+        if (task.assigneeId) {
+            const tm = await prisma.teamMember.findUnique({
+                where: { id: task.assigneeId },
+                select: { userId: true, email: true }
+            });
+            if (tm) {
+                if (tm.userId) {
+                    assigneeUserId = tm.userId;
+                } else if (tm.email) {
+                    const u = await prisma.user.findUnique({
+                        where: { email: tm.email.trim().toLowerCase() },
+                        select: { id: true }
+                    });
+                    if (u) assigneeUserId = u.id;
+                }
+            }
+        }
+
+        // Get all active users
+        const allUsers = await prisma.user.findMany({
+            where: { isActive: true },
+            select: { id: true, name: true, email: true }
+        });
+
+        // Track who has already been notified to avoid duplicate notifications
+        const notifiedUserIds = new Set();
+        if (authorId) {
+            notifiedUserIds.add(authorId); // Do not notify the author
+        }
+
+        // 1. Process mentions (@User or @userId)
+        for (const user of allUsers) {
+            const mentionByName = `@${user.name.toLowerCase()}`;
+            const mentionById = `@${user.id}`;
+            const normalizedContent = commentContent.toLowerCase();
+
+            if (normalizedContent.includes(mentionByName) || commentContent.includes(mentionById)) {
+                if (!notifiedUserIds.has(user.id)) {
+                    notifiedUserIds.add(user.id);
+                    await createNotification({
+                        userId: user.id,
+                        message: `Te han mencionado en la tarea "${task.title}": "${commentContent.substring(0, 60)}..."`,
+                        type: 'TASK_MENTION',
+                        relatedId: task.id,
+                        taskId: task.id
+                    });
+                }
+            }
+        }
+
+        // 2. Process Assignee notification if they haven't been notified (and are not the author)
+        if (assigneeUserId && !notifiedUserIds.has(assigneeUserId)) {
+            await createNotification({
+                userId: assigneeUserId,
+                message: `Nuevo comentario en tu tarea asignada "${task.title}": "${commentContent.substring(0, 60)}..."`,
+                type: 'TASK_COMMENT',
+                relatedId: task.id,
+                taskId: task.id
+            });
+        }
+    } catch (err) {
+        console.error("Error processing mentions and notifications:", err);
+    }
+};
+
 export const markAllNotificationsAsRead = async (userId) => {
     try {
         await prisma.notification.updateMany({
