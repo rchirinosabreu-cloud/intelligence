@@ -213,8 +213,8 @@ const NativeTasks = () => {
             }));
         },
         enabled: !!localStorage.getItem('authToken'),
-        refetchInterval: localStorage.getItem('authToken') ? 30000 : false,
-        refetchOnWindowFocus: true,
+        refetchInterval: (localStorage.getItem('authToken') && !isCreating && !editingTask) ? 30000 : false,
+        refetchOnWindowFocus: () => !isCreating && !editingTask,
     });
 
     const { data: clientsList = [] } = useQuery({

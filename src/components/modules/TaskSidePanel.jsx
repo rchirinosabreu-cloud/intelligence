@@ -3,7 +3,7 @@ import {
     Loader2, Zap, Star, Link as LinkIcon, ExternalLink,
     X, Send, MessageSquare, RotateCcw, CheckCircle2, Bell,
     LayoutGrid, Calendar, User, Trash2, Plus, ClipboardList,
-    FileText, Database, Paperclip, ImageIcon, Eye, Download
+    FileText, Database, Paperclip, ImageIcon, Eye, Download, Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -12,15 +12,25 @@ import { cn } from '@/lib/utils';
 import { triggerConfetti } from '@/utils/confetti';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
-import SlideOver from '@/components/ui/SlideOver';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 import LinkDropdown from '@/components/ui/LinkDropdown';
 import { linkify, cleanSystemMessage } from '@/utils/chatUtils.jsx';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from '@/components/ui/dialog';
 
 const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = null, defaultClientId = null }) => {
     const { toast } = useToast();
     const isEdition = !!taskData?.id;
+
+    // Local state for atomic inline editing
+    const [editingField, setEditingField] = useState(null); // 'title' | 'assigneeId' | 'dueDate' | 'status' | null
+    const [inlineVal, setInlineVal] = useState("");
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [teamMembers, setTeamMembers] = useState([]);
@@ -72,17 +82,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
     const handleDownloadImage = (url) => {
         if (!url) return;
-
-        // Since we are using a Backend Proxy with Content-Disposition: attachment,
-        // we can simply use window.location.assign or a simple <a> click.
-        // This is safer and avoids CORS/Blob complexities in the frontend.
         const link = document.createElement('a');
         link.href = url;
         link.setAttribute('download', '');
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-
         toast({ title: "Descarga iniciada", description: "El archivo se descargará en breve." });
     };
 
@@ -96,7 +101,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
     }, [isOpen]);
 
-    // Populate or Reset Form
+    // Esc to close preview image
     useEffect(() => {
         const handleEsc = (e) => {
             if (e.key === 'Escape') setPreviewImage(null);
@@ -107,15 +112,90 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         return () => window.removeEventListener('keydown', handleEsc);
     }, [previewImage]);
 
+    // sessionStorage draft logic for Creation mode
+    useEffect(() => {
+        if (isOpen && !isEdition) {
+            const savedDraft = sessionStorage.getItem('task_focus_draft');
+            if (savedDraft) {
+                try {
+                    const parsed = JSON.parse(savedDraft);
+                    setFormData(prev => ({
+                        ...prev,
+                        title: parsed.title || '',
+                        clientId: parsed.clientId || defaultClientId || '',
+                        assigneeId: parsed.assigneeId || '',
+                        dueDate: parsed.dueDate || '',
+                        isPriority: parsed.isPriority || false,
+                        isSpecial: parsed.isSpecial || false,
+                        specialType: parsed.specialType || '',
+                        status: parsed.status || 'PENDIENTE'
+                    }));
+                    if (Array.isArray(parsed.tempReferences)) setTempReferences(parsed.tempReferences);
+                    if (Array.isArray(parsed.tempInputs)) setTempInputs(parsed.tempInputs);
+                    if (Array.isArray(parsed.tempComments)) setTempComments(parsed.tempComments);
+
+                    toast({
+                        title: "Borrador restaurado",
+                        description: "Hemos recuperado los datos de tu última sesión.",
+                    });
+                } catch (e) {
+                    console.error("Error parsing task focus draft:", e);
+                }
+            }
+        }
+    }, [isOpen, isEdition, defaultClientId]);
+
+    // Save draft to sessionStorage on formData changes (Creation mode)
+    useEffect(() => {
+        if (isOpen && !isEdition) {
+            const draftData = {
+                title: formData.title,
+                clientId: formData.clientId,
+                assigneeId: formData.assigneeId,
+                dueDate: formData.dueDate,
+                isPriority: formData.isPriority,
+                isSpecial: formData.isSpecial,
+                specialType: formData.specialType,
+                status: formData.status,
+                tempReferences,
+                tempInputs,
+                tempComments
+            };
+            sessionStorage.setItem('task_focus_draft', JSON.stringify(draftData));
+        }
+    }, [formData, tempReferences, tempInputs, tempComments, isOpen, isEdition]);
+
+    const clearDraft = () => {
+        sessionStorage.removeItem('task_focus_draft');
+        setFormData({
+            title: '',
+            clientId: defaultClientId || '',
+            assigneeId: '',
+            dueDate: '',
+            comments: '',
+            status: 'PENDIENTE',
+            isPriority: false,
+            isSpecial: false,
+            specialType: '',
+            hasReference: false,
+            referenceUrl: '',
+            referenceLinks: [],
+            assetsLinks: [],
+            taskAttachments: []
+        });
+        setTempReferences([]);
+        setTempInputs([]);
+        setTempComments([]);
+        toast({ title: "Borrador descartado" });
+    };
+
     // Populate or Reset Form
     useEffect(() => {
         if (isOpen) {
             setPreviewImage(null); // Clear image viewer state when opening a task
             setSelectedFile(null); // Clear pending attachment
             setNewComment("");    // Clear pending comment draft
-            setTempReferences([]); // Clear creation mode temporary references
-            setTempInputs([]);     // Clear creation mode temporary inputs
-            setTempComments([]);   // Clear creation mode temporary comments
+            setEditingField(null);
             setNewRefUrl("");
             setNewRefName("");
             setNewInpUrl("");
@@ -183,28 +263,101 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     contentItemId: taskData.contentItemId
                 });
             } else {
-                setIsFollowing(false);
-                setFormData({
-                    title: '',
-                    clientId: defaultClientId || '',
-                    assigneeId: '',
-                    dueDate: '',
-                    comments: '',
-                    status: 'PENDIENTE',
-                    isPriority: false,
-                    isSpecial: false,
-                    specialType: '',
-                    hasReference: false,
-                    referenceUrl: '',
-                    referenceLinks: [],
-                    assetsLinks: [],
-                    taskAttachments: []
-                });
+                // If there's no saved draft, set clean empty form
+                if (!sessionStorage.getItem('task_focus_draft')) {
+                    setIsFollowing(false);
+                    setFormData({
+                        title: '',
+                        clientId: defaultClientId || '',
+                        assigneeId: '',
+                        dueDate: '',
+                        comments: '',
+                        status: 'PENDIENTE',
+                        isPriority: false,
+                        isSpecial: false,
+                        specialType: '',
+                        hasReference: false,
+                        referenceUrl: '',
+                        referenceLinks: [],
+                        assetsLinks: [],
+                        taskAttachments: []
+                    });
+                    setTempReferences([]);
+                    setTempInputs([]);
+                    setTempComments([]);
+                }
             }
             setShowReintegratePrompt(false);
             setReintegrateReason("");
         }
     }, [isOpen, taskData, isEdition, defaultClientId, clientsList]);
+
+    // Handle Inline Hot PATCH saving
+    const saveInlineField = async (fieldName, finalValue) => {
+        setIsSubmitting(true);
+        try {
+            const baseUrl = getApiBaseUrl();
+            let processedVal = finalValue;
+            if (fieldName === 'dueDate' && finalValue) {
+                let cleanDate = finalValue.split('T')[0];
+                processedVal = `${cleanDate}T12:00:00.000Z`;
+            }
+
+            const payload = {
+                [fieldName]: processedVal
+            };
+
+            const token = localStorage.getItem('authToken');
+            const url = `${baseUrl}/api/tasks/${formData.id}`;
+
+            if (fieldName === 'status' && finalValue === 'REALIZADA' && formData.originalStatus !== 'REALIZADA') {
+                triggerConfetti();
+            }
+
+            const res = await fetch(url, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                const updatedTask = await res.json();
+                toast({ title: 'Campo actualizado', description: 'La propiedad se guardó correctamente en caliente.' });
+
+                // Update local state with fresh data
+                let formattedDate = '';
+                if (updatedTask.dueDate) {
+                    try {
+                        formattedDate = new Date(updatedTask.dueDate).toISOString().split('T')[0];
+                    } catch(e) {}
+                }
+
+                setFormData(prev => ({
+                    ...prev,
+                    title: updatedTask.title || prev.title,
+                    assigneeId: updatedTask.assigneeId || '',
+                    status: updatedTask.status || 'PENDIENTE',
+                    dueDate: formattedDate,
+                    originalStatus: updatedTask.status,
+                    taskComments: updatedTask.taskComments || prev.taskComments,
+                    taskAttachments: updatedTask.taskAttachments || prev.taskAttachments
+                }));
+
+                setEditingField(null);
+                onSuccess(); // Refresh Kanban board
+            } else {
+                throw new Error("Failed to patch task");
+            }
+        } catch (err) {
+            console.error("Inline patch failed:", err);
+            toast({ title: 'Error', description: 'No se pudo guardar la modificación.', variant: 'destructive' });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     const handleSave = async (e) => {
         if (e) e.preventDefault();
@@ -233,7 +386,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 clientId: formData.clientId,
                 assigneeId: formData.assigneeId || null,
                 dueDate: isoDate,
-                comments: formData.comments,
+                comments: '', // Removed general comments description completely
                 status: formData.status,
                 isPriority: formData.isPriority,
                 isSpecial: formData.isSpecial,
@@ -262,6 +415,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
             if (res.ok) {
                 toast({ title: isEdition ? 'Tarea actualizada' : 'Tarea creada', description: 'Los cambios se guardaron correctamente.' });
+
+                // Clear sessionStorage draft on successful task creation
+                if (!isEdition) {
+                    sessionStorage.removeItem('task_focus_draft');
+                }
+
                 onSuccess();
                 onClose();
             } else {
@@ -315,7 +474,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
 
-            // 1. Update status with justification in reintegrateReason field for backend processing
             const statusRes = await fetch(`${baseUrl}/api/tasks/${formData.id}`, {
                 method: 'PATCH',
                 headers: {
@@ -418,7 +576,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     };
 
     const handleAddComment = async (fileToUpload = null) => {
-        // Defensive check: ensure fileToUpload is a File instance, not a React event
         const validFile = (fileToUpload instanceof File) ? fileToUpload : null;
         const file = validFile || selectedFile;
 
@@ -467,7 +624,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 const comment = await res.json();
                 setFormData(prev => ({
                     ...prev,
-                    taskComments: [comment, ...(prev.taskComments || [])]
+                    taskComments: [...(prev.taskComments || []), comment] // Keep in backend order, then UI will reverse it for display
                 }));
                 setNewComment("");
                 setSelectedFile(null);
@@ -481,7 +638,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     };
 
     const handleImagePreview = (imgData) => {
-        // imgData is { direct, proxy, commentId }
         const accessToken = localStorage.getItem('authToken');
         if (imgData.proxy && imgData.commentId) {
             let downloadUrl = `${getApiBaseUrl()}/api/tasks/${formData.id}/comments/${imgData.commentId}/download`;
@@ -490,17 +646,29 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             }
 
             setPreviewImage({
-                displayUrl: imgData.proxy, // already includes token from linkify
+                displayUrl: imgData.proxy,
                 downloadUrl: downloadUrl
             });
         } else {
-            // Fallback for non-proxy images (legacy or external)
             setPreviewImage({
                 displayUrl: imgData.direct || imgData,
                 downloadUrl: imgData.direct || imgData
             });
         }
     };
+
+    // Auto-scroll chat to bottom
+    const scrollToBottom = () => {
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+    };
+
+    useEffect(() => {
+        if (isOpen) {
+            setTimeout(scrollToBottom, 100);
+        }
+    }, [isOpen, formData.taskComments, tempComments]);
 
     const renderComment = (comment) => {
         const isSystem = comment.type === 'system_return' || comment.type === 'system_reintegrate';
@@ -512,24 +680,24 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
             return (
                 <div key={comment.id} className={cn(
-                    "p-3 rounded-xl mb-3 border flex gap-3 items-start",
-                    isReturn ? "bg-red-50/50 border-red-100 dark:bg-red-900/10 dark:border-red-900/30" : "bg-emerald-50/50 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900/30"
+                    "p-4 rounded-2xl mb-4 border flex gap-3.5 items-start shadow-sm",
+                    isReturn ? "bg-red-50/40 border-red-100 dark:bg-red-900/10 dark:border-red-900/20" : "bg-emerald-50/40 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900/20"
                 )}>
                     <div className={cn(
-                        "w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm",
+                        "w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-sm",
                         isReturn ? "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400" : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400"
                     )}>
-                        {isReturn ? <RotateCcw size={12} /> : <CheckCircle2 size={12} />}
+                        {isReturn ? <RotateCcw size={13} /> : <CheckCircle2 size={13} />}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                            <span className={cn("text-[9px] font-black uppercase tracking-tight", isReturn ? "text-red-600" : "text-emerald-600")}>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className={cn("text-[10px] font-black uppercase tracking-wider", isReturn ? "text-red-600" : "text-emerald-600")}>
                                 {isReturn ? "Evento: Devolución" : "Evento: Reintegración"}
                             </span>
-                            <span className="text-[9px] text-zinc-400">•</span>
-                            <span className="text-[9px] text-zinc-400">{new Date(comment.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short'})}</span>
+                            <span className="text-[10px] text-zinc-400">•</span>
+                            <span className="text-[10px] text-zinc-400 font-medium">{new Date(comment.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short'})}</span>
                         </div>
-                        <div className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed italic">
+                        <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed italic">
                             "{linkify(cleanContent, handleImagePreview, contextData)}"
                         </div>
                     </div>
@@ -538,19 +706,19 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
 
         return (
-            <div key={comment.id} className="flex gap-3 mb-4 group">
+            <div key={comment.id} className="flex gap-4 mb-5 group">
                 <TeamAvatar
                     member={{ name: comment.author?.name, avatarUrl: comment.author?.avatarUrl }}
-                    size={28}
-                    className="shrink-0 ring-1 ring-white dark:ring-zinc-900"
+                    size={36}
+                    className="shrink-0 ring-2 ring-white dark:ring-zinc-900 shadow-md"
                 />
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[11px] font-bold text-zinc-900 dark:text-zinc-100">{comment.author?.name || "Usuario"}</span>
-                        <span className="text-[9px] text-zinc-400">{new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-black text-zinc-900 dark:text-zinc-100">{comment.author?.name || "Usuario"}</span>
+                        <span className="text-[10px] text-zinc-400 font-medium">{new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
-                    <div className="bg-zinc-100 dark:bg-zinc-900 p-2.5 rounded-xl rounded-tl-none inline-block max-w-full shadow-sm">
-                        <div className="text-[11px] text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                    <div className="bg-white dark:bg-zinc-900 p-4.5 rounded-2xl rounded-tl-none inline-block max-w-full shadow-sm border border-zinc-100 dark:border-zinc-800">
+                        <div className="text-sm font-medium text-zinc-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
                             {linkify(comment.content, handleImagePreview, contextData)}
                         </div>
                     </div>
@@ -564,21 +732,32 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         onClose();
     };
 
-    const headerIcon = isEdition ? <ClipboardList className="text-primary" size={18} /> : <Plus className="text-primary" size={18} />;
+    // Prepare comments list in ascending chronological order (oldest top, newest bottom)
+    const displayComments = isEdition
+        ? [...(formData.taskComments || [])].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        : [...tempComments].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
     return (
-        <SlideOver
-            open={isOpen}
-            onOpenChange={(open) => !open && handleClosePanel()}
-            title={isEdition ? "Editar Tarea" : "Nueva Tarea"}
-            description={isEdition ? `ID: ${formData.id?.split('-')[0]}` : "Crea un nuevo pendiente operativo"}
-            icon={headerIcon}
-            className="w-[45vw] max-w-3xl"
-        >
-            <div className="flex flex-col h-full bg-zinc-50/30 dark:bg-transparent">
-                {/* Quick Access Toolbar */}
-                <div className="flex items-center justify-between px-5 py-2.5 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+        <Dialog open={isOpen} onOpenChange={(open) => !open && handleClosePanel()}>
+            <DialogContent className="max-w-6xl w-[90vw] h-[85vh] p-0 overflow-hidden bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl">
+
+                {/* Header Section */}
+                <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
                     <div className="flex items-center gap-3">
+                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-primary">
+                            {isEdition ? <ClipboardList size={20} /> : <Plus size={20} />}
+                        </div>
+                        <div>
+                            <DialogTitle className="text-base font-black text-zinc-900 dark:text-white uppercase tracking-wider">
+                                {isEdition ? "Focus View: Tarea" : "Nueva Tarea"}
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-zinc-500 font-medium mt-0.5">
+                                {isEdition ? `ID: ${formData.id?.split('-')[0]} • Gestiona los metadatos y la conversación en tiempo real` : "Crea un nuevo pendiente operativo en el tablero Kanban"}
+                            </DialogDescription>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3.5">
                         {isEdition && (formData.plan || formData.contentPlanId) && (
                             <button
                                 onClick={() => {
@@ -616,32 +795,50 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         >
                             <Bell size={14} className={cn(isFollowing && "fill-current animate-in zoom-in-50")} />
                         </button>
-                    </div>
 
-                    {isEdition && (
-                        <div className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900 px-2 py-1 rounded-full border border-zinc-200 dark:border-zinc-800 shadow-inner">
-                             <UserAvatarPopover user={formData.creator}>
-                                <TeamAvatar
-                                    member={formData.creator}
-                                    size={18}
-                                    className="ring-1 ring-white dark:ring-zinc-800"
-                                />
-                             </UserAvatarPopover>
-                             <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-tighter">De:</span>
-                             <span className="text-[9px] text-zinc-900 dark:text-zinc-100 font-black uppercase tracking-tighter truncate max-w-[100px]">{formData.creator?.name || formData.creatorName}</span>
-                        </div>
-                    )}
+                        {isEdition && (
+                            <div className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900 px-2 py-1 rounded-full border border-zinc-200 dark:border-zinc-800 shadow-inner">
+                                <UserAvatarPopover user={formData.creator}>
+                                    <TeamAvatar
+                                        member={formData.creator}
+                                        size={18}
+                                        className="ring-1 ring-white dark:ring-zinc-800"
+                                    />
+                                </UserAvatarPopover>
+                                <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-tighter">De:</span>
+                                <span className="text-[9px] text-zinc-900 dark:text-zinc-100 font-black uppercase tracking-tighter truncate max-w-[100px]">{formData.creator?.name || formData.creatorName}</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                {/* Main Content Area */}
-                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                    {/* Top Form Section (Fixed height/Adaptive scroll) */}
-                    <div className="shrink-0 overflow-y-auto max-h-[60%] border-b border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-transparent">
+                {/* Restore Draft Banner in Creation mode */}
+                {!isEdition && sessionStorage.getItem('task_focus_draft') && (
+                    <div className="bg-amber-50 dark:bg-amber-900/10 border-b border-amber-200 dark:border-amber-900/20 px-6 py-2 flex items-center justify-between text-amber-800 dark:text-amber-300 text-xs font-semibold">
+                        <div className="flex items-center gap-2">
+                            <Star className="w-4 h-4 fill-current text-amber-500" />
+                            <span>Borrador restaurado de tu última sesión</span>
+                        </div>
+                        <button
+                            onClick={clearDraft}
+                            className="text-amber-700 dark:text-amber-400 hover:underline text-[10px] font-black uppercase tracking-wider"
+                        >
+                            Limpiar borrador
+                        </button>
+                    </div>
+                )}
+
+                {/* Main Double Column Layout */}
+                <div className="flex-1 flex overflow-hidden">
+
+                    {/* Left Column (60%): Metadata / Edit Grid */}
+                    <div className="w-[60%] border-r border-zinc-200 dark:border-zinc-800 overflow-y-auto p-6 bg-white dark:bg-zinc-900 flex flex-col gap-6">
+
                         {showReintegratePrompt && (
                             <motion.div
                                 initial={{ opacity: 0, y: -20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="m-5 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/30 rounded-2xl shadow-xl"
+                                className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/30 rounded-2xl shadow-xl"
                             >
                                 <div className="flex items-center gap-2 mb-3">
                                     <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center rounded-full text-emerald-600">
@@ -676,503 +873,730 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </motion.div>
                         )}
 
-                        <form
-                            onSubmit={handleSave}
-                            className="p-5 space-y-4"
-                        >
-                                {/* Fila 1: Title & Client */}
-                                <div className="grid grid-cols-2 gap-4 items-end">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2">
-                                            Título de la tarea <span className="text-red-500">*</span>
-                                        </label>
+                        {/* Title Section (Read-Only / Inline Edit) */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Título de la Tarea</label>
+                            {isEdition ? (
+                                editingField === 'title' ? (
+                                    <div className="flex gap-2 items-center">
                                         <input
                                             type="text"
-                                            required
-                                            value={formData.title}
-                                            onChange={e => setFormData({...formData, title: e.target.value})}
-                                            placeholder="Ej: Revisión de artes..."
-                                            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-[13px] font-bold focus:ring-2 ring-primary/10 outline-none transition-all shadow-sm h-[38px]"
+                                            value={inlineVal}
+                                            onChange={e => setInlineVal(e.target.value)}
+                                            className="flex-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-[15px] font-black focus:ring-2 ring-primary/10 outline-none"
+                                            autoFocus
                                         />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Cliente</label>
-                                        <select
-                                            required
-                                            value={formData.clientId}
-                                            onChange={e => setFormData({...formData, clientId: e.target.value})}
-                                            disabled={!!defaultClientId}
-                                            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm disabled:opacity-60 h-[38px]"
+                                        <button
+                                            onClick={() => saveInlineField('title', inlineVal)}
+                                            className="p-2 bg-emerald-500 text-white rounded-xl shadow-md hover:bg-emerald-600"
                                         >
-                                            <option value="">Seleccionar...</option>
-                                            {clientsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                        </select>
+                                            <Check size={16} />
+                                        </button>
+                                        <button
+                                            onClick={() => setEditingField(null)}
+                                            className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-500 hover:bg-zinc-200"
+                                        >
+                                            <X size={16} />
+                                        </button>
                                     </div>
-                                </div>
+                                ) : (
+                                    <h1
+                                        onClick={() => {
+                                            setEditingField('title');
+                                            setInlineVal(formData.title);
+                                        }}
+                                        className="text-xl font-extrabold text-zinc-900 dark:text-white hover:bg-zinc-50 dark:hover:bg-zinc-950 px-2 py-1 rounded-xl cursor-pointer transition-colors leading-tight"
+                                    >
+                                        {formData.title}
+                                    </h1>
+                                )
+                            ) : (
+                                <input
+                                    type="text"
+                                    required
+                                    value={formData.title}
+                                    onChange={e => setFormData({...formData, title: e.target.value})}
+                                    placeholder="Ej: Revisión de artes para campaña..."
+                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-[15px] font-black focus:ring-2 ring-primary/10 outline-none transition-all shadow-sm"
+                                />
+                            )}
+                        </div>
 
-                                {/* Fila 2: Assignee, Deadline & Status */}
-                                <div className="grid grid-cols-3 gap-4">
-                                    <div className="col-span-1 space-y-1.5">
-                                        <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Responsable</label>
-                                        <select
-                                            value={formData.assigneeId}
-                                            onChange={e => setFormData({...formData, assigneeId: e.target.value})}
-                                            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[38px]"
+                        {/* Metadata Grid */}
+                        <div className="grid grid-cols-2 gap-5">
+
+                            {/* Cliente Selector */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Cliente</label>
+                                <select
+                                    required
+                                    value={formData.clientId}
+                                    onChange={e => setFormData({...formData, clientId: e.target.value})}
+                                    disabled={isEdition || !!defaultClientId}
+                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm disabled:opacity-80"
+                                >
+                                    <option value="">Seleccionar cliente...</option>
+                                    {clientsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                            </div>
+
+                            {/* Responsable (Read-Only / Inline Edit) */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Responsable</label>
+                                {isEdition ? (
+                                    editingField === 'assigneeId' ? (
+                                        <div className="flex gap-2 items-center">
+                                            <select
+                                                value={inlineVal}
+                                                onChange={e => setInlineVal(e.target.value)}
+                                                className="flex-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/10 outline-none"
+                                                autoFocus
+                                            >
+                                                <option value="">Sin asignar</option>
+                                                {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                            </select>
+                                            <button
+                                                onClick={() => saveInlineField('assigneeId', inlineVal || null)}
+                                                className="p-2 bg-emerald-500 text-white rounded-xl shadow-md"
+                                            >
+                                                <Check size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => setEditingField(null)}
+                                                className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-500"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div
+                                            onClick={() => {
+                                                setEditingField('assigneeId');
+                                                setInlineVal(formData.assigneeId || '');
+                                            }}
+                                            className="flex items-center gap-2.5 bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-850 px-3 py-2 rounded-xl cursor-pointer border border-zinc-200/50 dark:border-zinc-800 transition-colors"
                                         >
-                                            <option value="">Sin asignar</option>
-                                            {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="col-span-1 space-y-1.5">
-                                        <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Deadline</label>
-                                        <div className="relative w-full">
-                                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none z-10" />
+                                            <TeamAvatar
+                                                member={teamMembers.find(m => m.id === formData.assigneeId)}
+                                                size={22}
+                                            />
+                                            <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                                                {teamMembers.find(m => m.id === formData.assigneeId)?.name || "Sin asignar"}
+                                            </span>
+                                        </div>
+                                    )
+                                ) : (
+                                    <select
+                                        value={formData.assigneeId}
+                                        onChange={e => setFormData({...formData, assigneeId: e.target.value})}
+                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm"
+                                    >
+                                        <option value="">Sin asignar</option>
+                                        {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                    </select>
+                                )}
+                            </div>
+
+                            {/* Deadline / Fecha Entrega (Read-Only / Inline Edit) */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Deadline</label>
+                                {isEdition ? (
+                                    editingField === 'dueDate' ? (
+                                        <div className="flex gap-2 items-center">
                                             <DatePicker
-                                                selected={formData.dueDate ? new Date(`${formData.dueDate.split('T')[0]}T12:00:00.000Z`) : null}
+                                                selected={inlineVal ? new Date(`${inlineVal}T12:00:00.000Z`) : null}
                                                 onChange={(date) => {
                                                     const dateStr = date ? date.toISOString().split('T')[0] : '';
-                                                    setFormData({...formData, dueDate: dateStr});
+                                                    setInlineVal(dateStr);
                                                 }}
                                                 dateFormat="dd/MM/yyyy"
-                                                className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-[11px] font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[38px]"
+                                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/10 outline-none h-[36px]"
                                                 wrapperClassName="w-full"
                                                 placeholderText="Elegir fecha..."
-                                                isClearable
+                                                autoFocus
                                             />
+                                            <button
+                                                onClick={() => saveInlineField('dueDate', inlineVal || null)}
+                                                className="p-2 bg-emerald-500 text-white rounded-xl shadow-md shrink-0"
+                                            >
+                                                <Check size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => setEditingField(null)}
+                                                className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-500 shrink-0"
+                                            >
+                                                <X size={14} />
+                                            </button>
                                         </div>
-                                    </div>
-                                    <div className="col-span-1 space-y-1.5">
-                                        <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Estado Actual</label>
-                                        <select
-                                            value={formData.status}
-                                            onChange={e => setFormData({...formData, status: e.target.value})}
-                                            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest focus:ring-2 ring-primary/10 outline-none shadow-sm h-[38px]"
+                                    ) : (
+                                        <div
+                                            onClick={() => {
+                                                setEditingField('dueDate');
+                                                setInlineVal(formData.dueDate || '');
+                                            }}
+                                            className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-850 px-3 py-2 rounded-xl cursor-pointer border border-zinc-200/50 dark:border-zinc-800 transition-colors h-[38px]"
                                         >
-                                            <option value="PENDIENTE">PENDIENTE</option>
-                                            <option value="EN_CURSO">EN PROCESO</option>
-                                            <option value="REALIZADA">REALIZADO</option>
-                                            <option value="DEVUELTA">DEVUELTO</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                {/* Priority & Special Flags */}
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData(prev => ({ ...prev, isPriority: !prev.isPriority }))}
-                                        className={cn(
-                                            "flex items-center justify-center gap-2 p-2.5 rounded-xl border transition-all shadow-sm",
-                                            formData.isPriority ? "bg-orange-500 text-white border-orange-600 font-bold" : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400"
-                                        )}
-                                    >
-                                        <Zap size={14} fill={formData.isPriority ? "currentColor" : "none"} />
-                                        <span className="text-[9px] uppercase tracking-widest font-black">Prioritaria</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData(prev => ({ ...prev, isSpecial: !prev.isSpecial }))}
-                                        className={cn(
-                                            "flex items-center justify-center gap-2 p-2.5 rounded-xl border transition-all shadow-sm",
-                                            formData.isSpecial ? "bg-purple-600 text-white border-purple-700 font-bold" : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400"
-                                        )}
-                                    >
-                                        <Star size={14} fill={formData.isSpecial ? "currentColor" : "none"} />
-                                        <span className="text-[9px] uppercase tracking-widest font-black">Especial</span>
-                                    </button>
-                                </div>
-
-                                {formData.isSpecial && (
-                                    <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="space-y-1.5">
-                                        <label className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400">Tipo de Pendiente Especial</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            value={formData.specialType}
-                                            onChange={e => setFormData({...formData, specialType: e.target.value})}
-                                            placeholder="Ej: Manual de Marca..."
-                                            className="w-full bg-purple-500/5 border border-purple-200 dark:border-purple-800/50 rounded-xl px-4 py-2 text-[11px] font-bold focus:ring-2 ring-purple-500/10 outline-none shadow-sm"
+                                            <Calendar className="w-4 h-4 text-zinc-400 shrink-0" />
+                                            <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                                                {formData.dueDate ? formData.dueDate.split('-').reverse().join('/') : "Sin fecha límite"}
+                                            </span>
+                                        </div>
+                                    )
+                                ) : (
+                                    <div className="relative w-full">
+                                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none z-10" />
+                                        <DatePicker
+                                            selected={formData.dueDate ? new Date(`${formData.dueDate.split('T')[0]}T12:00:00.000Z`) : null}
+                                            onChange={(date) => {
+                                                const dateStr = date ? date.toISOString().split('T')[0] : '';
+                                                setFormData({...formData, dueDate: dateStr});
+                                            }}
+                                            dateFormat="dd/MM/yyyy"
+                                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-9 pr-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm"
+                                            wrapperClassName="w-full"
+                                            placeholderText="Elegir fecha..."
+                                            isClearable
                                         />
-                                    </motion.div>
-                                )}
-
-                                {/* Links Section (Dropdowns for Edition, Interactive list for Creation) */}
-                                {isEdition ? (
-                                    <div className="space-y-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
-                                        <div className="flex items-center justify-between">
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                                                Insumos & Referencias
-                                            </label>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            {(() => {
-                                                const referenceUrls = [];
-                                                if (formData.referenceUrl) referenceUrls.push(formData.referenceUrl);
-                                                if (Array.isArray(formData.referenceLinks)) {
-                                                    formData.referenceLinks.forEach(u => referenceUrls.push(u));
-                                                } else if (typeof formData.referenceLinks === 'string' && formData.referenceLinks.trim()) {
-                                                    formData.referenceLinks.split(/[\s,\n;]+/).forEach(u => referenceUrls.push(u));
-                                                }
-                                                if (formData.taskAttachments) {
-                                                    formData.taskAttachments
-                                                        .filter(a => a.category === 'REFERENCIA')
-                                                        .forEach(a => referenceUrls.push(a.url));
-                                                }
-
-                                                const uniqueReferences = [...new Set(referenceUrls)].filter(Boolean);
-
-                                                const inputUrls = [];
-                                                if (Array.isArray(formData.assetsLinks)) {
-                                                    formData.assetsLinks.forEach(u => inputUrls.push(u));
-                                                } else if (typeof formData.assetsLinks === 'string' && formData.assetsLinks.trim()) {
-                                                    formData.assetsLinks.split(/[\s,\n;]+/).forEach(u => inputUrls.push(u));
-                                                }
-                                                if (formData.taskAttachments) {
-                                                    formData.taskAttachments
-                                                        .filter(a => a.category === 'INSUMO')
-                                                        .forEach(a => inputUrls.push(a.url));
-                                                }
-
-                                                const uniqueInputs = [...new Set(inputUrls)].filter(Boolean);
-
-                                                if (uniqueReferences.length === 0 && uniqueInputs.length === 0) {
-                                                    return (
-                                                        <div className="text-[10px] text-zinc-400 italic text-center py-2 bg-zinc-100/50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 w-full">
-                                                            No hay enlaces vinculados a esta tarea.
-                                                        </div>
-                                                    );
-                                                }
-
-                                                return (
-                                                    <>
-                                                        {uniqueReferences.length > 0 && (
-                                                            <LinkDropdown
-                                                                label="Referencia"
-                                                                links={uniqueReferences}
-                                                                icon={FileText}
-                                                            />
-                                                        )}
-                                                        {uniqueInputs.length > 0 && (
-                                                            <LinkDropdown
-                                                                label="Insumo"
-                                                                links={uniqueInputs}
-                                                                icon={Database}
-                                                            />
-                                                        )}
-                                                    </>
-                                                );
-                                            })()}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
-                                        {/* Sección de Referencias */}
-                                        <div className="space-y-2">
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 block">
-                                                Referencias iniciales
-                                            </label>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Nombre de la referencia (ej: Figma...)"
-                                                    value={newRefName}
-                                                    onChange={e => setNewRefName(e.target.value)}
-                                                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
-                                                />
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="URL (https://...)"
-                                                        value={newRefUrl}
-                                                        onChange={e => setNewRefUrl(e.target.value)}
-                                                        className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            if (!newRefUrl.trim()) return;
-                                                            let finalUrl = newRefUrl.trim();
-                                                            if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
-                                                                finalUrl = 'https://' + finalUrl;
-                                                            }
-                                                            setTempReferences(prev => [...prev, { url: finalUrl, name: newRefName.trim() || finalUrl }]);
-                                                            setNewRefUrl("");
-                                                            setNewRefName("");
-                                                        }}
-                                                        className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-xl transition-all shrink-0 flex items-center justify-center h-[38px] w-[38px]"
-                                                        title="Agregar Referencia"
-                                                    >
-                                                        <Plus size={16} />
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {tempReferences.length > 0 && (
-                                                <div className="flex flex-wrap gap-2 pt-1">
-                                                    {tempReferences.map((ref, index) => (
-                                                        <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
-                                                            <ExternalLink size={12} className="text-zinc-400 shrink-0" />
-                                                            <span className="truncate max-w-[150px]">{ref.name}</span>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setTempReferences(prev => prev.filter((_, i) => i !== index))}
-                                                                className="text-zinc-400 hover:text-red-500 transition-colors"
-                                                            >
-                                                                <X size={12} />
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Sección de Insumos */}
-                                        <div className="space-y-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/10">
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500 block">
-                                                Insumos iniciales
-                                            </label>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Nombre del insumo (ej: Assets...)"
-                                                    value={newInpName}
-                                                    onChange={e => setNewInpName(e.target.value)}
-                                                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
-                                                />
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="URL (https://...)"
-                                                        value={newInpUrl}
-                                                        onChange={e => setNewInpUrl(e.target.value)}
-                                                        className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium outline-none focus:ring-2 ring-primary/10 shadow-sm"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            if (!newInpUrl.trim()) return;
-                                                            let finalUrl = newInpUrl.trim();
-                                                            if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
-                                                                finalUrl = 'https://' + finalUrl;
-                                                            }
-                                                            setTempInputs(prev => [...prev, { url: finalUrl, name: newInpName.trim() || finalUrl }]);
-                                                            setNewInpUrl("");
-                                                            setNewInpName("");
-                                                        }}
-                                                        className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-xl transition-all shrink-0 flex items-center justify-center h-[38px] w-[38px]"
-                                                        title="Agregar Insumo"
-                                                    >
-                                                        <Plus size={16} />
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {tempInputs.length > 0 && (
-                                                <div className="flex flex-wrap gap-2 pt-1">
-                                                    {tempInputs.map((inp, index) => (
-                                                        <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
-                                                            <ExternalLink size={12} className="text-zinc-400 shrink-0" />
-                                                            <span className="truncate max-w-[150px]">{inp.name}</span>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setTempInputs(prev => prev.filter((_, i) => i !== index))}
-                                                                className="text-zinc-400 hover:text-red-500 transition-colors"
-                                                            >
-                                                                <X size={12} />
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
                                     </div>
                                 )}
-
-                            {/* General Context / Static Comments */}
-                            <div className="space-y-1.5 pb-4">
-                                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Descripción / Contexto General</label>
-                                <textarea
-                                    value={formData.comments}
-                                    onChange={e => setFormData({...formData, comments: e.target.value})}
-                                    placeholder="Detalles base para el responsable..."
-                                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-[11px] font-medium focus:ring-2 ring-primary/10 outline-none transition-all resize-none h-28 shadow-sm"
-                                />
-                            </div>
-                        </form>
-                    </div>
-
-                    {/* Bottom Chat Section (Elastic/Independent Scroll) */}
-                    <div
-                        ref={chatContainerRef}
-                        onDragOver={(e) => {
-                            if (!isEdition) return;
-                            e.preventDefault();
-                            setIsDragging(true);
-                        }}
-                        onDragLeave={() => {
-                            if (!isEdition) return;
-                            setIsDragging(false);
-                        }}
-                        onDrop={(e) => {
-                            if (!isEdition) return;
-                            e.preventDefault();
-                            setIsDragging(false);
-                            const file = e.dataTransfer.files[0];
-                            if (file && file.type.startsWith('image/')) {
-                                handleAddComment(file);
-                            }
-                        }}
-                        className="flex-1 overflow-y-auto custom-scrollbar relative bg-zinc-50/50 dark:bg-transparent"
-                    >
-                        {/* Drag & Drop Overlay */}
-                        <AnimatePresence>
-                            {isDragging && isEdition && (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    exit={{ opacity: 0 }}
-                                    className="absolute inset-0 z-50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-8 transition-all"
-                                >
-                                    <div className="w-full h-full border-2 border-dashed border-primary/40 rounded-3xl flex flex-col items-center justify-center gap-4 animate-in zoom-in-95">
-                                        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center text-primary">
-                                            <ImageIcon size={32} />
-                                        </div>
-                                        <p className="text-sm font-black uppercase tracking-widest text-primary">Suelta tus imágenes aquí</p>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-
-                        <div className="px-5 py-6">
-                            <div className="flex items-center gap-4 mb-6">
-                                <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800/50" />
-                                <div className="flex items-center gap-2 px-3 py-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-full">
-                                    <MessageSquare size={10} className="text-zinc-400" />
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Conversación & Eventos</span>
-                                </div>
-                                <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800/50" />
                             </div>
 
-                            <div className="space-y-3 pb-4">
+                            {/* Estado Actual (Read-Only / Inline Edit) */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Estado Actual</label>
                                 {isEdition ? (
-                                    (!formData.taskComments || formData.taskComments.length === 0) ? (
-                                        <div className="py-10 flex flex-col items-center justify-center text-center px-8">
-                                            <div className="w-10 h-10 bg-zinc-50 dark:bg-zinc-900/50 rounded-full flex items-center justify-center mb-2 text-zinc-200 dark:text-zinc-800">
-                                                <MessageSquare size={20} />
-                                            </div>
-                                            <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Sin comentarios aún</h4>
+                                    editingField === 'status' ? (
+                                        <div className="flex gap-2 items-center">
+                                            <select
+                                                value={inlineVal}
+                                                onChange={e => setInlineVal(e.target.value)}
+                                                className="flex-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/10 outline-none"
+                                                autoFocus
+                                            >
+                                                <option value="PENDIENTE">PENDIENTE</option>
+                                                <option value="EN_CURSO">EN PROCESO</option>
+                                                <option value="REALIZADA">REALIZADO</option>
+                                                <option value="DEVUELTA">DEVUELTO</option>
+                                            </select>
+                                            <button
+                                                onClick={() => saveInlineField('status', inlineVal)}
+                                                className="p-2 bg-emerald-500 text-white rounded-xl shadow-md"
+                                            >
+                                                <Check size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => setEditingField(null)}
+                                                className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-500"
+                                            >
+                                                <X size={14} />
+                                            </button>
                                         </div>
                                     ) : (
-                                        formData.taskComments.map(renderComment)
+                                        <div
+                                            onClick={() => {
+                                                setEditingField('status');
+                                                setInlineVal(formData.status);
+                                            }}
+                                            className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-850 px-3 py-2 rounded-xl cursor-pointer border border-zinc-200/50 dark:border-zinc-800 transition-colors h-[38px]"
+                                        >
+                                            <span className={cn(
+                                                "text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full",
+                                                formData.status === 'REALIZADA' ? 'bg-emerald-500/10 text-emerald-600' :
+                                                formData.status === 'EN_CURSO' ? 'bg-blue-500/10 text-blue-600' :
+                                                formData.status === 'DEVUELTA' ? 'bg-red-500/10 text-red-600' : 'bg-zinc-500/10 text-zinc-600'
+                                            )}>
+                                                {formData.status === 'EN_CURSO' ? 'EN PROCESO' : formData.status === 'REALIZADA' ? 'REALIZADO' : formData.status === 'DEVUELTA' ? 'DEVUELTO' : 'PENDIENTE'}
+                                            </span>
+                                        </div>
                                     )
                                 ) : (
-                                    tempComments.length === 0 ? (
-                                        <div className="py-10 flex flex-col items-center justify-center text-center px-8">
-                                            <div className="w-10 h-10 bg-zinc-50 dark:bg-zinc-900/50 rounded-full flex items-center justify-center mb-2 text-zinc-200 dark:text-zinc-800">
-                                                <MessageSquare size={20} />
-                                            </div>
-                                            <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Agrega comentarios iniciales para el equipo...</h4>
-                                        </div>
-                                    ) : (
-                                        tempComments.map(renderComment)
-                                    )
+                                    <select
+                                        value={formData.status}
+                                        onChange={e => setFormData({...formData, status: e.target.value})}
+                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm"
+                                    >
+                                        <option value="PENDIENTE">PENDIENTE</option>
+                                        <option value="EN_CURSO">EN PROCESO</option>
+                                        <option value="REALIZADA">REALIZADO</option>
+                                        <option value="DEVUELTA">DEVUELTO</option>
+                                    </select>
                                 )}
                             </div>
                         </div>
-                    </div>
-                </div>
 
-                {/* Bottom Actions Area - Split for unified view */}
-                <div className="shrink-0 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 shadow-[0_-4px_30px_-10px_rgba(0,0,0,0.1)]">
-                    <div className="flex flex-col gap-4">
-                        {/* Chat Input Field */}
-                        <div className="flex flex-col gap-2">
-                            {selectedFile && isEdition && (
-                                <div className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/10 rounded-lg animate-in fade-in slide-in-from-bottom-1">
-                                    <div className="w-8 h-8 bg-primary/10 rounded flex items-center justify-center text-primary">
-                                        <ImageIcon size={14} />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-[10px] font-bold text-primary truncate">{selectedFile.name}</p>
-                                        <p className="text-[8px] text-primary/60">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                                    </div>
-                                    <button
-                                        onClick={() => setSelectedFile(null)}
-                                        className="p-1 hover:bg-primary/10 rounded text-primary"
-                                    >
-                                        <X size={14} />
-                                    </button>
-                                </div>
-                            )}
-                            <div className="relative group">
-                                <textarea
-                                    ref={commentInputRef}
-                                    value={newComment}
-                                    onChange={e => setNewComment(e.target.value)}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter' && !e.shiftKey) {
-                                            e.preventDefault();
-                                            handleAddComment();
-                                        }
-                                    }}
-                                    placeholder={isEdition ? "Escribe un mensaje al equipo..." : "Escribe comentarios/mensajes iniciales..."}
-                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary/30 rounded-xl px-12 py-3 pr-12 text-[11px] font-medium outline-none transition-all resize-none h-[48px] no-scrollbar shadow-inner"
+                        {/* Priority & Special Flags */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <button
+                                type="button"
+                                disabled={isEdition}
+                                onClick={() => setFormData(prev => ({ ...prev, isPriority: !prev.isPriority }))}
+                                className={cn(
+                                    "flex items-center justify-center gap-2.5 p-3 rounded-xl border transition-all shadow-sm",
+                                    formData.isPriority ? "bg-orange-500 text-white border-orange-600 font-bold" : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400",
+                                    isEdition && "opacity-80 cursor-default"
+                                )}
+                            >
+                                <Zap size={15} fill={formData.isPriority ? "currentColor" : "none"} />
+                                <span className="text-[10px] uppercase tracking-widest font-black">Prioritaria</span>
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isEdition}
+                                onClick={() => setFormData(prev => ({ ...prev, isSpecial: !prev.isSpecial }))}
+                                className={cn(
+                                    "flex items-center justify-center gap-2.5 p-3 rounded-xl border transition-all shadow-sm",
+                                    formData.isSpecial ? "bg-purple-600 text-white border-purple-700 font-bold" : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400",
+                                    isEdition && "opacity-80 cursor-default"
+                                )}
+                            >
+                                <Star size={15} fill={formData.isSpecial ? "currentColor" : "none"} />
+                                <span className="text-[10px] uppercase tracking-widest font-black">Especial</span>
+                            </button>
+                        </div>
+
+                        {formData.isSpecial && (
+                            <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="space-y-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400">Tipo de Pendiente Especial</label>
+                                <input
+                                    type="text"
+                                    required
+                                    disabled={isEdition}
+                                    value={formData.specialType}
+                                    onChange={e => setFormData({...formData, specialType: e.target.value})}
+                                    placeholder="Ej: Manual de Marca corporativo..."
+                                    className="w-full bg-purple-500/5 border border-purple-200 dark:border-purple-800/50 rounded-xl px-4 py-2.5 text-xs font-bold focus:ring-2 ring-purple-500/10 outline-none shadow-sm disabled:opacity-80"
                                 />
-                                <div className="absolute left-1.5 top-1.5">
-                                    <input
-                                        type="file"
-                                        id="task-file-upload"
-                                        className="hidden"
-                                        accept="image/*"
-                                        disabled={!isEdition}
-                                        onChange={(e) => setSelectedFile(e.target.files[0])}
-                                    />
-                                    <label
-                                        htmlFor="task-file-upload"
-                                        className={cn(
-                                            "p-2 rounded-lg text-zinc-400 block transition-all",
-                                            isEdition
-                                                ? "hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary cursor-pointer"
-                                                : "opacity-40 cursor-not-allowed"
-                                        )}
-                                        title={isEdition ? "Adjuntar archivo" : "Los adjuntos de S3 se habilitan una vez creada la tarea."}
-                                    >
-                                        <Paperclip size={16} />
+                            </motion.div>
+                        )}
+
+                        {/* Attachments Section (Interactive Insumos & Referencias) */}
+                        {isEdition ? (
+                            <div className="space-y-4 pt-4 border-t border-zinc-100 dark:border-zinc-850">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                                        Insumos & Referencias Vinculadas
                                     </label>
                                 </div>
-                                <button
-                                    onClick={() => handleAddComment()}
-                                    disabled={isEdition ? ((!newComment.trim() && !selectedFile) || isSendingComment) : !newComment.trim()}
-                                    className={cn(
-                                        "absolute right-1.5 top-1.5 p-2 rounded-lg transition-all",
-                                        (newComment.trim() || (selectedFile && isEdition)) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
+                                <div className="grid grid-cols-2 gap-4">
+
+                                    {/* Referencias en Edición */}
+                                    <div className="space-y-2 bg-zinc-50/50 dark:bg-zinc-950/30 p-3.5 rounded-2xl border border-zinc-200/40 dark:border-zinc-800/40">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">Referencias</span>
+                                        <div className="flex gap-2 mb-2">
+                                            <input
+                                                type="text"
+                                                placeholder="https://..."
+                                                value={editRefUrl}
+                                                onChange={e => setEditRefUrl(e.target.value)}
+                                                className="flex-1 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-850 rounded-lg px-2.5 py-1 text-xs outline-none"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    handleCreateAttachment(editRefUrl, editRefUrl, 'REFERENCIA');
+                                                    setEditRefUrl("");
+                                                }}
+                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-1.5 rounded-lg shrink-0 flex items-center justify-center h-[28px] w-[28px]"
+                                            >
+                                                <Plus size={14} />
+                                            </button>
+                                        </div>
+                                        {(() => {
+                                            const refUrls = [];
+                                            if (formData.referenceUrl) refUrls.push({ id: 'ref-legacy', url: formData.referenceUrl, name: 'Referencia Original' });
+                                            if (Array.isArray(formData.referenceLinks)) {
+                                                formData.referenceLinks.forEach((u, i) => refUrls.push({ id: `ref-link-${i}`, url: u, name: `Enlace de Parrilla ${i+1}` }));
+                                            }
+                                            if (formData.taskAttachments) {
+                                                formData.taskAttachments
+                                                    .filter(a => a.category === 'REFERENCIA')
+                                                    .forEach(a => refUrls.push({ id: a.id, url: a.url, name: a.name }));
+                                            }
+
+                                            if (refUrls.length === 0) {
+                                                return <div className="text-[10px] text-zinc-400 italic">No hay referencias</div>;
+                                            }
+
+                                            return (
+                                                <div className="space-y-1.5 max-h-[120px] overflow-y-auto">
+                                                    {refUrls.map((item) => (
+                                                        <div key={item.id} className="flex items-center justify-between gap-2 px-2 py-1 bg-white dark:bg-zinc-900 border border-zinc-150 dark:border-zinc-800 rounded-lg text-[10px] font-medium text-zinc-700 dark:text-zinc-300">
+                                                            <a href={item.url} target="_blank" rel="noopener noreferrer" className="truncate hover:underline text-indigo-600 flex items-center gap-1">
+                                                                <ExternalLink size={10} /> {item.name}
+                                                            </a>
+                                                            {item.id !== 'ref-legacy' && !item.id.startsWith('ref-link-') && (
+                                                                <button onClick={() => handleDeleteAttachment(item.id)} className="text-zinc-400 hover:text-red-500">
+                                                                    <X size={10} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    {/* Insumos en Edición */}
+                                    <div className="space-y-2 bg-zinc-50/50 dark:bg-zinc-950/30 p-3.5 rounded-2xl border border-zinc-200/40 dark:border-zinc-800/40">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">Insumos</span>
+                                        <div className="flex gap-2 mb-2">
+                                            <input
+                                                type="text"
+                                                placeholder="https://..."
+                                                value={editInpUrl}
+                                                onChange={e => setEditInpUrl(e.target.value)}
+                                                className="flex-1 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-850 rounded-lg px-2.5 py-1 text-xs outline-none"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    handleCreateAttachment(editInpUrl, editInpUrl, 'INSUMO');
+                                                    setEditInpUrl("");
+                                                }}
+                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-1.5 rounded-lg shrink-0 flex items-center justify-center h-[28px] w-[28px]"
+                                            >
+                                                <Plus size={14} />
+                                            </button>
+                                        </div>
+                                        {(() => {
+                                            const inpUrls = [];
+                                            if (Array.isArray(formData.assetsLinks)) {
+                                                formData.assetsLinks.forEach((u, i) => inpUrls.push({ id: `inp-link-${i}`, url: u, name: `Insumo de Parrilla ${i+1}` }));
+                                            }
+                                            if (formData.taskAttachments) {
+                                                formData.taskAttachments
+                                                    .filter(a => a.category === 'INSUMO')
+                                                    .forEach(a => inpUrls.push({ id: a.id, url: a.url, name: a.name }));
+                                            }
+
+                                            if (inpUrls.length === 0) {
+                                                return <div className="text-[10px] text-zinc-400 italic">No hay insumos</div>;
+                                            }
+
+                                            return (
+                                                <div className="space-y-1.5 max-h-[120px] overflow-y-auto">
+                                                    {inpUrls.map((item) => (
+                                                        <div key={item.id} className="flex items-center justify-between gap-2 px-2 py-1 bg-white dark:bg-zinc-900 border border-zinc-150 dark:border-zinc-800 rounded-lg text-[10px] font-medium text-zinc-700 dark:text-zinc-300">
+                                                            <a href={item.url} target="_blank" rel="noopener noreferrer" className="truncate hover:underline text-indigo-600 flex items-center gap-1">
+                                                                <ExternalLink size={10} /> {item.name}
+                                                            </a>
+                                                            {!item.id.startsWith('inp-link-') && (
+                                                                <button onClick={() => handleDeleteAttachment(item.id)} className="text-zinc-400 hover:text-red-500">
+                                                                    <X size={10} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-4 pt-4 border-t border-zinc-100 dark:border-zinc-850">
+
+                                {/* Sección de Referencias */}
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block">
+                                        Referencias iniciales
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-3 items-center">
+                                        <input
+                                            type="text"
+                                            placeholder="Nombre de la referencia (ej: Figma...)"
+                                            value={newRefName}
+                                            onChange={e => setNewRefName(e.target.value)}
+                                            className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-semibold outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                        />
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                placeholder="URL (https://...)"
+                                                value={newRefUrl}
+                                                onChange={e => setNewRefUrl(e.target.value)}
+                                                className="flex-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-semibold outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (!newRefUrl.trim()) return;
+                                                    let finalUrl = newRefUrl.trim();
+                                                    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+                                                        finalUrl = 'https://' + finalUrl;
+                                                    }
+                                                    setTempReferences(prev => [...prev, { url: finalUrl, name: newRefName.trim() || finalUrl }]);
+                                                    setNewRefUrl("");
+                                                    setNewRefName("");
+                                                }}
+                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-xl transition-all shrink-0 flex items-center justify-center h-[38px] w-[38px]"
+                                                title="Agregar Referencia"
+                                            >
+                                                <Plus size={16} />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {tempReferences.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 pt-1">
+                                            {tempReferences.map((ref, index) => (
+                                                <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
+                                                    <ExternalLink size={12} className="text-zinc-400 shrink-0" />
+                                                    <span className="truncate max-w-[150px]">{ref.name}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setTempReferences(prev => prev.filter((_, i) => i !== index))}
+                                                        className="text-zinc-400 hover:text-red-500 transition-colors"
+                                                    >
+                                                        <X size={12} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
                                     )}
+                                </div>
+
+                                {/* Sección de Insumos */}
+                                <div className="space-y-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/40">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block">
+                                        Insumos iniciales
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-3 items-center">
+                                        <input
+                                            type="text"
+                                            placeholder="Nombre del insumo (ej: Assets...)"
+                                            value={newInpName}
+                                            onChange={e => setNewInpName(e.target.value)}
+                                            className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-semibold outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                        />
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                placeholder="URL (https://...)"
+                                                value={newInpUrl}
+                                                onChange={e => setNewInpUrl(e.target.value)}
+                                                className="flex-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-semibold outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (!newInpUrl.trim()) return;
+                                                    let finalUrl = newInpUrl.trim();
+                                                    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+                                                        finalUrl = 'https://' + finalUrl;
+                                                    }
+                                                    setTempInputs(prev => [...prev, { url: finalUrl, name: newInpName.trim() || finalUrl }]);
+                                                    setNewInpUrl("");
+                                                    setNewInpName("");
+                                                }}
+                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-xl transition-all shrink-0 flex items-center justify-center h-[38px] w-[38px]"
+                                                title="Agregar Insumo"
+                                            >
+                                                <Plus size={16} />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {tempInputs.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 pt-1">
+                                            {tempInputs.map((inp, index) => (
+                                                <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
+                                                    <ExternalLink size={12} className="text-zinc-400 shrink-0" />
+                                                    <span className="truncate max-w-[150px]">{inp.name}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setTempInputs(prev => prev.filter((_, i) => i !== index))}
+                                                        className="text-zinc-400 hover:text-red-500 transition-colors"
+                                                    >
+                                                        <X size={12} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                            </div>
+                        )}
+
+                        {/* Footer Creation Actions */}
+                        {!isEdition && (
+                            <div className="mt-auto pt-6 border-t border-zinc-100 dark:border-zinc-850 flex gap-3">
+                                <button
+                                    onClick={clearDraft}
+                                    type="button"
+                                    className="flex-1 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-xl transition-all"
                                 >
-                                    {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                                    Descartar Borrador
                                 </button>
+                                <button
+                                    onClick={handleSave}
+                                    disabled={isSubmitting}
+                                    className="flex-[2] bg-primary text-primary-foreground px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                                >
+                                    {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                                    Crear Tarea
+                                </button>
+                            </div>
+                        )}
+
+                        {isEdition && (
+                            <div className="mt-auto pt-6 border-t border-zinc-100 dark:border-zinc-850 flex justify-end">
+                                <button
+                                    onClick={handleClosePanel}
+                                    className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl transition-all"
+                                >
+                                    Cerrar Focus Modal
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Right Column (40%): Chronological Chat (Oldest Top, Newest Bottom) */}
+                    <div className="w-[40%] flex flex-col h-full bg-zinc-100 dark:bg-zinc-950/30 overflow-hidden">
+
+                        {/* Chat Container */}
+                        <div
+                            ref={chatContainerRef}
+                            onDragOver={(e) => {
+                                if (!isEdition) return;
+                                e.preventDefault();
+                                setIsDragging(true);
+                            }}
+                            onDragLeave={() => {
+                                if (!isEdition) return;
+                                setIsDragging(false);
+                            }}
+                            onDrop={(e) => {
+                                if (!isEdition) return;
+                                e.preventDefault();
+                                setIsDragging(false);
+                                const file = e.dataTransfer.files[0];
+                                if (file && file.type.startsWith('image/')) {
+                                    handleAddComment(file);
+                                }
+                            }}
+                            className="flex-1 overflow-y-auto p-5 relative custom-scrollbar"
+                        >
+                            {/* Drag & Drop Overlay */}
+                            <AnimatePresence>
+                                {isDragging && isEdition && (
+                                    <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        className="absolute inset-0 z-50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-6 transition-all"
+                                    >
+                                        <div className="w-full h-full border-2 border-dashed border-primary/40 rounded-3xl flex flex-col items-center justify-center gap-3 animate-in zoom-in-95">
+                                            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
+                                                <ImageIcon size={24} />
+                                            </div>
+                                            <p className="text-xs font-black uppercase tracking-widest text-primary">Suelta tus imágenes aquí</p>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
+                            <div className="flex items-center gap-4 mb-5">
+                                <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+                                <div className="flex items-center gap-2 px-3 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full shadow-sm">
+                                    <MessageSquare size={11} className="text-zinc-400" />
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Conversación & Eventos</span>
+                                </div>
+                                <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+                            </div>
+
+                            <div className="space-y-4 pb-4">
+                                {displayComments.length === 0 ? (
+                                    <div className="py-16 flex flex-col items-center justify-center text-center px-6">
+                                        <div className="w-12 h-12 bg-white dark:bg-zinc-900 rounded-full flex items-center justify-center mb-3 text-zinc-300 dark:text-zinc-700 border border-zinc-200/50 dark:border-zinc-800 shadow-sm">
+                                            <MessageSquare size={22} />
+                                        </div>
+                                        <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Aún no hay comentarios</h4>
+                                        <p className="text-[10px] text-zinc-400 font-medium max-w-[200px] mt-1">Escribe o suelta una imagen abajo para iniciar la conversación</p>
+                                    </div>
+                                ) : (
+                                    displayComments.map(renderComment)
+                                )}
                             </div>
                         </div>
 
-                        {/* Save/Cancel Buttons */}
-                        <div className="flex gap-3">
-                            <button
-                                onClick={handleClosePanel}
-                                className="flex-1 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-zinc-900 transition-all rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-900 border border-transparent"
-                            >
-                                Cerrar Panel
-                            </button>
-                            <button
-                                onClick={handleSave}
-                                disabled={isSubmitting}
-                                className="flex-[2] bg-primary text-primary-foreground px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                            >
-                                {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                                {isEdition ? "Guardar Cambios" : "Crear Tarea"}
-                            </button>
+                        {/* Input Area */}
+                        <div className="p-4 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 shrink-0 shadow-lg">
+                            <div className="flex flex-col gap-2">
+                                {selectedFile && isEdition && (
+                                    <div className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/10 rounded-lg animate-in fade-in slide-in-from-bottom-1">
+                                        <div className="w-8 h-8 bg-primary/10 rounded flex items-center justify-center text-primary">
+                                            <ImageIcon size={14} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[10px] font-bold text-primary truncate">{selectedFile.name}</p>
+                                            <p className="text-[8px] text-primary/60">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                                        </div>
+                                        <button
+                                            onClick={() => setSelectedFile(null)}
+                                            className="p-1 hover:bg-primary/10 rounded text-primary"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                )}
+                                <div className="relative group">
+                                    <textarea
+                                        ref={commentInputRef}
+                                        value={newComment}
+                                        onChange={e => setNewComment(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleAddComment();
+                                            }
+                                        }}
+                                        placeholder={isEdition ? "Escribe un mensaje al equipo..." : "Escribe un mensaje inicial..."}
+                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-primary/30 rounded-xl px-12 py-3 pr-12 text-xs font-medium outline-none transition-all resize-none h-[48px] no-scrollbar shadow-inner"
+                                    />
+                                    <div className="absolute left-1.5 top-1.5">
+                                        <input
+                                            type="file"
+                                            id="task-file-upload-focus"
+                                            className="hidden"
+                                            accept="image/*"
+                                            disabled={!isEdition}
+                                            onChange={(e) => setSelectedFile(e.target.files[0])}
+                                        />
+                                        <label
+                                            htmlFor="task-file-upload-focus"
+                                            className={cn(
+                                                "p-2 rounded-lg text-zinc-400 block transition-all",
+                                                isEdition
+                                                    ? "hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary cursor-pointer"
+                                                    : "opacity-40 cursor-not-allowed"
+                                            )}
+                                            title={isEdition ? "Adjuntar archivo" : "Adjuntos S3 habilitados tras crear la tarea."}
+                                        >
+                                            <Paperclip size={16} />
+                                        </label>
+                                    </div>
+                                    <button
+                                        onClick={() => handleAddComment()}
+                                        disabled={isEdition ? ((!newComment.trim() && !selectedFile) || isSendingComment) : !newComment.trim()}
+                                        className={cn(
+                                            "absolute right-1.5 top-1.5 p-2 rounded-lg transition-all",
+                                            (newComment.trim() || (selectedFile && isEdition)) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
+                                        )}
+                                    >
+                                        {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
+
                     </div>
+
                 </div>
-            </div>
+
+            </DialogContent>
 
             {/* Media Viewer Lightbox */}
             {previewImage && (
@@ -1217,7 +1641,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     </div>
                 </div>
             )}
-        </SlideOver>
+        </Dialog>
     );
 };
 
