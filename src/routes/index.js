@@ -63,6 +63,7 @@ router.get('/metrics/quality-streak', taskController.getStreak);
 router.get('/tasks/completed', taskController.getCompleted);
 router.get('/tasks', taskController.getAllTasks);
 router.post('/tasks', taskController.createNewTask);
+router.post('/tasks/upload-temp', upload.single('file'), taskController.uploadTempFile);
 router.patch('/tasks/:taskId', taskController.updateExistingTask);
 router.delete('/tasks/:taskId', taskController.deleteExistingTask);
 router.post('/tasks/:taskId/toggle-follow', taskController.toggleFollow);

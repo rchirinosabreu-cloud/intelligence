@@ -2,7 +2,7 @@ import prisma from '../lib/prisma.js';
 import { getDashboardMetrics, getQualityStreak, getCompletedTasks, getTasks, createTask, updateTask, auditAndDeleteTask, toggleTaskFollow, checkIsFollowing } from '../services/nativeTaskService.js';
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from '../services/clientTaskService.js';
 import { uploadToS3, getFromS3Stream } from '../services/s3Service.js';
-import { createNotification } from '../services/notificationService.js';
+import { createNotification, processMentionsAndNotifications } from '../services/notificationService.js';
 
 export const getMetrics = async (req, res) => {
     try {
@@ -310,10 +310,33 @@ export const addTaskComment = async (req, res) => {
             include: { author: true }
         });
 
+        // Trigger mentions & assignee notifications
+        processMentionsAndNotifications(taskId, finalContent, authorId).catch(err => {
+            console.error("Async mentions processing failed:", err);
+        });
+
         res.status(201).json(comment);
     } catch (error) {
         console.error("Error adding comment:", error);
         res.status(500).json({ error: "Failed to add comment", details: error.message });
+    }
+};
+
+export const uploadTempFile = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: "No file uploaded" });
+        }
+        const uploadResult = await uploadToS3(req.file, "temp");
+        res.json({
+            url: uploadResult.url,
+            name: uploadResult.name,
+            size: uploadResult.size,
+            mimeType: uploadResult.mimeType
+        });
+    } catch (error) {
+        console.error("Temp upload failed:", error);
+        res.status(500).json({ error: "Failed to upload file", details: error.message });
     }
 };
 

@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma.js';
-import { createNotification } from './notificationService.js';
+import { createNotification, processMentionsAndNotifications } from './notificationService.js';
 import { enqueueTaskClassification } from './taskClassificationService.js';
 
 /**
@@ -421,6 +421,8 @@ export const createTask = async ({
                             type: 'human'
                         }
                     });
+                    // Trigger mentions & assignee notifications
+                    await processMentionsAndNotifications(task.id, comment.content, creatorId);
                 }
             }
 
