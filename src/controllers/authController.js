@@ -25,7 +25,17 @@ export const login = async (req, res) => {
                   email: defaultAdminEmail,
                   password: hashedAdminPassword,
                   role: 'ADMIN',
-                  hasFinancialAccess: true
+                  hasFinancialAccess: true,
+                  modulePermissions: {
+                      Inicio: true,
+                      Manager: true,
+                      Tareas: true,
+                      Actividad: true,
+                      Clientes: true,
+                      Equipo: true,
+                      Radar: true,
+                      Parrillas: true
+                  }
               }
           });
       }
@@ -50,13 +60,14 @@ export const login = async (req, res) => {
               name: user.name,
               email: user.email,
               role: user.role,
-              hasFinancialAccess: user.hasFinancialAccess
+              hasFinancialAccess: user.hasFinancialAccess,
+              modulePermissions: user.modulePermissions
           },
           JWT_SECRET,
           { expiresIn: '30d' }
       );
 
-      return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, hasFinancialAccess: user.hasFinancialAccess } });
+      return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, hasFinancialAccess: user.hasFinancialAccess, modulePermissions: user.modulePermissions } });
 
   } catch (error) {
       console.error('Error during login:', error);

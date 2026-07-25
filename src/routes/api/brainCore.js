@@ -10,13 +10,9 @@ import prisma from '../../lib/prisma.js';
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-const restrictAccess = (req, res, next) => {
-    const allowedEmails = ['chrodny@gmail.com', 'fvilladigital@gmail.com', 'contacto@brainstudioagencia.com'];
-    if (!req.user || !allowedEmails.includes(req.user.email)) {
-        return res.status(403).json({ error: 'Acceso restringido.' });
-    }
-    next();
-};
+import { requireModulePermission } from '../../middlewares/authMiddleware.js';
+
+const restrictAccess = requireModulePermission('Manager');
 
 // 1. Context Feed (Dashboard protagonists) - Redesigned for v2.5 Predictive Alerts
 router.get('/feed', restrictAccess, async (req, res) => {

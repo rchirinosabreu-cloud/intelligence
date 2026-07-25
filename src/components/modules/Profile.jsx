@@ -77,6 +77,7 @@ const Profile = () => {
 
     const isOwnProfile = !userId || userId === currentUser?.id;
     const isAdmin = currentUser?.role === 'ADMIN';
+    const isCockpitAllowed = currentUser?.role === 'ADMIN' || currentUser?.role === 'PM' || currentUser?.role === 'PROJECT_MANAGER';
 
     // Fetch initial data
     useEffect(() => {
@@ -85,13 +86,13 @@ const Profile = () => {
             fetchNotes();
         }
         fetchFeedback();
-        if (currentUser?.email === 'chrodny@gmail.com') {
+        if (isCockpitAllowed) {
             fetchTeam();
         }
     }, [userId]);
 
     useEffect(() => {
-        if (currentUser?.email === 'chrodny@gmail.com' && activeSimulationUserId) {
+        if (isCockpitAllowed && activeSimulationUserId) {
             fetchSimulationData(activeSimulationUserId);
         }
     }, [activeSimulationUserId]);
@@ -381,12 +382,12 @@ const Profile = () => {
                 </div>
             </div>
 
-            <Tabs defaultValue={currentUser?.email === 'chrodny@gmail.com' ? "cockpit" : (isOwnProfile ? "general" : "performance")} className="w-full">
+            <Tabs defaultValue={isCockpitAllowed ? "cockpit" : (isOwnProfile ? "general" : "performance")} className="w-full">
                 <TabsList className={cn(
                     "grid w-full h-auto p-1 bg-zinc-100 dark:bg-zinc-800/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 mb-8",
-                    currentUser?.email === 'chrodny@gmail.com' ? "grid-cols-2 md:grid-cols-5" : (isOwnProfile ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2")
+                    isCockpitAllowed ? "grid-cols-2 md:grid-cols-5" : (isOwnProfile ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2")
                 )}>
-                    {currentUser?.email === 'chrodny@gmail.com' && (
+                    {isCockpitAllowed && (
                         <TabsTrigger value="cockpit" className="rounded-xl py-3 flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-md transition-all">
                             <Zap className="w-4 h-4 text-amber-500" /> Mi Foco
                         </TabsTrigger>
@@ -410,7 +411,7 @@ const Profile = () => {
                 </TabsList>
 
                 {/* --- TAB: MI FOCO (COCKPIT) --- */}
-                {currentUser?.email === 'chrodny@gmail.com' && (
+                {isCockpitAllowed && (
                     <TabsContent value="cockpit" className="space-y-8 outline-none animate-in fade-in slide-in-from-bottom-4 duration-500">
                         {/* Simulation Selector */}
                         <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">

@@ -24,6 +24,80 @@ export default function Team() {
   const [email, setEmail] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
 
+  const [systemRole, setSystemRole] = useState('VIEWER');
+  const [modulePermissions, setModulePermissions] = useState({
+    Inicio: true,
+    Manager: false,
+    Tareas: false,
+    Actividad: false,
+    Clientes: false,
+    Equipo: false,
+    Radar: false,
+    Parrillas: false
+  });
+
+  const handleRolePresetChange = (selectedRole) => {
+    setSystemRole(selectedRole);
+    let presets = {
+      Inicio: true,
+      Manager: false,
+      Tareas: false,
+      Actividad: false,
+      Clientes: false,
+      Equipo: false,
+      Radar: false,
+      Parrillas: false
+    };
+
+    if (selectedRole === 'ADMIN') {
+      presets = {
+        Inicio: true,
+        Manager: true,
+        Tareas: true,
+        Actividad: true,
+        Clientes: true,
+        Equipo: true,
+        Radar: true,
+        Parrillas: true
+      };
+    } else if (selectedRole === 'PROJECT_MANAGER') {
+      presets = {
+        Inicio: true,
+        Manager: true,
+        Tareas: true,
+        Actividad: true,
+        Clientes: true,
+        Equipo: true,
+        Radar: true,
+        Parrillas: true
+      };
+    } else if (selectedRole === 'EDITOR') {
+      presets = {
+        Inicio: true,
+        Manager: false,
+        Tareas: true,
+        Actividad: true,
+        Clientes: true,
+        Equipo: false,
+        Radar: false,
+        Parrillas: true
+      };
+    } else if (selectedRole === 'VIEWER') {
+      presets = {
+        Inicio: true,
+        Manager: false,
+        Tareas: false,
+        Actividad: false,
+        Clientes: true,
+        Equipo: false,
+        Radar: false,
+        Parrillas: true
+      };
+    }
+
+    setModulePermissions(presets);
+  };
+
   const fetchTeam = async () => {
     try {
       setLoading(true);
@@ -51,12 +125,37 @@ export default function Team() {
       setRole(member.role);
       setEmail(member.email || '');
       setAvatarUrl(member.avatarUrl || '');
+
+      const userRole = member.user?.role || 'VIEWER';
+      const userPerms = member.user?.modulePermissions || {
+        Inicio: true,
+        Manager: false,
+        Tareas: false,
+        Actividad: false,
+        Clientes: false,
+        Equipo: false,
+        Radar: false,
+        Parrillas: false
+      };
+      setSystemRole(userRole);
+      setModulePermissions(userPerms);
     } else {
       setEditingMember(null);
       setName('');
       setRole('');
       setEmail('');
       setAvatarUrl('');
+      setSystemRole('VIEWER');
+      setModulePermissions({
+        Inicio: true,
+        Manager: false,
+        Tareas: false,
+        Actividad: false,
+        Clientes: false,
+        Equipo: false,
+        Radar: false,
+        Parrillas: false
+      });
     }
     setIsModalOpen(true);
   };
@@ -65,7 +164,14 @@ export default function Team() {
     e.preventDefault();
     if (!name || !role) return;
 
-    const payload = { name, role, email, avatarUrl };
+    const payload = {
+      name,
+      role,
+      email,
+      avatarUrl,
+      systemRole,
+      modulePermissions
+    };
     const method = editingMember ? 'PUT' : 'POST';
     const baseUrl = getApiBaseUrl();
     const url = editingMember
@@ -261,6 +367,48 @@ export default function Team() {
                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
               />
             </div>
+
+            {/* System Role & Permissions managed by Admins */}
+            {email && email.trim() !== '' && (
+              <div className="space-y-4 p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Rol de Permisos del Sistema</label>
+                  <select
+                    value={systemRole}
+                    onChange={(e) => handleRolePresetChange(e.target.value)}
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/50 text-zinc-900 dark:text-white"
+                  >
+                    <option value="ADMIN">ADMIN (Acceso Total)</option>
+                    <option value="PROJECT_MANAGER">PROJECT_MANAGER (PM)</option>
+                    <option value="EDITOR">EDITOR (Colaborador)</option>
+                    <option value="VIEWER">VIEWER (Lector)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Permisos por Módulo</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.keys(modulePermissions).map((module) => (
+                      <label key={module} className="flex items-center gap-2 p-2 bg-white dark:bg-zinc-900 border border-zinc-150 dark:border-zinc-800/60 rounded-xl cursor-pointer hover:bg-zinc-100/50 transition-colors select-none">
+                        <input
+                          type="checkbox"
+                          disabled={module === 'Inicio' || systemRole === 'ADMIN'}
+                          checked={systemRole === 'ADMIN' ? true : !!modulePermissions[module]}
+                          onChange={(e) => {
+                            setModulePermissions(prev => ({
+                              ...prev,
+                              [module]: e.target.checked
+                            }));
+                          }}
+                          className="rounded text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{module}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 mt-6 pt-2 border-t border-zinc-100 dark:border-zinc-800">
               <button

@@ -48,13 +48,14 @@ router.put('/profile/:userId', async (req, res) => {
             return res.status(403).json({ error: 'Solo los administradores pueden actualizar otros perfiles' });
         }
 
-        const { name, bio, avatarUrl, role, isActive } = req.body;
+        const { name, bio, avatarUrl, role, isActive, modulePermissions } = req.body;
         const updatedProfile = await updateUserProfile(req.params.userId, {
             name,
             bio,
             avatarUrl,
             role,
-            isActive
+            isActive,
+            modulePermissions
         });
 
         return res.json(updatedProfile);
