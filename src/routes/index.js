@@ -51,6 +51,34 @@ router.post('/users', authenticateToken, authController.createUser);
 // --- Protected Routes ---
 router.use(authenticateToken);
 
+router.get('/auth/me', async (req, res) => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                bio: true,
+                avatarUrl: true,
+                role: true,
+                createdAt: true,
+                modulePermissions: true
+            }
+        });
+        if (user && user.modulePermissions) {
+            if (typeof user.modulePermissions === 'string') {
+                try {
+                    user.modulePermissions = JSON.parse(user.modulePermissions);
+                } catch(e) {}
+            }
+        }
+        res.json(user);
+    } catch(err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // System Health
 router.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

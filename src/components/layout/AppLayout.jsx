@@ -32,6 +32,14 @@ const AppLayout = ({ children }) => {
     staleTime: 60000 // 1 minute
   });
 
+  // Keep local storage synchronized with latest backend profile permissions
+  useEffect(() => {
+    if (userData) {
+      localStorage.setItem('currentUser', JSON.stringify(userData));
+      sessionStorage.setItem('currentUser', JSON.stringify(userData));
+    }
+  }, [userData]);
+
   const displayUser = userData || currentUser;
 
   // --- REACT QUERY: NOTIFICATIONS ---
