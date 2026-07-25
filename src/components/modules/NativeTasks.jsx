@@ -208,6 +208,7 @@ const NativeTasks = () => {
                 aiCategory: task.aiCategory,
                 aiComplexity: task.aiComplexity,
                 plan: task.plan,
+                sortOrder: task.sortOrder || 0,
                 taskComments: task.taskComments || [],
                 taskAttachments: task.taskAttachments || []
             }));
@@ -390,6 +391,11 @@ const NativeTasks = () => {
             return true;
         });
         filtered.sort((a, b) => {
+            const orderA = a.sortOrder !== undefined && a.sortOrder !== null ? a.sortOrder : 999999;
+            const orderB = b.sortOrder !== undefined && b.sortOrder !== null ? b.sortOrder : 999999;
+            if (orderA !== orderB) {
+                return orderA - orderB;
+            }
             const dateA = parseDate(a.dueDateFormatted) || new Date(2100, 0, 1);
             const dateB = parseDate(b.dueDateFormatted) || new Date(2100, 0, 1);
             return dateA - dateB;
@@ -415,6 +421,64 @@ const NativeTasks = () => {
         const taskId = draggableId;
         const destinationColumnId = destination.droppableId;
         const sourceColumnId = source.droppableId;
+
+        const isPMOrAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER' || currentUser?.role === 'PM';
+
+        // 1. Dragged within the same column (Reordering Priority)
+        if (sourceColumnId === destinationColumnId) {
+            if (!isPMOrAdmin) {
+                toast({
+                    variant: "destructive",
+                    title: "Acceso denegado",
+                    description: "Solo los Project Managers o Administradores pueden reorganizar la prioridad de las tareas."
+                });
+                return;
+            }
+
+            const columnTasks = filteredTasks.filter(t => getColumnId(t.status) === sourceColumnId);
+            const reordered = [...columnTasks];
+            const [removed] = reordered.splice(source.index, 1);
+            reordered.splice(destination.index, 0, removed);
+
+            // Update sortOrder indexes locally
+            const updatedTasks = tasks.map(task => {
+                const newIndex = reordered.findIndex(t => t.id === task.id);
+                if (newIndex !== -1) {
+                    return { ...task, sortOrder: newIndex };
+                }
+                return task;
+            });
+            queryClient.setQueryData(['nativeTasks'], updatedTasks);
+
+            try {
+                const baseUrl = getApiBaseUrl();
+                const token = localStorage.getItem('authToken');
+                const reorderList = reordered.map((task, idx) => ({ id: task.id, sortOrder: idx }));
+
+                const res = await fetch(`${baseUrl}/api/tasks/reorder`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
+                    body: JSON.stringify({ reorderList })
+                });
+
+                if (res.ok) {
+                    toast({ title: "Prioridad guardada", description: "El orden de la columna se actualizó correctamente." });
+                    queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+                } else {
+                    throw new Error("Failed to persist task reordering");
+                }
+            } catch (err) {
+                console.error("Reorder failed:", err);
+                queryClient.setQueryData(['nativeTasks'], previousTasks);
+                toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la prioridad de la columna." });
+            }
+            return;
+        }
+
+        // 2. Dragged to a different column (Status transition)
         const newTasks = [...tasks];
         const taskIndex = newTasks.findIndex(t => String(t.id) === taskId);
         if (taskIndex === -1) return;
@@ -452,7 +516,6 @@ const NativeTasks = () => {
         if (insertionIndexInGlobal !== -1) newTasks.splice(insertionIndexInGlobal, 0, movedTask);
         else newTasks.push(movedTask);
         queryClient.setQueryData(['nativeTasks'], newTasks);
-        if (sourceColumnId === destinationColumnId) return;
         if (sourceColumnId !== 'realizado' && destinationColumnId === 'realizado') triggerConfetti();
         const newStatusForDB =
             destinationColumnId === 'pendiente' ? 'PENDIENTE' :
@@ -463,6 +526,9 @@ const NativeTasks = () => {
             const token = localStorage.getItem('authToken');
             const payload = { status: newStatusForDB };
             if (newStatusForDB === 'PENDIENTE' && sourceColumnId === 'devuelto') payload.isReturned = false;
+            if (isPMOrAdmin) {
+                payload.sortOrder = destination.index;
+            }
             const response = await fetch(`${baseUrl}/api/tasks/${taskId}`, {
                 method: 'PATCH',
                 headers: {

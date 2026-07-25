@@ -81,15 +81,30 @@ export const processMentionsAndNotifications = async (taskId, commentContent, au
             }
         }
 
-        // 2. Process Assignee notification if they haven't been notified (and are not the author)
-        if (assigneeUserId && !notifiedUserIds.has(assigneeUserId)) {
-            await createNotification({
-                userId: assigneeUserId,
-                message: `Nuevo comentario en tu tarea asignada "${task.title}": "${commentContent.substring(0, 60)}..."`,
-                type: 'TASK_COMMENT',
-                relatedId: task.id,
-                taskId: task.id
-            });
+        // 2. Process Thread Participant notifications (TASK_COMMENT_REPLY)
+        const previousComments = await prisma.taskComment.findMany({
+            where: { taskId },
+            select: { authorId: true }
+        });
+        const threadParticipants = new Set(previousComments.map(c => c.authorId).filter(Boolean));
+        if (assigneeUserId) {
+            threadParticipants.add(assigneeUserId);
+        }
+        if (authorId) {
+            threadParticipants.delete(authorId);
+        }
+
+        for (const participantId of threadParticipants) {
+            if (!notifiedUserIds.has(participantId)) {
+                notifiedUserIds.add(participantId);
+                await createNotification({
+                    userId: participantId,
+                    message: `Nuevo mensaje en el hilo de la tarea "${task.title}": "${commentContent.substring(0, 60)}..."`,
+                    type: 'TASK_COMMENT_REPLY',
+                    relatedId: task.id,
+                    taskId: task.id
+                });
+            }
         }
     } catch (err) {
         console.error("Error processing mentions and notifications:", err);

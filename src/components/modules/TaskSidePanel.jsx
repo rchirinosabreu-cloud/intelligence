@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
     Loader2, Zap, Star, Link as LinkIcon, ExternalLink,
     X, Send, MessageSquare, RotateCcw, CheckCircle2, Bell,
@@ -138,6 +139,38 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
         return () => window.removeEventListener('keydown', handleEsc);
     }, [previewImage]);
+
+    // Decoupled chat/comments polling while focus modal is open
+    useEffect(() => {
+        if (!isOpen || !isEdition || !formData.id) return;
+
+        const fetchComments = async () => {
+            try {
+                const baseUrl = getApiBaseUrl();
+                const res = await fetch(`${baseUrl}/api/tasks/${formData.id}/comments`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data)) {
+                        setFormData(prev => {
+                            const hasChanged = JSON.stringify(prev.taskComments) !== JSON.stringify(data);
+                            if (hasChanged) {
+                                return { ...prev, taskComments: data };
+                            }
+                            return prev;
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error("Error polling task comments:", err);
+            }
+        };
+
+        const interval = setInterval(fetchComments, 4000); // 4 seconds polling
+
+        return () => clearInterval(interval);
+    }, [isOpen, isEdition, formData.id]);
 
     // sessionStorage draft logic for Creation mode
     useEffect(() => {
@@ -1752,11 +1785,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
             </DialogContent>
 
-            {/* Media Viewer Lightbox */}
-            {previewImage && (
-                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/90 backdrop-blur-xl p-4 md:p-10 animate-in fade-in duration-300">
+            {/* Media Viewer Lightbox wrapped in a Portal to open above Radix Dialog Portal overlay */}
+            {previewImage && createPortal(
+                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[999] flex items-center justify-center bg-zinc-950/90 backdrop-blur-xl p-4 md:p-10 animate-in fade-in duration-300">
                     <div className="absolute inset-0" onClick={() => setPreviewImage(null)} />
-                    <div className="w-full h-full max-w-6xl flex flex-col z-[105] relative animate-in zoom-in-95 duration-300">
+                    <div className="w-full h-full max-w-6xl flex flex-col z-[1000] relative animate-in zoom-in-95 duration-300">
                         <div className="flex items-center justify-between mb-4 bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl">
                             <div className="flex items-center gap-3 pl-2">
                                 <div className="p-2 bg-primary/20 rounded-xl">
@@ -1793,7 +1826,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             />
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </Dialog>
     );

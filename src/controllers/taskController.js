@@ -97,10 +97,44 @@ export const createNewTask = async (req, res) => {
 
 export const updateExistingTask = async (req, res) => {
     try {
+        if ('sortOrder' in req.body) {
+            const role = req.user?.role;
+            if (role !== 'ADMIN' && role !== 'PROJECT_MANAGER' && role !== 'PM') {
+                return res.status(403).json({ error: "No tienes permisos de Project Manager o Administrador para reordenar tareas" });
+            }
+        }
         const updatedTask = await updateTask(req.params.taskId, req.body, req.user?.userId);
         res.json(updatedTask);
     } catch (error) {
         res.status(500).json({ error: "Failed to update task", details: error.message });
+    }
+};
+
+export const reorderTasks = async (req, res) => {
+    try {
+        const role = req.user?.role;
+        if (role !== 'ADMIN' && role !== 'PROJECT_MANAGER' && role !== 'PM') {
+            return res.status(403).json({ error: "No tienes permisos de Project Manager o Administrador para reordenar tareas" });
+        }
+
+        const { reorderList } = req.body; // Array of { id: string, sortOrder: number }
+        if (!Array.isArray(reorderList)) {
+            return res.status(400).json({ error: "reorderList must be an array" });
+        }
+
+        // Run updates inside a transaction
+        await prisma.$transaction(
+            reorderList.map(item =>
+                prisma.task.update({
+                    where: { id: item.id },
+                    data: { sortOrder: item.sortOrder }
+                })
+            )
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to reorder tasks", details: error.message });
     }
 };
 
@@ -337,6 +371,20 @@ export const uploadTempFile = async (req, res) => {
     } catch (error) {
         console.error("Temp upload failed:", error);
         res.status(500).json({ error: "Failed to upload file", details: error.message });
+    }
+};
+
+export const getTaskComments = async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const comments = await prisma.taskComment.findMany({
+            where: { taskId },
+            include: { author: true },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(comments);
+    } catch (error) {
+        res.status(500).json({ error: "Failed to fetch task comments", details: error.message });
     }
 };
 
