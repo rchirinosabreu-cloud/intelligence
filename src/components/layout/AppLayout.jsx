@@ -121,7 +121,7 @@ const AppLayout = ({ children }) => {
         navigate(`/`);
     } else if (notif.type === 'TASK_RETURNED') {
         navigate(`/gestion?showReturned=true&taskId=${notif.relatedId}`);
-    } else if (notif.type === 'TASK_CORRECTED' || notif.type === 'TASK_UPDATED' || notif.type === 'TASK_ASSIGNED' || notif.type === 'TASK_MENTION' || notif.type === 'TASK_COMMENT') {
+    } else if (notif.type === 'TASK_CORRECTED' || notif.type === 'TASK_UPDATED' || notif.type === 'TASK_ASSIGNED' || notif.type === 'TASK_MENTION' || notif.type === 'TASK_COMMENT' || notif.type === 'TASK_COMMENT_REPLY') {
         navigate(`/gestion?taskId=${notif.taskId || notif.relatedId}`);
     }
   };
