@@ -11,7 +11,8 @@ export const getUserProfile = async (userId) => {
             bio: true,
             avatarUrl: true,
             role: true,
-            createdAt: true
+            createdAt: true,
+            modulePermissions: true
         }
     });
     return user;
@@ -20,7 +21,7 @@ export const getUserProfile = async (userId) => {
 export const updateUserProfile = async (userId, data) => {
     // Basic fields that ANY user can update on their own profile
     // Or that an ADMIN can update for anyone.
-    const { name, bio, avatarUrl, role, isActive } = data;
+    const { name, bio, avatarUrl, role, isActive, modulePermissions } = data;
 
     const updatedUser = await prisma.$transaction(async (tx) => {
         const user = await tx.user.update({
@@ -30,7 +31,8 @@ export const updateUserProfile = async (userId, data) => {
                 bio,
                 avatarUrl,
                 role,
-                isActive
+                isActive,
+                modulePermissions
             },
             select: {
                 id: true,
@@ -39,7 +41,8 @@ export const updateUserProfile = async (userId, data) => {
                 bio: true,
                 avatarUrl: true,
                 role: true,
-                isActive: true
+                isActive: true,
+                modulePermissions: true
             }
         });
 

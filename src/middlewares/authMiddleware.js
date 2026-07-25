@@ -100,3 +100,41 @@ export const requireFinancialAccess = async (req, res, next) => {
     return res.status(500).json({ error: "Failed to validate financial access permissions" });
   }
 };
+
+export const requireModulePermission = (moduleName) => {
+  return async (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized", message: "Usuario no autenticado" });
+    }
+
+    try {
+      const userId = req.user.userId || req.user.id;
+      const dbUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true, modulePermissions: true }
+      });
+
+      if (!dbUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // ADMIN users always have access to all modules bypass
+      if (dbUser.role === 'ADMIN') {
+        return next();
+      }
+
+      const permissions = dbUser.modulePermissions || {};
+      if (permissions[moduleName] !== true) {
+        console.warn(`[Auth] Access denied for user ${userId}: Module ${moduleName} is not permitted.`);
+        return res.status(403).json({
+          error: `No tienes permisos para acceder al módulo: ${moduleName}`
+        });
+      }
+
+      next();
+    } catch (error) {
+      console.error("[Auth] Error checking module permissions:", error);
+      return res.status(500).json({ error: "Failed to validate module permissions" });
+    }
+  };
+};

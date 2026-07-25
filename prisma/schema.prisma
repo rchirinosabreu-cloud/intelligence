@@ -7,12 +7,20 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum SystemRole {
+  ADMIN
+  PROJECT_MANAGER
+  EDITOR
+  VIEWER
+}
+
 model User {
   id                  String               @id @default(uuid())
   name                String
   email               String               @unique
   password            String
-  role                String               @default("EDITOR")
+  role                SystemRole           @default(VIEWER)
+  modulePermissions   Json?                @default("{\"Inicio\": true, \"Manager\": false, \"Tareas\": false, \"Actividad\": false, \"Clientes\": false, \"Equipo\": false, \"Radar\": false, \"Parrillas\": false}")
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   avatarUrl           String?
@@ -30,6 +38,7 @@ model User {
   payrollContracts    PayrollContract[]
   payrollTransactions PayrollTransaction[]
   financialRecords    FinancialRecord[]
+  teamMember          TeamMember?
 }
 
 model UserNote {
@@ -212,6 +221,7 @@ model TeamMember {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   userId       String?       @unique
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
   desktopX     Int?
   desktopY     Int?
   statusMessage String?

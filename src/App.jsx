@@ -41,11 +41,16 @@ const queryClient = new QueryClient({
   },
 });
 
-function BrainCoreGuard({ children }) {
+function ModuleGuard({ module, children }) {
   const { currentUser } = useAuth();
-  const allowedEmails = ['chrodny@gmail.com', 'fvilladigital@gmail.com'];
 
-  if (!true) {
+  if (!currentUser) return <Navigate to="/login" replace />;
+
+  // ADMIN has full access bypass
+  if (currentUser.role === 'ADMIN') return children;
+
+  const permissions = currentUser.modulePermissions || {};
+  if (permissions[module] !== true) {
     return <Navigate to="/" replace />;
   }
 
@@ -107,15 +112,36 @@ function AppContent() {
                     <Route
                       path="/manager"
                       element={
-                        <BrainCoreGuard>
+                        <ModuleGuard module="Manager">
                           <BrainCore />
-                        </BrainCoreGuard>
+                        </ModuleGuard>
                       }
                     />
-                    <Route path="/gestion" element={<NativeTasks />} />
-                    <Route path="/actividad" element={<Activity />} />
+                    <Route
+                      path="/gestion"
+                      element={
+                        <ModuleGuard module="Tareas">
+                          <NativeTasks />
+                        </ModuleGuard>
+                      }
+                    />
+                    <Route
+                      path="/actividad"
+                      element={
+                        <ModuleGuard module="Actividad">
+                          <Activity />
+                        </ModuleGuard>
+                      }
+                    />
                     <Route path="/reportes" element={<Reports />} />
-                    <Route path="/parrillas" element={<ContentGrids />} />
+                    <Route
+                      path="/parrillas"
+                      element={
+                        <ModuleGuard module="Parrillas">
+                          <ContentGrids />
+                        </ModuleGuard>
+                      }
+                    />
                     <Route path="/parrillas/:clientSlug/:period" element={<ContentPlanDetail />} />
                     <Route path="/parrillas/:planId" element={<ContentPlanDetail />} />
                     <Route path="/minutas" element={<MinutesLayout />} />
@@ -126,11 +152,32 @@ function AppContent() {
                     <Route path="/moodboard" element={<MoodboardDashboard />} />
                     <Route path="/moodboard/:boardId" element={<MoodboardCanvas />} />
 
-                    <Route path="/clientes" element={<Clients />} />
+                    <Route
+                      path="/clientes"
+                      element={
+                        <ModuleGuard module="Clientes">
+                          <Clients />
+                        </ModuleGuard>
+                      }
+                    />
                     <Route path="/cliente/:clientId" element={<ClientDetailWrapper />} />
-                    <Route path="/radar" element={(currentUser?.role === 'ADMIN' || currentUser?.role === 'PM') ? <TalentRadar /> : <Navigate to="/" replace />} />
+                    <Route
+                      path="/radar"
+                      element={
+                        <ModuleGuard module="Radar">
+                          <TalentRadar />
+                        </ModuleGuard>
+                      }
+                    />
                     <Route path="/financiero" element={<FinancialDashboard />} />
-                    <Route path="/equipo" element={<Team />} />
+                    <Route
+                      path="/equipo"
+                      element={
+                        <ModuleGuard module="Equipo">
+                          <Team />
+                        </ModuleGuard>
+                      }
+                    />
                     <Route path="/perfil" element={<Profile />} />
                     <Route path="/perfil/:userId" element={<Profile />} />
 

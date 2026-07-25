@@ -13,6 +13,11 @@ router.get('/', async (req, res) => {
 
     const teamMembers = await prisma.teamMember.findMany({
       where: whereClause,
+      include: {
+        user: {
+          select: { role: true, modulePermissions: true }
+        }
+      },
       orderBy: { name: 'asc' },
     });
 
@@ -25,8 +30,11 @@ router.get('/', async (req, res) => {
 
 // Crear un nuevo miembro del equipo (y auto-crear cuenta de User)
 router.post('/', async (req, res) => {
+  if (req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Solo los administradores pueden gestionar miembros del equipo' });
+  }
   try {
-    const { name, role, email, avatarUrl } = req.body;
+    const { name, role, email, avatarUrl, systemRole, modulePermissions } = req.body;
 
     if (!name || !role) {
       return res.status(400).json({ error: 'Name and role are required' });
@@ -51,7 +59,25 @@ router.post('/', async (req, res) => {
                         name,
                         email: normalizedEmail,
                         password: hashedPassword,
-                        role: 'EDITOR' // Rol base para miembros del equipo
+                        role: systemRole || 'VIEWER',
+                        modulePermissions: modulePermissions || {
+                            Inicio: true,
+                            Manager: false,
+                            Tareas: false,
+                            Actividad: false,
+                            Clientes: false,
+                            Equipo: false,
+                            Radar: false,
+                            Parrillas: false
+                        }
+                    }
+                });
+            } else {
+                user = await tx.user.update({
+                    where: { id: user.id },
+                    data: {
+                        role: systemRole || undefined,
+                        modulePermissions: modulePermissions || undefined
                     }
                 });
             }
@@ -82,19 +108,36 @@ router.post('/', async (req, res) => {
 
 // Actualizar un miembro del equipo
 router.put('/:id', async (req, res) => {
+  if (req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Solo los administradores pueden gestionar miembros del equipo' });
+  }
   try {
     const { id } = req.params;
-    const { name, role, email, avatarUrl, isActive } = req.body;
+    const { name, role, email, avatarUrl, isActive, systemRole, modulePermissions } = req.body;
 
-    const updatedMember = await prisma.teamMember.update({
-      where: { id },
-      data: {
-        name,
-        role,
-        email,
-        avatarUrl,
-        isActive: isActive !== undefined ? isActive : undefined
-      },
+    const updatedMember = await prisma.$transaction(async (tx) => {
+        const member = await tx.teamMember.update({
+            where: { id },
+            data: {
+                name,
+                role,
+                email,
+                avatarUrl,
+                isActive: isActive !== undefined ? isActive : undefined
+            },
+        });
+
+        if (member.userId) {
+            await tx.user.update({
+                where: { id: member.userId },
+                data: {
+                    role: systemRole,
+                    modulePermissions
+                }
+            });
+        }
+
+        return member;
     });
 
     return res.json(updatedMember);
@@ -119,6 +162,9 @@ router.patch('/member/status-message', async (req, res) => {
 
 // Desactivar lógicamente (o borrar si se prefiere, pero usamos desactivación según las specs)
 router.delete('/:id', async (req, res) => {
+  if (req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Solo los administradores pueden gestionar miembros del equipo' });
+  }
   try {
     const { id } = req.params;
 

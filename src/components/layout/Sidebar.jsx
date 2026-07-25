@@ -16,25 +16,35 @@ const Sidebar = ({ isOpen, onClose }) => {
   const { currentUser } = useAuth();
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-    { id: 'brain-core', label: 'Manager', icon: Brain, path: '/manager', allowedEmails: ['chrodny@gmail.com', 'fvilladigital@gmail.com'] },
-    { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/gestion' },
-    { id: 'activity', label: 'Actividad', icon: Map, path: '/actividad' },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/', module: 'Inicio' },
+    { id: 'brain-core', label: 'Manager', icon: Brain, path: '/manager', module: 'Manager' },
+    { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/gestion', module: 'Tareas' },
+    { id: 'activity', label: 'Actividad', icon: Map, path: '/actividad', module: 'Actividad' },
     { id: 'reports', label: 'Reportes', icon: FileBarChart, path: '/reportes' },
     { id: 'moodboard', label: 'Inspiración', icon: Palette, path: '/moodboard' },
-    { id: 'content-grids', label: 'Parrillas', icon: LayoutGrid, path: '/parrillas' },
+    { id: 'content-grids', label: 'Parrillas', icon: LayoutGrid, path: '/parrillas', module: 'Parrillas' },
     { id: 'minutes', label: 'Minutas', icon: FileText, path: '/minutas' },
     { id: 'quotations', label: 'Cotizaciones', icon: DollarSign, path: '/cotizaciones', roles: ['ADMIN', 'PM'] },
     { id: 'financials', label: 'Financiero', icon: DollarSign, path: '/financiero', hasFinancialAccess: true },
-    { id: 'radar', label: 'Radar de Mérito', icon: Zap, path: '/radar', roles: ['ADMIN', 'PM'] },
-    { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes' },
-    { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo' },
+    { id: 'radar', label: 'Radar de Mérito', icon: Zap, path: '/radar', module: 'Radar' },
+    { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes', module: 'Clientes' },
+    { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo', module: 'Equipo' },
   ];
 
   const filteredMenuItems = menuItems.filter(item => {
-    if (item.allowedEmails && !item.allowedEmails.includes(currentUser?.email)) return false;
+    // Admin always has access to everything
+    if (currentUser?.role === 'ADMIN') return true;
+
+    // Check Module Permissions first
+    if (item.module) {
+      const perms = currentUser?.modulePermissions || {};
+      if (perms[item.module] !== true) return false;
+    }
+
+    // Role-based fallbacks for items without module
     if (item.roles && !item.roles.includes(currentUser?.role)) return false;
     if (item.hasFinancialAccess && currentUser?.hasFinancialAccess !== true) return false;
+
     return true;
   });
 

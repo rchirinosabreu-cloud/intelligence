@@ -2,8 +2,8 @@ import prisma from '../lib/prisma.js';
 
 export const getPersonalThreats = async (req, res) => {
     try {
-        // Feature Gate: Only Rodny can access this intelligence engine
-        if (req.user?.email !== 'chrodny@gmail.com') {
+        // Feature Gate: Only Admin or PM can access this intelligence engine
+        if (req.user?.role !== 'ADMIN' && req.user?.role !== 'PROJECT_MANAGER' && req.user?.role !== 'PM') {
             return res.status(403).json({ error: "Acceso denegado. Este cockpit es exclusivo para la administración central." });
         }
 
