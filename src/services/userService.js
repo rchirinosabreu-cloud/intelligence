@@ -23,6 +23,38 @@ export const updateUserProfile = async (userId, data) => {
     // Or that an ADMIN can update for anyone.
     const { name, bio, avatarUrl, role, isActive, modulePermissions } = data;
 
+    const defaultPermissions = {
+        dashboard: true,
+        manager: false,
+        gestion: false,
+        actividad: false,
+        reportes: false,
+        inspiracion: false,
+        parrillas: false,
+        minutas: false,
+        cotizaciones: false,
+        financiero: false,
+        radar: false,
+        clientes: false,
+        equipo: false
+    };
+
+    let sanitizedPermissions = undefined;
+    if (modulePermissions) {
+        sanitizedPermissions = { ...defaultPermissions };
+        Object.keys(modulePermissions).forEach(key => {
+            const lowerKey = key.toLowerCase();
+            let targetKey = lowerKey;
+            if (lowerKey === 'inicio') targetKey = 'dashboard';
+            if (lowerKey === 'tareas') targetKey = 'gestion';
+
+            if (targetKey in defaultPermissions) {
+                sanitizedPermissions[targetKey] = !!modulePermissions[key];
+            }
+        });
+        sanitizedPermissions.dashboard = true;
+    }
+
     const updatedUser = await prisma.$transaction(async (tx) => {
         const user = await tx.user.update({
             where: { id: userId },
@@ -32,7 +64,7 @@ export const updateUserProfile = async (userId, data) => {
                 avatarUrl,
                 role,
                 isActive,
-                modulePermissions
+                modulePermissions: sanitizedPermissions
             },
             select: {
                 id: true,

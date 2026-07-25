@@ -16,19 +16,19 @@ const Sidebar = ({ isOpen, onClose }) => {
   const { currentUser } = useAuth();
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/', module: 'Inicio' },
-    { id: 'brain-core', label: 'Manager', icon: Brain, path: '/manager', module: 'Manager' },
-    { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/gestion', module: 'Tareas' },
-    { id: 'activity', label: 'Actividad', icon: Map, path: '/actividad', module: 'Actividad' },
-    { id: 'reports', label: 'Reportes', icon: FileBarChart, path: '/reportes' },
-    { id: 'moodboard', label: 'Inspiración', icon: Palette, path: '/moodboard' },
-    { id: 'content-grids', label: 'Parrillas', icon: LayoutGrid, path: '/parrillas', module: 'Parrillas' },
-    { id: 'minutes', label: 'Minutas', icon: FileText, path: '/minutas' },
-    { id: 'quotations', label: 'Cotizaciones', icon: DollarSign, path: '/cotizaciones', roles: ['ADMIN', 'PM'] },
-    { id: 'financials', label: 'Financiero', icon: DollarSign, path: '/financiero', hasFinancialAccess: true },
-    { id: 'radar', label: 'Radar de Mérito', icon: Zap, path: '/radar', module: 'Radar' },
-    { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes', module: 'Clientes' },
-    { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo', module: 'Equipo' },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/', moduleKey: 'dashboard' },
+    { id: 'brain-core', label: 'Manager', icon: Brain, path: '/manager', moduleKey: 'manager' },
+    { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/gestion', moduleKey: 'gestion' },
+    { id: 'activity', label: 'Actividad', icon: Map, path: '/actividad', moduleKey: 'actividad' },
+    { id: 'reports', label: 'Reportes', icon: FileBarChart, path: '/reportes', moduleKey: 'reportes' },
+    { id: 'moodboard', label: 'Inspiración', icon: Palette, path: '/moodboard', moduleKey: 'inspiracion' },
+    { id: 'content-grids', label: 'Parrillas', icon: LayoutGrid, path: '/parrillas', moduleKey: 'parrillas' },
+    { id: 'minutes', label: 'Minutas', icon: FileText, path: '/minutas', moduleKey: 'minutas' },
+    { id: 'quotations', label: 'Cotizaciones', icon: DollarSign, path: '/cotizaciones', moduleKey: 'cotizaciones' },
+    { id: 'financials', label: 'Financiero', icon: DollarSign, path: '/financiero', moduleKey: 'financiero' },
+    { id: 'radar', label: 'Radar de Mérito', icon: Zap, path: '/radar', moduleKey: 'radar' },
+    { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes', moduleKey: 'clientes' },
+    { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo', moduleKey: 'equipo' },
   ];
 
   const filteredMenuItems = menuItems.filter(item => {
@@ -36,12 +36,12 @@ const Sidebar = ({ isOpen, onClose }) => {
     if (currentUser?.role === 'ADMIN') return true;
 
     // Check Module Permissions first
-    if (item.module) {
+    if (item.moduleKey) {
       const perms = currentUser?.modulePermissions || {};
-      if (perms[item.module] !== true) return false;
+      if (perms[item.moduleKey] !== true) return false;
     }
 
-    // Role-based fallbacks for items without module
+    // Role-based fallbacks for items without moduleKey
     if (item.roles && !item.roles.includes(currentUser?.role)) return false;
     if (item.hasFinancialAccess && currentUser?.hasFinancialAccess !== true) return false;
 

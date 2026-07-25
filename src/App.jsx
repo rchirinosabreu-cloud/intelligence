@@ -112,7 +112,7 @@ function AppContent() {
                     <Route
                       path="/manager"
                       element={
-                        <ModuleGuard module="Manager">
+                        <ModuleGuard module="manager">
                           <BrainCore />
                         </ModuleGuard>
                       }
@@ -120,7 +120,7 @@ function AppContent() {
                     <Route
                       path="/gestion"
                       element={
-                        <ModuleGuard module="Tareas">
+                        <ModuleGuard module="gestion">
                           <NativeTasks />
                         </ModuleGuard>
                       }
@@ -128,34 +128,55 @@ function AppContent() {
                     <Route
                       path="/actividad"
                       element={
-                        <ModuleGuard module="Actividad">
+                        <ModuleGuard module="actividad">
                           <Activity />
                         </ModuleGuard>
                       }
                     />
-                    <Route path="/reportes" element={<Reports />} />
+                    <Route
+                      path="/reportes"
+                      element={
+                        <ModuleGuard module="reportes">
+                          <Reports />
+                        </ModuleGuard>
+                      }
+                    />
                     <Route
                       path="/parrillas"
                       element={
-                        <ModuleGuard module="Parrillas">
+                        <ModuleGuard module="parrillas">
                           <ContentGrids />
                         </ModuleGuard>
                       }
                     />
                     <Route path="/parrillas/:clientSlug/:period" element={<ContentPlanDetail />} />
                     <Route path="/parrillas/:planId" element={<ContentPlanDetail />} />
-                    <Route path="/minutas" element={<MinutesLayout />} />
+                    <Route
+                      path="/minutas"
+                      element={
+                        <ModuleGuard module="minutas">
+                          <MinutesLayout />
+                        </ModuleGuard>
+                      }
+                    />
                     <Route path="/cotizaciones" element={<QuotationsLayout />} />
                     <Route path="/cotizaciones/nueva" element={<QuotationForm />} />
                     <Route path="/cotizaciones/editar/:id" element={<QuotationForm />} />
 
-                    <Route path="/moodboard" element={<MoodboardDashboard />} />
+                    <Route
+                      path="/moodboard"
+                      element={
+                        <ModuleGuard module="inspiracion">
+                          <MoodboardDashboard />
+                        </ModuleGuard>
+                      }
+                    />
                     <Route path="/moodboard/:boardId" element={<MoodboardCanvas />} />
 
                     <Route
                       path="/clientes"
                       element={
-                        <ModuleGuard module="Clientes">
+                        <ModuleGuard module="clientes">
                           <Clients />
                         </ModuleGuard>
                       }
@@ -164,16 +185,23 @@ function AppContent() {
                     <Route
                       path="/radar"
                       element={
-                        <ModuleGuard module="Radar">
+                        <ModuleGuard module="radar">
                           <TalentRadar />
                         </ModuleGuard>
                       }
                     />
-                    <Route path="/financiero" element={<FinancialDashboard />} />
+                    <Route
+                      path="/financiero"
+                      element={
+                        <ModuleGuard module="financiero">
+                          <FinancialDashboard />
+                        </ModuleGuard>
+                      }
+                    />
                     <Route
                       path="/equipo"
                       element={
-                        <ModuleGuard module="Equipo">
+                        <ModuleGuard module="equipo">
                           <Team />
                         </ModuleGuard>
                       }
