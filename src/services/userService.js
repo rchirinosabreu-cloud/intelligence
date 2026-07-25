@@ -15,6 +15,11 @@ export const getUserProfile = async (userId) => {
             modulePermissions: true
         }
     });
+    if (user && user.modulePermissions && typeof user.modulePermissions === 'string') {
+        try {
+            user.modulePermissions = JSON.parse(user.modulePermissions);
+        } catch (e) {}
+    }
     return user;
 };
 
@@ -77,6 +82,12 @@ export const updateUserProfile = async (userId, data) => {
                 modulePermissions: true
             }
         });
+
+        if (user && user.modulePermissions && typeof user.modulePermissions === 'string') {
+            try {
+                user.modulePermissions = JSON.parse(user.modulePermissions);
+            } catch (e) {}
+        }
 
         // Synchronize with TeamMember if it exists
         // We only sync 'name' and 'avatarUrl' for now
