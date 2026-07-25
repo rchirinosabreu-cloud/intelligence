@@ -124,7 +124,8 @@ export const requireModulePermission = (moduleName) => {
       }
 
       const permissions = dbUser.modulePermissions || {};
-      if (permissions[moduleName] !== true) {
+      const key = String(moduleName || '').toLowerCase();
+      if (permissions[key] !== true && permissions[moduleName] !== true) {
         console.warn(`[Auth] Access denied for user ${userId}: Module ${moduleName} is not permitted.`);
         return res.status(403).json({
           error: `No tienes permisos para acceder al módulo: ${moduleName}`

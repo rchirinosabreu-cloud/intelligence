@@ -28,6 +28,39 @@ router.get('/', async (req, res) => {
   }
 });
 
+const defaultPermissions = {
+    dashboard: true,
+    manager: false,
+    gestion: false,
+    actividad: false,
+    reportes: false,
+    inspiracion: false,
+    parrillas: false,
+    minutas: false,
+    cotizaciones: false,
+    financiero: false,
+    radar: false,
+    clientes: false,
+    equipo: false
+};
+
+const sanitizePermissions = (perms) => {
+    const sanitized = { ...defaultPermissions };
+    if (!perms) return sanitized;
+    Object.keys(perms).forEach(key => {
+        const lowerKey = key.toLowerCase();
+        let targetKey = lowerKey;
+        if (lowerKey === 'inicio') targetKey = 'dashboard';
+        if (lowerKey === 'tareas') targetKey = 'gestion';
+
+        if (targetKey in defaultPermissions) {
+            sanitized[targetKey] = !!perms[key];
+        }
+    });
+    sanitized.dashboard = true;
+    return sanitized;
+};
+
 // Crear un nuevo miembro del equipo (y auto-crear cuenta de User)
 router.post('/', async (req, res) => {
   if (req.user?.role !== 'ADMIN') {
@@ -39,6 +72,8 @@ router.post('/', async (req, res) => {
     if (!name || !role) {
       return res.status(400).json({ error: 'Name and role are required' });
     }
+
+    const sanitizedPerms = sanitizePermissions(modulePermissions);
 
     // Usamos una transacción para asegurar que ambas tablas se actualizan o ninguna
     const newMember = await prisma.$transaction(async (tx) => {
@@ -60,16 +95,7 @@ router.post('/', async (req, res) => {
                         email: normalizedEmail,
                         password: hashedPassword,
                         role: systemRole || 'VIEWER',
-                        modulePermissions: modulePermissions || {
-                            Inicio: true,
-                            Manager: false,
-                            Tareas: false,
-                            Actividad: false,
-                            Clientes: false,
-                            Equipo: false,
-                            Radar: false,
-                            Parrillas: false
-                        }
+                        modulePermissions: sanitizedPerms
                     }
                 });
             } else {
@@ -77,7 +103,7 @@ router.post('/', async (req, res) => {
                     where: { id: user.id },
                     data: {
                         role: systemRole || undefined,
-                        modulePermissions: modulePermissions || undefined
+                        modulePermissions: sanitizedPerms
                     }
                 });
             }
@@ -115,6 +141,8 @@ router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const { name, role, email, avatarUrl, isActive, systemRole, modulePermissions } = req.body;
 
+    const sanitizedPerms = sanitizePermissions(modulePermissions);
+
     const updatedMember = await prisma.$transaction(async (tx) => {
         const member = await tx.teamMember.update({
             where: { id },
@@ -132,7 +160,7 @@ router.put('/:id', async (req, res) => {
                 where: { id: member.userId },
                 data: {
                     role: systemRole,
-                    modulePermissions
+                    modulePermissions: sanitizedPerms
                 }
             });
         }

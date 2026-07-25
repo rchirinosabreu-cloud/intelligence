@@ -20,7 +20,7 @@ model User {
   email               String               @unique
   password            String
   role                SystemRole           @default(VIEWER)
-  modulePermissions   Json?                @default("{\"Inicio\": true, \"Manager\": false, \"Tareas\": false, \"Actividad\": false, \"Clientes\": false, \"Equipo\": false, \"Radar\": false, \"Parrillas\": false}")
+  modulePermissions   Json?                @default("{\"dashboard\": true, \"manager\": false, \"gestion\": false, \"actividad\": false, \"reportes\": false, \"inspiracion\": false, \"parrillas\": false, \"minutas\": false, \"cotizaciones\": false, \"financiero\": false, \"radar\": false, \"clientes\": false, \"equipo\": false}")
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   avatarUrl           String?

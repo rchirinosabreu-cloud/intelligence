@@ -26,72 +26,81 @@ export default function Team() {
 
   const [systemRole, setSystemRole] = useState('VIEWER');
   const [modulePermissions, setModulePermissions] = useState({
-    Inicio: true,
-    Manager: false,
-    Tareas: false,
-    Actividad: false,
-    Clientes: false,
-    Equipo: false,
-    Radar: false,
-    Parrillas: false
+    manager: false,
+    gestion: false,
+    actividad: false,
+    reportes: false,
+    inspiracion: false,
+    parrillas: false,
+    minutas: false,
+    cotizaciones: false,
+    financiero: false,
+    radar: false,
+    clientes: false,
+    equipo: false
   });
 
   const handleRolePresetChange = (selectedRole) => {
     setSystemRole(selectedRole);
     let presets = {
-      Inicio: true,
-      Manager: false,
-      Tareas: false,
-      Actividad: false,
-      Clientes: false,
-      Equipo: false,
-      Radar: false,
-      Parrillas: false
+      manager: false,
+      gestion: false,
+      actividad: false,
+      reportes: false,
+      inspiracion: false,
+      parrillas: false,
+      minutas: false,
+      cotizaciones: false,
+      financiero: false,
+      radar: false,
+      clientes: false,
+      equipo: false
     };
 
-    if (selectedRole === 'ADMIN') {
+    if (selectedRole === 'ADMIN' || selectedRole === 'PROJECT_MANAGER') {
       presets = {
-        Inicio: true,
-        Manager: true,
-        Tareas: true,
-        Actividad: true,
-        Clientes: true,
-        Equipo: true,
-        Radar: true,
-        Parrillas: true
-      };
-    } else if (selectedRole === 'PROJECT_MANAGER') {
-      presets = {
-        Inicio: true,
-        Manager: true,
-        Tareas: true,
-        Actividad: true,
-        Clientes: true,
-        Equipo: true,
-        Radar: true,
-        Parrillas: true
+        manager: true,
+        gestion: true,
+        actividad: true,
+        reportes: true,
+        inspiracion: true,
+        parrillas: true,
+        minutas: true,
+        cotizaciones: true,
+        financiero: true,
+        radar: true,
+        clientes: true,
+        equipo: true
       };
     } else if (selectedRole === 'EDITOR') {
       presets = {
-        Inicio: true,
-        Manager: false,
-        Tareas: true,
-        Actividad: true,
-        Clientes: true,
-        Equipo: false,
-        Radar: false,
-        Parrillas: true
+        manager: false,
+        gestion: true,
+        actividad: true,
+        reportes: true,
+        inspiracion: true,
+        parrillas: true,
+        minutas: true,
+        cotizaciones: false,
+        financiero: false,
+        radar: false,
+        clientes: true,
+        equipo: false
       };
     } else if (selectedRole === 'VIEWER') {
       presets = {
-        Inicio: true,
-        Manager: false,
-        Tareas: false,
-        Actividad: false,
-        Clientes: true,
-        Equipo: false,
-        Radar: false,
-        Parrillas: true
+        manager: false,
+        gestion: false,
+        actividad: false,
+        reportes: true,
+        inspiracion: true,
+        parrillas: true,
+        minutas: true,
+        cotizaciones: false,
+        financiero: false,
+        radar: false,
+        clientes: true,
+        equipo: false
       };
     }
 
@@ -127,15 +136,20 @@ export default function Team() {
       setAvatarUrl(member.avatarUrl || '');
 
       const userRole = member.user?.role || 'VIEWER';
-      const userPerms = member.user?.modulePermissions || {
-        Inicio: true,
-        Manager: false,
-        Tareas: false,
-        Actividad: false,
-        Clientes: false,
-        Equipo: false,
-        Radar: false,
-        Parrillas: false
+      const rawPerms = member.user?.modulePermissions || {};
+      const userPerms = {
+        manager: !!(rawPerms.manager || rawPerms.Manager),
+        gestion: !!(rawPerms.gestion || rawPerms.Tareas),
+        actividad: !!(rawPerms.actividad || rawPerms.Actividad),
+        reportes: !!rawPerms.reportes,
+        inspiracion: !!rawPerms.inspiracion,
+        parrillas: !!(rawPerms.parrillas || rawPerms.Parrillas),
+        minutas: !!rawPerms.minutas,
+        cotizaciones: !!rawPerms.cotizaciones,
+        financiero: !!rawPerms.financiero,
+        radar: !!(rawPerms.radar || rawPerms.Radar),
+        clientes: !!(rawPerms.clientes || rawPerms.Clientes),
+        equipo: !!(rawPerms.equipo || rawPerms.Equipo)
       };
       setSystemRole(userRole);
       setModulePermissions(userPerms);
@@ -147,14 +161,18 @@ export default function Team() {
       setAvatarUrl('');
       setSystemRole('VIEWER');
       setModulePermissions({
-        Inicio: true,
-        Manager: false,
-        Tareas: false,
-        Actividad: false,
-        Clientes: false,
-        Equipo: false,
-        Radar: false,
-        Parrillas: false
+        manager: false,
+        gestion: false,
+        actividad: false,
+        reportes: true,
+        inspiracion: true,
+        parrillas: true,
+        minutas: true,
+        cotizaciones: false,
+        financiero: false,
+        radar: false,
+        clientes: true,
+        equipo: false
       });
     }
     setIsModalOpen(true);
@@ -388,23 +406,41 @@ export default function Team() {
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Permisos por Módulo</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {Object.keys(modulePermissions).map((module) => (
-                      <label key={module} className="flex items-center gap-2 p-2 bg-white dark:bg-zinc-900 border border-zinc-150 dark:border-zinc-800/60 rounded-xl cursor-pointer hover:bg-zinc-100/50 transition-colors select-none">
-                        <input
-                          type="checkbox"
-                          disabled={module === 'Inicio' || systemRole === 'ADMIN'}
-                          checked={systemRole === 'ADMIN' ? true : !!modulePermissions[module]}
-                          onChange={(e) => {
-                            setModulePermissions(prev => ({
-                              ...prev,
-                              [module]: e.target.checked
-                            }));
-                          }}
-                          className="rounded text-primary focus:ring-primary h-4 w-4 cursor-pointer"
-                        />
-                        <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{module}</span>
-                      </label>
-                    ))}
+                    {Object.keys(modulePermissions).map((module) => {
+                      const displayNames = {
+                        manager: "Manager",
+                        gestion: "Gestión (Tareas)",
+                        actividad: "Actividad",
+                        reportes: "Reportes",
+                        inspiracion: "Inspiración",
+                        parrillas: "Parrillas",
+                        minutas: "Minutas",
+                        cotizaciones: "Cotizaciones",
+                        financiero: "Financiero",
+                        radar: "Radar de Mérito",
+                        clientes: "Clientes",
+                        equipo: "Equipo"
+                      };
+                      return (
+                        <label key={module} className="flex items-center gap-2 p-2 bg-white dark:bg-zinc-900 border border-zinc-150 dark:border-zinc-800/60 rounded-xl cursor-pointer hover:bg-zinc-100/50 transition-colors select-none">
+                          <input
+                            type="checkbox"
+                            disabled={systemRole === 'ADMIN'}
+                            checked={systemRole === 'ADMIN' ? true : !!modulePermissions[module]}
+                            onChange={(e) => {
+                              setModulePermissions(prev => ({
+                                ...prev,
+                                [module]: e.target.checked
+                              }));
+                            }}
+                            className="rounded text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                          />
+                          <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                            {displayNames[module] || module}
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
