@@ -378,10 +378,10 @@ export default function Team() {
             <div>
               <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">URL de avatar (opcional)</label>
               <input
-                type="url"
+                type="text"
                 value={avatarUrl}
                 onChange={(e) => setAvatarUrl(e.target.value)}
-                placeholder="https://..."
+                placeholder="https://... o ruta relativa /api/..."
                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
               />
             </div>
