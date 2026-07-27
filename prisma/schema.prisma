@@ -18,7 +18,6 @@ enum TaskPriority {
   URGENTE
   ALTA
   NORMAL
-  BAJA
 }
 
 model User {
@@ -277,7 +276,7 @@ model Task {
   creatorId       String?
   status          TaskStatus       @default(PENDIENTE)
   isPriority      Boolean          @default(false)
-  priority        TaskPriority     @default(NORMAL)
+  priority        TaskPriority?
   isSpecial       Boolean          @default(false)
   referenceUrl    String?
   specialType     String?
