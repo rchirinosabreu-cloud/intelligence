@@ -64,6 +64,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         comments: '',
         status: 'PENDIENTE',
         isPriority: false,
+        priority: 'NORMAL',
         isSpecial: false,
         specialType: '',
         hasReference: false,
@@ -186,6 +187,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         assigneeId: parsed.assigneeId || '',
                         dueDate: parsed.dueDate || '',
                         isPriority: parsed.isPriority || false,
+                        priority: parsed.priority || 'NORMAL',
                         isSpecial: parsed.isSpecial || false,
                         specialType: parsed.specialType || '',
                         status: parsed.status || 'PENDIENTE'
@@ -215,6 +217,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 assigneeId: formData.assigneeId,
                 dueDate: formData.dueDate,
                 isPriority: formData.isPriority,
+                priority: formData.priority,
                 isSpecial: formData.isSpecial,
                 specialType: formData.specialType,
                 status: formData.status,
@@ -237,6 +240,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             comments: '',
             status: 'PENDIENTE',
             isPriority: false,
+            priority: 'NORMAL',
             isSpecial: false,
             specialType: '',
             hasReference: false,
@@ -250,6 +254,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         setTempComments([]);
         setTempAttachments([]);
         toast({ title: "Borrador descartado" });
+        onClose(); // Immediate close modal action
     };
 
     // Populate or Reset Form
@@ -313,6 +318,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     comments: taskData.comments || '',
                     creatorName: taskData.creator?.name || taskData.creatorName || 'Sistema',
                     isPriority: taskData.isPriority || false,
+                    priority: taskData.priority || 'NORMAL',
                     isSpecial: taskData.isSpecial || false,
                     specialType: taskData.specialType || '',
                     hasReference: !!taskData.referenceUrl,
@@ -337,6 +343,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         comments: '',
                         status: 'PENDIENTE',
                         isPriority: false,
+                        priority: 'NORMAL',
                         isSpecial: false,
                         specialType: '',
                         hasReference: false,
@@ -369,6 +376,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             const payload = {
                 [fieldName]: processedVal
             };
+            if (fieldName === 'priority') {
+                payload.isPriority = finalValue === 'URGENTE' || finalValue === 'ALTA';
+            }
 
             const token = localStorage.getItem('authToken');
             const url = `${baseUrl}/api/tasks/${formData.id}`;
@@ -403,6 +413,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     title: updatedTask.title || prev.title,
                     assigneeId: updatedTask.assigneeId || '',
                     status: updatedTask.status || 'PENDIENTE',
+                    priority: updatedTask.priority || 'NORMAL',
+                    isPriority: updatedTask.isPriority || false,
                     dueDate: formattedDate,
                     originalStatus: updatedTask.status,
                     taskComments: updatedTask.taskComments || prev.taskComments,
@@ -452,6 +464,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 comments: '', // Removed general comments description completely
                 status: formData.status,
                 isPriority: formData.isPriority,
+                priority: formData.priority || 'NORMAL',
                 isSpecial: formData.isSpecial,
                 specialType: formData.isSpecial ? formData.specialType : null,
                 followOnCreate: !isEdition ? isFollowing : undefined,
@@ -1254,36 +1267,94 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     </select>
                                 )}
                             </div>
-                        </div>
 
-                        {/* Priority & Special Flags */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <button
-                                type="button"
-                                disabled={isEdition}
-                                onClick={() => setFormData(prev => ({ ...prev, isPriority: !prev.isPriority }))}
-                                className={cn(
-                                    "flex items-center justify-center gap-2.5 p-3 rounded-xl border transition-all shadow-sm",
-                                    formData.isPriority ? "bg-orange-500 text-white border-orange-600 font-bold" : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400",
-                                    isEdition && "opacity-80 cursor-default"
+                            {/* Prioridad (Read-Only / Inline Edit) */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Prioridad</label>
+                                {isEdition ? (
+                                    editingField === 'priority' ? (
+                                        <div className="flex gap-2 items-center">
+                                            <select
+                                                value={inlineVal}
+                                                onChange={e => setInlineVal(e.target.value)}
+                                                className="flex-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/10 outline-none h-[38px]"
+                                                autoFocus
+                                            >
+                                                <option value="URGENTE">🚨 URGENTE</option>
+                                                <option value="ALTA">💛 ALTA</option>
+                                                <option value="NORMAL">💙 NORMAL</option>
+                                                <option value="BAJA">🖤 BAJA</option>
+                                            </select>
+                                            <button
+                                                onClick={() => saveInlineField('priority', inlineVal)}
+                                                className="p-2 bg-emerald-500 text-white rounded-xl shadow-md shrink-0"
+                                            >
+                                                <Check size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => setEditingField(null)}
+                                                className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-500 shrink-0"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div
+                                            onClick={() => {
+                                                setEditingField('priority');
+                                                setInlineVal(formData.priority || 'NORMAL');
+                                            }}
+                                            className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-850 px-3 py-2 rounded-xl cursor-pointer border border-zinc-200/50 dark:border-zinc-800 transition-colors h-[38px]"
+                                        >
+                                            <span className={cn(
+                                                "text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full",
+                                                formData.priority === 'URGENTE' ? 'bg-red-500/10 text-red-600 font-bold' :
+                                                formData.priority === 'ALTA' ? 'bg-amber-500/10 text-amber-600 font-bold' :
+                                                formData.priority === 'BAJA' ? 'bg-zinc-500/10 text-zinc-600 font-bold' : 'bg-blue-500/10 text-blue-600 font-bold'
+                                            )}>
+                                                {formData.priority === 'URGENTE' ? '🚨 URGENTE' :
+                                                 formData.priority === 'ALTA' ? '💛 ALTA' :
+                                                 formData.priority === 'BAJA' ? '🖤 BAJA' : '💙 NORMAL'}
+                                            </span>
+                                        </div>
+                                    )
+                                ) : (
+                                    <select
+                                        value={formData.priority}
+                                        onChange={e => {
+                                            const newPriority = e.target.value;
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                priority: newPriority,
+                                                isPriority: newPriority === 'URGENTE' || newPriority === 'ALTA'
+                                            }));
+                                        }}
+                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[38px]"
+                                    >
+                                        <option value="URGENTE">🚨 URGENTE</option>
+                                        <option value="ALTA">💛 ALTA</option>
+                                        <option value="NORMAL">💙 NORMAL</option>
+                                        <option value="BAJA">🖤 BAJA</option>
+                                    </select>
                                 )}
-                            >
-                                <Zap size={15} fill={formData.isPriority ? "currentColor" : "none"} />
-                                <span className="text-[10px] uppercase tracking-widest font-black">Prioritaria</span>
-                            </button>
-                            <button
-                                type="button"
-                                disabled={isEdition}
-                                onClick={() => setFormData(prev => ({ ...prev, isSpecial: !prev.isSpecial }))}
-                                className={cn(
-                                    "flex items-center justify-center gap-2.5 p-3 rounded-xl border transition-all shadow-sm",
-                                    formData.isSpecial ? "bg-purple-600 text-white border-purple-700 font-bold" : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400",
-                                    isEdition && "opacity-80 cursor-default"
-                                )}
-                            >
-                                <Star size={15} fill={formData.isSpecial ? "currentColor" : "none"} />
-                                <span className="text-[10px] uppercase tracking-widest font-black">Especial</span>
-                            </button>
+                            </div>
+
+                            {/* Especial Flag (Read-Only / Button Toggle) */}
+                            <div className="space-y-1.5 flex flex-col justify-end">
+                                <button
+                                    type="button"
+                                    disabled={isEdition}
+                                    onClick={() => setFormData(prev => ({ ...prev, isSpecial: !prev.isSpecial }))}
+                                    className={cn(
+                                        "flex items-center justify-center gap-2.5 p-2 rounded-xl border transition-all shadow-sm h-[38px]",
+                                        formData.isSpecial ? "bg-purple-600 text-white border-purple-700 font-bold animate-pulse" : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400",
+                                        isEdition && "opacity-80 cursor-default"
+                                    )}
+                                >
+                                    <Star size={14} fill={formData.isSpecial ? "currentColor" : "none"} />
+                                    <span className="text-[10px] uppercase tracking-widest font-black">Especial</span>
+                                </button>
+                            </div>
                         </div>
 
                         {formData.isSpecial && (
@@ -1740,7 +1811,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             type="file"
                                             id="task-file-upload-focus"
                                             className="hidden"
-                                            accept="image/*"
+                                            accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,audio/*"
                                             onChange={(e) => {
                                                 const file = e.target.files[0];
                                                 if (!file) return;

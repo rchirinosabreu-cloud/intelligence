@@ -149,6 +149,15 @@ const NativeTasks = () => {
     const [responsibleFilter, setResponsibleFilter] = useState(currentUser?.name || 'Todos');
     const [dateFilter, setDateFilter] = useState('Hoy + Vencidos');
     const [clientFilter, setClientFilter] = useState('Todos');
+    const [searchQuery, setSearchQuery] = useState("");
+
+    useEffect(() => {
+        const handleSearch = (e) => {
+            setSearchQuery(e.detail?.query || "");
+        };
+        window.addEventListener('global-search-changed', handleSearch);
+        return () => window.removeEventListener('global-search-changed', handleSearch);
+    }, []);
 
     const [returningTask, setReturningTask] = useState(null);
     const [returnReason, setReturnReason] = useState('');
@@ -199,6 +208,7 @@ const NativeTasks = () => {
                 completedAt: task.completedAt,
                 comments: task.comments,
                 isPriority: task.isPriority || false,
+                priority: task.priority || (task.isPriority ? 'URGENTE' : 'NORMAL'),
                 isSpecial: task.isSpecial || false,
                 specialType: task.specialType,
                 referenceUrl: task.referenceUrl,
@@ -384,6 +394,16 @@ const NativeTasks = () => {
             }
             if (responsibleFilter !== 'Todos' && (task.assigneeName || "Desconocido") !== responsibleFilter) return false;
             if (clientFilter !== 'Todos' && (task.clientName || "Desconocido") !== clientFilter) return false;
+
+            // Global Search Filter
+            if (searchQuery.trim() !== '') {
+                const query = searchQuery.toLowerCase();
+                const matchesTitle = task.title?.toLowerCase().includes(query);
+                const matchesClient = task.clientName?.toLowerCase().includes(query);
+                const matchesAssignee = task.assigneeName?.toLowerCase().includes(query);
+                if (!matchesTitle && !matchesClient && !matchesAssignee) return false;
+            }
+
             if (dateFilter === 'Todos') return true;
             if (dateFilter === 'Hoy + Vencidos') return isTodayOrOverdue(task.dueDateFormatted);
             if (dateFilter === 'Solo Vencidos') return isOverdue(task.dueDateFormatted);
@@ -401,7 +421,7 @@ const NativeTasks = () => {
             return dateA - dateB;
         });
         return filtered;
-    }, [tasks, responsibleFilter, clientFilter, dateFilter]);
+    }, [tasks, responsibleFilter, clientFilter, dateFilter, searchQuery]);
 
     const columns = [
         { id: 'pendiente', title: 'Pendiente', color: 'bg-zinc-100 dark:bg-zinc-800/50' },
@@ -906,7 +926,12 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                         snapshot.isDragging ? "ring-2 ring-indigo-600 shadow-xl z-50 opacity-90 rotate-2 scale-105" : "",
                         !snapshot.isDragging && isHighlighted ? "ring-2 ring-red-500 scale-[1.02] z-10" : "ring-2 ring-transparent",
                         !snapshot.isDragging && !isHighlighted && overdue ? "border-red-500/50 ring-1 ring-red-500/20" : "",
-                        !snapshot.isDragging && !isHighlighted && !overdue && task.isPriority ? "border-l-4 border-l-red-500 border-zinc-200 dark:border-zinc-800" : "border-zinc-200 dark:border-zinc-800",
+                        !snapshot.isDragging && !isHighlighted && !overdue ? (
+                            task.priority === 'URGENTE' ? "border-l-4 border-l-red-500" :
+                            task.priority === 'ALTA' ? "border-l-4 border-l-amber-500" :
+                            task.priority === 'BAJA' ? "border-l-4 border-l-zinc-350 dark:border-l-zinc-700" :
+                            "border-l-4 border-l-blue-500"
+                        ) : "border-zinc-200 dark:border-zinc-800",
                         isReturned && !isHighlighted && "border-red-500/30 bg-red-50/20 dark:bg-red-900/10 shadow-[inset_0_0_12px_rgba(239,68,68,0.05)]"
                     )}>
                         <div className="flex flex-col gap-3 p-4">
@@ -975,10 +1000,24 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                             <AlertOctagon className="w-3 h-3" /> Vencido (+{daysOverdue}d)
                                         </span>
                                     )}
-                                    {task.isPriority && !overdue && !isReturned && (
-                                        <span className="text-[10px] font-bold text-white flex items-center gap-1 bg-orange-600 px-1.5 py-0.5 rounded border border-orange-500 shadow-sm animate-pulse">
-                                            <Zap className="w-3 h-3 fill-current" /> PRIORITARIO
-                                        </span>
+                                    {!overdue && !isReturned && (
+                                        task.priority === 'URGENTE' ? (
+                                            <span className="text-[10px] font-bold text-white flex items-center gap-1 bg-red-600 px-1.5 py-0.5 rounded border border-red-500 shadow-sm animate-pulse">
+                                                <Zap className="w-3 h-3 fill-current" /> URGENTE
+                                            </span>
+                                        ) : task.priority === 'ALTA' ? (
+                                            <span className="text-[10px] font-bold text-zinc-900 flex items-center gap-1 bg-amber-400 px-1.5 py-0.5 rounded border border-amber-500 shadow-sm">
+                                                <Zap className="w-3 h-3 fill-current" /> ALTA
+                                            </span>
+                                        ) : task.priority === 'BAJA' ? (
+                                            <span className="text-[10px] font-bold text-zinc-500 flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 shadow-sm">
+                                                <Zap className="w-3 h-3 fill-current" /> BAJA
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] font-bold text-white flex items-center gap-1 bg-blue-600 px-1.5 py-0.5 rounded border border-blue-500 shadow-sm">
+                                                <Zap className="w-3 h-3 fill-current" /> NORMAL
+                                            </span>
+                                        )
                                     )}
                                     {task.isSpecial && !isReturned && (
                                         <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 bg-purple-50 dark:bg-purple-900/30 px-1.5 py-0.5 rounded border border-purple-100 dark:border-purple-800">

@@ -14,6 +14,13 @@ enum SystemRole {
   VIEWER
 }
 
+enum TaskPriority {
+  URGENTE
+  ALTA
+  NORMAL
+  BAJA
+}
+
 model User {
   id                  String               @id @default(uuid())
   name                String
@@ -270,6 +277,7 @@ model Task {
   creatorId       String?
   status          TaskStatus       @default(PENDIENTE)
   isPriority      Boolean          @default(false)
+  priority        TaskPriority     @default(NORMAL)
   isSpecial       Boolean          @default(false)
   referenceUrl    String?
   specialType     String?

@@ -182,6 +182,9 @@ const AppLayout = ({ children }) => {
               <input
                 type="text"
                 placeholder="Buscar algo..."
+                onChange={(e) => {
+                    window.dispatchEvent(new CustomEvent('global-search-changed', { detail: { query: e.target.value } }));
+                }}
                 className="bg-transparent border-none outline-none text-xs text-zinc-900 dark:text-zinc-100 w-48"
               />
             </div>

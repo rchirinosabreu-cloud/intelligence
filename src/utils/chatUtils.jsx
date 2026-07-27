@@ -87,7 +87,19 @@ export const linkify = (text, onImageClick = null, contextData = {}) => {
                 </a>
             );
         }
-        return part;
+        // If it's plain text, parse mentions
+        const mentionRegex = /(@[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_.-]+(?:\s+[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_.-]+)?)/g;
+        const subParts = part.split(mentionRegex);
+        return subParts.map((subPart, subIndex) => {
+            if (subPart.match(mentionRegex)) {
+                return (
+                    <span key={subIndex} className="inline-block px-2 py-0.5 mx-0.5 bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 rounded-full font-bold text-xs select-all shadow-sm">
+                        {subPart}
+                    </span>
+                );
+            }
+            return subPart;
+        });
     });
 };
 
