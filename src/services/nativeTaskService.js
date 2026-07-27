@@ -282,7 +282,7 @@ export const getTasks = async (clientId) => {
                     select: { id: true, name: true, avatarUrl: true, email: true, role: true }
                 },
                 taskComments: {
-                    include: { author: true },
+                    include: { author: true, attachments: true },
                     orderBy: { createdAt: 'desc' }
                 },
                 taskAttachments: true,
@@ -439,7 +439,7 @@ export const createTask = async ({
                         select: { id: true, name: true, avatarUrl: true, email: true, role: true }
                     },
                     taskComments: {
-                        include: { author: true },
+                        include: { author: true, attachments: true },
                         orderBy: { createdAt: 'desc' }
                     },
                     taskAttachments: true,
@@ -792,7 +792,7 @@ export const updateTask = async (id, data, updaterId = null) => {
                     select: { id: true, name: true, avatarUrl: true, email: true, role: true }
                 },
                 taskComments: {
-                    include: { author: true },
+                    include: { author: true, attachments: true },
                     orderBy: { createdAt: 'desc' }
                 },
                 taskAttachments: true,

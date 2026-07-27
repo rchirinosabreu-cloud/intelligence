@@ -311,8 +311,13 @@ model TaskAttachment {
   category  AttachmentCategory @default(REFERENCIA)
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
+  commentId String?
 
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task    Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  comment TaskComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([commentId])
 }
 
 model TaskFollower {
@@ -335,8 +340,11 @@ model TaskComment {
   type      String   @default("human") // human, system_return, system_reintegrate
   createdAt DateTime @default(now())
 
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  task        Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author      User?            @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  attachments TaskAttachment[]
+
+  @@index([taskId])
 }
 
 model BrandAsset {

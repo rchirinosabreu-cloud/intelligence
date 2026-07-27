@@ -90,6 +90,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [tempAttachments, setTempAttachments] = useState([]); // Array of { url, name, category }
 
     const [isUploadingTemp, setIsUploadingTemp] = useState(false);
+    const [isLoadingComments, setIsLoadingComments] = useState(false);
     const [showMentions, setShowMentions] = useState(false);
     const [mentionFilter, setMentionFilter] = useState("");
     const [mentionIndex, setMentionIndex] = useState(-1);
@@ -130,28 +131,40 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
     }, [isOpen]);
 
-    // Esc to close preview image
+    // Esc to close preview image (using useCapture: true and stopPropagation to isolate event from parent Radix Dialog)
     useEffect(() => {
         const handleEsc = (e) => {
-            if (e.key === 'Escape') setPreviewImage(null);
+            if (e.key === 'Escape') {
+                e.stopPropagation();
+                e.preventDefault();
+                setPreviewImage(null);
+            }
         };
         if (previewImage) {
-            window.addEventListener('keydown', handleEsc);
+            window.addEventListener('keydown', handleEsc, true);
         }
-        return () => window.removeEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc, true);
     }, [previewImage]);
 
     // Decoupled chat/comments polling while focus modal is open
     useEffect(() => {
-        if (!isOpen || !isEdition || !formData.id) return;
+        if (!isOpen || !isEdition || !formData.id) {
+            setIsLoadingComments(false);
+            return;
+        }
 
-        const fetchComments = async () => {
+        let isMounted = true;
+
+        const fetchComments = async (isInitial = false) => {
+            if (isInitial && isMounted) {
+                setIsLoadingComments(true);
+            }
             try {
                 const baseUrl = getApiBaseUrl();
                 const res = await fetch(`${baseUrl}/api/tasks/${formData.id}/comments`, {
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
                 });
-                if (res.ok) {
+                if (res.ok && isMounted) {
                     const data = await res.json();
                     if (Array.isArray(data)) {
                         setFormData(prev => {
@@ -165,12 +178,24 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 }
             } catch (err) {
                 console.error("Error polling task comments:", err);
+            } finally {
+                if (isInitial && isMounted) {
+                    setIsLoadingComments(false);
+                }
             }
         };
 
-        const interval = setInterval(fetchComments, 4000); // 4 seconds polling
+        // Call immediately for initial fetch
+        fetchComments(true);
 
-        return () => clearInterval(interval);
+        const interval = setInterval(() => {
+            fetchComments(false);
+        }, 4000); // 4 seconds polling
+
+        return () => {
+            isMounted = false;
+            clearInterval(interval);
+        };
     }, [isOpen, isEdition, formData.id]);
 
     // sessionStorage draft logic for Creation mode
@@ -1711,7 +1736,27 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                             <div className="space-y-4 pb-4">
-                                {displayComments.length === 0 ? (
+                                {isLoadingComments ? (
+                                    <div className="space-y-4">
+                                        {[1, 2, 3].map((i) => (
+                                            <div key={i} className="flex gap-4 mb-3 animate-pulse">
+                                                <div className="w-9 h-9 bg-zinc-200 dark:bg-zinc-800 rounded-full shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-1.5">
+                                                        <div className="h-3 w-20 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                                                        <div className="h-2 w-10 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                                                    </div>
+                                                    <div className="bg-white dark:bg-zinc-900 p-3.5 rounded-2xl rounded-tl-none inline-block w-2/3 border border-zinc-100 dark:border-zinc-800">
+                                                        <div className="space-y-2">
+                                                            <div className="h-3 bg-zinc-200 dark:bg-zinc-800 rounded w-5/6" />
+                                                            <div className="h-3 bg-zinc-200 dark:bg-zinc-800 rounded w-1/2" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : displayComments.length === 0 ? (
                                     <div className="py-16 flex flex-col items-center justify-center text-center px-6">
                                         <div className="w-12 h-12 bg-white dark:bg-zinc-900 rounded-full flex items-center justify-center mb-3 text-zinc-300 dark:text-zinc-700 border border-zinc-200/50 dark:border-zinc-800 shadow-sm">
                                             <MessageSquare size={22} />
@@ -1858,9 +1903,23 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
             {/* Media Viewer Lightbox wrapped in a Portal to open above Radix Dialog Portal overlay */}
             {previewImage && createPortal(
-                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[999] flex items-center justify-center bg-zinc-950/90 backdrop-blur-xl p-4 md:p-10 animate-in fade-in duration-300">
-                    <div className="absolute inset-0" onClick={() => setPreviewImage(null)} />
-                    <div className="w-full h-full max-w-6xl flex flex-col z-[1000] relative animate-in zoom-in-95 duration-300">
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    className="fixed inset-0 z-[10000] flex items-center justify-center bg-zinc-950/40 backdrop-blur-md p-4 md:p-10 animate-in fade-in duration-300"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setPreviewImage(null);
+                    }}
+                >
+                    <div className="absolute inset-0" onClick={(e) => {
+                        e.stopPropagation();
+                        setPreviewImage(null);
+                    }} />
+                    <div
+                        className="w-full h-full max-w-6xl flex flex-col z-[10001] relative animate-in zoom-in-95 duration-300"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="flex items-center justify-between mb-4 bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl">
                             <div className="flex items-center gap-3 pl-2">
                                 <div className="p-2 bg-primary/20 rounded-xl">
@@ -1873,14 +1932,20 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => handleDownloadImage(previewImage?.downloadUrl)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDownloadImage(previewImage?.downloadUrl);
+                                    }}
                                     className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 rounded-xl text-white text-xs font-bold transition-all shadow-lg"
                                 >
                                     <Download className="w-3.5 h-3.5" />
                                     DESCARGAR ARCHIVO
                                 </button>
                                 <button
-                                    onClick={() => setPreviewImage(null)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setPreviewImage(null);
+                                    }}
                                     className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all border border-white/10"
                                     title="Cerrar"
                                 >
