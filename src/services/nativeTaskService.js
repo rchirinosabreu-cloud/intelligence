@@ -339,7 +339,8 @@ export const createTask = async ({
     title, dueDate, assigneeId, creatorId, comments, status, clientId,
     isPriority = false, priority = null, isSpecial = false, specialType = null, referenceUrl = null,
     contentItemId = null, followOnCreate = false,
-    initial_references = [], initial_inputs = [], initial_insumos = [], initial_comments = []
+    initial_references = [], initial_inputs = [], initial_insumos = [], initial_comments = [],
+    tempAttachments = []
 }) => {
     try {
         const mappedStatus = statusMapper[status] || 'PENDIENTE';
@@ -367,6 +368,45 @@ export const createTask = async ({
 
             if (mappedStatus === 'DEVUELTA') {
                 await resetSystemStreak(tx);
+            }
+
+            // Create initial comment first to link tempAttachments
+            let initialComment = null;
+            if (Array.isArray(initial_comments) && initial_comments.length > 0) {
+                const firstCommentText = initial_comments[0].content || "";
+                initialComment = await tx.taskComment.create({
+                    data: {
+                        taskId: task.id,
+                        authorId: creatorId,
+                        content: firstCommentText,
+                        type: 'human'
+                    }
+                });
+
+                await processMentionsAndNotifications(task.id, firstCommentText, creatorId);
+
+                // Create any remaining comments
+                for (let i = 1; i < initial_comments.length; i++) {
+                    await tx.taskComment.create({
+                        data: {
+                            taskId: task.id,
+                            authorId: creatorId,
+                            content: initial_comments[i].content,
+                            type: 'human'
+                        }
+                    });
+                    await processMentionsAndNotifications(task.id, initial_comments[i].content, creatorId);
+                }
+            } else if (Array.isArray(tempAttachments) && tempAttachments.length > 0) {
+                // Shell comment to link files if no comment text
+                initialComment = await tx.taskComment.create({
+                    data: {
+                        taskId: task.id,
+                        authorId: creatorId,
+                        content: tempAttachments.map(f => f.url).join('\n\n'),
+                        type: 'human'
+                    }
+                });
             }
 
             // 2. Insert initial_references, initial_inputs, and initial_insumos if any
@@ -405,26 +445,23 @@ export const createTask = async ({
                 });
             }
 
+            // Create tempAttachments linked to the initialComment!
+            if (Array.isArray(tempAttachments) && tempAttachments.length > 0) {
+                tempAttachments.forEach(att => {
+                    attachmentsToCreate.push({
+                        taskId: task.id,
+                        commentId: initialComment ? initialComment.id : null,
+                        url: att.url,
+                        name: att.name || "Adjunto de Chat",
+                        category: 'REFERENCIA'
+                    });
+                });
+            }
+
             if (attachmentsToCreate.length > 0) {
                 await tx.taskAttachment.createMany({
                     data: attachmentsToCreate
                 });
-            }
-
-            // 3. Insert initial_comments into TaskComment if any
-            if (Array.isArray(initial_comments) && initial_comments.length > 0) {
-                for (const comment of initial_comments) {
-                    await tx.taskComment.create({
-                        data: {
-                            taskId: task.id,
-                            authorId: creatorId,
-                            content: comment.content,
-                            type: 'human'
-                        }
-                    });
-                    // Trigger mentions & assignee notifications
-                    await processMentionsAndNotifications(task.id, comment.content, creatorId);
-                }
             }
 
             // Return the created task with its nested relations populated
