@@ -327,6 +327,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             setEditRefName("");
             setEditInpUrl("");
             setEditInpName("");
+
+            if (isEdition) {
+                sessionStorage.removeItem('task_focus_draft');
+            }
+
             if (isEdition && taskData) {
                 // Fetch follow status
                 const fetchFollowStatus = async () => {
@@ -941,7 +946,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && (isEdition ? handleClosePanel() : handleDiscardAndCloseDraft())}>
-            <DialogContent className="max-w-6xl w-[90vw] h-[85vh] p-0 overflow-hidden bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl">
+            <DialogContent className="w-[95vw] max-w-6xl h-[85vh] max-h-[90vh] p-0 overflow-y-auto bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl z-[100]">
 
                 {/* Header Section */}
                 <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
@@ -1075,53 +1080,17 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </motion.div>
                         )}
 
-                        {/* Title Section (Read-Only / Inline Edit) */}
+                        {/* Title Section */}
                         <div className="space-y-1">
                             <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Título de la Tarea</label>
-                            {isEdition ? (
-                                editingField === 'title' ? (
-                                    <div className="flex gap-2 items-center">
-                                        <input
-                                            type="text"
-                                            value={inlineVal}
-                                            onChange={e => setInlineVal(e.target.value)}
-                                            className="flex-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 text-[15px] font-black focus:ring-2 ring-primary/10 outline-none"
-                                            autoFocus
-                                        />
-                                        <button
-                                            onClick={() => saveInlineField('title', inlineVal)}
-                                            className="p-2 bg-emerald-500 text-white rounded-xl shadow-md hover:bg-emerald-600"
-                                        >
-                                            <Check size={16} />
-                                        </button>
-                                        <button
-                                            onClick={() => setEditingField(null)}
-                                            className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-500 hover:bg-zinc-200"
-                                        >
-                                            <X size={16} />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <h1
-                                        onClick={() => {
-                                            setEditingField('title');
-                                            setInlineVal(formData.title);
-                                        }}
-                                        className="text-lg font-bold text-zinc-900 dark:text-white hover:bg-zinc-50 dark:hover:bg-zinc-950 px-2 py-1 rounded-xl cursor-pointer transition-colors leading-tight"
-                                    >
-                                        {formData.title}
-                                    </h1>
-                                )
-                            ) : (
-                                <input
-                                    type="text"
-                                    required
-                                    value={formData.title}
-                                    onChange={e => setFormData({...formData, title: e.target.value})}
-                                    placeholder="Ej: Revisión de artes para campaña..."
-                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-[15px] font-black focus:ring-2 ring-primary/10 outline-none transition-all shadow-sm"
-                                />
-                            )}
+                            <input
+                                type="text"
+                                required
+                                value={formData.title || ''}
+                                onChange={e => setFormData({...formData, title: e.target.value})}
+                                placeholder="Ej: Revisión de artes para campaña..."
+                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-[15px] font-black focus:ring-2 ring-primary/10 outline-none transition-all shadow-sm"
+                            />
                         </div>
 
                         {/* Metadata Grid */}
@@ -1135,291 +1104,105 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     value={formData.clientId}
                                     onChange={e => setFormData({...formData, clientId: e.target.value})}
                                     disabled={isEdition || !!defaultClientId}
-                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm disabled:opacity-80"
+                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm disabled:opacity-80 h-[38px] cursor-pointer"
                                 >
                                     <option value="">Seleccionar cliente...</option>
                                     {clientsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select>
                             </div>
 
-                            {/* Responsable (Read-Only / Inline Edit) */}
+                            {/* Responsable */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Responsable</label>
-                                {isEdition ? (
-                                    editingField === 'assigneeId' ? (
-                                        <div className="flex gap-2 items-center">
-                                            <select
-                                                value={inlineVal}
-                                                onChange={e => setInlineVal(e.target.value)}
-                                                className="flex-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/10 outline-none"
-                                                autoFocus
-                                            >
-                                                <option value="">Sin asignar</option>
-                                                {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                            </select>
-                                            <button
-                                                onClick={() => saveInlineField('assigneeId', inlineVal || null)}
-                                                className="p-2 bg-emerald-500 text-white rounded-xl shadow-md"
-                                            >
-                                                <Check size={14} />
-                                            </button>
-                                            <button
-                                                onClick={() => setEditingField(null)}
-                                                className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-500"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div
-                                            onClick={() => {
-                                                setEditingField('assigneeId');
-                                                setInlineVal(formData.assigneeId || '');
-                                            }}
-                                            className="flex items-center gap-2.5 bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-850 px-3 py-2 rounded-xl cursor-pointer border border-zinc-200/50 dark:border-zinc-800 transition-colors"
-                                        >
-                                            <TeamAvatar
-                                                member={teamMembers.find(m => m.id === formData.assigneeId)}
-                                                size={22}
-                                            />
-                                            <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                                                {teamMembers.find(m => m.id === formData.assigneeId)?.name || "Sin asignar"}
-                                            </span>
-                                        </div>
-                                    )
-                                ) : (
-                                    <select
-                                        value={formData.assigneeId}
-                                        onChange={e => setFormData({...formData, assigneeId: e.target.value})}
-                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm"
-                                    >
-                                        <option value="">Sin asignar</option>
-                                        {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                    </select>
-                                )}
+                                <select
+                                    value={formData.assigneeId || ''}
+                                    onChange={e => setFormData({...formData, assigneeId: e.target.value})}
+                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[38px] cursor-pointer"
+                                >
+                                    <option value="">Sin asignar</option>
+                                    {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                </select>
                             </div>
 
-                            {/* Deadline / Fecha Entrega (Read-Only / Inline Edit) */}
+                            {/* Deadline / Fecha Entrega */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Deadline</label>
-                                {isEdition ? (
-                                    editingField === 'dueDate' ? (
-                                        <div className="flex gap-2 items-center">
-                                            <DatePicker
-                                                selected={inlineVal ? new Date(`${inlineVal}T12:00:00.000Z`) : null}
-                                                onChange={(date) => {
-                                                    const dateStr = date ? date.toISOString().split('T')[0] : '';
-                                                    setInlineVal(dateStr);
-                                                }}
-                                                dateFormat="dd/MM/yyyy"
-                                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/10 outline-none h-[36px]"
-                                                wrapperClassName="w-full"
-                                                placeholderText="Elegir fecha..."
-                                                autoFocus
-                                            />
-                                            <button
-                                                onClick={() => saveInlineField('dueDate', inlineVal || null)}
-                                                className="p-2 bg-emerald-500 text-white rounded-xl shadow-md shrink-0"
-                                            >
-                                                <Check size={14} />
-                                            </button>
-                                            <button
-                                                onClick={() => setEditingField(null)}
-                                                className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-500 shrink-0"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div
-                                            onClick={() => {
-                                                setEditingField('dueDate');
-                                                setInlineVal(formData.dueDate || '');
-                                            }}
-                                            className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-850 px-3 py-2 rounded-xl cursor-pointer border border-zinc-200/50 dark:border-zinc-800 transition-colors h-[38px]"
-                                        >
-                                            <Calendar className="w-4 h-4 text-zinc-400 shrink-0" />
-                                            <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                                                {formData.dueDate ? formData.dueDate.split('-').reverse().join('/') : "Sin fecha límite"}
-                                            </span>
-                                        </div>
-                                    )
-                                ) : (
-                                    <div className="relative w-full">
-                                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none z-10" />
-                                        <DatePicker
-                                            selected={formData.dueDate ? new Date(`${formData.dueDate.split('T')[0]}T12:00:00.000Z`) : null}
-                                            onChange={(date) => {
-                                                const dateStr = date ? date.toISOString().split('T')[0] : '';
-                                                setFormData({...formData, dueDate: dateStr});
-                                            }}
-                                            dateFormat="dd/MM/yyyy"
-                                            className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-9 pr-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm"
-                                            wrapperClassName="w-full"
-                                            placeholderText="Elegir fecha..."
-                                            isClearable
-                                        />
-                                    </div>
-                                )}
+                                <div className="relative w-full">
+                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none z-10" />
+                                    <DatePicker
+                                        selected={formData.dueDate ? new Date(`${formData.dueDate.split('T')[0]}T12:00:00.000Z`) : null}
+                                        onChange={(date) => {
+                                            const dateStr = date ? date.toISOString().split('T')[0] : '';
+                                            setFormData({...formData, dueDate: dateStr});
+                                        }}
+                                        dateFormat="dd/MM/yyyy"
+                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-9 pr-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm cursor-pointer h-[38px]"
+                                        wrapperClassName="w-full"
+                                        placeholderText="Elegir fecha..."
+                                        isClearable
+                                    />
+                                </div>
                             </div>
 
-                            {/* Estado Actual (Read-Only / Inline Edit) */}
+                            {/* Estado Actual */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Estado Actual</label>
-                                {isEdition ? (
-                                    editingField === 'status' ? (
-                                        <div className="flex gap-2 items-center">
-                                            <select
-                                                value={inlineVal}
-                                                onChange={e => setInlineVal(e.target.value)}
-                                                className="flex-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/10 outline-none"
-                                                autoFocus
-                                            >
-                                                <option value="PENDIENTE">PENDIENTE</option>
-                                                <option value="EN_CURSO">EN PROCESO</option>
-                                                <option value="REALIZADA">REALIZADO</option>
-                                                <option value="DEVUELTA">DEVUELTO</option>
-                                            </select>
-                                            <button
-                                                onClick={() => saveInlineField('status', inlineVal)}
-                                                className="p-2 bg-emerald-500 text-white rounded-xl shadow-md"
-                                            >
-                                                <Check size={14} />
-                                            </button>
-                                            <button
-                                                onClick={() => setEditingField(null)}
-                                                className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-500"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div
-                                            onClick={() => {
-                                                setEditingField('status');
-                                                setInlineVal(formData.status);
-                                            }}
-                                            className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-850 px-3 py-2 rounded-xl cursor-pointer border border-zinc-200/50 dark:border-zinc-800 transition-colors h-[38px]"
-                                        >
-                                            <span className={cn(
-                                                "text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full",
-                                                formData.status === 'REALIZADA' ? 'bg-emerald-500/10 text-emerald-600' :
-                                                formData.status === 'EN_CURSO' ? 'bg-blue-500/10 text-blue-600' :
-                                                formData.status === 'DEVUELTA' ? 'bg-red-500/10 text-red-600' : 'bg-zinc-500/10 text-zinc-600'
-                                            )}>
-                                                {formData.status === 'EN_CURSO' ? 'EN PROCESO' : formData.status === 'REALIZADA' ? 'REALIZADO' : formData.status === 'DEVUELTA' ? 'DEVUELTO' : 'PENDIENTE'}
-                                            </span>
-                                        </div>
-                                    )
-                                ) : (
-                                    <select
-                                        value={formData.status}
-                                        onChange={e => setFormData({...formData, status: e.target.value})}
-                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm"
-                                    >
-                                        <option value="PENDIENTE">PENDIENTE</option>
-                                        <option value="EN_CURSO">EN PROCESO</option>
-                                        <option value="REALIZADA">REALIZADO</option>
-                                        <option value="DEVUELTA">DEVUELTO</option>
-                                    </select>
-                                )}
+                                <select
+                                    value={formData.status}
+                                    onChange={e => setFormData({...formData, status: e.target.value})}
+                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm cursor-pointer h-[38px]"
+                                >
+                                    <option value="PENDIENTE">PENDIENTE</option>
+                                    <option value="EN_CURSO">EN PROCESO</option>
+                                    <option value="REALIZADA">REALIZADO</option>
+                                    <option value="DEVUELTA">DEVUELTO</option>
+                                </select>
                             </div>
 
-                            {/* Prioridad (Read-Only / Inline Edit) */}
+                            {/* Prioridad */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Prioridad</label>
-                                {isEdition ? (
-                                    editingField === 'priority' ? (
-                                        <div className="flex gap-2 items-center">
+                                <div className="flex flex-col gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const nextIsPriority = !formData.isPriority;
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                isPriority: nextIsPriority,
+                                                priority: nextIsPriority ? 'NORMAL' : null
+                                            }));
+                                        }}
+                                        className={cn(
+                                            "flex items-center justify-center gap-2.5 p-2 rounded-xl border transition-all shadow-sm h-[38px] w-full",
+                                            formData.isPriority ? "bg-red-500/10 text-red-600 border-red-500/30 font-black animate-in zoom-in-95 duration-150" : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400 font-bold hover:bg-zinc-100 transition-colors"
+                                        )}
+                                    >
+                                        <Zap size={14} fill={formData.isPriority ? "currentColor" : "none"} />
+                                        <span className="text-[10px] uppercase tracking-widest font-black">¿Es Prioritaria?</span>
+                                    </button>
+
+                                    {formData.isPriority && (
+                                        <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}>
                                             <select
-                                                value={inlineVal || "NONE"}
-                                                onChange={e => setInlineVal(e.target.value)}
-                                                className="flex-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/10 outline-none h-[38px]"
-                                                autoFocus
+                                                value={formData.priority || 'NORMAL'}
+                                                onChange={e => {
+                                                    const val = e.target.value;
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        priority: val,
+                                                        isPriority: true
+                                                    }));
+                                                }}
+                                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[38px] cursor-pointer"
                                             >
-                                                <option value="NONE">Sin prioridad</option>
                                                 <option value="URGENTE">Urgente</option>
                                                 <option value="ALTA">Alta</option>
                                                 <option value="NORMAL">Normal</option>
                                             </select>
-                                            <button
-                                                onClick={() => saveInlineField('priority', inlineVal)}
-                                                className="p-2 bg-emerald-500 text-white rounded-xl shadow-md shrink-0"
-                                            >
-                                                <Check size={14} />
-                                            </button>
-                                            <button
-                                                onClick={() => setEditingField(null)}
-                                                className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-500 shrink-0"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div
-                                            onClick={() => {
-                                                setEditingField('priority');
-                                                setInlineVal(formData.priority || 'NORMAL');
-                                            }}
-                                            className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-850 px-3 py-2 rounded-xl cursor-pointer border border-zinc-200/50 dark:border-zinc-800 transition-colors h-[38px]"
-                                        >
-                                            <span className={cn(
-                                                "text-[10px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-full border flex items-center gap-1",
-                                                formData.priority === 'URGENTE' ? 'bg-red-500/10 text-red-600 border-red-500/20 font-bold' :
-                                                formData.priority === 'ALTA' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20 font-bold' :
-                                                formData.priority === 'NORMAL' ? 'bg-blue-500/10 text-blue-600 border-blue-500/20 font-bold' :
-                                                'bg-zinc-100 text-zinc-500 dark:bg-zinc-900 border-zinc-200/50 dark:border-zinc-800/50 text-zinc-600 font-medium'
-                                            )}>
-                                                {formData.isPriority && <Zap size={10} className="fill-current shrink-0" />}
-                                                {formData.priority === 'URGENTE' ? 'Urgente' :
-                                                 formData.priority === 'ALTA' ? 'Alta' :
-                                                 formData.priority === 'NORMAL' ? 'Normal' : 'Sin prioridad'}
-                                            </span>
-                                        </div>
-                                    )
-                                ) : (
-                                    <div className="flex flex-col gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const nextIsPriority = !formData.isPriority;
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    isPriority: nextIsPriority,
-                                                    priority: nextIsPriority ? 'NORMAL' : null
-                                                }));
-                                            }}
-                                            className={cn(
-                                                "flex items-center justify-center gap-2.5 p-2 rounded-xl border transition-all shadow-sm h-[38px] w-full",
-                                                formData.isPriority ? "bg-red-500/10 text-red-600 border-red-500/30 font-black animate-in zoom-in-95 duration-150" : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400 font-bold hover:bg-zinc-100 transition-colors"
-                                            )}
-                                        >
-                                            <Zap size={14} fill={formData.isPriority ? "currentColor" : "none"} />
-                                            <span className="text-[10px] uppercase tracking-widest font-black">¿Es Prioritaria?</span>
-                                        </button>
-
-                                        {formData.isPriority && (
-                                            <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}>
-                                                <select
-                                                    value={formData.priority || 'NORMAL'}
-                                                    onChange={e => {
-                                                        const val = e.target.value;
-                                                        setFormData(prev => ({
-                                                            ...prev,
-                                                            priority: val,
-                                                            isPriority: true
-                                                        }));
-                                                    }}
-                                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[38px] cursor-pointer"
-                                                >
-                                                    <option value="URGENTE">Urgente</option>
-                                                    <option value="ALTA">Alta</option>
-                                                    <option value="NORMAL">Normal</option>
-                                                </select>
-                                            </motion.div>
-                                        )}
-                                    </div>
-                                )}
+                                        </motion.div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Especial Flag (Read-Only / Button Toggle) */}
@@ -1728,12 +1511,22 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         )}
 
                         {isEdition && (
-                            <div className="mt-auto pt-6 border-t border-zinc-100 dark:border-zinc-850 flex justify-end">
+                            <div className="mt-auto pt-6 border-t border-zinc-100 dark:border-zinc-850 flex justify-end gap-3">
                                 <button
+                                    type="button"
                                     onClick={handleClosePanel}
                                     className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl transition-all"
                                 >
                                     Cerrar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleSave()}
+                                    disabled={isSubmitting}
+                                    className="px-6 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
+                                >
+                                    {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                                    Guardar Cambios
                                 </button>
                             </div>
                         )}
@@ -1964,7 +1757,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 <div
                     role="dialog"
                     aria-modal="true"
-                    className="fixed inset-0 z-[10000] flex items-center justify-center bg-zinc-950/40 backdrop-blur-md p-4 md:p-10 animate-in fade-in duration-300"
+                    className="fixed inset-0 z-[110] flex items-center justify-center bg-zinc-950/40 backdrop-blur-md p-4 md:p-10 animate-in fade-in duration-300"
                     onClick={(e) => {
                         e.stopPropagation();
                         setPreviewImage(null);
@@ -1975,7 +1768,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         setPreviewImage(null);
                     }} />
                     <div
-                        className="w-full h-full max-w-6xl flex flex-col z-[10001] relative animate-in zoom-in-95 duration-300"
+                        className="w-full h-full max-w-6xl flex flex-col z-[111] relative animate-in zoom-in-95 duration-300"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-4 bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl">
