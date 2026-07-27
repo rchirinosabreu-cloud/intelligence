@@ -179,32 +179,58 @@ export const getCommentFileProxy = async (req, res) => {
             return res.status(404).json({ error: "Comment not found or doesn't belong to this task" });
         }
 
-        // Extract key from URL in content robustly
         const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
         let key = null;
 
-        try {
-            // Find the URL within the content (it's usually at the end)
-            const lines = comment.content.split('\n');
-            const lastLine = lines[lines.length - 1].trim();
+        // 1. Structured DB lookup first (TaskAttachment relation)
+        const attachment = await prisma.taskAttachment.findFirst({
+            where: { commentId }
+        });
 
-            if (lastLine.includes(bucketName)) {
-                const url = new URL(lastLine);
-                // Pathname usually is /{bucket}/{key}
-                const parts = url.pathname.split('/');
-                const bucketIndex = parts.indexOf(bucketName);
-                if (bucketIndex !== -1 && parts.length > bucketIndex + 1) {
-                    key = parts.slice(bucketIndex + 1).join('/');
+        if (attachment) {
+            try {
+                if (attachment.url.includes(bucketName)) {
+                    const url = new URL(attachment.url);
+                    const parts = url.pathname.split('/');
+                    const bucketIndex = parts.indexOf(bucketName);
+                    if (bucketIndex !== -1 && parts.length > bucketIndex + 1) {
+                        key = parts.slice(bucketIndex + 1).join('/');
+                    }
                 }
+            } catch (e) {}
+
+            if (!key) {
+                const regex = new RegExp(`${bucketName}/([^\\s\\n?]+)`);
+                const match = attachment.url.match(regex);
+                if (match) key = match[1].trim();
             }
-        } catch (e) {
-            console.error("URL parsing failed, falling back to regex", e);
         }
 
+        // 2. Text parsing fallback for historic records
         if (!key) {
-            const regex = new RegExp(`${bucketName}/([^\\s\\n?]+)`);
-            const match = comment.content.match(regex);
-            if (match) key = match[1].trim();
+            try {
+                // Find the URL within the content (it's usually at the end)
+                const lines = comment.content.split('\n');
+                const lastLine = lines[lines.length - 1].trim();
+
+                if (lastLine.includes(bucketName)) {
+                    const url = new URL(lastLine);
+                    // Pathname usually is /{bucket}/{key}
+                    const parts = url.pathname.split('/');
+                    const bucketIndex = parts.indexOf(bucketName);
+                    if (bucketIndex !== -1 && parts.length > bucketIndex + 1) {
+                        key = parts.slice(bucketIndex + 1).join('/');
+                    }
+                }
+            } catch (e) {
+                console.error("URL parsing failed, falling back to regex", e);
+            }
+
+            if (!key) {
+                const regex = new RegExp(`${bucketName}/([^\\s\\n?]+)`);
+                const match = comment.content.match(regex);
+                if (match) key = match[1].trim();
+            }
         }
 
         if (!key) return res.status(404).json({ error: "No storage key found in comment" });
@@ -252,28 +278,57 @@ export const getCommentFileDownloadProxy = async (req, res) => {
 
         const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
         let key = null;
+        let originalName = null;
 
-        try {
-            const lines = comment.content.split('\n');
-            const lastLine = lines[lines.length - 1].trim();
-            if (lastLine.includes(bucketName)) {
-                const url = new URL(lastLine);
-                const parts = url.pathname.split('/');
-                const bucketIndex = parts.indexOf(bucketName);
-                if (bucketIndex !== -1 && parts.length > bucketIndex + 1) {
-                    key = parts.slice(bucketIndex + 1).join('/');
+        // 1. Structured DB lookup first (TaskAttachment relation)
+        const attachment = await prisma.taskAttachment.findFirst({
+            where: { commentId }
+        });
+
+        if (attachment) {
+            originalName = attachment.name;
+            try {
+                if (attachment.url.includes(bucketName)) {
+                    const url = new URL(attachment.url);
+                    const parts = url.pathname.split('/');
+                    const bucketIndex = parts.indexOf(bucketName);
+                    if (bucketIndex !== -1 && parts.length > bucketIndex + 1) {
+                        key = parts.slice(bucketIndex + 1).join('/');
+                    }
                 }
-            }
-        } catch (e) {}
+            } catch (e) {}
 
+            if (!key) {
+                const regex = new RegExp(`${bucketName}/([^\\s\\n?]+)`);
+                const match = attachment.url.match(regex);
+                if (match) key = match[1].trim();
+            }
+        }
+
+        // 2. Text parsing fallback for historic records
         if (!key) {
-            const regex = new RegExp(`${bucketName}/([^\\s\\n?]+)`);
-            const match = comment.content.match(regex);
-            if (match) key = match[1].trim();
+            try {
+                const lines = comment.content.split('\n');
+                const lastLine = lines[lines.length - 1].trim();
+                if (lastLine.includes(bucketName)) {
+                    const url = new URL(lastLine);
+                    const parts = url.pathname.split('/');
+                    const bucketIndex = parts.indexOf(bucketName);
+                    if (bucketIndex !== -1 && parts.length > bucketIndex + 1) {
+                        key = parts.slice(bucketIndex + 1).join('/');
+                    }
+                }
+            } catch (e) {}
+
+            if (!key) {
+                const regex = new RegExp(`${bucketName}/([^\\s\\n?]+)`);
+                const match = comment.content.match(regex);
+                if (match) key = match[1].trim();
+            }
         }
 
         if (!key) return res.status(404).json({ error: "No storage key found in comment" });
-        const fileName = key.split('/').pop() || 'adjunto_tarea.jpg';
+        const fileName = originalName || key.split('/').pop() || 'adjunto_tarea.jpg';
 
         try {
             const s3Response = await getFromS3Stream(key);

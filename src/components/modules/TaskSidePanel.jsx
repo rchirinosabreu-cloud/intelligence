@@ -25,6 +25,24 @@ import {
     DialogDescription,
 } from '@/components/ui/dialog';
 
+const EMPTY_TASK_FORM = {
+    title: '',
+    clientId: '',
+    assigneeId: '',
+    dueDate: '',
+    comments: '',
+    status: 'PENDIENTE',
+    isPriority: false,
+    priority: null,
+    isSpecial: false,
+    specialType: '',
+    hasReference: false,
+    referenceUrl: '',
+    referenceLinks: [],
+    assetsLinks: [],
+    taskAttachments: []
+};
+
 const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = null, defaultClientId = null }) => {
     const { toast } = useToast();
     const isEdition = !!taskData?.id;
@@ -32,6 +50,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     // Local state for atomic inline editing
     const [editingField, setEditingField] = useState(null); // 'title' | 'assigneeId' | 'dueDate' | 'status' | null
     const [inlineVal, setInlineVal] = useState("");
+    const [isDraftHydrated, setIsDraftHydrated] = useState(false);
 
     const hasRealDraft = () => {
         const saved = sessionStorage.getItem('task_focus_draft');
@@ -110,15 +129,51 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const scrollRef = useRef(null);
     const chatContainerRef = useRef(null);
 
-    const handleDownloadImage = (url) => {
+    const handleDownloadImage = async (url) => {
         if (!url) return;
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', '');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast({ title: "Descarga iniciada", description: "El archivo se descargará en breve." });
+        try {
+            const token = localStorage.getItem('authToken');
+            const headers = {};
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const response = await fetch(url, { headers });
+            if (!response.ok) {
+                throw new Error(`Servidor respondió con código ${response.status}`);
+            }
+
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+
+            // Extract file name
+            let fileName = 'descarga_archivo';
+            const urlPath = url.split('?')[0];
+            const segment = urlPath.split('/').pop();
+            if (segment) {
+                fileName = decodeURIComponent(segment);
+            }
+
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.setAttribute('download', fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            setTimeout(() => {
+                URL.revokeObjectURL(blobUrl);
+            }, 100);
+
+            toast({ title: "Descarga exitosa", description: "El archivo se ha descargado correctamente." });
+        } catch (err) {
+            console.error("Error downloading file:", err);
+            toast({
+                variant: "destructive",
+                title: "Error de descarga",
+                description: err.message || "No se pudo descargar el archivo."
+            });
+        }
     };
 
     // Fetch team members
@@ -198,6 +253,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         };
     }, [isOpen, isEdition, formData.id]);
 
+    // Reset draft hydration flag when modal is closed
+    useEffect(() => {
+        if (!isOpen) {
+            setIsDraftHydrated(false);
+        }
+    }, [isOpen]);
+
     // sessionStorage draft logic for Creation mode
     useEffect(() => {
         if (isOpen && !isEdition && hasRealDraft()) {
@@ -205,8 +267,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             if (savedDraft) {
                 try {
                     const parsed = JSON.parse(savedDraft);
-                    setFormData(prev => ({
-                        ...prev,
+                    setFormData({
+                        ...EMPTY_TASK_FORM,
                         title: parsed.title || '',
                         clientId: parsed.clientId || defaultClientId || '',
                         assigneeId: parsed.assigneeId || '',
@@ -216,7 +278,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         isSpecial: parsed.isSpecial || false,
                         specialType: parsed.specialType || '',
                         status: parsed.status || 'PENDIENTE'
-                    }));
+                    });
                     if (Array.isArray(parsed.tempReferences)) setTempReferences(parsed.tempReferences);
                     if (Array.isArray(parsed.tempInputs)) setTempInputs(parsed.tempInputs);
                     if (Array.isArray(parsed.tempComments)) setTempComments(parsed.tempComments);
@@ -228,14 +290,21 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     });
                 } catch (e) {
                     console.error("Error parsing task focus draft:", e);
+                } finally {
+                    setIsDraftHydrated(true);
                 }
+            } else {
+                setIsDraftHydrated(true);
             }
+        } else if (isOpen && !isEdition) {
+            setIsDraftHydrated(true);
         }
     }, [isOpen, isEdition, defaultClientId]);
 
     // Save draft to sessionStorage on formData changes (Creation mode)
     useEffect(() => {
         if (isOpen && !isEdition) {
+            if (!isDraftHydrated) return; // Guard clause: avoid overwriting with empty initial form
             const draftData = {
                 title: formData.title,
                 clientId: formData.clientId,
@@ -253,26 +322,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             };
             sessionStorage.setItem('task_focus_draft', JSON.stringify(draftData));
         }
-    }, [formData, tempReferences, tempInputs, tempComments, tempAttachments, isOpen, isEdition]);
+    }, [formData, tempReferences, tempInputs, tempComments, tempAttachments, isOpen, isEdition, isDraftHydrated]);
 
     const handleCleanDraftOnly = () => {
         sessionStorage.removeItem('task_focus_draft');
         setFormData({
-            title: '',
-            clientId: defaultClientId || '',
-            assigneeId: '',
-            dueDate: '',
-            comments: '',
-            status: 'PENDIENTE',
-            isPriority: false,
-            priority: null,
-            isSpecial: false,
-            specialType: '',
-            hasReference: false,
-            referenceUrl: '',
-            referenceLinks: [],
-            assetsLinks: [],
-            taskAttachments: []
+            ...EMPTY_TASK_FORM,
+            clientId: defaultClientId || ''
         });
         setTempReferences([]);
         setTempInputs([]);
@@ -285,21 +341,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const handleDiscardAndCloseDraft = () => {
         sessionStorage.removeItem('task_focus_draft');
         setFormData({
-            title: '',
-            clientId: defaultClientId || '',
-            assigneeId: '',
-            dueDate: '',
-            comments: '',
-            status: 'PENDIENTE',
-            isPriority: false,
-            priority: null,
-            isSpecial: false,
-            specialType: '',
-            hasReference: false,
-            referenceUrl: '',
-            referenceLinks: [],
-            assetsLinks: [],
-            taskAttachments: []
+            ...EMPTY_TASK_FORM,
+            clientId: defaultClientId || ''
         });
         setTempReferences([]);
         setTempInputs([]);
@@ -396,25 +439,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 if (!sessionStorage.getItem('task_focus_draft')) {
                     setIsFollowing(false);
                     setFormData({
-                        title: '',
-                        clientId: defaultClientId || '',
-                        assigneeId: '',
-                        dueDate: '',
-                        comments: '',
-                        status: 'PENDIENTE',
-                        isPriority: false,
-                        priority: null,
-                        isSpecial: false,
-                        specialType: '',
-                        hasReference: false,
-                        referenceUrl: '',
-                        referenceLinks: [],
-                        assetsLinks: [],
-                        taskAttachments: []
+                        ...EMPTY_TASK_FORM,
+                        clientId: defaultClientId || ''
                     });
                     setTempReferences([]);
                     setTempInputs([]);
                     setTempComments([]);
+                    setTempAttachments([]);
+                    setIsDraftHydrated(true);
                 }
             }
             setShowReintegratePrompt(false);
@@ -946,7 +978,24 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && (isEdition ? handleClosePanel() : handlePassiveClose())}>
-            <DialogContent className="w-[95vw] max-w-6xl h-[85vh] max-h-[90vh] p-0 overflow-y-auto bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl z-[100]">
+            <DialogContent
+                className="w-[95vw] max-w-6xl h-[85vh] max-h-[90vh] p-0 overflow-y-auto bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl z-[100]"
+                onPointerDownOutside={(e) => {
+                    if (previewImage) {
+                        e.preventDefault();
+                    }
+                }}
+                onInteractOutside={(e) => {
+                    if (previewImage) {
+                        e.preventDefault();
+                    }
+                }}
+                onEscapeKeyDown={(e) => {
+                    if (previewImage) {
+                        e.preventDefault();
+                    }
+                }}
+            >
 
                 {/* Header Section */}
                 <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
@@ -1758,19 +1807,33 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     role="dialog"
                     aria-modal="true"
                     className="fixed inset-0 z-[110] flex items-center justify-center bg-zinc-950/40 backdrop-blur-md p-4 md:p-10 animate-in fade-in duration-300 animate-out fade-out"
+                    onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                    }}
                     onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
                         setPreviewImage(null);
                     }}
                 >
-                    <div className="absolute inset-0" onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        setPreviewImage(null);
-                    }} />
+                    <div className="absolute inset-0"
+                        onPointerDown={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                        }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            setPreviewImage(null);
+                        }}
+                    />
                     <div
                         className="w-full h-full max-w-6xl flex flex-col z-[111] relative animate-in zoom-in-95 duration-300"
+                        onPointerDown={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                        }}
                         onClick={(e) => {
                             e.stopPropagation();
                             e.preventDefault();
@@ -1788,6 +1851,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
+                                    onPointerDown={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                    }}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         e.preventDefault();
@@ -1799,6 +1866,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     DESCARGAR ARCHIVO
                                 </button>
                                 <button
+                                    onPointerDown={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                    }}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         e.preventDefault();
