@@ -520,12 +520,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 comments: '', // Removed general comments description completely
                 status: formData.status,
                 isPriority: formData.isPriority,
-                priority: formData.priority || 'NORMAL',
+                priority: formData.isPriority ? (formData.priority || 'NORMAL') : null,
                 isSpecial: formData.isSpecial,
                 specialType: formData.isSpecial ? formData.specialType : null,
                 followOnCreate: !isEdition ? isFollowing : undefined,
                 initial_references: !isEdition ? tempReferences : undefined,
-                initial_inputs: !isEdition ? [...tempInputs, ...tempAttachments] : undefined,
+                initial_inputs: !isEdition ? tempInputs : undefined,
+                tempAttachments: !isEdition ? tempAttachments : undefined,
                 initial_comments: !isEdition ? tempComments.map(c => ({ content: c.content })) : undefined
             };
 

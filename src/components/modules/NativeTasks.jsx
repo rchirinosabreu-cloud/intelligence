@@ -486,7 +486,6 @@ const NativeTasks = () => {
 
                 if (res.ok) {
                     toast({ title: "Prioridad guardada", description: "El orden de la columna se actualizó correctamente." });
-                    queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
                 } else {
                     throw new Error("Failed to persist task reordering");
                 }
