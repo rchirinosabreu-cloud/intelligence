@@ -310,6 +310,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         onClose();
     };
 
+    const handlePassiveClose = () => {
+        onClose();
+    };
+
     const clearDraft = handleDiscardAndCloseDraft;
 
     // Populate or Reset Form
@@ -327,10 +331,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             setEditRefName("");
             setEditInpUrl("");
             setEditInpName("");
-
-            if (isEdition) {
-                sessionStorage.removeItem('task_focus_draft');
-            }
 
             if (isEdition && taskData) {
                 // Fetch follow status
@@ -945,7 +945,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         : [...tempComments].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && (isEdition ? handleClosePanel() : handleDiscardAndCloseDraft())}>
+        <Dialog open={isOpen} onOpenChange={(open) => !open && (isEdition ? handleClosePanel() : handlePassiveClose())}>
             <DialogContent className="w-[95vw] max-w-6xl h-[85vh] max-h-[90vh] p-0 overflow-y-auto bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl z-[100]">
 
                 {/* Header Section */}
@@ -1757,19 +1757,24 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 <div
                     role="dialog"
                     aria-modal="true"
-                    className="fixed inset-0 z-[110] flex items-center justify-center bg-zinc-950/40 backdrop-blur-md p-4 md:p-10 animate-in fade-in duration-300"
+                    className="fixed inset-0 z-[110] flex items-center justify-center bg-zinc-950/40 backdrop-blur-md p-4 md:p-10 animate-in fade-in duration-300 animate-out fade-out"
                     onClick={(e) => {
                         e.stopPropagation();
+                        e.preventDefault();
                         setPreviewImage(null);
                     }}
                 >
                     <div className="absolute inset-0" onClick={(e) => {
                         e.stopPropagation();
+                        e.preventDefault();
                         setPreviewImage(null);
                     }} />
                     <div
                         className="w-full h-full max-w-6xl flex flex-col z-[111] relative animate-in zoom-in-95 duration-300"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                        }}
                     >
                         <div className="flex items-center justify-between mb-4 bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl">
                             <div className="flex items-center gap-3 pl-2">
@@ -1785,6 +1790,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
+                                        e.preventDefault();
                                         handleDownloadImage(previewImage?.downloadUrl);
                                     }}
                                     className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 rounded-xl text-white text-xs font-bold transition-all shadow-lg"
@@ -1795,6 +1801,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
+                                        e.preventDefault();
                                         setPreviewImage(null);
                                     }}
                                     className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all border border-white/10"
