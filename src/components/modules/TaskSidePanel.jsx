@@ -64,7 +64,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         comments: '',
         status: 'PENDIENTE',
         isPriority: false,
-        priority: 'NORMAL',
+        priority: null,
         isSpecial: false,
         specialType: '',
         hasReference: false,
@@ -212,7 +212,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         assigneeId: parsed.assigneeId || '',
                         dueDate: parsed.dueDate || '',
                         isPriority: parsed.isPriority || false,
-                        priority: parsed.priority || 'NORMAL',
+                        priority: parsed.priority || null,
                         isSpecial: parsed.isSpecial || false,
                         specialType: parsed.specialType || '',
                         status: parsed.status || 'PENDIENTE'
@@ -255,7 +255,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
     }, [formData, tempReferences, tempInputs, tempComments, tempAttachments, isOpen, isEdition]);
 
-    const clearDraft = () => {
+    const handleCleanDraftOnly = () => {
         sessionStorage.removeItem('task_focus_draft');
         setFormData({
             title: '',
@@ -265,7 +265,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             comments: '',
             status: 'PENDIENTE',
             isPriority: false,
-            priority: 'NORMAL',
+            priority: null,
             isSpecial: false,
             specialType: '',
             hasReference: false,
@@ -278,9 +278,39 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         setTempInputs([]);
         setTempComments([]);
         setTempAttachments([]);
-        toast({ title: "Borrador descartado" });
-        onClose(); // Immediate close modal action
+        setSelectedFile(null);
+        toast({ title: "Borrador limpiado", description: "Los campos han sido reiniciados." });
     };
+
+    const handleDiscardAndCloseDraft = () => {
+        sessionStorage.removeItem('task_focus_draft');
+        setFormData({
+            title: '',
+            clientId: defaultClientId || '',
+            assigneeId: '',
+            dueDate: '',
+            comments: '',
+            status: 'PENDIENTE',
+            isPriority: false,
+            priority: null,
+            isSpecial: false,
+            specialType: '',
+            hasReference: false,
+            referenceUrl: '',
+            referenceLinks: [],
+            assetsLinks: [],
+            taskAttachments: []
+        });
+        setTempReferences([]);
+        setTempInputs([]);
+        setTempComments([]);
+        setTempAttachments([]);
+        setSelectedFile(null);
+        toast({ title: "Borrador descartado" });
+        onClose();
+    };
+
+    const clearDraft = handleDiscardAndCloseDraft;
 
     // Populate or Reset Form
     useEffect(() => {
@@ -343,7 +373,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     comments: taskData.comments || '',
                     creatorName: taskData.creator?.name || taskData.creatorName || 'Sistema',
                     isPriority: taskData.isPriority || false,
-                    priority: taskData.priority || 'NORMAL',
+                    priority: taskData.priority || null,
                     isSpecial: taskData.isSpecial || false,
                     specialType: taskData.specialType || '',
                     hasReference: !!taskData.referenceUrl,
@@ -368,7 +398,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         comments: '',
                         status: 'PENDIENTE',
                         isPriority: false,
-                        priority: 'NORMAL',
+                        priority: null,
                         isSpecial: false,
                         specialType: '',
                         hasReference: false,
@@ -403,6 +433,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             };
             if (fieldName === 'priority') {
                 payload.isPriority = finalValue === 'URGENTE' || finalValue === 'ALTA';
+                payload.priority = finalValue === 'NONE' || !finalValue ? null : finalValue;
             }
 
             const token = localStorage.getItem('authToken');
@@ -438,7 +469,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     title: updatedTask.title || prev.title,
                     assigneeId: updatedTask.assigneeId || '',
                     status: updatedTask.status || 'PENDIENTE',
-                    priority: updatedTask.priority || 'NORMAL',
+                    priority: updatedTask.priority || null,
                     isPriority: updatedTask.isPriority || false,
                     dueDate: formattedDate,
                     originalStatus: updatedTask.status,
@@ -908,7 +939,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         : [...tempComments].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && handleClosePanel()}>
+        <Dialog open={isOpen} onOpenChange={(open) => !open && (isEdition ? handleClosePanel() : handleDiscardAndCloseDraft())}>
             <DialogContent className="max-w-6xl w-[90vw] h-[85vh] p-0 overflow-hidden bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl">
 
                 {/* Header Section */}
@@ -990,7 +1021,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             <span>Borrador restaurado de tu última sesión</span>
                         </div>
                         <button
-                            onClick={clearDraft}
+                            onClick={handleCleanDraftOnly}
                             className="text-amber-700 dark:text-amber-400 hover:underline text-[10px] font-black uppercase tracking-wider"
                         >
                             Limpiar borrador
@@ -1300,15 +1331,15 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     editingField === 'priority' ? (
                                         <div className="flex gap-2 items-center">
                                             <select
-                                                value={inlineVal}
+                                                value={inlineVal || "NONE"}
                                                 onChange={e => setInlineVal(e.target.value)}
                                                 className="flex-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/10 outline-none h-[38px]"
                                                 autoFocus
                                             >
-                                                <option value="URGENTE">🚨 URGENTE</option>
-                                                <option value="ALTA">💛 ALTA</option>
-                                                <option value="NORMAL">💙 NORMAL</option>
-                                                <option value="BAJA">🖤 BAJA</option>
+                                                <option value="NONE">Sin prioridad</option>
+                                                <option value="URGENTE">Urgente</option>
+                                                <option value="ALTA">Alta</option>
+                                                <option value="NORMAL">Normal</option>
                                             </select>
                                             <button
                                                 onClick={() => saveInlineField('priority', inlineVal)}
@@ -1332,35 +1363,61 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-850 px-3 py-2 rounded-xl cursor-pointer border border-zinc-200/50 dark:border-zinc-800 transition-colors h-[38px]"
                                         >
                                             <span className={cn(
-                                                "text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full",
-                                                formData.priority === 'URGENTE' ? 'bg-red-500/10 text-red-600 font-bold' :
-                                                formData.priority === 'ALTA' ? 'bg-amber-500/10 text-amber-600 font-bold' :
-                                                formData.priority === 'BAJA' ? 'bg-zinc-500/10 text-zinc-600 font-bold' : 'bg-blue-500/10 text-blue-600 font-bold'
+                                                "text-[10px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-full border flex items-center gap-1",
+                                                formData.priority === 'URGENTE' ? 'bg-red-500/10 text-red-600 border-red-500/20 font-bold' :
+                                                formData.priority === 'ALTA' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20 font-bold' :
+                                                formData.priority === 'NORMAL' ? 'bg-blue-500/10 text-blue-600 border-blue-500/20 font-bold' :
+                                                'bg-zinc-100 text-zinc-500 dark:bg-zinc-900 border-zinc-200/50 dark:border-zinc-800/50 text-zinc-600 font-medium'
                                             )}>
-                                                {formData.priority === 'URGENTE' ? '🚨 URGENTE' :
-                                                 formData.priority === 'ALTA' ? '💛 ALTA' :
-                                                 formData.priority === 'BAJA' ? '🖤 BAJA' : '💙 NORMAL'}
+                                                {formData.isPriority && <Zap size={10} className="fill-current shrink-0" />}
+                                                {formData.priority === 'URGENTE' ? 'Urgente' :
+                                                 formData.priority === 'ALTA' ? 'Alta' :
+                                                 formData.priority === 'NORMAL' ? 'Normal' : 'Sin prioridad'}
                                             </span>
                                         </div>
                                     )
                                 ) : (
-                                    <select
-                                        value={formData.priority}
-                                        onChange={e => {
-                                            const newPriority = e.target.value;
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                priority: newPriority,
-                                                isPriority: newPriority === 'URGENTE' || newPriority === 'ALTA'
-                                            }));
-                                        }}
-                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[38px]"
-                                    >
-                                        <option value="URGENTE">🚨 URGENTE</option>
-                                        <option value="ALTA">💛 ALTA</option>
-                                        <option value="NORMAL">💙 NORMAL</option>
-                                        <option value="BAJA">🖤 BAJA</option>
-                                    </select>
+                                    <div className="flex flex-col gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const nextIsPriority = !formData.isPriority;
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    isPriority: nextIsPriority,
+                                                    priority: nextIsPriority ? 'NORMAL' : null
+                                                }));
+                                            }}
+                                            className={cn(
+                                                "flex items-center justify-center gap-2.5 p-2 rounded-xl border transition-all shadow-sm h-[38px] w-full",
+                                                formData.isPriority ? "bg-red-500/10 text-red-600 border-red-500/30 font-black animate-in zoom-in-95 duration-150" : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400 font-bold hover:bg-zinc-100 transition-colors"
+                                            )}
+                                        >
+                                            <Zap size={14} fill={formData.isPriority ? "currentColor" : "none"} />
+                                            <span className="text-[10px] uppercase tracking-widest font-black">¿Es Prioritaria?</span>
+                                        </button>
+
+                                        {formData.isPriority && (
+                                            <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}>
+                                                <select
+                                                    value={formData.priority || 'NORMAL'}
+                                                    onChange={e => {
+                                                        const val = e.target.value;
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            priority: val,
+                                                            isPriority: true
+                                                        }));
+                                                    }}
+                                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[38px] cursor-pointer"
+                                                >
+                                                    <option value="URGENTE">Urgente</option>
+                                                    <option value="ALTA">Alta</option>
+                                                    <option value="NORMAL">Normal</option>
+                                                </select>
+                                            </motion.div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
 

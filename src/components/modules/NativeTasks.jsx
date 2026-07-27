@@ -208,7 +208,7 @@ const NativeTasks = () => {
                 completedAt: task.completedAt,
                 comments: task.comments,
                 isPriority: task.isPriority || false,
-                priority: task.priority || (task.isPriority ? 'URGENTE' : 'NORMAL'),
+                priority: task.priority || null,
                 isSpecial: task.isSpecial || false,
                 specialType: task.specialType,
                 referenceUrl: task.referenceUrl,
@@ -927,10 +927,10 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                         !snapshot.isDragging && isHighlighted ? "ring-2 ring-red-500 scale-[1.02] z-10" : "ring-2 ring-transparent",
                         !snapshot.isDragging && !isHighlighted && overdue ? "border-red-500/50 ring-1 ring-red-500/20" : "",
                         !snapshot.isDragging && !isHighlighted && !overdue ? (
-                            task.priority === 'URGENTE' ? "border-l-4 border-l-red-500" :
-                            task.priority === 'ALTA' ? "border-l-4 border-l-amber-500" :
-                            task.priority === 'BAJA' ? "border-l-4 border-l-zinc-350 dark:border-l-zinc-700" :
-                            "border-l-4 border-l-blue-500"
+                            task.priority === 'URGENTE' ? "border-red-500/40 dark:border-red-500/30" :
+                            task.priority === 'ALTA' ? "border-amber-500/40 dark:border-amber-500/30" :
+                            task.priority === 'NORMAL' ? "border-blue-500/40 dark:border-blue-500/30" :
+                            "border-zinc-200 dark:border-zinc-800"
                         ) : "border-zinc-200 dark:border-zinc-800",
                         isReturned && !isHighlighted && "border-red-500/30 bg-red-50/20 dark:bg-red-900/10 shadow-[inset_0_0_12px_rgba(239,68,68,0.05)]"
                     )}>
@@ -1000,24 +1000,20 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                             <AlertOctagon className="w-3 h-3" /> Vencido (+{daysOverdue}d)
                                         </span>
                                     )}
-                                    {!overdue && !isReturned && (
+                                    {!overdue && !isReturned && task.priority && (
                                         task.priority === 'URGENTE' ? (
-                                            <span className="text-[10px] font-bold text-white flex items-center gap-1 bg-red-600 px-1.5 py-0.5 rounded border border-red-500 shadow-sm animate-pulse">
+                                            <span className="text-[10px] font-black text-white flex items-center gap-1 bg-red-600 px-1.5 py-0.5 rounded border border-red-500 shadow-sm">
                                                 <Zap className="w-3 h-3 fill-current" /> URGENTE
                                             </span>
                                         ) : task.priority === 'ALTA' ? (
-                                            <span className="text-[10px] font-bold text-zinc-900 flex items-center gap-1 bg-amber-400 px-1.5 py-0.5 rounded border border-amber-500 shadow-sm">
+                                            <span className="text-[10px] font-black text-zinc-950 flex items-center gap-1 bg-amber-400 px-1.5 py-0.5 rounded border border-amber-500 shadow-sm">
                                                 <Zap className="w-3 h-3 fill-current" /> ALTA
                                             </span>
-                                        ) : task.priority === 'BAJA' ? (
-                                            <span className="text-[10px] font-bold text-zinc-500 flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 shadow-sm">
-                                                <Zap className="w-3 h-3 fill-current" /> BAJA
-                                            </span>
-                                        ) : (
-                                            <span className="text-[10px] font-bold text-white flex items-center gap-1 bg-blue-600 px-1.5 py-0.5 rounded border border-blue-500 shadow-sm">
+                                        ) : task.priority === 'NORMAL' ? (
+                                            <span className="text-[10px] font-black text-white flex items-center gap-1 bg-blue-600 px-1.5 py-0.5 rounded border border-blue-500 shadow-sm">
                                                 <Zap className="w-3 h-3 fill-current" /> NORMAL
                                             </span>
-                                        )
+                                        ) : null
                                     )}
                                     {task.isSpecial && !isReturned && (
                                         <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 bg-purple-50 dark:bg-purple-900/30 px-1.5 py-0.5 rounded border border-purple-100 dark:border-purple-800">
