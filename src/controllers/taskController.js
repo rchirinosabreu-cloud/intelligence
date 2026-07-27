@@ -315,6 +315,7 @@ export const addTaskComment = async (req, res) => {
         }
 
         let finalContent = content || "";
+        let publicUrl = null;
 
         if (req.file) {
             const task = await prisma.task.findUnique({
@@ -328,20 +329,38 @@ export const addTaskComment = async (req, res) => {
             const folderPrefix = `clientes/${task.clientId}/tareas/${taskId}/imagenes`;
 
             const uploadResult = await uploadToS3(req.file, folderPrefix);
-            const publicUrl = uploadResult.url;
+            publicUrl = uploadResult.url;
 
             // If there's already content, append the image URL. If not, just the URL.
             finalContent = content ? `${content}\n\n${publicUrl}` : publicUrl;
         }
 
-        const comment = await prisma.taskComment.create({
-            data: {
-                taskId,
-                authorId,
-                content: finalContent,
-                type: type || 'human'
-            },
-            include: { author: true }
+        const comment = await prisma.$transaction(async (tx) => {
+            const createdComment = await tx.taskComment.create({
+                data: {
+                    taskId,
+                    authorId,
+                    content: finalContent,
+                    type: type || 'human'
+                }
+            });
+
+            if (req.file && publicUrl) {
+                await tx.taskAttachment.create({
+                    data: {
+                        taskId,
+                        commentId: createdComment.id,
+                        url: publicUrl,
+                        name: req.file.originalname || "Adjunto de Chat",
+                        category: "REFERENCIA"
+                    }
+                });
+            }
+
+            return tx.taskComment.findUnique({
+                where: { id: createdComment.id },
+                include: { author: true, attachments: true }
+            });
         });
 
         // Trigger mentions & assignee notifications
@@ -379,7 +398,7 @@ export const getTaskComments = async (req, res) => {
         const { taskId } = req.params;
         const comments = await prisma.taskComment.findMany({
             where: { taskId },
-            include: { author: true },
+            include: { author: true, attachments: true },
             orderBy: { createdAt: 'desc' }
         });
         res.json(comments);
