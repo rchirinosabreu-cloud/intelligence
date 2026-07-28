@@ -49,7 +49,7 @@ const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent
-                className="fixed inset-0 z-[110] flex items-center justify-center bg-zinc-950/40 backdrop-blur-md p-4 md:p-10 border-none shadow-none max-w-none w-screen h-screen"
+                className="fixed inset-0 z-[110] flex items-center justify-center bg-white/70 dark:bg-black/80 backdrop-blur-md p-4 md:p-10 border-none shadow-none max-w-none w-screen h-screen"
                 onPointerDownOutside={(e) => {
                     e.preventDefault();
                     onClose();
@@ -70,14 +70,14 @@ const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage 
                         e.preventDefault();
                     }}
                 >
-                    <div className="flex items-center justify-between mb-4 bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl">
+                    <div className="flex items-center justify-between mb-4 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-zinc-200 dark:border-white/10 shadow-2xl">
                         <div className="flex items-center gap-3 pl-2">
                             <div className="p-2 bg-primary/20 rounded-xl">
                                 <ImageIcon className="w-4 h-4 text-primary" />
                             </div>
                             <div className="flex flex-col">
-                                <span className="text-sm font-bold text-white text-left">Vista previa de imagen</span>
-                                <span className="text-[10px] text-zinc-400 font-medium uppercase tracking-tighter text-left">Archivo de tarea</span>
+                                <span className="text-sm font-bold text-zinc-900 dark:text-white text-left">Vista previa de imagen</span>
+                                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-tighter text-left">Archivo de tarea</span>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -104,7 +104,7 @@ const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage 
                                     e.preventDefault();
                                     onClose();
                                 }}
-                                className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all border border-white/10 cursor-pointer"
+                                className="p-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-white/10 dark:hover:bg-white/20 rounded-xl text-zinc-700 dark:text-white transition-all border border-zinc-200 dark:border-white/10 cursor-pointer"
                                 title="Cerrar"
                             >
                                 <X className="w-5 h-5" />
@@ -112,11 +112,11 @@ const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage 
                         </div>
                     </div>
 
-                    <div className="flex-1 bg-white/5 dark:bg-zinc-900/50 rounded-2xl border border-white/5 overflow-hidden shadow-2xl relative flex items-center justify-center">
+                    <div className="flex-1 bg-zinc-100/30 dark:bg-zinc-900/40 rounded-2xl border border-zinc-200 dark:border-white/5 overflow-hidden shadow-2xl relative flex items-center justify-center">
                         <img
                             src={previewImage?.displayUrl}
                             alt="Preview"
-                            className="max-w-full max-h-full object-contain rounded-xl shadow-xl"
+                            className="max-w-[90vw] max-h-[85vh] object-contain rounded-xl shadow-xl"
                         />
                     </div>
                 </div>
