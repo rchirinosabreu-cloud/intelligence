@@ -43,6 +43,88 @@ const EMPTY_TASK_FORM = {
     taskAttachments: []
 };
 
+const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage }) => {
+    if (!previewImage) return null;
+
+    return (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent
+                className="fixed inset-0 z-[110] flex items-center justify-center bg-zinc-950/40 backdrop-blur-md p-4 md:p-10 border-none shadow-none max-w-none w-screen h-screen"
+                onPointerDownOutside={(e) => {
+                    e.preventDefault();
+                    onClose();
+                }}
+                onEscapeKeyDown={(e) => {
+                    e.preventDefault();
+                    onClose();
+                }}
+            >
+                <div
+                    className="w-full h-full max-w-6xl flex flex-col z-[111] relative"
+                    onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                    }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                    }}
+                >
+                    <div className="flex items-center justify-between mb-4 bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl">
+                        <div className="flex items-center gap-3 pl-2">
+                            <div className="p-2 bg-primary/20 rounded-xl">
+                                <ImageIcon className="w-4 h-4 text-primary" />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-sm font-bold text-white text-left">Vista previa de imagen</span>
+                                <span className="text-[10px] text-zinc-400 font-medium uppercase tracking-tighter text-left">Archivo de tarea</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    handleDownloadImage(previewImage?.downloadUrl);
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 rounded-xl text-white text-xs font-bold transition-all shadow-lg cursor-pointer"
+                            >
+                                <Download className="w-3.5 h-3.5" />
+                                DESCARGAR ARCHIVO
+                            </button>
+                            <button
+                                onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    onClose();
+                                }}
+                                className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all border border-white/10 cursor-pointer"
+                                title="Cerrar"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 bg-white/5 dark:bg-zinc-900/50 rounded-2xl border border-white/5 overflow-hidden shadow-2xl relative flex items-center justify-center">
+                        <img
+                            src={previewImage?.displayUrl}
+                            alt="Preview"
+                            className="max-w-full max-h-full object-contain rounded-xl shadow-xl"
+                        />
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
 const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = null, defaultClientId = null }) => {
     const { toast } = useToast();
     const isEdition = !!taskData?.id;
@@ -50,25 +132,15 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     // Local state for atomic inline editing
     const [editingField, setEditingField] = useState(null); // 'title' | 'assigneeId' | 'dueDate' | 'status' | null
     const [inlineVal, setInlineVal] = useState("");
-    const [isDraftHydrated, setIsDraftHydrated] = useState(false);
+    const isDraftHydratedRef = useRef(false);
 
     const hasRealDraft = () => {
         const saved = sessionStorage.getItem('task_focus_draft');
         if (!saved) return false;
         try {
-            const parsed = JSON.parse(saved);
-            return !!(
-                (parsed.title && parsed.title.trim() !== '') ||
-                (parsed.clientId && parsed.clientId.trim() !== '') ||
-                (parsed.assigneeId && parsed.assigneeId.trim() !== '') ||
-                (parsed.dueDate && parsed.dueDate.trim() !== '') ||
-                (parsed.specialType && parsed.specialType.trim() !== '') ||
-                (Array.isArray(parsed.tempReferences) && parsed.tempReferences.length > 0) ||
-                (Array.isArray(parsed.tempInputs) && parsed.tempInputs.length > 0) ||
-                (Array.isArray(parsed.tempComments) && parsed.tempComments.length > 0) ||
-                (Array.isArray(parsed.tempAttachments) && parsed.tempAttachments.length > 0)
-            );
-        } catch(e) {
+            JSON.parse(saved);
+            return true;
+        } catch (e) {
             return false;
         }
     };
@@ -146,12 +218,21 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             const blob = await response.blob();
             const blobUrl = URL.createObjectURL(blob);
 
-            // Extract file name
+            // Extract filename from Content-Disposition header with safe fallback
             let fileName = 'descarga_archivo';
-            const urlPath = url.split('?')[0];
-            const segment = urlPath.split('/').pop();
-            if (segment) {
-                fileName = decodeURIComponent(segment);
+            const contentDisposition = response.headers.get('content-disposition');
+            if (contentDisposition) {
+                const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                const matches = filenameRegex.exec(contentDisposition);
+                if (matches != null && matches[1]) {
+                    fileName = decodeURIComponent(matches[1].replace(/['"]/g, ''));
+                }
+            } else {
+                const urlPath = url.split('?')[0];
+                const segment = urlPath.split('/').pop();
+                if (segment) {
+                    fileName = decodeURIComponent(segment);
+                }
             }
 
             const link = document.createElement('a');
@@ -163,7 +244,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
             setTimeout(() => {
                 URL.revokeObjectURL(blobUrl);
-            }, 100);
+            }, 5000); // Increased to 5000ms safe margin for slower browsers
 
             toast({ title: "Descarga exitosa", description: "El archivo se ha descargado correctamente." });
         } catch (err) {
@@ -185,21 +266,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 .catch(err => console.error("Error fetching team members:", err));
         }
     }, [isOpen]);
-
-    // Esc to close preview image (using useCapture: true and stopPropagation to isolate event from parent Radix Dialog)
-    useEffect(() => {
-        const handleEsc = (e) => {
-            if (e.key === 'Escape') {
-                e.stopPropagation();
-                e.preventDefault();
-                setPreviewImage(null);
-            }
-        };
-        if (previewImage) {
-            window.addEventListener('keydown', handleEsc, true);
-        }
-        return () => window.removeEventListener('keydown', handleEsc, true);
-    }, [previewImage]);
 
     // Decoupled chat/comments polling while focus modal is open
     useEffect(() => {
@@ -253,58 +319,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         };
     }, [isOpen, isEdition, formData.id]);
 
-    // Reset draft hydration flag when modal is closed
-    useEffect(() => {
-        if (!isOpen) {
-            setIsDraftHydrated(false);
-        }
-    }, [isOpen]);
-
-    // sessionStorage draft logic for Creation mode
-    useEffect(() => {
-        if (isOpen && !isEdition && hasRealDraft()) {
-            const savedDraft = sessionStorage.getItem('task_focus_draft');
-            if (savedDraft) {
-                try {
-                    const parsed = JSON.parse(savedDraft);
-                    setFormData({
-                        ...EMPTY_TASK_FORM,
-                        title: parsed.title || '',
-                        clientId: parsed.clientId || defaultClientId || '',
-                        assigneeId: parsed.assigneeId || '',
-                        dueDate: parsed.dueDate || '',
-                        isPriority: parsed.isPriority || false,
-                        priority: parsed.priority || null,
-                        isSpecial: parsed.isSpecial || false,
-                        specialType: parsed.specialType || '',
-                        status: parsed.status || 'PENDIENTE'
-                    });
-                    if (Array.isArray(parsed.tempReferences)) setTempReferences(parsed.tempReferences);
-                    if (Array.isArray(parsed.tempInputs)) setTempInputs(parsed.tempInputs);
-                    if (Array.isArray(parsed.tempComments)) setTempComments(parsed.tempComments);
-                    if (Array.isArray(parsed.tempAttachments)) setTempAttachments(parsed.tempAttachments);
-
-                    toast({
-                        title: "Borrador restaurado",
-                        description: "Hemos recuperado los datos de tu última sesión.",
-                    });
-                } catch (e) {
-                    console.error("Error parsing task focus draft:", e);
-                } finally {
-                    setIsDraftHydrated(true);
-                }
-            } else {
-                setIsDraftHydrated(true);
-            }
-        } else if (isOpen && !isEdition) {
-            setIsDraftHydrated(true);
-        }
-    }, [isOpen, isEdition, defaultClientId]);
-
     // Save draft to sessionStorage on formData changes (Creation mode)
     useEffect(() => {
         if (isOpen && !isEdition) {
-            if (!isDraftHydrated) return; // Guard clause: avoid overwriting with empty initial form
+            if (!isDraftHydratedRef.current) return; // Guard clause: avoid overwriting with empty initial form
             const draftData = {
                 title: formData.title,
                 clientId: formData.clientId,
@@ -318,11 +336,21 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 tempReferences,
                 tempInputs,
                 tempComments,
-                tempAttachments
+                tempAttachments,
+                // Include in-progress fields in sessionStorage snapshot!
+                newComment,
+                newRefUrl,
+                newRefName,
+                newInpUrl,
+                newInpName
             };
             sessionStorage.setItem('task_focus_draft', JSON.stringify(draftData));
         }
-    }, [formData, tempReferences, tempInputs, tempComments, tempAttachments, isOpen, isEdition, isDraftHydrated]);
+    }, [
+        formData, tempReferences, tempInputs, tempComments, tempAttachments,
+        newComment, newRefUrl, newRefName, newInpUrl, newInpName,
+        isOpen, isEdition
+    ]);
 
     const handleCleanDraftOnly = () => {
         sessionStorage.removeItem('task_focus_draft');
@@ -334,6 +362,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         setTempInputs([]);
         setTempComments([]);
         setTempAttachments([]);
+        setNewComment("");
+        setNewRefUrl("");
+        setNewRefName("");
+        setNewInpUrl("");
+        setNewInpName("");
         setSelectedFile(null);
         toast({ title: "Borrador limpiado", description: "Los campos han sido reiniciados." });
     };
@@ -348,6 +381,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         setTempInputs([]);
         setTempComments([]);
         setTempAttachments([]);
+        setNewComment("");
+        setNewRefUrl("");
+        setNewRefName("");
+        setNewInpUrl("");
+        setNewInpName("");
         setSelectedFile(null);
         toast({ title: "Borrador descartado" });
         onClose();
@@ -359,7 +397,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
     const clearDraft = handleDiscardAndCloseDraft;
 
-    // Populate or Reset Form
+    // Populate or Reset Form (Consolidated Logic Flow)
     useEffect(() => {
         if (isOpen) {
             setPreviewImage(null); // Clear image viewer state when opening a task
@@ -374,6 +412,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             setEditRefName("");
             setEditInpUrl("");
             setEditInpName("");
+
+            // Sychronously lock draft saving during initialization
+            isDraftHydratedRef.current = false;
 
             if (isEdition && taskData) {
                 // Fetch follow status
@@ -434,9 +475,58 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     plan: taskData.plan,
                     contentItemId: taskData.contentItemId
                 });
-            } else {
-                // If there's no saved draft, set clean empty form
-                if (!sessionStorage.getItem('task_focus_draft')) {
+
+                // Completed loading task, no draft hydration needed
+                isDraftHydratedRef.current = true;
+            } else if (!isEdition) {
+                // Restoration flow for "Nueva Tarea" (isCreationMode)
+                const savedDraft = sessionStorage.getItem('task_focus_draft');
+                if (savedDraft) {
+                    try {
+                        const parsed = JSON.parse(savedDraft);
+                        setFormData({
+                            ...EMPTY_TASK_FORM,
+                            title: parsed.title || '',
+                            clientId: parsed.clientId || defaultClientId || '',
+                            assigneeId: parsed.assigneeId || '',
+                            dueDate: parsed.dueDate || '',
+                            isPriority: parsed.isPriority || false,
+                            priority: parsed.priority || null,
+                            isSpecial: parsed.isSpecial || false,
+                            specialType: parsed.specialType || '',
+                            status: parsed.status || 'PENDIENTE'
+                        });
+
+                        if (Array.isArray(parsed.tempReferences)) setTempReferences(parsed.tempReferences);
+                        else setTempReferences([]);
+
+                        if (Array.isArray(parsed.tempInputs)) setTempInputs(parsed.tempInputs);
+                        else setTempInputs([]);
+
+                        if (Array.isArray(parsed.tempComments)) setTempComments(parsed.tempComments);
+                        else setTempComments([]);
+
+                        if (Array.isArray(parsed.tempAttachments)) setTempAttachments(parsed.tempAttachments);
+                        else setTempAttachments([]);
+
+                        // Restore fields in progress!
+                        if (parsed.newComment !== undefined) setNewComment(parsed.newComment);
+                        if (parsed.newRefUrl !== undefined) setNewRefUrl(parsed.newRefUrl);
+                        if (parsed.newRefName !== undefined) setNewRefName(parsed.newRefName);
+                        if (parsed.newInpUrl !== undefined) setNewInpUrl(parsed.newInpUrl);
+                        if (parsed.newInpName !== undefined) setNewInpName(parsed.newInpName);
+
+                        toast({
+                            title: "Borrador restaurado",
+                            description: "Hemos recuperado los datos de tu última sesión.",
+                        });
+                    } catch (e) {
+                        console.error("Error parsing task focus draft:", e);
+                    } finally {
+                        isDraftHydratedRef.current = true;
+                    }
+                } else {
+                    // Start clean if no draft exists
                     setIsFollowing(false);
                     setFormData({
                         ...EMPTY_TASK_FORM,
@@ -446,11 +536,19 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     setTempInputs([]);
                     setTempComments([]);
                     setTempAttachments([]);
-                    setIsDraftHydrated(true);
+                    setNewComment("");
+                    setNewRefUrl("");
+                    setNewRefName("");
+                    setNewInpUrl("");
+                    setNewInpName("");
+
+                    isDraftHydratedRef.current = true;
                 }
             }
             setShowReintegratePrompt(false);
             setReintegrateReason("");
+        } else {
+            isDraftHydratedRef.current = false;
         }
     }, [isOpen, taskData, isEdition, defaultClientId, clientsList]);
 
@@ -1801,99 +1899,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
             </DialogContent>
 
-            {/* Media Viewer Lightbox wrapped in a Portal to open above Radix Dialog Portal overlay */}
-            {previewImage && createPortal(
-                <div
-                    role="dialog"
-                    aria-modal="true"
-                    className="fixed inset-0 z-[110] flex items-center justify-center bg-zinc-950/40 backdrop-blur-md p-4 md:p-10 animate-in fade-in duration-300 animate-out fade-out"
-                    onPointerDown={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                    }}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        setPreviewImage(null);
-                    }}
-                >
-                    <div className="absolute inset-0"
-                        onPointerDown={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                        }}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            setPreviewImage(null);
-                        }}
-                    />
-                    <div
-                        className="w-full h-full max-w-6xl flex flex-col z-[111] relative animate-in zoom-in-95 duration-300"
-                        onPointerDown={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                        }}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                        }}
-                    >
-                        <div className="flex items-center justify-between mb-4 bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl">
-                            <div className="flex items-center gap-3 pl-2">
-                                <div className="p-2 bg-primary/20 rounded-xl">
-                                    <ImageIcon className="w-4 h-4 text-primary" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-sm font-bold text-white">Vista previa de imagen</span>
-                                    <span className="text-[10px] text-zinc-400 font-medium uppercase tracking-tighter">Archivo de tarea</span>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onPointerDown={(e) => {
-                                        e.stopPropagation();
-                                        e.preventDefault();
-                                    }}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        e.preventDefault();
-                                        handleDownloadImage(previewImage?.downloadUrl);
-                                    }}
-                                    className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 rounded-xl text-white text-xs font-bold transition-all shadow-lg"
-                                >
-                                    <Download className="w-3.5 h-3.5" />
-                                    DESCARGAR ARCHIVO
-                                </button>
-                                <button
-                                    onPointerDown={(e) => {
-                                        e.stopPropagation();
-                                        e.preventDefault();
-                                    }}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        e.preventDefault();
-                                        setPreviewImage(null);
-                                    }}
-                                    className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all border border-white/10"
-                                    title="Cerrar"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="flex-1 bg-white/5 dark:bg-zinc-900/50 rounded-2xl border border-white/5 overflow-hidden shadow-2xl relative flex items-center justify-center">
-                            <img
-                                src={previewImage?.displayUrl}
-                                alt="Preview"
-                                className="max-w-full max-h-full object-contain rounded-xl shadow-xl"
-                            />
-                        </div>
-                    </div>
-                </div>,
-                document.body
-            )}
+            {/* Media Viewer Lightbox wrapped in an inner controlled Radix Dialog overlay */}
+            <MediaPreviewModal
+                isOpen={!!previewImage}
+                onClose={() => setPreviewImage(null)}
+                previewImage={previewImage}
+                handleDownloadImage={handleDownloadImage}
+            />
         </Dialog>
     );
 };

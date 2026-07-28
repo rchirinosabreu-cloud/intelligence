@@ -333,6 +333,7 @@ export const getCommentFileDownloadProxy = async (req, res) => {
         try {
             const s3Response = await getFromS3Stream(key);
 
+            res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
             res.setHeader('Content-Type', 'application/octet-stream');
             res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
 
