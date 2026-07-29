@@ -1683,7 +1683,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 <div className="flex-1 flex flex-col bg-zinc-50 dark:bg-zinc-950 overflow-hidden min-h-0">
 
                     {/* Metadata Grid Area - Full Width compact top section */}
-                    <div className="w-full max-h-[30%] border-b border-zinc-200 dark:border-zinc-800 p-4 px-6 bg-white dark:bg-zinc-900 flex flex-col gap-3 shrink-0 shadow-sm overflow-y-auto custom-scrollbar">
+                    <div className="w-full border-b border-zinc-200 dark:border-zinc-800 p-4 px-6 bg-white dark:bg-zinc-900 flex flex-col gap-3 shrink-0 shadow-sm">
 
                         {showReintegratePrompt && (
                             <motion.div
@@ -2177,11 +2177,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     </div>
 
                     {/* Bottom Section: Full Width Chronological Chat */}
-                    <div className="w-full h-[70%] flex flex-col bg-zinc-100 dark:bg-zinc-950/30 overflow-hidden">
+                    <div className="w-full flex flex-col bg-zinc-100 dark:bg-zinc-950/30">
 
                         {/* Chat Container */}
                         <div
-                            ref={chatContainerRef}
                             onDragOver={(e) => {
                                 if (!isEdition) return;
                                 e.preventDefault();
@@ -2200,7 +2199,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     handleAddComment(file);
                                 }
                             }}
-                            className="flex-1 overflow-y-auto p-5 relative custom-scrollbar"
+                            className="w-full p-6 md:p-8 relative"
                         >
                             {/* Drag & Drop Overlay */}
                             <AnimatePresence>
