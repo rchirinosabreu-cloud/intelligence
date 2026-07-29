@@ -2,6 +2,7 @@ import React from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
+import Placeholder from '@tiptap/extension-placeholder';
 import { Extension } from '@tiptap/core';
 import { cn } from '@/lib/utils';
 
@@ -10,14 +11,14 @@ const CustomKeymap = Extension.create({
   name: 'customKeymap',
   addOptions() {
     return {
-      onSend: null,
+      onSendRef: null,
     };
   },
   addKeyboardShortcuts() {
     return {
       'Mod-Enter': () => {
-        if (this.options.onSend) {
-          this.options.onSend();
+        if (this.options.onSendRef && this.options.onSendRef.current) {
+          this.options.onSendRef.current();
           return true;
         }
         return false;
@@ -28,8 +29,8 @@ const CustomKeymap = Extension.create({
         if (isList || isHeading) {
           return false; // Let native Enter create new list items or headings
         }
-        if (this.options.onSend) {
-          this.options.onSend();
+        if (this.options.onSendRef && this.options.onSendRef.current) {
+          this.options.onSendRef.current();
           return true;
         }
         return false;
@@ -38,7 +39,13 @@ const CustomKeymap = Extension.create({
   },
 });
 
-const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showToolbar, onToggleToolbar }) => {
+const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showToolbar, onToggleToolbar, onTextChange }) => {
+  // Memorize the onSend callback in a mutable ref to prevent Tiptap editor reconstructions
+  const onSendRef = React.useRef(onSend);
+  React.useEffect(() => {
+    onSendRef.current = onSend;
+  }, [onSend]);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -47,8 +54,11 @@ const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showT
         },
       }),
       Underline,
+      Placeholder.configure({
+        placeholder: placeholder || 'Escribe un mensaje...',
+      }),
       CustomKeymap.configure({
-        onSend,
+        onSendRef,
       }),
     ],
     content: value,
@@ -61,14 +71,28 @@ const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showT
       },
     },
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      const html = editor.getHTML();
+      const plainText = editor.getText().trim();
+      onChange(html);
+      if (onTextChange) {
+        onTextChange(plainText);
+      }
     },
-  }, [onSend]);
+  }, []); // Run exact ONCE on mount, preventing reconstruction on prop changes!
 
   // Sync value if changed from outside (e.g. cleared on successful comment post)
   React.useEffect(() => {
-    if (editor && editor.getHTML() !== value) {
-      editor.commands.setContent(value || '');
+    if (editor) {
+      const currentHtml = editor.getHTML();
+      if (value === "" || value === null || value === undefined) {
+        if (currentHtml !== "") {
+          editor.commands.setContent("");
+          if (onTextChange) onTextChange("");
+        }
+      } else if (currentHtml !== value) {
+        editor.commands.setContent(value);
+        if (onTextChange) onTextChange(editor.getText().trim());
+      }
     }
   }, [value, editor]);
 
@@ -81,7 +105,7 @@ const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showT
         <div className="flex flex-wrap items-center gap-1.5 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg mb-2 animate-in slide-in-from-bottom-2 duration-150">
           <button
             type="button"
-            onClick={() => editor.commands.toggleBold()}
+            onClick={() => editor.chain().focus().toggleBold().run()}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
               editor.isActive('bold') ? "bg-primary/10 text-primary" : "text-zinc-500"
@@ -92,7 +116,7 @@ const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showT
           </button>
           <button
             type="button"
-            onClick={() => editor.commands.toggleItalic()}
+            onClick={() => editor.chain().focus().toggleItalic().run()}
             className={cn(
               "px-2 py-1 rounded text-xs italic transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
               editor.isActive('italic') ? "bg-primary/10 text-primary" : "text-zinc-500"
@@ -103,7 +127,7 @@ const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showT
           </button>
           <button
             type="button"
-            onClick={() => editor.commands.toggleUnderline()}
+            onClick={() => editor.chain().focus().toggleUnderline().run()}
             className={cn(
               "px-2 py-1 rounded text-xs underline transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
               editor.isActive('underline') ? "bg-primary/10 text-primary" : "text-zinc-500"
@@ -115,7 +139,7 @@ const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showT
           <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1" />
           <button
             type="button"
-            onClick={() => editor.commands.toggleHeading({ level: 1 })}
+            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
               editor.isActive('heading', { level: 1 }) ? "bg-primary/10 text-primary" : "text-zinc-500"
@@ -126,7 +150,7 @@ const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showT
           </button>
           <button
             type="button"
-            onClick={() => editor.commands.toggleHeading({ level: 2 })}
+            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
               editor.isActive('heading', { level: 2 }) ? "bg-primary/10 text-primary" : "text-zinc-500"
@@ -138,7 +162,7 @@ const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showT
           <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1" />
           <button
             type="button"
-            onClick={() => editor.commands.toggleBulletList()}
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
               editor.isActive('bulletList') ? "bg-primary/10 text-primary" : "text-zinc-500"
@@ -149,7 +173,7 @@ const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showT
           </button>
           <button
             type="button"
-            onClick={() => editor.commands.toggleOrderedList()}
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
               editor.isActive('orderedList') ? "bg-primary/10 text-primary" : "text-zinc-500"
