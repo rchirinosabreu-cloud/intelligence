@@ -101,6 +101,9 @@ router.get('/tasks/:taskId/comments', taskController.getTaskComments);
 router.post('/tasks/:taskId/comments', upload.single('file'), taskController.addTaskComment);
 router.get('/tasks/:taskId/comments/:commentId/file', taskController.getCommentFileProxy);
 router.get('/tasks/:taskId/comments/:commentId/download', taskController.getCommentFileDownloadProxy);
+router.post('/tasks/:taskId/comments/:commentId/reactions', taskController.toggleCommentReaction);
+router.patch('/tasks/:taskId/comments/:commentId', taskController.updateTaskComment);
+router.delete('/tasks/:taskId/comments/:commentId', taskController.deleteTaskComment);
 
 // Client Specific (Tasks, Links, Logo)
 router.get('/db/clients/:clientId/tasks', taskController.getClientTasksHandler);
