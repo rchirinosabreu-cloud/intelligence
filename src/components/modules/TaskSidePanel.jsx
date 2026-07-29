@@ -1342,129 +1342,139 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         </div>
                     ) : (
                         <div className="relative inline-block max-w-full">
-                            <div className="bg-white dark:bg-zinc-900 p-3.5 rounded-2xl rounded-tl-none block max-w-full shadow-sm border border-zinc-100 dark:border-zinc-800">
-                                <div className="text-sm font-medium text-zinc-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                            <div className="bg-white dark:bg-zinc-900 p-3.5 pr-10 rounded-2xl rounded-tl-none block max-w-full shadow-sm border border-zinc-100 dark:border-zinc-800 relative group/card">
+                                <div className="text-sm font-medium text-zinc-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap pb-1">
                                     {linkify(comment.content, handleImagePreview, contextData)}
                                 </div>
-                            </div>
 
-                            {/* Floating Reactions Bar on hover */}
-                            {isEdition && (
-                                <div className="absolute -top-3 right-4 z-40 hidden group-hover:flex items-center gap-1 bg-white dark:bg-zinc-900 border border-zinc-200/85 dark:border-zinc-800/85 rounded-full px-2 py-1 shadow-md animate-in fade-in duration-100">
-                                    {['🧠', '🚀', '👍', '😄', '💯'].map((emoji) => (
-                                        <button
-                                            key={emoji}
-                                            type="button"
-                                            onClick={() => handleToggleReaction(comment.id, emoji)}
-                                            className="hover:scale-125 transition-transform p-0.5 text-xs active:scale-95"
-                                        >
-                                            {emoji}
-                                        </button>
-                                    ))}
-                                    <div className="relative">
+                                {/* Basecamp Action Menu inside message card */}
+                                {isEdition && (
+                                    <div className="absolute top-3 right-3 opacity-0 group-hover/card:opacity-100 transition-opacity z-50">
                                         <button
                                             type="button"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                setActiveEmojiPickerCommentId(activeEmojiPickerCommentId === comment.id ? null : comment.id);
+                                                setOpenMenuCommentId(openMenuCommentId === comment.id ? null : comment.id);
                                             }}
-                                            className="w-5 h-5 rounded-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 hover:text-zinc-800 text-[10px] font-bold transition-all"
+                                            className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-zinc-600 transition-all select-none"
                                         >
-                                            +
+                                            <MoreHorizontal size={14} />
                                         </button>
-                                        {activeEmojiPickerCommentId === comment.id && (
-                                            <div className="absolute bottom-[115%] right-0 z-50 w-52 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-2.5 flex flex-col gap-1.5 animate-in zoom-in-95 duration-100">
-                                                <div className="text-[8px] font-black uppercase tracking-wider text-zinc-400 px-1">
-                                                    Reaccionar
-                                                </div>
-                                                <div className="grid grid-cols-6 gap-1 max-h-36 overflow-y-auto">
-                                                    {APPROVED_EMOJIS.map((emoji) => (
+                                        {openMenuCommentId === comment.id && (
+                                            <div className="absolute right-0 top-full mt-1.5 z-[60] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-2.5 w-56 flex flex-col gap-2 animate-in zoom-in-95 duration-100">
+                                                {/* Reacciones Rápidas */}
+                                                <div className="flex items-center justify-between gap-1 px-1 py-0.5">
+                                                    {['🧠', '🚀', '👍', '😄', '💯'].map((emoji) => (
                                                         <button
                                                             key={emoji}
                                                             type="button"
                                                             onClick={() => {
                                                                 handleToggleReaction(comment.id, emoji);
-                                                                setActiveEmojiPickerCommentId(null);
+                                                                setOpenMenuCommentId(null);
                                                             }}
-                                                            className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-sm transition-all active:scale-90"
+                                                            className="hover:scale-125 transition-transform p-0.5 text-base active:scale-95"
                                                         >
                                                             {emoji}
                                                         </button>
                                                     ))}
+                                                    <div className="relative">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActiveEmojiPickerCommentId(activeEmojiPickerCommentId === comment.id ? null : comment.id);
+                                                            }}
+                                                            className="w-6 h-6 rounded-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-500 hover:text-zinc-800 text-[10px] font-bold transition-all"
+                                                        >
+                                                            +
+                                                        </button>
+                                                        {activeEmojiPickerCommentId === comment.id && (
+                                                            <div className="absolute bottom-[115%] right-0 z-[70] w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-2 flex flex-col gap-1.5 animate-in zoom-in-95 duration-100">
+                                                                <div className="text-[8px] font-black uppercase tracking-wider text-zinc-400 px-1">
+                                                                    Reaccionar
+                                                                </div>
+                                                                <div className="grid grid-cols-5 gap-1 max-h-36 overflow-y-auto">
+                                                                    {APPROVED_EMOJIS.map((emoji) => (
+                                                                        <button
+                                                                            key={emoji}
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                handleToggleReaction(comment.id, emoji);
+                                                                                setActiveEmojiPickerCommentId(null);
+                                                                                setOpenMenuCommentId(null);
+                                                                            }}
+                                                                            className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-sm transition-all active:scale-90"
+                                                                        >
+                                                                            {emoji}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
+
+                                                {/* Autor Acciones */}
+                                                {(isAuthor || currentUser?.role === 'ADMIN') && (
+                                                    <>
+                                                        <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-0.5" />
+                                                        <div className="flex flex-col gap-0.5">
+                                                            {isAuthor && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setEditingCommentId(comment.id);
+                                                                        setEditingContent(comment.content);
+                                                                        setOpenMenuCommentId(null);
+                                                                    }}
+                                                                    className="w-full text-left px-2.5 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-lg text-xs font-bold text-zinc-700 dark:text-zinc-200 flex items-center gap-2"
+                                                                >
+                                                                    Editar comentario
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    handleDeleteComment(comment.id);
+                                                                    setOpenMenuCommentId(null);
+                                                                }}
+                                                                className="w-full text-left px-2.5 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg text-xs font-bold text-red-600 flex items-center gap-2"
+                                                            >
+                                                                Eliminar comentario
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         )}
                                     </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                )}
 
-                    {/* Reactions Pills */}
-                    {!isEditingThis && comment.reactions && comment.reactions.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1.5">
-                            {comment.reactions.map((reaction) => (
-                                <button
-                                    key={reaction.emoji}
-                                    type="button"
-                                    onClick={() => handleToggleReaction(comment.id, reaction.emoji)}
-                                    className={cn(
-                                        "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold border transition-all active:scale-90",
-                                        reaction.userReacted
-                                            ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
-                                            : "bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 border-zinc-205/50 dark:border-zinc-750"
-                                    )}
-                                >
-                                    <span>{reaction.emoji}</span>
-                                    <span className="text-[9px] font-black">{reaction.count}</span>
-                                </button>
-                            ))}
+                                {/* Reactions Pills Inside Message Card Boundary */}
+                                {comment.reactions && comment.reactions.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mt-3">
+                                        {comment.reactions.map((reaction) => (
+                                            <button
+                                                key={reaction.emoji}
+                                                type="button"
+                                                onClick={() => handleToggleReaction(comment.id, reaction.emoji)}
+                                                className={cn(
+                                                    "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold border transition-all active:scale-90",
+                                                    reaction.userReacted
+                                                        ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                                                        : "bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 border-zinc-200/50 dark:border-zinc-750"
+                                                )}
+                                            >
+                                                <span>{reaction.emoji}</span>
+                                                <span className="text-[9px] font-black">{reaction.count}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>
-
-                {/* Comment Option Menu (Edit / Delete) */}
-                {isEdition && !isEditingThis && (isAuthor || currentUser?.role === 'ADMIN') && (
-                    <div className="relative shrink-0 self-start mt-5 hidden group-hover:block ml-2">
-                        <button
-                            type="button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenMenuCommentId(openMenuCommentId === comment.id ? null : comment.id);
-                            }}
-                            className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-zinc-650 transition-colors animate-in zoom-in-95 duration-100"
-                        >
-                            <MoreHorizontal size={14} />
-                        </button>
-                        {openMenuCommentId === comment.id && (
-                            <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl py-1 w-24 animate-in fade-in duration-100">
-                                {isAuthor && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setEditingCommentId(comment.id);
-                                            setEditingContent(comment.content);
-                                            setOpenMenuCommentId(null);
-                                        }}
-                                        className="w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-bold text-zinc-700 dark:text-zinc-200 flex items-center gap-1.5"
-                                    >
-                                        Editar
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        handleDeleteComment(comment.id);
-                                        setOpenMenuCommentId(null);
-                                    }}
-                                    className="w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-bold text-red-600 flex items-center gap-1.5"
-                                >
-                                    Eliminar
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                )}
             </div>
         );
     };
@@ -1482,7 +1492,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && (isEdition ? handleClosePanel() : handlePassiveClose())}>
             <DialogContent
-                className="w-[95vw] max-w-6xl h-[85vh] max-h-[90vh] p-0 overflow-y-auto bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl z-[100]"
+                className="w-[95vw] max-w-4xl h-[85vh] max-h-[90vh] p-0 overflow-y-auto bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl z-[100]"
                 onPointerDownOutside={(e) => {
                     if (previewImage) {
                         e.preventDefault();
@@ -1587,11 +1597,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     </div>
                 )}
 
-                {/* Main Double Column Layout */}
-                <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+                {/* Main Single Column Layout (Basecamp Style) */}
+                <div className="flex-1 flex flex-col bg-zinc-50 dark:bg-zinc-950">
 
-                    {/* Left Column (50%): Metadata / Edit Grid */}
-                    <div className="w-full md:w-1/2 border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-800 overflow-y-auto p-6 bg-white dark:bg-zinc-900 flex flex-col gap-6">
+                    {/* Metadata Grid Area - Full Width compact top section */}
+                    <div className="w-full border-b border-zinc-200 dark:border-zinc-800 p-6 bg-white dark:bg-zinc-900 flex flex-col gap-6 shrink-0 shadow-sm">
 
                         {showReintegratePrompt && (
                             <motion.div
@@ -2084,8 +2094,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         )}
                     </div>
 
-                    {/* Right Column (50%): Chronological Chat */}
-                    <div className="w-full md:w-1/2 flex flex-col h-full bg-zinc-100 dark:bg-zinc-950/30 overflow-hidden">
+                    {/* Bottom Section: Full Width Chronological Chat */}
+                    <div className="w-full flex flex-col bg-zinc-100 dark:bg-zinc-950/30 shrink-0 min-h-[500px]">
 
                         {/* Chat Container */}
                         <div
