@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import DOMPurify from 'isomorphic-dompurify';
 import { getDashboardMetrics, getQualityStreak, getCompletedTasks, getTasks, createTask, updateTask, auditAndDeleteTask, toggleTaskFollow, checkIsFollowing } from '../services/nativeTaskService.js';
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from '../services/clientTaskService.js';
 import { uploadToS3, getFromS3Stream } from '../services/s3Service.js';
@@ -370,7 +371,12 @@ export const addTaskComment = async (req, res) => {
             return res.status(400).json({ error: "Content or file is required" });
         }
 
-        let finalContent = content || "";
+        const sanitizedContent = content ? DOMPurify.sanitize(content, {
+            ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'h1', 'h2', 'ul', 'ol', 'li', 'br', 'span', 'a'],
+            ALLOWED_ATTR: ['href', 'target', 'rel', 'class']
+        }) : "";
+
+        let finalContent = sanitizedContent;
         let publicUrl = null;
 
         if (req.file) {
@@ -388,7 +394,7 @@ export const addTaskComment = async (req, res) => {
             publicUrl = uploadResult.url;
 
             // If there's already content, append the image URL. If not, just the URL.
-            finalContent = content ? `${content}\n\n${publicUrl}` : publicUrl;
+            finalContent = sanitizedContent ? `${sanitizedContent}\n\n${publicUrl}` : publicUrl;
         }
 
         const comment = await prisma.$transaction(async (tx) => {
@@ -566,10 +572,15 @@ export const updateTaskComment = async (req, res) => {
             return res.status(403).json({ error: "No tienes permisos para editar este comentario" });
         }
 
+        const sanitizedContent = DOMPurify.sanitize(content, {
+            ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'h1', 'h2', 'ul', 'ol', 'li', 'br', 'span', 'a'],
+            ALLOWED_ATTR: ['href', 'target', 'rel', 'class']
+        });
+
         const updated = await prisma.taskComment.update({
             where: { id: commentId },
             data: {
-                content,
+                content: sanitizedContent,
                 isEdited: true
             },
             include: { author: true, attachments: true, reactions: true }
