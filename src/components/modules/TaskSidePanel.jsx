@@ -20,7 +20,6 @@ import { useAuth } from '@/context/AuthContext';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 import LinkDropdown from '@/components/ui/LinkDropdown';
 import { linkify, cleanSystemMessage } from '@/utils/chatUtils.jsx';
-import RichTextEditor from '@/components/ui/RichTextEditor';
 import {
     Dialog,
     DialogContent,
@@ -149,58 +148,6 @@ const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage 
     );
 };
 
-const renderCommentContent = (comment, handleImagePreview, contextData) => {
-    const content = comment.content || "";
-    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
-    const urls = content.match(urlRegex) || [];
-
-    let cleanHtml = content;
-    urls.forEach(url => {
-        if (url.includes('t3.storageapi.dev')) {
-            cleanHtml = cleanHtml.replace(url, '').trim();
-        }
-    });
-
-    const mentionRegex = /(@[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_.-]+(?:\s+[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_.-]+)?)/g;
-    const mentionPillClass = "inline-block px-2 py-0.5 mx-0.5 bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 rounded-full font-bold text-[10px] select-all shadow-sm";
-
-    let htmlWithMentions = cleanHtml;
-    htmlWithMentions = htmlWithMentions.replace(mentionRegex, (match) => {
-        return `<span class="${mentionPillClass}">${match}</span>`;
-    });
-
-    const hasTags = /<[a-z][\s\S]*>/i.test(htmlWithMentions);
-    const finalHtmlMarkup = hasTags ? htmlWithMentions : `<p>${htmlWithMentions.replace(/\n/g, '<br/>')}</p>`;
-
-    return (
-        <div className="w-full flex flex-col gap-2">
-            {finalHtmlMarkup.replace(/<p>\s*<\/p>/g, '').trim() !== '' && (
-                <div
-                    className={cn(
-                        "prose dark:prose-invert max-w-none text-xs font-medium text-zinc-850 dark:text-zinc-200 leading-relaxed pb-1",
-                        "[&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_strong]:font-bold",
-                        "[&_h1]:text-[13px] [&_h1]:font-black [&_h1]:uppercase [&_h1]:tracking-wider [&_h1]:my-1.5",
-                        "[&_h2]:text-[11px] [&_h2]:font-black [&_h2]:uppercase [&_h2]:tracking-wider [&_h2]:my-1.5"
-                    )}
-                    dangerouslySetInnerHTML={{ __html: finalHtmlMarkup }}
-                />
-            )}
-
-            {urls.length > 0 && (
-                <div className="flex flex-col gap-1.5 mt-1 border-t border-zinc-100 dark:border-zinc-800/50 pt-1.5">
-                    {urls.map((url, idx) => {
-                        return (
-                            <div key={idx} className="w-full">
-                                {linkify(url, handleImagePreview, contextData)}
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
-        </div>
-    );
-};
-
 const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = null, defaultClientId = null }) => {
     const { toast } = useToast();
     const { currentUser } = useAuth();
@@ -248,9 +195,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     });
 
     const [newComment, setNewComment] = useState("");
-    const [mainEditor, setMainEditor] = useState(null);
-    const [showFormatBar, setShowFormatBar] = useState(false);
-    const [showEditFormatBar, setShowEditFormatBar] = useState(false);
     const [isSendingComment, setIsSendingComment] = useState(false);
     const [isFollowing, setIsFollowing] = useState(false);
     const [isTogglingFollow, setIsTogglingFollow] = useState(false);
@@ -370,28 +314,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 .catch(err => console.error("Error fetching team members:", err));
         }
     }, [isOpen]);
-
-    // Handle rich text editor custom events for mentions
-    useEffect(() => {
-        const handleMentionType = (e) => {
-            const { query, atIndex } = e.detail;
-            setShowMentions(true);
-            setMentionFilter(query);
-            setMentionIndex(atIndex);
-        };
-
-        const handleMentionHide = () => {
-            setShowMentions(false);
-        };
-
-        window.addEventListener('editor-mention-type', handleMentionType);
-        window.addEventListener('editor-mention-hide', handleMentionHide);
-
-        return () => {
-            window.removeEventListener('editor-mention-type', handleMentionType);
-            window.removeEventListener('editor-mention-hide', handleMentionHide);
-        };
-    }, []);
 
     // Decoupled chat/comments polling while focus modal is open
     useEffect(() => {
@@ -978,12 +900,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         const validFile = (fileToUpload instanceof File) ? fileToUpload : null;
         const file = validFile || selectedFile;
 
-        const isCommentEmpty = !newComment || newComment.replace(/<[^>]*>/g, '').trim() === '';
-        if (isCommentEmpty && !file) return;
+        if (!newComment.trim() && !file) return;
 
         // If in creation mode, simulate adding comment to local state
         if (!isEdition) {
-            if (isCommentEmpty) return;
+            if (!newComment.trim()) return;
             const newTempComment = {
                 id: `temp-comment-${Date.now()}`,
                 content: newComment,
@@ -995,9 +916,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             };
             setTempComments(prev => [...prev, newTempComment]);
             setNewComment("");
-            if (mainEditor) {
-                mainEditor.commands.setContent("");
-            }
             return;
         }
 
@@ -1034,9 +952,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     };
                 });
                 setNewComment("");
-                if (mainEditor) {
-                    mainEditor.commands.setContent("");
-                }
                 setSelectedFile(null);
                 toast({ title: "Comentario enviado" });
             }
@@ -1229,20 +1144,41 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
     };
 
-    const handleSelectMention = (user) => {
-        if (mainEditor) {
-            const { from } = mainEditor.state.selection;
-            const textBeforeCursor = mainEditor.state.doc.textBetween(0, from, ' ');
-            const atIndex = textBeforeCursor.lastIndexOf('@');
-            if (atIndex !== -1) {
-                mainEditor.chain().focus()
-                    .deleteRange({ from: atIndex + 1, to: from })
-                    .insertContent(`@${user.name} `)
-                    .run();
-                setNewComment(mainEditor.getHTML());
+    const handleCommentChange = (e) => {
+        const val = e.target.value;
+        setNewComment(val);
+
+        const selectionStart = e.target.selectionStart;
+        const textBeforeCursor = val.slice(0, selectionStart);
+        const atIndex = textBeforeCursor.lastIndexOf('@');
+
+        if (atIndex !== -1 && (atIndex === 0 || /\s/.test(textBeforeCursor[atIndex - 1]))) {
+            const query = textBeforeCursor.slice(atIndex + 1);
+            if (!/\s/.test(query)) {
+                setShowMentions(true);
+                setMentionFilter(query);
+                setMentionIndex(atIndex);
+                return;
             }
         }
         setShowMentions(false);
+    };
+
+    const handleSelectMention = (user) => {
+        const textBeforeMention = newComment.slice(0, mentionIndex);
+        const textAfterMention = newComment.slice(commentInputRef.current.selectionStart);
+        const updatedComment = `${textBeforeMention}@${user.name} ${textAfterMention}`;
+
+        setNewComment(updatedComment);
+        setShowMentions(false);
+
+        setTimeout(() => {
+            if (commentInputRef.current) {
+                commentInputRef.current.focus();
+                const newPos = textBeforeMention.length + user.name.length + 2; // +1 for @, +1 for space
+                commentInputRef.current.setSelectionRange(newPos, newPos);
+            }
+        }, 50);
     };
 
     const handleImagePreview = (imgData) => {
@@ -1382,51 +1318,33 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                     {isEditingThis ? (
                         <div className="w-full flex flex-col gap-2 mt-1">
-                            <RichTextEditor
+                            <textarea
                                 value={editingContent}
-                                onChange={setEditingContent}
-                                onSubmit={() => handleUpdateComment(comment.id)}
-                                showToolbar={showEditFormatBar}
-                                isEdition={true}
+                                onChange={(e) => setEditingContent(e.target.value)}
+                                className="w-full text-xs font-medium p-3 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 rounded-xl outline-none focus:border-primary/40 resize-none h-20 shadow-inner"
                             />
-                            <div className="flex gap-2 justify-between items-center w-full mt-1">
+                            <div className="flex gap-2 justify-end">
                                 <button
                                     type="button"
-                                    onClick={() => setShowEditFormatBar(!showEditFormatBar)}
-                                    className={cn(
-                                        "p-1.5 rounded-lg text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all",
-                                        showEditFormatBar ? "text-primary bg-primary/10" : "text-zinc-450 hover:text-primary"
-                                    )}
-                                    title="Opciones de formato (A)"
+                                    onClick={() => setEditingCommentId(null)}
+                                    className="px-2.5 py-1 text-[10px] font-bold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-all"
                                 >
-                                    <span className="font-extrabold text-xs underline select-none leading-none">A</span>
+                                    Cancelar
                                 </button>
-                                <div className="flex gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setEditingCommentId(null);
-                                            setShowEditFormatBar(false);
-                                        }}
-                                        className="px-2.5 py-1 text-[10px] font-bold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-all"
-                                    >
-                                        Cancelar
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleUpdateComment(comment.id)}
-                                        className="px-2.5 py-1 text-[10px] font-bold text-white bg-primary rounded-lg shadow-md shadow-primary/10 active:scale-95 transition-all"
-                                    >
-                                        Guardar
-                                    </button>
-                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handleUpdateComment(comment.id)}
+                                    className="px-2.5 py-1 text-[10px] font-bold text-white bg-primary rounded-lg shadow-md shadow-primary/10 active:scale-95 transition-all"
+                                >
+                                    Guardar
+                                </button>
                             </div>
                         </div>
                     ) : (
-                        <div className="relative inline-block max-w-full">
-                            <div className="bg-white dark:bg-zinc-900 p-3.5 pr-10 rounded-2xl rounded-tl-none block max-w-full shadow-sm border border-zinc-100 dark:border-zinc-800 relative group/card">
-                                <div className="text-sm font-medium text-zinc-800 dark:text-zinc-200 leading-relaxed pb-1">
-                                    {renderCommentContent(comment, handleImagePreview, contextData)}
+                        <div className="relative inline-block max-w-[80%] md:max-w-3xl mr-6 pr-6">
+                            <div className="bg-white dark:bg-zinc-900 p-3.5 pr-10 rounded-2xl rounded-tl-none block shadow-sm border border-zinc-100 dark:border-zinc-800 relative group/card">
+                                <div className="text-sm font-medium text-zinc-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap pb-1">
+                                    {linkify(comment.content, handleImagePreview, contextData)}
                                 </div>
 
                                 {/* Basecamp Action Menu inside message card */}
@@ -1574,7 +1492,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && (isEdition ? handleClosePanel() : handlePassiveClose())}>
             <DialogContent
-                className="w-[92vw] max-w-6xl h-[85vh] max-h-[90vh] p-0 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl z-[100] overflow-hidden"
+                className="w-[92vw] max-w-6xl h-[85vh] max-h-[92dvh] p-0 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl z-[100] overflow-hidden"
                 onPointerDownOutside={(e) => {
                     if (previewImage) {
                         e.preventDefault();
@@ -1680,10 +1598,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 )}
 
                 {/* Main Single Column Layout (Basecamp Style) */}
-                <div className="flex-1 flex flex-col bg-zinc-50 dark:bg-zinc-950 overflow-hidden min-h-0">
+                <div
+                    ref={chatContainerRef}
+                    className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-zinc-50 dark:bg-zinc-950 flex flex-col"
+                >
 
                     {/* Metadata Grid Area - Full Width compact top section */}
-                    <div className="w-full border-b border-zinc-200 dark:border-zinc-800 p-4 px-6 bg-white dark:bg-zinc-900 flex flex-col gap-3 shrink-0 shadow-sm">
+                    <div className="w-full border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 bg-white dark:bg-zinc-900 flex flex-col gap-3 shadow-sm">
 
                         {showReintegratePrompt && (
                             <motion.div
@@ -1725,7 +1646,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         )}
 
                         {/* Title Section */}
-                        <div className="space-y-0.5">
+                        <div className="space-y-1">
                             <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Título de la Tarea</label>
                             <input
                                 type="text"
@@ -1868,7 +1789,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         </div>
 
                         {formData.isSpecial && (
-                            <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="space-y-0.5">
+                            <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="space-y-1.5">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400">Tipo de Pendiente Especial</label>
                                 <input
                                     type="text"
@@ -1877,7 +1798,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     value={formData.specialType}
                                     onChange={e => setFormData({...formData, specialType: e.target.value})}
                                     placeholder="Ej: Manual de Marca corporativo..."
-                                    className="w-full bg-purple-500/5 border border-purple-200 dark:border-purple-800/50 rounded-xl px-4 py-1 text-xs font-bold focus:ring-2 ring-purple-500/10 outline-none shadow-sm disabled:opacity-80 h-[32px]"
+                                    className="w-full bg-purple-500/5 border border-purple-200 dark:border-purple-800/50 rounded-xl px-4 py-2.5 text-xs font-bold focus:ring-2 ring-purple-500/10 outline-none shadow-sm disabled:opacity-80"
                                 />
                             </motion.div>
                         )}
@@ -2177,7 +2098,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     </div>
 
                     {/* Bottom Section: Full Width Chronological Chat */}
-                    <div className="w-full flex flex-col bg-zinc-100 dark:bg-zinc-950/30">
+                    <div className="w-full flex flex-col bg-zinc-50/50 dark:bg-zinc-950/20">
 
                         {/* Chat Container */}
                         <div
@@ -2332,13 +2253,18 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         </div>
                                     )}
 
-                                    <RichTextEditor
+                                    <textarea
+                                        ref={commentInputRef}
                                         value={newComment}
-                                        onChange={setNewComment}
-                                        onSubmit={handleAddComment}
-                                        onEditorReady={setMainEditor}
-                                        showToolbar={showFormatBar}
-                                        isEdition={isEdition}
+                                        onChange={handleCommentChange}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleAddComment();
+                                            }
+                                        }}
+                                        placeholder={isEdition ? "Escribe un mensaje al equipo..." : "Escribe un mensaje inicial..."}
+                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-primary/30 rounded-xl px-12 py-3 pr-20 text-xs font-medium outline-none transition-all resize-none h-[48px] no-scrollbar shadow-inner"
                                     />
                                     {showInputEmojiPicker && (
                                         <div className="absolute bottom-[105%] right-4 z-[90] w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-3 animate-in slide-in-from-bottom-2 duration-150">
@@ -2351,12 +2277,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                         key={emoji}
                                                         type="button"
                                                         onClick={() => {
-                                                            if (mainEditor) {
-                                                                mainEditor.commands.insertContent(emoji);
-                                                                setNewComment(mainEditor.getHTML());
-                                                            } else {
-                                                                setNewComment(prev => prev + emoji);
-                                                            }
+                                                            setNewComment(prev => prev + emoji);
                                                             setShowInputEmojiPicker(false);
                                                         }}
                                                         className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-base transition-all active:scale-90"
@@ -2367,7 +2288,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             </div>
                                         </div>
                                     )}
-                                    <div className="absolute left-1.5 bottom-1.5">
+                                    <div className="absolute left-1.5 top-1.5">
                                         <input
                                             type="file"
                                             id="task-file-upload-focus"
@@ -2399,29 +2320,18 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     </div>
                                     <button
                                         type="button"
-                                        onClick={() => setShowFormatBar(!showFormatBar)}
-                                        className={cn(
-                                            "absolute right-[76px] bottom-1.5 p-2 rounded-lg transition-all hover:bg-zinc-200 dark:hover:bg-zinc-800",
-                                            showFormatBar ? "text-primary bg-primary/10" : "text-zinc-450 hover:text-primary"
-                                        )}
-                                        title="Formato de texto (A)"
-                                    >
-                                        <span className="font-extrabold text-xs underline select-none leading-none">A</span>
-                                    </button>
-                                    <button
-                                        type="button"
                                         onClick={() => setShowInputEmojiPicker(!showInputEmojiPicker)}
-                                        className="absolute right-11 bottom-1.5 p-2 rounded-lg text-zinc-450 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary transition-all select-none"
+                                        className="absolute right-11 top-1.5 p-2 rounded-lg text-zinc-450 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary transition-all select-none"
                                         title="Insertar emoji"
                                     >
                                         😀
                                     </button>
                                     <button
                                         onClick={() => handleAddComment()}
-                                        disabled={isEdition ? (((!newComment || newComment.replace(/<[^>]*>/g, '').trim() === '') && !selectedFile) || isSendingComment) : (!newComment || newComment.replace(/<[^>]*>/g, '').trim() === '')}
+                                        disabled={isEdition ? ((!newComment.trim() && !selectedFile) || isSendingComment) : !newComment.trim()}
                                         className={cn(
-                                            "absolute right-1.5 bottom-1.5 p-2 rounded-lg transition-all",
-                                            ((newComment && newComment.replace(/<[^>]*>/g, '').trim() !== '') || (selectedFile && isEdition)) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
+                                            "absolute right-1.5 top-1.5 p-2 rounded-lg transition-all",
+                                            (newComment.trim() || (selectedFile && isEdition)) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
                                         )}
                                     >
                                         {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
