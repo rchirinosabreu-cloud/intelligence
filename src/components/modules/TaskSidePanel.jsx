@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
     Loader2, Zap, Star, Link as LinkIcon, ExternalLink,
     X, Send, MessageSquare, RotateCcw, CheckCircle2, Bell,
@@ -25,6 +26,8 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
+    DialogPortal,
+    DialogOverlay,
 } from '@/components/ui/dialog';
 
 // Global in-memory cache for task comments (SWR engine)
@@ -68,79 +71,79 @@ const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage 
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent
-                className="fixed inset-0 z-[110] flex items-center justify-center bg-white/70 dark:bg-black/80 backdrop-blur-md p-4 md:p-10 border-none shadow-none max-w-none w-screen h-screen"
-                onPointerDownOutside={(e) => {
-                    e.preventDefault();
-                    onClose();
-                }}
-                onEscapeKeyDown={(e) => {
-                    e.preventDefault();
-                    onClose();
-                }}
-            >
-                <div
-                    className="w-full h-full max-w-6xl flex flex-col z-[111] relative"
-                    onPointerDown={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                    }}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                    }}
-                >
-                    <div className="flex items-center justify-between mb-4 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-zinc-200 dark:border-white/10 shadow-2xl">
-                        <div className="flex items-center gap-3 pl-2">
-                            <div className="p-2 bg-primary/20 rounded-xl">
-                                <ImageIcon className="w-4 h-4 text-primary" />
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold text-zinc-900 dark:text-white text-left">Vista previa de imagen</span>
-                                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-tighter text-left">Archivo de tarea</span>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onPointerDown={(e) => {
-                                    e.stopPropagation();
-                                }}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    handleDownloadImage(previewImage?.downloadUrl);
-                                }}
-                                className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 rounded-xl text-white text-xs font-bold transition-all shadow-lg cursor-pointer"
-                            >
-                                <Download className="w-3.5 h-3.5" />
-                                DESCARGAR ARCHIVO
-                            </button>
-                            <button
-                                onPointerDown={(e) => {
-                                    e.stopPropagation();
-                                }}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    onClose();
-                                }}
-                                className="p-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-white/10 dark:hover:bg-white/20 rounded-xl text-zinc-700 dark:text-white transition-all border border-zinc-200 dark:border-white/10 cursor-pointer"
-                                title="Cerrar"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                    </div>
+            <DialogPortal>
+                {/* Full-screen Fixed Overlay with adaptive blur background */}
+                <DialogOverlay
+                    onClick={onClose}
+                    className="fixed inset-0 z-[110] bg-white/70 dark:bg-black/80 backdrop-blur-md"
+                />
 
-                    <div className="flex-1 bg-zinc-100/30 dark:bg-zinc-900/40 rounded-2xl border border-zinc-200 dark:border-white/5 overflow-hidden shadow-2xl relative flex items-center justify-center">
-                        <img
-                            src={previewImage?.displayUrl}
-                            alt="Preview"
-                            className="max-w-[90vw] max-h-[85vh] object-contain rounded-xl shadow-xl"
-                        />
+                {/* Centered responsive container utilizing DialogPrimitive.Content */}
+                <DialogPrimitive.Content
+                    className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[111] flex flex-col w-[calc(100vw-2rem)] h-[calc(100dvh-2rem)] max-w-6xl p-0 border-none bg-transparent outline-none focus:outline-none"
+                    onPointerDownOutside={onClose}
+                    onEscapeKeyDown={onClose}
+                >
+                    <div
+                        className="w-full h-full flex flex-col"
+                        onPointerDown={(e) => {
+                            e.stopPropagation();
+                        }}
+                    >
+                        {/* Toolbar */}
+                        <div className="flex items-center justify-between mb-4 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-zinc-200 dark:border-white/10 shadow-2xl shrink-0">
+                            <div className="flex items-center gap-3 pl-2">
+                                <div className="p-2 bg-primary/20 rounded-xl">
+                                    <ImageIcon className="w-4 h-4 text-primary" />
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-bold text-zinc-900 dark:text-white text-left">Vista previa de imagen</span>
+                                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-tighter text-left">Archivo de tarea</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onPointerDown={(e) => {
+                                        e.stopPropagation();
+                                    }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        handleDownloadImage(previewImage?.downloadUrl);
+                                    }}
+                                    className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 rounded-xl text-white text-xs font-bold transition-all shadow-lg cursor-pointer"
+                                >
+                                    <Download className="w-3.5 h-3.5" />
+                                    DESCARGAR ARCHIVO
+                                </button>
+                                <button
+                                    onPointerDown={(e) => {
+                                        e.stopPropagation();
+                                    }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        onClose();
+                                    }}
+                                    className="p-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-white/10 dark:hover:bg-white/20 rounded-xl text-zinc-700 dark:text-white transition-all border border-zinc-200 dark:border-white/10 cursor-pointer"
+                                    title="Cerrar"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Image Region Contained perfectly inside Viewport */}
+                        <div className="flex-1 bg-zinc-100/30 dark:bg-zinc-900/40 rounded-2xl border border-zinc-200 dark:border-white/5 overflow-hidden shadow-2xl relative flex items-center justify-center min-h-0 min-w-0">
+                            <img
+                                src={previewImage?.displayUrl}
+                                alt="Preview"
+                                className="max-w-full max-h-full w-auto h-auto object-contain rounded-xl shadow-xl"
+                            />
+                        </div>
                     </div>
-                </div>
-            </DialogContent>
+                </DialogPrimitive.Content>
+            </DialogPortal>
         </Dialog>
     );
 };
@@ -255,10 +258,28 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     fileName = decodeURIComponent(matches[1].replace(/['"]/g, ''));
                 }
             } else {
-                const urlPath = url.split('?')[0];
-                const segment = urlPath.split('/').pop();
-                if (segment) {
-                    fileName = decodeURIComponent(segment);
+                try {
+                    const parsedUrl = new URL(url, window.location.href);
+                    const filenameParam = parsedUrl.searchParams.get('filename');
+                    if (filenameParam) {
+                        fileName = filenameParam;
+                    } else {
+                        const urlPath = url.split('?')[0];
+                        const segment = urlPath.split('/').pop();
+                        if (segment && segment !== 'download') {
+                            fileName = decodeURIComponent(segment);
+                        } else {
+                            fileName = 'adjunto_tarea.jpg';
+                        }
+                    }
+                } catch(e) {
+                    const urlPath = url.split('?')[0];
+                    const segment = urlPath.split('/').pop();
+                    if (segment && segment !== 'download') {
+                        fileName = decodeURIComponent(segment);
+                    } else {
+                        fileName = 'adjunto_tarea.jpg';
+                    }
                 }
             }
 
@@ -582,7 +603,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         } else {
             isDraftHydratedRef.current = false;
         }
-    }, [isOpen, taskData, isEdition, defaultClientId, clientsList]);
+    }, [isOpen, taskData, isEdition, defaultClientId]);
 
     // Handle Inline Hot PATCH saving
     const saveInlineField = async (fieldName, finalValue) => {
@@ -1164,8 +1185,15 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         const accessToken = localStorage.getItem('authToken');
         if (imgData.proxy && imgData.commentId) {
             let downloadUrl = `${getApiBaseUrl()}/api/tasks/${formData.id}/comments/${imgData.commentId}/download`;
+            const params = [];
             if (accessToken) {
-                downloadUrl += `?token=${encodeURIComponent(accessToken)}`;
+                params.push(`token=${encodeURIComponent(accessToken)}`);
+            }
+            if (imgData.name) {
+                params.push(`filename=${encodeURIComponent(imgData.name)}`);
+            }
+            if (params.length > 0) {
+                downloadUrl += `?${params.join('&')}`;
             }
 
             setPreviewImage({
