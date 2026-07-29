@@ -113,3 +113,22 @@ test('Spanish Chronological Day Dividers - Format uppercase and dashes', () => {
     // Assert that it matches Tuesday (Martes), 28, July (Julio), 2026 and wraps with dashes
     assert.match(result, /— (MARTES|TUESDAY), 28 DE (JULIO|JULY) DE 2026 —/i);
 });
+
+// 5. Verificar estructura real desacoplada de MediaPreviewModal y TaskSidePanel
+test('MediaPreviewModal Decoupled Structural Integrity - Absolute Centering and Viewport Constraint', async () => {
+    const { readFileSync } = await import('node:fs');
+    const code = readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');
+
+    // Assert the structural decoupling of MediaPreviewModal exists in JSX
+    assert.ok(code.includes('DialogPortal'), 'MediaPreviewModal must use DialogPortal to decouple from parent rendering nodes.');
+    assert.ok(code.includes('DialogOverlay'), 'MediaPreviewModal must use DialogOverlay as a dedicated full-screen backdrop.');
+    assert.ok(code.includes('DialogPrimitive.Content'), 'MediaPreviewModal must use DialogPrimitive.Content for its custom layout wrapper.');
+
+    // Assert absolute positioning layout rules
+    assert.ok(code.includes('fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'), 'MediaPreviewModal Content must use fixed translations for geometric centering.');
+    assert.ok(code.includes('w-[calc(100vw-2rem)]'), 'MediaPreviewModal Content width must be constrained responsive.');
+    assert.ok(code.includes('h-[calc(100dvh-2rem)]'), 'MediaPreviewModal Content height must be constrained responsive.');
+
+    // Assert the image region dimensions
+    assert.ok(code.includes('max-w-full max-h-full w-auto h-auto object-contain'), 'Image preview tag must be fully constrained (max-w-full, max-h-full, object-contain) to prevent viewport overflows.');
+});
