@@ -4,7 +4,8 @@ import {
     Loader2, Zap, Star, Link as LinkIcon, ExternalLink,
     X, Send, MessageSquare, RotateCcw, CheckCircle2, Bell,
     LayoutGrid, Calendar, User, Trash2, Plus, ClipboardList,
-    FileText, Database, Paperclip, ImageIcon, Eye, Download, Check
+    FileText, Database, Paperclip, ImageIcon, Eye, Download, Check,
+    MoreHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -14,6 +15,7 @@ import { triggerConfetti } from '@/utils/confetti';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import TeamAvatar from '@/components/ui/TeamAvatar';
+import { useAuth } from '@/context/AuthContext';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 import LinkDropdown from '@/components/ui/LinkDropdown';
 import { linkify, cleanSystemMessage } from '@/utils/chatUtils.jsx';
@@ -38,6 +40,10 @@ const formatDateInSpanish = (dateStr) => {
         return '';
     }
 };
+
+const APPROVED_EMOJIS = [
+    '🧠', '🚀', '👍', '😄', '💯', '🤩', '❤️', '🥲', '😂', '✌️', '🤯', '🤔', '😶', '👀', '🧨', '🗿', '💰', '🎂', '🥳', '🎉', '⏰', '🥇', '🥈', '🥉', '🔨', '👌', '📈', '📉', '⌛', '📍', '📌', '💡', '💣'
+];
 
 const EMPTY_TASK_FORM = {
     title: '',
@@ -141,7 +147,14 @@ const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage 
 
 const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = null, defaultClientId = null }) => {
     const { toast } = useToast();
+    const { currentUser } = useAuth();
     const isEdition = !!taskData?.id;
+
+    const [activeEmojiPickerCommentId, setActiveEmojiPickerCommentId] = useState(null);
+    const [showInputEmojiPicker, setShowInputEmojiPicker] = useState(false);
+    const [editingCommentId, setEditingCommentId] = useState(null);
+    const [editingContent, setEditingContent] = useState("");
+    const [openMenuCommentId, setOpenMenuCommentId] = useState(null);
 
     // Local state for atomic inline editing
     const [editingField, setEditingField] = useState(null); // 'title' | 'assigneeId' | 'dueDate' | 'status' | null
@@ -928,6 +941,156 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
     };
 
+    const handleToggleReaction = async (commentId, emoji) => {
+        const userId = currentUser?.id;
+        if (!userId) return;
+
+        let originalComments = [...(formData.taskComments || [])];
+        setFormData(prev => {
+            const updated = (prev.taskComments || []).map(comment => {
+                if (comment.id !== commentId) return comment;
+
+                let rx = [...(comment.reactions || [])];
+                const existingIndex = rx.findIndex(r => r.emoji === emoji);
+
+                if (existingIndex !== -1) {
+                    const existing = rx[existingIndex];
+                    if (existing.userReacted) {
+                        const newCount = existing.count - 1;
+                        if (newCount <= 0) {
+                            rx.splice(existingIndex, 1);
+                        } else {
+                            rx[existingIndex] = { ...existing, count: newCount, userReacted: false };
+                        }
+                    } else {
+                        rx[existingIndex] = { ...existing, count: existing.count + 1, userReacted: true };
+                    }
+                } else {
+                    rx.push({ emoji, count: 1, userReacted: true });
+                }
+
+                return { ...comment, reactions: rx };
+            });
+
+            taskCommentsCache[formData.id] = updated;
+            return { ...prev, taskComments: updated };
+        });
+
+        try {
+            const baseUrl = getApiBaseUrl();
+            const res = await fetch(`${baseUrl}/api/tasks/${formData.id}/comments/${commentId}/reactions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({ emoji })
+            });
+
+            if (!res.ok) {
+                throw new Error("Failed to toggle reaction");
+            }
+        } catch (err) {
+            console.error("Error toggling reaction:", err);
+            setFormData(prev => {
+                taskCommentsCache[formData.id] = originalComments;
+                return { ...prev, taskComments: originalComments };
+            });
+            toast({ variant: "destructive", title: "Error", description: "No se pudo reaccionar al comentario." });
+        }
+    };
+
+    const handleUpdateComment = async (commentId) => {
+        if (!editingContent.trim()) {
+            return toast({ variant: "destructive", title: "Contenido vacío", description: "El contenido del comentario no puede estar vacío." });
+        }
+
+        const originalComments = [...(formData.taskComments || [])];
+        setFormData(prev => {
+            const updated = (prev.taskComments || []).map(comment => {
+                if (comment.id === commentId) {
+                    return { ...comment, content: editingContent, isEdited: true };
+                }
+                return comment;
+            });
+            taskCommentsCache[formData.id] = updated;
+            return { ...prev, taskComments: updated };
+        });
+
+        setEditingCommentId(null);
+
+        try {
+            const baseUrl = getApiBaseUrl();
+            const res = await fetch(`${baseUrl}/api/tasks/${formData.id}/comments/${commentId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({ content: editingContent })
+            });
+
+            if (!res.ok) {
+                throw new Error("Failed to update comment");
+            }
+
+            const updatedComment = await res.json();
+            setFormData(prev => {
+                const updated = (prev.taskComments || []).map(comment => {
+                    if (comment.id === commentId) {
+                        return { ...comment, ...updatedComment };
+                    }
+                    return comment;
+                });
+                taskCommentsCache[formData.id] = updated;
+                return { ...prev, taskComments: updated };
+            });
+
+            toast({ title: "Comentario actualizado" });
+        } catch (err) {
+            console.error("Error updating comment:", err);
+            setFormData(prev => {
+                taskCommentsCache[formData.id] = originalComments;
+                return { ...prev, taskComments: originalComments };
+            });
+            toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar el comentario." });
+        }
+    };
+
+    const handleDeleteComment = async (commentId) => {
+        if (!window.confirm("¿Estás seguro de que deseas eliminar este comentario?")) return;
+
+        const originalComments = [...(formData.taskComments || [])];
+        setFormData(prev => {
+            const updated = (prev.taskComments || []).filter(comment => comment.id !== commentId);
+            taskCommentsCache[formData.id] = updated;
+            return { ...prev, taskComments: updated };
+        });
+
+        try {
+            const baseUrl = getApiBaseUrl();
+            const res = await fetch(`${baseUrl}/api/tasks/${formData.id}/comments/${commentId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (!res.ok) {
+                throw new Error("Failed to delete comment");
+            }
+
+            toast({ title: "Comentario eliminado" });
+        } catch (err) {
+            console.error("Error deleting comment:", err);
+            setFormData(prev => {
+                taskCommentsCache[formData.id] = originalComments;
+                return { ...prev, taskComments: originalComments };
+            });
+            toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar el comentario." });
+        }
+    };
+
     const handleUploadTempFile = async (file) => {
         if (!file) return;
         setIsUploadingTemp(true);
@@ -1106,24 +1269,174 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             );
         }
 
+        const isAuthor = comment.authorId === currentUser?.id;
+        const isEditingThis = editingCommentId === comment.id;
+
         return (
-            <div key={comment.id} className="flex gap-4 mb-3 group">
+            <div key={comment.id} className="flex gap-4 mb-3 group relative">
                 <TeamAvatar
                     member={{ name: comment.author?.name, avatarUrl: comment.author?.avatarUrl }}
                     size={36}
-                    className="shrink-0 ring-2 ring-white dark:ring-zinc-900 shadow-md"
+                    className="shrink-0 ring-2 ring-white dark:ring-zinc-900 shadow-md shadow-zinc-200/50 dark:shadow-none"
                 />
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 relative">
                     <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-black text-zinc-900 dark:text-zinc-100">{comment.author?.name || "Usuario"}</span>
-                        <span className="text-[10px] text-zinc-400 font-medium">{new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="text-[10px] text-zinc-400 font-medium">
+                            {new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {comment.isEdited && <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-medium ml-1.5 italic">(editado)</span>}
+                        </span>
                     </div>
-                    <div className="bg-white dark:bg-zinc-900 p-3.5 rounded-2xl rounded-tl-none inline-block max-w-full shadow-sm border border-zinc-100 dark:border-zinc-800">
-                        <div className="text-sm font-medium text-zinc-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
-                            {linkify(comment.content, handleImagePreview, contextData)}
+
+                    {isEditingThis ? (
+                        <div className="w-full flex flex-col gap-2 mt-1">
+                            <textarea
+                                value={editingContent}
+                                onChange={(e) => setEditingContent(e.target.value)}
+                                className="w-full text-xs font-medium p-3 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 rounded-xl outline-none focus:border-primary/40 resize-none h-20 shadow-inner"
+                            />
+                            <div className="flex gap-2 justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => setEditingCommentId(null)}
+                                    className="px-2.5 py-1 text-[10px] font-bold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleUpdateComment(comment.id)}
+                                    className="px-2.5 py-1 text-[10px] font-bold text-white bg-primary rounded-lg shadow-md shadow-primary/10 active:scale-95 transition-all"
+                                >
+                                    Guardar
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="relative inline-block max-w-full">
+                            <div className="bg-white dark:bg-zinc-900 p-3.5 rounded-2xl rounded-tl-none block max-w-full shadow-sm border border-zinc-100 dark:border-zinc-800">
+                                <div className="text-sm font-medium text-zinc-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                                    {linkify(comment.content, handleImagePreview, contextData)}
+                                </div>
+                            </div>
+
+                            {/* Floating Reactions Bar on hover */}
+                            {isEdition && (
+                                <div className="absolute -top-3 right-4 z-40 hidden group-hover:flex items-center gap-1 bg-white dark:bg-zinc-900 border border-zinc-200/85 dark:border-zinc-800/85 rounded-full px-2 py-1 shadow-md animate-in fade-in duration-100">
+                                    {['🧠', '🚀', '👍', '😄', '💯'].map((emoji) => (
+                                        <button
+                                            key={emoji}
+                                            type="button"
+                                            onClick={() => handleToggleReaction(comment.id, emoji)}
+                                            className="hover:scale-125 transition-transform p-0.5 text-xs active:scale-95"
+                                        >
+                                            {emoji}
+                                        </button>
+                                    ))}
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setActiveEmojiPickerCommentId(activeEmojiPickerCommentId === comment.id ? null : comment.id);
+                                            }}
+                                            className="w-5 h-5 rounded-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 hover:text-zinc-800 text-[10px] font-bold transition-all"
+                                        >
+                                            +
+                                        </button>
+                                        {activeEmojiPickerCommentId === comment.id && (
+                                            <div className="absolute bottom-[115%] right-0 z-50 w-52 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-2.5 flex flex-col gap-1.5 animate-in zoom-in-95 duration-100">
+                                                <div className="text-[8px] font-black uppercase tracking-wider text-zinc-400 px-1">
+                                                    Reaccionar
+                                                </div>
+                                                <div className="grid grid-cols-6 gap-1 max-h-36 overflow-y-auto">
+                                                    {APPROVED_EMOJIS.map((emoji) => (
+                                                        <button
+                                                            key={emoji}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                handleToggleReaction(comment.id, emoji);
+                                                                setActiveEmojiPickerCommentId(null);
+                                                            }}
+                                                            className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-sm transition-all active:scale-90"
+                                                        >
+                                                            {emoji}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Reactions Pills */}
+                    {!isEditingThis && comment.reactions && comment.reactions.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                            {comment.reactions.map((reaction) => (
+                                <button
+                                    key={reaction.emoji}
+                                    type="button"
+                                    onClick={() => handleToggleReaction(comment.id, reaction.emoji)}
+                                    className={cn(
+                                        "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold border transition-all active:scale-90",
+                                        reaction.userReacted
+                                            ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                                            : "bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 border-zinc-205/50 dark:border-zinc-750"
+                                    )}
+                                >
+                                    <span>{reaction.emoji}</span>
+                                    <span className="text-[9px] font-black">{reaction.count}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
+
+                {/* Comment Option Menu (Edit / Delete) */}
+                {isEdition && !isEditingThis && (isAuthor || currentUser?.role === 'ADMIN') && (
+                    <div className="relative shrink-0 self-start mt-5 hidden group-hover:block ml-2">
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuCommentId(openMenuCommentId === comment.id ? null : comment.id);
+                            }}
+                            className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-zinc-650 transition-colors animate-in zoom-in-95 duration-100"
+                        >
+                            <MoreHorizontal size={14} />
+                        </button>
+                        {openMenuCommentId === comment.id && (
+                            <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl py-1 w-24 animate-in fade-in duration-100">
+                                {isAuthor && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setEditingCommentId(comment.id);
+                                            setEditingContent(comment.content);
+                                            setOpenMenuCommentId(null);
+                                        }}
+                                        className="w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-bold text-zinc-700 dark:text-zinc-200 flex items-center gap-1.5"
+                                    >
+                                        Editar
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        handleDeleteComment(comment.id);
+                                        setOpenMenuCommentId(null);
+                                    }}
+                                    className="w-full text-left px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-bold text-red-600 flex items-center gap-1.5"
+                                >
+                                    Eliminar
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         );
     };
@@ -1911,8 +2224,30 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             }
                                         }}
                                         placeholder={isEdition ? "Escribe un mensaje al equipo..." : "Escribe un mensaje inicial..."}
-                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-primary/30 rounded-xl px-12 py-3 pr-12 text-xs font-medium outline-none transition-all resize-none h-[48px] no-scrollbar shadow-inner"
+                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-primary/30 rounded-xl px-12 py-3 pr-20 text-xs font-medium outline-none transition-all resize-none h-[48px] no-scrollbar shadow-inner"
                                     />
+                                    {showInputEmojiPicker && (
+                                        <div className="absolute bottom-[105%] right-4 z-[90] w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-3 animate-in slide-in-from-bottom-2 duration-150">
+                                            <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-2 px-1">
+                                                Emojis aprobados
+                                            </div>
+                                            <div className="grid grid-cols-8 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                                                {APPROVED_EMOJIS.map((emoji) => (
+                                                    <button
+                                                        key={emoji}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setNewComment(prev => prev + emoji);
+                                                            setShowInputEmojiPicker(false);
+                                                        }}
+                                                        className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-base transition-all active:scale-90"
+                                                    >
+                                                        {emoji}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="absolute left-1.5 top-1.5">
                                         <input
                                             type="file"
@@ -1943,6 +2278,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             )}
                                         </label>
                                     </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowInputEmojiPicker(!showInputEmojiPicker)}
+                                        className="absolute right-11 top-1.5 p-2 rounded-lg text-zinc-450 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary transition-all select-none"
+                                        title="Insertar emoji"
+                                    >
+                                        😀
+                                    </button>
                                     <button
                                         onClick={() => handleAddComment()}
                                         disabled={isEdition ? ((!newComment.trim() && !selectedFile) || isSendingComment) : !newComment.trim()}
