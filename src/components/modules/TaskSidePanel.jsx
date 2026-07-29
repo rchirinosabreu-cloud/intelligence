@@ -1492,7 +1492,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && (isEdition ? handleClosePanel() : handlePassiveClose())}>
             <DialogContent
-                className="w-[95vw] max-w-4xl h-[85vh] max-h-[90vh] p-0 overflow-y-auto bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl z-[100]"
+                className="w-[92vw] max-w-6xl h-[85vh] max-h-[90vh] p-0 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl z-[100] overflow-hidden"
                 onPointerDownOutside={(e) => {
                     if (previewImage) {
                         e.preventDefault();
@@ -1601,7 +1601,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 <div className="flex-1 flex flex-col bg-zinc-50 dark:bg-zinc-950">
 
                     {/* Metadata Grid Area - Full Width compact top section */}
-                    <div className="w-full border-b border-zinc-200 dark:border-zinc-800 p-6 bg-white dark:bg-zinc-900 flex flex-col gap-6 shrink-0 shadow-sm">
+                    <div className="w-full max-h-[30%] border-b border-zinc-200 dark:border-zinc-800 p-4 px-6 bg-white dark:bg-zinc-900 flex flex-col gap-3 shrink-0 shadow-sm overflow-y-auto custom-scrollbar">
 
                         {showReintegratePrompt && (
                             <motion.div
@@ -1651,22 +1651,22 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 value={formData.title || ''}
                                 onChange={e => setFormData({...formData, title: e.target.value})}
                                 placeholder="Ej: Revisión de artes para campaña..."
-                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-[15px] font-black focus:ring-2 ring-primary/10 outline-none transition-all shadow-sm"
+                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-1.5 text-sm font-black focus:ring-2 ring-primary/10 outline-none transition-all shadow-sm"
                             />
                         </div>
 
                         {/* Metadata Grid */}
-                        <div className="grid grid-cols-2 gap-5">
+                        <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
 
                             {/* Cliente Selector */}
-                            <div className="space-y-1.5">
+                            <div className="space-y-1">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Cliente</label>
                                 <select
                                     required
                                     value={formData.clientId}
                                     onChange={e => setFormData({...formData, clientId: e.target.value})}
                                     disabled={isEdition || !!defaultClientId}
-                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm disabled:opacity-80 h-[38px] cursor-pointer"
+                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2 py-1.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm disabled:opacity-80 h-[32px] cursor-pointer"
                                 >
                                     <option value="">Seleccionar cliente...</option>
                                     {clientsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1674,12 +1674,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                             {/* Responsable */}
-                            <div className="space-y-1.5">
+                            <div className="space-y-1">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Responsable</label>
                                 <select
                                     value={formData.assigneeId || ''}
                                     onChange={e => setFormData({...formData, assigneeId: e.target.value})}
-                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[38px] cursor-pointer"
+                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2 py-1.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[32px] cursor-pointer"
                                 >
                                     <option value="">Sin asignar</option>
                                     {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -1687,10 +1687,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                             {/* Deadline / Fecha Entrega */}
-                            <div className="space-y-1.5">
+                            <div className="space-y-1">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Deadline</label>
                                 <div className="relative w-full">
-                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none z-10" />
+                                    <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none z-10" />
                                     <DatePicker
                                         selected={formData.dueDate ? new Date(`${formData.dueDate.split('T')[0]}T12:00:00.000Z`) : null}
                                         onChange={(date) => {
@@ -1698,7 +1698,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             setFormData({...formData, dueDate: dateStr});
                                         }}
                                         dateFormat="dd/MM/yyyy"
-                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-9 pr-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm cursor-pointer h-[38px]"
+                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-8 pr-2 py-1.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm cursor-pointer h-[32px]"
                                         wrapperClassName="w-full"
                                         placeholderText="Elegir fecha..."
                                         isClearable
@@ -1707,12 +1707,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                             {/* Estado Actual */}
-                            <div className="space-y-1.5">
+                            <div className="space-y-1">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Estado Actual</label>
                                 <select
                                     value={formData.status}
                                     onChange={e => setFormData({...formData, status: e.target.value})}
-                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm cursor-pointer h-[38px]"
+                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2 py-1.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm cursor-pointer h-[32px]"
                                 >
                                     <option value="PENDIENTE">PENDIENTE</option>
                                     <option value="EN_CURSO">EN PROCESO</option>
@@ -1722,9 +1722,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                             {/* Prioridad */}
-                            <div className="space-y-1.5">
+                            <div className="space-y-1">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Prioridad</label>
-                                <div className="flex flex-col gap-2">
+                                <div className="flex flex-col gap-1.5">
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -1736,12 +1736,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             }));
                                         }}
                                         className={cn(
-                                            "flex items-center justify-center gap-2.5 p-2 rounded-xl border transition-all shadow-sm h-[38px] w-full",
+                                            "flex items-center justify-center gap-2 px-2 py-1.5 rounded-xl border transition-all shadow-sm h-[32px] w-full",
                                             formData.isPriority ? "bg-red-500/10 text-red-600 border-red-500/30 font-black animate-in zoom-in-95 duration-150" : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400 font-bold hover:bg-zinc-100 transition-colors"
                                         )}
                                     >
-                                        <Zap size={14} fill={formData.isPriority ? "currentColor" : "none"} />
-                                        <span className="text-[10px] uppercase tracking-widest font-black">¿Es Prioritaria?</span>
+                                        <Zap size={12} fill={formData.isPriority ? "currentColor" : "none"} />
+                                        <span className="text-[9px] uppercase tracking-widest font-black">¿Es Prioritaria?</span>
                                     </button>
 
                                     {formData.isPriority && (
@@ -1756,7 +1756,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                         isPriority: true
                                                     }));
                                                 }}
-                                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[38px] cursor-pointer"
+                                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2 py-1 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[30px] cursor-pointer"
                                             >
                                                 <option value="URGENTE">Urgente</option>
                                                 <option value="ALTA">Alta</option>
@@ -1768,13 +1768,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                             {/* Especial Flag (Read-Only / Button Toggle) */}
-                            <div className="space-y-1.5 flex flex-col justify-end">
+                            <div className="space-y-1 flex flex-col justify-end">
                                 <button
                                     type="button"
                                     disabled={isEdition}
                                     onClick={() => setFormData(prev => ({ ...prev, isSpecial: !prev.isSpecial }))}
                                     className={cn(
-                                        "flex items-center justify-center gap-2.5 p-2 rounded-xl border transition-all shadow-sm h-[38px]",
+                                        "flex items-center justify-center gap-2 px-2 py-1.5 rounded-xl border transition-all shadow-sm h-[32px]",
                                         formData.isSpecial ? "bg-purple-600 text-white border-purple-700 font-bold animate-pulse" : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400",
                                         isEdition && "opacity-80 cursor-default"
                                     )}
@@ -1811,7 +1811,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 <div className="grid grid-cols-2 gap-4">
 
                                     {/* Referencias en Edición */}
-                                    <div className="space-y-2 bg-zinc-50/50 dark:bg-zinc-950/30 p-3.5 rounded-2xl border border-zinc-200/40 dark:border-zinc-800/40">
+                                    <div className="space-y-2 bg-zinc-50/50 dark:bg-zinc-950/30 p-2 px-3 rounded-2xl border border-zinc-200/40 dark:border-zinc-800/40">
                                         <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">Referencias</span>
                                         <div className="flex gap-2 mb-2">
                                             <input
@@ -1845,7 +1845,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             }
 
                                             if (refUrls.length === 0) {
-                                                return <div className="text-[10px] text-zinc-400 italic">No hay referencias</div>;
+                                                return null;
                                             }
 
                                             return (
@@ -1868,7 +1868,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     </div>
 
                                     {/* Insumos en Edición */}
-                                    <div className="space-y-2 bg-zinc-50/50 dark:bg-zinc-950/30 p-3.5 rounded-2xl border border-zinc-200/40 dark:border-zinc-800/40">
+                                    <div className="space-y-2 bg-zinc-50/50 dark:bg-zinc-950/30 p-2 px-3 rounded-2xl border border-zinc-200/40 dark:border-zinc-800/40">
                                         <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">Insumos</span>
                                         <div className="flex gap-2 mb-2">
                                             <input
@@ -1901,7 +1901,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             }
 
                                             if (inpUrls.length === 0) {
-                                                return <div className="text-[10px] text-zinc-400 italic">No hay insumos</div>;
+                                                return null;
                                             }
 
                                             return (
@@ -2095,7 +2095,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     </div>
 
                     {/* Bottom Section: Full Width Chronological Chat */}
-                    <div className="w-full flex flex-col bg-zinc-100 dark:bg-zinc-950/30 shrink-0 min-h-[500px]">
+                    <div className="w-full h-[70%] flex flex-col bg-zinc-100 dark:bg-zinc-950/30 overflow-hidden">
 
                         {/* Chat Container */}
                         <div
