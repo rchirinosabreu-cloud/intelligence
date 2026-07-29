@@ -30,6 +30,11 @@ import {
     DialogPortal,
     DialogOverlay,
 } from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+} from '@/components/ui/dropdown-menu';
 
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
@@ -197,6 +202,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     });
 
     const [newComment, setNewComment] = useState("");
+    const [newCommentText, setNewCommentText] = useState("");
+    const [editingCommentText, setEditingCommentText] = useState("");
     const [isSendingComment, setIsSendingComment] = useState(false);
     const [isFollowing, setIsFollowing] = useState(false);
     const [isTogglingFollow, setIsTogglingFollow] = useState(false);
@@ -418,6 +425,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         setTempComments([]);
         setTempAttachments([]);
         setNewComment("");
+        setNewCommentText("");
         setNewRefUrl("");
         setNewRefName("");
         setNewInpUrl("");
@@ -437,6 +445,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         setTempComments([]);
         setTempAttachments([]);
         setNewComment("");
+        setNewCommentText("");
         setNewRefUrl("");
         setNewRefName("");
         setNewInpUrl("");
@@ -458,6 +467,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             setPreviewImage(null); // Clear image viewer state when opening a task
             setSelectedFile(null); // Clear pending attachment
             setNewComment("");    // Clear pending comment draft
+            setNewCommentText("");
+            setEditingCommentText("");
             setEditingField(null);
             setNewRefUrl("");
             setNewRefName("");
@@ -1314,6 +1325,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 value={editingContent}
                                 onChange={setEditingContent}
                                 onSend={() => handleUpdateComment(comment.id)}
+                                onTextChange={setEditingCommentText}
                                 showToolbar={showEditToolbar}
                                 className="pr-12"
                             />
@@ -1335,6 +1347,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     onClick={() => {
                                         setEditingCommentId(null);
                                         setShowEditToolbar(false);
+                                        setEditingCommentText("");
                                     }}
                                     className="px-2.5 py-1 text-[10px] font-bold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-all"
                                 >
@@ -1343,7 +1356,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 <button
                                     type="button"
                                     onClick={() => handleUpdateComment(comment.id)}
-                                    className="px-2.5 py-1 text-[10px] font-bold text-white bg-primary rounded-lg shadow-md shadow-primary/10 active:scale-95 transition-all"
+                                    disabled={!editingCommentText}
+                                    className={cn(
+                                        "px-2.5 py-1 text-[10px] font-bold rounded-lg shadow-md transition-all active:scale-95",
+                                        editingCommentText ? "bg-primary text-white shadow-primary/10" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed"
+                                    )}
                                 >
                                     Guardar
                                 </button>
@@ -2288,9 +2305,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         value={newComment}
                                         onChange={setNewComment}
                                         onSend={handleAddComment}
+                                        onTextChange={setNewCommentText}
                                         placeholder={isEdition ? "Escribe un mensaje al equipo..." : "Escribe un mensaje inicial..."}
                                         showToolbar={showToolbar}
-                                        className="pr-28"
+                                        className="pl-4 pr-44"
                                     />
                                     {showInputEmojiPicker && (
                                         <div className="absolute bottom-[105%] right-4 z-[90] w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-3 animate-in slide-in-from-bottom-2 duration-150">
@@ -2314,65 +2332,76 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             </div>
                                         </div>
                                     )}
-                                    <div className="absolute left-1.5 top-1.5 w-9 h-9 flex items-center justify-center z-10">
-                                        <input
-                                            type="file"
-                                            id="task-file-upload-focus"
-                                            className="hidden"
-                                            accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,audio/*"
-                                            onChange={(e) => {
-                                                const file = e.target.files[0];
-                                                if (!file) return;
-                                                if (isEdition) {
-                                                    setSelectedFile(file);
-                                                } else {
-                                                    handleUploadTempFile(file);
-                                                }
-                                            }}
-                                        />
-                                        <label
-                                            htmlFor="task-file-upload-focus"
+
+                                    {/* Action Group Flexbox on the right (Clip, Format A, Emoji, Send) */}
+                                    <div className="absolute right-1.5 top-1.5 flex items-center gap-1 z-10">
+                                        {/* 1. Attachment Clip Button */}
+                                        <div className="w-9 h-9 flex items-center justify-center">
+                                            <input
+                                                type="file"
+                                                id="task-file-upload-focus"
+                                                className="hidden"
+                                                accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,audio/*"
+                                                onChange={(e) => {
+                                                    const file = e.target.files[0];
+                                                    if (!file) return;
+                                                    if (isEdition) {
+                                                        setSelectedFile(file);
+                                                    } else {
+                                                        handleUploadTempFile(file);
+                                                    }
+                                                }}
+                                            />
+                                            <label
+                                                htmlFor="task-file-upload-focus"
+                                                className={cn(
+                                                    "w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 transition-all hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary cursor-pointer select-none"
+                                                )}
+                                                title="Adjuntar archivo"
+                                            >
+                                                {isUploadingTemp ? (
+                                                    <Loader2 size={16} className="animate-spin text-primary" />
+                                                ) : (
+                                                    <Paperclip size={16} />
+                                                )}
+                                            </label>
+                                        </div>
+
+                                        {/* 2. Format 'A' Button */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowToolbar(!showToolbar)}
                                             className={cn(
-                                                "w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 transition-all hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary cursor-pointer select-none"
+                                                "w-9 h-9 flex items-center justify-center rounded-lg text-xs font-bold transition-all select-none hover:bg-zinc-200 dark:hover:bg-zinc-800",
+                                                showToolbar ? "text-primary bg-primary/10" : "text-zinc-400"
                                             )}
-                                            title="Adjuntar archivo"
+                                            title="Formato"
                                         >
-                                            {isUploadingTemp ? (
-                                                <Loader2 size={16} className="animate-spin text-primary" />
-                                            ) : (
-                                                <Paperclip size={16} />
+                                            A
+                                        </button>
+
+                                        {/* 3. Insert Emoji Button */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowInputEmojiPicker(!showInputEmojiPicker)}
+                                            className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-450 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary transition-all select-none"
+                                            title="Insertar emoji"
+                                        >
+                                            😀
+                                        </button>
+
+                                        {/* 4. Send Message Button */}
+                                        <button
+                                            onClick={() => handleAddComment()}
+                                            disabled={isEdition ? ((!newCommentText && !selectedFile) || isSendingComment) : !newCommentText}
+                                            className={cn(
+                                                "w-9 h-9 flex items-center justify-center rounded-lg transition-all",
+                                                (newCommentText || (selectedFile && isEdition)) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
                                             )}
-                                        </label>
+                                        >
+                                            {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                                        </button>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowToolbar(!showToolbar)}
-                                        className={cn(
-                                            "absolute right-20 top-1.5 w-9 h-9 flex items-center justify-center rounded-lg text-xs font-bold transition-all select-none hover:bg-zinc-200 dark:hover:bg-zinc-800 z-10",
-                                            showToolbar ? "text-primary bg-primary/10" : "text-zinc-400"
-                                        )}
-                                        title="Formato"
-                                    >
-                                        A
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowInputEmojiPicker(!showInputEmojiPicker)}
-                                        className="absolute right-11 top-1.5 w-9 h-9 flex items-center justify-center rounded-lg text-zinc-450 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary transition-all select-none z-10"
-                                        title="Insertar emoji"
-                                    >
-                                        😀
-                                    </button>
-                                    <button
-                                        onClick={() => handleAddComment()}
-                                        disabled={isEdition ? ((!newComment.trim() && !selectedFile) || isSendingComment) : !newComment.trim()}
-                                        className={cn(
-                                            "absolute right-1.5 top-1.5 w-9 h-9 flex items-center justify-center rounded-lg transition-all z-10",
-                                            (newComment.trim() || (selectedFile && isEdition)) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
-                                        )}
-                                    >
-                                        {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -2394,4 +2423,43 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     );
 };
 
-export default TaskSidePanel;
+class ErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+    }
+
+    componentDidCatch(error, errorInfo) {
+        console.error("ErrorBoundary caught an error:", error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="p-6 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-2xl flex flex-col gap-2">
+                    <h3 className="text-sm font-bold text-red-700 dark:text-red-400">Algo salió mal al cargar el panel de tareas</h3>
+                    <p className="text-xs text-red-600/80 dark:text-red-400/80">{this.state.error?.message}</p>
+                    <button
+                        onClick={() => this.setState({ hasError: false, error: null })}
+                        className="mt-2 self-start px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/20 dark:hover:bg-red-900/30 dark:text-red-400 rounded-lg text-xs font-bold transition-all"
+                    >
+                        Reintentar
+                    </button>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
+const TaskSidePanelWithErrorBoundary = (props) => (
+    <ErrorBoundary>
+        <TaskSidePanel {...props} />
+    </ErrorBoundary>
+);
+
+export default TaskSidePanelWithErrorBoundary;
