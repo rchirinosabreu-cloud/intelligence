@@ -452,14 +452,183 @@ export const uploadTempFile = async (req, res) => {
 export const getTaskComments = async (req, res) => {
     try {
         const { taskId } = req.params;
+        const taskExists = await prisma.task.findUnique({
+            where: { id: taskId }
+        });
+        if (!taskExists) {
+            return res.status(404).json({ error: "Task not found" });
+        }
+
         const comments = await prisma.taskComment.findMany({
             where: { taskId },
-            include: { author: true, attachments: true },
+            include: { author: true, attachments: true, reactions: true },
             orderBy: { createdAt: 'desc' }
         });
-        res.json(comments);
+
+        const mappedComments = comments.map(comment => {
+            const emojiGroups = {};
+            comment.reactions.forEach(reaction => {
+                if (!emojiGroups[reaction.emoji]) {
+                    emojiGroups[reaction.emoji] = {
+                        emoji: reaction.emoji,
+                        count: 0,
+                        userReacted: false
+                    };
+                }
+                emojiGroups[reaction.emoji].count += 1;
+                if (req.user && reaction.userId === req.user.userId) {
+                    emojiGroups[reaction.emoji].userReacted = true;
+                }
+            });
+
+            const { reactions: rawReactions, ...commentData } = comment;
+            return {
+                ...commentData,
+                reactions: Object.values(emojiGroups)
+            };
+        });
+
+        res.json(mappedComments);
     } catch (error) {
         res.status(500).json({ error: "Failed to fetch task comments", details: error.message });
+    }
+};
+
+export const toggleCommentReaction = async (req, res) => {
+    try {
+        const { taskId, commentId } = req.params;
+        const { emoji } = req.body;
+        const userId = req.user?.userId;
+
+        if (!emoji) {
+            return res.status(400).json({ error: "Emoji is required" });
+        }
+
+        const comment = await prisma.taskComment.findUnique({
+            where: { id: commentId }
+        });
+
+        if (!comment || comment.taskId !== taskId) {
+            return res.status(404).json({ error: "Comment not found or does not belong to this task" });
+        }
+
+        const existingReaction = await prisma.taskCommentReaction.findUnique({
+            where: {
+                commentId_userId_emoji: {
+                    commentId,
+                    userId,
+                    emoji
+                }
+            }
+        });
+
+        if (existingReaction) {
+            await prisma.taskCommentReaction.delete({
+                where: {
+                    id: existingReaction.id
+                }
+            });
+            return res.json({ success: true, action: "removed" });
+        } else {
+            await prisma.taskCommentReaction.create({
+                data: {
+                    commentId,
+                    userId,
+                    emoji
+                }
+            });
+            return res.status(201).json({ success: true, action: "added" });
+        }
+    } catch (error) {
+        res.status(500).json({ error: "Failed to toggle reaction", details: error.message });
+    }
+};
+
+export const updateTaskComment = async (req, res) => {
+    try {
+        const { taskId, commentId } = req.params;
+        const { content } = req.body;
+        const userId = req.user?.userId;
+
+        if (content === undefined || content === null) {
+            return res.status(400).json({ error: "Content is required" });
+        }
+
+        const comment = await prisma.taskComment.findUnique({
+            where: { id: commentId }
+        });
+
+        if (!comment || comment.taskId !== taskId) {
+            return res.status(404).json({ error: "Comment not found or does not belong to this task" });
+        }
+
+        if (comment.authorId !== userId) {
+            return res.status(403).json({ error: "No tienes permisos para editar este comentario" });
+        }
+
+        const updated = await prisma.taskComment.update({
+            where: { id: commentId },
+            data: {
+                content,
+                isEdited: true
+            },
+            include: { author: true, attachments: true, reactions: true }
+        });
+
+        const emojiGroups = {};
+        updated.reactions.forEach(reaction => {
+            if (!emojiGroups[reaction.emoji]) {
+                emojiGroups[reaction.emoji] = {
+                    emoji: reaction.emoji,
+                    count: 0,
+                    userReacted: false
+                };
+            }
+            emojiGroups[reaction.emoji].count += 1;
+            if (reaction.userId === userId) {
+                emojiGroups[reaction.emoji].userReacted = true;
+            }
+        });
+
+        const { reactions: rawReactions, ...commentData } = updated;
+
+        res.json({
+            ...commentData,
+            reactions: Object.values(emojiGroups)
+        });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to update comment", details: error.message });
+    }
+};
+
+export const deleteTaskComment = async (req, res) => {
+    try {
+        const { taskId, commentId } = req.params;
+        const userId = req.user?.userId;
+        const role = req.user?.role;
+
+        const comment = await prisma.taskComment.findUnique({
+            where: { id: commentId }
+        });
+
+        if (!comment || comment.taskId !== taskId) {
+            return res.status(404).json({ error: "Comment not found or does not belong to this task" });
+        }
+
+        const isAuthor = comment.authorId === userId;
+        const isAdmin = role === 'ADMIN';
+
+        if (!isAuthor && !isAdmin) {
+            return res.status(403).json({ error: "No tienes permisos para eliminar este comentario" });
+        }
+
+        await prisma.taskComment.delete({
+            where: { id: commentId }
+        });
+
+        res.json({ success: true, message: "Comentario eliminado exitosamente" });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to delete comment", details: error.message });
     }
 };
 

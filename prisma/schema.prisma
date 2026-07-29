@@ -40,6 +40,7 @@ model User {
   createdTasks        Task[]               @relation("CreatedTasks")
   notes               UserNote[]
   taskComments        TaskComment[]
+  taskCommentReactions TaskCommentReaction[]
   taskFollowing       TaskFollower[]
   payrollContracts    PayrollContract[]
   payrollTransactions PayrollTransaction[]
@@ -338,12 +339,29 @@ model TaskComment {
   content   String
   type      String   @default("human") // human, system_return, system_reintegrate
   createdAt DateTime @default(now())
+  isEdited  Boolean  @default(false)
+  updatedAt DateTime @updatedAt
 
-  task        Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  author      User?            @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  task        Task                  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author      User?                 @relation(fields: [authorId], references: [id], onDelete: SetNull)
   attachments TaskAttachment[]
+  reactions   TaskCommentReaction[]
 
   @@index([taskId])
+}
+
+model TaskCommentReaction {
+  id        String   @id @default(uuid())
+  commentId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  comment   TaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId, emoji])
+  @@index([commentId])
 }
 
 model BrandAsset {
