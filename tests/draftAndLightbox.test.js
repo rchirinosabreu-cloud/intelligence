@@ -92,3 +92,24 @@ test('Verified Blob Download - Extracción de Content-Disposition y trigger de d
 
     assert.strictEqual(fileName, 'documento_corporativo_2026.docx', 'Debe extraer correctamente el nombre original del archivo desde el Content-Disposition.');
 });
+
+// 4. Simular separadores cronológicos formateados en español
+test('Spanish Chronological Day Dividers - Format uppercase and dashes', () => {
+    const formatDateInSpanish = (dateStr) => {
+        try {
+            const date = new Date(dateStr);
+            const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+            let formatted = new Intl.DateTimeFormat('es-ES', options).format(date);
+            return `— ${formatted.toUpperCase()} —`;
+        } catch (e) {
+            return '';
+        }
+    };
+
+    // Use a fixed date: 2026-07-28
+    const testDate = '2026-07-28T12:00:00.000Z';
+    const result = formatDateInSpanish(testDate);
+
+    // Assert that it matches Tuesday (Martes), 28, July (Julio), 2026 and wraps with dashes
+    assert.match(result, /— (MARTES|TUESDAY), 28 DE (JULIO|JULY) DE 2026 —/i);
+});

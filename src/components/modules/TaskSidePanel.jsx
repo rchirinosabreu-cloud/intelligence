@@ -25,6 +25,20 @@ import {
     DialogDescription,
 } from '@/components/ui/dialog';
 
+// Global in-memory cache for task comments (SWR engine)
+const taskCommentsCache = {};
+
+const formatDateInSpanish = (dateStr) => {
+    try {
+        const date = new Date(dateStr);
+        const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+        let formatted = new Intl.DateTimeFormat('es-ES', options).format(date);
+        return `— ${formatted.toUpperCase()} —`;
+    } catch (e) {
+        return '';
+    }
+};
+
 const EMPTY_TASK_FORM = {
     title: '',
     clientId: '',
@@ -278,7 +292,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
         const fetchComments = async (isInitial = false) => {
             if (isInitial && isMounted) {
-                setIsLoadingComments(true);
+                if (taskCommentsCache[formData.id]) {
+                    setIsLoadingComments(false);
+                } else {
+                    setIsLoadingComments(true);
+                }
             }
             try {
                 const baseUrl = getApiBaseUrl();
@@ -288,6 +306,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 if (res.ok && isMounted) {
                     const data = await res.json();
                     if (Array.isArray(data)) {
+                        taskCommentsCache[formData.id] = data;
                         setFormData(prev => {
                             const hasChanged = JSON.stringify(prev.taskComments) !== JSON.stringify(data);
                             if (hasChanged) {
@@ -469,7 +488,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     referenceUrl: taskData.referenceUrl || '',
                     referenceLinks: referenceLinks,
                     assetsLinks: taskData.contentItem?.assetsLinks || [],
-                    taskComments: taskData.taskComments || [],
+                    taskComments: taskCommentsCache[taskData.id] || taskData.taskComments || [],
                     taskAttachments: taskData.taskAttachments || [],
                     creator: taskData.creator || { name: taskData.creatorName || 'Sistema' },
                     plan: taskData.plan,
@@ -890,10 +909,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
             if (res.ok) {
                 const comment = await res.json();
-                setFormData(prev => ({
-                    ...prev,
-                    taskComments: [...(prev.taskComments || []), comment] // Keep in backend order, then UI will reverse it for display
-                }));
+                setFormData(prev => {
+                    const updatedComments = [...(prev.taskComments || []), comment];
+                    taskCommentsCache[formData.id] = updatedComments;
+                    return {
+                        ...prev,
+                        taskComments: updatedComments
+                    };
+                });
                 setNewComment("");
                 setSelectedFile(null);
                 toast({ title: "Comentario enviado" });
@@ -1003,9 +1026,50 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
     useEffect(() => {
         if (isOpen) {
-            setTimeout(scrollToBottom, 100);
+            scrollToBottom();
+            const t1 = setTimeout(scrollToBottom, 50);
+            const t2 = setTimeout(scrollToBottom, 150);
+            const t3 = setTimeout(scrollToBottom, 300);
+            return () => {
+                clearTimeout(t1);
+                clearTimeout(t2);
+                clearTimeout(t3);
+            };
         }
     }, [isOpen, formData.taskComments, tempComments]);
+
+    const renderCommentsWithDividers = () => {
+        const rendered = [];
+        let lastDateStr = null;
+
+        displayComments.forEach((comment) => {
+            if (!comment.createdAt) {
+                rendered.push(renderComment(comment));
+                return;
+            }
+
+            const dateObj = new Date(comment.createdAt);
+            const dateStr = dateObj.toISOString().split('T')[0];
+
+            if (dateStr !== lastDateStr) {
+                const headerText = formatDateInSpanish(comment.createdAt);
+                if (headerText) {
+                    rendered.push(
+                        <div key={`divider-${dateStr}`} className="py-4 flex items-center justify-center">
+                            <span className="text-[10px] font-black tracking-widest text-zinc-400 dark:text-zinc-500 uppercase select-none">
+                                {headerText}
+                            </span>
+                        </div>
+                    );
+                }
+                lastDateStr = dateStr;
+            }
+
+            rendered.push(renderComment(comment));
+        });
+
+        return rendered;
+    };
 
     const renderComment = (comment) => {
         const isSystem = comment.type === 'system_return' || comment.type === 'system_reintegrate';
@@ -1763,7 +1827,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         <p className="text-[10px] text-zinc-400 font-medium max-w-[200px] mt-1">Escribe o suelta una imagen abajo para iniciar la conversación</p>
                                     </div>
                                 ) : (
-                                    displayComments.map(renderComment)
+                                    renderCommentsWithDividers()
                                 )}
                             </div>
                         </div>
