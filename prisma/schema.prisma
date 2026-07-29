@@ -340,7 +340,7 @@ model TaskComment {
   type      String   @default("human") // human, system_return, system_reintegrate
   createdAt DateTime @default(now())
   isEdited  Boolean  @default(false)
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   task        Task                  @relation(fields: [taskId], references: [id], onDelete: Cascade)
   author      User?                 @relation(fields: [authorId], references: [id], onDelete: SetNull)
