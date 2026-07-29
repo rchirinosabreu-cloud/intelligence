@@ -102,3 +102,41 @@
 .animate-pulse-subtle {
   animation: pulse-subtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Tiptap / Prosemirror Rich Text Styling */
+.ProseMirror h1, .prose h1 {
+  font-size: 1.125rem !important; /* text-lg */
+  font-weight: 700 !important;    /* font-bold */
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.ProseMirror h2, .prose h2 {
+  font-size: 1rem !important;     /* text-base */
+  font-weight: 700 !important;    /* font-bold */
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.ProseMirror ul, .prose ul {
+  list-style-type: disc !important;
+  padding-left: 1.25rem !important; /* pl-5 */
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.ProseMirror ol, .prose ol {
+  list-style-type: decimal !important;
+  padding-left: 1.25rem !important; /* pl-5 */
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.ProseMirror p, .prose p {
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.ProseMirror:focus {
+  outline: none;
+}

@@ -132,3 +132,19 @@ test('MediaPreviewModal Decoupled Structural Integrity - Absolute Centering and 
     // Assert the image region dimensions
     assert.ok(code.includes('max-w-full max-h-full w-auto h-auto object-contain'), 'Image preview tag must be fully constrained (max-w-full, max-h-full, object-contain) to prevent viewport overflows.');
 });
+
+// 6. Verificar integración de Tiptap, popovers de comentarios y habilitación de atributo Especial
+test('Tiptap, Unified Popovers and Especial Attr Enablement', async () => {
+    const { readFileSync } = await import('node:fs');
+    const code = readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');
+
+    // Assert Tiptap is imported and used
+    assert.ok(code.includes('RichTextEditor'), 'RichTextEditor must be imported and integrated inside the task sidebar.');
+
+    // Assert the unified commentPopover state is used
+    assert.ok(code.includes('commentPopover'), 'Unified commentPopover state must manage reaction and CRUD view states.');
+    assert.ok(!code.includes('openMenuCommentId'), 'Legacy openMenuCommentId must be completely removed.');
+
+    // Assert Especial button is not locked
+    assert.ok(code.includes('nextIsSpecial'), 'Special button toggle must update nextIsSpecial state.');
+});
