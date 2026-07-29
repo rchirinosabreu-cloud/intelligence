@@ -13,7 +13,8 @@ import {
     getTaskComments,
     toggleCommentReaction,
     updateTaskComment,
-    deleteTaskComment
+    deleteTaskComment,
+    addTaskComment
 } from '../src/controllers/taskController.js';
 
 function mockRes() {
@@ -239,5 +240,84 @@ test('TaskComment and Reactions Controller Tests', async (t) => {
         await deleteTaskComment(req, res);
         assert.strictEqual(res.statusCode, 200);
         assert.strictEqual(deletedCommentId, 'comment-1');
+    });
+
+    await t.test('HTML Sanitization - addTaskComment & updateTaskComment desinfect content securely', async () => {
+        // Mock transaction and final return
+        const originalTransaction = prisma.$transaction;
+        const expectedCleanHtml = '<p>Hello <strong>world</strong></p>';
+        prisma.$transaction = async (cb) => {
+            return cb({
+                taskComment: {
+                    create: async ({ data }) => {
+                        return { id: 'comment-created', ...data };
+                    },
+                    findUnique: async () => ({
+                        id: 'comment-created',
+                        content: expectedCleanHtml,
+                        author: { name: 'Test User' },
+                        attachments: []
+                    })
+                },
+                taskAttachment: {
+                    create: async () => ({})
+                }
+            });
+        };
+
+        const maliciousHtml = '<p>Hello <script>alert(1)</script><strong onload="malicious()">world</strong></p>';
+
+        // 1. Test addTaskComment
+        prisma.taskComment.findUnique = async () => ({
+            id: 'comment-created',
+            content: expectedCleanHtml,
+            author: { name: 'Test User' },
+            attachments: []
+        });
+
+        let req = {
+            params: { taskId: 'task-abc' },
+            body: { content: maliciousHtml },
+            user: { userId: 'user-1' }
+        };
+        let res = mockRes();
+
+        await addTaskComment(req, res);
+        assert.strictEqual(res.statusCode, 201);
+        assert.strictEqual(res.jsonData.content, expectedCleanHtml);
+
+        // Restore original transaction
+        prisma.$transaction = originalTransaction;
+
+        // 2. Test updateTaskComment
+        prisma.taskComment.findUnique = async () => ({
+            id: 'comment-1',
+            taskId: 'task-abc',
+            authorId: 'user-1'
+        });
+
+        let updatedData = null;
+        prisma.taskComment.update = async ({ where, data }) => {
+            updatedData = data;
+            return {
+                id: 'comment-1',
+                taskId: 'task-abc',
+                authorId: 'user-1',
+                content: data.content,
+                isEdited: data.isEdited,
+                reactions: []
+            };
+        };
+
+        req = {
+            params: { taskId: 'task-abc', commentId: 'comment-1' },
+            body: { content: maliciousHtml },
+            user: { userId: 'user-1' }
+        };
+        res = mockRes();
+
+        await updateTaskComment(req, res);
+        assert.strictEqual(res.statusCode, 200);
+        assert.strictEqual(updatedData.content, expectedCleanHtml);
     });
 });
