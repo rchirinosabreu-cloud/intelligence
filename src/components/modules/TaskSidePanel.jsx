@@ -20,6 +20,7 @@ import { useAuth } from '@/context/AuthContext';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 import LinkDropdown from '@/components/ui/LinkDropdown';
 import { linkify, cleanSystemMessage } from '@/utils/chatUtils.jsx';
+import RichTextEditor from '@/components/ui/RichTextEditor';
 import {
     Dialog,
     DialogContent,
@@ -153,11 +154,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const { currentUser } = useAuth();
     const isEdition = !!taskData?.id;
 
-    const [activeEmojiPickerCommentId, setActiveEmojiPickerCommentId] = useState(null);
+    const [commentPopover, setCommentPopover] = useState({ commentId: null, view: null }); // view: 'quick-actions' | 'all-emojis' | null
     const [showInputEmojiPicker, setShowInputEmojiPicker] = useState(false);
     const [editingCommentId, setEditingCommentId] = useState(null);
     const [editingContent, setEditingContent] = useState("");
-    const [openMenuCommentId, setOpenMenuCommentId] = useState(null);
+    const [showToolbar, setShowToolbar] = useState(false);
+    const [showEditToolbar, setShowEditToolbar] = useState(false);
 
     // Local state for atomic inline editing
     const [editingField, setEditingField] = useState(null); // 'title' | 'assigneeId' | 'dueDate' | 'status' | null
@@ -954,6 +956,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 setNewComment("");
                 setSelectedFile(null);
                 toast({ title: "Comentario enviado" });
+                setTimeout(scrollToBottomSmooth, 50);
             }
         } catch (err) {
             toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el comentario." });
@@ -1208,26 +1211,15 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
     };
 
-    // Auto-scroll chat to bottom
-    const scrollToBottom = () => {
+    // Auto-scroll chat to bottom smoothly on user comment addition
+    const scrollToBottomSmooth = () => {
         if (chatContainerRef.current) {
-            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+            chatContainerRef.current.scrollTo({
+                top: chatContainerRef.current.scrollHeight,
+                behavior: 'smooth'
+            });
         }
     };
-
-    useEffect(() => {
-        if (isOpen) {
-            scrollToBottom();
-            const t1 = setTimeout(scrollToBottom, 50);
-            const t2 = setTimeout(scrollToBottom, 150);
-            const t3 = setTimeout(scrollToBottom, 300);
-            return () => {
-                clearTimeout(t1);
-                clearTimeout(t2);
-                clearTimeout(t3);
-            };
-        }
-    }, [isOpen, formData.taskComments, tempComments]);
 
     const renderCommentsWithDividers = () => {
         const rendered = [];
@@ -1309,24 +1301,41 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 />
                 <div className="flex-1 min-w-0 relative">
                     <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-black text-zinc-900 dark:text-zinc-100">{comment.author?.name || "Usuario"}</span>
-                        <span className="text-[10px] text-zinc-400 font-medium">
+                        <span className="text-[13px] font-black text-zinc-900 dark:text-zinc-100">{comment.author?.name || "Usuario"}</span>
+                        <span className="text-[11px] text-zinc-400 font-medium">
                             {new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            {comment.isEdited && <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-medium ml-1.5 italic">(editado)</span>}
+                            {comment.isEdited && <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-medium ml-1.5 italic">(editado)</span>}
                         </span>
                     </div>
 
                     {isEditingThis ? (
-                        <div className="w-full flex flex-col gap-2 mt-1">
-                            <textarea
+                        <div className="w-full flex flex-col gap-2 mt-1 relative">
+                            <RichTextEditor
                                 value={editingContent}
-                                onChange={(e) => setEditingContent(e.target.value)}
-                                className="w-full text-xs font-medium p-3 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 rounded-xl outline-none focus:border-primary/40 resize-none h-20 shadow-inner"
+                                onChange={setEditingContent}
+                                onSend={() => handleUpdateComment(comment.id)}
+                                showToolbar={showEditToolbar}
+                                className="pr-12"
                             />
+                            {/* Formatting 'A' Toggle Button */}
+                            <button
+                                type="button"
+                                onClick={() => setShowEditToolbar(!showEditToolbar)}
+                                className={cn(
+                                    "absolute right-1.5 top-1.5 p-1.5 rounded-lg text-xs font-bold transition-all select-none hover:bg-zinc-200 dark:hover:bg-zinc-800 z-10",
+                                    showEditToolbar ? "text-primary bg-primary/10" : "text-zinc-400"
+                                )}
+                                title="Formato"
+                            >
+                                A
+                            </button>
                             <div className="flex gap-2 justify-end">
                                 <button
                                     type="button"
-                                    onClick={() => setEditingCommentId(null)}
+                                    onClick={() => {
+                                        setEditingCommentId(null);
+                                        setShowEditToolbar(false);
+                                    }}
                                     className="px-2.5 py-1 text-[10px] font-bold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-all"
                                 >
                                     Cancelar
@@ -1350,103 +1359,119 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 {/* Basecamp Action Menu inside message card */}
                                 {isEdition && (
                                     <div className="absolute top-3 right-3 opacity-0 group-hover/card:opacity-100 transition-opacity z-50">
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setOpenMenuCommentId(openMenuCommentId === comment.id ? null : comment.id);
-                                            }}
-                                            className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-zinc-600 transition-all select-none"
+                                        <DropdownMenu
+                                            open={commentPopover.commentId === comment.id}
+                                            onOpenChange={(isOpen) => setCommentPopover(isOpen ? { commentId: comment.id, view: 'quick-actions' } : { commentId: null, view: null })}
                                         >
-                                            <MoreHorizontal size={14} />
-                                        </button>
-                                        {openMenuCommentId === comment.id && (
-                                            <div className="absolute right-0 top-full mt-1.5 z-[60] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-2.5 w-56 flex flex-col gap-2 animate-in zoom-in-95 duration-100">
-                                                {/* Reacciones Rápidas */}
-                                                <div className="flex items-center justify-between gap-1 px-1 py-0.5">
-                                                    {['🧠', '🚀', '👍', '😄', '💯'].map((emoji) => (
-                                                        <button
-                                                            key={emoji}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                handleToggleReaction(comment.id, emoji);
-                                                                setOpenMenuCommentId(null);
-                                                            }}
-                                                            className="hover:scale-125 transition-transform p-0.5 text-base active:scale-95"
-                                                        >
-                                                            {emoji}
-                                                        </button>
-                                                    ))}
-                                                    <div className="relative">
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setActiveEmojiPickerCommentId(activeEmojiPickerCommentId === comment.id ? null : comment.id);
-                                                            }}
-                                                            className="w-6 h-6 rounded-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-500 hover:text-zinc-800 text-[10px] font-bold transition-all"
-                                                        >
-                                                            +
-                                                        </button>
-                                                        {activeEmojiPickerCommentId === comment.id && (
-                                                            <div className="absolute bottom-[115%] right-0 z-[70] w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-2 flex flex-col gap-1.5 animate-in zoom-in-95 duration-100">
-                                                                <div className="text-[8px] font-black uppercase tracking-wider text-zinc-400 px-1">
-                                                                    Reaccionar
-                                                                </div>
-                                                                <div className="grid grid-cols-5 gap-1 max-h-36 overflow-y-auto">
-                                                                    {APPROVED_EMOJIS.map((emoji) => (
-                                                                        <button
-                                                                            key={emoji}
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                handleToggleReaction(comment.id, emoji);
-                                                                                setActiveEmojiPickerCommentId(null);
-                                                                                setOpenMenuCommentId(null);
-                                                                            }}
-                                                                            className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-sm transition-all active:scale-90"
-                                                                        >
-                                                                            {emoji}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Autor Acciones */}
-                                                {(isAuthor || currentUser?.role === 'ADMIN') && (
-                                                    <>
-                                                        <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-0.5" />
-                                                        <div className="flex flex-col gap-0.5">
-                                                            {isAuthor && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        setEditingCommentId(comment.id);
-                                                                        setEditingContent(comment.content);
-                                                                        setOpenMenuCommentId(null);
-                                                                    }}
-                                                                    className="w-full text-left px-2.5 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-lg text-xs font-bold text-zinc-700 dark:text-zinc-200 flex items-center gap-2"
-                                                                >
-                                                                    Editar comentario
-                                                                </button>
-                                                            )}
+                                            <DropdownMenuTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-zinc-650 transition-all select-none focus:outline-none outline-none"
+                                                >
+                                                    <MoreHorizontal size={14} />
+                                                </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent
+                                                align="end"
+                                                side="bottom"
+                                                collisionPadding={16}
+                                                className="z-[120] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-2.5 w-56 flex flex-col gap-2 focus:outline-none outline-none animate-in zoom-in-95 duration-100"
+                                            >
+                                                {commentPopover.view === 'all-emojis' ? (
+                                                    <div className="flex flex-col gap-1.5 p-1 animate-in zoom-in-95 duration-100">
+                                                        <div className="flex items-center justify-between px-1 mb-1">
+                                                            <span className="text-[8px] font-black uppercase tracking-wider text-zinc-400">Reaccionar</span>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => {
-                                                                    handleDeleteComment(comment.id);
-                                                                    setOpenMenuCommentId(null);
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setCommentPopover({ commentId: comment.id, view: 'quick-actions' });
                                                                 }}
-                                                                className="w-full text-left px-2.5 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg text-xs font-bold text-red-600 flex items-center gap-2"
+                                                                className="text-[8px] font-black uppercase tracking-wider text-primary hover:underline"
                                                             >
-                                                                Eliminar comentario
+                                                                Atrás
                                                             </button>
                                                         </div>
+                                                        <div className="grid grid-cols-5 gap-1 max-h-36 overflow-y-auto">
+                                                            {APPROVED_EMOJIS.map((emoji) => (
+                                                                <button
+                                                                    key={emoji}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        handleToggleReaction(comment.id, emoji);
+                                                                        setCommentPopover({ commentId: null, view: null });
+                                                                    }}
+                                                                    className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-xl transition-all active:scale-90"
+                                                                >
+                                                                    {emoji}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        {/* Reacciones Rápidas */}
+                                                        <div className="flex items-center justify-between gap-1 px-1 py-0.5">
+                                                            {['🧠', '🚀', '👍', '😄', '💯'].map((emoji) => (
+                                                                <button
+                                                                    key={emoji}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        handleToggleReaction(comment.id, emoji);
+                                                                        setCommentPopover({ commentId: null, view: null });
+                                                                    }}
+                                                                    className="hover:scale-125 transition-transform p-0.5 text-xl active:scale-95 animate-in zoom-in-50 duration-75"
+                                                                >
+                                                                    {emoji}
+                                                                </button>
+                                                            ))}
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setCommentPopover({ commentId: comment.id, view: 'all-emojis' });
+                                                                }}
+                                                                className="w-6 h-6 rounded-full flex items-center justify-center bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-500 hover:text-zinc-800 text-[10px] font-bold transition-all"
+                                                            >
+                                                                +
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Autor Acciones */}
+                                                        {(isAuthor || currentUser?.role === 'ADMIN') && (
+                                                            <>
+                                                                <div className="h-px bg-zinc-150 dark:bg-zinc-800 my-0.5" />
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    {isAuthor && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setEditingCommentId(comment.id);
+                                                                                setEditingContent(comment.content);
+                                                                                setCommentPopover({ commentId: null, view: null });
+                                                                            }}
+                                                                            className="w-full text-left px-2.5 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-lg text-xs font-bold text-zinc-700 dark:text-zinc-200 flex items-center gap-2"
+                                                                        >
+                                                                            Editar comentario
+                                                                        </button>
+                                                                    )}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            handleDeleteComment(comment.id);
+                                                                            setCommentPopover({ commentId: null, view: null });
+                                                                        }}
+                                                                        className="w-full text-left px-2.5 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg text-xs font-bold text-red-600 flex items-center gap-2"
+                                                                    >
+                                                                        Eliminar comentario
+                                                                    </button>
+                                                                </div>
+                                                            </>
+                                                        )}
                                                     </>
                                                 )}
-                                            </div>
-                                        )}
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </div>
                                 )}
 
@@ -1459,14 +1484,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 type="button"
                                                 onClick={() => handleToggleReaction(comment.id, reaction.emoji)}
                                                 className={cn(
-                                                    "flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold border transition-all active:scale-90",
+                                                    "flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[12px] font-extrabold border transition-all active:scale-90",
                                                     reaction.userReacted
                                                         ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
                                                         : "bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 border-zinc-200/50 dark:border-zinc-750"
                                                 )}
                                             >
-                                                <span>{reaction.emoji}</span>
-                                                <span className="text-[9px] font-black">{reaction.count}</span>
+                                                <span className="text-xl leading-none select-none">{reaction.emoji}</span>
+                                                <span className="text-[11px] font-black">{reaction.count}</span>
                                             </button>
                                         ))}
                                     </div>
@@ -1774,12 +1799,19 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             <div className="space-y-1 flex flex-col justify-end">
                                 <button
                                     type="button"
-                                    disabled={isEdition}
-                                    onClick={() => setFormData(prev => ({ ...prev, isSpecial: !prev.isSpecial }))}
+                                    onClick={() => {
+                                        setFormData(prev => {
+                                            const nextIsSpecial = !prev.isSpecial;
+                                            return {
+                                                ...prev,
+                                                isSpecial: nextIsSpecial,
+                                                specialType: nextIsSpecial ? prev.specialType : ''
+                                            };
+                                        });
+                                    }}
                                     className={cn(
-                                        "flex items-center justify-center gap-2 px-2 py-1.5 rounded-xl border transition-all shadow-sm h-[32px]",
-                                        formData.isSpecial ? "bg-purple-600 text-white border-purple-700 font-bold animate-pulse" : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400",
-                                        isEdition && "opacity-80 cursor-default"
+                                        "flex items-center justify-center gap-2 px-2 py-1.5 rounded-xl border transition-all shadow-sm h-[32px] w-full",
+                                        formData.isSpecial ? "bg-purple-600 text-white border-purple-700 font-bold animate-pulse" : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400"
                                     )}
                                 >
                                     <Star size={14} fill={formData.isSpecial ? "currentColor" : "none"} />
@@ -1794,11 +1826,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 <input
                                     type="text"
                                     required
-                                    disabled={isEdition}
                                     value={formData.specialType}
                                     onChange={e => setFormData({...formData, specialType: e.target.value})}
                                     placeholder="Ej: Manual de Marca corporativo..."
-                                    className="w-full bg-purple-500/5 border border-purple-200 dark:border-purple-800/50 rounded-xl px-4 py-2.5 text-xs font-bold focus:ring-2 ring-purple-500/10 outline-none shadow-sm disabled:opacity-80"
+                                    className="w-full bg-purple-500/5 border border-purple-200 dark:border-purple-800/50 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 ring-purple-500/10 outline-none shadow-sm"
                                 />
                             </motion.div>
                         )}
@@ -2253,18 +2284,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         </div>
                                     )}
 
-                                    <textarea
-                                        ref={commentInputRef}
+                                    <RichTextEditor
                                         value={newComment}
-                                        onChange={handleCommentChange}
-                                        onKeyDown={e => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                handleAddComment();
-                                            }
-                                        }}
+                                        onChange={setNewComment}
+                                        onSend={handleAddComment}
                                         placeholder={isEdition ? "Escribe un mensaje al equipo..." : "Escribe un mensaje inicial..."}
-                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-primary/30 rounded-xl px-12 py-3 pr-20 text-xs font-medium outline-none transition-all resize-none h-[48px] no-scrollbar shadow-inner"
+                                        showToolbar={showToolbar}
+                                        className="pr-28"
                                     />
                                     {showInputEmojiPicker && (
                                         <div className="absolute bottom-[105%] right-4 z-[90] w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-3 animate-in slide-in-from-bottom-2 duration-150">
@@ -2288,7 +2314,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             </div>
                                         </div>
                                     )}
-                                    <div className="absolute left-1.5 top-1.5">
+                                    <div className="absolute left-1.5 top-1.5 w-9 h-9 flex items-center justify-center z-10">
                                         <input
                                             type="file"
                                             id="task-file-upload-focus"
@@ -2307,7 +2333,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         <label
                                             htmlFor="task-file-upload-focus"
                                             className={cn(
-                                                "p-2 rounded-lg text-zinc-400 block transition-all hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary cursor-pointer"
+                                                "w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 transition-all hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary cursor-pointer select-none"
                                             )}
                                             title="Adjuntar archivo"
                                         >
@@ -2320,8 +2346,19 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     </div>
                                     <button
                                         type="button"
+                                        onClick={() => setShowToolbar(!showToolbar)}
+                                        className={cn(
+                                            "absolute right-20 top-1.5 w-9 h-9 flex items-center justify-center rounded-lg text-xs font-bold transition-all select-none hover:bg-zinc-200 dark:hover:bg-zinc-800 z-10",
+                                            showToolbar ? "text-primary bg-primary/10" : "text-zinc-400"
+                                        )}
+                                        title="Formato"
+                                    >
+                                        A
+                                    </button>
+                                    <button
+                                        type="button"
                                         onClick={() => setShowInputEmojiPicker(!showInputEmojiPicker)}
-                                        className="absolute right-11 top-1.5 p-2 rounded-lg text-zinc-450 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary transition-all select-none"
+                                        className="absolute right-11 top-1.5 w-9 h-9 flex items-center justify-center rounded-lg text-zinc-450 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary transition-all select-none z-10"
                                         title="Insertar emoji"
                                     >
                                         😀
@@ -2330,7 +2367,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         onClick={() => handleAddComment()}
                                         disabled={isEdition ? ((!newComment.trim() && !selectedFile) || isSendingComment) : !newComment.trim()}
                                         className={cn(
-                                            "absolute right-1.5 top-1.5 p-2 rounded-lg transition-all",
+                                            "absolute right-1.5 top-1.5 w-9 h-9 flex items-center justify-center rounded-lg transition-all z-10",
                                             (newComment.trim() || (selectedFile && isEdition)) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
                                         )}
                                     >
