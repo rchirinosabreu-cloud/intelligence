@@ -2253,9 +2253,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         onToggleToolbar={setShowToolbar}
                                         teamMembers={teamMembers}
                                         className="pl-4 pr-44"
-                                        actions={
-                                            <>
-                                                {/* 1. Attachment Clip Button */}
+                                        attachmentAction={
                                                 <div className="w-9 h-9 flex items-center justify-center">
                                                     <input
                                                         type="file"
@@ -2286,8 +2284,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                         )}
                                                     </label>
                                                 </div>
-
-                                                {/* 2. Insert Emoji Button */}
+                                        }
+                                        emojiAction={
                                                 <button
                                                     type="button"
                                                     onClick={() => setShowInputEmojiPicker(!showInputEmojiPicker)}
@@ -2296,9 +2294,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 >
                                                     😀
                                                 </button>
-
-                                                {/* 3. Send Message Button */}
+                                        }
+                                        sendAction={
                                                 <button
+                                                    type="button"
                                                     onClick={() => handleAddComment()}
                                                     disabled={isEdition ? ((!newCommentText && !selectedFile) || isSendingComment) : !newCommentText}
                                                     className={cn(
@@ -2308,7 +2307,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 >
                                                     {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                                                 </button>
-                                            </>
                                         }
                                     />
                                     {showInputEmojiPicker && (
