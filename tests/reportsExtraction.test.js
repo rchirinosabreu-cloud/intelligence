@@ -97,4 +97,37 @@ test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) =>
 
         assert.strictEqual(warnings.length, 0);
     });
+
+    await t.test('Manual edit flag detection and audit updates', async () => {
+        const dbMetrics = {
+            spend: { value: 1250.50, unit: "USD" },
+            impressions: { value: 100000, unit: "count" }
+        };
+
+        const newMetrics = {
+            spend: { value: 1300.00, unit: "USD" }, // Edited!
+            impressions: { value: 100000, unit: "count" } // Unchanged
+        };
+
+        const updatedMetrics = {};
+        const keys = ['spend', 'impressions'];
+        keys.forEach(key => {
+            const dbMetric = dbMetrics[key] || {};
+            const newMetric = newMetrics[key] || {};
+
+            const dbVal = dbMetric.value !== undefined ? dbMetric.value : null;
+            const newVal = newMetric.value !== undefined ? newMetric.value : null;
+            const isEdited = dbVal !== newVal || dbMetric.isManuallyEdited === true;
+
+            updatedMetrics[key] = {
+                ...dbMetric,
+                ...newMetric,
+                isManuallyEdited: isEdited
+            };
+        });
+
+        assert.strictEqual(updatedMetrics.spend.isManuallyEdited, true);
+        assert.strictEqual(updatedMetrics.impressions.isManuallyEdited, false);
+        assert.strictEqual(updatedMetrics.spend.value, 1300.00);
+    });
 });

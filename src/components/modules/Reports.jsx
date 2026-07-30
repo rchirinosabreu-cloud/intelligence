@@ -36,6 +36,141 @@ import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 
+const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
+  const [localMetrics, setLocalMetrics] = useState(report.normalizedMetrics || {});
+
+  const handleValueChange = (key, val) => {
+    const parsedVal = val === '' ? null : parseFloat(val);
+    setLocalMetrics(prev => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        value: parsedVal
+      }
+    }));
+  };
+
+  const handleApprove = () => {
+    onApprove(localMetrics);
+  };
+
+  const allWarnings = report.sources?.flatMap(s => s.warnings || []) || [];
+
+  const hasWarning = (key) => {
+    if (key === 'ctr' || key === 'clicks' || key === 'impressions') {
+      return allWarnings.some(w => w.toLowerCase().includes('ctr') || w.toLowerCase().includes('matemática') || w.toLowerCase().includes('difiere'));
+    }
+    return false;
+  };
+
+  return (
+    <div className="space-y-8 bg-white border border-[#e2e8f0] rounded-[2.5rem] p-10 shadow-lg no-print">
+      <div className="border-b border-slate-100 pb-6 space-y-2">
+        <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+          <Sparkles className="w-6 h-6 text-primary" />
+          Auditoría de Métricas Extraídas (Visión AI)
+        </h2>
+        <p className="text-sm text-slate-500 font-medium">
+          Por favor, inspecciona y valida las cifras leídas automáticamente antes de proceder con el reporte ejecutivo.
+        </p>
+      </div>
+
+      {allWarnings.length > 0 && (
+        <div className="p-6 bg-amber-50 border border-amber-200 rounded-2xl space-y-2">
+          <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
+            <Info className="w-5 h-5 text-amber-600 animate-pulse" />
+            Alertas de Coherencia Matemática y Calidad
+          </div>
+          <ul className="list-disc pl-5 space-y-1 text-amber-700 text-xs font-medium">
+            {allWarnings.map((warn, wIdx) => (
+              <li key={wIdx}>{warn}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {Object.entries(localMetrics).map(([key, metric]) => {
+          if (!metric) return null;
+          const warningActive = hasWarning(key) || (metric.confidence !== undefined && metric.confidence < 0.8);
+
+          return (
+            <div
+              key={key}
+              className={cn(
+                "border rounded-2xl p-6 space-y-4 transition-all duration-300",
+                warningActive
+                  ? "bg-amber-50/40 border-amber-300 shadow-amber-100/50 hover:border-amber-400"
+                  : "bg-slate-50/50 border-slate-200 hover:border-primary/20 shadow-sm"
+              )}
+            >
+              <div className="flex justify-between items-start">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  {metric.label || key}
+                </span>
+                <span className={cn(
+                  "text-[10px] font-bold px-2 py-0.5 rounded-full",
+                  warningActive ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+                )}>
+                  {((metric.confidence || 1.0) * 100).toFixed(0)}% conf
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  {metric.unit === 'USD' || metric.unit === 'COP' || metric.unit === 'EUR' ? (
+                    <span className="text-sm font-bold text-slate-500">{metric.unit}</span>
+                  ) : null}
+                  <input
+                    type="number"
+                    step="any"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xl font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
+                    value={metric.value === null ? '' : metric.value}
+                    onChange={(e) => handleValueChange(key, e.target.value)}
+                  />
+                  {metric.unit && metric.unit !== 'USD' && metric.unit !== 'COP' && metric.unit !== 'EUR' && metric.unit !== 'count' ? (
+                    <span className="text-sm font-bold text-slate-500">{metric.unit}</span>
+                  ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Evidencia detectada:</p>
+                  <p className="text-xs text-slate-600 bg-white/75 border border-slate-100 p-2.5 rounded-lg italic line-clamp-2">
+                    &ldquo;{metric.evidence || 'N/A'}&rdquo;
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="border-t border-slate-100 pt-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="text-xs text-slate-400 font-medium">
+          Una vez aprobado, el reporte avanzará al estado <span className="font-bold text-slate-600">REVIEW</span> y se habilitará el informe narrativo final.
+        </div>
+        <button
+          onClick={handleApprove}
+          disabled={isSubmitting}
+          className="px-8 py-3 bg-primary hover:opacity-90 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 self-end shrink-0"
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Guardando Auditoría...
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="w-4 h-4" />
+              Aprobar Cifras y Continuar
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const Reports = () => {
   const { currentUser } = useAuth();
   const [clients, setClients] = useState([]);
@@ -49,6 +184,7 @@ const Reports = () => {
   const [adsPreviews, setAdsPreviews] = useState([]);
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [report, setReport] = useState(null);
   const [editedTexts, setEditedTexts] = useState({
     title: '',
@@ -184,6 +320,32 @@ const Reports = () => {
       console.error('[Reports Frontend] Extraction error:', error);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleApproveReview = async (reviewedMetrics) => {
+    if (!report?.id) return;
+    setIsSubmittingReview(true);
+    try {
+      const response = await axios.patch(`${getApiBaseUrl()}/api/reports/${report.id}/metrics`, {
+        normalizedMetrics: reviewedMetrics
+      }, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.data?.success && response.data?.report) {
+        setReport(response.data.report);
+        toast.success('Métricas auditadas y guardadas exitosamente!');
+      } else {
+        throw new Error('Fallo al guardar la auditoría');
+      }
+    } catch (error) {
+      const errMsg = error.response?.data?.error || 'Error al guardar la auditoría. Intenta de nuevo.';
+      toast.error(errMsg);
+      console.error('[Reports Frontend] Audit save error:', error);
+    } finally {
+      setIsSubmittingReview(false);
     }
   };
 
@@ -364,10 +526,17 @@ const Reports = () => {
       {/* Main Report Canvas */}
       <AnimatePresence mode="wait">
         {report ? (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="bg-white border border-[#e2e8f0] shadow-2xl rounded-[2.5rem] overflow-hidden"
-          >
+          report.status === 'DRAFT' ? (
+            <ReportMetricsReview
+              report={report}
+              onApprove={handleApproveReview}
+              isSubmitting={isSubmittingReview}
+            />
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              className="bg-white border border-[#e2e8f0] shadow-2xl rounded-[2.5rem] overflow-hidden"
+            >
             <div id="report-canvas" ref={reportRef} className="p-12 md:p-20 space-y-20 bg-white">
                {/* Portada */}
                <div className="min-h-[85vh] flex flex-col justify-center py-32 border-b border-slate-50 relative">
@@ -494,6 +663,7 @@ const Reports = () => {
                </div>
             </div>
           </motion.div>
+          )
         ) : (
           <div className="h-[500px] flex flex-col items-center justify-center space-y-8 bg-white border border-slate-200 border-dashed rounded-[3rem]">
              <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center shadow-inner">
