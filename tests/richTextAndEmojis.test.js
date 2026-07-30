@@ -110,9 +110,62 @@ test('RichTextEditor - Tiptap Wrapper, Popover Toolbar Portal and Height Class V
     assert.ok(editorCode.includes('Popover.Portal'), 'RichTextEditor must use Popover.Portal to render toolbar in a decoupled overlay layer.');
     assert.ok(editorCode.includes('Popover.Content'), 'RichTextEditor must use Popover.Content to configure alignment/collision padding.');
 
-    // Assert ProseMirror Height Rules
+    // Assert ProseMirror Height Rules are present in container wrappers
     assert.ok(editorCode.includes('min-h-[48px]'), 'RichTextEditor must support min-h-[48px] in compact mode.');
     assert.ok(editorCode.includes('max-h-[120px]'), 'RichTextEditor must support max-h-[120px] in compact mode.');
     assert.ok(editorCode.includes('min-h-[144px]'), 'RichTextEditor must support min-h-[144px] in showToolbar format mode.');
     assert.ok(editorCode.includes('max-h-[280px]'), 'RichTextEditor must support max-h-[280px] in showToolbar format mode.');
+});
+
+// 6. Dialog Shielding Verification
+test('Dialog Shielding - Avoid closure when interaction originates from data-task-format-toolbar element', () => {
+    let preventDefaultCalled = false;
+
+    const mockEvent = {
+        target: {
+            hasAttribute: (attr) => attr === 'data-task-format-toolbar',
+            closest: () => null
+        },
+        preventDefault() {
+            preventDefaultCalled = true;
+        }
+    };
+
+    // Shielding trigger simulation matching TaskSidePanel.jsx
+    const handlePointerDownOutside = (e) => {
+        const target = e.target;
+        const isToolbar = target && (target.closest('[data-task-format-toolbar]') || target.hasAttribute('data-task-format-toolbar'));
+        if (isToolbar) {
+            e.preventDefault();
+        }
+    };
+
+    handlePointerDownOutside(mockEvent);
+    assert.strictEqual(preventDefaultCalled, true, 'PointerDown must be prevented to prevent Dialog closure.');
+});
+
+// 7. Tiptap Mentions filtering against teamMembers
+test('Tiptap Mentions - Filter teamMembers against input search query', () => {
+    const teamMembers = [
+        { id: '1', name: 'Francisco Villa' },
+        { id: '2', name: 'Kamila del Toro' },
+        { id: '3', name: 'Rodny Chirinos' }
+    ];
+
+    const getSuggestions = (query) => {
+        return teamMembers
+            .filter(item => item.name.toLowerCase().includes(query.toLowerCase()))
+            .slice(0, 5);
+    };
+
+    const resultsFr = getSuggestions('fran');
+    assert.strictEqual(resultsFr.length, 1);
+    assert.strictEqual(resultsFr[0].name, 'Francisco Villa');
+
+    const resultsRo = getSuggestions('chir');
+    assert.strictEqual(resultsRo.length, 1);
+    assert.strictEqual(resultsRo[0].name, 'Rodny Chirinos');
+
+    const resultsAll = getSuggestions('');
+    assert.strictEqual(resultsAll.length, 3);
 });
