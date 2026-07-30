@@ -1,11 +1,9 @@
 import React from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, useEditorState } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import Mention from '@tiptap/extension-mention';
 import { Extension } from '@tiptap/core';
-import * as Popover from '@radix-ui/react-popover';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import ComposerActionLayout from '@/components/ui/ComposerActionLayout';
@@ -104,7 +102,6 @@ const RichTextEditor = React.forwardRef(({
           levels: [1, 2],
         },
       }),
-      Underline,
       Placeholder.configure({
         placeholder: placeholder || 'Escribe un mensaje...',
       }),
@@ -202,6 +199,26 @@ const RichTextEditor = React.forwardRef(({
     },
   }, []); // Run exact ONCE on mount, preventing reconstruction on prop changes!
 
+  const formattingState = useEditorState({
+    editor,
+    selector: ({ editor: currentEditor }) => ({
+      bold: currentEditor?.isActive('bold') ?? false,
+      italic: currentEditor?.isActive('italic') ?? false,
+      underline: currentEditor?.isActive('underline') ?? false,
+      heading1: currentEditor?.isActive('heading', { level: 1 }) ?? false,
+      heading2: currentEditor?.isActive('heading', { level: 2 }) ?? false,
+      bulletList: currentEditor?.isActive('bulletList') ?? false,
+      orderedList: currentEditor?.isActive('orderedList') ?? false,
+    }),
+  });
+
+  const composerRef = React.useRef(null);
+  React.useLayoutEffect(() => {
+    if (isToolbarOpen) {
+      composerRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [isToolbarOpen]);
+
   // Expose imperatively controlled functions via Ref
   React.useImperativeHandle(ref, () => ({
     insertEmoji(emoji) {
@@ -291,10 +308,11 @@ const RichTextEditor = React.forwardRef(({
         <TopToolbarSurface>
           <button
             type="button"
+            aria-pressed={formattingState.bold}
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleBold())}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('bold') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.bold ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Negrita"
           >
@@ -302,10 +320,11 @@ const RichTextEditor = React.forwardRef(({
           </button>
           <button
             type="button"
+            aria-pressed={formattingState.italic}
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleItalic())}
             className={cn(
               "px-2 py-1 rounded text-xs italic transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('italic') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.italic ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Cursiva"
           >
@@ -313,10 +332,11 @@ const RichTextEditor = React.forwardRef(({
           </button>
           <button
             type="button"
+            aria-pressed={formattingState.underline}
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleUnderline())}
             className={cn(
               "px-2 py-1 rounded text-xs underline transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('underline') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.underline ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Subrayado"
           >
@@ -325,10 +345,11 @@ const RichTextEditor = React.forwardRef(({
           <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1" />
           <button
             type="button"
+            aria-pressed={formattingState.heading1}
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleHeading({ level: 1 }))}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('heading', { level: 1 }) ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.heading1 ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Título 1"
           >
@@ -336,10 +357,11 @@ const RichTextEditor = React.forwardRef(({
           </button>
           <button
             type="button"
+            aria-pressed={formattingState.heading2}
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleHeading({ level: 2 }))}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('heading', { level: 2 }) ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.heading2 ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Título 2"
           >
@@ -348,10 +370,11 @@ const RichTextEditor = React.forwardRef(({
           <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1" />
           <button
             type="button"
+            aria-pressed={formattingState.bulletList}
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleBulletList())}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('bulletList') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.bulletList ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Lista de Viñetas"
           >
@@ -359,10 +382,11 @@ const RichTextEditor = React.forwardRef(({
           </button>
           <button
             type="button"
+            aria-pressed={formattingState.orderedList}
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleOrderedList())}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('orderedList') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.orderedList ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Lista Numerada"
           >
@@ -404,7 +428,7 @@ const RichTextEditor = React.forwardRef(({
         </div>,
         document.body
       )}
-    </Popover.Root>
+    </div>
   );
 });
 
