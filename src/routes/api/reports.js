@@ -405,4 +405,64 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
     }
 });
 
+router.patch('/:reportId/metrics', async (req, res) => {
+    try {
+        const { reportId } = req.params;
+        const { normalizedMetrics: newMetrics } = req.body;
+
+        if (!newMetrics) {
+            return res.status(400).json({ error: "normalizedMetrics is required in payload" });
+        }
+
+        const existingReport = await prisma.metricReport.findUnique({
+            where: { id: reportId }
+        });
+
+        if (!existingReport) {
+            return res.status(404).json({ error: "Metric report not found" });
+        }
+
+        const dbMetrics = existingReport.normalizedMetrics || {};
+        const updatedMetrics = {};
+
+        const keys = ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'];
+        keys.forEach(key => {
+            const dbMetric = dbMetrics[key] || {};
+            const newMetric = newMetrics[key] || {};
+
+            // Determine if the value was manually modified from the DB value
+            const dbVal = dbMetric.value !== undefined ? dbMetric.value : null;
+            const newVal = newMetric.value !== undefined ? newMetric.value : null;
+            const isEdited = dbVal !== newVal || dbMetric.isManuallyEdited === true;
+
+            updatedMetrics[key] = {
+                ...dbMetric,
+                ...newMetric,
+                isManuallyEdited: isEdited
+            };
+        });
+
+        const updatedReport = await prisma.metricReport.update({
+            where: { id: reportId },
+            data: {
+                normalizedMetrics: updatedMetrics,
+                status: 'REVIEW'
+            },
+            include: {
+                sources: true,
+                client: true
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            report: updatedReport
+        });
+
+    } catch (error) {
+        console.error('[Reports API] Error updating report metrics:', error);
+        res.status(500).json({ error: 'Internal Server Error during metrics update', details: error.message });
+    }
+});
+
 export default router;
