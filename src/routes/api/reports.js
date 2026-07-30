@@ -4,7 +4,7 @@ import prisma from '../../lib/prisma.js';
 import { GoogleGenAI } from '@google/genai';
 import { uploadClientFile, getSignedUrl, getClientFileStream } from '../../services/storageService.js';
 import { parseJsonResponse, extractModelText } from '../../services/aiService.js';
-import { extractMetricsWithVision } from '../../services/reportVisionService.js';
+import { extractMetricsWithVision, generateNarrativeWithOpenAI } from '../../services/reportVisionService.js';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
@@ -462,6 +462,46 @@ router.patch('/:reportId/metrics', async (req, res) => {
     } catch (error) {
         console.error('[Reports API] Error updating report metrics:', error);
         res.status(500).json({ error: 'Internal Server Error during metrics update', details: error.message });
+    }
+});
+
+router.post('/:reportId/generate-narrative', async (req, res) => {
+    try {
+        const { reportId } = req.params;
+
+        const report = await prisma.metricReport.findUnique({
+            where: { id: reportId }
+        });
+
+        if (!report) {
+            return res.status(404).json({ error: "Metric report not found" });
+        }
+
+        const metrics = report.normalizedMetrics || {};
+
+        console.log(`[Reports API] Generating narrative for report ${reportId}...`);
+        const narrativeResult = await generateNarrativeWithOpenAI(metrics);
+
+        const updatedReport = await prisma.metricReport.update({
+            where: { id: reportId },
+            data: {
+                narrative: narrativeResult,
+                status: 'PUBLISHED'
+            },
+            include: {
+                sources: true,
+                client: true
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            report: updatedReport
+        });
+
+    } catch (error) {
+        console.error('[Reports API] Error generating narrative:', error);
+        res.status(500).json({ error: 'Internal Server Error during narrative generation', details: error.message });
     }
 });
 
