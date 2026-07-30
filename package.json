@@ -7,7 +7,7 @@
   "scripts": {
     "start": "npx prisma generate && node scripts/pre-push-enum.js && npx prisma db push --accept-data-loss && npx prisma generate && npx prisma db seed && node scripts/add_status_message.js && node server.js",
     "dev": "vite --host :: --port 3000",
-    "build": "npm run test:activity-build && prisma generate && vite build",
+    "build": "npm run test:activity-build && npm run test:editor-build && prisma generate && vite build",
     "postinstall": "prisma generate",
     "preview": "vite preview --host :: --port 3000",
     "lint": "eslint . --quiet",
@@ -17,8 +17,9 @@
     "db:seed:financials": "node scripts/seed-financials.js",
     "db:seed:team": "node scripts/seed-team.js",
     "db:hard-cleanup": "node scripts/hard-cleanup.js",
-    "test": "node --test tests/kanbanLifecycle.test.js tests/draftAndLightbox.test.js tests/commentInteractions.test.js tests/richTextAndEmojis.test.js",
-    "test:activity-build": "node --test tests/activityComponentsCompile.test.js"
+    "test": "node --test tests/kanbanLifecycle.test.js tests/draftAndLightbox.test.js tests/commentInteractions.test.js tests/richTextAndEmojis.test.js tests/composerActionLayout.test.js tests/richTextEditorCompile.test.js",
+    "test:activity-build": "node --test tests/activityComponentsCompile.test.js",
+    "test:editor-build": "node --test tests/richTextEditorCompile.test.js"
   },
   "prisma": {
     "seed": "node scripts/seed_catalog.js"
