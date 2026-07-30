@@ -93,7 +93,7 @@ test('Ref Actions - useImperativeHandle exposes emoji insertion command', () => 
 });
 
 // 5. ProseMirror Height Constraints Code Inspection
-test('RichTextEditor - Tiptap Wrapper, Popover Toolbar Portal and Height Class Verification', () => {
+test('RichTextEditor - Tiptap Wrapper, in-flow toolbar and Height Class Verification', () => {
     const editorCode = readFileSync('src/components/ui/RichTextEditor.jsx', 'utf8');
 
     // Assert forwardRef and imperative handle exist

@@ -2197,7 +2197,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         </div>
 
                         {/* Input Area */}
-                        <div className="p-4 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 shrink-0 shadow-lg">
+                        <div className="shrink-0 bg-transparent">
                             <div className="flex flex-col gap-2">
                                 {selectedFile && isEdition && (
                                     <div className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/10 rounded-lg animate-in fade-in slide-in-from-bottom-1">

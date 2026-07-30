@@ -1,11 +1,9 @@
 import React from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, useEditorState } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import Mention from '@tiptap/extension-mention';
 import { Extension } from '@tiptap/core';
-import * as Popover from '@radix-ui/react-popover';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import ComposerActionLayout from '@/components/ui/ComposerActionLayout';
@@ -71,51 +69,15 @@ const RichTextEditor = React.forwardRef(({
     }
   };
 
-  // Preservation of selection in ProseMirror
-  const savedSelectionRef = React.useRef(null);
-
-  const saveSelection = () => {
-    if (!editor) return;
-    savedSelectionRef.current = editor.state.selection;
-  };
-
-  const restoreSelection = () => {
-    const selection = savedSelectionRef.current;
-    if (!selection || !editor) {
-      return editor ? editor.chain().focus() : null;
-    }
-    const docSize = editor.state.doc.content.size;
-    const from = Math.min(selection.from, docSize);
-    const to = Math.min(selection.to, docSize);
-
-    return editor
-      .chain()
-      .focus()
-      .setTextSelection({ from, to });
-  };
-
-  // Centralized format command execution using savedSelectionRef
+  // Execute against ProseMirror's live selection. Restoring a selection captured
+  // when the toolbar opened makes subsequent formatting jump to an old block.
   const executeFormat = (event, command) => {
     if (event) {
       event.preventDefault();
       event.stopPropagation();
     }
 
-    if (!editor) return;
-
-    let chain = editor.chain().focus();
-
-    if (savedSelectionRef.current) {
-      const docSize = editor.state.doc.content.size;
-      const from = Math.min(savedSelectionRef.current.from, docSize);
-      const to = Math.min(savedSelectionRef.current.to, docSize);
-      chain = chain.setTextSelection({ from, to });
-    }
-
-    command(chain).run();
-
-    // Refresh selection ref immediately after execution to keep it safe and in sync
-    saveSelection();
+    runEditorFormat(editor, command);
   };
 
   // React State for native cursor-positioned suggestions list
@@ -140,7 +102,6 @@ const RichTextEditor = React.forwardRef(({
           levels: [1, 2],
         },
       }),
-      Underline,
       Placeholder.configure({
         placeholder: placeholder || 'Escribe un mensaje...',
       }),
@@ -238,6 +199,26 @@ const RichTextEditor = React.forwardRef(({
     },
   }, []); // Run exact ONCE on mount, preventing reconstruction on prop changes!
 
+  const formattingState = useEditorState({
+    editor,
+    selector: ({ editor: currentEditor }) => ({
+      bold: currentEditor?.isActive('bold') ?? false,
+      italic: currentEditor?.isActive('italic') ?? false,
+      underline: currentEditor?.isActive('underline') ?? false,
+      heading1: currentEditor?.isActive('heading', { level: 1 }) ?? false,
+      heading2: currentEditor?.isActive('heading', { level: 2 }) ?? false,
+      bulletList: currentEditor?.isActive('bulletList') ?? false,
+      orderedList: currentEditor?.isActive('orderedList') ?? false,
+    }),
+  });
+
+  const composerRef = React.useRef(null);
+  React.useLayoutEffect(() => {
+    if (isToolbarOpen) {
+      composerRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [isToolbarOpen]);
+
   // Expose imperatively controlled functions via Ref
   React.useImperativeHandle(ref, () => ({
     insertEmoji(emoji) {
@@ -281,10 +262,11 @@ const RichTextEditor = React.forwardRef(({
 
   return (
     <Popover.Root open={isToolbarOpen} onOpenChange={handleToggleToolbar}>
-      <div className="relative w-full flex flex-col justify-end">
+      <div className={cn("relative w-full flex h-12 flex-col justify-end", isToolbarOpen && "z-20")}>
         <Popover.Anchor asChild>
           <div className={cn(
             "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus-within:border-primary/30 rounded-xl shadow-inner transition-all relative flex flex-col justify-end",
+            isToolbarOpen && "absolute inset-x-0 bottom-0 min-h-[144px]",
             className
           )}>
             {/* Dynamic heights and scroll wrapped at React container level instead of Tiptap editorProps */}
@@ -305,9 +287,7 @@ const RichTextEditor = React.forwardRef(({
             <Popover.Trigger asChild>
             <button
               type="button"
-              onMouseDown={(e) => {
-                saveSelection();
-              }}
+              onMouseDown={(e) => e.preventDefault()}
               className={cn(
                 "w-9 h-9 flex items-center justify-center rounded-lg text-xs font-bold transition-all select-none hover:bg-zinc-200 dark:hover:bg-zinc-800",
                 isToolbarOpen ? "text-primary bg-primary/10" : "text-zinc-400"
@@ -328,10 +308,11 @@ const RichTextEditor = React.forwardRef(({
         <TopToolbarSurface>
           <button
             type="button"
+            aria-pressed={formattingState.bold}
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleBold())}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('bold') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.bold ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Negrita"
           >
@@ -339,10 +320,11 @@ const RichTextEditor = React.forwardRef(({
           </button>
           <button
             type="button"
+            aria-pressed={formattingState.italic}
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleItalic())}
             className={cn(
               "px-2 py-1 rounded text-xs italic transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('italic') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.italic ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Cursiva"
           >
@@ -350,10 +332,11 @@ const RichTextEditor = React.forwardRef(({
           </button>
           <button
             type="button"
+            aria-pressed={formattingState.underline}
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleUnderline())}
             className={cn(
               "px-2 py-1 rounded text-xs underline transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('underline') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.underline ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Subrayado"
           >
@@ -362,10 +345,11 @@ const RichTextEditor = React.forwardRef(({
           <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1" />
           <button
             type="button"
+            aria-pressed={formattingState.heading1}
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleHeading({ level: 1 }))}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('heading', { level: 1 }) ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.heading1 ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Título 1"
           >
@@ -373,10 +357,11 @@ const RichTextEditor = React.forwardRef(({
           </button>
           <button
             type="button"
+            aria-pressed={formattingState.heading2}
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleHeading({ level: 2 }))}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('heading', { level: 2 }) ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.heading2 ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Título 2"
           >
@@ -385,10 +370,11 @@ const RichTextEditor = React.forwardRef(({
           <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1" />
           <button
             type="button"
+            aria-pressed={formattingState.bulletList}
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleBulletList())}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('bulletList') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.bulletList ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Lista de Viñetas"
           >
@@ -396,10 +382,11 @@ const RichTextEditor = React.forwardRef(({
           </button>
           <button
             type="button"
+            aria-pressed={formattingState.orderedList}
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleOrderedList())}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('orderedList') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.orderedList ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Lista Numerada"
           >
