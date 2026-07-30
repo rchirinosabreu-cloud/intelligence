@@ -4,9 +4,10 @@ import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Extension } from '@tiptap/core';
+import * as Popover from '@radix-ui/react-popover';
 import { cn } from '@/lib/utils';
 
-// Custom Tiptap extension to handle Enter / Ctrl+Enter key actions
+// Custom Tiptap extension to handle Mod-Enter (Ctrl+Enter / Cmd+Enter) key action
 const CustomKeymap = Extension.create({
   name: 'customKeymap',
   addOptions() {
@@ -23,23 +24,11 @@ const CustomKeymap = Extension.create({
         }
         return false;
       },
-      'Enter': ({ editor }) => {
-        const isList = editor.isActive('bulletList') || editor.isActive('orderedList');
-        const isHeading = editor.isActive('heading');
-        if (isList || isHeading) {
-          return false; // Let native Enter create new list items or headings
-        }
-        if (this.options.onSendRef && this.options.onSendRef.current) {
-          this.options.onSendRef.current();
-          return true;
-        }
-        return false;
-      },
     };
   },
 });
 
-const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showToolbar, onToggleToolbar, onTextChange }) => {
+const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder, className, showToolbar, onToggleToolbar, onTextChange }, ref) => {
   // Memorize the onSend callback in a mutable ref to prevent Tiptap editor reconstructions
   const onSendRef = React.useRef(onSend);
   React.useEffect(() => {
@@ -65,8 +54,10 @@ const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showT
     editorProps: {
       attributes: {
         class: cn(
-          "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus-within:border-primary/30 rounded-xl px-12 py-3 pr-28 text-sm font-medium outline-none transition-all min-h-[48px] shadow-inner prose dark:prose-invert max-w-none text-zinc-800 dark:text-zinc-200",
-          className
+          "w-full text-sm font-medium outline-none prose dark:prose-invert max-w-none text-zinc-800 dark:text-zinc-200 px-4 py-3",
+          "focus:outline-none focus-visible:outline-none [&_.ProseMirror]:outline-none",
+          "min-h-[48px] max-h-[120px] overflow-y-auto transition-[min-height] duration-200 ease-in-out",
+          showToolbar && "min-h-[144px] max-h-[280px]"
         ),
       },
     },
@@ -79,6 +70,29 @@ const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showT
       }
     },
   }, []); // Run exact ONCE on mount, preventing reconstruction on prop changes!
+
+  // Expose imperatively controlled functions via Ref
+  React.useImperativeHandle(ref, () => ({
+    insertEmoji(emoji) {
+      if (editor) {
+        editor
+          .chain()
+          .focus()
+          .insertContent(emoji)
+          .run();
+      }
+    },
+    focus() {
+      if (editor) {
+        editor.commands.focus();
+      }
+    },
+    clear() {
+      if (editor) {
+        editor.commands.clearContent();
+      }
+    }
+  }));
 
   // Sync value if changed from outside (e.g. cleared on successful comment post)
   React.useEffect(() => {
@@ -99,10 +113,26 @@ const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showT
   if (!editor) return null;
 
   return (
-    <div className="w-full flex flex-col relative">
-      {/* Tiptap Toolbar (toggleable with button 'A') */}
-      {showToolbar && (
-        <div className="flex flex-wrap items-center gap-1.5 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg mb-2 animate-in slide-in-from-bottom-2 duration-150">
+    <Popover.Root open={showToolbar} onOpenChange={onToggleToolbar}>
+      <Popover.Anchor asChild>
+        <div className={cn(
+          "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus-within:border-primary/30 rounded-xl shadow-inner transition-all relative flex flex-col",
+          className
+        )}>
+          <EditorContent editor={editor} />
+        </div>
+      </Popover.Anchor>
+
+      <Popover.Portal>
+        <Popover.Content
+          side="top"
+          align="center"
+          sideOffset={8}
+          collisionPadding={16}
+          avoidCollisions
+          className="flex flex-wrap items-center gap-1.5 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg z-[120] animate-in slide-in-from-bottom-2 duration-150"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleBold().run()}
@@ -182,15 +212,12 @@ const RichTextEditor = ({ value, onChange, onSend, placeholder, className, showT
           >
             1. Lista
           </button>
-        </div>
-      )}
-
-      {/* Editor Content Area */}
-      <div className="relative w-full">
-        <EditorContent editor={editor} />
-      </div>
-    </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
-};
+});
+
+RichTextEditor.displayName = 'RichTextEditor';
 
 export default RichTextEditor;

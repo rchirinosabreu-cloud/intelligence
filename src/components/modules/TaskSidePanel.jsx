@@ -21,6 +21,7 @@ import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 import LinkDropdown from '@/components/ui/LinkDropdown';
 import { linkify, cleanSystemMessage } from '@/utils/chatUtils.jsx';
 import RichTextEditor from '@/components/ui/RichTextEditor';
+import RichCommentContent from '@/components/ui/RichCommentContent';
 import {
     Dialog,
     DialogContent,
@@ -237,6 +238,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [editInpName, setEditInpName] = useState("");
 
     const commentInputRef = useRef(null);
+    const mainEditorRef = useRef(null);
     const scrollRef = useRef(null);
     const chatContainerRef = useRef(null);
 
@@ -1293,7 +1295,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             <span className="text-[10px] text-zinc-400 font-medium">{new Date(comment.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short'})}</span>
                         </div>
                         <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed italic">
-                            "{linkify(cleanContent, handleImagePreview, contextData)}"
+                            "<RichCommentContent
+                                content={cleanContent}
+                                contextData={contextData}
+                                onImageClick={handleImagePreview}
+                            />"
                         </div>
                     </div>
                 </div>
@@ -1369,8 +1375,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     ) : (
                         <div className="relative inline-block max-w-[80%] md:max-w-3xl mr-6 pr-6">
                             <div className="bg-white dark:bg-zinc-900 p-3.5 pr-10 rounded-2xl rounded-tl-none block shadow-sm border border-zinc-100 dark:border-zinc-800 relative group/card">
-                                <div className="text-sm font-medium text-zinc-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap pb-1">
-                                    {linkify(comment.content, handleImagePreview, contextData)}
+                                <div className="pb-1">
+                                    <RichCommentContent
+                                        content={comment.content}
+                                        contextData={contextData}
+                                        onImageClick={handleImagePreview}
+                                    />
                                 </div>
 
                                 {/* Basecamp Action Menu inside message card */}
@@ -2302,6 +2312,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     )}
 
                                     <RichTextEditor
+                                        ref={mainEditorRef}
                                         value={newComment}
                                         onChange={setNewComment}
                                         onSend={handleAddComment}
@@ -2321,7 +2332,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                         key={emoji}
                                                         type="button"
                                                         onClick={() => {
-                                                            setNewComment(prev => prev + emoji);
+                                                            mainEditorRef.current?.insertEmoji(emoji);
                                                             setShowInputEmojiPicker(false);
                                                         }}
                                                         className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-base transition-all active:scale-90"
