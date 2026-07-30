@@ -4,6 +4,8 @@ import prisma from '../../lib/prisma.js';
 import { GoogleGenAI } from '@google/genai';
 import { uploadClientFile, getSignedUrl, getClientFileStream } from '../../services/storageService.js';
 import { parseJsonResponse, extractModelText } from '../../services/aiService.js';
+import { extractMetricsWithVision } from '../../services/reportVisionService.js';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -245,6 +247,221 @@ router.post('/generate', upload.any(), async (req, res) => {
     } catch (error) {
         console.error('[Reports API] Fatal Error:', error);
         res.status(500).json({ error: 'Internal Server Error during analysis' });
+    }
+});
+
+router.post('/extract-metrics', upload.any(), async (req, res) => {
+    try {
+        const { clientId, periodKind, startDate, endDate } = req.body;
+        if (!clientId) {
+            return res.status(400).json({ error: 'Client ID is required' });
+        }
+
+        const client = await prisma.client.findUnique({ where: { id: clientId } });
+        if (!client) {
+            return res.status(404).json({ error: 'Client not found' });
+        }
+
+        const files = req.files || [];
+        if (files.length === 0) {
+            return res.status(400).json({ error: 'At least one screenshot is required' });
+        }
+
+        const processedSources = [];
+        let totalSpend = 0;
+        let totalImpressions = 0;
+        let totalReach = 0;
+        let totalClicks = 0;
+        let totalResults = 0;
+        let firstSourceSpendUnit = 'USD';
+        const narrativeDrafts = [];
+
+        // Process files in parallel
+        const filePromises = files.map(async (file) => {
+            const sourceId = uuidv4();
+
+            // 1. Upload to GCS
+            const uploadResult = await uploadClientFile(file, client.name);
+
+            // 2. Vision analysis
+            const extracted = await extractMetricsWithVision(file.buffer, file.mimetype);
+
+            // 3. Math Validation
+            const spendVal = extracted.metrics?.spend?.value;
+            const impressionsVal = extracted.metrics?.impressions?.value;
+            const reachVal = extracted.metrics?.reach?.value;
+            const clicksVal = extracted.metrics?.clicks?.value;
+            const ctrVal = extracted.metrics?.ctr?.value;
+            const resultsVal = extracted.metrics?.results?.value;
+
+            const warnings = [];
+            if (typeof clicksVal === 'number' && typeof impressionsVal === 'number' && impressionsVal > 0) {
+                const theoreticalCtr = (clicksVal / impressionsVal) * 100;
+                if (typeof ctrVal === 'number') {
+                    const diff = Math.abs(ctrVal - theoreticalCtr);
+                    if (diff > 0.01) {
+                        warnings.push(`Advertencia matemática: El CTR extraído (${ctrVal}%) difiere del cálculo teórico basado en clics e impresiones (${theoreticalCtr.toFixed(4)}%).`);
+                    }
+                }
+            }
+
+            return {
+                sourceId,
+                storagePath: uploadResult.gcsPath,
+                platform: 'META_ADS',
+                screenType: extracted.screenType || 'Desconocido',
+                extractionData: extracted.metrics,
+                confidence: parseFloat(extracted.confidence) || 0.0,
+                warnings: warnings,
+                narrativeDraft: extracted.narrativeDraft || '',
+                spendVal,
+                spendUnit: extracted.metrics?.spend?.unit || 'USD',
+                impressionsVal,
+                reachVal,
+                clicksVal,
+                resultsVal
+            };
+        });
+
+        const results = await Promise.all(filePromises);
+
+        // Aggregate across sources
+        results.forEach((res, index) => {
+            if (index === 0 && res.spendUnit) {
+                firstSourceSpendUnit = res.spendUnit;
+            }
+            if (typeof res.spendVal === 'number') totalSpend += res.spendVal;
+            if (typeof res.impressionsVal === 'number') totalImpressions += res.impressionsVal;
+            if (typeof res.reachVal === 'number') totalReach += res.reachVal;
+            if (typeof res.clicksVal === 'number') totalClicks += res.clicksVal;
+            if (typeof res.resultsVal === 'number') totalResults += res.resultsVal;
+
+            if (res.narrativeDraft) {
+                narrativeDrafts.push(`Captura ${index + 1}: ${res.narrativeDraft}`);
+            }
+
+            processedSources.push({
+                sourceId: res.sourceId,
+                storagePath: res.storagePath,
+                platform: res.platform,
+                screenType: res.screenType,
+                extractionData: res.extractionData,
+                confidence: res.confidence,
+                warnings: res.warnings
+            });
+        });
+
+        // Overall theoretical CTR
+        let overallCtr = 0;
+        if (totalImpressions > 0) {
+            overallCtr = (totalClicks / totalImpressions) * 100;
+        }
+
+        const normalizedMetrics = {
+            spend: { key: 'spend', label: 'Inversión Total', value: totalSpend, unit: firstSourceSpendUnit, confidence: 1.0, evidence: 'Agregado de fuentes' },
+            impressions: { key: 'impressions', label: 'Impresiones Totales', value: totalImpressions, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
+            reach: { key: 'reach', label: 'Alcance Total', value: totalReach, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
+            clicks: { key: 'clicks', label: 'Clics Totales', value: totalClicks, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
+            ctr: { key: 'ctr', label: 'CTR Promedio', value: parseFloat(overallCtr.toFixed(4)), unit: '%', confidence: 1.0, evidence: 'Cálculo agregado' },
+            results: { key: 'results', label: 'Resultados Totales', value: totalResults, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' }
+        };
+
+        const combinedNarrative = narrativeDrafts.join('\n\n');
+
+        const parsedStartDate = startDate ? new Date(startDate) : new Date(new Date().setDate(1));
+        const parsedEndDate = endDate ? new Date(endDate) : new Date();
+
+        // Save DRAFT report in database
+        const report = await prisma.metricReport.create({
+            data: {
+                clientId,
+                periodKind: periodKind === 'QUARTERLY' ? 'QUARTERLY' : 'MONTHLY',
+                startDate: parsedStartDate,
+                endDate: parsedEndDate,
+                status: 'DRAFT',
+                normalizedMetrics,
+                narrative: {
+                    draft: combinedNarrative,
+                    final: combinedNarrative
+                },
+                sources: {
+                    create: processedSources
+                }
+            },
+            include: {
+                sources: true,
+                client: true
+            }
+        });
+
+        res.status(201).json({
+            success: true,
+            report
+        });
+
+    } catch (error) {
+        console.error('[Reports API] Error extracting metrics:', error);
+        res.status(500).json({ error: 'Internal Server Error during metrics extraction', details: error.message });
+    }
+});
+
+router.patch('/:reportId/metrics', async (req, res) => {
+    try {
+        const { reportId } = req.params;
+        const { normalizedMetrics: newMetrics } = req.body;
+
+        if (!newMetrics) {
+            return res.status(400).json({ error: "normalizedMetrics is required in payload" });
+        }
+
+        const existingReport = await prisma.metricReport.findUnique({
+            where: { id: reportId }
+        });
+
+        if (!existingReport) {
+            return res.status(404).json({ error: "Metric report not found" });
+        }
+
+        const dbMetrics = existingReport.normalizedMetrics || {};
+        const updatedMetrics = {};
+
+        const keys = ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'];
+        keys.forEach(key => {
+            const dbMetric = dbMetrics[key] || {};
+            const newMetric = newMetrics[key] || {};
+
+            // Determine if the value was manually modified from the DB value
+            const dbVal = dbMetric.value !== undefined ? dbMetric.value : null;
+            const newVal = newMetric.value !== undefined ? newMetric.value : null;
+            const isEdited = dbVal !== newVal || dbMetric.isManuallyEdited === true;
+
+            updatedMetrics[key] = {
+                ...dbMetric,
+                ...newMetric,
+                isManuallyEdited: isEdited
+            };
+        });
+
+        const updatedReport = await prisma.metricReport.update({
+            where: { id: reportId },
+            data: {
+                normalizedMetrics: updatedMetrics,
+                status: 'REVIEW'
+            },
+            include: {
+                sources: true,
+                client: true
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            report: updatedReport
+        });
+
+    } catch (error) {
+        console.error('[Reports API] Error updating report metrics:', error);
+        res.status(500).json({ error: 'Internal Server Error during metrics update', details: error.message });
     }
 });
 

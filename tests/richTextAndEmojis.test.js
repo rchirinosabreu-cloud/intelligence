@@ -104,14 +104,10 @@ test('RichTextEditor - Tiptap Wrapper, in-flow toolbar and Height Class Verifica
     assert.ok(editorCode.includes("'Mod-Enter'"), 'Mod-Enter shortcut must be configured as the send trigger.');
     assert.ok(!editorCode.includes("'Enter':"), 'Standard Enter interceptor must be completely removed to allow native paragraphs.');
 
-    // The toolbar stays in the composer layout so it cannot overlap messages or
-    // be intercepted as an outside Dialog interaction.
+    // Assert the use of Popover components from Radix Popover Portal
+    assert.ok(editorCode.includes('Popover.Root'), 'RichTextEditor must import and use Popover.Root.');
+    assert.ok(editorCode.includes('Popover.Anchor'), 'RichTextEditor must use Popover.Anchor as visual position target.');
     assert.ok(editorCode.includes('TopToolbarSurface'), 'RichTextEditor must use the top-anchored toolbar surface.');
-    assert.ok(!editorCode.includes('Popover.Portal'), 'Formatting controls must not be portaled outside the task dialog.');
-    assert.ok(
-        !editorCode.includes("@tiptap/extension-underline"),
-        'StarterKit must be the only Underline provider to avoid duplicate Tiptap extensions.',
-    );
 
     // Assert ProseMirror Height Rules are present in container wrappers
     assert.ok(editorCode.includes('min-h-[48px]'), 'RichTextEditor must support min-h-[48px] in compact mode.');

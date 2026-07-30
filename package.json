@@ -17,7 +17,7 @@
     "db:seed:financials": "node scripts/seed-financials.js",
     "db:seed:team": "node scripts/seed-team.js",
     "db:hard-cleanup": "node scripts/hard-cleanup.js",
-    "test": "node --test tests/kanbanLifecycle.test.js tests/draftAndLightbox.test.js tests/commentInteractions.test.js tests/richTextAndEmojis.test.js tests/composerActionLayout.test.js",
+    "test": "node --test tests/kanbanLifecycle.test.js tests/draftAndLightbox.test.js tests/commentInteractions.test.js tests/richTextAndEmojis.test.js tests/composerActionLayout.test.js tests/reportsExtraction.test.js",
     "test:activity-build": "node --test tests/activityComponentsCompile.test.js"
   },
   "prisma": {
