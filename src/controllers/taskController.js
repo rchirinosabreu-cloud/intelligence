@@ -5,7 +5,7 @@ const sanitizeHTML = (html) => {
     if (!html) return '';
     return DOMPurify.sanitize(html, {
         ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'h1', 'h2', 'ul', 'ol', 'li', 'br', 'span', 'a'],
-        ALLOWED_ATTR: ['href', 'target', 'class']
+        ALLOWED_ATTR: ['href', 'target', 'class', 'data-type', 'data-id', 'data-label', 'data-mention-id']
     });
 };
 

@@ -222,9 +222,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
     const [isUploadingTemp, setIsUploadingTemp] = useState(false);
     const [isLoadingComments, setIsLoadingComments] = useState(false);
-    const [showMentions, setShowMentions] = useState(false);
-    const [mentionFilter, setMentionFilter] = useState("");
-    const [mentionIndex, setMentionIndex] = useState(-1);
 
     const [newRefUrl, setNewRefUrl] = useState("");
     const [newRefName, setNewRefName] = useState("");
@@ -1160,42 +1157,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
     };
 
-    const handleCommentChange = (e) => {
-        const val = e.target.value;
-        setNewComment(val);
-
-        const selectionStart = e.target.selectionStart;
-        const textBeforeCursor = val.slice(0, selectionStart);
-        const atIndex = textBeforeCursor.lastIndexOf('@');
-
-        if (atIndex !== -1 && (atIndex === 0 || /\s/.test(textBeforeCursor[atIndex - 1]))) {
-            const query = textBeforeCursor.slice(atIndex + 1);
-            if (!/\s/.test(query)) {
-                setShowMentions(true);
-                setMentionFilter(query);
-                setMentionIndex(atIndex);
-                return;
-            }
-        }
-        setShowMentions(false);
-    };
-
-    const handleSelectMention = (user) => {
-        const textBeforeMention = newComment.slice(0, mentionIndex);
-        const textAfterMention = newComment.slice(commentInputRef.current.selectionStart);
-        const updatedComment = `${textBeforeMention}@${user.name} ${textAfterMention}`;
-
-        setNewComment(updatedComment);
-        setShowMentions(false);
-
-        setTimeout(() => {
-            if (commentInputRef.current) {
-                commentInputRef.current.focus();
-                const newPos = textBeforeMention.length + user.name.length + 2; // +1 for @, +1 for space
-                commentInputRef.current.setSelectionRange(newPos, newPos);
-            }
-        }, 50);
-    };
 
     const handleImagePreview = (imgData) => {
         const accessToken = localStorage.getItem('authToken');
@@ -1333,6 +1294,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 onSend={() => handleUpdateComment(comment.id)}
                                 onTextChange={setEditingCommentText}
                                 showToolbar={showEditToolbar}
+                                teamMembers={teamMembers}
                                 className="pr-12"
                             />
                             {/* Formatting 'A' Toggle Button */}
@@ -1546,12 +1508,16 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             <DialogContent
                 className="w-[92vw] max-w-6xl h-[85vh] max-h-[92dvh] p-0 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl z-[100] overflow-hidden"
                 onPointerDownOutside={(e) => {
-                    if (previewImage) {
+                    const target = e.target;
+                    const isToolbar = target && (target.closest('[data-task-format-toolbar]') || target.hasAttribute('data-task-format-toolbar'));
+                    if (previewImage || isToolbar) {
                         e.preventDefault();
                     }
                 }}
                 onInteractOutside={(e) => {
-                    if (previewImage) {
+                    const target = e.target;
+                    const isToolbar = target && (target.closest('[data-task-format-toolbar]') || target.hasAttribute('data-task-format-toolbar'));
+                    if (previewImage || isToolbar) {
                         e.preventDefault();
                     }
                 }}
@@ -2289,28 +2255,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 )}
 
                                 <div className="relative group">
-                                    {showMentions && (
-                                        <div className="absolute bottom-[105%] left-4 z-[90] w-52 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1.5 flex flex-col gap-0.5 animate-in slide-in-from-bottom-2 duration-150">
-                                            <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400 px-2.5 py-1">
-                                                Mencionar miembro
-                                            </div>
-                                            {teamMembers
-                                                .filter(m => m.name.toLowerCase().includes(mentionFilter.toLowerCase()))
-                                                .map((member) => (
-                                                    <button
-                                                        key={member.id}
-                                                        type="button"
-                                                        onClick={() => handleSelectMention(member)}
-                                                        className="w-full text-left px-2.5 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-xs font-bold text-zinc-700 dark:text-zinc-200 flex items-center gap-2 transition-all"
-                                                    >
-                                                        <TeamAvatar member={member} size={18} />
-                                                        <span className="truncate">{member.name}</span>
-                                                    </button>
-                                                ))
-                                            }
-                                        </div>
-                                    )}
-
                                     <RichTextEditor
                                         ref={mainEditorRef}
                                         value={newComment}
@@ -2319,14 +2263,15 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         onTextChange={setNewCommentText}
                                         placeholder={isEdition ? "Escribe un mensaje al equipo..." : "Escribe un mensaje inicial..."}
                                         showToolbar={showToolbar}
+                                        teamMembers={teamMembers}
                                         className="pl-4 pr-44"
                                     />
                                     {showInputEmojiPicker && (
-                                        <div className="absolute bottom-[105%] right-4 z-[90] w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-3 animate-in slide-in-from-bottom-2 duration-150">
+                                        <div className="absolute bottom-[105%] right-4 z-[90] w-[298px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-2 animate-in slide-in-from-bottom-2 duration-150">
                                             <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-2 px-1">
                                                 Emojis aprobados
                                             </div>
-                                            <div className="grid grid-cols-8 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                                            <div className="grid grid-cols-7 gap-1 max-h-48 overflow-y-auto pr-1">
                                                 {APPROVED_EMOJIS.map((emoji) => (
                                                     <button
                                                         key={emoji}
@@ -2335,7 +2280,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                             mainEditorRef.current?.insertEmoji(emoji);
                                                             setShowInputEmojiPicker(false);
                                                         }}
-                                                        className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-base transition-all active:scale-90"
+                                                        className="w-9 h-9 flex items-center justify-center hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-xl transition-all active:scale-90"
                                                     >
                                                         {emoji}
                                                     </button>
