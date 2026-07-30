@@ -5,7 +5,7 @@ const TopToolbarSurface = ({ children }) => React.createElement(
     {
         'data-task-format-toolbar': 'true',
         className: [
-            'relative z-[120] mb-2 self-end',
+            'absolute bottom-full right-0 mb-2 z-[120]',
             'flex max-w-[calc(100vw-2rem)] flex-nowrap items-center gap-1.5 overflow-x-auto',
             'rounded-xl border border-zinc-200 bg-white p-2 shadow-lg scrollbar-none',
             'dark:border-zinc-800 dark:bg-zinc-900',
