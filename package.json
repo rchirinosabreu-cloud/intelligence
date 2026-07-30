@@ -10,7 +10,7 @@
     "build": "npm run test:activity-build && prisma generate && vite build",
     "postinstall": "prisma generate",
     "preview": "vite preview --host :: --port 3000",
-    "lint": "eslint . --quiet",
+    "lint": "node scripts/fix-richtext-lint.js && eslint . --quiet",
     "lint:warn": "eslint .",
     "db:fix": "node scripts/fix_content_arrays.js",
     "db:status": "node scripts/add_status_message.js",

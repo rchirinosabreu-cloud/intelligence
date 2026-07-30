@@ -171,8 +171,8 @@ test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) =>
             // Import and run the new narrative generation service
             const { generateNarrativeWithOpenAI } = await import('../src/services/reportVisionService.js');
             const metrics = { spend: { value: 1300 } };
+const result = await generateNarrativeWithOpenAI(metrics);
 
-            const result = await generateNarrativeWithOpenAI(metrics);
 
             assert.ok(result);
             assert.strictEqual(result.headline, "Rendimiento Excepcional en Campañas de Pauta");
