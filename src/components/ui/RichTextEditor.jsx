@@ -10,7 +10,6 @@ import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import ComposerActionLayout from '@/components/ui/ComposerActionLayout';
 import TopToolbarSurface from '@/components/ui/TopToolbarSurface';
-import { runEditorFormat } from '@/components/ui/editorFormatting';
 
 // Custom Tiptap extension to handle Mod-Enter (Ctrl+Enter / Cmd+Enter) key action
 const CustomKeymap = Extension.create({
@@ -286,9 +285,10 @@ const RichTextEditor = React.forwardRef(({
           emojiAction={emojiAction}
           sendAction={sendAction}
         />
+      </div>
 
       {isToolbarOpen && (
-        <TopToolbarSurface expanded>
+        <TopToolbarSurface>
           <button
             type="button"
             onMouseDown={(e) => executeFormat(e, chain => chain.toggleBold())}
@@ -370,7 +370,6 @@ const RichTextEditor = React.forwardRef(({
           </button>
         </TopToolbarSurface>
       )}
-      </div>
 
       {/* Render suggestion list inside React Portal anchored dynamically to parsed cursor coordinates */}
       {suggestion.isOpen && suggestion.items.length > 0 && createPortal(
