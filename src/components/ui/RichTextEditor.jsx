@@ -71,51 +71,15 @@ const RichTextEditor = React.forwardRef(({
     }
   };
 
-  // Preservation of selection in ProseMirror
-  const savedSelectionRef = React.useRef(null);
-
-  const saveSelection = () => {
-    if (!editor) return;
-    savedSelectionRef.current = editor.state.selection;
-  };
-
-  const restoreSelection = () => {
-    const selection = savedSelectionRef.current;
-    if (!selection || !editor) {
-      return editor ? editor.chain().focus() : null;
-    }
-    const docSize = editor.state.doc.content.size;
-    const from = Math.min(selection.from, docSize);
-    const to = Math.min(selection.to, docSize);
-
-    return editor
-      .chain()
-      .focus()
-      .setTextSelection({ from, to });
-  };
-
-  // Centralized format command execution using savedSelectionRef
+  // Execute against ProseMirror's live selection. Restoring a selection captured
+  // when the toolbar opened makes subsequent formatting jump to an old block.
   const executeFormat = (event, command) => {
     if (event) {
       event.preventDefault();
       event.stopPropagation();
     }
 
-    if (!editor) return;
-
-    let chain = editor.chain().focus();
-
-    if (savedSelectionRef.current) {
-      const docSize = editor.state.doc.content.size;
-      const from = Math.min(savedSelectionRef.current.from, docSize);
-      const to = Math.min(savedSelectionRef.current.to, docSize);
-      chain = chain.setTextSelection({ from, to });
-    }
-
-    command(chain).run();
-
-    // Refresh selection ref immediately after execution to keep it safe and in sync
-    saveSelection();
+    runEditorFormat(editor, command);
   };
 
   // React State for native cursor-positioned suggestions list
@@ -281,10 +245,11 @@ const RichTextEditor = React.forwardRef(({
 
   return (
     <Popover.Root open={isToolbarOpen} onOpenChange={handleToggleToolbar}>
-      <div className="relative w-full flex flex-col justify-end">
+      <div className={cn("relative w-full flex h-12 flex-col justify-end", isToolbarOpen && "z-20")}>
         <Popover.Anchor asChild>
           <div className={cn(
             "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus-within:border-primary/30 rounded-xl shadow-inner transition-all relative flex flex-col justify-end",
+            isToolbarOpen && "absolute inset-x-0 bottom-0 min-h-[144px]",
             className
           )}>
             {/* Dynamic heights and scroll wrapped at React container level instead of Tiptap editorProps */}
@@ -305,9 +270,7 @@ const RichTextEditor = React.forwardRef(({
             <Popover.Trigger asChild>
             <button
               type="button"
-              onMouseDown={(e) => {
-                saveSelection();
-              }}
+              onMouseDown={(e) => e.preventDefault()}
               className={cn(
                 "w-9 h-9 flex items-center justify-center rounded-lg text-xs font-bold transition-all select-none hover:bg-zinc-200 dark:hover:bg-zinc-800",
                 isToolbarOpen ? "text-primary bg-primary/10" : "text-zinc-400"
