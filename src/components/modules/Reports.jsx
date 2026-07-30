@@ -36,6 +36,224 @@ import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 
+const ReportCover = ({ report }) => {
+  const formattedStart = report.startDate ? new Date(report.startDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  const formattedEnd = report.endDate ? new Date(report.endDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+
+  return (
+    <div className="min-h-[80vh] flex flex-col justify-between py-20 border-b border-slate-100 relative print:min-h-screen">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-16">
+          <div className="flex-1 space-y-8 text-center md:text-left">
+             <div className="inline-block px-3 py-1 bg-primary/10 border border-primary/20 rounded-full text-[10px] font-bold text-primary uppercase tracking-widest">
+                Reporte de Desempeño • {report.periodKind}
+             </div>
+             <h1 className="text-5xl md:text-6xl font-black text-slate-900 tracking-tight leading-tight">
+                Auditoría Digital de Performance
+             </h1>
+             <div className="flex items-center justify-center md:justify-start gap-6 text-xs font-bold text-slate-400 uppercase tracking-[0.3em]">
+                <span>{report.client?.name || 'Cliente'}</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-primary/20" />
+                <span>{formattedStart} — {formattedEnd}</span>
+             </div>
+          </div>
+          <div className="h-24 w-auto flex items-center justify-center shrink-0">
+             <img
+              src={report.client?.logoUrl ? `${getApiBaseUrl()}${report.client.logoUrl.startsWith('/api') ? '' : '/api'}${report.client.logoUrl}` : '/brainstudio-logo.png'}
+              alt={report.client?.name}
+              className="h-full w-full object-contain opacity-85"
+              onError={(e) => {
+                e.target.src = '/brainstudio-logo.png';
+              }}
+            />
+          </div>
+      </div>
+      <div className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.4em] text-center md:text-left border-t border-slate-50 pt-8">
+         Brainstudio Agencia de Alto Rendimiento
+      </div>
+    </div>
+  );
+};
+
+const ExecutiveSummary = ({ narrative, onUpdate }) => {
+  if (!narrative) return null;
+
+  const handlePointChange = (idx, value) => {
+    const updatedPoints = [...(narrative.summaryPoints || [])];
+    updatedPoints[idx] = value;
+    onUpdate({ ...narrative, summaryPoints: updatedPoints });
+  };
+
+  return (
+    <div className="space-y-8 break-inside-avoid">
+      <div className="space-y-4">
+        <textarea
+          rows={2}
+          className="w-full bg-transparent border-none text-3xl font-black text-slate-800 leading-snug tracking-tight focus:ring-1 focus:ring-primary/10 rounded-xl py-2 outline-none resize-none"
+          value={narrative.headline || ''}
+          onChange={(e) => onUpdate({ ...narrative, headline: e.target.value })}
+        />
+        <div className="h-1 w-20 bg-primary/40 rounded-full" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {(narrative.summaryPoints || []).map((point, idx) => (
+          <Card key={idx} className="bg-slate-50 border-slate-100 p-6 flex gap-4 break-inside-avoid">
+            <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/10 text-primary flex items-center justify-center shrink-0 font-black text-sm">
+              {idx + 1}
+            </div>
+            <textarea
+              className="w-full bg-transparent border-none text-xs text-slate-600 leading-relaxed font-semibold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none"
+              rows={4}
+              value={point}
+              onChange={(e) => handlePointChange(idx, e.target.value)}
+            />
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const MetricGrid = ({ metrics }) => {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-6 break-inside-avoid">
+      {Object.entries(metrics).map(([key, metric]) => {
+        if (!metric) return null;
+        return (
+          <div key={key} className={cn(
+            "border p-6 space-y-4 rounded-2xl transition-all break-inside-avoid shadow-sm",
+            metric.isManuallyEdited
+              ? "bg-slate-50 border-primary/40 shadow-sm shadow-primary/5"
+              : "bg-slate-50 border-slate-100 hover:border-primary/20 shadow-sm"
+          )}>
+            <div className="flex justify-between items-start">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                {metric.label || key}
+                {metric.isManuallyEdited && (
+                  <span className="ml-1 text-[9px] text-primary font-bold lowercase tracking-normal">(editado)</span>
+                )}
+              </span>
+              <span className={cn(
+                "text-[10px] font-bold px-2 py-0.5 rounded-full",
+                (metric.confidence > 0.8 || metric.confidence === undefined) ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+              )}>
+                {((metric.confidence || 1.0) * 100).toFixed(0)}% conf
+              </span>
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-3xl font-black text-slate-800">
+                {metric.value !== null && metric.value !== undefined ? (
+                  key === 'spend' ? `${metric.unit} ${metric.value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` :
+                  key === 'ctr' ? `${metric.value.toFixed(2)}${metric.unit || '%'}` :
+                  metric.value.toLocaleString('es-ES')
+                ) : 'N/A'}
+              </h4>
+              <p className="text-[10px] text-slate-500 font-medium italic">
+                Evidencia: &ldquo;{metric.evidence || 'N/A'}&rdquo;
+              </p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const ActionPlan = ({ narrative, onUpdate }) => {
+  if (!narrative || !narrative.actionPlan) return null;
+
+  const handleChange = (idx, field, value) => {
+    const updatedPlan = [...narrative.actionPlan];
+    updatedPlan[idx] = { ...updatedPlan[idx], [field]: value };
+    onUpdate({ ...narrative, actionPlan: updatedPlan });
+  };
+
+  return (
+    <div className="space-y-6 break-inside-avoid pt-12 border-t border-slate-100">
+      <div className="space-y-2">
+        <h3 className="text-xl font-black tracking-tight text-slate-800">Plan de Acción Sugerido</h3>
+        <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Estrategias de Optimización para el Siguiente Periodo</p>
+      </div>
+
+      <div className="overflow-x-auto border border-slate-100 rounded-2xl bg-white">
+        <table className="w-full border-collapse text-left text-sm text-slate-500">
+          <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+            <tr>
+              <th className="px-6 py-4 font-bold">Compromiso / Acción Recomendada</th>
+              <th className="px-6 py-4 font-bold">KPI de Éxito</th>
+              <th className="px-6 py-4 font-bold">Responsable</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50 font-medium">
+            {narrative.actionPlan.map((item, idx) => (
+              <tr key={idx} className="hover:bg-slate-50/50 break-inside-avoid">
+                <td className="px-6 py-4">
+                  <textarea
+                    rows={2}
+                    className="w-full bg-transparent border-none text-slate-700 font-medium focus:ring-1 focus:ring-primary/10 rounded-lg outline-none resize-none"
+                    value={item.action}
+                    onChange={(e) => handleChange(idx, 'action', e.target.value)}
+                  />
+                </td>
+                <td className="px-6 py-4">
+                  <textarea
+                    rows={2}
+                    className="w-full bg-transparent border-none text-slate-700 font-semibold focus:ring-1 focus:ring-primary/10 rounded-lg outline-none resize-none"
+                    value={item.kpi}
+                    onChange={(e) => handleChange(idx, 'kpi', e.target.value)}
+                  />
+                </td>
+                <td className="px-6 py-4">
+                  <input
+                    type="text"
+                    className="w-full bg-transparent border-none text-primary font-bold focus:ring-1 focus:ring-primary/10 rounded-lg outline-none"
+                    value={item.suggestedAssignee}
+                    onChange={(e) => handleChange(idx, 'suggestedAssignee', e.target.value)}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const SourceAppendix = ({ sources }) => {
+  if (!sources || sources.length === 0) return null;
+
+  return (
+    <div className="space-y-6 break-inside-avoid pt-12 border-t border-slate-100 print:hidden">
+      <div className="space-y-2">
+        <h3 className="text-xl font-black tracking-tight text-slate-800">Apéndice de Evidencias</h3>
+        <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Capturas Originales de Meta Ads Procesadas</p>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+        {sources.map((src, idx) => (
+          <Card key={idx} className="overflow-hidden border-slate-100 hover:shadow-md transition-all p-4 bg-slate-50/50">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pb-3 border-b border-slate-200/60 mb-3 flex justify-between items-center">
+              <span>{src.screenType || 'Evidencia'}</span>
+              <span>{src.platform}</span>
+            </div>
+            <div className="aspect-video rounded-xl overflow-hidden border border-slate-200/70 bg-white flex items-center justify-center">
+              {src.storagePath ? (
+                <img
+                  src={`${getApiBaseUrl()}/api/reports/image-proxy?path=${encodeURIComponent(src.storagePath)}`}
+                  alt={src.screenType}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-xs text-slate-300 font-bold">Imagen no disponible</span>
+              )}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
   const [localMetrics, setLocalMetrics] = useState(report.normalizedMetrics || {});
 
@@ -185,13 +403,36 @@ const Reports = () => {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [isGeneratingNarrative, setIsGeneratingNarrative] = useState(false);
   const [report, setReport] = useState(null);
   const [editedTexts, setEditedTexts] = useState({
     title: '',
     organic_analysis: [],
     performance_analysis: []
   });
+  const [narrativeState, setNarrativeState] = useState(null);
   const reportRef = useRef(null);
+
+  useEffect(() => {
+    if (report?.narrative && report.status === 'PUBLISHED') {
+      let parsed = report.narrative;
+      if (typeof parsed === 'string') {
+        try {
+          parsed = JSON.parse(parsed);
+        } catch (e) {
+          parsed = {
+            headline: "Análisis General de Performance",
+            summaryPoints: ["Análisis de pauta extraído exitosamente.", "Evolución optimista en los deltas de CTR.", "Acciones de mejora planificadas."],
+            keyAchievements: report.narrative,
+            actionPlan: []
+          };
+        }
+      }
+      setNarrativeState(parsed);
+    } else {
+      setNarrativeState(null);
+    }
+  }, [report]);
 
   useEffect(() => {
     fetchClients();
@@ -327,25 +568,42 @@ const Reports = () => {
     if (!report?.id) return;
     setIsSubmittingReview(true);
     try {
-      const response = await axios.patch(`${getApiBaseUrl()}/api/reports/${report.id}/metrics`, {
+      // 1. Save audited metrics
+      const patchResponse = await axios.patch(`${getApiBaseUrl()}/api/reports/${report.id}/metrics`, {
         normalizedMetrics: reviewedMetrics
       }, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      if (response.data?.success && response.data?.report) {
-        setReport(response.data.report);
-        toast.success('Métricas auditadas y guardadas exitosamente!');
+
+      if (patchResponse.data?.success && patchResponse.data?.report) {
+        toast.success('Métricas auditadas correctamente!');
+
+        // 2. Trigger Narrative Generation
+        setIsGeneratingNarrative(true);
+        const narrativeResponse = await axios.post(`${getApiBaseUrl()}/api/reports/${report.id}/generate-narrative`, {}, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        if (narrativeResponse.data?.success && narrativeResponse.data?.report) {
+          setReport(narrativeResponse.data.report);
+          toast.success('Reporte narrativo editorial generado exitosamente!');
+        } else {
+          throw new Error('Fallo al generar la narrativa');
+        }
       } else {
         throw new Error('Fallo al guardar la auditoría');
       }
     } catch (error) {
-      const errMsg = error.response?.data?.error || 'Error al guardar la auditoría. Intenta de nuevo.';
+      const errMsg = error.response?.data?.error || 'Error en el proceso. Intenta de nuevo.';
       toast.error(errMsg);
-      console.error('[Reports Frontend] Audit save error:', error);
+      console.error('[Reports Frontend] Flow error:', error);
     } finally {
       setIsSubmittingReview(false);
+      setIsGeneratingNarrative(false);
     }
   };
 
@@ -523,9 +781,51 @@ const Reports = () => {
          </div>
       </div>
 
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          body {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-full-width {
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          .break-inside-avoid {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+          textarea, input {
+            border: none !important;
+            box-shadow: none !important;
+            background: transparent !important;
+            resize: none !important;
+          }
+          @page {
+            size: A4;
+            margin: 20mm;
+          }
+        }
+      `}} />
+
       {/* Main Report Canvas */}
       <AnimatePresence mode="wait">
-        {report ? (
+        {isGeneratingNarrative ? (
+          <div className="h-[500px] flex flex-col items-center justify-center space-y-6 bg-white border border-slate-200 rounded-[2.5rem] shadow-sm no-print">
+             <Loader2 className="w-12 h-12 text-primary animate-spin" />
+             <div className="text-center space-y-2">
+               <h3 className="text-xl font-bold text-slate-800">Generando Narrativa Editorial</h3>
+               <p className="text-sm text-slate-400 font-medium max-w-sm">
+                 Nuestros modelos de Inteligencia Estratégica están analizando las métricas validadas para redactar el reporte ejecutivo...
+               </p>
+             </div>
+          </div>
+        ) : report ? (
           report.status === 'DRAFT' ? (
             <ReportMetricsReview
               report={report}
@@ -535,134 +835,47 @@ const Reports = () => {
           ) : (
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="bg-white border border-[#e2e8f0] shadow-2xl rounded-[2.5rem] overflow-hidden"
+              className="bg-white border border-[#e2e8f0] shadow-2xl rounded-[2.5rem] overflow-hidden print:border-none print:shadow-none"
             >
-            <div id="report-canvas" ref={reportRef} className="p-12 md:p-20 space-y-20 bg-white">
-               {/* Portada */}
-               <div className="min-h-[85vh] flex flex-col justify-center py-32 border-b border-slate-50 relative">
-                  <div className="flex flex-col md:flex-row items-center justify-between gap-16">
-                      <div className="flex-1 space-y-10 text-center md:text-left">
-                         <textarea
-                            className="w-full bg-transparent border-none text-6xl md:text-7xl font-light text-slate-900 tracking-tight leading-tight resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl py-2"
-                            rows={2}
-                            value={editedTexts.title}
-                            onChange={(e) => handleTextEdit('title', null, e.target.value)}
-                         />
-                         <div className="flex items-center justify-center md:justify-start gap-6 text-xs font-bold text-slate-400 uppercase tracking-[0.3em]">
-                            <span>Brainstudio Agencia</span>
-                            <div className="w-1.5 h-1.5 rounded-full bg-primary/20" />
-                            <span>{new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</span>
-                         </div>
-                      </div>
-                      <div className="h-20 md:h-24 w-auto flex items-center justify-center shrink-0">
-                         <img
-                          src={report.client.logoUrl ? getImageUrl(report.client.logoUrl) : '/brainstudio-logo.png'}
-                          alt={report.client.name}
-                          className="h-full w-full object-contain opacity-80"
-                          onError={(e) => {
-                            console.warn("Client logo load failed, falling back to agency logo");
-                            e.target.src = '/brainstudio-logo.png';
-                          }}
-                        />
-                      </div>
-                  </div>
-               </div>
+              <div id="report-canvas" ref={reportRef} className="p-12 md:p-20 space-y-20 bg-white">
+                 <ReportCover report={report} />
 
-               {/* Sección: Métricas Extraídas Canonizadas */}
-               {report.normalizedMetrics && (
-               <div className="space-y-12">
-                  <SectionHeader title="Métricas Extraídas Canonizadas (Meta Ads)" client={report.client} />
+                 <ExecutiveSummary narrative={narrativeState} onUpdate={setNarrativeState} />
 
-                  {/* Warning notifications */}
-                  {report.sources && report.sources.some(s => s.warnings && s.warnings.length > 0) && (
-                    <div className="p-6 bg-amber-50 border border-amber-200 rounded-2xl space-y-3">
-                      <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
-                        <Info className="w-5 h-5 text-amber-600 animate-pulse" />
-                        Inconsistencias Detectadas en la Extracción
-                      </div>
-                      <ul className="list-disc pl-5 space-y-1.5 text-amber-700 text-xs font-medium">
-                        {report.sources.flatMap(s => s.warnings || []).map((warn, wIdx) => (
-                          <li key={wIdx}>{warn}</li>
-                        ))}
-                      </ul>
+                 <div className="space-y-6 pt-12 border-t border-slate-100 break-inside-avoid">
+                    <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Análisis Interpretativo de Logros</h4>
+                    <Card className="bg-[#fcfcfd] border-slate-100 p-8">
+                       <textarea
+                          rows={6}
+                          className="w-full bg-transparent border-none text-slate-600 leading-relaxed font-normal text-lg outline-none resize-none focus:ring-1 focus:ring-primary/10 rounded-xl"
+                          value={narrativeState?.keyAchievements || ''}
+                          onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
+                       />
+                    </Card>
+                 </div>
+
+                 {report.normalizedMetrics && (
+                   <div className="space-y-8 pt-12 border-t border-slate-100 break-inside-avoid">
+                     <div className="space-y-2">
+                       <h3 className="text-xl font-black tracking-tight text-slate-800">Desempeño Cuantitativo</h3>
+                       <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Métricas Clave de Performance Meta Ads</p>
+                     </div>
+                     <MetricGrid metrics={report.normalizedMetrics} />
+                   </div>
+                 )}
+
+                 <ActionPlan narrative={narrativeState} onUpdate={setNarrativeState} />
+
+                 <SourceAppendix sources={report.sources} />
+
+                 {/* Footer */}
+                 <div className="pt-20 border-t border-slate-50 flex flex-col items-center gap-4 text-center">
+                    <div className="text-[11px] font-bold text-slate-300 tracking-[0.2em]">
+                       Brainstudio Agencia
                     </div>
-                  )}
-
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                    {Object.entries(report.normalizedMetrics).map(([key, metric]) => {
-                      if (!metric) return null;
-                      return (
-                        <Card key={key} className="bg-slate-50 border-slate-100 hover:border-primary/20 transition-all p-6 space-y-4">
-                          <div className="flex justify-between items-start">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{metric.label || key}</span>
-                            <span className={cn(
-                              "text-[10px] font-bold px-2 py-0.5 rounded-full",
-                              (metric.confidence > 0.8 || metric.confidence === undefined) ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                            )}>
-                              {((metric.confidence || 1.0) * 100).toFixed(0)}% conf
-                            </span>
-                          </div>
-                          <div className="space-y-1">
-                            <h4 className="text-3xl font-black text-slate-800">
-                              {metric.value !== null && metric.value !== undefined ? (
-                                key === 'spend' ? `${metric.unit} ${metric.value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` :
-                                key === 'ctr' ? `${metric.value.toFixed(2)}${metric.unit || '%'}` :
-                                metric.value.toLocaleString('es-ES')
-                              ) : 'N/A'}
-                            </h4>
-                            <p className="text-[10px] text-slate-500 font-medium italic">
-                              Evidencia: &ldquo;{metric.evidence || 'N/A'}&rdquo;
-                            </p>
-                          </div>
-                        </Card>
-                      );
-                    })}
-                  </div>
-               </div>
-               )}
-
-               {/* Sección: Análisis Narrativo */}
-               {report.narrative && (
-               <div className="space-y-6 pt-12 border-t border-slate-100">
-                  <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Análisis Narrativo Generado</h4>
-                  <Card className="bg-[#fcfcfd] border-slate-100 p-8">
-                     <p className="text-slate-600 leading-relaxed font-normal whitespace-pre-wrap text-lg">
-                        {report.narrative.draft || report.narrative}
-                     </p>
-                  </Card>
-               </div>
-               )}
-
-               {/* Sección: Fuentes de Información Auditas */}
-               {report.sources && report.sources.length > 0 && (
-               <div className="space-y-6 pt-12 border-t border-slate-100">
-                  <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Fuentes Analizadas</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {report.sources.map((src, sIdx) => (
-                      <Card key={sIdx} className="bg-slate-50 border-slate-100 p-6 space-y-4">
-                        <div className="flex justify-between items-center border-b border-slate-200/60 pb-3">
-                          <span className="text-xs font-bold text-slate-700">{src.screenType || 'Pantalla Extracción'}</span>
-                          <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-md font-bold">{src.platform}</span>
-                        </div>
-                        <div className="space-y-1.5 text-xs text-slate-500 font-medium">
-                          <p><span className="font-bold text-slate-600">ID de Origen:</span> {src.sourceId}</p>
-                          <p><span className="font-bold text-slate-600">Ruta en Storage:</span> <span className="font-mono text-[10px] bg-white px-1.5 py-0.5 rounded border border-slate-200">{src.storagePath}</span></p>
-                          <p><span className="font-bold text-slate-600">Confianza:</span> {Math.round(src.confidence * 100)}%</p>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-               </div>
-               )}
-
-               {/* Footer */}
-               <div className="pt-20 border-t border-slate-50 flex flex-col items-center gap-4 text-center">
-                  <div className="text-[11px] font-bold text-slate-300 tracking-[0.2em]">
-                     Brainstudio Agencia
-                  </div>
-               </div>
-            </div>
-          </motion.div>
+                 </div>
+              </div>
+            </motion.div>
           )
         ) : (
           <div className="h-[500px] flex flex-col items-center justify-center space-y-8 bg-white border border-slate-200 border-dashed rounded-[3rem]">

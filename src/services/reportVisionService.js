@@ -198,3 +198,108 @@ export const extractMetricsWithVision = async (imageBuffer, mimeType = 'image/jp
         throw parseError;
     }
 };
+
+/**
+ * Generates an editorial narrative and strategic action plan from normalized metrics.
+ * @param {Object} normalizedMetrics - The validated metrics object.
+ * @returns {Promise<Object>} The parsed narrative structure.
+ */
+export const generateNarrativeWithOpenAI = async (normalizedMetrics) => {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        throw new Error("Missing OpenAI API Key in server configuration");
+    }
+
+    const model = process.env.OPENAI_VISION_MODEL || "gpt-4o";
+
+    const prompt = `Analiza las siguientes métricas cuantitativas ya validadas y genera una narración editorial estructurada en Español.
+
+MÉTRICAS DEL PERIODO:
+${JSON.stringify(normalizedMetrics, null, 2)}
+
+REGLAS DE REDACCIÓN DE LA NARRATIVA:
+1. TONO: Consultivo, positivo, profesional, motivador y orientado a metas comerciales de alto nivel.
+2. REGLA ESTRICTA DE INTEGRIDAD DE DATOS (PROHIBIDO HALLUCINAR): Queda terminantemente prohibido que menciones o inventes valores numéricos, métricas, cantidades o porcentajes que no existan de forma explícita en el objeto de métricas provisto arriba. No asumas divisas ni cifras que no estén allí.
+3. ESTRUCTURA REQUERIDA (JSON):
+   - headline: Un titular de impacto, corto y motivador.
+   - summaryPoints: Un arreglo de exactamente 3 puntos clave resumidos.
+   - keyAchievements: Un texto (de 1 o 2 párrafos) que explique los logros más importantes y las variaciones relevantes, destacando la evolución de manera optimista.
+   - actionPlan: Un plan de acción con exactamente 3 compromisos recomendados. Cada compromiso debe ser un objeto con 'action' (Acción), 'kpi' (KPI de éxito) y 'suggestedAssignee' (Responsable sugerido).
+`;
+
+    const narrativeSchema = {
+      type: "object",
+      properties: {
+        headline: { type: "string" },
+        summaryPoints: {
+          type: "array",
+          items: { type: "string" }
+        },
+        keyAchievements: { type: "string" },
+        actionPlan: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              action: { type: "string" },
+              kpi: { type: "string" },
+              suggestedAssignee: { type: "string" }
+            },
+            required: ["action", "kpi", "suggestedAssignee"],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ["headline", "summaryPoints", "keyAchievements", "actionPlan"],
+      additionalProperties: false
+    };
+
+    const response = await fetch(OPENAI_API_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'User-Agent': 'BrainStudioIntelligence/2.0'
+        },
+        body: JSON.stringify({
+            model: model,
+            messages: [
+                {
+                    role: 'system',
+                    content: "Eres un Director Editorial de Estrategia Digital en Brainstudio, experto en redactar análisis consultivos y planes de acción accionables basados en datos reales."
+                },
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ],
+            response_format: {
+                type: "json_schema",
+                json_schema: {
+                    name: "editorial_narrative",
+                    strict: true,
+                    schema: narrativeSchema
+                }
+            }
+        })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[Vision Service] OpenAI Narrative API error: ${response.status}`, errorText);
+        throw new Error(`OpenAI Narrative API failed with status ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content) {
+        throw new Error("OpenAI Narrative response content is empty");
+    }
+
+    try {
+        return parseJsonResponse(content);
+    } catch (parseError) {
+        console.error("[Vision Service] Error parsing narrative JSON schema:", parseError, "Raw content:", content);
+        throw parseError;
+    }
+};

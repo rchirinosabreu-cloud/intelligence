@@ -130,4 +130,58 @@ test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) =>
         assert.strictEqual(updatedMetrics.impressions.isManuallyEdited, false);
         assert.strictEqual(updatedMetrics.spend.value, 1300.00);
     });
+
+    await t.test('Editorial narrative prompt and format generation logic', async () => {
+        const mockNarrativeResponse = {
+            choices: [
+                {
+                    message: {
+                        content: JSON.stringify({
+                            headline: "Rendimiento Excepcional en Campañas de Pauta",
+                            summaryPoints: [
+                                "Incremento sustancial en la conversión final.",
+                                "Estabilización y optimización de costos de adquisición.",
+                                "Aumento en CTR impulsado por nuevos ganchos de contenido."
+                            ],
+                            keyAchievements: "Durante este ciclo, la pauta publicitaria demostró una consolidación clave.",
+                            actionPlan: [
+                                { action: "Implementar optimización de audiencias", kpi: "CPA -10%", suggestedAssignee: "Director de Performance" },
+                                { action: "Renovar creativos del pilar más relevante", kpi: "CTR > 1.8%", suggestedAssignee: "Diseñador Creativo" },
+                                { action: "Establecer presupuesto incremental", kpi: "Retorno de inversión", suggestedAssignee: "Project Manager" }
+                            ]
+                        })
+                    }
+                }
+            ]
+        };
+
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = async () => {
+            return {
+                ok: true,
+                status: 200,
+                json: async () => mockNarrativeResponse
+            };
+        };
+
+        const originalApiKey = process.env.OPENAI_API_KEY;
+        process.env.OPENAI_API_KEY = 'mock-key';
+
+        try {
+            // Import and run the new narrative generation service
+            const { generateNarrativeWithOpenAI } = await import('../src/services/reportVisionService.js');
+            const metrics = { spend: { value: 1300 } };
+
+            const result = await generateNarrativeWithOpenAI(metrics);
+
+            assert.ok(result);
+            assert.strictEqual(result.headline, "Rendimiento Excepcional en Campañas de Pauta");
+            assert.strictEqual(result.summaryPoints.length, 3);
+            assert.strictEqual(result.actionPlan.length, 3);
+            assert.strictEqual(result.actionPlan[0].suggestedAssignee, "Director de Performance");
+        } finally {
+            globalThis.fetch = originalFetch;
+            process.env.OPENAI_API_KEY = originalApiKey;
+        }
+    });
 });
