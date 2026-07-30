@@ -154,32 +154,34 @@ const Reports = () => {
 
     const formData = new FormData();
     formData.append('clientId', selectedClientId);
-    organicFiles.forEach(file => formData.append('organic', file));
-    adsFiles.forEach(file => formData.append('ads', file));
+    formData.append('periodKind', 'MONTHLY');
+    adsFiles.forEach(file => formData.append('files', file));
+    organicFiles.forEach(file => formData.append('files', file));
     if (logoFile) formData.append('logo', logoFile);
 
     try {
-      const response = await axios.post(`${getApiBaseUrl()}/api/reports/generate`, formData, {
+      const response = await axios.post(`${getApiBaseUrl()}/api/reports/extract-metrics`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      if (response.data?.analysis) {
-        setReport(response.data);
-        const reportType = (organicFiles.length > 0 && adsFiles.length > 0) ? "Completo" : (adsFiles.length > 0 ? "de Performance" : "Orgánico");
+      if (response.data?.success && response.data?.report) {
+        const reportData = response.data.report;
+        setReport(reportData);
         setEditedTexts({
-            title: `Reporte ${reportType} de ${response.data.client.name} - 2026`,
-            organic_analysis: response.data.analysis.organic_analysis || [],
-            performance_analysis: response.data.analysis.performance_analysis || []
+            title: `Reporte de Performance - ${reportData.client?.name || 'Cliente'} - 2026`,
+            organic_analysis: [],
+            performance_analysis: []
         });
-        toast.success('Reporte final generado');
+        toast.success('Extracción de métricas y reporte borrador generado exitosamente!');
       } else {
         throw new Error('Invalid response');
       }
     } catch (error) {
-      toast.error('Fallo en el análisis de IA. Reintenta.');
-      console.error(error);
+      const errMsg = error.response?.data?.error || 'Fallo en la extracción de IA. Reintenta.';
+      toast.error(errMsg);
+      console.error('[Reports Frontend] Extraction error:', error);
     } finally {
       setIsGenerating(false);
     }
@@ -397,126 +399,89 @@ const Reports = () => {
                   </div>
                </div>
 
-               {/* Sección: Análisis orgánico (RRSS) */}
-               {report.analysis.organic_analysis?.length > 0 && (
+               {/* Sección: Métricas Extraídas Canonizadas */}
+               {report.normalizedMetrics && (
                <div className="space-y-12">
-                  <SectionHeader title="Análisis orgánico (RRSS)" client={report.client} />
+                  <SectionHeader title="Métricas Extraídas Canonizadas (Meta Ads)" client={report.client} />
 
-                  <div className="grid grid-cols-1 gap-16">
-                  {editedTexts.organic_analysis.map((block, i) => (
-                    <div key={`org-${i}`} className="relative group pt-12">
-                        <div className="absolute top-0 -left-4 z-20 px-3 py-1 bg-white border border-slate-100 rounded-full shadow-sm text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                            {block.tipo === 'RADIOGRAFIA' ? <User className="w-3 h-3 text-blue-500" /> :
-                             block.tipo === 'RESUMEN' ? <Trophy className="w-3 h-3 text-amber-500" /> :
-                             <TrendingUp className="w-3 h-3 text-emerald-500" />}
-                            {block.tipo === 'AVANCE' ? 'Avance General' :
-                             block.tipo === 'RADIOGRAFIA' ? 'Público' :
-                             block.tipo === 'RESUMEN' ? 'Contenido' : (block.tipo || "Análisis")}
-                        </div>
-
-                        <div className="space-y-8">
-                            {block.imagen_url && (
-                                <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-3xl mx-auto bg-slate-50">
-                                    <img
-                                      src={getImageUrl(block.imagen_url)}
-                                      className="w-full h-auto"
-                                      alt={block.tipo}
-                                      onError={(e) => console.error("Error loading image:", block.imagen_url)}
-                                    />
-                                </div>
-                            )}
-                            <Card className="bg-[#fcfcfd] border-slate-100 relative">
-                                <textarea
-                                   className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[100px]"
-                                   value={block.texto_analisis}
-                                   onChange={(e) => handleTextEdit('organic_analysis', 'texto_analisis', e.target.value, i)}
-                                />
-                            </Card>
-                        </div>
-                    </div>
-                  ))}
-                  </div>
-               </div>
-               )}
-
-               {/* Sección: Performance digital */}
-               {report.analysis.performance_analysis?.length > 0 && (
-               <div className="space-y-12 pt-24 border-t border-slate-100">
-                  <SectionHeader title="Performance digital (Pauta ADS)" client={report.client} />
-
-                  <div className="grid grid-cols-1 gap-16">
-                  {editedTexts.performance_analysis.map((block, i) => (
-                    <div key={`ads-${i}`} className="relative group pt-12">
-                        <div className="absolute top-0 -left-4 z-20 px-3 py-1 bg-white border border-slate-100 rounded-full shadow-sm text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                            {block.tipo === 'MACRO' ? <Zap className="w-3 h-3 text-cyan-500" /> :
-                             <Target className="w-3 h-3 text-purple-500" />}
-                            {block.tipo === 'MACRO' ? 'Rendimiento Macro' :
-                             block.tipo === 'MICRO' ? 'Desglose Micro' : (block.tipo || "Análisis de Pauta")}
-                        </div>
-
-                        <div className="space-y-8">
-                            {block.imagen_url && (
-                                <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm max-w-4xl mx-auto bg-slate-50">
-                                    <img
-                                      src={getImageUrl(block.imagen_url)}
-                                      className="w-full h-auto"
-                                      alt={block.tipo}
-                                      onError={(e) => console.error("Error loading image:", block.imagen_url)}
-                                    />
-                                </div>
-                            )}
-                            <Card className="bg-[#fcfcfd] border-slate-100">
-                                <textarea
-                                   className="w-full bg-transparent border-none text-lg text-slate-600 leading-relaxed font-normal resize-none outline-none focus:ring-1 focus:ring-primary/10 rounded-xl min-h-[100px]"
-                                   value={block.texto_analisis}
-                                   onChange={(e) => handleTextEdit('performance_analysis', 'texto_analisis', e.target.value, i)}
-                                />
-                            </Card>
-                        </div>
-                    </div>
-                  ))}
-                  </div>
-               </div>
-               )}
-
-               {/* Sección: Hoja de ruta estratégica */}
-               {report.analysis.hoja_de_ruta && (
-               <div className="pt-24 border-t border-slate-100">
-                  <div className="bg-slate-900 rounded-[3rem] p-12 md:p-20 space-y-12 relative overflow-hidden">
-                     <div className="absolute top-0 right-0 w-80 h-80 bg-primary/20 blur-[100px] rounded-full translate-x-1/2 -translate-y-1/2" />
-                     <div className="space-y-6 relative z-10">
-                        <h3 className="text-3xl md:text-4xl font-bold text-white tracking-tight">Hoja de ruta estratégica</h3>
-                        <div className="h-0.5 w-12 bg-primary" />
-                     </div>
-
-                     <div className="space-y-10 relative z-10">
-                        {(report.analysis.hoja_de_ruta || []).map((step, i) => (
-                           <div key={i} className="flex gap-8 items-start group">
-                              <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/10 text-white flex items-center justify-center shrink-0 font-black text-xl shadow-xl">
-                                 {step.step || i+1}
-                              </div>
-                              <div className="space-y-2 flex-1">
-                                 <input
-                                    className="w-full bg-transparent border-none text-xl font-bold text-white leading-tight outline-none focus:ring-1 focus:ring-primary/30 rounded-lg px-2 !text-white !opacity-100"
-                                    value={step.title}
-                                    onChange={(e) => handleTextEdit('hoja_de_ruta', 'title', e.target.value, i)}
-                                 />
-                                 <textarea
-                                    className="w-full bg-transparent border-none text-lg text-white font-medium leading-relaxed resize-none outline-none focus:ring-1 focus:ring-primary/30 rounded-lg px-2 !text-white !opacity-100"
-                                    rows={2}
-                                    value={step.description}
-                                    onChange={(e) => handleTextEdit('hoja_de_ruta', 'description', e.target.value, i)}
-                                 />
-                              </div>
-                           </div>
+                  {/* Warning notifications */}
+                  {report.sources && report.sources.some(s => s.warnings && s.warnings.length > 0) && (
+                    <div className="p-6 bg-amber-50 border border-amber-200 rounded-2xl space-y-3">
+                      <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
+                        <Info className="w-5 h-5 text-amber-600 animate-pulse" />
+                        Inconsistencias Detectadas en la Extracción
+                      </div>
+                      <ul className="list-disc pl-5 space-y-1.5 text-amber-700 text-xs font-medium">
+                        {report.sources.flatMap(s => s.warnings || []).map((warn, wIdx) => (
+                          <li key={wIdx}>{warn}</li>
                         ))}
-                     </div>
+                      </ul>
+                    </div>
+                  )}
 
-                     <div className="flex items-center gap-6 pt-10 relative z-10 opacity-30">
-                        <img src="/brainstudio-logo.png" className="h-10 grayscale brightness-200" />
-                        <div className="h-8 w-px bg-white/20" />
-                        <span className="text-[10px] font-bold text-white uppercase tracking-[0.5em]">Digital Performance Strategy</span>
-                     </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                    {Object.entries(report.normalizedMetrics).map(([key, metric]) => {
+                      if (!metric) return null;
+                      return (
+                        <Card key={key} className="bg-slate-50 border-slate-100 hover:border-primary/20 transition-all p-6 space-y-4">
+                          <div className="flex justify-between items-start">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{metric.label || key}</span>
+                            <span className={cn(
+                              "text-[10px] font-bold px-2 py-0.5 rounded-full",
+                              (metric.confidence > 0.8 || metric.confidence === undefined) ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                            )}>
+                              {((metric.confidence || 1.0) * 100).toFixed(0)}% conf
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            <h4 className="text-3xl font-black text-slate-800">
+                              {metric.value !== null && metric.value !== undefined ? (
+                                key === 'spend' ? `${metric.unit} ${metric.value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` :
+                                key === 'ctr' ? `${metric.value.toFixed(2)}${metric.unit || '%'}` :
+                                metric.value.toLocaleString('es-ES')
+                              ) : 'N/A'}
+                            </h4>
+                            <p className="text-[10px] text-slate-500 font-medium italic">
+                              Evidencia: &ldquo;{metric.evidence || 'N/A'}&rdquo;
+                            </p>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+               </div>
+               )}
+
+               {/* Sección: Análisis Narrativo */}
+               {report.narrative && (
+               <div className="space-y-6 pt-12 border-t border-slate-100">
+                  <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Análisis Narrativo Generado</h4>
+                  <Card className="bg-[#fcfcfd] border-slate-100 p-8">
+                     <p className="text-slate-600 leading-relaxed font-normal whitespace-pre-wrap text-lg">
+                        {report.narrative.draft || report.narrative}
+                     </p>
+                  </Card>
+               </div>
+               )}
+
+               {/* Sección: Fuentes de Información Auditas */}
+               {report.sources && report.sources.length > 0 && (
+               <div className="space-y-6 pt-12 border-t border-slate-100">
+                  <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Fuentes Analizadas</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {report.sources.map((src, sIdx) => (
+                      <Card key={sIdx} className="bg-slate-50 border-slate-100 p-6 space-y-4">
+                        <div className="flex justify-between items-center border-b border-slate-200/60 pb-3">
+                          <span className="text-xs font-bold text-slate-700">{src.screenType || 'Pantalla Extracción'}</span>
+                          <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-md font-bold">{src.platform}</span>
+                        </div>
+                        <div className="space-y-1.5 text-xs text-slate-500 font-medium">
+                          <p><span className="font-bold text-slate-600">ID de Origen:</span> {src.sourceId}</p>
+                          <p><span className="font-bold text-slate-600">Ruta en Storage:</span> <span className="font-mono text-[10px] bg-white px-1.5 py-0.5 rounded border border-slate-200">{src.storagePath}</span></p>
+                          <p><span className="font-bold text-slate-600">Confianza:</span> {Math.round(src.confidence * 100)}%</p>
+                        </div>
+                      </Card>
+                    ))}
                   </div>
                </div>
                )}
