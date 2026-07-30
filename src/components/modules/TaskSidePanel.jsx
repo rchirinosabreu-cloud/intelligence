@@ -1293,22 +1293,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 onChange={setEditingContent}
                                 onSend={() => handleUpdateComment(comment.id)}
                                 onTextChange={setEditingCommentText}
-                                showToolbar={showEditToolbar}
                                 teamMembers={teamMembers}
                                 className="pr-12"
                             />
-                            {/* Formatting 'A' Toggle Button */}
-                            <button
-                                type="button"
-                                onClick={() => setShowEditToolbar(!showEditToolbar)}
-                                className={cn(
-                                    "absolute right-1.5 top-1.5 p-1.5 rounded-lg text-xs font-bold transition-all select-none hover:bg-zinc-200 dark:hover:bg-zinc-800 z-10",
-                                    showEditToolbar ? "text-primary bg-primary/10" : "text-zinc-400"
-                                )}
-                                title="Formato"
-                            >
-                                A
-                            </button>
                             <div className="flex gap-2 justify-end">
                                 <button
                                     type="button"
@@ -2263,8 +2250,66 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         onTextChange={setNewCommentText}
                                         placeholder={isEdition ? "Escribe un mensaje al equipo..." : "Escribe un mensaje inicial..."}
                                         showToolbar={showToolbar}
+                                        onToggleToolbar={setShowToolbar}
                                         teamMembers={teamMembers}
                                         className="pl-4 pr-44"
+                                        actions={
+                                            <>
+                                                {/* 1. Attachment Clip Button */}
+                                                <div className="w-9 h-9 flex items-center justify-center">
+                                                    <input
+                                                        type="file"
+                                                        id="task-file-upload-focus"
+                                                        className="hidden"
+                                                        accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,audio/*"
+                                                        onChange={(e) => {
+                                                            const file = e.target.files[0];
+                                                            if (!file) return;
+                                                            if (isEdition) {
+                                                                setSelectedFile(file);
+                                                            } else {
+                                                                handleUploadTempFile(file);
+                                                            }
+                                                        }}
+                                                    />
+                                                    <label
+                                                        htmlFor="task-file-upload-focus"
+                                                        className={cn(
+                                                            "w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 transition-all hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary cursor-pointer select-none"
+                                                        )}
+                                                        title="Adjuntar archivo"
+                                                    >
+                                                        {isUploadingTemp ? (
+                                                            <Loader2 size={16} className="animate-spin text-primary" />
+                                                        ) : (
+                                                            <Paperclip size={16} />
+                                                        )}
+                                                    </label>
+                                                </div>
+
+                                                {/* 2. Insert Emoji Button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowInputEmojiPicker(!showInputEmojiPicker)}
+                                                    className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-455 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary transition-all select-none"
+                                                    title="Insertar emoji"
+                                                >
+                                                    😀
+                                                </button>
+
+                                                {/* 3. Send Message Button */}
+                                                <button
+                                                    onClick={() => handleAddComment()}
+                                                    disabled={isEdition ? ((!newCommentText && !selectedFile) || isSendingComment) : !newCommentText}
+                                                    className={cn(
+                                                        "w-9 h-9 flex items-center justify-center rounded-lg transition-all",
+                                                        (newCommentText || (selectedFile && isEdition)) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
+                                                    )}
+                                                >
+                                                    {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                                                </button>
+                                            </>
+                                        }
                                     />
                                     {showInputEmojiPicker && (
                                         <div className="absolute bottom-[105%] right-4 z-[90] w-[298px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-2 animate-in slide-in-from-bottom-2 duration-150">
@@ -2288,76 +2333,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             </div>
                                         </div>
                                     )}
-
-                                    {/* Action Group Flexbox on the right (Clip, Format A, Emoji, Send) */}
-                                    <div className="absolute right-1.5 top-1.5 flex items-center gap-1 z-10">
-                                        {/* 1. Attachment Clip Button */}
-                                        <div className="w-9 h-9 flex items-center justify-center">
-                                            <input
-                                                type="file"
-                                                id="task-file-upload-focus"
-                                                className="hidden"
-                                                accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,audio/*"
-                                                onChange={(e) => {
-                                                    const file = e.target.files[0];
-                                                    if (!file) return;
-                                                    if (isEdition) {
-                                                        setSelectedFile(file);
-                                                    } else {
-                                                        handleUploadTempFile(file);
-                                                    }
-                                                }}
-                                            />
-                                            <label
-                                                htmlFor="task-file-upload-focus"
-                                                className={cn(
-                                                    "w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 transition-all hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary cursor-pointer select-none"
-                                                )}
-                                                title="Adjuntar archivo"
-                                            >
-                                                {isUploadingTemp ? (
-                                                    <Loader2 size={16} className="animate-spin text-primary" />
-                                                ) : (
-                                                    <Paperclip size={16} />
-                                                )}
-                                            </label>
-                                        </div>
-
-                                        {/* 2. Format 'A' Button */}
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowToolbar(!showToolbar)}
-                                            className={cn(
-                                                "w-9 h-9 flex items-center justify-center rounded-lg text-xs font-bold transition-all select-none hover:bg-zinc-200 dark:hover:bg-zinc-800",
-                                                showToolbar ? "text-primary bg-primary/10" : "text-zinc-400"
-                                            )}
-                                            title="Formato"
-                                        >
-                                            A
-                                        </button>
-
-                                        {/* 3. Insert Emoji Button */}
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowInputEmojiPicker(!showInputEmojiPicker)}
-                                            className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-450 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary transition-all select-none"
-                                            title="Insertar emoji"
-                                        >
-                                            😀
-                                        </button>
-
-                                        {/* 4. Send Message Button */}
-                                        <button
-                                            onClick={() => handleAddComment()}
-                                            disabled={isEdition ? ((!newCommentText && !selectedFile) || isSendingComment) : !newCommentText}
-                                            className={cn(
-                                                "w-9 h-9 flex items-center justify-center rounded-lg transition-all",
-                                                (newCommentText || (selectedFile && isEdition)) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
-                                            )}
-                                        >
-                                            {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                                        </button>
-                                    </div>
                                 </div>
                             </div>
                         </div>

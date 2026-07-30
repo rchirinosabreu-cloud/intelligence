@@ -30,7 +30,18 @@ const CustomKeymap = Extension.create({
   },
 });
 
-const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder, className, showToolbar, onToggleToolbar, onTextChange, teamMembers = [] }, ref) => {
+const RichTextEditor = React.forwardRef(({
+  value,
+  onChange,
+  onSend,
+  placeholder,
+  className,
+  showToolbar,
+  onToggleToolbar,
+  onTextChange,
+  teamMembers = [],
+  actions
+}, ref) => {
   // Memorize the onSend callback in a mutable ref to prevent Tiptap editor reconstructions
   const onSendRef = React.useRef(onSend);
   React.useEffect(() => {
@@ -42,6 +53,66 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
   React.useEffect(() => {
     teamMembersRef.current = teamMembers;
   }, [teamMembers]);
+
+  // Support both controlled and uncontrolled states for the Popover formatting toolbar
+  const [internalShowToolbar, setInternalShowToolbar] = React.useState(false);
+  const isControlled = showToolbar !== undefined;
+  const isToolbarOpen = isControlled ? showToolbar : internalShowToolbar;
+
+  const handleToggleToolbar = (isOpen) => {
+    if (onToggleToolbar) {
+      onToggleToolbar(isOpen);
+    } else {
+      setInternalShowToolbar(isOpen);
+    }
+  };
+
+  // Preservation of selection in ProseMirror
+  const savedSelectionRef = React.useRef(null);
+
+  const saveSelection = () => {
+    if (!editor) return;
+    savedSelectionRef.current = editor.state.selection;
+  };
+
+  const restoreSelection = () => {
+    const selection = savedSelectionRef.current;
+    if (!selection || !editor) {
+      return editor ? editor.chain().focus() : null;
+    }
+    const docSize = editor.state.doc.content.size;
+    const from = Math.min(selection.from, docSize);
+    const to = Math.min(selection.to, docSize);
+
+    return editor
+      .chain()
+      .focus()
+      .setTextSelection({ from, to });
+  };
+
+  // Centralized format command execution using savedSelectionRef
+  const executeFormat = (event, command) => {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    if (!editor) return;
+
+    let chain = editor.chain().focus();
+
+    if (savedSelectionRef.current) {
+      const docSize = editor.state.doc.content.size;
+      const from = Math.min(savedSelectionRef.current.from, docSize);
+      const to = Math.min(savedSelectionRef.current.to, docSize);
+      chain = chain.setTextSelection({ from, to });
+    }
+
+    command(chain).run();
+
+    // Refresh selection ref immediately after execution to keep it safe and in sync
+    saveSelection();
+  };
 
   // React State for native cursor-positioned suggestions list
   const [suggestion, setSuggestion] = React.useState({
@@ -96,10 +167,8 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
                   selectedIndex: 0,
                   command: props.command,
                 });
-                if (onToggleToolbar) {
-                  // Hide formatting toolbar to avoid overlay conflicts
-                  onToggleToolbar(false);
-                }
+                // Auto-hide the formatting toolbar to prevent Visual Overlay Conflicts
+                handleToggleToolbar(false);
               },
               onUpdate: (props) => {
                 const rect = props.clientRect ? props.clientRect() : null;
@@ -150,7 +219,7 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
     editorProps: {
       attributes: {
         class: cn(
-          "w-full text-sm font-medium outline-none prose dark:prose-invert max-w-none text-zinc-800 dark:text-zinc-200 px-4 py-3",
+          "w-full text-sm font-medium outline-none prose dark:prose-invert max-w-none text-zinc-800 dark:text-zinc-200 px-4 py-3 pb-12",
           "focus:outline-none focus-visible:outline-none [&_.ProseMirror]:outline-none"
         ),
       },
@@ -207,23 +276,46 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
   if (!editor) return null;
 
   return (
-    <Popover.Root open={showToolbar} onOpenChange={onToggleToolbar}>
-      <Popover.Anchor asChild>
-        <div className={cn(
-          "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus-within:border-primary/30 rounded-xl shadow-inner transition-all relative flex flex-col",
-          className
-        )}>
-          {/* Dynamic heights and scroll wrapped at React container level instead of Tiptap editorProps */}
+    <Popover.Root open={isToolbarOpen} onOpenChange={handleToggleToolbar}>
+      <div className="relative w-full flex flex-col justify-end">
+        <Popover.Anchor asChild>
           <div className={cn(
-            "w-full overflow-y-auto transition-[min-height] duration-200 ease-in-out scrollbar-thin",
-            "min-h-[48px] max-h-[120px]",
-            showToolbar && "min-h-[144px] max-h-[280px]",
-            "[&_.ProseMirror]:min-h-full [&_.ProseMirror]:focus:outline-none"
+            "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus-within:border-primary/30 rounded-xl shadow-inner transition-all relative flex flex-col justify-end",
+            className
           )}>
-            <EditorContent editor={editor} />
+            {/* Dynamic heights and scroll wrapped at React container level instead of Tiptap editorProps */}
+            <div className={cn(
+              "w-full overflow-y-auto transition-[min-height] duration-200 ease-in-out scrollbar-thin",
+              "min-h-[48px] max-h-[120px]",
+              isToolbarOpen && "min-h-[144px] max-h-[280px]",
+              "[&_.ProseMirror]:min-h-full [&_.ProseMirror]:focus:outline-none"
+            )}>
+              <EditorContent editor={editor} />
+            </div>
           </div>
+        </Popover.Anchor>
+
+        {/* Absolute Action Group on the bottom right to avoid blocking text rows */}
+        <div className="absolute right-1.5 bottom-1.5 flex items-center gap-1 z-10">
+          {actions}
+
+          <Popover.Trigger asChild>
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                saveSelection();
+              }}
+              className={cn(
+                "w-9 h-9 flex items-center justify-center rounded-lg text-xs font-bold transition-all select-none hover:bg-zinc-200 dark:hover:bg-zinc-800",
+                isToolbarOpen ? "text-primary bg-primary/10" : "text-zinc-400"
+              )}
+              title="Formato"
+            >
+              A
+            </button>
+          </Popover.Trigger>
         </div>
-      </Popover.Anchor>
+      </div>
 
       <Popover.Portal>
         <Popover.Content
@@ -231,15 +323,14 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
           align="center"
           sideOffset={8}
           collisionPadding={16}
-          avoidCollisions
+          avoidCollisions={false}
           data-task-format-toolbar="true"
-          className="flex flex-wrap items-center gap-1.5 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg z-[120] animate-in slide-in-from-bottom-2 duration-150"
+          className="flex flex-wrap items-center gap-1.5 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg z-[120] animate-in slide-in-from-bottom-2 duration-150 max-w-[calc(100vw-2rem)] flex-nowrap overflow-x-auto scrollbar-none"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleBold().run()}
+            onMouseDown={(e) => executeFormat(e, chain => chain.toggleBold())}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
               editor.isActive('bold') ? "bg-primary/10 text-primary" : "text-zinc-500"
@@ -250,8 +341,7 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
           </button>
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleItalic().run()}
+            onMouseDown={(e) => executeFormat(e, chain => chain.toggleItalic())}
             className={cn(
               "px-2 py-1 rounded text-xs italic transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
               editor.isActive('italic') ? "bg-primary/10 text-primary" : "text-zinc-500"
@@ -262,8 +352,7 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
           </button>
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleUnderline().run()}
+            onMouseDown={(e) => executeFormat(e, chain => chain.toggleUnderline())}
             className={cn(
               "px-2 py-1 rounded text-xs underline transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
               editor.isActive('underline') ? "bg-primary/10 text-primary" : "text-zinc-500"
@@ -275,8 +364,7 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
           <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1" />
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+            onMouseDown={(e) => executeFormat(e, chain => chain.toggleHeading({ level: 1 }))}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
               editor.isActive('heading', { level: 1 }) ? "bg-primary/10 text-primary" : "text-zinc-500"
@@ -287,8 +375,7 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
           </button>
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+            onMouseDown={(e) => executeFormat(e, chain => chain.toggleHeading({ level: 2 }))}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
               editor.isActive('heading', { level: 2 }) ? "bg-primary/10 text-primary" : "text-zinc-500"
@@ -300,8 +387,7 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
           <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1" />
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            onMouseDown={(e) => executeFormat(e, chain => chain.toggleBulletList())}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
               editor.isActive('bulletList') ? "bg-primary/10 text-primary" : "text-zinc-500"
@@ -312,8 +398,7 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
           </button>
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            onMouseDown={(e) => executeFormat(e, chain => chain.toggleOrderedList())}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
               editor.isActive('orderedList') ? "bg-primary/10 text-primary" : "text-zinc-500"
