@@ -428,7 +428,7 @@ const RichTextEditor = React.forwardRef(({
         </div>,
         document.body
       )}
-    </div>
+    </Popover.Root>
   );
 });
 
