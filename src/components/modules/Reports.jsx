@@ -36,6 +36,93 @@ import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid } from 'recharts';
+
+const TrendChart = ({ data }) => {
+  if (!data || data.length === 0) return null;
+  return (
+    <div className="h-[280px] w-full mt-4">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <defs>
+            <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
+              <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+          <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
+          <YAxis tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
+          <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
+          <Area type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+const DemographicsChart = ({ data }) => {
+  if (!data || data.length === 0) return null;
+  return (
+    <div className="h-[280px] w-full mt-4">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} layout="vertical" margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+          <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
+          <YAxis dataKey="demographicGroup" type="category" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
+          <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
+          <Bar dataKey="percentage" fill="#6366f1" radius={[0, 8, 8, 0]} barSize={16} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+const TopContentTable = ({ data }) => {
+  if (!data || data.length === 0) return null;
+  return (
+    <div className="overflow-x-auto border border-slate-100 rounded-2xl bg-white mt-4">
+      <table className="w-full border-collapse text-left text-xs text-slate-500">
+        <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+          <tr>
+            <th className="px-6 py-4 font-bold">Publicación destacada / Ad Creative</th>
+            <th className="px-6 py-4 font-bold text-right">Visualizaciones</th>
+            <th className="px-6 py-4 font-bold text-right">Interacciones</th>
+            <th className="px-6 py-4 font-bold text-right">Clics</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50 font-medium">
+          {data.map((item, idx) => (
+            <tr key={idx} className="hover:bg-slate-50/50 break-inside-avoid">
+              <td className="px-6 py-4 font-bold text-slate-700">{item.title}</td>
+              <td className="px-6 py-4 text-right text-slate-600 font-semibold">{item.views?.toLocaleString('es-ES') || 'N/A'}</td>
+              <td className="px-6 py-4 text-right text-slate-600 font-semibold">{item.interactions?.toLocaleString('es-ES') || 'N/A'}</td>
+              <td className="px-6 py-4 text-right text-primary font-bold">{item.clicks?.toLocaleString('es-ES') || 'N/A'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const GranularNarrativeBlock = ({ sectionKey, title, comment, onChange }) => {
+  return (
+    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 mt-4 space-y-2 break-inside-avoid shadow-sm no-print">
+      <div className="flex items-center gap-2">
+        <Sparkles className="w-4 h-4 text-primary" />
+        <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">{title}</h5>
+      </div>
+      <textarea
+        rows={3}
+        className="w-full bg-transparent border-none text-xs text-slate-600 leading-relaxed font-semibold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none"
+        value={comment || ''}
+        onChange={(e) => onChange(sectionKey, e.target.value)}
+        placeholder="Escribe un comentario consultivo para esta sección..."
+      />
+    </div>
+  );
+};
 
 const ReportCover = ({ report }) => {
   const formattedStart = report.startDate ? new Date(report.startDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
@@ -119,7 +206,7 @@ const MetricGrid = ({ metrics }) => {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 gap-6 break-inside-avoid">
       {Object.entries(metrics).map(([key, metric]) => {
-        if (!metric) return null;
+        if (!metric || key === 'series' || key === 'demographics' || key === 'topContent') return null;
         return (
           <div key={key} className={cn(
             "border p-6 space-y-4 rounded-2xl transition-all break-inside-avoid shadow-sm",
@@ -134,12 +221,6 @@ const MetricGrid = ({ metrics }) => {
                   <span className="ml-1 text-[9px] text-primary font-bold lowercase tracking-normal">(editado)</span>
                 )}
               </span>
-              <span className={cn(
-                "text-[10px] font-bold px-2 py-0.5 rounded-full",
-                (metric.confidence > 0.8 || metric.confidence === undefined) ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-              )}>
-                {((metric.confidence || 1.0) * 100).toFixed(0)}% conf
-              </span>
             </div>
             <div className="space-y-1">
               <h4 className="text-3xl font-black text-slate-800">
@@ -149,9 +230,6 @@ const MetricGrid = ({ metrics }) => {
                   metric.value.toLocaleString('es-ES')
                 ) : 'N/A'}
               </h4>
-              <p className="text-[10px] text-slate-500 font-medium italic">
-                Evidencia: &ldquo;{metric.evidence || 'N/A'}&rdquo;
-              </p>
             </div>
           </div>
         );
@@ -425,7 +503,8 @@ const Reports = () => {
             headline: "Análisis General de Performance",
             summaryPoints: ["Análisis de pauta extraído exitosamente.", "Evolución optimista en los deltas de CTR.", "Acciones de mejora planificadas."],
             keyAchievements: report.narrative,
-            actionPlan: []
+            actionPlan: [],
+            granularNarratives: []
           };
         }
       }
@@ -434,6 +513,27 @@ const Reports = () => {
       setNarrativeState(null);
     }
   }, [report]);
+
+  const getGranularComment = (sectionKey) => {
+    const item = narrativeState?.granularNarratives?.find(n => n.sectionKey === sectionKey);
+    return item ? item.consultativeComment : '';
+  };
+
+  const handleGranularCommentChange = (sectionKey, value) => {
+    const list = [...(narrativeState?.granularNarratives || [])];
+    const idx = list.findIndex(n => n.sectionKey === sectionKey);
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], consultativeComment: value };
+    } else {
+      const defaultTitles = {
+        macro_performance: 'Rendimiento y Tendencia',
+        demographics: 'Distribución Demográfica',
+        top_content: 'Mejores Contenidos'
+      };
+      list.push({ sectionKey, title: defaultTitles[sectionKey] || 'Sección', consultativeComment: value });
+    }
+    setNarrativeState({ ...narrativeState, granularNarratives: list });
+  };
 
   useEffect(() => {
     fetchClients();
@@ -850,18 +950,67 @@ const Reports = () => {
                  </div>
 
                  {report.normalizedMetrics && (
-                   <div className="space-y-8 pt-12 border-t border-slate-100 break-inside-avoid">
+                   <div className="space-y-12 pt-12 border-t border-slate-100 break-inside-avoid">
                      <div className="space-y-2">
                        <h3 className="text-xl font-black tracking-tight text-slate-800">Desempeño Cuantitativo</h3>
                        <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Métricas Clave de Performance Meta Ads</p>
                      </div>
                      <MetricGrid metrics={report.normalizedMetrics} />
+
+                     {/* 1. Trend and Macro Performance section */}
+                     {report.normalizedMetrics.series && report.normalizedMetrics.series.length > 0 && (
+                       <div className="space-y-4 pt-8 border-t border-slate-100/60 break-inside-avoid">
+                         <div className="space-y-1">
+                           <h4 className="text-base font-black text-slate-800">Tendencia de Desempeño</h4>
+                           <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Evolución de Rendimiento en el Periodo</p>
+                         </div>
+                         <TrendChart data={report.normalizedMetrics.series} />
+                         <GranularNarrativeBlock
+                           sectionKey="macro_performance"
+                           title="Análisis de Rendimiento y Tendencia"
+                           comment={getGranularComment("macro_performance")}
+                           onChange={handleGranularCommentChange}
+                         />
+                       </div>
+                     )}
+
+                     {/* 2. Demographics section */}
+                     {report.normalizedMetrics.demographics && report.normalizedMetrics.demographics.length > 0 && (
+                       <div className="space-y-4 pt-8 border-t border-slate-100/60 break-inside-avoid">
+                         <div className="space-y-1">
+                           <h4 className="text-base font-black text-slate-800">Distribución de Audiencia</h4>
+                           <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Segmentación por Edad y Género</p>
+                         </div>
+                         <DemographicsChart data={report.normalizedMetrics.demographics} />
+                         <GranularNarrativeBlock
+                           sectionKey="demographics"
+                           title="Análisis de Distribución Demográfica"
+                           comment={getGranularComment("demographics")}
+                           onChange={handleGranularCommentChange}
+                         />
+                       </div>
+                     )}
+
+                     {/* 3. Top performing content section */}
+                     {report.normalizedMetrics.topContent && report.normalizedMetrics.topContent.length > 0 && (
+                       <div className="space-y-4 pt-8 border-t border-slate-100/60 break-inside-avoid">
+                         <div className="space-y-1">
+                           <h4 className="text-base font-black text-slate-800">Rendimiento de Contenidos Destacados</h4>
+                           <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Ranking de Mejores Creativos del Periodo</p>
+                         </div>
+                         <TopContentTable data={report.normalizedMetrics.topContent} />
+                         <GranularNarrativeBlock
+                           sectionKey="top_content"
+                           title="Análisis de Contenidos Estrella"
+                           comment={getGranularComment("top_content")}
+                           onChange={handleGranularCommentChange}
+                         />
+                       </div>
+                     )}
                    </div>
                  )}
 
                  <ActionPlan narrative={narrativeState} onUpdate={setNarrativeState} />
-
-                 <SourceAppendix sources={report.sources} />
 
                  {/* Footer */}
                  <div className="pt-20 border-t border-slate-50 flex flex-col items-center gap-4 text-center">

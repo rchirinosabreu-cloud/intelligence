@@ -21,7 +21,18 @@ test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) =>
                             },
                             screenType: "Rendimiento Macro",
                             confidence: 0.95,
-                            narrativeDraft: "El rendimiento de la campaña muestra una estabilización excelente."
+                            narrativeDraft: "El rendimiento de la campaña muestra una estabilización excelente.",
+                            series: [
+                                { date: "Día 1", value: 100 },
+                                { date: "Día 2", value: 150 }
+                            ],
+                            demographics: [
+                                { demographicGroup: "18-24 F", percentage: 40 },
+                                { demographicGroup: "25-34 M", percentage: 60 }
+                            ],
+                            topContent: [
+                                { title: "Anuncio de Video", views: 5000, interactions: 400, clicks: 120 }
+                            ]
                         })
                     }
                 }
@@ -148,6 +159,11 @@ test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) =>
                                 { action: "Implementar optimización de audiencias", kpi: "CPA -10%", suggestedAssignee: "Director de Performance" },
                                 { action: "Renovar creativos del pilar más relevante", kpi: "CTR > 1.8%", suggestedAssignee: "Diseñador Creativo" },
                                 { action: "Establecer presupuesto incremental", kpi: "Retorno de inversión", suggestedAssignee: "Project Manager" }
+                            ],
+                            granularNarratives: [
+                                { sectionKey: "macro_performance", title: "Rendimiento y Tendencia", consultativeComment: "Comentario optimista sobre rendimiento macro." },
+                                { sectionKey: "demographics", title: "Distribución Demográfica", consultativeComment: "Comentario optimista sobre demografía." },
+                                { sectionKey: "top_content", title: "Mejores Contenidos", consultativeComment: "Comentario optimista sobre mejores contenidos." }
                             ]
                         })
                     }

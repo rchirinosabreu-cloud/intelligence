@@ -319,11 +319,18 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 impressionsVal,
                 reachVal,
                 clicksVal,
-                resultsVal
+                resultsVal,
+                series: extracted.series || [],
+                demographics: extracted.demographics || [],
+                topContent: extracted.topContent || []
             };
         });
 
         const results = await Promise.all(filePromises);
+
+        let aggregatedSeries = [];
+        let aggregatedDemographics = [];
+        let aggregatedTopContent = [];
 
         // Aggregate across sources
         results.forEach((res, index) => {
@@ -335,6 +342,16 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             if (typeof res.reachVal === 'number') totalReach += res.reachVal;
             if (typeof res.clicksVal === 'number') totalClicks += res.clicksVal;
             if (typeof res.resultsVal === 'number') totalResults += res.resultsVal;
+
+            if (res.series && res.series.length > 0) {
+                aggregatedSeries = res.series;
+            }
+            if (res.demographics && res.demographics.length > 0) {
+                aggregatedDemographics = res.demographics;
+            }
+            if (res.topContent && res.topContent.length > 0) {
+                aggregatedTopContent = res.topContent;
+            }
 
             if (res.narrativeDraft) {
                 narrativeDrafts.push(`Captura ${index + 1}: ${res.narrativeDraft}`);
@@ -363,7 +380,10 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             reach: { key: 'reach', label: 'Alcance Total', value: totalReach, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
             clicks: { key: 'clicks', label: 'Clics Totales', value: totalClicks, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
             ctr: { key: 'ctr', label: 'CTR Promedio', value: parseFloat(overallCtr.toFixed(4)), unit: '%', confidence: 1.0, evidence: 'Cálculo agregado' },
-            results: { key: 'results', label: 'Resultados Totales', value: totalResults, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' }
+            results: { key: 'results', label: 'Resultados Totales', value: totalResults, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
+            series: aggregatedSeries,
+            demographics: aggregatedDemographics,
+            topContent: aggregatedTopContent
         };
 
         const combinedNarrative = narrativeDrafts.join('\n\n');
