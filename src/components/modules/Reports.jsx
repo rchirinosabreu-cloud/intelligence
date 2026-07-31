@@ -38,7 +38,7 @@ import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid } from 'recharts';
 
-const TrendChart = ({ data }) => {
+const PerformanceTrendChart = ({ data }) => {
   if (!data || data.length === 0) return null;
   return (
     <div className="h-[280px] w-full mt-4">
@@ -61,7 +61,7 @@ const TrendChart = ({ data }) => {
   );
 };
 
-const DemographicsChart = ({ data }) => {
+const DemographicsBarChart = ({ data }) => {
   if (!data || data.length === 0) return null;
   return (
     <div className="h-[280px] w-full mt-4">
@@ -202,6 +202,33 @@ const ExecutiveSummary = ({ narrative, onUpdate }) => {
   );
 };
 
+const CANONICAL_METRICS = {
+  spend: "Inversión Total",
+  impressions: "Impresiones Totales",
+  reach: "Alcance Total",
+  clicks: "Clics Totales",
+  ctr: "CTR Promedio",
+  results: "Resultados Totales"
+};
+
+const formatMetricValue = (key, metric) => {
+  if (metric.value === null || metric.value === undefined) return 'N/A';
+
+  if (key === 'spend') {
+    const unit = metric.unit || 'COP';
+    if (unit.toUpperCase() === 'COP') {
+      return `COP $${Math.round(metric.value).toLocaleString('es-ES')}`;
+    }
+    return `${unit} $${metric.value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+
+  if (key === 'ctr') {
+    return `${parseFloat(metric.value).toFixed(2)}%`;
+  }
+
+  return Math.round(metric.value).toLocaleString('es-ES');
+};
+
 const MetricGrid = ({ metrics }) => {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 gap-6 break-inside-avoid">
@@ -216,7 +243,7 @@ const MetricGrid = ({ metrics }) => {
           )}>
             <div className="flex justify-between items-start">
               <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                {metric.label || key}
+                {CANONICAL_METRICS[key] || metric.label || key}
                 {metric.isManuallyEdited && (
                   <span className="ml-1 text-[9px] text-primary font-bold lowercase tracking-normal">(editado)</span>
                 )}
@@ -224,11 +251,7 @@ const MetricGrid = ({ metrics }) => {
             </div>
             <div className="space-y-1">
               <h4 className="text-3xl font-black text-slate-800">
-                {metric.value !== null && metric.value !== undefined ? (
-                  key === 'spend' ? `${metric.unit} ${metric.value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` :
-                  key === 'ctr' ? `${metric.value.toFixed(2)}${metric.unit || '%'}` :
-                  metric.value.toLocaleString('es-ES')
-                ) : 'N/A'}
+                {formatMetricValue(key, metric)}
               </h4>
             </div>
           </div>
@@ -902,8 +925,12 @@ const Reports = () => {
             resize: none !important;
           }
           @page {
-            size: A4;
-            margin: 20mm;
+            size: A4 landscape;
+            margin: 0;
+          }
+          .page-break-after {
+            page-break-after: always !important;
+            break-after: page !important;
           }
         }
       `}} />
@@ -932,92 +959,116 @@ const Reports = () => {
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               className="bg-white border border-[#e2e8f0] shadow-2xl rounded-[2.5rem] overflow-hidden print:border-none print:shadow-none"
             >
-              <div id="report-canvas" ref={reportRef} className="p-12 md:p-20 space-y-20 bg-white">
-                 <ReportCover report={report} />
+              <div id="report-canvas" ref={reportRef} className="bg-white flex flex-col w-full">
 
-                 <ExecutiveSummary narrative={narrativeState} onUpdate={setNarrativeState} />
-
-                 <div className="space-y-6 pt-12 border-t border-slate-100 break-inside-avoid">
-                    <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Análisis Interpretativo de Logros</h4>
-                    <Card className="bg-[#fcfcfd] border-slate-100 p-8">
-                       <textarea
-                          rows={6}
-                          className="w-full bg-transparent border-none text-slate-600 leading-relaxed font-normal text-lg outline-none resize-none focus:ring-1 focus:ring-primary/10 rounded-xl"
-                          value={narrativeState?.keyAchievements || ''}
-                          onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
-                       />
-                    </Card>
-                 </div>
-
-                 {report.normalizedMetrics && (
-                   <div className="space-y-12 pt-12 border-t border-slate-100 break-inside-avoid">
-                     <div className="space-y-2">
-                       <h3 className="text-xl font-black tracking-tight text-slate-800">Desempeño Cuantitativo</h3>
-                       <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Métricas Clave de Performance Meta Ads</p>
-                     </div>
-                     <MetricGrid metrics={report.normalizedMetrics} />
-
-                     {/* 1. Trend and Macro Performance section */}
-                     {report.normalizedMetrics.series && report.normalizedMetrics.series.length > 0 && (
-                       <div className="space-y-4 pt-8 border-t border-slate-100/60 break-inside-avoid">
-                         <div className="space-y-1">
-                           <h4 className="text-base font-black text-slate-800">Tendencia de Desempeño</h4>
-                           <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Evolución de Rendimiento en el Periodo</p>
-                         </div>
-                         <TrendChart data={report.normalizedMetrics.series} />
-                         <GranularNarrativeBlock
-                           sectionKey="macro_performance"
-                           title="Análisis de Rendimiento y Tendencia"
-                           comment={getGranularComment("macro_performance")}
-                           onChange={handleGranularCommentChange}
-                         />
-                       </div>
-                     )}
-
-                     {/* 2. Demographics section */}
-                     {report.normalizedMetrics.demographics && report.normalizedMetrics.demographics.length > 0 && (
-                       <div className="space-y-4 pt-8 border-t border-slate-100/60 break-inside-avoid">
-                         <div className="space-y-1">
-                           <h4 className="text-base font-black text-slate-800">Distribución de Audiencia</h4>
-                           <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Segmentación por Edad y Género</p>
-                         </div>
-                         <DemographicsChart data={report.normalizedMetrics.demographics} />
-                         <GranularNarrativeBlock
-                           sectionKey="demographics"
-                           title="Análisis de Distribución Demográfica"
-                           comment={getGranularComment("demographics")}
-                           onChange={handleGranularCommentChange}
-                         />
-                       </div>
-                     )}
-
-                     {/* 3. Top performing content section */}
-                     {report.normalizedMetrics.topContent && report.normalizedMetrics.topContent.length > 0 && (
-                       <div className="space-y-4 pt-8 border-t border-slate-100/60 break-inside-avoid">
-                         <div className="space-y-1">
-                           <h4 className="text-base font-black text-slate-800">Rendimiento de Contenidos Destacados</h4>
-                           <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Ranking de Mejores Creativos del Periodo</p>
-                         </div>
-                         <TopContentTable data={report.normalizedMetrics.topContent} />
-                         <GranularNarrativeBlock
-                           sectionKey="top_content"
-                           title="Análisis de Contenidos Estrella"
-                           comment={getGranularComment("top_content")}
-                           onChange={handleGranularCommentChange}
-                         />
-                       </div>
-                     )}
-                   </div>
-                 )}
-
-                 <ActionPlan narrative={narrativeState} onUpdate={setNarrativeState} />
-
-                 {/* Footer */}
-                 <div className="pt-20 border-t border-slate-50 flex flex-col items-center gap-4 text-center">
-                    <div className="text-[11px] font-bold text-slate-300 tracking-[0.2em]">
-                       Brainstudio Agencia
+                 {/* Slide 1: Portada, Resumen Ejecutivo, Análisis Interpretativo */}
+                 <div className="w-full min-h-[90vh] print:min-h-screen p-12 md:p-16 flex flex-col justify-between border-b border-slate-100 print:border-none page-break-after" style={{ pageBreakAfter: 'always', breakAfter: 'page' }}>
+                    <ReportCover report={report} />
+                    <div className="space-y-6 mt-6">
+                      <ExecutiveSummary narrative={narrativeState} onUpdate={setNarrativeState} />
+                      <div className="space-y-2 pt-4 border-t border-slate-100/60">
+                         <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Análisis Interpretativo de Logros</h4>
+                         <Card className="bg-[#fcfcfd] border-slate-100 p-6">
+                            <textarea
+                               rows={3}
+                               className="w-full bg-transparent border-none text-slate-600 leading-relaxed font-normal text-base outline-none resize-none focus:ring-1 focus:ring-primary/10 rounded-xl"
+                               value={narrativeState?.keyAchievements || ''}
+                               onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
+                            />
+                         </Card>
+                      </div>
+                    </div>
+                    <div className="pt-4 flex items-center justify-between text-slate-300 text-[9px] font-bold tracking-widest uppercase">
+                      <span>Brainstudio Agencia</span>
+                      <span>Página 1 de 3 (Deck Executive Summary)</span>
                     </div>
                  </div>
+
+                 {/* Slide 2: 6 Métricas Clave, Gráfico de Tendencia Temporal, Análisis de Tendencia */}
+                 <div className="w-full min-h-[90vh] print:min-h-screen p-12 md:p-16 flex flex-col justify-between border-b border-slate-100 print:border-none page-break-after" style={{ pageBreakAfter: 'always', breakAfter: 'page' }}>
+                   {report.normalizedMetrics && (
+                     <div className="space-y-6 flex-1 flex flex-col justify-between">
+                       <div className="space-y-1">
+                         <h3 className="text-xl font-black tracking-tight text-slate-800">Desempeño Cuantitativo y Tendencia</h3>
+                         <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Métricas Clave de Performance Meta Ads</p>
+                       </div>
+                       <MetricGrid metrics={report.normalizedMetrics} />
+
+                       {report.normalizedMetrics.series && report.normalizedMetrics.series.length > 0 && (
+                         <div className="space-y-2 pt-4 border-t border-slate-100/60 flex-1">
+                           <div className="space-y-1">
+                             <h4 className="text-sm font-black text-slate-800">Tendencia de Desempeño</h4>
+                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Evolución de Rendimiento en el Periodo</p>
+                           </div>
+                           <PerformanceTrendChart data={report.normalizedMetrics.series} />
+                           <GranularNarrativeBlock
+                             sectionKey="macro_performance"
+                             title="Análisis de Rendimiento y Tendencia"
+                             comment={getGranularComment("macro_performance")}
+                             onChange={handleGranularCommentChange}
+                           />
+                         </div>
+                       )}
+                     </div>
+                   )}
+                   <div className="pt-4 flex items-center justify-between text-slate-300 text-[9px] font-bold tracking-widest uppercase">
+                     <span>Brainstudio Agencia</span>
+                     <span>Página 2 de 3 (Performance & Trend Analytics)</span>
+                   </div>
+                 </div>
+
+                 {/* Slide 3: Gráfico Demográfico, Tabla de Plan de Acción Sugerido, Mejores Contenidos */}
+                 <div className="w-full min-h-[90vh] print:min-h-screen p-12 md:p-16 flex flex-col justify-between">
+                   <div className="space-y-6 flex-1 flex flex-col justify-between">
+                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1">
+
+                       {/* Left Column: Demographics */}
+                       {report.normalizedMetrics?.demographics && report.normalizedMetrics.demographics.length > 0 && (
+                         <div className="space-y-2 flex flex-col justify-between">
+                           <div className="space-y-1">
+                             <h4 className="text-sm font-black text-slate-800">Distribución de Audiencia</h4>
+                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Segmentación por Edad y Género</p>
+                           </div>
+                           <DemographicsBarChart data={report.normalizedMetrics.demographics} />
+                           <GranularNarrativeBlock
+                             sectionKey="demographics"
+                             title="Análisis de Distribución Demográfica"
+                             comment={getGranularComment("demographics")}
+                             onChange={handleGranularCommentChange}
+                           />
+                         </div>
+                       )}
+
+                       {/* Right Column: Top performing content and block narrative */}
+                       {report.normalizedMetrics?.topContent && report.normalizedMetrics.topContent.length > 0 && (
+                         <div className="space-y-2 flex flex-col justify-between">
+                           <div className="space-y-1">
+                             <h4 className="text-sm font-black text-slate-800">Rendimiento de Contenidos</h4>
+                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Ranking de Mejores Creativos</p>
+                           </div>
+                           <TopContentTable data={report.normalizedMetrics.topContent} />
+                           <GranularNarrativeBlock
+                             sectionKey="top_content"
+                             title="Análisis de Contenidos Estrella"
+                             comment={getGranularComment("top_content")}
+                             onChange={handleGranularCommentChange}
+                           />
+                         </div>
+                       )}
+
+                     </div>
+
+                     <div className="pt-4 border-t border-slate-100">
+                       <ActionPlan narrative={narrativeState} onUpdate={setNarrativeState} />
+                     </div>
+
+                     <div className="pt-4 flex items-center justify-between text-slate-350 text-[9px] font-bold tracking-widest uppercase">
+                        <span>Brainstudio Agencia</span>
+                        <span>Página 3 de 3 (Audience Focus & Strategic Action Plan)</span>
+                     </div>
+                   </div>
+                 </div>
+
               </div>
             </motion.div>
           )
