@@ -38,6 +38,12 @@ import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
 
+const toSentenceCase = (str) => {
+  if (typeof str !== 'string' || !str) return '';
+  const trimmed = str.trim();
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+};
+
 const PerformanceTrendChart = ({ data }) => {
   if (!data || data.length === 0) return null;
   return (
@@ -52,7 +58,7 @@ const PerformanceTrendChart = ({ data }) => {
           </defs>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
           <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
-          <YAxis tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
+          <YAxis width={80} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
           <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
           <Area type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
         </AreaChart>
@@ -139,7 +145,7 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
             </defs>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
             <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
-            <YAxis tickFormatter={formatYAxis} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
+            <YAxis width={80} tickFormatter={formatYAxis} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
             <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
             <Area type="monotone" dataKey={activeDataKey} stroke={currentTheme.stroke} strokeWidth={3} fillOpacity={1} fill={`url(#colorValueWeb-${normalizedPlatform})`}>
               <LabelList dataKey={activeDataKey} position="top" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => val?.toLocaleString('es-ES')} />
@@ -157,7 +163,7 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
           <BarChart data={sanitizedDataset} layout="vertical" margin={{ top: 15, right: 35, left: 10, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
             <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
-            <YAxis dataKey="label" type="category" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
+            <YAxis width={110} dataKey="label" type="category" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
             <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
             <Bar dataKey="percentage" fill={currentTheme.fill} radius={[0, 8, 8, 0]} barSize={16}>
               <LabelList dataKey="percentage" position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => `${val}%`} />
@@ -242,7 +248,7 @@ const DemographicsBarChart = ({ data }) => {
         <BarChart data={data} layout="vertical" margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
           <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
-          <YAxis dataKey="demographicGroup" type="category" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
+          <YAxis width={80} dataKey="demographicGroup" type="category" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
           <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
           <Bar dataKey="percentage" fill="#6366f1" radius={[0, 8, 8, 0]} barSize={16} />
         </BarChart>
@@ -307,10 +313,10 @@ const ReportCover = ({ report }) => {
       <div className="flex flex-col md:flex-row items-center justify-between gap-16">
           <div className="flex-1 space-y-8 text-center md:text-left">
              <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight">
-                Reporte de desempeño digital {report.client?.name || 'Cliente'}
+                {toSentenceCase(`Reporte de desempeño digital ${report.client?.name || 'Cliente'}`)}
              </h1>
              <p className="text-xl font-bold text-slate-500">
-                Estrategia y Resultados
+                {toSentenceCase("Estrategia y resultados")}
              </p>
              <div className="flex items-center justify-center md:justify-start gap-6 text-xs font-bold text-slate-400 uppercase tracking-[0.3em] pt-4">
                 <span>{report.client?.name || 'Cliente'}</span>
@@ -330,8 +336,8 @@ const ReportCover = ({ report }) => {
           </div>
       </div>
       <div className="text-[10px] font-bold text-slate-350 uppercase tracking-[0.4em] text-center md:text-left border-t border-slate-50 pt-8 flex justify-between items-center">
-         <span>Creado por Brainstudio Agencia</span>
-         <span>Fecha de emisión: {new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+         <span>{toSentenceCase("Creado por Brainstudio agencia")}</span>
+         <span>{toSentenceCase(`Fecha de emisión: ${new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}`)}</span>
       </div>
     </div>
   );
@@ -352,7 +358,7 @@ const ExecutiveSummary = ({ narrative, onUpdate }) => {
         <textarea
           rows={2}
           className="w-full bg-transparent border-none text-3xl font-black text-slate-800 leading-snug tracking-tight focus:ring-1 focus:ring-primary/10 rounded-xl py-2 outline-none resize-none"
-          value={narrative.headline || ''}
+          value={toSentenceCase(narrative.headline) || ''}
           onChange={(e) => onUpdate({ ...narrative, headline: e.target.value })}
         />
         <div className="h-1 w-20 bg-primary/40 rounded-full" />
@@ -360,15 +366,15 @@ const ExecutiveSummary = ({ narrative, onUpdate }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {(narrative.summaryPoints || []).map((point, idx) => (
-          <Card key={idx} className="bg-slate-50 border-slate-100 p-6 flex gap-4 break-inside-avoid">
+          <Card key={idx} className="bg-[#f9fafb] border-slate-200 p-6 flex gap-4 break-inside-avoid">
             <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/10 text-primary flex items-center justify-center shrink-0 font-black text-sm">
               {idx + 1}
             </div>
             <textarea
-              className="w-full bg-transparent border-none text-sm text-slate-600 leading-relaxed font-semibold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
+              className="w-full bg-transparent border-none text-sm text-[#111827] leading-relaxed font-bold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
               rows={4}
               style={{ height: 'auto', overflow: 'visible' }}
-              value={point}
+              value={toSentenceCase(point)}
               onChange={(e) => handlePointChange(idx, e.target.value)}
             />
           </Card>
@@ -1326,12 +1332,13 @@ const Reports = () => {
                          <ExecutiveSummary narrative={narrativeState} onUpdate={setNarrativeState} />
 
                          <div className="space-y-2 pt-4 border-t border-slate-100/60">
-                           <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Análisis Interpretativo de Logros</h4>
-                           <Card className="bg-[#fcfcfd] border-slate-100 p-6">
+                           <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Análisis interpretativo de logros")}</h4>
+                           <Card className="bg-[#fcfcfd] border-slate-200 p-6">
                               <textarea
-                                 rows={3}
-                                 className="w-full bg-transparent border-none text-slate-600 leading-relaxed font-normal text-base outline-none resize-none focus:ring-1 focus:ring-primary/10 rounded-xl"
-                                 value={narrativeState?.keyAchievements || ''}
+                                 rows={4}
+                                 className="w-full bg-transparent border-none text-[#111827] leading-relaxed font-bold text-base outline-none resize-none focus:ring-1 focus:ring-primary/10 rounded-xl !h-auto !overflow-visible"
+                                 style={{ height: 'auto', overflow: 'visible' }}
+                                 value={toSentenceCase(narrativeState?.keyAchievements) || ''}
                                  onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
                               />
                            </Card>
@@ -1340,7 +1347,7 @@ const Reports = () => {
 
                        {report.normalizedMetrics && (
                          <div className="border-t border-slate-100 pt-8 space-y-4">
-                           <h3 className="text-xl font-black tracking-tight text-slate-800">Resultados Generales</h3>
+                           <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Resultados generales")}</h3>
                            <MetricGrid metrics={report.normalizedMetrics} />
                          </div>
                        )}
@@ -1349,15 +1356,15 @@ const Reports = () => {
                        {report.sections && report.sections.some(s => s.sectionCategory === 'ORGANIC') && (
                          <div className="space-y-8 border-t border-slate-100 pt-8">
                            <div className="space-y-1">
-                             <h3 className="text-xl font-black tracking-tight text-slate-800">Análisis Orgánico (RRSS)</h3>
-                             <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Evolución y Rendimiento en Redes Sociales</p>
+                             <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Análisis orgánico (RRSS)")}</h3>
+                             <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{toSentenceCase("Evolución y rendimiento en redes sociales")}</p>
                            </div>
 
                            {/* Filter Facebook */}
                            {report.sections.filter(s => s.sectionCategory === 'ORGANIC' && s.platform === 'FACEBOOK').map((sect, idx) => (
                              <div key={sect.sectionId || `fb-org-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid">
                                <div className="flex justify-between items-center">
-                                 <h4 className="text-base font-black text-slate-800">{sect.title || 'Facebook Orgánico'}</h4>
+                                 <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Facebook orgánico')}</h4>
                                  <span className="text-[10px] font-bold text-[#1877F2] uppercase tracking-wider bg-[#1877F2]/10 px-2.5 py-0.5 rounded-full">Facebook</span>
                                </div>
                                <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform="FACEBOOK" />
@@ -1373,7 +1380,7 @@ const Reports = () => {
                            {report.sections.filter(s => s.sectionCategory === 'ORGANIC' && s.platform === 'INSTAGRAM').map((sect, idx) => (
                              <div key={sect.sectionId || `ig-org-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid">
                                <div className="flex justify-between items-center">
-                                 <h4 className="text-base font-black text-slate-800">{sect.title || 'Instagram Orgánico'}</h4>
+                                 <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Instagram orgánico')}</h4>
                                  <span className="text-[10px] font-bold text-[#E4405F] uppercase tracking-wider bg-[#E4405F]/10 px-2.5 py-0.5 rounded-full">Instagram</span>
                                </div>
                                <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform="INSTAGRAM" />
@@ -1391,14 +1398,14 @@ const Reports = () => {
                        {report.sections && report.sections.some(s => s.sectionCategory === 'ADS') && (
                          <div className="space-y-8 border-t border-slate-100 pt-8">
                            <div className="space-y-1">
-                             <h3 className="text-xl font-black tracking-tight text-slate-800">Performance Digital (ADS)</h3>
-                             <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Inversión y Retorno en Pauta Publicitaria</p>
+                             <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Performance digital (ADS)")}</h3>
+                             <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{toSentenceCase("Inversión y retorno en pauta publicitaria")}</p>
                            </div>
 
                            {report.sections.filter(s => s.sectionCategory === 'ADS').map((sect, idx) => (
                              <div key={sect.sectionId || `ads-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid">
                                <div className="flex justify-between items-center">
-                                 <h4 className="text-base font-black text-slate-800">{sect.title || 'Performance Ads'}</h4>
+                                 <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Performance ads')}</h4>
                                  <span className="text-[10px] font-bold text-[#7C3AED] uppercase tracking-wider bg-[#7C3AED]/10 px-2.5 py-0.5 rounded-full">Meta Ads</span>
                                </div>
                                <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform={sect.platform || 'META_ADS'} />
