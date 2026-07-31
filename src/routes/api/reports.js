@@ -308,7 +308,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             return {
                 sourceId,
                 storagePath: uploadResult.gcsPath,
-                platform: 'META_ADS',
+                platform: extracted.platform || 'META_ADS',
                 screenType: extracted.screenType || 'Desconocido',
                 extractionData: extracted.metrics,
                 confidence: parseFloat(extracted.confidence) || 0.0,
@@ -322,6 +322,8 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 resultsVal,
                 chartType: extracted.chartType || 'LINE_CHART',
                 title: extracted.title || 'Sección',
+                sectionCategory: extracted.sectionCategory || 'ADS',
+                platformVal: extracted.platform || 'META_ADS',
                 dataset: extracted.dataset || []
             };
         });
@@ -345,6 +347,8 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 sectionId: uuidv4(),
                 chartType: res.chartType,
                 title: res.title,
+                sectionCategory: res.sectionCategory,
+                platform: res.platformVal,
                 dataset: res.dataset,
                 narrativeComment: ""
             });

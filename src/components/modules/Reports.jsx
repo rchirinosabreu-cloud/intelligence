@@ -36,7 +36,7 @@ import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
 
 const PerformanceTrendChart = ({ data }) => {
   if (!data || data.length === 0) return null;
@@ -61,25 +61,49 @@ const PerformanceTrendChart = ({ data }) => {
   );
 };
 
-const DynamicChartRenderer = ({ chartType, dataset }) => {
+const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => {
   if (!dataset || dataset.length === 0) return null;
+
+  // Casing and Cromatic Styling
+  const normalizedPlatform = (platform || 'META_ADS').toUpperCase();
+  const colors = {
+    FACEBOOK: {
+      stroke: '#1877F2',
+      fill: '#1877F2',
+      bg: 'bg-[#1877F2]'
+    },
+    INSTAGRAM: {
+      stroke: '#E4405F',
+      fill: '#E4405F',
+      bg: 'bg-[#E4405F]'
+    },
+    META_ADS: {
+      stroke: '#7C3AED',
+      fill: '#10B981',
+      bg: 'bg-[#7C3AED]'
+    }
+  };
+
+  const currentTheme = colors[normalizedPlatform] || colors.META_ADS;
 
   if (chartType === 'LINE_CHART') {
     return (
       <div className="h-[280px] w-full mt-4">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={dataset} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <AreaChart data={dataset} margin={{ top: 25, right: 15, left: -20, bottom: 5 }}>
             <defs>
-              <linearGradient id="colorValueWeb" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
-                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+              <linearGradient id={`colorValueWeb-${normalizedPlatform}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={currentTheme.stroke} stopOpacity={0.25}/>
+                <stop offset="95%" stopColor={currentTheme.stroke} stopOpacity={0}/>
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
             <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
             <YAxis tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
             <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
-            <Area type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorValueWeb)" />
+            <Area type="monotone" dataKey="value" stroke={currentTheme.stroke} strokeWidth={3} fillOpacity={1} fill={`url(#colorValueWeb-${normalizedPlatform})`}>
+              <LabelList dataKey="value" position="top" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => val?.toLocaleString('es-ES')} />
+            </Area>
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -90,12 +114,14 @@ const DynamicChartRenderer = ({ chartType, dataset }) => {
     return (
       <div className="h-[280px] w-full mt-4">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={dataset} layout="vertical" margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+          <BarChart data={dataset} layout="vertical" margin={{ top: 15, right: 35, left: 10, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
             <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
             <YAxis dataKey="label" type="category" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
             <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
-            <Bar dataKey="percentage" fill="#6366f1" radius={[0, 8, 8, 0]} barSize={16} />
+            <Bar dataKey="percentage" fill={currentTheme.fill} radius={[0, 8, 8, 0]} barSize={16}>
+              <LabelList dataKey="percentage" position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => `${val}%`} />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -113,7 +139,7 @@ const DynamicChartRenderer = ({ chartType, dataset }) => {
             </div>
             <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
               <div
-                className="bg-primary h-full rounded-full transition-all duration-500"
+                className={cn("h-full rounded-full transition-all duration-500", currentTheme.bg)}
                 style={{ width: `${item.percentage || item.value || 0}%` }}
               />
             </div>
@@ -153,16 +179,12 @@ const DynamicChartRenderer = ({ chartType, dataset }) => {
   return null;
 };
 
-const SectionInsight = ({ sectionId, title, comment, onChange }) => {
+const SectionInsight = ({ sectionId, comment, onChange }) => {
   return (
-    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 mt-4 space-y-2 break-inside-avoid shadow-sm">
-      <div className="flex items-center gap-2">
-        <Sparkles className="w-4 h-4 text-primary" />
-        <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">{title}</h5>
-      </div>
+    <div className="mt-4 break-inside-avoid no-print">
       <textarea
         rows={3}
-        className="w-full bg-transparent border-none text-xs text-slate-600 leading-relaxed font-semibold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none"
+        className="w-full bg-slate-50 border border-slate-100 hover:border-slate-200 text-xs text-slate-600 leading-relaxed font-semibold focus:ring-1 focus:ring-primary/10 rounded-xl p-4 resize-none outline-none"
         value={comment || ''}
         onChange={(e) => onChange(sectionId, e.target.value)}
         placeholder="Escribe un comentario consultivo para esta sección..."
@@ -242,13 +264,13 @@ const ReportCover = ({ report }) => {
     <div className="min-h-[80vh] flex flex-col justify-between py-20 border-b border-slate-100 relative print:min-h-screen">
       <div className="flex flex-col md:flex-row items-center justify-between gap-16">
           <div className="flex-1 space-y-8 text-center md:text-left">
-             <div className="inline-block px-3 py-1 bg-primary/10 border border-primary/20 rounded-full text-[10px] font-bold text-primary uppercase tracking-widest">
-                Reporte de Desempeño • {report.periodKind}
-             </div>
-             <h1 className="text-5xl md:text-6xl font-black text-slate-900 tracking-tight leading-tight">
-                Auditoría Digital de Performance
+             <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+                Reporte de desempeño digital {report.client?.name || 'Cliente'}
              </h1>
-             <div className="flex items-center justify-center md:justify-start gap-6 text-xs font-bold text-slate-400 uppercase tracking-[0.3em]">
+             <p className="text-xl font-bold text-slate-500">
+                Estrategia y Resultados
+             </p>
+             <div className="flex items-center justify-center md:justify-start gap-6 text-xs font-bold text-slate-400 uppercase tracking-[0.3em] pt-4">
                 <span>{report.client?.name || 'Cliente'}</span>
                 <div className="w-1.5 h-1.5 rounded-full bg-primary/20" />
                 <span>{formattedStart} — {formattedEnd}</span>
@@ -265,8 +287,9 @@ const ReportCover = ({ report }) => {
             />
           </div>
       </div>
-      <div className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.4em] text-center md:text-left border-t border-slate-50 pt-8">
-         Brainstudio Agencia de Alto Rendimiento
+      <div className="text-[10px] font-bold text-slate-350 uppercase tracking-[0.4em] text-center md:text-left border-t border-slate-50 pt-8 flex justify-between items-center">
+         <span>Creado por Brainstudio Agencia</span>
+         <span>Fecha de emisión: {new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
       </div>
     </div>
   );
@@ -1244,21 +1267,65 @@ const Reports = () => {
                          </div>
                        )}
 
-                       {/* N DYNAMIC SECTIONS */}
-                       {report.sections && report.sections.length > 0 && (
-                         <div className="space-y-12 border-t border-slate-100 pt-8">
-                           {report.sections.map((sect, idx) => (
-                             <div key={sect.sectionId || idx} className="space-y-4 p-6 bg-slate-50/30 border border-slate-100/80 rounded-[1.5rem] break-inside-avoid">
-                               <div className="space-y-1">
-                                 <h4 className="text-base font-black text-slate-800">{sect.title || 'Sección'}</h4>
-                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-2.5 py-0.5 rounded-full">{sect.chartType}</span>
+                       {/* Bloque 1: Análisis Orgánico (RRSS) */}
+                       {report.sections && report.sections.some(s => s.sectionCategory === 'ORGANIC') && (
+                         <div className="space-y-8 border-t border-slate-100 pt-8">
+                           <div className="space-y-1">
+                             <h3 className="text-xl font-black tracking-tight text-slate-800">Análisis Orgánico (RRSS)</h3>
+                             <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Evolución y Rendimiento en Redes Sociales</p>
+                           </div>
+
+                           {/* Filter Facebook */}
+                           {report.sections.filter(s => s.sectionCategory === 'ORGANIC' && s.platform === 'FACEBOOK').map((sect, idx) => (
+                             <div key={sect.sectionId || `fb-org-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid">
+                               <div className="flex justify-between items-center">
+                                 <h4 className="text-base font-black text-slate-800">{sect.title || 'Facebook Orgánico'}</h4>
+                                 <span className="text-[10px] font-bold text-[#1877F2] uppercase tracking-wider bg-[#1877F2]/10 px-2.5 py-0.5 rounded-full">Facebook</span>
                                </div>
-
-                               <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} />
-
+                               <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform="FACEBOOK" />
                                <SectionInsight
                                  sectionId={sect.sectionId}
-                                 title="Comentario Interpretativo Editorial"
+                                 comment={sect.narrativeComment}
+                                 onChange={handleSectionCommentChange}
+                               />
+                             </div>
+                           ))}
+
+                           {/* Filter Instagram */}
+                           {report.sections.filter(s => s.sectionCategory === 'ORGANIC' && s.platform === 'INSTAGRAM').map((sect, idx) => (
+                             <div key={sect.sectionId || `ig-org-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid">
+                               <div className="flex justify-between items-center">
+                                 <h4 className="text-base font-black text-slate-800">{sect.title || 'Instagram Orgánico'}</h4>
+                                 <span className="text-[10px] font-bold text-[#E4405F] uppercase tracking-wider bg-[#E4405F]/10 px-2.5 py-0.5 rounded-full">Instagram</span>
+                               </div>
+                               <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform="INSTAGRAM" />
+                               <SectionInsight
+                                 sectionId={sect.sectionId}
+                                 comment={sect.narrativeComment}
+                                 onChange={handleSectionCommentChange}
+                               />
+                             </div>
+                           ))}
+                         </div>
+                       )}
+
+                       {/* Bloque 2: Performance Digital (ADS) */}
+                       {report.sections && report.sections.some(s => s.sectionCategory === 'ADS') && (
+                         <div className="space-y-8 border-t border-slate-100 pt-8">
+                           <div className="space-y-1">
+                             <h3 className="text-xl font-black tracking-tight text-slate-800">Performance Digital (ADS)</h3>
+                             <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Inversión y Retorno en Pauta Publicitaria</p>
+                           </div>
+
+                           {report.sections.filter(s => s.sectionCategory === 'ADS').map((sect, idx) => (
+                             <div key={sect.sectionId || `ads-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid">
+                               <div className="flex justify-between items-center">
+                                 <h4 className="text-base font-black text-slate-800">{sect.title || 'Performance Ads'}</h4>
+                                 <span className="text-[10px] font-bold text-[#7C3AED] uppercase tracking-wider bg-[#7C3AED]/10 px-2.5 py-0.5 rounded-full">Meta Ads</span>
+                               </div>
+                               <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform={sect.platform || 'META_ADS'} />
+                               <SectionInsight
+                                 sectionId={sect.sectionId}
                                  comment={sect.narrativeComment}
                                  onChange={handleSectionCommentChange}
                                />
@@ -1271,8 +1338,9 @@ const Reports = () => {
                          <ActionPlan narrative={narrativeState} onUpdate={setNarrativeState} />
                        </div>
 
-                       <div className="pt-8 flex items-center justify-center text-slate-350 text-[10px] font-bold tracking-widest uppercase">
-                          <span>Brainstudio Agencia • Visor de Reporte Web Interactivo</span>
+                       <div className="pt-8 border-t border-slate-100 flex items-center justify-between text-slate-350 text-[10px] font-bold tracking-widest uppercase font-bold">
+                          <span>Creado por Brainstudio Agencia</span>
+                          <span>Fecha de emisión: {new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                        </div>
                      </div>
                    )}
