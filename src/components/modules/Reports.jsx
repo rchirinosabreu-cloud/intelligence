@@ -132,6 +132,29 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
 
   const currentTheme = colors[normalizedPlatform] || colors.META_ADS;
 
+  const isFunnelDataset = sanitizedDataset.some(item => {
+    const label = (item.label || '').toLowerCase();
+    return label.includes('visua') || label.includes('alcan') || label.includes('interac') || label.includes('clic') || label.includes('visit') || label.includes('seguidor');
+  });
+
+  if (chartType === 'LINE_CHART' && isFunnelDataset) {
+    // Render funnel metrics as isolatedMetricCards to prevent rendering continuos line charts on funnel stages
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+        {sanitizedDataset.map((item, idx) => (
+          <div key={idx} className="bg-[#f8fafc] border border-slate-200 p-6 rounded-2xl space-y-2 shadow-sm break-inside-avoid">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              {toSentenceCase(item.label)}
+            </span>
+            <h4 className="text-2xl font-black text-[#0f172a]">
+              {((item[activeDataKey] !== undefined && item[activeDataKey] !== null) ? item[activeDataKey] : (item.value || 0)).toLocaleString('es-ES')}
+            </h4>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (chartType === 'LINE_CHART') {
     return (
       <div className="h-[280px] w-full mt-4">
@@ -242,6 +265,17 @@ const SectionInsight = ({ sectionId, comment, onChange }) => {
 
 const DemographicsBarChart = ({ data }) => {
   if (!data || data.length === 0) return null;
+
+  let activeDemKey = 'percentage';
+  if (data.length > 0) {
+    const keys = Object.keys(data[0]);
+    if (keys.includes('percentage') && data[0].percentage !== null && data[0].percentage !== undefined) {
+      activeDemKey = 'percentage';
+    } else if (keys.includes('value') && data[0].value !== null && data[0].value !== undefined) {
+      activeDemKey = 'value';
+    }
+  }
+
   return (
     <div className="h-[280px] w-full mt-4">
       <ResponsiveContainer width="100%" height="100%">
@@ -250,7 +284,9 @@ const DemographicsBarChart = ({ data }) => {
           <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
           <YAxis width={80} dataKey="demographicGroup" type="category" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
           <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
-          <Bar dataKey="percentage" fill="#6366f1" radius={[0, 8, 8, 0]} barSize={16} />
+          <Bar dataKey={activeDemKey} fill="#6366f1" radius={[0, 8, 8, 0]} barSize={16}>
+            <LabelList dataKey={activeDemKey} position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => activeDemKey === 'percentage' ? `${val}%` : val?.toLocaleString('es-ES')} />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -357,7 +393,7 @@ const ExecutiveSummary = ({ narrative, onUpdate }) => {
       <div className="space-y-4">
         <textarea
           rows={2}
-          className="w-full bg-transparent border-none text-3xl font-black text-slate-800 leading-snug tracking-tight focus:ring-1 focus:ring-primary/10 rounded-xl py-2 outline-none resize-none"
+          className="w-full bg-transparent border-none text-3xl font-black text-[#0f172a] leading-snug tracking-tight focus:ring-1 focus:ring-primary/10 rounded-xl py-2 outline-none resize-none"
           value={toSentenceCase(narrative.headline) || ''}
           onChange={(e) => onUpdate({ ...narrative, headline: e.target.value })}
         />
@@ -366,12 +402,12 @@ const ExecutiveSummary = ({ narrative, onUpdate }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {(narrative.summaryPoints || []).map((point, idx) => (
-          <Card key={idx} className="bg-[#f9fafb] border-slate-200 p-6 flex gap-4 break-inside-avoid">
+          <Card key={idx} className="bg-[#ffffff] border-slate-200 p-6 flex gap-4 break-inside-avoid shadow-sm">
             <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/10 text-primary flex items-center justify-center shrink-0 font-black text-sm">
               {idx + 1}
             </div>
             <textarea
-              className="w-full bg-transparent border-none text-sm text-[#111827] leading-relaxed font-bold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
+              className="w-full bg-transparent border-none text-sm text-[#0f172a] leading-relaxed font-bold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
               rows={4}
               style={{ height: 'auto', overflow: 'visible' }}
               value={toSentenceCase(point)}
