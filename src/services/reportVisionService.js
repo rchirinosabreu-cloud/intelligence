@@ -95,6 +95,8 @@ const schema = {
     narrativeDraft: { type: "string" },
     chartType: { type: "string" },
     title: { type: "string" },
+    sectionCategory: { type: "string" },
+    platform: { type: "string" },
     dataset: {
       type: "array",
       items: {
@@ -112,7 +114,7 @@ const schema = {
       }
     }
   },
-  required: ["metrics", "screenType", "confidence", "narrativeDraft", "chartType", "title", "dataset"],
+  required: ["metrics", "screenType", "confidence", "narrativeDraft", "chartType", "title", "sectionCategory", "platform", "dataset"],
   additionalProperties: false
 };
 
@@ -141,6 +143,8 @@ Also identify:
 Also extract graphic points and visual data as a structured section:
 - chartType: Detect or choose the most appropriate chart type to display this visual: "LINE_CHART" (for trend curves or daily data), "BAR_CHART" (for age/gender bar breakdowns), "DONUT_CHART" (for platform split or percentage distribution), or "RANKING_TABLE" (for listing contents, ads, or posts).
 - title: A descriptive and clear Spanish title for this chart/visualization block.
+- sectionCategory: Categorize this screenshot section strictly as "ORGANIC" (for organic reels, posts, feed reach, likes, story views, organic Facebook/Instagram profile stats) or "ADS" (for campaigns, ad manager charts, spend/inversión, campaign results, paid conversions).
+- platform: Identify the specific platform: "FACEBOOK" (for Facebook specific stats), "INSTAGRAM" (for Instagram specific business profile/feed stats), or "META_ADS" (for paid ads/manager).
 - dataset: An array of data points with at least "label" (string representing day, date, demographic group, platform, or post title) and dynamic numeric fields ("value" for values, "percentage" for percentages, or "views", "interactions", "clicks" for posts metrics). If not visible in the image, generate 4-6 realistic, high-quality simulated data points for this brand to always ensure beautiful, native and informative charts.
 `;
 
@@ -285,6 +289,8 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
               sectionId: { type: "string" },
               chartType: { type: "string" },
               title: { type: "string" },
+              sectionCategory: { type: "string" },
+              platform: { type: "string" },
               dataset: {
                 type: "array",
                 items: {
@@ -303,7 +309,7 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
               },
               narrativeComment: { type: "string" }
             },
-            required: ["sectionId", "chartType", "title", "dataset", "narrativeComment"],
+            required: ["sectionId", "chartType", "title", "sectionCategory", "platform", "dataset", "narrativeComment"],
             additionalProperties: false
           }
         }
