@@ -64,6 +64,46 @@ const PerformanceTrendChart = ({ data }) => {
 const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => {
   if (!dataset || dataset.length === 0) return null;
 
+  // Intercept and sanitize labels for organic comparison chart and orthographic errors
+  const sanitizedDataset = dataset.map(item => {
+    let cleanLabel = item.label || '';
+    if (cleanLabel.toLowerCase().includes('publ') || cleanLabel.toLowerCase().startsWith('pub')) {
+      cleanLabel = 'Publicaciones';
+    } else if (cleanLabel.toLowerCase().includes('hist') || cleanLabel.toLowerCase().startsWith('his')) {
+      cleanLabel = 'Historias';
+    }
+    return {
+      ...item,
+      label: cleanLabel
+    };
+  });
+
+  // Find active key that contains data
+  let activeDataKey = 'value';
+  if (sanitizedDataset.length > 0) {
+    const keys = Object.keys(sanitizedDataset[0]);
+    if (keys.includes('results') && sanitizedDataset[0].results !== null && sanitizedDataset[0].results !== undefined) {
+      activeDataKey = 'results';
+    } else if (keys.includes('impressions') && sanitizedDataset[0].impressions !== null && sanitizedDataset[0].impressions !== undefined) {
+      activeDataKey = 'impressions';
+    } else if (keys.includes('reach') && sanitizedDataset[0].reach !== null && sanitizedDataset[0].reach !== undefined) {
+      activeDataKey = 'reach';
+    } else if (keys.includes('value') && sanitizedDataset[0].value !== null && sanitizedDataset[0].value !== undefined) {
+      activeDataKey = 'value';
+    } else if (keys.includes('percentage') && sanitizedDataset[0].percentage !== null && sanitizedDataset[0].percentage !== undefined) {
+      activeDataKey = 'percentage';
+    }
+  }
+
+  // Format tick labels cleanly (e.g. 24.000 or 24k)
+  const formatYAxis = (tick) => {
+    if (typeof tick !== 'number') return tick;
+    if (tick >= 1000) {
+      return `${(tick / 1000).toFixed(0)}k`;
+    }
+    return tick.toLocaleString('es-ES');
+  };
+
   // Casing and Cromatic Styling
   const normalizedPlatform = (platform || 'META_ADS').toUpperCase();
   const colors = {
@@ -90,7 +130,7 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
     return (
       <div className="h-[280px] w-full mt-4">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={dataset} margin={{ top: 25, right: 15, left: -20, bottom: 5 }}>
+          <AreaChart data={sanitizedDataset} margin={{ top: 25, right: 15, left: -20, bottom: 5 }}>
             <defs>
               <linearGradient id={`colorValueWeb-${normalizedPlatform}`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={currentTheme.stroke} stopOpacity={0.25}/>
@@ -99,10 +139,10 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
             </defs>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
             <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
-            <YAxis tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
+            <YAxis tickFormatter={formatYAxis} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
             <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
-            <Area type="monotone" dataKey="value" stroke={currentTheme.stroke} strokeWidth={3} fillOpacity={1} fill={`url(#colorValueWeb-${normalizedPlatform})`}>
-              <LabelList dataKey="value" position="top" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => val?.toLocaleString('es-ES')} />
+            <Area type="monotone" dataKey={activeDataKey} stroke={currentTheme.stroke} strokeWidth={3} fillOpacity={1} fill={`url(#colorValueWeb-${normalizedPlatform})`}>
+              <LabelList dataKey={activeDataKey} position="top" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => val?.toLocaleString('es-ES')} />
             </Area>
           </AreaChart>
         </ResponsiveContainer>
@@ -114,7 +154,7 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
     return (
       <div className="h-[280px] w-full mt-4">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={dataset} layout="vertical" margin={{ top: 15, right: 35, left: 10, bottom: 5 }}>
+          <BarChart data={sanitizedDataset} layout="vertical" margin={{ top: 15, right: 35, left: 10, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
             <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
             <YAxis dataKey="label" type="category" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
@@ -131,7 +171,7 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
   if (chartType === 'DONUT_CHART') {
     return (
       <div className="mt-4 p-6 bg-slate-50 border border-slate-100 rounded-2xl space-y-4">
-        {dataset.map((item, idx) => (
+        {sanitizedDataset.map((item, idx) => (
           <div key={idx} className="space-y-1">
             <div className="flex justify-between text-xs font-bold text-slate-600">
               <span>{item.label}</span>
@@ -156,18 +196,18 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
           <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
             <tr>
               <th className="px-6 py-4 font-bold">Publicación destacada / Ad Creative</th>
-              <th className="px-6 py-4 font-bold text-right">Visualizaciones</th>
-              <th className="px-6 py-4 font-bold text-right">Interacciones</th>
-              <th className="px-6 py-4 font-bold text-right">Clics</th>
+              <th className="px-6 py-4 font-bold text-right">Resultados</th>
+              <th className="px-6 py-4 font-bold text-right">Impresiones</th>
+              <th className="px-6 py-4 font-bold text-right">Alcance</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50 font-medium">
-            {dataset.map((item, idx) => (
+            {sanitizedDataset.map((item, idx) => (
               <tr key={idx} className="hover:bg-slate-50/50 break-inside-avoid">
                 <td className="px-6 py-4 font-bold text-slate-700">{item.label}</td>
-                <td className="px-6 py-4 text-right text-slate-600 font-semibold">{(item.views || item.value || 0).toLocaleString('es-ES')}</td>
-                <td className="px-6 py-4 text-right text-slate-600 font-semibold">{(item.interactions || item.value || 0).toLocaleString('es-ES')}</td>
-                <td className="px-6 py-4 text-right text-primary font-bold">{(item.clicks || item.value || 0).toLocaleString('es-ES')}</td>
+                <td className="px-6 py-4 text-right text-slate-600 font-semibold">{(item.results || item.value || 0).toLocaleString('es-ES')}</td>
+                <td className="px-6 py-4 text-right text-slate-600 font-semibold">{(item.impressions || item.value || 0).toLocaleString('es-ES')}</td>
+                <td className="px-6 py-4 text-right text-primary font-bold">{(item.reach || item.value || 0).toLocaleString('es-ES')}</td>
               </tr>
             ))}
           </tbody>
@@ -181,10 +221,11 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
 
 const SectionInsight = ({ sectionId, comment, onChange }) => {
   return (
-    <div className="mt-4 break-inside-avoid no-print">
+    <div className="mt-4 break-inside-avoid no-print !h-auto !overflow-visible">
       <textarea
-        rows={3}
-        className="w-full bg-slate-50 border border-slate-100 hover:border-slate-200 text-xs text-slate-600 leading-relaxed font-semibold focus:ring-1 focus:ring-primary/10 rounded-xl p-4 resize-none outline-none"
+        rows={4}
+        className="w-full bg-slate-50 border border-slate-100 hover:border-slate-200 text-sm text-slate-600 leading-relaxed font-semibold focus:ring-1 focus:ring-primary/10 rounded-xl p-4 resize-none outline-none !h-auto !overflow-visible"
+        style={{ height: 'auto', overflow: 'visible' }}
         value={comment || ''}
         onChange={(e) => onChange(sectionId, e.target.value)}
         placeholder="Escribe un comentario consultivo para esta sección..."
@@ -218,18 +259,18 @@ const TopContentTable = ({ data }) => {
         <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
           <tr>
             <th className="px-6 py-4 font-bold">Publicación destacada / Ad Creative</th>
-            <th className="px-6 py-4 font-bold text-right">Visualizaciones</th>
-            <th className="px-6 py-4 font-bold text-right">Interacciones</th>
-            <th className="px-6 py-4 font-bold text-right">Clics</th>
+            <th className="px-6 py-4 font-bold text-right">Resultados</th>
+            <th className="px-6 py-4 font-bold text-right">Impresiones</th>
+            <th className="px-6 py-4 font-bold text-right">Alcance</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50 font-medium">
           {data.map((item, idx) => (
             <tr key={idx} className="hover:bg-slate-50/50 break-inside-avoid">
               <td className="px-6 py-4 font-bold text-slate-700">{item.title}</td>
-              <td className="px-6 py-4 text-right text-slate-600 font-semibold">{item.views?.toLocaleString('es-ES') || 'N/A'}</td>
-              <td className="px-6 py-4 text-right text-slate-600 font-semibold">{item.interactions?.toLocaleString('es-ES') || 'N/A'}</td>
-              <td className="px-6 py-4 text-right text-primary font-bold">{item.clicks?.toLocaleString('es-ES') || 'N/A'}</td>
+              <td className="px-6 py-4 text-right text-slate-600 font-semibold">{item.results?.toLocaleString('es-ES') || item.views?.toLocaleString('es-ES') || 'N/A'}</td>
+              <td className="px-6 py-4 text-right text-slate-600 font-semibold">{item.impressions?.toLocaleString('es-ES') || item.interactions?.toLocaleString('es-ES') || 'N/A'}</td>
+              <td className="px-6 py-4 text-right text-primary font-bold">{item.reach?.toLocaleString('es-ES') || item.clicks?.toLocaleString('es-ES') || 'N/A'}</td>
             </tr>
           ))}
         </tbody>
@@ -240,14 +281,15 @@ const TopContentTable = ({ data }) => {
 
 const GranularNarrativeBlock = ({ sectionKey, title, comment, onChange }) => {
   return (
-    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 mt-4 space-y-2 break-inside-avoid shadow-sm no-print">
+    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 mt-4 space-y-2 break-inside-avoid shadow-sm no-print !h-auto !overflow-visible">
       <div className="flex items-center gap-2">
         <Sparkles className="w-4 h-4 text-primary" />
         <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">{title}</h5>
       </div>
       <textarea
-        rows={3}
-        className="w-full bg-transparent border-none text-xs text-slate-600 leading-relaxed font-semibold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none"
+        rows={4}
+        className="w-full bg-transparent border-none text-sm text-slate-600 leading-relaxed font-semibold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
+        style={{ height: 'auto', overflow: 'visible' }}
         value={comment || ''}
         onChange={(e) => onChange(sectionKey, e.target.value)}
         placeholder="Escribe un comentario consultivo para esta sección..."
@@ -323,8 +365,9 @@ const ExecutiveSummary = ({ narrative, onUpdate }) => {
               {idx + 1}
             </div>
             <textarea
-              className="w-full bg-transparent border-none text-xs text-slate-600 leading-relaxed font-semibold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none"
+              className="w-full bg-transparent border-none text-sm text-slate-600 leading-relaxed font-semibold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
               rows={4}
+              style={{ height: 'auto', overflow: 'visible' }}
               value={point}
               onChange={(e) => handlePointChange(idx, e.target.value)}
             />
@@ -886,62 +929,87 @@ const Reports = () => {
     }
   };
 
-  const downloadPDF = async () => {
+  const downloadHTML = () => {
     if (!reportRef.current) return;
-    const toastId = toast.loading('Generando documento...');
+    const toastId = toast.loading('Generando documento HTML...');
     try {
-      // Ensure fonts are loaded
-      if (document.fonts) {
-          await document.fonts.ready;
-      }
+      // Clone report element
+      const element = reportRef.current.cloneNode(true);
 
-      // Small delay to allow final paint
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Hide no-print elements
+      const noPrintElements = element.querySelectorAll('.no-print');
+      noPrintElements.forEach(el => el.remove());
 
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: '#ffffff',
-        logging: true,
-        imageTimeout: 15000,
-        onclone: (clonedDoc) => {
-          const noPrintElements = clonedDoc.querySelectorAll('.no-print');
-          noPrintElements.forEach(el => el.style.display = 'none');
-
-          const textareas = clonedDoc.querySelectorAll('textarea, input');
-          textareas.forEach(ta => {
-            const div = clonedDoc.createElement('div');
-            div.innerText = ta.value;
-            div.className = ta.className;
-            div.style.height = 'auto';
-            div.style.whiteSpace = 'pre-wrap';
-            div.style.border = 'none';
-            div.style.color = '#1e293b'; // slate-800
-            ta.parentNode.replaceChild(div, ta);
-          });
-
-          // Force layout recalculation for cloned document
-          const reportContainer = clonedDoc.getElementById('report-canvas');
-          if (reportContainer) {
-              reportContainer.style.transform = 'none';
-              reportContainer.style.opacity = '1';
-          }
-        }
+      // Replace textareas/inputs with static divs/spans
+      const textareas = element.querySelectorAll('textarea, input');
+      textareas.forEach(ta => {
+        const div = document.createElement('div');
+        div.innerText = ta.value;
+        div.className = ta.className;
+        div.style.height = 'auto';
+        div.style.whiteSpace = 'pre-wrap';
+        div.style.border = 'none';
+        div.style.color = '#1e293b'; // slate-800
+        ta.parentNode.replaceChild(div, ta);
       });
-      const imgData = canvas.toDataURL('image/png', 1.0);
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'px',
-        format: [canvas.width / 2, canvas.height / 2]
-      });
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 2, canvas.height / 2);
+
+      // Construct a complete HTML file with Tailwind and fonts
+      const htmlContent = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${editedTexts.title || 'Reporte de Performance'}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f8fafc;
+      margin: 0;
+      padding: 2rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .report-wrapper {
+      background-color: #ffffff;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+      border-radius: 2.5rem;
+      overflow: hidden;
+      width: 100%;
+      max-width: 80rem;
+    }
+    textarea, input {
+      outline: none;
+      border: none;
+      background: transparent;
+      resize: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="report-wrapper">
+    ${element.innerHTML}
+  </div>
+</body>
+</html>`;
+
+      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
       const fileName = editedTexts.title.replace(/[^a-z0-9]/gi, '_').substring(0, 50);
-      pdf.save(`${fileName}.pdf`);
-      toast.success('Descarga lista', { id: toastId });
+      link.download = `${fileName}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('Descarga HTML lista', { id: toastId });
     } catch (err) {
-      console.error('PDF Export Error:', err);
-      toast.error('Error al exportar PDF', { id: toastId });
+      console.error('HTML Export Error:', err);
+      toast.error('Error al exportar HTML', { id: toastId });
     }
   };
 
@@ -971,8 +1039,8 @@ const Reports = () => {
             </div>
             <div className="flex gap-3">
                {report && (
-                 <button onClick={downloadPDF} className="px-6 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold transition-all">
-                  PDF Final
+                 <button onClick={downloadHTML} className="px-6 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold transition-all">
+                  Descargar Reporte HTML
                  </button>
                )}
                <button

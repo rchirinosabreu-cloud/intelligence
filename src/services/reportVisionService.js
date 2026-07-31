@@ -105,11 +105,11 @@ const schema = {
           label: { type: "string" },
           value: { anyOf: [{ type: "number" }, { type: "null" }] },
           percentage: { anyOf: [{ type: "number" }, { type: "null" }] },
-          views: { anyOf: [{ type: "number" }, { type: "null" }] },
-          interactions: { anyOf: [{ type: "number" }, { type: "null" }] },
-          clicks: { anyOf: [{ type: "number" }, { type: "null" }] }
+          results: { anyOf: [{ type: "number" }, { type: "null" }] },
+          impressions: { anyOf: [{ type: "number" }, { type: "null" }] },
+          reach: { anyOf: [{ type: "number" }, { type: "null" }] }
         },
-        required: ["label", "value", "percentage", "views", "interactions", "clicks"],
+        required: ["label", "value", "percentage", "results", "impressions", "reach"],
         additionalProperties: false
       }
     }
@@ -138,14 +138,14 @@ For each metric, extract the following:
 Also identify:
 - screenType: The type of screen (e.g., "Rendimiento Macro" or "Desglose Micro" or "Tabla General").
 - confidence: Overall confidence score for the whole screenshot extraction (0.0 to 1.0).
-- narrativeDraft: A short (maximum 3 lines) narrative explanation of these metrics in Spanish, highlighting the progress and using extremely positive, forward-looking terminology. Never use negative/alarmist words (e.g. instead of "bajo" or "caída", use "fase de consolidación" or "ventana de oportunidad").
+- narrativeDraft: A short narrative explanation of these metrics in Spanish (exactly 3 to 4 complete, well-structured sentences), highlighting the progress and using extremely positive, forward-looking terminology. Never use negative/alarmist words (e.g. instead of "bajo" or "caída", use "fase de consolidación" or "ventana de oportunidad"). Ensure it does not truncate or cut off.
 
 Also extract graphic points and visual data as a structured section:
 - chartType: Detect or choose the most appropriate chart type to display this visual: "LINE_CHART" (for trend curves or daily data), "BAR_CHART" (for age/gender bar breakdowns), "DONUT_CHART" (for platform split or percentage distribution), or "RANKING_TABLE" (for listing contents, ads, or posts).
 - title: A descriptive and clear Spanish title for this chart/visualization block.
 - sectionCategory: Categorize this screenshot section strictly as "ORGANIC" (for organic reels, posts, feed reach, likes, story views, organic Facebook/Instagram profile stats) or "ADS" (for campaigns, ad manager charts, spend/inversión, campaign results, paid conversions).
 - platform: Identify the specific platform: "FACEBOOK" (for Facebook specific stats), "INSTAGRAM" (for Instagram specific business profile/feed stats), or "META_ADS" (for paid ads/manager).
-- dataset: An array of data points with at least "label" (string representing day, date, demographic group, platform, or post title) and dynamic numeric fields ("value" for values, "percentage" for percentages, or "views", "interactions", "clicks" for posts metrics). If not visible in the image, generate 4-6 realistic, high-quality simulated data points for this brand to always ensure beautiful, native and informative charts.
+- dataset: An array of data points with at least "label" (string representing day, date, demographic group, platform, or post title) and dynamic numeric fields: "value" for baseline, "percentage" for percentages, and for ads tables (RANKING_TABLE), extract "results" (for results/conversiones/mensajes), "impressions" (for impressions), and "reach" (for alcance), substituting secondary low-volume columns like views or isolated clicks. If not visible in the image, generate 4-6 realistic, high-quality simulated data points for this brand containing "results", "impressions", and "reach" keys to always ensure beautiful, native and informative charts.
 `;
 
 /**
@@ -251,12 +251,13 @@ ${JSON.stringify(sections, null, 2)}
 REGLAS DE REDACCIÓN DE LA NARRATIVA:
 1. TONO: Consultivo, positivo, profesional, motivador y orientado a metas comerciales de alto nivel.
 2. REGLA ESTRICTA DE INTEGRIDAD DE DATOS (PROHIBIDO HALLUCINAR): Queda terminantemente prohibido que menciones o inventes valores numéricos, métricas, cantidades o porcentajes que no existan de forma explícita en el objeto de métricas o secciones provisto arriba. No asumas divisas ni cifras que no estén allí.
-3. ESTRUCTURA REQUERIDA (JSON):
+3. PROFUNDIDAD NARRATIVA EDITORIAL: Cada comentario explicativo o interpretativo debe constar de explicaciones consultivas profundas de exactamente 3 a 4 oraciones completas y bien estructuradas. Asegura que el string comience desde el inicio de la oración y no sufra ningún recorte, truncamiento o abreviación.
+4. ESTRUCTURA REQUERIDA (JSON):
    - headline: Un titular de impacto, corto y motivador.
    - summaryPoints: Un arreglo de exactamente 3 puntos clave resumidos.
-   - keyAchievements: Un texto (de 1 o 2 párrafos) que explique los logros más importantes y las variaciones relevantes, destacando la evolución de manera optimista.
+   - keyAchievements: Un texto profundo de exactamente 3 a 4 oraciones completas que explique los logros más importantes y las variaciones relevantes, destacando la evolución de manera optimista.
    - actionPlan: Un plan de acción con exactamente 3 compromisos recomendados. Cada compromiso debe ser un objeto con 'action' (Acción), 'kpi' (KPI de éxito) y 'suggestedAssignee' (Responsable sugerido).
-   - sections: Un arreglo que contenga exactamente los mismos objetos que se te pasaron en SECCIONES VISUALES REGISTRADAS, pero agregando en cada uno un campo 'narrativeComment' con una explicación consultiva, positiva y optimista de 2 a 3 frases explicando dicho gráfico o tabla.
+   - sections: Un arreglo que contenga exactamente los mismos objetos que se te pasaron en SECCIONES VISUALES REGISTRADAS, pero agregando en cada uno un campo 'narrativeComment' con una explicación consultiva profunda, positiva y de exactamente 3 a 4 oraciones completas explicando dicho gráfico o tabla.
 `;
 
     const narrativeSchema = {
@@ -299,11 +300,11 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
                     label: { type: "string" },
                     value: { anyOf: [{ type: "number" }, { type: "null" }] },
                     percentage: { anyOf: [{ type: "number" }, { type: "null" }] },
-                    views: { anyOf: [{ type: "number" }, { type: "null" }] },
-                    interactions: { anyOf: [{ type: "number" }, { type: "null" }] },
-                    clicks: { anyOf: [{ type: "number" }, { type: "null" }] }
+                    results: { anyOf: [{ type: "number" }, { type: "null" }] },
+                    impressions: { anyOf: [{ type: "number" }, { type: "null" }] },
+                    reach: { anyOf: [{ type: "number" }, { type: "null" }] }
                   },
-                  required: ["label", "value", "percentage", "views", "interactions", "clicks"],
+                  required: ["label", "value", "percentage", "results", "impressions", "reach"],
                   additionalProperties: false
                 }
               },
