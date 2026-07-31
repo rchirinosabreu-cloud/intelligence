@@ -93,46 +93,26 @@ const schema = {
     screenType: { type: "string" },
     confidence: { type: "number" },
     narrativeDraft: { type: "string" },
-    series: {
+    chartType: { type: "string" },
+    title: { type: "string" },
+    dataset: {
       type: "array",
       items: {
         type: "object",
         properties: {
-          date: { type: "string" },
-          value: { type: "number" }
+          label: { type: "string" },
+          value: { anyOf: [{ type: "number" }, { type: "null" }] },
+          percentage: { anyOf: [{ type: "number" }, { type: "null" }] },
+          views: { anyOf: [{ type: "number" }, { type: "null" }] },
+          interactions: { anyOf: [{ type: "number" }, { type: "null" }] },
+          clicks: { anyOf: [{ type: "number" }, { type: "null" }] }
         },
-        required: ["date", "value"],
-        additionalProperties: false
-      }
-    },
-    demographics: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          demographicGroup: { type: "string" },
-          percentage: { type: "number" }
-        },
-        required: ["demographicGroup", "percentage"],
-        additionalProperties: false
-      }
-    },
-    topContent: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          title: { type: "string" },
-          views: { type: "number" },
-          interactions: { type: "number" },
-          clicks: { type: "number" }
-        },
-        required: ["title", "views", "interactions", "clicks"],
+        required: ["label"],
         additionalProperties: false
       }
     }
   },
-  required: ["metrics", "screenType", "confidence", "narrativeDraft", "series", "demographics", "topContent"],
+  required: ["metrics", "screenType", "confidence", "narrativeDraft", "chartType", "title", "dataset"],
   additionalProperties: false
 };
 
@@ -158,10 +138,10 @@ Also identify:
 - confidence: Overall confidence score for the whole screenshot extraction (0.0 to 1.0).
 - narrativeDraft: A short (maximum 3 lines) narrative explanation of these metrics in Spanish, highlighting the progress and using extremely positive, forward-looking terminology. Never use negative/alarmist words (e.g. instead of "bajo" or "caída", use "fase de consolidación" or "ventana de oportunidad").
 
-Also extract these breakdown arrays:
-- series: array of objects with "date" (string like "2026-03-01", "Día 1", "Día 2") and "value" (number) representing trend data if visible in any line/bar chart. If not visible, generate 5-7 reasonable, sequential data points representing a positive trend corresponding to the metrics.
-- demographics: array of objects with "demographicGroup" (string like "18-24 F", "25-34 M") and "percentage" (number) representing age/gender breakdown. If not visible, generate a realistic demographic distribution (summing to 100) typical for digital marketing campaigns.
-- topContent: array of objects with "title" (string), "views" (number), "interactions" (number), and "clicks" (number) listing the top performing creative pieces or ad posts. If not visible, generate 3 typical high-performing post listings for this brand.
+Also extract graphic points and visual data as a structured section:
+- chartType: Detect or choose the most appropriate chart type to display this visual: "LINE_CHART" (for trend curves or daily data), "BAR_CHART" (for age/gender bar breakdowns), "DONUT_CHART" (for platform split or percentage distribution), or "RANKING_TABLE" (for listing contents, ads, or posts).
+- title: A descriptive and clear Spanish title for this chart/visualization block.
+- dataset: An array of data points with at least "label" (string representing day, date, demographic group, platform, or post title) and dynamic numeric fields ("value" for values, "percentage" for percentages, or "views", "interactions", "clicks" for posts metrics). If not visible in the image, generate 4-6 realistic, high-quality simulated data points for this brand to always ensure beautiful, native and informative charts.
 `;
 
 /**
@@ -243,11 +223,12 @@ export const extractMetricsWithVision = async (imageBuffer, mimeType = 'image/jp
 };
 
 /**
- * Generates an editorial narrative and strategic action plan from normalized metrics.
+ * Generates an editorial narrative and strategic action plan from normalized metrics and sections.
  * @param {Object} normalizedMetrics - The validated metrics object.
+ * @param {Array} sections - The structured sections array.
  * @returns {Promise<Object>} The parsed narrative structure.
  */
-export const generateNarrativeWithOpenAI = async (normalizedMetrics) => {
+export const generateNarrativeWithOpenAI = async (normalizedMetrics, sections = []) => {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
         throw new Error("Missing OpenAI API Key in server configuration");
@@ -255,23 +236,23 @@ export const generateNarrativeWithOpenAI = async (normalizedMetrics) => {
 
     const model = process.env.OPENAI_VISION_MODEL || "gpt-4o";
 
-    const prompt = `Analiza las siguientes métricas cuantitativas ya validadas y genera una narración editorial estructurada en Español.
+    const prompt = `Analiza las siguientes métricas cuantitativas ya validadas y la colección de secciones visuales, y genera una narración editorial estructurada en Español.
 
 MÉTRICAS DEL PERIODO:
 ${JSON.stringify(normalizedMetrics, null, 2)}
 
+SECCIONES VISUALES REGISTRADAS:
+${JSON.stringify(sections, null, 2)}
+
 REGLAS DE REDACCIÓN DE LA NARRATIVA:
 1. TONO: Consultivo, positivo, profesional, motivador y orientado a metas comerciales de alto nivel.
-2. REGLA ESTRICTA DE INTEGRIDAD DE DATOS (PROHIBIDO HALLUCINAR): Queda terminantemente prohibido que menciones o inventes valores numéricos, métricas, cantidades o porcentajes que no existan de forma explícita en el objeto de métricas provisto arriba. No asumas divisas ni cifras que no estén allí.
+2. REGLA ESTRICTA DE INTEGRIDAD DE DATOS (PROHIBIDO HALLUCINAR): Queda terminantemente prohibido que menciones o inventes valores numéricos, métricas, cantidades o porcentajes que no existan de forma explícita en el objeto de métricas o secciones provisto arriba. No asumas divisas ni cifras que no estén allí.
 3. ESTRUCTURA REQUERIDA (JSON):
    - headline: Un titular de impacto, corto y motivador.
    - summaryPoints: Un arreglo de exactamente 3 puntos clave resumidos.
    - keyAchievements: Un texto (de 1 o 2 párrafos) que explique los logros más importantes y las variaciones relevantes, destacando la evolución de manera optimista.
    - actionPlan: Un plan de acción con exactamente 3 compromisos recomendados. Cada compromiso debe ser un objeto con 'action' (Acción), 'kpi' (KPI de éxito) y 'suggestedAssignee' (Responsable sugerido).
-   - granularNarratives: Un arreglo de exactamente 3 objetos para cada una de las secciones del informe visual, con comentarios optimistas de 2 a 3 frases:
-     1. Para la sección "macro_performance" (Rendimiento y Tendencia de Performance).
-     2. Para la sección "demographics" (Distribución Demográfica de la Audiencia).
-     3. Para la sección "top_content" (Rendimiento de los Mejores Contenidos).
+   - sections: Un arreglo que contenga exactamente los mismos objetos que se te pasaron en SECCIONES VISUALES REGISTRADAS, pero agregando en cada uno un campo 'narrativeComment' con una explicación consultiva, positiva y optimista de 2 a 3 frases explicando dicho gráfico o tabla.
 `;
 
     const narrativeSchema = {
@@ -296,21 +277,23 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
             additionalProperties: false
           }
         },
-        granularNarratives: {
+        sections: {
           type: "array",
           items: {
             type: "object",
             properties: {
-              sectionKey: { type: "string" }, // "macro_performance", "demographics", "top_content"
+              sectionId: { type: "string" },
+              chartType: { type: "string" },
               title: { type: "string" },
-              consultativeComment: { type: "string" }
+              dataset: { type: "array", items: { type: "object" } },
+              narrativeComment: { type: "string" }
             },
-            required: ["sectionKey", "title", "consultativeComment"],
+            required: ["sectionId", "chartType", "title", "dataset", "narrativeComment"],
             additionalProperties: false
           }
         }
       },
-      required: ["headline", "summaryPoints", "keyAchievements", "actionPlan", "granularNarratives"],
+      required: ["headline", "summaryPoints", "keyAchievements", "actionPlan", "sections"],
       additionalProperties: false
     };
 
