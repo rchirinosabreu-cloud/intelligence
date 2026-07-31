@@ -25,8 +25,8 @@ test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) =>
                             chartType: "LINE_CHART",
                             title: "Tendencia de Performance",
                             dataset: [
-                                { label: "Día 1", value: 100 },
-                                { label: "Día 2", value: 150 }
+                                { label: "Día 1", value: 100, percentage: null, views: null, interactions: null, clicks: null },
+                                { label: "Día 2", value: 150, percentage: null, views: null, interactions: null, clicks: null }
                             ]
                         })
                     }
@@ -160,7 +160,7 @@ test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) =>
                                     sectionId: "sec-1",
                                     chartType: "LINE_CHART",
                                     title: "Rendimiento y Tendencia",
-                                    dataset: [{ label: "Día 1", value: 100 }],
+                                    dataset: [{ label: "Día 1", value: 100, percentage: null, views: null, interactions: null, clicks: null }],
                                     narrativeComment: "Comentario optimista sobre rendimiento macro."
                                 }
                             ]
@@ -186,7 +186,7 @@ test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) =>
             // Import and run the new narrative generation service
             const { generateNarrativeWithOpenAI } = await import('../src/services/reportVisionService.js');
             const metrics = { spend: { value: 1300 } };
-            const sections = [{ sectionId: "sec-1", chartType: "LINE_CHART", title: "Rendimiento y Tendencia", dataset: [{ label: "Día 1", value: 100 }] }];
+            const sections = [{ sectionId: "sec-1", chartType: "LINE_CHART", title: "Rendimiento y Tendencia", dataset: [{ label: "Día 1", value: 100, percentage: null, views: null, interactions: null, clicks: null }] }];
             const result = await generateNarrativeWithOpenAI(metrics, sections);
 
 

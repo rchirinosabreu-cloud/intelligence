@@ -107,7 +107,7 @@ const schema = {
           interactions: { anyOf: [{ type: "number" }, { type: "null" }] },
           clicks: { anyOf: [{ type: "number" }, { type: "null" }] }
         },
-        required: ["label"],
+        required: ["label", "value", "percentage", "views", "interactions", "clicks"],
         additionalProperties: false
       }
     }
