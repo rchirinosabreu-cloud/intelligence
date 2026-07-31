@@ -35,6 +35,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import ClientAvatar from '@/components/ui/ClientAvatar';
+import { Card } from '@/components/ui/Card';
 
 const ReportCover = ({ report }) => {
   const formattedStart = report.startDate ? new Date(report.startDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
@@ -665,12 +666,6 @@ const Reports = () => {
       toast.error('Error al exportar PDF', { id: toastId });
     }
   };
-
-  const Card = ({ children, className = "" }) => (
-    <div className={cn("bg-white border border-[#e2e8f0] rounded-2xl shadow-sm p-6", className)}>
-      {children}
-    </div>
-  );
 
   const getImageUrl = (url) => {
     if (!url) return '';
