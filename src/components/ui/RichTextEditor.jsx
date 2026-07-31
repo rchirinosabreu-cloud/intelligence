@@ -1,6 +1,7 @@
 import React from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { useEditor, EditorContent, useEditorState } from '@tiptap/react';
+import { runEditorFormat } from './editorFormatting';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Mention from '@tiptap/extension-mention';
