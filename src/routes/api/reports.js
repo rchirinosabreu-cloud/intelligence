@@ -388,29 +388,39 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
         const parsedStartDate = startDate ? new Date(startDate) : new Date(new Date().setDate(1));
         const parsedEndDate = endDate ? new Date(endDate) : new Date();
 
-        // Save DRAFT report in database
-        const report = await prisma.metricReport.create({
-            data: {
-                clientId,
-                periodKind: periodKind === 'QUARTERLY' ? 'QUARTERLY' : 'MONTHLY',
-                startDate: parsedStartDate,
-                endDate: parsedEndDate,
-                status: 'DRAFT',
-                normalizedMetrics,
-                narrative: {
-                    draft: combinedNarrative,
-                    final: combinedNarrative
+        // Save DRAFT report in database with defensive try-catch
+        let report;
+        try {
+            report = await prisma.metricReport.create({
+                data: {
+                    clientId,
+                    periodKind: periodKind === 'QUARTERLY' ? 'QUARTERLY' : 'MONTHLY',
+                    startDate: parsedStartDate,
+                    endDate: parsedEndDate,
+                    status: 'DRAFT',
+                    normalizedMetrics,
+                    narrative: {
+                        draft: combinedNarrative,
+                        final: combinedNarrative
+                    },
+                    sections: extractedSections,
+                    sources: {
+                        create: processedSources
+                    }
                 },
-                sections: extractedSections,
-                sources: {
-                    create: processedSources
+                include: {
+                    sources: true,
+                    client: true
                 }
-            },
-            include: {
-                sources: true,
-                client: true
-            }
-        });
+            });
+            console.log(`[Reports API] MetricReport created successfully with ID ${report.id} and ${extractedSections.length} sections.`);
+        } catch (dbError) {
+            console.error('[Reports API] Prisma insertion failed:', dbError.message || dbError);
+            return res.status(400).json({
+                error: 'Database validation or insertion error',
+                details: dbError.message || dbError
+            });
+        }
 
         res.status(201).json({
             success: true,
