@@ -56,4 +56,6 @@ jobs:
           DATABASE_URL: postgresql://user:password@localhost:5432/brainstudio
           JWT_SECRET: test-secret
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: node --test tests/moodboardCompile.test.js tests/activityComponentsCompile.test.js
+        run: |
+          npm test
+          node --test tests/moodboardCompile.test.js tests/activityComponentsCompile.test.js
