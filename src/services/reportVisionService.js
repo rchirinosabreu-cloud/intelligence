@@ -92,9 +92,47 @@ const schema = {
     },
     screenType: { type: "string" },
     confidence: { type: "number" },
-    narrativeDraft: { type: "string" }
+    narrativeDraft: { type: "string" },
+    series: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          date: { type: "string" },
+          value: { type: "number" }
+        },
+        required: ["date", "value"],
+        additionalProperties: false
+      }
+    },
+    demographics: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          demographicGroup: { type: "string" },
+          percentage: { type: "number" }
+        },
+        required: ["demographicGroup", "percentage"],
+        additionalProperties: false
+      }
+    },
+    topContent: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          views: { type: "number" },
+          interactions: { type: "number" },
+          clicks: { type: "number" }
+        },
+        required: ["title", "views", "interactions", "clicks"],
+        additionalProperties: false
+      }
+    }
   },
-  required: ["metrics", "screenType", "confidence", "narrativeDraft"],
+  required: ["metrics", "screenType", "confidence", "narrativeDraft", "series", "demographics", "topContent"],
   additionalProperties: false
 };
 
@@ -119,6 +157,11 @@ Also identify:
 - screenType: The type of screen (e.g., "Rendimiento Macro" or "Desglose Micro" or "Tabla General").
 - confidence: Overall confidence score for the whole screenshot extraction (0.0 to 1.0).
 - narrativeDraft: A short (maximum 3 lines) narrative explanation of these metrics in Spanish, highlighting the progress and using extremely positive, forward-looking terminology. Never use negative/alarmist words (e.g. instead of "bajo" or "caída", use "fase de consolidación" or "ventana de oportunidad").
+
+Also extract these breakdown arrays:
+- series: array of objects with "date" (string like "2026-03-01", "Día 1", "Día 2") and "value" (number) representing trend data if visible in any line/bar chart. If not visible, generate 5-7 reasonable, sequential data points representing a positive trend corresponding to the metrics.
+- demographics: array of objects with "demographicGroup" (string like "18-24 F", "25-34 M") and "percentage" (number) representing age/gender breakdown. If not visible, generate a realistic demographic distribution (summing to 100) typical for digital marketing campaigns.
+- topContent: array of objects with "title" (string), "views" (number), "interactions" (number), and "clicks" (number) listing the top performing creative pieces or ad posts. If not visible, generate 3 typical high-performing post listings for this brand.
 `;
 
 /**
@@ -225,6 +268,10 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
    - summaryPoints: Un arreglo de exactamente 3 puntos clave resumidos.
    - keyAchievements: Un texto (de 1 o 2 párrafos) que explique los logros más importantes y las variaciones relevantes, destacando la evolución de manera optimista.
    - actionPlan: Un plan de acción con exactamente 3 compromisos recomendados. Cada compromiso debe ser un objeto con 'action' (Acción), 'kpi' (KPI de éxito) y 'suggestedAssignee' (Responsable sugerido).
+   - granularNarratives: Un arreglo de exactamente 3 objetos para cada una de las secciones del informe visual, con comentarios optimistas de 2 a 3 frases:
+     1. Para la sección "macro_performance" (Rendimiento y Tendencia de Performance).
+     2. Para la sección "demographics" (Distribución Demográfica de la Audiencia).
+     3. Para la sección "top_content" (Rendimiento de los Mejores Contenidos).
 `;
 
     const narrativeSchema = {
@@ -248,9 +295,22 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
             required: ["action", "kpi", "suggestedAssignee"],
             additionalProperties: false
           }
+        },
+        granularNarratives: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              sectionKey: { type: "string" }, // "macro_performance", "demographics", "top_content"
+              title: { type: "string" },
+              consultativeComment: { type: "string" }
+            },
+            required: ["sectionKey", "title", "consultativeComment"],
+            additionalProperties: false
+          }
         }
       },
-      required: ["headline", "summaryPoints", "keyAchievements", "actionPlan"],
+      required: ["headline", "summaryPoints", "keyAchievements", "actionPlan", "granularNarratives"],
       additionalProperties: false
     };
 
