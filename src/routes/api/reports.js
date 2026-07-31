@@ -320,17 +320,15 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 reachVal,
                 clicksVal,
                 resultsVal,
-                series: extracted.series || [],
-                demographics: extracted.demographics || [],
-                topContent: extracted.topContent || []
+                chartType: extracted.chartType || 'LINE_CHART',
+                title: extracted.title || 'Sección',
+                dataset: extracted.dataset || []
             };
         });
 
         const results = await Promise.all(filePromises);
 
-        let aggregatedSeries = [];
-        let aggregatedDemographics = [];
-        let aggregatedTopContent = [];
+        const extractedSections = [];
 
         // Aggregate across sources
         results.forEach((res, index) => {
@@ -343,15 +341,13 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             if (typeof res.clicksVal === 'number') totalClicks += res.clicksVal;
             if (typeof res.resultsVal === 'number') totalResults += res.resultsVal;
 
-            if (res.series && res.series.length > 0) {
-                aggregatedSeries = res.series;
-            }
-            if (res.demographics && res.demographics.length > 0) {
-                aggregatedDemographics = res.demographics;
-            }
-            if (res.topContent && res.topContent.length > 0) {
-                aggregatedTopContent = res.topContent;
-            }
+            extractedSections.push({
+                sectionId: uuidv4(),
+                chartType: res.chartType,
+                title: res.title,
+                dataset: res.dataset,
+                narrativeComment: ""
+            });
 
             if (res.narrativeDraft) {
                 narrativeDrafts.push(`Captura ${index + 1}: ${res.narrativeDraft}`);
@@ -380,10 +376,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             reach: { key: 'reach', label: 'Alcance Total', value: totalReach, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
             clicks: { key: 'clicks', label: 'Clics Totales', value: totalClicks, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
             ctr: { key: 'ctr', label: 'CTR Promedio', value: parseFloat(overallCtr.toFixed(4)), unit: '%', confidence: 1.0, evidence: 'Cálculo agregado' },
-            results: { key: 'results', label: 'Resultados Totales', value: totalResults, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
-            series: aggregatedSeries,
-            demographics: aggregatedDemographics,
-            topContent: aggregatedTopContent
+            results: { key: 'results', label: 'Resultados Totales', value: totalResults, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' }
         };
 
         const combinedNarrative = narrativeDrafts.join('\n\n');
@@ -404,6 +397,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                     draft: combinedNarrative,
                     final: combinedNarrative
                 },
+                sections: extractedSections,
                 sources: {
                     create: processedSources
                 }
@@ -498,14 +492,21 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
         }
 
         const metrics = report.normalizedMetrics || {};
+        const sections = report.sections || [];
 
         console.log(`[Reports API] Generating narrative for report ${reportId}...`);
-        const narrativeResult = await generateNarrativeWithOpenAI(metrics);
+        const narrativeResult = await generateNarrativeWithOpenAI(metrics, sections);
 
         const updatedReport = await prisma.metricReport.update({
             where: { id: reportId },
             data: {
-                narrative: narrativeResult,
+                narrative: {
+                    headline: narrativeResult.headline,
+                    summaryPoints: narrativeResult.summaryPoints,
+                    keyAchievements: narrativeResult.keyAchievements,
+                    actionPlan: narrativeResult.actionPlan
+                },
+                sections: narrativeResult.sections,
                 status: 'PUBLISHED'
             },
             include: {

@@ -61,6 +61,116 @@ const PerformanceTrendChart = ({ data }) => {
   );
 };
 
+const DynamicChartRenderer = ({ chartType, dataset }) => {
+  if (!dataset || dataset.length === 0) return null;
+
+  if (chartType === 'LINE_CHART') {
+    return (
+      <div className="h-[280px] w-full mt-4">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={dataset} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <defs>
+              <linearGradient id="colorValueWeb" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
+                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
+            <YAxis tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
+            <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
+            <Area type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorValueWeb)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
+  if (chartType === 'BAR_CHART') {
+    return (
+      <div className="h-[280px] w-full mt-4">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={dataset} layout="vertical" margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+            <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
+            <YAxis dataKey="label" type="category" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
+            <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
+            <Bar dataKey="percentage" fill="#6366f1" radius={[0, 8, 8, 0]} barSize={16} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
+  if (chartType === 'DONUT_CHART') {
+    return (
+      <div className="mt-4 p-6 bg-slate-50 border border-slate-100 rounded-2xl space-y-4">
+        {dataset.map((item, idx) => (
+          <div key={idx} className="space-y-1">
+            <div className="flex justify-between text-xs font-bold text-slate-600">
+              <span>{item.label}</span>
+              <span>{item.percentage ? `${item.percentage}%` : `${item.value}%`}</span>
+            </div>
+            <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+              <div
+                className="bg-primary h-full rounded-full transition-all duration-500"
+                style={{ width: `${item.percentage || item.value || 0}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (chartType === 'RANKING_TABLE') {
+    return (
+      <div className="overflow-x-auto border border-slate-100 rounded-2xl bg-white mt-4">
+        <table className="w-full border-collapse text-left text-xs text-slate-500">
+          <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+            <tr>
+              <th className="px-6 py-4 font-bold">Publicación destacada / Ad Creative</th>
+              <th className="px-6 py-4 font-bold text-right">Visualizaciones</th>
+              <th className="px-6 py-4 font-bold text-right">Interacciones</th>
+              <th className="px-6 py-4 font-bold text-right">Clics</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50 font-medium">
+            {dataset.map((item, idx) => (
+              <tr key={idx} className="hover:bg-slate-50/50 break-inside-avoid">
+                <td className="px-6 py-4 font-bold text-slate-700">{item.label}</td>
+                <td className="px-6 py-4 text-right text-slate-600 font-semibold">{(item.views || item.value || 0).toLocaleString('es-ES')}</td>
+                <td className="px-6 py-4 text-right text-slate-600 font-semibold">{(item.interactions || item.value || 0).toLocaleString('es-ES')}</td>
+                <td className="px-6 py-4 text-right text-primary font-bold">{(item.clicks || item.value || 0).toLocaleString('es-ES')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return null;
+};
+
+const SectionInsight = ({ sectionId, title, comment, onChange }) => {
+  return (
+    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 mt-4 space-y-2 break-inside-avoid shadow-sm">
+      <div className="flex items-center gap-2">
+        <Sparkles className="w-4 h-4 text-primary" />
+        <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">{title}</h5>
+      </div>
+      <textarea
+        rows={3}
+        className="w-full bg-transparent border-none text-xs text-slate-600 leading-relaxed font-semibold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none"
+        value={comment || ''}
+        onChange={(e) => onChange(sectionId, e.target.value)}
+        placeholder="Escribe un comentario consultivo para esta sección..."
+      />
+    </div>
+  );
+};
+
 const DemographicsBarChart = ({ data }) => {
   if (!data || data.length === 0) return null;
   return (
@@ -507,6 +617,7 @@ const Reports = () => {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [isGeneratingNarrative, setIsGeneratingNarrative] = useState(false);
   const [report, setReport] = useState(null);
+  const [viewMode, setViewMode] = useState('web'); // 'web' (Ver Reporte Web) | 'deck' (PDF Deck)
   const [editedTexts, setEditedTexts] = useState({
     title: '',
     organic_analysis: [],
@@ -556,6 +667,17 @@ const Reports = () => {
       list.push({ sectionKey, title: defaultTitles[sectionKey] || 'Sección', consultativeComment: value });
     }
     setNarrativeState({ ...narrativeState, granularNarratives: list });
+  };
+
+  const handleSectionCommentChange = (sectionId, value) => {
+    if (!report?.sections) return;
+    const updatedSections = (report.sections || []).map(s => {
+      if (s.sectionId === sectionId) {
+        return { ...s, narrativeComment: value };
+      }
+      return s;
+    });
+    setReport({ ...report, sections: updatedSections });
   };
 
   useEffect(() => {
@@ -955,122 +1077,209 @@ const Reports = () => {
               isSubmitting={isSubmittingReview}
             />
           ) : (
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="bg-white border border-[#e2e8f0] shadow-2xl rounded-[2.5rem] overflow-hidden print:border-none print:shadow-none"
-            >
-              <div id="report-canvas" ref={reportRef} className="bg-white flex flex-col w-full">
+            <div className="space-y-6 flex flex-col w-full">
+              {/* Tab Selector Mode (No-print) */}
+              <div className="flex gap-2 no-print bg-slate-100 p-1.5 rounded-xl self-start">
+                <button
+                  onClick={() => setViewMode('web')}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-xs font-bold transition-all",
+                    viewMode === 'web' ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-800"
+                  )}
+                >
+                  Ver Reporte Web
+                </button>
+                <button
+                  onClick={() => setViewMode('deck')}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-xs font-bold transition-all",
+                    viewMode === 'deck' ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-800"
+                  )}
+                >
+                  Vista PDF Deck (A4)
+                </button>
+              </div>
 
-                 {/* Slide 1: Portada, Resumen Ejecutivo, Análisis Interpretativo */}
-                 <div className="w-full min-h-[90vh] print:min-h-screen p-12 md:p-16 flex flex-col justify-between border-b border-slate-100 print:border-none page-break-after" style={{ pageBreakAfter: 'always', breakAfter: 'page' }}>
-                    <ReportCover report={report} />
-                    <div className="space-y-6 mt-6">
-                      <ExecutiveSummary narrative={narrativeState} onUpdate={setNarrativeState} />
-                      <div className="space-y-2 pt-4 border-t border-slate-100/60">
-                         <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Análisis Interpretativo de Logros</h4>
-                         <Card className="bg-[#fcfcfd] border-slate-100 p-6">
-                            <textarea
-                               rows={3}
-                               className="w-full bg-transparent border-none text-slate-600 leading-relaxed font-normal text-base outline-none resize-none focus:ring-1 focus:ring-primary/10 rounded-xl"
-                               value={narrativeState?.keyAchievements || ''}
-                               onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
-                            />
-                         </Card>
-                      </div>
-                    </div>
-                    <div className="pt-4 flex items-center justify-between text-slate-300 text-[9px] font-bold tracking-widest uppercase">
-                      <span>Brainstudio Agencia</span>
-                      <span>Página 1 de 3 (Deck Executive Summary)</span>
-                    </div>
-                 </div>
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                className="bg-white border border-[#e2e8f0] shadow-2xl rounded-[2.5rem] overflow-hidden print:border-none print:shadow-none"
+              >
+                <div id="report-canvas" ref={reportRef} className="bg-white flex flex-col w-full">
 
-                 {/* Slide 2: 6 Métricas Clave, Gráfico de Tendencia Temporal, Análisis de Tendencia */}
-                 <div className="w-full min-h-[90vh] print:min-h-screen p-12 md:p-16 flex flex-col justify-between border-b border-slate-100 print:border-none page-break-after" style={{ pageBreakAfter: 'always', breakAfter: 'page' }}>
-                   {report.normalizedMetrics && (
-                     <div className="space-y-6 flex-1 flex flex-col justify-between">
-                       <div className="space-y-1">
-                         <h3 className="text-xl font-black tracking-tight text-slate-800">Desempeño Cuantitativo y Tendencia</h3>
-                         <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Métricas Clave de Performance Meta Ads</p>
+                   {viewMode === 'deck' ? (
+                     <>
+                       {/* Slide 1: Portada, Resumen Ejecutivo, Análisis Interpretativo */}
+                       <div className="w-full min-h-[90vh] print:min-h-screen p-12 md:p-16 flex flex-col justify-between border-b border-slate-100 print:border-none page-break-after" style={{ pageBreakAfter: 'always', breakAfter: 'page' }}>
+                          <ReportCover report={report} />
+                          <div className="space-y-6 mt-6">
+                            <ExecutiveSummary narrative={narrativeState} onUpdate={setNarrativeState} />
+                            <div className="space-y-2 pt-4 border-t border-slate-100/60">
+                               <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Análisis Interpretativo de Logros</h4>
+                               <Card className="bg-[#fcfcfd] border-slate-100 p-6">
+                                  <textarea
+                                     rows={3}
+                                     className="w-full bg-transparent border-none text-slate-600 leading-relaxed font-normal text-base outline-none resize-none focus:ring-1 focus:ring-primary/10 rounded-xl"
+                                     value={narrativeState?.keyAchievements || ''}
+                                     onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
+                                  />
+                               </Card>
+                            </div>
+                          </div>
+                          <div className="pt-4 flex items-center justify-between text-slate-300 text-[9px] font-bold tracking-widest uppercase">
+                            <span>Brainstudio Agencia</span>
+                            <span>Página 1 de 3 (Deck Executive Summary)</span>
+                          </div>
                        </div>
-                       <MetricGrid metrics={report.normalizedMetrics} />
 
-                       {report.normalizedMetrics.series && report.normalizedMetrics.series.length > 0 && (
-                         <div className="space-y-2 pt-4 border-t border-slate-100/60 flex-1">
-                           <div className="space-y-1">
-                             <h4 className="text-sm font-black text-slate-800">Tendencia de Desempeño</h4>
-                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Evolución de Rendimiento en el Periodo</p>
+                       {/* Slide 2: 6 Métricas Clave, Gráfico de Tendencia Temporal, Análisis de Tendencia */}
+                       <div className="w-full min-h-[90vh] print:min-h-screen p-12 md:p-16 flex flex-col justify-between border-b border-slate-100 print:border-none page-break-after" style={{ pageBreakAfter: 'always', breakAfter: 'page' }}>
+                         {report.normalizedMetrics && (
+                           <div className="space-y-6 flex-1 flex flex-col justify-between">
+                             <div className="space-y-1">
+                               <h3 className="text-xl font-black tracking-tight text-slate-800">Desempeño Cuantitativo y Tendencia</h3>
+                               <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Métricas Clave de Performance Meta Ads</p>
+                             </div>
+                             <MetricGrid metrics={report.normalizedMetrics} />
+
+                             {report.normalizedMetrics.series && report.normalizedMetrics.series.length > 0 && (
+                               <div className="space-y-2 pt-4 border-t border-slate-100/60 flex-1">
+                                 <div className="space-y-1">
+                                   <h4 className="text-sm font-black text-slate-800">Tendencia de Desempeño</h4>
+                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Evolución de Rendimiento en el Periodo</p>
+                                 </div>
+                                 <PerformanceTrendChart data={report.normalizedMetrics.series} />
+                                 <GranularNarrativeBlock
+                                   sectionKey="macro_performance"
+                                   title="Análisis de Rendimiento y Tendencia"
+                                   comment={getGranularComment("macro_performance")}
+                                   onChange={handleGranularCommentChange}
+                                 />
+                               </div>
+                             )}
                            </div>
-                           <PerformanceTrendChart data={report.normalizedMetrics.series} />
-                           <GranularNarrativeBlock
-                             sectionKey="macro_performance"
-                             title="Análisis de Rendimiento y Tendencia"
-                             comment={getGranularComment("macro_performance")}
-                             onChange={handleGranularCommentChange}
-                           />
+                         )}
+                         <div className="pt-4 flex items-center justify-between text-slate-300 text-[9px] font-bold tracking-widest uppercase">
+                           <span>Brainstudio Agencia</span>
+                           <span>Página 2 de 3 (Performance & Trend Analytics)</span>
+                         </div>
+                       </div>
+
+                       {/* Slide 3: Gráfico Demográfico, Tabla de Plan de Acción Sugerido, Mejores Contenidos */}
+                       <div className="w-full min-h-[90vh] print:min-h-screen p-12 md:p-16 flex flex-col justify-between">
+                         <div className="space-y-6 flex-1 flex flex-col justify-between">
+                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1">
+
+                             {/* Left Column: Demographics */}
+                             {report.normalizedMetrics?.demographics && report.normalizedMetrics.demographics.length > 0 && (
+                               <div className="space-y-2 flex flex-col justify-between">
+                                 <div className="space-y-1">
+                                   <h4 className="text-sm font-black text-slate-800">Distribución de Audiencia</h4>
+                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Segmentación por Edad y Género</p>
+                                 </div>
+                                 <DemographicsBarChart data={report.normalizedMetrics.demographics} />
+                                 <GranularNarrativeBlock
+                                   sectionKey="demographics"
+                                   title="Análisis de Distribución Demográfica"
+                                   comment={getGranularComment("demographics")}
+                                   onChange={handleGranularCommentChange}
+                                 />
+                               </div>
+                             )}
+
+                             {/* Right Column: Top performing content and block narrative */}
+                             {report.normalizedMetrics?.topContent && report.normalizedMetrics.topContent.length > 0 && (
+                               <div className="space-y-2 flex flex-col justify-between">
+                                 <div className="space-y-1">
+                                   <h4 className="text-sm font-black text-slate-800">Rendimiento de Contenidos</h4>
+                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Ranking de Mejores Creativos</p>
+                                 </div>
+                                 <TopContentTable data={report.normalizedMetrics.topContent} />
+                                 <GranularNarrativeBlock
+                                   sectionKey="top_content"
+                                   title="Análisis de Contenidos Estrella"
+                                   comment={getGranularComment("top_content")}
+                                   onChange={handleGranularCommentChange}
+                                 />
+                               </div>
+                             )}
+
+                           </div>
+
+                           <div className="pt-4 border-t border-slate-100">
+                             <ActionPlan narrative={narrativeState} onUpdate={setNarrativeState} />
+                           </div>
+
+                           <div className="pt-4 flex items-center justify-between text-slate-350 text-[9px] font-bold tracking-widest uppercase">
+                              <span>Brainstudio Agencia</span>
+                              <span>Página 3 de 3 (Audience Focus & Strategic Action Plan)</span>
+                           </div>
+                         </div>
+                       </div>
+                     </>
+                   ) : (
+                     /* INTERACTIVE WEB VISOR DE REPORTE WEB (Dynamic sections) */
+                     <div className="p-8 md:p-12 space-y-12">
+                       <ReportCover report={report} />
+
+                       <div className="border-t border-slate-100 pt-8 space-y-6">
+                         <ExecutiveSummary narrative={narrativeState} onUpdate={setNarrativeState} />
+
+                         <div className="space-y-2 pt-4 border-t border-slate-100/60">
+                           <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Análisis Interpretativo de Logros</h4>
+                           <Card className="bg-[#fcfcfd] border-slate-100 p-6">
+                              <textarea
+                                 rows={3}
+                                 className="w-full bg-transparent border-none text-slate-600 leading-relaxed font-normal text-base outline-none resize-none focus:ring-1 focus:ring-primary/10 rounded-xl"
+                                 value={narrativeState?.keyAchievements || ''}
+                                 onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
+                              />
+                           </Card>
+                         </div>
+                       </div>
+
+                       {report.normalizedMetrics && (
+                         <div className="border-t border-slate-100 pt-8 space-y-4">
+                           <h3 className="text-xl font-black tracking-tight text-slate-800">Resultados Generales</h3>
+                           <MetricGrid metrics={report.normalizedMetrics} />
                          </div>
                        )}
+
+                       {/* N DYNAMIC SECTIONS */}
+                       {report.sections && report.sections.length > 0 && (
+                         <div className="space-y-12 border-t border-slate-100 pt-8">
+                           {report.sections.map((sect, idx) => (
+                             <div key={sect.sectionId || idx} className="space-y-4 p-6 bg-slate-50/30 border border-slate-100/80 rounded-[1.5rem] break-inside-avoid">
+                               <div className="space-y-1">
+                                 <h4 className="text-base font-black text-slate-800">{sect.title || 'Sección'}</h4>
+                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-2.5 py-0.5 rounded-full">{sect.chartType}</span>
+                               </div>
+
+                               <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} />
+
+                               <SectionInsight
+                                 sectionId={sect.sectionId}
+                                 title="Comentario Interpretativo Editorial"
+                                 comment={sect.narrativeComment}
+                                 onChange={handleSectionCommentChange}
+                               />
+                             </div>
+                           ))}
+                         </div>
+                       )}
+
+                       <div className="border-t border-slate-100 pt-8">
+                         <ActionPlan narrative={narrativeState} onUpdate={setNarrativeState} />
+                       </div>
+
+                       <div className="pt-8 flex items-center justify-center text-slate-350 text-[10px] font-bold tracking-widest uppercase">
+                          <span>Brainstudio Agencia • Visor de Reporte Web Interactivo</span>
+                       </div>
                      </div>
                    )}
-                   <div className="pt-4 flex items-center justify-between text-slate-300 text-[9px] font-bold tracking-widest uppercase">
-                     <span>Brainstudio Agencia</span>
-                     <span>Página 2 de 3 (Performance & Trend Analytics)</span>
-                   </div>
-                 </div>
 
-                 {/* Slide 3: Gráfico Demográfico, Tabla de Plan de Acción Sugerido, Mejores Contenidos */}
-                 <div className="w-full min-h-[90vh] print:min-h-screen p-12 md:p-16 flex flex-col justify-between">
-                   <div className="space-y-6 flex-1 flex flex-col justify-between">
-                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1">
-
-                       {/* Left Column: Demographics */}
-                       {report.normalizedMetrics?.demographics && report.normalizedMetrics.demographics.length > 0 && (
-                         <div className="space-y-2 flex flex-col justify-between">
-                           <div className="space-y-1">
-                             <h4 className="text-sm font-black text-slate-800">Distribución de Audiencia</h4>
-                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Segmentación por Edad y Género</p>
-                           </div>
-                           <DemographicsBarChart data={report.normalizedMetrics.demographics} />
-                           <GranularNarrativeBlock
-                             sectionKey="demographics"
-                             title="Análisis de Distribución Demográfica"
-                             comment={getGranularComment("demographics")}
-                             onChange={handleGranularCommentChange}
-                           />
-                         </div>
-                       )}
-
-                       {/* Right Column: Top performing content and block narrative */}
-                       {report.normalizedMetrics?.topContent && report.normalizedMetrics.topContent.length > 0 && (
-                         <div className="space-y-2 flex flex-col justify-between">
-                           <div className="space-y-1">
-                             <h4 className="text-sm font-black text-slate-800">Rendimiento de Contenidos</h4>
-                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Ranking de Mejores Creativos</p>
-                           </div>
-                           <TopContentTable data={report.normalizedMetrics.topContent} />
-                           <GranularNarrativeBlock
-                             sectionKey="top_content"
-                             title="Análisis de Contenidos Estrella"
-                             comment={getGranularComment("top_content")}
-                             onChange={handleGranularCommentChange}
-                           />
-                         </div>
-                       )}
-
-                     </div>
-
-                     <div className="pt-4 border-t border-slate-100">
-                       <ActionPlan narrative={narrativeState} onUpdate={setNarrativeState} />
-                     </div>
-
-                     <div className="pt-4 flex items-center justify-between text-slate-350 text-[9px] font-bold tracking-widest uppercase">
-                        <span>Brainstudio Agencia</span>
-                        <span>Página 3 de 3 (Audience Focus & Strategic Action Plan)</span>
-                     </div>
-                   </div>
-                 </div>
-
-              </div>
-            </motion.div>
+                </div>
+              </motion.div>
+            </div>
           )
         ) : (
           <div className="h-[500px] flex flex-col items-center justify-center space-y-8 bg-white border border-slate-200 border-dashed rounded-[3rem]">
