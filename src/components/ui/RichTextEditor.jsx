@@ -1,4 +1,5 @@
 import React from 'react';
+import * as Popover from '@radix-ui/react-popover';
 import { useEditor, EditorContent, useEditorState } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
