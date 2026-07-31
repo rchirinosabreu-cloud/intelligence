@@ -250,10 +250,10 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
 
 const SectionInsight = ({ sectionId, comment, onChange }) => {
   return (
-    <div className="mt-4 break-inside-avoid no-print !h-auto !overflow-visible">
+    <div className="mt-4 break-inside-avoid !h-auto !overflow-visible bg-[#f9fafb] border border-slate-200 rounded-xl p-4">
       <textarea
         rows={4}
-        className="w-full bg-slate-50 border border-slate-100 hover:border-slate-200 text-sm text-slate-600 leading-relaxed font-semibold focus:ring-1 focus:ring-primary/10 rounded-xl p-4 resize-none outline-none !h-auto !overflow-visible"
+        className="w-full bg-transparent border-none text-sm text-[#0f172a] leading-relaxed font-bold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
         style={{ height: 'auto', overflow: 'visible' }}
         value={comment || ''}
         onChange={(e) => onChange(sectionId, e.target.value)}
@@ -323,14 +323,14 @@ const TopContentTable = ({ data }) => {
 
 const GranularNarrativeBlock = ({ sectionKey, title, comment, onChange }) => {
   return (
-    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 mt-4 space-y-2 break-inside-avoid shadow-sm no-print !h-auto !overflow-visible">
+    <div className="bg-[#f9fafb] border border-slate-200 rounded-2xl p-6 mt-4 space-y-2 break-inside-avoid shadow-sm !h-auto !overflow-visible">
       <div className="flex items-center gap-2">
         <Sparkles className="w-4 h-4 text-primary" />
         <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">{title}</h5>
       </div>
       <textarea
         rows={4}
-        className="w-full bg-transparent border-none text-sm text-slate-600 leading-relaxed font-semibold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
+        className="w-full bg-transparent border-none text-sm text-[#0f172a] leading-relaxed font-bold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
         style={{ height: 'auto', overflow: 'visible' }}
         value={comment || ''}
         onChange={(e) => onChange(sectionKey, e.target.value)}
