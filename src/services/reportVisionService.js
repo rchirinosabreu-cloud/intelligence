@@ -285,7 +285,22 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
               sectionId: { type: "string" },
               chartType: { type: "string" },
               title: { type: "string" },
-              dataset: { type: "array", items: { type: "object" } },
+              dataset: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    label: { type: "string" },
+                    value: { anyOf: [{ type: "number" }, { type: "null" }] },
+                    percentage: { anyOf: [{ type: "number" }, { type: "null" }] },
+                    views: { anyOf: [{ type: "number" }, { type: "null" }] },
+                    interactions: { anyOf: [{ type: "number" }, { type: "null" }] },
+                    clicks: { anyOf: [{ type: "number" }, { type: "null" }] }
+                  },
+                  required: ["label", "value", "percentage", "views", "interactions", "clicks"],
+                  additionalProperties: false
+                }
+              },
               narrativeComment: { type: "string" }
             },
             required: ["sectionId", "chartType", "title", "dataset", "narrativeComment"],
