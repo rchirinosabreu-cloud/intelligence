@@ -145,7 +145,8 @@ Also extract graphic points and visual data as a structured section:
 - title: A descriptive and clear Spanish title for this chart/visualization block.
 - sectionCategory: Categorize this screenshot section strictly as "ORGANIC" (for organic reels, posts, feed reach, likes, story views, organic Facebook/Instagram profile stats) or "ADS" (for campaigns, ad manager charts, spend/inversión, campaign results, paid conversions).
 - platform: Identify the specific platform: "FACEBOOK" (for Facebook specific stats), "INSTAGRAM" (for Instagram specific business profile/feed stats), or "META_ADS" (for paid ads/manager).
-- dataset: An array of data points with at least "label" (string representing day, date, demographic group, platform, or post title) and dynamic numeric fields: "value" for baseline, "percentage" for percentages, and for ads tables (RANKING_TABLE), extract "results" (for results/conversiones/mensajes), "impressions" (for impressions), and "reach" (for alcance), substituting secondary low-volume columns like views or isolated clicks. If not visible in the image, generate 4-6 realistic, high-quality simulated data points for this brand containing "results", "impressions", and "reach" keys to always ensure beautiful, native and informative charts.
+- dataset: An array of data points with at least "label" (string representing day, date, demographic group, platform, or post title) and dynamic numeric fields: "value" for baseline, "percentage" for percentages, and for ads tables (RANKING_TABLE), extract "results" (for results/conversiones/mensajes), "impressions" (for impressions), and "reach" (for alcance), substituting secondary low-volume columns like views or isolated clicks. If not visible in the image, return an empty array []. Do NOT generate simulated, fake, placeholder, or mock data (such as "Simulado 1").
+- title: A descriptive and clear Spanish title for this chart/visualization block, following strictly the Spanish Sentence Case rule (only capitalize the first letter of the first word, all other words in lowercase, except proper names).
 `;
 
 /**
@@ -253,11 +254,11 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
 2. REGLA ESTRICTA DE INTEGRIDAD DE DATOS (PROHIBIDO HALLUCINAR): Queda terminantemente prohibido que menciones o inventes valores numéricos, métricas, cantidades o porcentajes que no existan de forma explícita en el objeto de métricas o secciones provisto arriba. No asumas divisas ni cifras que no estén allí.
 3. PROFUNDIDAD NARRATIVA EDITORIAL: Cada comentario explicativo o interpretativo debe constar de explicaciones consultivas profundas de exactamente 3 a 4 oraciones completas y bien estructuradas. Asegura que el string comience desde el inicio de la oración y no sufra ningún recorte, truncamiento o abreviación.
 4. ESTRUCTURA REQUERIDA (JSON):
-   - headline: Un titular de impacto, corto y motivador.
-   - summaryPoints: Un arreglo de exactamente 3 puntos clave resumidos.
-   - keyAchievements: Un texto profundo de exactamente 3 a 4 oraciones completas que explique los logros más importantes y las variaciones relevantes, destacando la evolución de manera optimista.
-   - actionPlan: Un plan de acción con exactamente 3 compromisos recomendados. Cada compromiso debe ser un objeto con 'action' (Acción), 'kpi' (KPI de éxito) y 'suggestedAssignee' (Responsable sugerido).
-   - sections: Un arreglo que contenga exactamente los mismos objetos que se te pasaron en SECCIONES VISUALES REGISTRADAS, pero agregando en cada uno un campo 'narrativeComment' con una explicación consultiva profunda, positiva y de exactamente 3 a 4 oraciones completas explicando dicho gráfico o tabla.
+   - headline: Un titular de impacto, corto y motivador, capitalizado strictly en Sentence Case (solo la primera letra en mayúscula).
+   - summaryPoints: Un arreglo de exactamente 3 puntos clave resumidos, cada uno capitalizado strictly en Sentence Case.
+   - keyAchievements: Un texto profundo de exactamente 3 a 4 oraciones completas que explique los logros más importantes y las variaciones relevantes, destacando la evolución de manera optimista, capitalizado strictly en Sentence Case.
+   - actionPlan: Un plan de acción con exactamente 3 compromisos recomendados. Cada compromiso debe ser un objeto con 'action' (Acción, capitalizado strictly en Sentence Case), 'kpi' (KPI de éxito, capitalizado strictly en Sentence Case) y 'suggestedAssignee' (Responsable sugerido).
+   - sections: Un arreglo que contenga exactamente los mismos objetos que se te pasaron en SECCIONES VISUALES REGISTRADAS, pero agregando en cada uno un campo 'narrativeComment' con una explicación consultiva profunda, positiva y de exactamente 3 a 4 oraciones completas explicando dicho gráfico o tabla, capitalizado strictly en Sentence Case.
 `;
 
     const narrativeSchema = {
