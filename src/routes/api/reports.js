@@ -250,7 +250,46 @@ router.post('/generate', upload.any(), async (req, res) => {
     }
 });
 
+function validateAndCleanNormalizedMetrics(metrics) {
+    if (!metrics || typeof metrics !== 'object') {
+        throw new Error("normalizedMetrics must be a valid object");
+    }
+    const allowedKeys = ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'];
+    const clean = {};
+    for (const key of allowedKeys) {
+        const item = metrics[key];
+        if (!item || typeof item !== 'object') {
+            throw new Error(`Metric '${key}' is missing or is not an object`);
+        }
+
+        const cleanItem = {
+            key: key,
+            label: typeof item.label === 'string' ? item.label : String(item.key || key),
+            value: item.value === null || item.value === undefined ? null : parseFloat(item.value),
+            unit: typeof item.unit === 'string' ? item.unit : 'count',
+            confidence: typeof item.confidence === 'number' ? item.confidence : 1.0,
+            evidence: typeof item.evidence === 'string' ? item.evidence : ''
+        };
+
+        if (isNaN(cleanItem.value) && cleanItem.value !== null) {
+            cleanItem.value = null;
+        }
+
+        clean[key] = cleanItem;
+    }
+
+    // Strict validation to avoid key collisions or additional keys
+    for (const key of Object.keys(metrics)) {
+        if (!allowedKeys.includes(key)) {
+            throw new Error(`Unexpected metric key '${key}' in normalizedMetrics`);
+        }
+    }
+
+    return clean;
+}
+
 router.post('/extract-metrics', upload.any(), async (req, res) => {
+    const requestId = uuidv4();
     try {
         const { clientId, periodKind, startDate, endDate } = req.body;
         if (!clientId) {
@@ -284,7 +323,21 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             const uploadResult = await uploadClientFile(file, client.name);
 
             // 2. Vision analysis
-            const extracted = await extractMetricsWithVision(file.buffer, file.mimetype);
+            let extracted;
+            try {
+                extracted = await extractMetricsWithVision(file.buffer, file.mimetype);
+            } catch (aiError) {
+                // If AI service fails or isn't reachable
+                const aiErr = new Error(`AI Service call failed for file ${file.originalname}: ${aiError.message}`);
+                aiErr.isAIUnavailable = true;
+                throw aiErr;
+            }
+
+            if (!extracted || !extracted.metrics) {
+                const schemaErr = new Error(`AI response validation failed for file ${file.originalname}: Invalid schema or missing metrics`);
+                schemaErr.isAIInvalidResponse = true;
+                throw schemaErr;
+            }
 
             // 3. Math Validation
             const spendVal = extracted.metrics?.spend?.value;
@@ -357,10 +410,16 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 narrativeDrafts.push(`Captura ${index + 1}: ${res.narrativeDraft}`);
             }
 
+            // Map extracted platform (FACEBOOK/INSTAGRAM/META_ADS) to valid MetricSourcePlatform enum (META_ADS/ORGANIC_RRSS)
+            let dbPlatform = 'META_ADS';
+            if (res.sectionCategory === 'ORGANIC' || res.platform === 'ORGANIC_RRSS' || res.platform === 'FACEBOOK' || res.platform === 'INSTAGRAM') {
+                dbPlatform = 'ORGANIC_RRSS';
+            }
+
             processedSources.push({
                 sourceId: res.sourceId,
                 storagePath: res.storagePath,
-                platform: res.platform,
+                platform: dbPlatform,
                 screenType: res.screenType,
                 extractionData: res.extractionData,
                 confidence: res.confidence,
@@ -374,7 +433,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             overallCtr = (totalClicks / totalImpressions) * 100;
         }
 
-        const normalizedMetrics = {
+        const rawNormalizedMetrics = {
             spend: { key: 'spend', label: 'Inversión Total', value: totalSpend, unit: firstSourceSpendUnit, confidence: 1.0, evidence: 'Agregado de fuentes' },
             impressions: { key: 'impressions', label: 'Impresiones Totales', value: totalImpressions, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
             reach: { key: 'reach', label: 'Alcance Total', value: totalReach, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
@@ -383,42 +442,51 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             results: { key: 'results', label: 'Resultados Totales', value: totalResults, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' }
         };
 
+        const validatedNormalizedMetrics = validateAndCleanNormalizedMetrics(rawNormalizedMetrics);
+
         const combinedNarrative = narrativeDrafts.join('\n\n');
 
         const parsedStartDate = startDate ? new Date(startDate) : new Date(new Date().setDate(1));
         const parsedEndDate = endDate ? new Date(endDate) : new Date();
 
-        // Save DRAFT report in database with defensive try-catch
+        // Enforce valid enums MONTHLY and DRAFT
+        const validPeriodKinds = ['MONTHLY', 'QUARTERLY'];
+        const finalPeriodKind = validPeriodKinds.includes(periodKind) ? periodKind : 'MONTHLY';
+
+        // Save DRAFT report in database under a secure transaction with no spread fields
         let report;
         try {
-            report = await prisma.metricReport.create({
-                data: {
-                    clientId,
-                    periodKind: periodKind === 'QUARTERLY' ? 'QUARTERLY' : 'MONTHLY',
-                    startDate: parsedStartDate,
-                    endDate: parsedEndDate,
-                    status: 'DRAFT',
-                    normalizedMetrics,
-                    narrative: {
-                        draft: combinedNarrative,
-                        final: combinedNarrative
+            report = await prisma.$transaction(async (tx) => {
+                return await tx.metricReport.create({
+                    data: {
+                        clientId: client.id,
+                        periodKind: finalPeriodKind,
+                        startDate: parsedStartDate,
+                        endDate: parsedEndDate,
+                        status: 'DRAFT',
+                        normalizedMetrics: validatedNormalizedMetrics,
+                        narrative: {
+                            draft: combinedNarrative,
+                            final: combinedNarrative
+                        },
+                        sections: extractedSections,
+                        sources: {
+                            create: processedSources
+                        }
                     },
-                    sections: extractedSections,
-                    sources: {
-                        create: processedSources
+                    include: {
+                        sources: true,
+                        client: true
                     }
-                },
-                include: {
-                    sources: true,
-                    client: true
-                }
+                });
             });
-            console.log(`[Reports API] MetricReport created successfully with ID ${report.id} and ${extractedSections.length} sections.`);
+            console.log(`[Reports API] MetricReport created successfully with ID ${report.id}.`);
         } catch (dbError) {
-            console.error('[Reports API] Prisma insertion failed:', dbError.message || dbError);
-            return res.status(400).json({
+            console.error(`[Reports API][ID:${requestId}] Prisma insertion failed:`, dbError.message || dbError);
+            return res.status(500).json({
                 error: 'Database validation or insertion error',
-                details: dbError.message || dbError
+                message: 'Internal Database Error',
+                requestId
             });
         }
 
@@ -428,8 +496,25 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[Reports API] Error extracting metrics:', error);
-        res.status(500).json({ error: 'Internal Server Error during metrics extraction', details: error.message });
+        console.error(`[Reports API][ID:${requestId}] Error extracting metrics:`, error.message);
+        if (error.isAIUnavailable) {
+            return res.status(502).json({
+                error: 'AI service unavailable or failed',
+                details: error.message,
+                requestId
+            });
+        } else if (error.isAIInvalidResponse || error.message.includes('validation') || error.message.includes('schema') || error.message.includes('Unexpected') || error.message.includes('Metric')) {
+            return res.status(422).json({
+                error: 'AI response validation failed',
+                details: error.message,
+                requestId
+            });
+        }
+        res.status(500).json({
+            error: 'Internal Server Error during metrics extraction',
+            message: error.message,
+            requestId
+        });
     }
 });
 
