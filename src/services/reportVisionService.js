@@ -103,13 +103,9 @@ const schema = {
         type: "object",
         properties: {
           label: { type: "string" },
-          value: { anyOf: [{ type: "number" }, { type: "null" }] },
-          percentage: { anyOf: [{ type: "number" }, { type: "null" }] },
-          results: { anyOf: [{ type: "number" }, { type: "null" }] },
-          impressions: { anyOf: [{ type: "number" }, { type: "null" }] },
-          reach: { anyOf: [{ type: "number" }, { type: "null" }] }
+          value: { anyOf: [{ type: "number" }, { type: "null" }] }
         },
-        required: ["label", "value", "percentage", "results", "impressions", "reach"],
+        required: ["label", "value"],
         additionalProperties: false
       }
     }
@@ -299,13 +295,9 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
                   type: "object",
                   properties: {
                     label: { type: "string" },
-                    value: { anyOf: [{ type: "number" }, { type: "null" }] },
-                    percentage: { anyOf: [{ type: "number" }, { type: "null" }] },
-                    results: { anyOf: [{ type: "number" }, { type: "null" }] },
-                    impressions: { anyOf: [{ type: "number" }, { type: "null" }] },
-                    reach: { anyOf: [{ type: "number" }, { type: "null" }] }
+                    value: { anyOf: [{ type: "number" }, { type: "null" }] }
                   },
-                  required: ["label", "value", "percentage", "results", "impressions", "reach"],
+                  required: ["label", "value"],
                   additionalProperties: false
                 }
               },
