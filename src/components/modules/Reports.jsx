@@ -649,6 +649,9 @@ const Reports = () => {
   const [narrativeState, setNarrativeState] = useState(null);
   const reportRef = useRef(null);
 
+  const isGeneratingRef = useRef(false);
+  const isApprovingRef = useRef(false);
+
   useEffect(() => {
     if (report?.narrative && report.status === 'PUBLISHED') {
       let parsed = report.narrative;
@@ -781,6 +784,7 @@ const Reports = () => {
   };
 
   const generateReport = async () => {
+    if (isGeneratingRef.current) return;
     if (isGenerating) return;
     if (!selectedClientId) {
       toast.error('Selecciona un cliente');
@@ -791,6 +795,7 @@ const Reports = () => {
         return;
     }
 
+    isGeneratingRef.current = true;
     setIsGenerating(true);
     setReport(null);
     setEditedTexts({
@@ -831,11 +836,14 @@ const Reports = () => {
       console.error('[Reports Frontend] Extraction error:', error);
     } finally {
       setIsGenerating(false);
+      isGeneratingRef.current = false;
     }
   };
 
   const handleApproveReview = async (reviewedMetrics) => {
+    if (isApprovingRef.current) return;
     if (!report?.id) return;
+    isApprovingRef.current = true;
     setIsSubmittingReview(true);
     try {
       // 1. Save audited metrics
@@ -874,6 +882,7 @@ const Reports = () => {
     } finally {
       setIsSubmittingReview(false);
       setIsGeneratingNarrative(false);
+      isApprovingRef.current = false;
     }
   };
 
