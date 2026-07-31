@@ -781,6 +781,7 @@ const Reports = () => {
   };
 
   const generateReport = async () => {
+    if (isGenerating) return;
     if (!selectedClientId) {
       toast.error('Selecciona un cliente');
       return;
