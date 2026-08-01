@@ -385,6 +385,34 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
 
         const extractedSections = [];
 
+        const sanitizeSectionDataset = (dataset) => {
+            if (!Array.isArray(dataset)) return [];
+            return dataset
+                .map(item => {
+                    const label = typeof item.label === 'string' ? item.label : String(item.label || '');
+                    const value = item.value === undefined || item.value === null ? 0 : Number(item.value);
+                    const hombres = item.hombres === undefined || item.hombres === null ? 0 : Number(item.hombres);
+                    const mujeres = item.mujeres === undefined || item.mujeres === null ? 0 : Number(item.mujeres);
+
+                    const clean = {
+                        label,
+                        value: isNaN(value) ? 0 : value
+                    };
+
+                    if (item.hombres !== undefined && item.hombres !== null) {
+                        clean.hombres = isNaN(hombres) ? 0 : hombres;
+                    }
+                    if (item.mujeres !== undefined && item.mujeres !== null) {
+                        clean.mujeres = isNaN(mujeres) ? 0 : mujeres;
+                    }
+
+                    return clean;
+                })
+                .filter(item => {
+                    return item.value !== 0 || item.hombres !== 0 || item.mujeres !== 0;
+                });
+        };
+
         // Aggregate across sources
         results.forEach((res, index) => {
             if (index === 0 && res.spendUnit) {
@@ -396,13 +424,15 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             if (typeof res.clicksVal === 'number') totalClicks += res.clicksVal;
             if (typeof res.resultsVal === 'number') totalResults += res.resultsVal;
 
+            const cleanDataset = sanitizeSectionDataset(res.dataset);
+
             extractedSections.push({
                 sectionId: uuidv4(),
                 chartType: res.chartType,
                 title: res.title,
                 sectionCategory: res.sectionCategory,
                 platform: res.platformVal,
-                dataset: res.dataset,
+                dataset: cleanDataset,
                 narrativeComment: ""
             });
 

@@ -44,6 +44,16 @@ const toSentenceCase = (str) => {
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
 };
 
+const sumDatasetValues = (dataset) => {
+  if (!Array.isArray(dataset)) return 0;
+  return dataset.reduce((sum, item) => {
+    const val = item.value === undefined || item.value === null ? 0 : Number(item.value);
+    const h = item.hombres === undefined || item.hombres === null ? 0 : Number(item.hombres);
+    const m = item.mujeres === undefined || item.mujeres === null ? 0 : Number(item.mujeres);
+    return sum + val + h + m;
+  }, 0);
+};
+
 const PerformanceTrendChart = ({ data }) => {
   if (!data || data.length === 0) return null;
   return (
@@ -188,8 +198,8 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
             <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
             <YAxis width={110} dataKey="label" type="category" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
             <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
-            <Bar dataKey="percentage" fill={currentTheme.fill} radius={[0, 8, 8, 0]} barSize={16}>
-              <LabelList dataKey="percentage" position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => `${val}%`} />
+            <Bar dataKey="value" fill={currentTheme.fill} radius={[0, 8, 8, 0]} barSize={16}>
+              <LabelList dataKey="value" position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => `${val}%`} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
@@ -266,26 +276,19 @@ const SectionInsight = ({ sectionId, comment, onChange }) => {
 const DemographicsBarChart = ({ data }) => {
   if (!data || data.length === 0) return null;
 
-  let activeDemKey = 'percentage';
-  if (data.length > 0) {
-    const keys = Object.keys(data[0]);
-    if (keys.includes('percentage') && data[0].percentage !== null && data[0].percentage !== undefined) {
-      activeDemKey = 'percentage';
-    } else if (keys.includes('value') && data[0].value !== null && data[0].value !== undefined) {
-      activeDemKey = 'value';
-    }
-  }
-
   return (
     <div className="h-[280px] w-full mt-4">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} layout="vertical" margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+        <BarChart data={data} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
           <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
-          <YAxis width={80} dataKey="demographicGroup" type="category" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
+          <YAxis width={80} dataKey="label" type="category" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
           <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
-          <Bar dataKey={activeDemKey} fill="#6366f1" radius={[0, 8, 8, 0]} barSize={16}>
-            <LabelList dataKey={activeDemKey} position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => activeDemKey === 'percentage' ? `${val}%` : val?.toLocaleString('es-ES')} />
+          <Bar dataKey="hombres" fill="#009fb7" radius={[0, 8, 8, 0]} barSize={12}>
+            <LabelList dataKey="hombres" position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => `${val}%`} />
+          </Bar>
+          <Bar dataKey="mujeres" fill="#e4405f" radius={[0, 8, 8, 0]} barSize={12}>
+            <LabelList dataKey="mujeres" position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => `${val}%`} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -402,14 +405,14 @@ const ExecutiveSummary = ({ narrative, onUpdate }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {(narrative.summaryPoints || []).map((point, idx) => (
-          <Card key={idx} className="bg-[#ffffff] border-slate-200 p-6 flex gap-4 break-inside-avoid shadow-sm">
-            <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/10 text-primary flex items-center justify-center shrink-0 font-black text-sm">
+          <Card key={idx} className="bg-[#009fb7] border-[#009fb7] p-6 flex gap-4 break-inside-avoid shadow-sm text-white">
+            <div className="w-8 h-8 rounded-xl bg-white/20 border border-white/10 text-white flex items-center justify-center shrink-0 font-black text-sm">
               {idx + 1}
             </div>
             <textarea
-              className="w-full bg-transparent border-none text-sm text-[#0f172a] leading-relaxed font-bold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
+              className="w-full bg-transparent border-none text-sm text-white leading-relaxed font-bold focus:ring-1 focus:ring-white/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
               rows={4}
-              style={{ height: 'auto', overflow: 'visible' }}
+              style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
               value={toSentenceCase(point)}
               onChange={(e) => handlePointChange(idx, e.target.value)}
             />
@@ -1257,12 +1260,13 @@ const Reports = () => {
                           <div className="space-y-6 mt-6">
                             <ExecutiveSummary narrative={narrativeState} onUpdate={setNarrativeState} />
                             <div className="space-y-2 pt-4 border-t border-slate-100/60">
-                               <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Análisis Interpretativo de Logros</h4>
-                               <Card className="bg-[#fcfcfd] border-slate-100 p-6">
+                               <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Análisis interpretativo de logros")}</h4>
+                               <Card className="bg-[#009fb7] border-[#009fb7] p-6 text-white shadow-sm">
                                   <textarea
-                                     rows={3}
-                                     className="w-full bg-transparent border-none text-slate-600 leading-relaxed font-normal text-base outline-none resize-none focus:ring-1 focus:ring-primary/10 rounded-xl"
-                                     value={narrativeState?.keyAchievements || ''}
+                                     rows={4}
+                                     className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-1 focus:ring-white/10 rounded-xl !h-auto !overflow-visible"
+                                     style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
+                                     value={toSentenceCase(narrativeState?.keyAchievements) || ''}
                                      onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
                                   />
                                </Card>
@@ -1313,7 +1317,7 @@ const Reports = () => {
                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1">
 
                              {/* Left Column: Demographics */}
-                             {report.normalizedMetrics?.demographics && report.normalizedMetrics.demographics.length > 0 && (
+                             {report.normalizedMetrics?.demographics && report.normalizedMetrics.demographics.length > 0 && sumDatasetValues(report.normalizedMetrics.demographics) > 0 && (
                                <div className="space-y-2 flex flex-col justify-between">
                                  <div className="space-y-1">
                                    <h4 className="text-sm font-black text-slate-800">Distribución de Audiencia</h4>
@@ -1330,7 +1334,7 @@ const Reports = () => {
                              )}
 
                              {/* Right Column: Top performing content and block narrative */}
-                             {report.normalizedMetrics?.topContent && report.normalizedMetrics.topContent.length > 0 && (
+                             {report.normalizedMetrics?.topContent && report.normalizedMetrics.topContent.length > 0 && sumDatasetValues(report.normalizedMetrics.topContent) > 0 && (
                                <div className="space-y-2 flex flex-col justify-between">
                                  <div className="space-y-1">
                                    <h4 className="text-sm font-black text-slate-800">Rendimiento de Contenidos</h4>
@@ -1369,11 +1373,11 @@ const Reports = () => {
 
                          <div className="space-y-2 pt-4 border-t border-slate-100/60">
                            <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Análisis interpretativo de logros")}</h4>
-                           <Card className="bg-[#fcfcfd] border-slate-200 p-6">
+                           <Card className="bg-[#009fb7] border-[#009fb7] p-6 text-white shadow-sm">
                               <textarea
                                  rows={4}
-                                 className="w-full bg-transparent border-none text-[#111827] leading-relaxed font-bold text-base outline-none resize-none focus:ring-1 focus:ring-primary/10 rounded-xl !h-auto !overflow-visible"
-                                 style={{ height: 'auto', overflow: 'visible' }}
+                                 className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-1 focus:ring-white/10 rounded-xl !h-auto !overflow-visible"
+                                 style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
                                  value={toSentenceCase(narrativeState?.keyAchievements) || ''}
                                  onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
                               />
@@ -1397,7 +1401,9 @@ const Reports = () => {
                            </div>
 
                            {/* Filter Facebook */}
-                           {report.sections.filter(s => s.sectionCategory === 'ORGANIC' && s.platform === 'FACEBOOK').map((sect, idx) => (
+                           {report.sections.filter(s => s.sectionCategory === 'ORGANIC' && s.platform === 'FACEBOOK').map((sect, idx) => {
+                             if (!sect.dataset || sect.dataset.length === 0 || sumDatasetValues(sect.dataset) === 0) return null;
+                             return (
                              <div key={sect.sectionId || `fb-org-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid">
                                <div className="flex justify-between items-center">
                                  <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Facebook orgánico')}</h4>
@@ -1410,10 +1416,13 @@ const Reports = () => {
                                  onChange={handleSectionCommentChange}
                                />
                              </div>
-                           ))}
+                             );
+                           })}
 
                            {/* Filter Instagram */}
-                           {report.sections.filter(s => s.sectionCategory === 'ORGANIC' && s.platform === 'INSTAGRAM').map((sect, idx) => (
+                           {report.sections.filter(s => s.sectionCategory === 'ORGANIC' && s.platform === 'INSTAGRAM').map((sect, idx) => {
+                             if (!sect.dataset || sect.dataset.length === 0 || sumDatasetValues(sect.dataset) === 0) return null;
+                             return (
                              <div key={sect.sectionId || `ig-org-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid">
                                <div className="flex justify-between items-center">
                                  <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Instagram orgánico')}</h4>
@@ -1426,7 +1435,8 @@ const Reports = () => {
                                  onChange={handleSectionCommentChange}
                                />
                              </div>
-                           ))}
+                             );
+                           })}
                          </div>
                        )}
 
@@ -1438,7 +1448,9 @@ const Reports = () => {
                              <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{toSentenceCase("Inversión y retorno en pauta publicitaria")}</p>
                            </div>
 
-                           {report.sections.filter(s => s.sectionCategory === 'ADS').map((sect, idx) => (
+                           {report.sections.filter(s => s.sectionCategory === 'ADS').map((sect, idx) => {
+                             if (!sect.dataset || sect.dataset.length === 0 || sumDatasetValues(sect.dataset) === 0) return null;
+                             return (
                              <div key={sect.sectionId || `ads-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid">
                                <div className="flex justify-between items-center">
                                  <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Performance ads')}</h4>
@@ -1451,7 +1463,8 @@ const Reports = () => {
                                  onChange={handleSectionCommentChange}
                                />
                              </div>
-                           ))}
+                             );
+                           })}
                          </div>
                        )}
 
