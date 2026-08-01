@@ -256,45 +256,6 @@ router.post('/generate', upload.any(), async (req, res) => {
     }
 });
 
-function validateAndCleanNormalizedMetrics(metrics) {
-    if (!metrics || typeof metrics !== 'object') {
-        throw new Error("normalizedMetrics must be a valid object");
-    }
-    const allowedKeys = ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'];
-    const clean = {};
-    for (const key of allowedKeys) {
-        const item = metrics[key] || {};
-
-        const cleanItem = {
-            key: key,
-            label: typeof item.label === 'string' ? item.label : String(item.key || key),
-            value: item.value === null || item.value === undefined ? null : parseFloat(item.value),
-            unit: typeof item.unit === 'string' ? item.unit : 'count',
-            confidence: typeof item.confidence === 'number' ? item.confidence : 1.0,
-            evidence: typeof item.evidence === 'string' ? item.evidence : ''
-        };
-
-        if (isNaN(cleanItem.value) && cleanItem.value !== null) {
-            cleanItem.value = null;
-        }
-
-        clean[key] = cleanItem;
-    }
-
-    // Preserve demographics and topContent in the cleaned object
-    if (metrics.demographics) {
-        clean.demographics = metrics.demographics;
-    } else {
-        clean.demographics = { ageGender: [], cities: [], countries: [] };
-    }
-    if (metrics.topContent) {
-        clean.topContent = metrics.topContent;
-    } else {
-        clean.topContent = [];
-    }
-
-    return clean;
-}
 
 router.post('/extract-metrics', upload.any(), async (req, res) => {
     const requestId = uuidv4();

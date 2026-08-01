@@ -161,6 +161,19 @@ test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) =>
         assert.strictEqual(updatedMetrics.spend.value, 1300.00);
     });
 
+    await t.test('cleanNumericValue utility parsing styles', async () => {
+        const { cleanNumericValue } = await import('../src/services/reportVisionService.js');
+
+        assert.strictEqual(cleanNumericValue(1250.50), 1250.50);
+        assert.strictEqual(cleanNumericValue("147.636"), 147636);
+        assert.strictEqual(cleanNumericValue("147,636"), 147636);
+        assert.strictEqual(cleanNumericValue("0,82%"), 0.82);
+        assert.strictEqual(cleanNumericValue("$1,250.50 COP"), 1250.50);
+        assert.strictEqual(cleanNumericValue("1.250,50"), 1250.50);
+        assert.strictEqual(cleanNumericValue("1,250.50"), 1250.50);
+        assert.strictEqual(cleanNumericValue("N/A"), null);
+    });
+
     await t.test('Tolerant validation - partial metrics', async () => {
         // Screenshot with only spend and impressions, others null/missing
         const rawPayload = {
