@@ -208,9 +208,9 @@ Also extract graphic points and visual data as a structured section:
   If not visible or quantifiable in the image, return an empty array []. Do NOT generate simulated, fake, placeholder, or mock data (such as "Simulado 1"). All values must be valid numbers (not strings, and not null/undefined inside the properties if quantifiable).
 - title: A descriptive and clear Spanish title for this chart/visualization block, following strictly the Spanish Sentence Case rule (only capitalize the first letter of the first word, all other words in lowercase, except proper names).
 
-For Demographics and Top Content:
-- demographics: Extract Age & Gender percentage breakdowns (ranges 18-24 to 65+ mapping males to "hombres" and females to "mujeres"), Top Cities ("cities"), and Top Countries ("countries"). If not visible in the screenshot, return empty arrays []. NEVER use mock or placeholder data (such as "Simulado X").
-- topContent: Extract list of top performing posts or creatives. Each must specify "title" (name of publication), "format" (Imagen, Reel, or Carrusel), "results" (interactions or conversions), "impressions", and "reach". If not visible, return an empty array []. NEVER use mock or placeholder data.
+For Demographics and Top Content (N:1 Exhaustive Processing):
+- demographics: Extract Age & Gender percentage breakdowns (ranges 18-24 to 65+ mapping males to "hombres" and females to "mujeres"), Top Cities ("cities"), and Top Countries ("countries"). Perform exhaustive extraction of all demographic metrics from the screenshot. If not visible in the screenshot, return empty arrays []. NEVER use mock or placeholder data (such as "Simulado X").
+- topContent: Extract list of top performing posts, video/Reels formats, and ad creatives. Each must specify "title" (name of publication or ad creative), "format" (Imagen, Reel, or Carrusel), "results" (interactions or conversions), "impressions", and "reach". Perform exhaustive extraction of video, Reels, and ad performance metrics from the screenshot. If not visible, return an empty array []. NEVER use mock or placeholder data.
 `;
 
 /**
