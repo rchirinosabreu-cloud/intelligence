@@ -257,10 +257,7 @@ function validateAndCleanNormalizedMetrics(metrics) {
     const allowedKeys = ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'];
     const clean = {};
     for (const key of allowedKeys) {
-        const item = metrics[key];
-        if (!item || typeof item !== 'object') {
-            throw new Error(`Metric '${key}' is missing or is not an object`);
-        }
+        const item = metrics[key] || {};
 
         const cleanItem = {
             key: key,
@@ -288,14 +285,6 @@ function validateAndCleanNormalizedMetrics(metrics) {
         clean.topContent = metrics.topContent;
     } else {
         clean.topContent = [];
-    }
-
-    // Strict validation to avoid key collisions or additional keys
-    const validKeys = [...allowedKeys, 'demographics', 'topContent'];
-    for (const key of Object.keys(metrics)) {
-        if (!validKeys.includes(key)) {
-            throw new Error(`Unexpected metric key '${key}' in normalizedMetrics: ${key}`);
-        }
     }
 
     return clean;
