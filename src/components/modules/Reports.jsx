@@ -1138,11 +1138,11 @@ const Reports = () => {
       overflow: visible !important;
     }
     /* Enforce corporate and dark blue background & contrast styles */
-    .bg-\\[\\#009fb7\\] {
+    .bg-\\[\\#009fb7\\], .bg-\\[\\#009fb7\\] * {
       background-color: #009fb7 !important;
       color: #ffffff !important;
     }
-    .bg-\\[\\#0F172A\\] {
+    .bg-\\[\\#0F172A\\], .bg-\\[\\#0F172A\\] * {
       background-color: #0F172A !important;
       color: #ffffff !important;
     }
