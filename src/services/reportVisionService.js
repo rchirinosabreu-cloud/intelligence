@@ -1,6 +1,55 @@
 import { parseJsonResponse } from './aiService.js';
 import { GoogleGenAI } from '@google/genai';
 
+/**
+ * Sanitizes and cleans formatted text string values into valid floats or integers.
+ */
+export const cleanNumericValue = (rawVal) => {
+    if (typeof rawVal === 'number') {
+        return isFinite(rawVal) ? rawVal : null;
+    }
+    if (typeof rawVal !== 'string') {
+        return null;
+    }
+
+    let clean = rawVal.trim();
+    // Remove symbols, currency words, letters, spaces, percent signs
+    clean = clean.replace(/[^\d.,+-]/g, '');
+
+    if (!clean) return null;
+
+    // Detect format of separator:
+    const commaIndex = clean.lastIndexOf(',');
+    const periodIndex = clean.lastIndexOf('.');
+
+    if (commaIndex !== -1 && periodIndex !== -1) {
+        if (commaIndex < periodIndex) {
+            // US format "1,250.50"
+            clean = clean.replace(/,/g, '');
+        } else {
+            // European format "1.250,50"
+            clean = clean.replace(/\./g, '').replace(/,/g, '.');
+        }
+    } else if (commaIndex !== -1) {
+        const parts = clean.split(',');
+        if (parts[1] && parts[1].length === 3) {
+            clean = clean.replace(/,/g, '');
+        } else {
+            clean = clean.replace(/,/g, '.');
+        }
+    } else if (periodIndex !== -1) {
+        const parts = clean.split('.');
+        if (parts[1] && parts[1].length === 3 && parts.length === 2) {
+            clean = clean.replace(/\./g, '');
+        } else if (parts.length > 2) {
+            clean = clean.replace(/\./g, '');
+        }
+    }
+
+    const num = parseFloat(clean);
+    return isFinite(num) ? num : null;
+};
+
 const schema = {
   type: "object",
   properties: {
@@ -298,12 +347,12 @@ export const validateAndCleanSourceExtraction = (extracted) => {
 
     for (const key of allowedKeys) {
         const item = metrics[key] || {};
-        const val = item.value === null || item.value === undefined ? null : parseFloat(item.value);
+        const val = cleanNumericValue(item.value);
 
         cleanMetrics[key] = {
             key: key,
             label: typeof item.label === 'string' ? item.label : String(item.key || key),
-            value: isNaN(val) ? null : val,
+            value: val,
             unit: typeof item.unit === 'string' ? item.unit : 'count',
             confidence: typeof item.confidence === 'number' ? item.confidence : 1.0,
             evidence: typeof item.evidence === 'string' ? item.evidence : ''
@@ -386,27 +435,35 @@ export const mergeSourceMetricsIntoAccumulator = (accumulator, incomingExtractio
     const { metrics, demographics, topContent } = incomingExtraction;
 
     // Regla de Ausencia: Si la métrica entrante es null o undefined, preservar el acumulado anterior
-    if (metrics.spend && metrics.spend.value !== null) {
-        accumulator.spend.sum += metrics.spend.value;
+    const cleanSpend = metrics.spend ? cleanNumericValue(metrics.spend.value) : null;
+    if (cleanSpend !== null) {
+        accumulator.spend.sum += cleanSpend;
         accumulator.spend.count++;
         if (metrics.spend.unit) accumulator.spend.unit = metrics.spend.unit;
     }
-    if (metrics.impressions && metrics.impressions.value !== null) {
-        accumulator.impressions.sum += metrics.impressions.value;
+
+    const cleanImpressions = metrics.impressions ? cleanNumericValue(metrics.impressions.value) : null;
+    if (cleanImpressions !== null) {
+        accumulator.impressions.sum += cleanImpressions;
         accumulator.impressions.count++;
     }
-    if (metrics.clicks && metrics.clicks.value !== null) {
-        accumulator.clicks.sum += metrics.clicks.value;
+
+    const cleanClicks = metrics.clicks ? cleanNumericValue(metrics.clicks.value) : null;
+    if (cleanClicks !== null) {
+        accumulator.clicks.sum += cleanClicks;
         accumulator.clicks.count++;
     }
-    if (metrics.results && metrics.results.value !== null) {
-        accumulator.results.sum += metrics.results.value;
+
+    const cleanResults = metrics.results ? cleanNumericValue(metrics.results.value) : null;
+    if (cleanResults !== null) {
+        accumulator.results.sum += cleanResults;
         accumulator.results.count++;
     }
 
     // Regla de Alcance (reach): Tratar el alcance como métrica no aditiva si proviene de capturas del mismo periodo
-    if (metrics.reach && metrics.reach.value !== null) {
-        accumulator.reach.values.push(metrics.reach.value);
+    const cleanReach = metrics.reach ? cleanNumericValue(metrics.reach.value) : null;
+    if (cleanReach !== null) {
+        accumulator.reach.values.push(cleanReach);
     }
 
     // Accumulate demographics safely
@@ -617,7 +674,9 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
         contents: [
             {
                 role: 'user',
-                content: prompt
+                parts: [
+                    { text: prompt }
+                ]
             }
         ],
         config: {

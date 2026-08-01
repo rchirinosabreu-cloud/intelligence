@@ -746,7 +746,7 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
                     type="number"
                     step="any"
                     className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xl font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
-                    value={metric.value === null ? '' : metric.value}
+                    value={metric.value === null || metric.value === undefined ? '' : String(metric.value)}
                     onChange={(e) => handleValueChange(key, e.target.value)}
                   />
                   {metric.unit && metric.unit !== 'USD' && metric.unit !== 'COP' && metric.unit !== 'EUR' && metric.unit !== 'count' ? (
