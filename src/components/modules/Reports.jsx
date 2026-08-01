@@ -77,6 +77,74 @@ const PerformanceTrendChart = ({ data }) => {
   );
 };
 
+const DemographicsChart = ({ demographics }) => {
+  if (!demographics) return null;
+
+  const ageGenderData = demographics.ageGender || [];
+  const citiesData = demographics.cities || [];
+  const countriesData = demographics.countries || [];
+
+  const totalAgeGender = ageGenderData.reduce((acc, item) => acc + (Number(item.hombres) || 0) + (Number(item.mujeres) || 0), 0);
+  const totalCities = citiesData.reduce((acc, item) => acc + (Number(item.value) || 0), 0);
+  const totalCountries = countriesData.reduce((acc, item) => acc + (Number(item.value) || 0), 0);
+
+  // Render guard: if all datasets are empty or sum to 0, omit the container completely
+  if (totalAgeGender === 0 && totalCities === 0 && totalCountries === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-6 mt-4 w-full">
+      {ageGenderData.length > 0 && totalAgeGender > 0 && (
+        <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
+          <h5 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Rango de edad y género</h5>
+          <DemographicsBarChart data={ageGenderData} />
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {citiesData.length > 0 && totalCities > 0 && (
+          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
+            <h5 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Principales ciudades</h5>
+            <div className="space-y-4">
+              {citiesData.map((city, idx) => (
+                <div key={idx} className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-bold text-slate-700">
+                    <span>{city.label}</span>
+                    <span>{city.value}%</span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div className="bg-[#009fb7] h-full rounded-full" style={{ width: `${city.value}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {countriesData.length > 0 && totalCountries > 0 && (
+          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
+            <h5 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Principales países</h5>
+            <div className="space-y-4">
+              {countriesData.map((country, idx) => (
+                <div key={idx} className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-bold text-slate-700">
+                    <span>{country.label}</span>
+                    <span>{country.value}%</span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div className="bg-[#e4405f] h-full rounded-full" style={{ width: `${country.value}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => {
   if (!dataset || dataset.length === 0) return null;
 
@@ -346,37 +414,49 @@ const GranularNarrativeBlock = ({ sectionKey, title, comment, onChange }) => {
 const ReportCover = ({ report }) => {
   const formattedStart = report.startDate ? new Date(report.startDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
   const formattedEnd = report.endDate ? new Date(report.endDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  const yearStr = report.startDate ? new Date(report.startDate).getFullYear() : new Date().getFullYear();
+  const clientName = report.client?.name || 'Cliente';
 
   return (
-    <div className="min-h-[80vh] flex flex-col justify-between py-20 border-b border-slate-100 relative print:min-h-screen">
-      <div className="flex flex-col md:flex-row items-center justify-between gap-16">
-          <div className="flex-1 space-y-8 text-center md:text-left">
-             <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight">
-                {toSentenceCase(`Reporte de desempeño digital ${report.client?.name || 'Cliente'}`)}
-             </h1>
-             <p className="text-xl font-bold text-slate-500">
-                {toSentenceCase("Estrategia y resultados")}
-             </p>
-             <div className="flex items-center justify-center md:justify-start gap-6 text-xs font-bold text-slate-400 uppercase tracking-[0.3em] pt-4">
-                <span>{report.client?.name || 'Cliente'}</span>
-                <div className="w-1.5 h-1.5 rounded-full bg-primary/20" />
-                <span>{formattedStart} — {formattedEnd}</span>
-             </div>
-          </div>
-          <div className="h-24 w-auto flex items-center justify-center shrink-0">
-             <img
-              src={report.client?.logoUrl ? `${getApiBaseUrl()}${report.client.logoUrl.startsWith('/api') ? '' : '/api'}${report.client.logoUrl}` : '/brainstudio-logo.png'}
-              alt={report.client?.name}
-              className="h-full w-full object-contain opacity-85"
-              onError={(e) => {
-                e.target.src = '/brainstudio-logo.png';
-              }}
-            />
-          </div>
+    <div className="min-h-[85vh] flex flex-col justify-between py-12 md:py-16 relative print:min-h-screen">
+      {/* Top row: Client Logo on the top left */}
+      <div className="flex justify-between items-center w-full">
+        <div className="h-16 w-auto flex items-center justify-start shrink-0">
+           <img
+            src={report.client?.logoUrl ? `${getApiBaseUrl()}${report.client.logoUrl.startsWith('/api') ? '' : '/api'}${report.client.logoUrl}` : '/brainstudio-logo.png'}
+            alt={clientName}
+            className="h-12 w-auto object-contain opacity-90"
+            onError={(e) => {
+              e.target.src = '/brainstudio-logo.png';
+            }}
+          />
+        </div>
       </div>
-      <div className="text-[10px] font-bold text-slate-350 uppercase tracking-[0.4em] text-center md:text-left border-t border-slate-50 pt-8 flex justify-between items-center">
-         <span>{toSentenceCase("Creado por Brainstudio agencia")}</span>
-         <span>{toSentenceCase(`Fecha de emisión: ${new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}`)}</span>
+
+      {/* Main Cover Body */}
+      <div className="space-y-6 md:space-y-8 my-auto">
+         {/* Badge redondeado */}
+         <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#009fb7]/10 text-[#009fb7] rounded-full text-xs font-extrabold tracking-wider uppercase">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#009fb7]" />
+            Reporte oficial
+         </div>
+
+         {/* Giant Title */}
+         <h1 className="text-5xl md:text-6xl font-black text-[#0F172A] tracking-tight leading-none">
+            Reporte de desempeño digital de {clientName}
+         </h1>
+
+         {/* Subtitle with separator */}
+         <p className="text-lg md:text-xl font-semibold text-slate-500 tracking-wide">
+            Estrategia & resultados • {yearStr}
+         </p>
+      </div>
+
+      {/* Bottom Footer Section */}
+      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] border-t border-slate-100 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+         <span>Creado por Brainstudio agencia</span>
+         <span className="text-slate-300 hidden sm:block">•</span>
+         <span>Periodo: {formattedStart} — {formattedEnd}</span>
       </div>
     </div>
   );
@@ -999,7 +1079,7 @@ const Reports = () => {
       });
 
       // Construct a complete HTML file with Tailwind and fonts
-      const htmlContent = `<!DOCTYPE html>
+      const htmlContentRaw = `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -1026,11 +1106,43 @@ const Reports = () => {
       width: 100%;
       max-width: 80rem;
     }
-    textarea, input {
+    textarea, input, select, div, p, span, h1, h2, h3, h4, h5, h6 {
       outline: none;
       border: none;
       background: transparent;
       resize: none;
+      height: auto !important;
+      overflow: visible !important;
+    }
+    /* Enforce corporate and dark blue background & contrast styles */
+    .bg-\\[\\#009fb7\\] {
+      background-color: #009fb7 !important;
+      color: #ffffff !important;
+    }
+    .bg-\\[\\#0F172A\\] {
+      background-color: #0F172A !important;
+      color: #ffffff !important;
+    }
+    .text-white {
+      color: #ffffff !important;
+    }
+    .bg-white {
+      background-color: #ffffff !important;
+    }
+    .bg-slate-50 {
+      background-color: #f8fafc !important;
+    }
+    .border-slate-100 {
+      border-color: #f1f5f9 !important;
+    }
+    .text-slate-800 {
+      color: #1e293b !important;
+    }
+    .text-slate-700 {
+      color: #334155 !important;
+    }
+    .text-slate-500 {
+      color: #64748b !important;
     }
   </style>
 </head>
@@ -1040,6 +1152,16 @@ const Reports = () => {
   </div>
 </body>
 </html>`;
+
+      // Apply decimal formatting to percentages within the text to exactly 2 decimals (e.g., 0.8234% -> 0.82%)
+      const htmlContent = htmlContentRaw.replace(/(\d+)\.(\d+)(%)/g, (match, integerPart, decimalPart, percentSign) => {
+        if (decimalPart.length > 2) {
+          const roundedDecimal = Math.round(parseFloat(`0.${decimalPart}`) * 100) / 100;
+          const roundedStr = roundedDecimal.toFixed(2).split('.')[1] || '00';
+          return `${integerPart}.${roundedStr}${percentSign}`;
+        }
+        return match;
+      });
 
       const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -1254,22 +1376,47 @@ const Reports = () => {
 
                    {viewMode === 'deck' ? (
                      <>
-                       {/* Slide 1: Portada, Resumen Ejecutivo, Análisis Interpretativo */}
+                       {/* Slide 1: Portada, Resumen Ejecutivo, Análisis Interpretativo, Logros y Avances */}
                        <div className="w-full min-h-[90vh] print:min-h-screen p-12 md:p-16 flex flex-col justify-between border-b border-slate-100 print:border-none page-break-after" style={{ pageBreakAfter: 'always', breakAfter: 'page' }}>
                           <ReportCover report={report} />
                           <div className="space-y-6 mt-6">
                             <ExecutiveSummary narrative={narrativeState} onUpdate={setNarrativeState} />
-                            <div className="space-y-2 pt-4 border-t border-slate-100/60">
-                               <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Análisis interpretativo de logros")}</h4>
-                               <Card className="bg-[#009fb7] border-[#009fb7] p-6 text-white shadow-sm">
-                                  <textarea
-                                     rows={4}
-                                     className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-1 focus:ring-white/10 rounded-xl !h-auto !overflow-visible"
-                                     style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
-                                     value={toSentenceCase(narrativeState?.keyAchievements) || ''}
-                                     onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
-                                  />
-                               </Card>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100/60">
+                              <div className="space-y-2">
+                                 <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Análisis interpretativo de logros")}</h4>
+                                 <Card className="bg-[#009fb7] border-[#009fb7] p-6 text-white shadow-sm">
+                                    <textarea
+                                       rows={4}
+                                       className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-sm outline-none resize-none focus:ring-1 focus:ring-white/10 rounded-xl !h-auto !overflow-visible"
+                                       style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
+                                       value={toSentenceCase(narrativeState?.keyAchievements) || ''}
+                                       onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
+                                    />
+                                 </Card>
+                              </div>
+
+                              <div className="space-y-2">
+                                 <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Logros y avances</h4>
+                                 <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6">
+                                   <ul className="list-disc pl-5 space-y-2 text-slate-700 text-xs font-semibold leading-relaxed">
+                                     {(narrativeState?.logrosYAvances || []).map((bullet, idx) => (
+                                       <li key={idx}>
+                                         <input
+                                           type="text"
+                                           className="w-full bg-transparent border-none text-slate-700 focus:ring-0 outline-none p-0 font-bold"
+                                           value={bullet}
+                                           onChange={(e) => {
+                                             const updated = [...narrativeState.logrosYAvances];
+                                             updated[idx] = e.target.value;
+                                             setNarrativeState({ ...narrativeState, logrosYAvances: updated });
+                                           }}
+                                         />
+                                       </li>
+                                     ))}
+                                   </ul>
+                                 </div>
+                              </div>
                             </div>
                           </div>
                           <div className="pt-4 flex items-center justify-between text-slate-300 text-[9px] font-bold tracking-widest uppercase">
@@ -1283,21 +1430,21 @@ const Reports = () => {
                          {report.normalizedMetrics && (
                            <div className="space-y-6 flex-1 flex flex-col justify-between">
                              <div className="space-y-1">
-                               <h3 className="text-xl font-black tracking-tight text-slate-800">Desempeño Cuantitativo y Tendencia</h3>
-                               <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Métricas Clave de Performance Meta Ads</p>
+                               <h3 className="text-xl font-black tracking-tight text-slate-800">Desempeño cuantitativo y tendencia</h3>
+                               <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Métricas clave de performance Meta Ads</p>
                              </div>
                              <MetricGrid metrics={report.normalizedMetrics} />
 
                              {report.normalizedMetrics.series && report.normalizedMetrics.series.length > 0 && (
                                <div className="space-y-2 pt-4 border-t border-slate-100/60 flex-1">
                                  <div className="space-y-1">
-                                   <h4 className="text-sm font-black text-slate-800">Tendencia de Desempeño</h4>
-                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Evolución de Rendimiento en el Periodo</p>
+                                   <h4 className="text-sm font-black text-slate-800">Tendencia de desempeño</h4>
+                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Evolución de rendimiento en el periodo</p>
                                  </div>
                                  <PerformanceTrendChart data={report.normalizedMetrics.series} />
                                  <GranularNarrativeBlock
                                    sectionKey="macro_performance"
-                                   title="Análisis de Rendimiento y Tendencia"
+                                   title="Análisis de rendimiento y tendencia"
                                    comment={getGranularComment("macro_performance")}
                                    onChange={handleGranularCommentChange}
                                  />
@@ -1317,16 +1464,16 @@ const Reports = () => {
                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1">
 
                              {/* Left Column: Demographics */}
-                             {report.normalizedMetrics?.demographics && report.normalizedMetrics.demographics.length > 0 && sumDatasetValues(report.normalizedMetrics.demographics) > 0 && (
+                             {report.normalizedMetrics?.demographics && (
                                <div className="space-y-2 flex flex-col justify-between">
                                  <div className="space-y-1">
-                                   <h4 className="text-sm font-black text-slate-800">Distribución de Audiencia</h4>
-                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Segmentación por Edad y Género</p>
+                                   <h4 className="text-sm font-black text-slate-800">Distribución de audiencia</h4>
+                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Segmentación por edad y género</p>
                                  </div>
-                                 <DemographicsBarChart data={report.normalizedMetrics.demographics} />
+                                 <DemographicsChart demographics={report.normalizedMetrics.demographics} />
                                  <GranularNarrativeBlock
                                    sectionKey="demographics"
-                                   title="Análisis de Distribución Demográfica"
+                                   title="Análisis de distribución demográfica"
                                    comment={getGranularComment("demographics")}
                                    onChange={handleGranularCommentChange}
                                  />
@@ -1334,16 +1481,29 @@ const Reports = () => {
                              )}
 
                              {/* Right Column: Top performing content and block narrative */}
-                             {report.normalizedMetrics?.topContent && report.normalizedMetrics.topContent.length > 0 && sumDatasetValues(report.normalizedMetrics.topContent) > 0 && (
+                             {report.normalizedMetrics?.topContent && report.normalizedMetrics.topContent.length > 0 && (
                                <div className="space-y-2 flex flex-col justify-between">
                                  <div className="space-y-1">
-                                   <h4 className="text-sm font-black text-slate-800">Rendimiento de Contenidos</h4>
-                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Ranking de Mejores Creativos</p>
+                                   <h4 className="text-sm font-black text-slate-800">Rendimiento de contenidos</h4>
+                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Ranking de mejores creativos</p>
                                  </div>
                                  <TopContentTable data={report.normalizedMetrics.topContent} />
+
+                                 {narrativeState?.contenidoTopAnalisis && (
+                                   <Card className="bg-[#f8fafc] border border-slate-100 p-4 rounded-2xl shadow-sm mt-2">
+                                     <textarea
+                                        rows={3}
+                                        className="w-full bg-transparent border-none text-slate-700 leading-relaxed font-bold text-xs outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
+                                        style={{ height: 'auto', overflow: 'visible' }}
+                                        value={narrativeState.contenidoTopAnalisis}
+                                        onChange={(e) => setNarrativeState({ ...narrativeState, contenidoTopAnalisis: e.target.value })}
+                                     />
+                                   </Card>
+                                 )}
+
                                  <GranularNarrativeBlock
                                    sectionKey="top_content"
-                                   title="Análisis de Contenidos Estrella"
+                                   title="Análisis de contenidos estrella"
                                    comment={getGranularComment("top_content")}
                                    onChange={handleGranularCommentChange}
                                  />
@@ -1368,20 +1528,46 @@ const Reports = () => {
                      <div className="p-8 md:p-12 space-y-12">
                        <ReportCover report={report} />
 
+                       {/* Portada, Resumen Ejecutivo, Análisis Interpretativo, Logros y Avances */}
                        <div className="border-t border-slate-100 pt-8 space-y-6">
                          <ExecutiveSummary narrative={narrativeState} onUpdate={setNarrativeState} />
 
-                         <div className="space-y-2 pt-4 border-t border-slate-100/60">
-                           <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Análisis interpretativo de logros")}</h4>
-                           <Card className="bg-[#009fb7] border-[#009fb7] p-6 text-white shadow-sm">
-                              <textarea
-                                 rows={4}
-                                 className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-1 focus:ring-white/10 rounded-xl !h-auto !overflow-visible"
-                                 style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
-                                 value={toSentenceCase(narrativeState?.keyAchievements) || ''}
-                                 onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
-                              />
-                           </Card>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-slate-100/60">
+                           <div className="space-y-2">
+                             <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Análisis interpretativo de logros")}</h4>
+                             <Card className="bg-[#009fb7] border-[#009fb7] p-6 text-white shadow-sm">
+                                <textarea
+                                   rows={4}
+                                   className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-1 focus:ring-white/10 rounded-xl !h-auto !overflow-visible"
+                                   style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
+                                   value={toSentenceCase(narrativeState?.keyAchievements) || ''}
+                                   onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
+                                />
+                             </Card>
+                           </div>
+
+                           {/* Logros y avances list */}
+                           <div className="space-y-2">
+                             <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Logros y avances</h4>
+                             <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6">
+                               <ul className="list-disc pl-5 space-y-3 text-slate-700 text-sm font-semibold leading-relaxed">
+                                 {(narrativeState?.logrosYAvances || []).map((bullet, idx) => (
+                                   <li key={idx}>
+                                     <input
+                                       type="text"
+                                       className="w-full bg-transparent border-none text-slate-700 focus:ring-0 outline-none p-0 font-bold"
+                                       value={bullet}
+                                       onChange={(e) => {
+                                         const updated = [...narrativeState.logrosYAvances];
+                                         updated[idx] = e.target.value;
+                                         setNarrativeState({ ...narrativeState, logrosYAvances: updated });
+                                       }}
+                                     />
+                                   </li>
+                                 ))}
+                               </ul>
+                             </div>
+                           </div>
                          </div>
                        </div>
 
@@ -1389,6 +1575,34 @@ const Reports = () => {
                          <div className="border-t border-slate-100 pt-8 space-y-4">
                            <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Resultados generales")}</h3>
                            <MetricGrid metrics={report.normalizedMetrics} />
+                         </div>
+                       )}
+
+                       {/* Demographics & Public focus block */}
+                       {report.normalizedMetrics?.demographics && (
+                         <div className="border-t border-slate-100 pt-8 space-y-4">
+                           <h3 className="text-xl font-black tracking-tight text-slate-800">Demografía de público</h3>
+                           <DemographicsChart demographics={report.normalizedMetrics.demographics} />
+                         </div>
+                       )}
+
+                       {/* Top Performing Content Creative ranking block */}
+                       {report.normalizedMetrics?.topContent && report.normalizedMetrics.topContent.length > 0 && (
+                         <div className="border-t border-slate-100 pt-8 space-y-4">
+                           <h3 className="text-xl font-black tracking-tight text-slate-800">Ranking de mejores creativos</h3>
+                           <TopContentTable data={report.normalizedMetrics.topContent} />
+
+                           {narrativeState?.contenidoTopAnalisis && (
+                             <Card className="bg-[#f8fafc] border border-slate-100 p-6 rounded-3xl shadow-sm mt-4">
+                               <textarea
+                                  rows={4}
+                                  className="w-full bg-transparent border-none text-slate-700 leading-relaxed font-bold text-sm outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
+                                  style={{ height: 'auto', overflow: 'visible' }}
+                                  value={narrativeState.contenidoTopAnalisis}
+                                  onChange={(e) => setNarrativeState({ ...narrativeState, contenidoTopAnalisis: e.target.value })}
+                               />
+                             </Card>
+                           )}
                          </div>
                        )}
 
@@ -1468,9 +1682,41 @@ const Reports = () => {
                          </div>
                        )}
 
+                       {/* Oportunidades & Aprendizajes */}
+                       {narrativeState?.oportunidadesYAprendizajes && (
+                         <div className="space-y-3 pt-8 border-t border-slate-100">
+                           <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Oportunidades & aprendizajes</h4>
+                           <Card className="bg-[#0F172A] border-[#0F172A] p-8 text-white rounded-[2rem] shadow-xl space-y-4">
+                             <textarea
+                                rows={5}
+                                className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
+                                style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
+                                value={narrativeState.oportunidadesYAprendizajes}
+                                onChange={(e) => setNarrativeState({ ...narrativeState, oportunidadesYAprendizajes: e.target.value })}
+                             />
+                           </Card>
+                         </div>
+                       )}
+
                        <div className="border-t border-slate-100 pt-8">
                          <ActionPlan narrative={narrativeState} onUpdate={setNarrativeState} />
                        </div>
+
+                       {/* Recomendaciones Estratégicas */}
+                       {narrativeState?.recomendacionesEstrategicas && (
+                         <div className="space-y-4 pt-8 border-t border-slate-100">
+                           <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Recomendaciones estratégicas</h4>
+                           <div className="bg-[#009fb7] text-white rounded-[2rem] p-8 shadow-lg">
+                             <textarea
+                                rows={6}
+                                className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
+                                style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
+                                value={narrativeState.recomendacionesEstrategicas}
+                                onChange={(e) => setNarrativeState({ ...narrativeState, recomendacionesEstrategicas: e.target.value })}
+                             />
+                           </div>
+                         </div>
+                       )}
 
                        <div className="pt-8 border-t border-slate-100 flex items-center justify-between text-slate-350 text-[10px] font-bold tracking-widest uppercase font-bold">
                           <span>Creado por Brainstudio Agencia</span>
