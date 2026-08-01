@@ -278,6 +278,238 @@ export const extractMetricsWithGemini = async (imageBuffer, mimeType = 'image/jp
 };
 
 /**
+ * Paso 2: Desacoplamiento de Validación por Fuente
+ * Evaluates the parsed payload of a single screenshot and cleans it, returning if it is usable.
+ */
+export const validateAndCleanSourceExtraction = (extracted) => {
+    if (!extracted) {
+        return { usable: false, warnings: ["Extracción vacía"] };
+    }
+
+    const metrics = extracted.metrics || {};
+    const dataset = extracted.dataset || [];
+    const demographics = extracted.demographics || {};
+    const topContent = extracted.topContent || [];
+    const narrativeDraft = extracted.narrativeDraft || "";
+
+    const allowedKeys = ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'];
+    const cleanMetrics = {};
+    let hasValidCanonicalMetric = false;
+
+    for (const key of allowedKeys) {
+        const item = metrics[key] || {};
+        const val = item.value === null || item.value === undefined ? null : parseFloat(item.value);
+
+        cleanMetrics[key] = {
+            key: key,
+            label: typeof item.label === 'string' ? item.label : String(item.key || key),
+            value: isNaN(val) ? null : val,
+            unit: typeof item.unit === 'string' ? item.unit : 'count',
+            confidence: typeof item.confidence === 'number' ? item.confidence : 1.0,
+            evidence: typeof item.evidence === 'string' ? item.evidence : ''
+        };
+
+        if (cleanMetrics[key].value !== null) {
+            hasValidCanonicalMetric = true;
+        }
+    }
+
+    const hasValidDataset = Array.isArray(dataset) && dataset.length > 0;
+    const hasValidDemographics = demographics && (
+        (Array.isArray(demographics.ageGender) && demographics.ageGender.length > 0) ||
+        (Array.isArray(demographics.cities) && demographics.cities.length > 0) ||
+        (Array.isArray(demographics.countries) && demographics.countries.length > 0)
+    );
+    const hasValidTopContent = Array.isArray(topContent) && topContent.length > 0;
+    const hasExplicitNarrative = typeof narrativeDraft === 'string' && narrativeDraft.trim().length > 10;
+
+    const usable = hasValidCanonicalMetric || hasValidDataset || hasValidDemographics || hasValidTopContent || hasExplicitNarrative;
+
+    const warnings = [];
+    const missingMetrics = [];
+    const invalidMetrics = [];
+
+    for (const key of allowedKeys) {
+        if (cleanMetrics[key].value === null) {
+            missingMetrics.push(key);
+        }
+    }
+
+    // Math check for CTR discrepancy
+    const clicksVal = cleanMetrics.clicks.value;
+    const impressionsVal = cleanMetrics.impressions.value;
+    const ctrVal = cleanMetrics.ctr.value;
+
+    if (typeof clicksVal === 'number' && typeof impressionsVal === 'number' && impressionsVal > 0) {
+        const theoreticalCtr = (clicksVal / impressionsVal) * 100;
+        if (typeof ctrVal === 'number') {
+            const diff = Math.abs(ctrVal - theoreticalCtr);
+            if (diff > 0.01) {
+                warnings.push(`Advertencia matemática: El CTR extraído (${ctrVal}%) difiere del cálculo teórico basado en clics e impresiones (${theoreticalCtr.toFixed(4)}%).`);
+            }
+        }
+    }
+
+    return {
+        usable,
+        metrics: cleanMetrics,
+        dataset,
+        demographics: hasValidDemographics ? demographics : null,
+        topContent,
+        missingMetrics,
+        invalidMetrics,
+        warnings,
+        screenType: extracted.screenType || 'Desconocido',
+        sectionCategory: extracted.sectionCategory || 'ADS',
+        platform: extracted.platform || 'META_ADS'
+    };
+};
+
+/**
+ * Paso 3: Consolidación Semántica Acumulativa
+ * Merges a single cleaned screenshot extraction into the master accumulator.
+ */
+export const mergeSourceMetricsIntoAccumulator = (accumulator, incomingExtraction) => {
+    if (!accumulator) {
+        accumulator = {
+            spend: { sum: 0, count: 0, label: 'Inversión Total', unit: 'USD' },
+            impressions: { sum: 0, count: 0, label: 'Impresiones Totales', unit: 'count' },
+            reach: { values: [], label: 'Alcance Total', unit: 'count' },
+            clicks: { sum: 0, count: 0, label: 'Clics Totales', unit: 'count' },
+            results: { sum: 0, count: 0, label: 'Resultados Totales', unit: 'count' },
+            ctr: { label: 'CTR Promedio', unit: '%' },
+            demographics: { ageGender: [], cities: [], countries: [] },
+            topContent: []
+        };
+    }
+
+    const { metrics, demographics, topContent } = incomingExtraction;
+
+    // Regla de Ausencia: Si la métrica entrante es null o undefined, preservar el acumulado anterior
+    if (metrics.spend && metrics.spend.value !== null) {
+        accumulator.spend.sum += metrics.spend.value;
+        accumulator.spend.count++;
+        if (metrics.spend.unit) accumulator.spend.unit = metrics.spend.unit;
+    }
+    if (metrics.impressions && metrics.impressions.value !== null) {
+        accumulator.impressions.sum += metrics.impressions.value;
+        accumulator.impressions.count++;
+    }
+    if (metrics.clicks && metrics.clicks.value !== null) {
+        accumulator.clicks.sum += metrics.clicks.value;
+        accumulator.clicks.count++;
+    }
+    if (metrics.results && metrics.results.value !== null) {
+        accumulator.results.sum += metrics.results.value;
+        accumulator.results.count++;
+    }
+
+    // Regla de Alcance (reach): Tratar el alcance como métrica no aditiva si proviene de capturas del mismo periodo
+    if (metrics.reach && metrics.reach.value !== null) {
+        accumulator.reach.values.push(metrics.reach.value);
+    }
+
+    // Accumulate demographics safely
+    if (demographics) {
+        if (Array.isArray(demographics.ageGender) && demographics.ageGender.length > 0) {
+            accumulator.demographics.ageGender = demographics.ageGender;
+        }
+        if (Array.isArray(demographics.cities) && demographics.cities.length > 0) {
+            accumulator.demographics.cities = demographics.cities;
+        }
+        if (Array.isArray(demographics.countries) && demographics.countries.length > 0) {
+            accumulator.demographics.countries = demographics.countries;
+        }
+    }
+
+    // Accumulate top content safely
+    if (Array.isArray(topContent) && topContent.length > 0) {
+        accumulator.topContent = [...accumulator.topContent, ...topContent];
+    }
+
+    return accumulator;
+};
+
+/**
+ * Paso 3: Consolidación Semántica Acumulativa - Finalización
+ * Formatea el acumulador en la estructura normalizedMetrics requerida por el backend.
+ */
+export const finalizeNormalizedMetrics = (accumulator) => {
+    if (!accumulator) return null;
+
+    // Regla de CTR: Recalcular el CTR global derivado mediante la fórmula teórica clicks / impressions * 100
+    let overallClicks = accumulator.clicks.count > 0 ? accumulator.clicks.sum : null;
+    let overallImpressions = accumulator.impressions.count > 0 ? accumulator.impressions.sum : null;
+    let overallCtr = null;
+
+    if (overallClicks !== null && overallImpressions !== null && overallImpressions > 0) {
+        overallCtr = parseFloat(((overallClicks / overallImpressions) * 100).toFixed(4));
+    }
+
+    // Consolidate non-additive reach: take maximum observed value to prevent users counts duplication
+    let overallReach = null;
+    if (accumulator.reach.values.length > 0) {
+        overallReach = Math.max(...accumulator.reach.values);
+    }
+
+    // Formulate final normalizedMetrics payload conforming strictly to Schema
+    const finalMetrics = {
+        spend: {
+            key: 'spend',
+            label: 'Inversión Total',
+            value: accumulator.spend.count > 0 ? accumulator.spend.sum : null,
+            unit: accumulator.spend.unit,
+            confidence: 1.0,
+            evidence: 'Consolidación de fuentes'
+        },
+        impressions: {
+            key: 'impressions',
+            label: 'Impresiones Totales',
+            value: overallImpressions,
+            unit: 'count',
+            confidence: 1.0,
+            evidence: 'Consolidación de fuentes'
+        },
+        reach: {
+            key: 'reach',
+            label: 'Alcance Total',
+            value: overallReach,
+            unit: 'count',
+            confidence: 1.0,
+            evidence: 'Consolidación de fuentes (máximo observado)'
+        },
+        clicks: {
+            key: 'clicks',
+            label: 'Clics Totales',
+            value: overallClicks,
+            unit: 'count',
+            confidence: 1.0,
+            evidence: 'Consolidación de fuentes'
+        },
+        ctr: {
+            key: 'ctr',
+            label: 'CTR Promedio',
+            value: overallCtr,
+            unit: '%',
+            confidence: 1.0,
+            evidence: 'Cálculo derivado de clics e impresiones'
+        },
+        results: {
+            key: 'results',
+            label: 'Resultados Totales',
+            value: accumulator.results.count > 0 ? accumulator.results.sum : null,
+            unit: 'count',
+            confidence: 1.0,
+            evidence: 'Consolidación de fuentes'
+        },
+        demographics: accumulator.demographics,
+        topContent: accumulator.topContent
+    };
+
+    return finalMetrics;
+};
+
+/**
  * Generates an editorial narrative and strategic action plan from normalized metrics and sections using Gemini.
  * @param {Object} normalizedMetrics - The validated metrics object.
  * @param {Array} sections - The structured sections array.
