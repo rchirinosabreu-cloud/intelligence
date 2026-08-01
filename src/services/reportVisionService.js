@@ -219,12 +219,12 @@ RIGOROUS META ADS TABLE PARSING RULES:
 `;
 
 /**
- * Analyzes a screenshot of Meta Ads using OpenAI Vision with Structured Outputs.
+ * Analyzes a screenshot of Meta Ads using Gemini Vision with Structured Outputs.
  * @param {Buffer} imageBuffer - The binary image data.
  * @param {string} mimeType - The mime type of the image (image/png, image/jpeg).
  * @returns {Promise<Object>} The parsed canonical metrics extraction response.
  */
-export const extractMetricsWithVision = async (imageBuffer, mimeType = 'image/jpeg') => {
+export const extractMetricsWithGemini = async (imageBuffer, mimeType = 'image/jpeg') => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
         throw new Error("Missing GEMINI_API_KEY in server configuration");
@@ -278,12 +278,12 @@ export const extractMetricsWithVision = async (imageBuffer, mimeType = 'image/jp
 };
 
 /**
- * Generates an editorial narrative and strategic action plan from normalized metrics and sections.
+ * Generates an editorial narrative and strategic action plan from normalized metrics and sections using Gemini.
  * @param {Object} normalizedMetrics - The validated metrics object.
  * @param {Array} sections - The structured sections array.
  * @returns {Promise<Object>} The parsed narrative structure.
  */
-export const generateNarrativeWithOpenAI = async (normalizedMetrics, sections = []) => {
+export const generateNarrativeWithGemini = async (normalizedMetrics, sections = []) => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
         throw new Error("Missing GEMINI_API_KEY in server configuration");

@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { extractMetricsWithVision } from '../src/services/reportVisionService.js';
+import { extractMetricsWithGemini } from '../src/services/reportVisionService.js';
 
-// We can mock the fetch call to OpenAI to test the vision service
-test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) => {
+// We can mock the fetch call to Gemini to test the vision service
+test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) => {
 
     await t.test('Successfully extracts structured metrics from mock response', async () => {
         const mockResponse = {
@@ -68,7 +68,7 @@ test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) =>
         process.env.GEMINI_API_KEY = 'mock-key';
 
         try {
-            const result = await extractMetricsWithVision(Buffer.from('mock-image'), 'image/jpeg');
+            const result = await extractMetricsWithGemini(Buffer.from('mock-image'), 'image/jpeg');
             assert.ok(result.metrics);
             assert.strictEqual(result.metrics.spend.value, 1250.50);
             assert.strictEqual(result.metrics.clicks.value, 1500);
@@ -215,10 +215,10 @@ test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) =>
 
         try {
             // Import and run the new narrative generation service
-            const { generateNarrativeWithOpenAI } = await import('../src/services/reportVisionService.js');
+            const { generateNarrativeWithGemini } = await import('../src/services/reportVisionService.js');
             const metrics = { spend: { value: 1300 } };
             const sections = [{ sectionId: "sec-1", chartType: "LINE_CHART", title: "Rendimiento y Tendencia", sectionCategory: "ADS", platform: "META_ADS", dataset: [{ label: "Día 1", value: 100, hombres: null, mujeres: null }] }];
-            const result = await generateNarrativeWithOpenAI(metrics, sections);
+            const result = await generateNarrativeWithGemini(metrics, sections);
 
 
             assert.ok(result);

@@ -4,7 +4,7 @@ import prisma from '../../lib/prisma.js';
 import { GoogleGenAI } from '@google/genai';
 import { uploadClientFile, getSignedUrl, getClientFileStream } from '../../services/storageService.js';
 import { parseJsonResponse, extractModelText } from '../../services/aiService.js';
-import { extractMetricsWithVision, generateNarrativeWithOpenAI } from '../../services/reportVisionService.js';
+import { extractMetricsWithGemini, generateNarrativeWithGemini } from '../../services/reportVisionService.js';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
@@ -338,7 +338,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             // 2. Vision analysis
             let extracted;
             try {
-                extracted = await extractMetricsWithVision(file.buffer, file.mimetype);
+                extracted = await extractMetricsWithGemini(file.buffer, file.mimetype);
             } catch (aiError) {
                 // If AI service fails or isn't reachable
                 const aiErr = new Error(`AI Service call failed for file ${file.originalname}: ${aiError.message}`);
@@ -668,7 +668,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
         const sections = report.sections || [];
 
         console.log(`[Reports API] Generating narrative for report ${reportId}...`);
-        const narrativeResult = await generateNarrativeWithOpenAI(metrics, sections);
+        const narrativeResult = await generateNarrativeWithGemini(metrics, sections);
 
         const updatedReport = await prisma.metricReport.update({
             where: { id: reportId },
@@ -677,7 +677,11 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
                     headline: narrativeResult.headline,
                     summaryPoints: narrativeResult.summaryPoints,
                     keyAchievements: narrativeResult.keyAchievements,
-                    actionPlan: narrativeResult.actionPlan
+                    actionPlan: narrativeResult.actionPlan,
+                    logrosYAvances: narrativeResult.logrosYAvances || [],
+                    contenidoTopAnalisis: narrativeResult.contenidoTopAnalisis || "",
+                    oportunidadesYAprendizajes: narrativeResult.oportunidadesYAprendizajes || "",
+                    recomendacionesEstrategicas: narrativeResult.recomendacionesEstrategicas || ""
                 },
                 sections: narrativeResult.sections,
                 status: 'PUBLISHED'
