@@ -1374,356 +1374,227 @@ const Reports = () => {
               >
                 <div id="report-canvas" ref={reportRef} className="bg-white flex flex-col w-full">
 
-                   {viewMode === 'deck' ? (
-                     <>
-                       {/* Slide 1: Portada, Resumen Ejecutivo, Análisis Interpretativo, Logros y Avances */}
-                       <div className="w-full min-h-[90vh] print:min-h-screen p-12 md:p-16 flex flex-col justify-between border-b border-slate-100 print:border-none page-break-after" style={{ pageBreakAfter: 'always', breakAfter: 'page' }}>
-                          <ReportCover report={report} />
-                          <div className="space-y-6 mt-6">
-                            <ExecutiveSummary narrative={narrativeState} onUpdate={setNarrativeState} />
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100/60">
-                              <div className="space-y-2">
-                                 <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Análisis interpretativo de logros")}</h4>
-                                 <Card className="bg-[#009fb7] border-[#009fb7] p-6 text-white shadow-sm">
-                                    <textarea
-                                       rows={4}
-                                       className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-sm outline-none resize-none focus:ring-1 focus:ring-white/10 rounded-xl !h-auto !overflow-visible"
-                                       style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
-                                       value={toSentenceCase(narrativeState?.keyAchievements) || ''}
-                                       onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
-                                    />
-                                 </Card>
-                              </div>
-
-                              <div className="space-y-2">
-                                 <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Logros y avances</h4>
-                                 <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6">
-                                   <ul className="list-disc pl-5 space-y-2 text-slate-700 text-xs font-semibold leading-relaxed">
-                                     {(narrativeState?.logrosYAvances || []).map((bullet, idx) => (
-                                       <li key={idx}>
-                                         <input
-                                           type="text"
-                                           className="w-full bg-transparent border-none text-slate-700 focus:ring-0 outline-none p-0 font-bold"
-                                           value={bullet}
-                                           onChange={(e) => {
-                                             const updated = [...narrativeState.logrosYAvances];
-                                             updated[idx] = e.target.value;
-                                             setNarrativeState({ ...narrativeState, logrosYAvances: updated });
-                                           }}
-                                         />
-                                       </li>
-                                     ))}
-                                   </ul>
-                                 </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="pt-4 flex items-center justify-between text-slate-300 text-[9px] font-bold tracking-widest uppercase">
-                            <span>Brainstudio Agencia</span>
-                            <span>Página 1 de 3 (Deck Executive Summary)</span>
-                          </div>
-                       </div>
-
-                       {/* Slide 2: 6 Métricas Clave, Gráfico de Tendencia Temporal, Análisis de Tendencia */}
-                       <div className="w-full min-h-[90vh] print:min-h-screen p-12 md:p-16 flex flex-col justify-between border-b border-slate-100 print:border-none page-break-after" style={{ pageBreakAfter: 'always', breakAfter: 'page' }}>
-                         {report.normalizedMetrics && (
-                           <div className="space-y-6 flex-1 flex flex-col justify-between">
-                             <div className="space-y-1">
-                               <h3 className="text-xl font-black tracking-tight text-slate-800">Desempeño cuantitativo y tendencia</h3>
-                               <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Métricas clave de performance Meta Ads</p>
-                             </div>
-                             <MetricGrid metrics={report.normalizedMetrics} />
-
-                             {report.normalizedMetrics.series && report.normalizedMetrics.series.length > 0 && (
-                               <div className="space-y-2 pt-4 border-t border-slate-100/60 flex-1">
-                                 <div className="space-y-1">
-                                   <h4 className="text-sm font-black text-slate-800">Tendencia de desempeño</h4>
-                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Evolución de rendimiento en el periodo</p>
-                                 </div>
-                                 <PerformanceTrendChart data={report.normalizedMetrics.series} />
-                                 <GranularNarrativeBlock
-                                   sectionKey="macro_performance"
-                                   title="Análisis de rendimiento y tendencia"
-                                   comment={getGranularComment("macro_performance")}
-                                   onChange={handleGranularCommentChange}
-                                 />
-                               </div>
-                             )}
-                           </div>
-                         )}
-                         <div className="pt-4 flex items-center justify-between text-slate-300 text-[9px] font-bold tracking-widest uppercase">
-                           <span>Brainstudio Agencia</span>
-                           <span>Página 2 de 3 (Performance & Trend Analytics)</span>
-                         </div>
-                       </div>
-
-                       {/* Slide 3: Gráfico Demográfico, Tabla de Plan de Acción Sugerido, Mejores Contenidos */}
-                       <div className="w-full min-h-[90vh] print:min-h-screen p-12 md:p-16 flex flex-col justify-between">
-                         <div className="space-y-6 flex-1 flex flex-col justify-between">
-                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1">
-
-                             {/* Left Column: Demographics */}
-                             {report.normalizedMetrics?.demographics && (
-                               <div className="space-y-2 flex flex-col justify-between">
-                                 <div className="space-y-1">
-                                   <h4 className="text-sm font-black text-slate-800">Distribución de audiencia</h4>
-                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Segmentación por edad y género</p>
-                                 </div>
-                                 <DemographicsChart demographics={report.normalizedMetrics.demographics} />
-                                 <GranularNarrativeBlock
-                                   sectionKey="demographics"
-                                   title="Análisis de distribución demográfica"
-                                   comment={getGranularComment("demographics")}
-                                   onChange={handleGranularCommentChange}
-                                 />
-                               </div>
-                             )}
-
-                             {/* Right Column: Top performing content and block narrative */}
-                             {report.normalizedMetrics?.topContent && report.normalizedMetrics.topContent.length > 0 && (
-                               <div className="space-y-2 flex flex-col justify-between">
-                                 <div className="space-y-1">
-                                   <h4 className="text-sm font-black text-slate-800">Rendimiento de contenidos</h4>
-                                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Ranking de mejores creativos</p>
-                                 </div>
-                                 <TopContentTable data={report.normalizedMetrics.topContent} />
-
-                                 {narrativeState?.contenidoTopAnalisis && (
-                                   <Card className="bg-[#f8fafc] border border-slate-100 p-4 rounded-2xl shadow-sm mt-2">
-                                     <textarea
-                                        rows={3}
-                                        className="w-full bg-transparent border-none text-slate-700 leading-relaxed font-bold text-xs outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
-                                        style={{ height: 'auto', overflow: 'visible' }}
-                                        value={narrativeState.contenidoTopAnalisis}
-                                        onChange={(e) => setNarrativeState({ ...narrativeState, contenidoTopAnalisis: e.target.value })}
-                                     />
-                                   </Card>
-                                 )}
-
-                                 <GranularNarrativeBlock
-                                   sectionKey="top_content"
-                                   title="Análisis de contenidos estrella"
-                                   comment={getGranularComment("top_content")}
-                                   onChange={handleGranularCommentChange}
-                                 />
-                               </div>
-                             )}
-
-                           </div>
-
-                           <div className="pt-4 border-t border-slate-100">
-                             <ActionPlan narrative={narrativeState} onUpdate={setNarrativeState} />
-                           </div>
-
-                           <div className="pt-4 flex items-center justify-between text-slate-350 text-[9px] font-bold tracking-widest uppercase">
-                              <span>Brainstudio Agencia</span>
-                              <span>Página 3 de 3 (Audience Focus & Strategic Action Plan)</span>
-                           </div>
-                         </div>
-                       </div>
-                     </>
-                   ) : (
-                     /* INTERACTIVE WEB VISOR DE REPORTE WEB (Dynamic sections) */
-                     <div className="p-8 md:p-12 space-y-12">
+                   {/* UNIFIED executive monocolumn continuous vertical layout */}
+                   <div className="p-8 md:p-12 space-y-12 w-full">
+                     {/* 1. Portada Monumental */}
+                     <div className="page-break-after">
                        <ReportCover report={report} />
+                     </div>
 
-                       {/* Portada, Resumen Ejecutivo, Análisis Interpretativo, Logros y Avances */}
-                       <div className="border-t border-slate-100 pt-8 space-y-6">
-                         <ExecutiveSummary narrative={narrativeState} onUpdate={setNarrativeState} />
+                     {/* 2. Resumen Ejecutivo (Impact cards + full-width interpretive text) */}
+                     <div className="border-t border-slate-100 pt-8 space-y-6 page-break-after">
+                       <ExecutiveSummary narrative={narrativeState} onUpdate={setNarrativeState} />
 
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-slate-100/60">
-                           <div className="space-y-2">
-                             <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Análisis interpretativo de logros")}</h4>
-                             <Card className="bg-[#009fb7] border-[#009fb7] p-6 text-white shadow-sm">
-                                <textarea
-                                   rows={4}
-                                   className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-1 focus:ring-white/10 rounded-xl !h-auto !overflow-visible"
-                                   style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
-                                   value={toSentenceCase(narrativeState?.keyAchievements) || ''}
-                                   onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
-                                />
-                             </Card>
-                           </div>
+                       <div className="space-y-4 pt-6 border-t border-slate-100/60 w-full">
+                         <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Análisis interpretativo de logros")}</h4>
+                         <Card className="bg-[#009fb7] border-[#009fb7] p-6 text-white shadow-sm w-full">
+                            <textarea
+                               rows={4}
+                               className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-1 focus:ring-white/10 rounded-xl !h-auto !overflow-visible"
+                               style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
+                               value={toSentenceCase(narrativeState?.keyAchievements) || ''}
+                               onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
+                            />
+                         </Card>
+                       </div>
+                     </div>
 
-                           {/* Logros y avances list */}
-                           <div className="space-y-2">
-                             <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Logros y avances</h4>
-                             <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6">
-                               <ul className="list-disc pl-5 space-y-3 text-slate-700 text-sm font-semibold leading-relaxed">
-                                 {(narrativeState?.logrosYAvances || []).map((bullet, idx) => (
-                                   <li key={idx}>
-                                     <input
-                                       type="text"
-                                       className="w-full bg-transparent border-none text-slate-700 focus:ring-0 outline-none p-0 font-bold"
-                                       value={bullet}
-                                       onChange={(e) => {
-                                         const updated = [...narrativeState.logrosYAvances];
-                                         updated[idx] = e.target.value;
-                                         setNarrativeState({ ...narrativeState, logrosYAvances: updated });
-                                       }}
-                                     />
-                                   </li>
-                                 ))}
-                               </ul>
-                             </div>
-                           </div>
+                     {/* 3. Logros y avances stacked below */}
+                     {narrativeState?.logrosYAvances && narrativeState.logrosYAvances.length > 0 && (
+                       <div className="border-t border-slate-100 pt-8 space-y-4 w-full page-break-after">
+                         <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Logros y avances</h4>
+                         <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 w-full">
+                           <ul className="list-disc pl-5 space-y-3 text-slate-700 text-sm font-semibold leading-relaxed w-full">
+                             {narrativeState.logrosYAvances.map((bullet, idx) => (
+                               <li key={idx} className="w-full">
+                                 <input
+                                   type="text"
+                                   className="w-full bg-transparent border-none text-slate-700 focus:ring-0 outline-none p-0 font-bold"
+                                   value={bullet}
+                                   onChange={(e) => {
+                                     const updated = [...narrativeState.logrosYAvances];
+                                     updated[idx] = e.target.value;
+                                     setNarrativeState({ ...narrativeState, logrosYAvances: updated });
+                                   }}
+                                 />
+                               </li>
+                             ))}
+                           </ul>
                          </div>
                        </div>
+                     )}
 
-                       {report.normalizedMetrics && (
-                         <div className="border-t border-slate-100 pt-8 space-y-4">
+                     {/* 4. Secciones Gráficas Vectoriales (Recharts) */}
+                     {report.normalizedMetrics && (
+                       <div className="border-t border-slate-100 pt-8 space-y-8 page-break-after w-full">
+                         <div className="space-y-4 w-full">
                            <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Resultados generales")}</h3>
                            <MetricGrid metrics={report.normalizedMetrics} />
                          </div>
-                       )}
 
-                       {/* Demographics & Public focus block */}
-                       {report.normalizedMetrics?.demographics && (
-                         <div className="border-t border-slate-100 pt-8 space-y-4">
-                           <h3 className="text-xl font-black tracking-tight text-slate-800">Demografía de público</h3>
-                           <DemographicsChart demographics={report.normalizedMetrics.demographics} />
-                         </div>
-                       )}
-
-                       {/* Top Performing Content Creative ranking block */}
-                       {report.normalizedMetrics?.topContent && report.normalizedMetrics.topContent.length > 0 && (
-                         <div className="border-t border-slate-100 pt-8 space-y-4">
-                           <h3 className="text-xl font-black tracking-tight text-slate-800">Ranking de mejores creativos</h3>
-                           <TopContentTable data={report.normalizedMetrics.topContent} />
-
-                           {narrativeState?.contenidoTopAnalisis && (
-                             <Card className="bg-[#f8fafc] border border-slate-100 p-6 rounded-3xl shadow-sm mt-4">
-                               <textarea
-                                  rows={4}
-                                  className="w-full bg-transparent border-none text-slate-700 leading-relaxed font-bold text-sm outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
-                                  style={{ height: 'auto', overflow: 'visible' }}
-                                  value={narrativeState.contenidoTopAnalisis}
-                                  onChange={(e) => setNarrativeState({ ...narrativeState, contenidoTopAnalisis: e.target.value })}
-                               />
-                             </Card>
-                           )}
-                         </div>
-                       )}
-
-                       {/* Bloque 1: Análisis Orgánico (RRSS) */}
-                       {report.sections && report.sections.some(s => s.sectionCategory === 'ORGANIC') && (
-                         <div className="space-y-8 border-t border-slate-100 pt-8">
-                           <div className="space-y-1">
-                             <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Análisis orgánico (RRSS)")}</h3>
-                             <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{toSentenceCase("Evolución y rendimiento en redes sociales")}</p>
+                         {report.normalizedMetrics.series && report.normalizedMetrics.series.length > 0 && (
+                           <div className="space-y-4 pt-6 border-t border-slate-100/60 w-full">
+                             <div className="space-y-1">
+                               <h4 className="text-sm font-black text-slate-800">Tendencia de desempeño</h4>
+                               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Evolución de rendimiento en el periodo</p>
+                             </div>
+                             <PerformanceTrendChart data={report.normalizedMetrics.series} />
+                             <GranularNarrativeBlock
+                               sectionKey="macro_performance"
+                               title="Análisis de rendimiento y tendencia"
+                               comment={getGranularComment("macro_performance")}
+                               onChange={handleGranularCommentChange}
+                             />
                            </div>
+                         )}
 
-                           {/* Filter Facebook */}
-                           {report.sections.filter(s => s.sectionCategory === 'ORGANIC' && s.platform === 'FACEBOOK').map((sect, idx) => {
-                             if (!sect.dataset || sect.dataset.length === 0 || sumDatasetValues(sect.dataset) === 0) return null;
-                             return (
-                             <div key={sect.sectionId || `fb-org-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid">
-                               <div className="flex justify-between items-center">
-                                 <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Facebook orgánico')}</h4>
-                                 <span className="text-[10px] font-bold text-[#1877F2] uppercase tracking-wider bg-[#1877F2]/10 px-2.5 py-0.5 rounded-full">Facebook</span>
-                               </div>
-                               <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform="FACEBOOK" />
-                               <SectionInsight
-                                 sectionId={sect.sectionId}
-                                 comment={sect.narrativeComment}
-                                 onChange={handleSectionCommentChange}
-                               />
-                             </div>
-                             );
-                           })}
-
-                           {/* Filter Instagram */}
-                           {report.sections.filter(s => s.sectionCategory === 'ORGANIC' && s.platform === 'INSTAGRAM').map((sect, idx) => {
-                             if (!sect.dataset || sect.dataset.length === 0 || sumDatasetValues(sect.dataset) === 0) return null;
-                             return (
-                             <div key={sect.sectionId || `ig-org-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid">
-                               <div className="flex justify-between items-center">
-                                 <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Instagram orgánico')}</h4>
-                                 <span className="text-[10px] font-bold text-[#E4405F] uppercase tracking-wider bg-[#E4405F]/10 px-2.5 py-0.5 rounded-full">Instagram</span>
-                               </div>
-                               <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform="INSTAGRAM" />
-                               <SectionInsight
-                                 sectionId={sect.sectionId}
-                                 comment={sect.narrativeComment}
-                                 onChange={handleSectionCommentChange}
-                               />
-                             </div>
-                             );
-                           })}
-                         </div>
-                       )}
-
-                       {/* Bloque 2: Performance Digital (ADS) */}
-                       {report.sections && report.sections.some(s => s.sectionCategory === 'ADS') && (
-                         <div className="space-y-8 border-t border-slate-100 pt-8">
-                           <div className="space-y-1">
-                             <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Performance digital (ADS)")}</h3>
-                             <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{toSentenceCase("Inversión y retorno en pauta publicitaria")}</p>
+                         {report.normalizedMetrics.demographics && (
+                           <div className="space-y-4 pt-6 border-t border-slate-100/60 w-full">
+                             <h3 className="text-xl font-black tracking-tight text-slate-800">Demografía de público</h3>
+                             <DemographicsChart demographics={report.normalizedMetrics.demographics} />
                            </div>
+                         )}
+                       </div>
+                     )}
 
-                           {report.sections.filter(s => s.sectionCategory === 'ADS').map((sect, idx) => {
-                             if (!sect.dataset || sect.dataset.length === 0 || sumDatasetValues(sect.dataset) === 0) return null;
-                             return (
-                             <div key={sect.sectionId || `ads-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid">
-                               <div className="flex justify-between items-center">
-                                 <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Performance ads')}</h4>
-                                 <span className="text-[10px] font-bold text-[#7C3AED] uppercase tracking-wider bg-[#7C3AED]/10 px-2.5 py-0.5 rounded-full">Meta Ads</span>
-                               </div>
-                               <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform={sect.platform || 'META_ADS'} />
-                               <SectionInsight
-                                 sectionId={sect.sectionId}
-                                 comment={sect.narrativeComment}
-                                 onChange={handleSectionCommentChange}
-                               />
-                             </div>
-                             );
-                           })}
-                         </div>
-                       )}
+                     {/* 5. Desempeño de Anuncios / Contenido Top */}
+                     {report.normalizedMetrics?.topContent && report.normalizedMetrics.topContent.length > 0 && (
+                       <div className="border-t border-slate-100 pt-8 space-y-4 page-break-after w-full">
+                         <h3 className="text-xl font-black tracking-tight text-slate-800">Ranking de mejores creativos</h3>
+                         <TopContentTable data={report.normalizedMetrics.topContent} />
 
-                       {/* Oportunidades & Aprendizajes */}
-                       {narrativeState?.oportunidadesYAprendizajes && (
-                         <div className="space-y-3 pt-8 border-t border-slate-100">
-                           <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Oportunidades & aprendizajes</h4>
-                           <Card className="bg-[#0F172A] border-[#0F172A] p-8 text-white rounded-[2rem] shadow-xl space-y-4">
+                         {narrativeState?.contenidoTopAnalisis && (
+                           <Card className="bg-[#f8fafc] border border-slate-100 p-6 rounded-3xl shadow-sm w-full">
                              <textarea
-                                rows={5}
-                                className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
-                                style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
-                                value={narrativeState.oportunidadesYAprendizajes}
-                                onChange={(e) => setNarrativeState({ ...narrativeState, oportunidadesYAprendizajes: e.target.value })}
+                                rows={4}
+                                className="w-full bg-transparent border-none text-slate-700 leading-relaxed font-bold text-sm outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
+                                style={{ height: 'auto', overflow: 'visible' }}
+                                value={narrativeState.contenidoTopAnalisis}
+                                onChange={(e) => setNarrativeState({ ...narrativeState, contenidoTopAnalisis: e.target.value })}
                              />
                            </Card>
-                         </div>
-                       )}
-
-                       <div className="border-t border-slate-100 pt-8">
-                         <ActionPlan narrative={narrativeState} onUpdate={setNarrativeState} />
+                         )}
                        </div>
+                     )}
 
-                       {/* Recomendaciones Estratégicas */}
-                       {narrativeState?.recomendacionesEstrategicas && (
-                         <div className="space-y-4 pt-8 border-t border-slate-100">
-                           <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Recomendaciones estratégicas</h4>
-                           <div className="bg-[#009fb7] text-white rounded-[2rem] p-8 shadow-lg">
-                             <textarea
-                                rows={6}
-                                className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
-                                style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
-                                value={narrativeState.recomendacionesEstrategicas}
-                                onChange={(e) => setNarrativeState({ ...narrativeState, recomendacionesEstrategicas: e.target.value })}
+                     {/* 6. Bloque 1: Análisis Orgánico (RRSS) */}
+                     {report.sections && report.sections.some(s => s.sectionCategory === 'ORGANIC') && (
+                       <div className="space-y-8 border-t border-slate-100 pt-8 w-full page-break-after">
+                         <div className="space-y-1">
+                           <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Análisis orgánico (RRSS)")}</h3>
+                           <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{toSentenceCase("Evolución y rendimiento en redes sociales")}</p>
+                         </div>
+
+                         {/* Filter Facebook */}
+                         {report.sections.filter(s => s.sectionCategory === 'ORGANIC' && s.platform === 'FACEBOOK').map((sect, idx) => {
+                           if (!sect.dataset || sect.dataset.length === 0 || sumDatasetValues(sect.dataset) === 0) return null;
+                           return (
+                           <div key={sect.sectionId || `fb-org-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid w-full">
+                             <div className="flex justify-between items-center">
+                               <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Facebook orgánico')}</h4>
+                               <span className="text-[10px] font-bold text-[#1877F2] uppercase tracking-wider bg-[#1877F2]/10 px-2.5 py-0.5 rounded-full">Facebook</span>
+                             </div>
+                             <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform="FACEBOOK" />
+                             <SectionInsight
+                               sectionId={sect.sectionId}
+                               comment={sect.narrativeComment}
+                               onChange={handleSectionCommentChange}
                              />
                            </div>
-                         </div>
-                       )}
+                           );
+                         })}
 
-                       <div className="pt-8 border-t border-slate-100 flex items-center justify-between text-slate-350 text-[10px] font-bold tracking-widest uppercase font-bold">
-                          <span>Creado por Brainstudio Agencia</span>
-                          <span>Fecha de emisión: {new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                         {/* Filter Instagram */}
+                         {report.sections.filter(s => s.sectionCategory === 'ORGANIC' && s.platform === 'INSTAGRAM').map((sect, idx) => {
+                           if (!sect.dataset || sect.dataset.length === 0 || sumDatasetValues(sect.dataset) === 0) return null;
+                           return (
+                           <div key={sect.sectionId || `ig-org-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid w-full">
+                             <div className="flex justify-between items-center">
+                               <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Instagram orgánico')}</h4>
+                               <span className="text-[10px] font-bold text-[#E4405F] uppercase tracking-wider bg-[#E4405F]/10 px-2.5 py-0.5 rounded-full">Instagram</span>
+                             </div>
+                             <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform="INSTAGRAM" />
+                             <SectionInsight
+                               sectionId={sect.sectionId}
+                               comment={sect.narrativeComment}
+                               onChange={handleSectionCommentChange}
+                             />
+                           </div>
+                           );
+                         })}
                        </div>
+                     )}
+
+                     {/* Bloque 2: Performance Digital (ADS) */}
+                     {report.sections && report.sections.some(s => s.sectionCategory === 'ADS') && (
+                       <div className="space-y-8 border-t border-slate-100 pt-8 w-full page-break-after">
+                         <div className="space-y-1">
+                           <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Performance digital (ADS)")}</h3>
+                           <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{toSentenceCase("Inversión y retorno en pauta publicitaria")}</p>
+                         </div>
+
+                         {report.sections.filter(s => s.sectionCategory === 'ADS').map((sect, idx) => {
+                           if (!sect.dataset || sect.dataset.length === 0 || sumDatasetValues(sect.dataset) === 0) return null;
+                           return (
+                           <div key={sect.sectionId || `ads-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid w-full">
+                             <div className="flex justify-between items-center">
+                               <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Performance ads')}</h4>
+                               <span className="text-[10px] font-bold text-[#7C3AED] uppercase tracking-wider bg-[#7C3AED]/10 px-2.5 py-0.5 rounded-full">Meta Ads</span>
+                             </div>
+                             <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform={sect.platform || 'META_ADS'} />
+                             <SectionInsight
+                               sectionId={sect.sectionId}
+                               comment={sect.narrativeComment}
+                               onChange={handleSectionCommentChange}
+                             />
+                           </div>
+                           );
+                         })}
+                       </div>
+                     )}
+
+                     {/* 7. Oportunidades & Aprendizajes */}
+                     {narrativeState?.oportunidadesYAprendizajes && (
+                       <div className="space-y-3 pt-8 border-t border-slate-100 page-break-after w-full">
+                         <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Oportunidades & aprendizajes</h4>
+                         <Card className="bg-[#0F172A] border-[#0F172A] p-8 text-white rounded-[2rem] shadow-xl space-y-4 w-full">
+                           <textarea
+                              rows={5}
+                              className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
+                              style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
+                              value={narrativeState.oportunidadesYAprendizajes}
+                              onChange={(e) => setNarrativeState({ ...narrativeState, oportunidadesYAprendizajes: e.target.value })}
+                           />
+                         </Card>
+                       </div>
+                     )}
+
+                     {/* 8. Plan de Acción Sugerido */}
+                     <div className="border-t border-slate-100 pt-8 w-full page-break-after">
+                       <ActionPlan narrative={narrativeState} onUpdate={setNarrativeState} />
                      </div>
-                   )}
+
+                     {/* 9. Recomendaciones Estratégicas */}
+                     {narrativeState?.recomendacionesEstrategicas && (
+                       <div className="space-y-4 pt-8 border-t border-slate-100 w-full">
+                         <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">Recomendaciones estratégicas</h4>
+                         <div className="bg-[#009fb7] text-white rounded-[2rem] p-8 shadow-lg w-full">
+                           <textarea
+                              rows={6}
+                              className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
+                              style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
+                              value={narrativeState.recomendacionesEstrategicas}
+                              onChange={(e) => setNarrativeState({ ...narrativeState, recomendacionesEstrategicas: e.target.value })}
+                           />
+                         </div>
+                       </div>
+                     )}
+
+                     <div className="pt-8 border-t border-slate-100 flex items-center justify-between text-slate-350 text-[10px] font-bold tracking-widest uppercase font-bold w-full">
+                        <span>Creado por Brainstudio Agencia</span>
+                        <span>Fecha de emisión: {new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                     </div>
+                   </div>
 
                 </div>
               </motion.div>
