@@ -1074,7 +1074,30 @@ const Reports = () => {
         div.style.height = 'auto';
         div.style.whiteSpace = 'pre-wrap';
         div.style.border = 'none';
-        div.style.color = '#1e293b'; // slate-800
+
+        // Dynamic high contrast calculation
+        let isDarkBg = false;
+        let parent = ta.parentElement;
+        while (parent) {
+          const classes = parent.className || '';
+          if (
+            classes.includes('bg-[#009fb7]') ||
+            classes.includes('bg-[#0F172A]') ||
+            classes.includes('text-white') ||
+            classes.includes('bg-primary')
+          ) {
+            isDarkBg = true;
+            break;
+          }
+          parent = parent.parentElement;
+        }
+
+        if (isDarkBg) {
+          div.style.color = '#ffffff';
+        } else {
+          div.style.color = '#1e293b'; // slate-800
+        }
+
         ta.parentNode.replaceChild(div, ta);
       });
 
