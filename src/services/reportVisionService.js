@@ -103,9 +103,11 @@ const schema = {
         type: "object",
         properties: {
           label: { type: "string" },
-          value: { anyOf: [{ type: "number" }, { type: "null" }] }
+          value: { anyOf: [{ type: "number" }, { type: "null" }] },
+          hombres: { anyOf: [{ type: "number" }, { type: "null" }] },
+          mujeres: { anyOf: [{ type: "number" }, { type: "null" }] }
         },
-        required: ["label", "value"],
+        required: ["label"],
         additionalProperties: false
       }
     }
@@ -141,7 +143,10 @@ Also extract graphic points and visual data as a structured section:
 - title: A descriptive and clear Spanish title for this chart/visualization block.
 - sectionCategory: Categorize this screenshot section strictly as "ORGANIC" (for organic reels, posts, feed reach, likes, story views, organic Facebook/Instagram profile stats) or "ADS" (for campaigns, ad manager charts, spend/inversión, campaign results, paid conversions).
 - platform: Identify the specific platform: "FACEBOOK" (for Facebook specific stats), "INSTAGRAM" (for Instagram specific business profile/feed stats), or "META_ADS" (for paid ads/manager).
-- dataset: An array of data points with at least "label" (string representing day, date, demographic group, platform, or post title) and dynamic numeric fields: "value" for baseline, "percentage" for percentages, and for ads tables (RANKING_TABLE), extract "results" (for results/conversiones/mensajes), "impressions" (for impressions), and "reach" (for alcance), substituting secondary low-volume columns like views or isolated clicks. If not visible in the image, return an empty array []. Do NOT generate simulated, fake, placeholder, or mock data (such as "Simulado 1").
+- dataset: An array of data points following this strict schema based on chartType:
+  - For BAR_CHART and LINE_CHART: return array of { "label": string, "value": number }.
+  - For DEMOGRAPHICS_CHART: return array of { "label": string, "hombres": number, "mujeres": number }.
+  If not visible or quantifiable in the image, return an empty array []. Do NOT generate simulated, fake, placeholder, or mock data (such as "Simulado 1"). All values must be valid numbers (not strings, and not null/undefined inside the properties if quantifiable).
 - title: A descriptive and clear Spanish title for this chart/visualization block, following strictly the Spanish Sentence Case rule (only capitalize the first letter of the first word, all other words in lowercase, except proper names).
 `;
 
@@ -295,9 +300,11 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
                   type: "object",
                   properties: {
                     label: { type: "string" },
-                    value: { anyOf: [{ type: "number" }, { type: "null" }] }
+                    value: { anyOf: [{ type: "number" }, { type: "null" }] },
+                    hombres: { anyOf: [{ type: "number" }, { type: "null" }] },
+                    mujeres: { anyOf: [{ type: "number" }, { type: "null" }] }
                   },
-                  required: ["label", "value"],
+                  required: ["label"],
                   additionalProperties: false
                 }
               },
