@@ -29,6 +29,20 @@ test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) =>
                             dataset: [
                                 { label: "Día 1", value: 100, hombres: null, mujeres: null },
                                 { label: "Día 2", value: 150, hombres: null, mujeres: null }
+                            ],
+                            demographics: {
+                                ageGender: [
+                                    { label: "18-24", hombres: 10, mujeres: 15 }
+                                ],
+                                cities: [
+                                    { label: "Bogota", value: 80 }
+                                ],
+                                countries: [
+                                    { label: "Colombia", value: 95 }
+                                ]
+                            },
+                            topContent: [
+                                { title: "Publicacion 1", format: "Imagen", results: 150, impressions: 5000, reach: 4000 }
                             ]
                         })
                     }
@@ -157,6 +171,13 @@ test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) =>
                                 { action: "Renovar creativos del pilar más relevante", kpi: "CTR > 1.8%", suggestedAssignee: "Diseñador Creativo" },
                                 { action: "Establecer presupuesto incremental", kpi: "Retorno de inversión", suggestedAssignee: "Project Manager" }
                             ],
+                            logrosYAvances: [
+                                "Incremento sustancial en la conversión final.",
+                                "Aumento en CTR impulsado por nuevos ganchos de contenido."
+                            ],
+                            contenidoTopAnalisis: "Análisis de las mejores piezas del mes.",
+                            oportunidadesYAprendizajes: "Nuevas oportunidades en la pauta de Meta Ads.",
+                            recomendacionesEstrategicas: "Recomendaciones finales de desempeño.",
                             sections: [
                                 {
                                     sectionId: "sec-1",
@@ -164,7 +185,7 @@ test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) =>
                                     title: "Rendimiento y Tendencia",
                                     sectionCategory: "ADS",
                                     platform: "META_ADS",
-                                    dataset: [{ label: "Día 1", value: 100 }],
+                                    dataset: [{ label: "Día 1", value: 100, hombres: null, mujeres: null }],
                                     narrativeComment: "Comentario optimista sobre rendimiento macro."
                                 }
                             ]

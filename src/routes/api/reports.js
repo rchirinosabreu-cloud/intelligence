@@ -278,10 +278,23 @@ function validateAndCleanNormalizedMetrics(metrics) {
         clean[key] = cleanItem;
     }
 
+    // Preserve demographics and topContent in the cleaned object
+    if (metrics.demographics) {
+        clean.demographics = metrics.demographics;
+    } else {
+        clean.demographics = { ageGender: [], cities: [], countries: [] };
+    }
+    if (metrics.topContent) {
+        clean.topContent = metrics.topContent;
+    } else {
+        clean.topContent = [];
+    }
+
     // Strict validation to avoid key collisions or additional keys
+    const validKeys = [...allowedKeys, 'demographics', 'topContent'];
     for (const key of Object.keys(metrics)) {
-        if (!allowedKeys.includes(key)) {
-            throw new Error(`Unexpected metric key '${key}' in normalizedMetrics`);
+        if (!validKeys.includes(key)) {
+            throw new Error(`Unexpected metric key '${key}' in normalizedMetrics: ${key}`);
         }
     }
 
@@ -377,7 +390,9 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 title: extracted.title || 'Sección',
                 sectionCategory: extracted.sectionCategory || 'ADS',
                 platformVal: extracted.platform || 'META_ADS',
-                dataset: extracted.dataset || []
+                dataset: extracted.dataset || [],
+                demographics: extracted.demographics || null,
+                topContent: extracted.topContent || []
             };
         });
 
@@ -413,6 +428,9 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 });
         };
 
+        let finalDemographics = { ageGender: [], cities: [], countries: [] };
+        let finalTopContent = [];
+
         // Aggregate across sources
         results.forEach((res, index) => {
             if (index === 0 && res.spendUnit) {
@@ -423,6 +441,22 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             if (typeof res.reachVal === 'number') totalReach += res.reachVal;
             if (typeof res.clicksVal === 'number') totalClicks += res.clicksVal;
             if (typeof res.resultsVal === 'number') totalResults += res.resultsVal;
+
+            if (res.demographics) {
+                if (Array.isArray(res.demographics.ageGender) && res.demographics.ageGender.length > 0) {
+                    finalDemographics.ageGender = res.demographics.ageGender;
+                }
+                if (Array.isArray(res.demographics.cities) && res.demographics.cities.length > 0) {
+                    finalDemographics.cities = res.demographics.cities;
+                }
+                if (Array.isArray(res.demographics.countries) && res.demographics.countries.length > 0) {
+                    finalDemographics.countries = res.demographics.countries;
+                }
+            }
+
+            if (Array.isArray(res.topContent) && res.topContent.length > 0) {
+                finalTopContent = [...finalTopContent, ...res.topContent];
+            }
 
             const cleanDataset = sanitizeSectionDataset(res.dataset);
 
@@ -469,7 +503,9 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             reach: { key: 'reach', label: 'Alcance Total', value: totalReach, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
             clicks: { key: 'clicks', label: 'Clics Totales', value: totalClicks, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
             ctr: { key: 'ctr', label: 'CTR Promedio', value: parseFloat(overallCtr.toFixed(4)), unit: '%', confidence: 1.0, evidence: 'Cálculo agregado' },
-            results: { key: 'results', label: 'Resultados Totales', value: totalResults, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' }
+            results: { key: 'results', label: 'Resultados Totales', value: totalResults, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
+            demographics: finalDemographics,
+            topContent: finalTopContent
         };
 
         const validatedNormalizedMetrics = validateAndCleanNormalizedMetrics(rawNormalizedMetrics);
@@ -497,7 +533,15 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                         normalizedMetrics: validatedNormalizedMetrics,
                         narrative: {
                             draft: combinedNarrative,
-                            final: combinedNarrative
+                            final: combinedNarrative,
+                            headline: "",
+                            summaryPoints: [],
+                            keyAchievements: combinedNarrative,
+                            actionPlan: [],
+                            logrosYAvances: [],
+                            contenidoTopAnalisis: "",
+                            oportunidadesYAprendizajes: "",
+                            recomendacionesEstrategicas: ""
                         },
                         sections: extractedSections,
                         sources: {

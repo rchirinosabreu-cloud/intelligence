@@ -110,9 +110,68 @@ const schema = {
         required: ["label", "value", "hombres", "mujeres"],
         additionalProperties: false
       }
+    },
+    demographics: {
+      type: "object",
+      properties: {
+        ageGender: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string" },
+              hombres: { anyOf: [{ type: "number" }, { type: "null" }] },
+              mujeres: { anyOf: [{ type: "number" }, { type: "null" }] }
+            },
+            required: ["label", "hombres", "mujeres"],
+            additionalProperties: false
+          }
+        },
+        cities: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string" },
+              value: { anyOf: [{ type: "number" }, { type: "null" }] }
+            },
+            required: ["label", "value"],
+            additionalProperties: false
+          }
+        },
+        countries: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string" },
+              value: { anyOf: [{ type: "number" }, { type: "null" }] }
+            },
+            required: ["label", "value"],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ["ageGender", "cities", "countries"],
+      additionalProperties: false
+    },
+    topContent: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          format: { type: "string" },
+          results: { anyOf: [{ type: "number" }, { type: "null" }] },
+          impressions: { anyOf: [{ type: "number" }, { type: "null" }] },
+          reach: { anyOf: [{ type: "number" }, { type: "null" }] }
+        },
+        required: ["title", "format", "results", "impressions", "reach"],
+        additionalProperties: false
+      }
     }
   },
-  required: ["metrics", "screenType", "confidence", "narrativeDraft", "chartType", "title", "sectionCategory", "platform", "dataset"],
+  required: ["metrics", "screenType", "confidence", "narrativeDraft", "chartType", "title", "sectionCategory", "platform", "dataset", "demographics", "topContent"],
   additionalProperties: false
 };
 
@@ -148,6 +207,10 @@ Also extract graphic points and visual data as a structured section:
   - For DEMOGRAPHICS_CHART: return array of { "label": string, "hombres": number, "mujeres": number }.
   If not visible or quantifiable in the image, return an empty array []. Do NOT generate simulated, fake, placeholder, or mock data (such as "Simulado 1"). All values must be valid numbers (not strings, and not null/undefined inside the properties if quantifiable).
 - title: A descriptive and clear Spanish title for this chart/visualization block, following strictly the Spanish Sentence Case rule (only capitalize the first letter of the first word, all other words in lowercase, except proper names).
+
+For Demographics and Top Content:
+- demographics: Extract Age & Gender percentage breakdowns (ranges 18-24 to 65+ mapping males to "hombres" and females to "mujeres"), Top Cities ("cities"), and Top Countries ("countries"). If not visible in the screenshot, return empty arrays []. NEVER use mock or placeholder data (such as "Simulado X").
+- topContent: Extract list of top performing posts or creatives. Each must specify "title" (name of publication), "format" (Imagen, Reel, or Carrusel), "results" (interactions or conversions), "impressions", and "reach". If not visible, return an empty array []. NEVER use mock or placeholder data.
 `;
 
 /**
@@ -259,6 +322,10 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
    - summaryPoints: Un arreglo de exactamente 3 puntos clave resumidos, cada uno capitalizado strictly en Sentence Case.
    - keyAchievements: Un texto profundo de exactamente 3 a 4 oraciones completas que explique los logros más importantes y las variaciones relevantes, destacando la evolución de manera optimista, capitalizado strictly en Sentence Case.
    - actionPlan: Un plan de acción con exactamente 3 compromisos recomendados. Cada compromiso debe ser un objeto con 'action' (Acción, capitalizado strictly en Sentence Case), 'kpi' (KPI de éxito, capitalizado strictly en Sentence Case) y 'suggestedAssignee' (Responsable sugerido).
+   - logrosYAvances: Un arreglo de exactamente 4 a 5 strings (viñetas analíticas con el impacto alcanzado), capitalizado strictly en Sentence Case.
+   - contenidoTopAnalisis: Texto explicativo de las piezas creativas de mayor rendimiento con ranking detallado (Top 1 - Imagen, Top 2 - Reel, etc.), capitalizado strictly en Sentence Case.
+   - oportunidadesYAprendizajes: Lecciones clave extraídas de la pauta y el contenido orgánico, capitalizado strictly en Sentence Case.
+   - recomendacionesEstrategicas: 2 a 3 párrafos de aconsejamiento consultivo y motivador de cierre, capitalizado strictly en Sentence Case.
    - sections: Un arreglo que contenga exactamente los mismos objetos que se te pasaron en SECCIONES VISUALES REGISTRADAS, pero agregando en cada uno un campo 'narrativeComment' con una explicación consultiva profunda, positiva y de exactamente 3 a 4 oraciones completas explicando dicho gráfico o tabla, capitalizado strictly en Sentence Case.
 `;
 
@@ -284,6 +351,13 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
             additionalProperties: false
           }
         },
+        logrosYAvances: {
+          type: "array",
+          items: { type: "string" }
+        },
+        contenidoTopAnalisis: { type: "string" },
+        oportunidadesYAprendizajes: { type: "string" },
+        recomendacionesEstrategicas: { type: "string" },
         sections: {
           type: "array",
           items: {
@@ -315,7 +389,7 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
           }
         }
       },
-      required: ["headline", "summaryPoints", "keyAchievements", "actionPlan", "sections"],
+      required: ["headline", "summaryPoints", "keyAchievements", "actionPlan", "logrosYAvances", "contenidoTopAnalisis", "oportunidadesYAprendizajes", "recomendacionesEstrategicas", "sections"],
       additionalProperties: false
     };
 
