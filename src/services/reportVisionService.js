@@ -107,7 +107,7 @@ const schema = {
           hombres: { anyOf: [{ type: "number" }, { type: "null" }] },
           mujeres: { anyOf: [{ type: "number" }, { type: "null" }] }
         },
-        required: ["label"],
+        required: ["label", "value", "hombres", "mujeres"],
         additionalProperties: false
       }
     }
@@ -304,7 +304,7 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
                     hombres: { anyOf: [{ type: "number" }, { type: "null" }] },
                     mujeres: { anyOf: [{ type: "number" }, { type: "null" }] }
                   },
-                  required: ["label"],
+                  required: ["label", "value", "hombres", "mujeres"],
                   additionalProperties: false
                 }
               },
