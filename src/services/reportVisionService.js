@@ -1,6 +1,5 @@
 import { parseJsonResponse } from './aiService.js';
-
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+import { GoogleGenAI } from '@google/genai';
 
 const schema = {
   type: "object",
@@ -175,8 +174,8 @@ const schema = {
   additionalProperties: false
 };
 
-const SYSTEM_PROMPT = `You are a professional Meta Ads data extraction expert.
-Analyze the provided screenshot of Meta Ads metrics and extract the 6 key metrics strictly:
+const SYSTEM_PROMPT = `You are a professional Meta Ads and Organic Social Media data extraction expert using Google Generative AI (Gemini).
+Analyze the provided screenshot and extract the 6 key metrics strictly:
 - spend: Inversión (e.g. amount spent in USD, COP, EUR, etc.)
 - impressions: Impresiones
 - reach: Alcance
@@ -195,13 +194,13 @@ For each metric, extract the following:
 Also identify:
 - screenType: The type of screen (e.g., "Rendimiento Macro" or "Desglose Micro" or "Tabla General").
 - confidence: Overall confidence score for the whole screenshot extraction (0.0 to 1.0).
-- narrativeDraft: A short narrative explanation of these metrics in Spanish (exactly 3 to 4 complete, well-structured sentences), highlighting the progress and using extremely positive, forward-looking terminology. Never use negative/alarmist words (e.g. instead of "bajo" or "caída", use "fase de consolidación" or "ventana de oportunidad"). Ensure it does not truncate or cut off.
+- narrativeDraft: A short narrative explanation of these metrics in Spanish (exactly 3 to 4 complete, well-structured sentences), highlighting the progress and using extremely positive, forward-looking terminology. Never use negative/alarmist words (e.g. instead of "bajo" or "caída", use "fase de consolidación" or "ventana de oportunidad"). Ensure it does not truncate or cut off. Ensure the general strategy maintains a balanced 50/50 overview between organic social media content and paid performance results.
 
 Also extract graphic points and visual data as a structured section:
 - chartType: Detect or choose the most appropriate chart type to display this visual: "LINE_CHART" (for trend curves or daily data), "BAR_CHART" (for age/gender bar breakdowns), "DONUT_CHART" (for platform split or percentage distribution), or "RANKING_TABLE" (for listing contents, ads, or posts).
 - title: A descriptive and clear Spanish title for this chart/visualization block.
 - sectionCategory: Categorize this screenshot section strictly as "ORGANIC" (for organic reels, posts, feed reach, likes, story views, organic Facebook/Instagram profile stats) or "ADS" (for campaigns, ad manager charts, spend/inversión, campaign results, paid conversions).
-- platform: Identify the specific platform: "FACEBOOK" (for Facebook specific stats), "INSTAGRAM" (for Instagram specific business profile/feed stats), or "META_ADS" (for paid ads/manager).
+- platform: Identify the specific platform category strictly: return 'ORGANIC_RRSS' (for Instagram/Facebook organic posts, reach, stories, feed demographics) or 'PAID_ADS' (for Meta Ads Manager paid campaigns, ad sets, impressions, investment).
 - dataset: An array of data points following this strict schema based on chartType:
   - For BAR_CHART and LINE_CHART: return array of { "label": string, "value": number }.
   - For DEMOGRAPHICS_CHART: return array of { "label": string, "hombres": number, "mujeres": number }.
@@ -211,6 +210,12 @@ Also extract graphic points and visual data as a structured section:
 For Demographics and Top Content (N:1 Exhaustive Processing):
 - demographics: Extract Age & Gender percentage breakdowns (ranges 18-24 to 65+ mapping males to "hombres" and females to "mujeres"), Top Cities ("cities"), and Top Countries ("countries"). Perform exhaustive extraction of all demographic metrics from the screenshot. If not visible in the screenshot, return empty arrays []. NEVER use mock or placeholder data (such as "Simulado X").
 - topContent: Extract list of top performing posts, video/Reels formats, and ad creatives. Each must specify "title" (name of publication or ad creative), "format" (Imagen, Reel, or Carrusel), "results" (interactions or conversions), "impressions", and "reach". Perform exhaustive extraction of video, Reels, and ad performance metrics from the screenshot. If not visible, return an empty array []. NEVER use mock or placeholder data.
+
+RIGOROUS META ADS TABLE PARSING RULES:
+1. Row titles (the "title" field in topContent) MUST correspond strictly to the actual names of ads or Reels (e.g. "REEL - ELEGIR COLEGIO", "POST - ADVENTURE").
+2. It is STRICTLY PROHIBITED to use metric names (like "Importe gastado", "Impresiones", "Alcance", "Resultados") as row titles.
+3. Each column MUST map its actual numeric value from the screenshot: results (real conversions), impressions (actual impressions), and reach (actual accounts reached).
+4. It is STRICTLY PROHIBITED to copy or repeat the investment/spend value in all columns or cells of a row. Keep the metric columns completely distinct and separate.
 `;
 
 /**
@@ -220,67 +225,48 @@ For Demographics and Top Content (N:1 Exhaustive Processing):
  * @returns {Promise<Object>} The parsed canonical metrics extraction response.
  */
 export const extractMetricsWithVision = async (imageBuffer, mimeType = 'image/jpeg') => {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-        throw new Error("Missing OpenAI API Key in server configuration");
+        throw new Error("Missing GEMINI_API_KEY in server configuration");
     }
+
+    const genAI = new GoogleGenAI({ apiKey });
+    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+
+    console.log(`[Vision Service] Sending image to Gemini using model ${model}...`);
 
     const base64Image = imageBuffer.toString('base64');
-    const model = process.env.OPENAI_VISION_MODEL || "gpt-4o";
 
-    console.log(`[Vision Service] Sending image to OpenAI using model ${model}...`);
-
-    const response = await fetch(OPENAI_API_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-            'User-Agent': 'BrainStudioIntelligence/2.0'
-        },
-        body: JSON.stringify({
-            model: model,
-            messages: [
-                {
-                    role: 'system',
-                    content: SYSTEM_PROMPT
-                },
-                {
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'text',
-                            text: "Extract key metrics from this Meta Ads screenshot."
-                        },
-                        {
-                            type: 'image_url',
-                            image_url: {
-                                url: `data:${mimeType};base64,${base64Image}`
-                            }
+    const result = await genAI.models.generateContent({
+        model: model,
+        contents: [
+            {
+                role: 'user',
+                parts: [
+                    { text: SYSTEM_PROMPT },
+                    { text: "Extract key metrics from this Meta Ads/organic screenshot." },
+                    {
+                        inlineData: {
+                            data: base64Image,
+                            mimeType: mimeType
                         }
-                    ]
-                }
-            ],
-            response_format: {
-                type: "json_schema",
-                json_schema: {
-                    name: "metrics_extraction",
-                    strict: true,
-                    schema: schema
-                }
+                    }
+                ]
             }
-        })
+        ],
+        config: {
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                maxOutputTokens: 8192,
+                temperature: 0.1
+            }
+        }
     });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[Vision Service] OpenAI API error: ${response.status}`, errorText);
-        throw new Error(`OpenAI Vision API failed with status ${response.status}: ${errorText}`);
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
+    const content = result.text;
     if (!content) {
-        throw new Error("OpenAI Vision response content is empty");
+        throw new Error("Gemini Vision response content is empty");
     }
 
     try {
@@ -298,12 +284,13 @@ export const extractMetricsWithVision = async (imageBuffer, mimeType = 'image/jp
  * @returns {Promise<Object>} The parsed narrative structure.
  */
 export const generateNarrativeWithOpenAI = async (normalizedMetrics, sections = []) => {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-        throw new Error("Missing OpenAI API Key in server configuration");
+        throw new Error("Missing GEMINI_API_KEY in server configuration");
     }
 
-    const model = process.env.OPENAI_VISION_MODEL || "gpt-4o";
+    const genAI = new GoogleGenAI({ apiKey });
+    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
     const prompt = `Analiza las siguientes métricas cuantitativas ya validadas y la colección de secciones visuales, y genera una narración editorial estructurada en Español.
 
@@ -393,46 +380,28 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
       additionalProperties: false
     };
 
-    const response = await fetch(OPENAI_API_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-            'User-Agent': 'BrainStudioIntelligence/2.0'
-        },
-        body: JSON.stringify({
-            model: model,
-            messages: [
-                {
-                    role: 'system',
-                    content: "Eres un Director Editorial de Estrategia Digital en Brainstudio, experto en redactar análisis consultivos y planes de acción accionables basados en datos reales."
-                },
-                {
-                    role: 'user',
-                    content: prompt
-                }
-            ],
-            response_format: {
-                type: "json_schema",
-                json_schema: {
-                    name: "editorial_narrative",
-                    strict: true,
-                    schema: narrativeSchema
-                }
+    const response = await genAI.models.generateContent({
+        model: model,
+        contents: [
+            {
+                role: 'user',
+                content: prompt
             }
-        })
+        ],
+        config: {
+            systemInstruction: "Eres un Director Editorial de Estrategia Digital en Brainstudio, experto en redactar análisis consultivos y planes de acción accionables basados en datos reales.",
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: narrativeSchema,
+                maxOutputTokens: 8192,
+                temperature: 0.1
+            }
+        }
     });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[Vision Service] OpenAI Narrative API error: ${response.status}`, errorText);
-        throw new Error(`OpenAI Narrative API failed with status ${response.status}: ${errorText}`);
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
+    const content = response.text;
     if (!content) {
-        throw new Error("OpenAI Narrative response content is empty");
+        throw new Error("Gemini Narrative response content is empty");
     }
 
     try {
