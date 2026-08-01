@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { extractMetricsWithGemini } from '../src/services/reportVisionService.js';
+import {
+    extractMetricsWithGemini,
+    validateAndCleanSourceExtraction,
+    mergeSourceMetricsIntoAccumulator,
+    finalizeNormalizedMetrics
+} from '../src/services/reportVisionService.js';
 
 // We can mock the fetch call to Gemini to test the vision service
 test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) => {
@@ -154,6 +159,112 @@ test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) =>
         assert.strictEqual(updatedMetrics.spend.isManuallyEdited, true);
         assert.strictEqual(updatedMetrics.impressions.isManuallyEdited, false);
         assert.strictEqual(updatedMetrics.spend.value, 1300.00);
+    });
+
+    await t.test('Tolerant validation - partial metrics', async () => {
+        // Screenshot with only spend and impressions, others null/missing
+        const rawPayload = {
+            metrics: {
+                spend: { key: "spend", label: "Importe", value: 500, unit: "USD" },
+                impressions: { key: "impressions", label: "Imp", value: 50000, unit: "count" }
+            },
+            screenType: "Rendimiento",
+            sectionCategory: "ADS"
+        };
+
+        const cleaned = validateAndCleanSourceExtraction(rawPayload);
+        assert.strictEqual(cleaned.usable, true);
+        assert.strictEqual(cleaned.metrics.spend.value, 500);
+        assert.strictEqual(cleaned.metrics.impressions.value, 50000);
+        // Clicks, ctr, results, reach should be cleanly resolved to null
+        assert.strictEqual(cleaned.metrics.clicks.value, null);
+        assert.strictEqual(cleaned.metrics.ctr.value, null);
+        assert.strictEqual(cleaned.metrics.reach.value, null);
+    });
+
+    await t.test('Tolerant validation - pure demographics screen', async () => {
+        // Pure demographic screen with no global financial metrics
+        const rawPayload = {
+            metrics: {
+                spend: { value: null },
+                impressions: { value: null }
+            },
+            demographics: {
+                ageGender: [{ label: "18-24", hombres: 12, mujeres: 18 }]
+            },
+            screenType: "Demografía",
+            sectionCategory: "ORGANIC"
+        };
+
+        const cleaned = validateAndCleanSourceExtraction(rawPayload);
+        assert.strictEqual(cleaned.usable, true);
+        assert.strictEqual(cleaned.metrics.spend.value, null);
+        assert.ok(cleaned.demographics);
+        assert.strictEqual(cleaned.demographics.ageGender[0].hombres, 12);
+    });
+
+    await t.test('Consolidation - metric sum, reach non-additive, and null preservation', async () => {
+        let accumulator = null;
+
+        const source1 = validateAndCleanSourceExtraction({
+            metrics: {
+                spend: { value: 200, unit: "USD" },
+                impressions: { value: 1000 },
+                reach: { value: 800 }
+            }
+        });
+
+        const source2 = validateAndCleanSourceExtraction({
+            metrics: {
+                spend: { value: 300, unit: "USD" },
+                impressions: { value: 2000 },
+                reach: { value: 1500 }
+            }
+        });
+
+        accumulator = mergeSourceMetricsIntoAccumulator(accumulator, source1);
+        accumulator = mergeSourceMetricsIntoAccumulator(accumulator, source2);
+
+        const finalized = finalizeNormalizedMetrics(accumulator);
+
+        // Sum check
+        assert.strictEqual(finalized.spend.value, 500);
+        assert.strictEqual(finalized.impressions.value, 3000);
+
+        // Reach non-additive check (consolidates using Math.max)
+        assert.strictEqual(finalized.reach.value, 1500);
+
+        // Null preservation check: clicks and results were not observed and must remain null, never 0
+        assert.strictEqual(finalized.clicks.value, null);
+        assert.strictEqual(finalized.results.value, null);
+    });
+
+    await t.test('Consolidation - derived overall CTR calculation', async () => {
+        let accumulator = null;
+
+        const source1 = validateAndCleanSourceExtraction({
+            metrics: {
+                impressions: { value: 10000 },
+                clicks: { value: 150 }
+            }
+        });
+
+        const source2 = validateAndCleanSourceExtraction({
+            metrics: {
+                impressions: { value: 20000 },
+                clicks: { value: 300 }
+            }
+        });
+
+        accumulator = mergeSourceMetricsIntoAccumulator(accumulator, source1);
+        accumulator = mergeSourceMetricsIntoAccumulator(accumulator, source2);
+
+        const finalized = finalizeNormalizedMetrics(accumulator);
+
+        // Theoretical overall CTR = (150+300) / (10000+20000) * 100 = 450 / 30000 * 100 = 1.5%
+        assert.strictEqual(finalized.clicks.value, 450);
+        assert.strictEqual(finalized.impressions.value, 30000);
+        assert.strictEqual(finalized.ctr.value, 1.5);
     });
 
     await t.test('Editorial narrative prompt and format generation logic', async () => {

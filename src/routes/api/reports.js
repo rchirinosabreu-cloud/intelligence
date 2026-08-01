@@ -4,7 +4,13 @@ import prisma from '../../lib/prisma.js';
 import { GoogleGenAI } from '@google/genai';
 import { uploadClientFile, getSignedUrl, getClientFileStream } from '../../services/storageService.js';
 import { parseJsonResponse, extractModelText } from '../../services/aiService.js';
-import { extractMetricsWithGemini, generateNarrativeWithGemini } from '../../services/reportVisionService.js';
+import {
+    extractMetricsWithGemini,
+    generateNarrativeWithGemini,
+    validateAndCleanSourceExtraction,
+    mergeSourceMetricsIntoAccumulator,
+    finalizeNormalizedMetrics
+} from '../../services/reportVisionService.js';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
@@ -308,87 +314,6 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             return res.status(400).json({ error: 'At least one screenshot is required' });
         }
 
-        const processedSources = [];
-        let totalSpend = 0;
-        let totalImpressions = 0;
-        let totalReach = 0;
-        let totalClicks = 0;
-        let totalResults = 0;
-        let firstSourceSpendUnit = 'USD';
-        const narrativeDrafts = [];
-
-        // Process files in parallel
-        const filePromises = files.map(async (file) => {
-            const sourceId = uuidv4();
-
-            // 1. Upload to GCS
-            const uploadResult = await uploadClientFile(file, client.name);
-
-            // 2. Vision analysis
-            let extracted;
-            try {
-                extracted = await extractMetricsWithGemini(file.buffer, file.mimetype);
-            } catch (aiError) {
-                // If AI service fails or isn't reachable
-                const aiErr = new Error(`AI Service call failed for file ${file.originalname}: ${aiError.message}`);
-                aiErr.isAIUnavailable = true;
-                throw aiErr;
-            }
-
-            if (!extracted || !extracted.metrics) {
-                const schemaErr = new Error(`AI response validation failed for file ${file.originalname}: Invalid schema or missing metrics`);
-                schemaErr.isAIInvalidResponse = true;
-                throw schemaErr;
-            }
-
-            // 3. Math Validation
-            const spendVal = extracted.metrics?.spend?.value;
-            const impressionsVal = extracted.metrics?.impressions?.value;
-            const reachVal = extracted.metrics?.reach?.value;
-            const clicksVal = extracted.metrics?.clicks?.value;
-            const ctrVal = extracted.metrics?.ctr?.value;
-            const resultsVal = extracted.metrics?.results?.value;
-
-            const warnings = [];
-            if (typeof clicksVal === 'number' && typeof impressionsVal === 'number' && impressionsVal > 0) {
-                const theoreticalCtr = (clicksVal / impressionsVal) * 100;
-                if (typeof ctrVal === 'number') {
-                    const diff = Math.abs(ctrVal - theoreticalCtr);
-                    if (diff > 0.01) {
-                        warnings.push(`Advertencia matemática: El CTR extraído (${ctrVal}%) difiere del cálculo teórico basado en clics e impresiones (${theoreticalCtr.toFixed(4)}%).`);
-                    }
-                }
-            }
-
-            return {
-                sourceId,
-                storagePath: uploadResult.gcsPath,
-                platform: extracted.platform || 'META_ADS',
-                screenType: extracted.screenType || 'Desconocido',
-                extractionData: extracted.metrics,
-                confidence: parseFloat(extracted.confidence) || 0.0,
-                warnings: warnings,
-                narrativeDraft: extracted.narrativeDraft || '',
-                spendVal,
-                spendUnit: extracted.metrics?.spend?.unit || 'USD',
-                impressionsVal,
-                reachVal,
-                clicksVal,
-                resultsVal,
-                chartType: extracted.chartType || 'LINE_CHART',
-                title: extracted.title || 'Sección',
-                sectionCategory: extracted.sectionCategory || 'ADS',
-                platformVal: extracted.platform || 'META_ADS',
-                dataset: extracted.dataset || [],
-                demographics: extracted.demographics || null,
-                topContent: extracted.topContent || []
-            };
-        });
-
-        const results = await Promise.all(filePromises);
-
-        const extractedSections = [];
-
         const sanitizeSectionDataset = (dataset) => {
             if (!Array.isArray(dataset)) return [];
             return dataset
@@ -417,53 +342,107 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 });
         };
 
-        let finalDemographics = { ageGender: [], cities: [], countries: [] };
-        let finalTopContent = [];
+        // Process files in parallel with Promise.allSettled
+        const filePromises = files.map(async (file) => {
+            const sourceId = uuidv4();
 
-        // Aggregate across sources
-        results.forEach((res, index) => {
-            if (index === 0 && res.spendUnit) {
-                firstSourceSpendUnit = res.spendUnit;
-            }
-            if (typeof res.spendVal === 'number') totalSpend += res.spendVal;
-            if (typeof res.impressionsVal === 'number') totalImpressions += res.impressionsVal;
-            if (typeof res.reachVal === 'number') totalReach += res.reachVal;
-            if (typeof res.clicksVal === 'number') totalClicks += res.clicksVal;
-            if (typeof res.resultsVal === 'number') totalResults += res.resultsVal;
+            // 1. Upload to GCS
+            const uploadResult = await uploadClientFile(file, client.name);
 
-            if (res.demographics) {
-                if (Array.isArray(res.demographics.ageGender) && res.demographics.ageGender.length > 0) {
-                    finalDemographics.ageGender = res.demographics.ageGender;
+            // 2. Vision analysis
+            const extracted = await extractMetricsWithGemini(file.buffer, file.mimetype);
+
+            // 3. Validation and cleaning by Source
+            const cleaned = validateAndCleanSourceExtraction(extracted);
+
+            return {
+                sourceId,
+                storagePath: uploadResult.gcsPath,
+                ...cleaned,
+                originalName: file.originalname
+            };
+        });
+
+        const settleResults = await Promise.allSettled(filePromises);
+
+        const successful = [];
+        const partial = [];
+        const failed = [];
+        const allWarnings = [];
+
+        settleResults.forEach((res, index) => {
+            const originalName = files[index]?.originalname || `Captura ${index + 1}`;
+            if (res.status === 'fulfilled') {
+                const val = res.value;
+                if (val.usable) {
+                    successful.push(val);
+                    if (val.warnings && val.warnings.length > 0) {
+                        allWarnings.push(...val.warnings);
+                    }
+                } else {
+                    partial.push({
+                        originalName: val.originalName || originalName,
+                        reason: "Información extraída no contiene datos utilizables o métricas reconocibles.",
+                        ...val
+                    });
+                    allWarnings.push(`Archivo parcial (${originalName}): No se detectaron métricas ni audiencias.`);
                 }
-                if (Array.isArray(res.demographics.cities) && res.demographics.cities.length > 0) {
-                    finalDemographics.cities = res.demographics.cities;
-                }
-                if (Array.isArray(res.demographics.countries) && res.demographics.countries.length > 0) {
-                    finalDemographics.countries = res.demographics.countries;
-                }
+            } else {
+                const err = res.reason || {};
+                failed.push({
+                    originalName,
+                    error: err.message || String(err)
+                });
+                allWarnings.push(`Fallo en lectura (${originalName}): ${err.message || String(err)}`);
             }
+        });
 
-            if (Array.isArray(res.topContent) && res.topContent.length > 0) {
-                finalTopContent = [...finalTopContent, ...res.topContent];
-            }
+        const processingSummary = {
+            totalFiles: files.length,
+            successfulFiles: successful.length,
+            partialFiles: partial.length,
+            failedFiles: failed.length
+        };
 
-            const cleanDataset = sanitizeSectionDataset(res.dataset);
-
-            extractedSections.push({
-                sectionId: uuidv4(),
-                chartType: res.chartType,
-                title: res.title,
-                sectionCategory: res.sectionCategory,
-                platform: res.platformVal,
-                dataset: cleanDataset,
-                narrativeComment: ""
+        // Responder con estado HTTP 422 única y exclusivamente si ninguna imagen del lote aportó información utilizable
+        if (successful.length === 0) {
+            return res.status(422).json({
+                error: 'AI response validation failed',
+                details: 'Ninguna de las imágenes del lote proporcionó datos utilizables (métricas, gráficos o audiencias).',
+                processingSummary,
+                warnings: allWarnings,
+                requestId
             });
+        }
+
+        let accumulator = null;
+        const processedSources = [];
+        const extractedSections = [];
+        const narrativeDrafts = [];
+
+        successful.forEach((res, index) => {
+            // Merge into semantic accumulator
+            accumulator = mergeSourceMetricsIntoAccumulator(accumulator, res);
+
+            // Register sections
+            if (res.dataset && res.dataset.length > 0) {
+                const cleanDataset = sanitizeSectionDataset(res.dataset);
+                extractedSections.push({
+                    sectionId: uuidv4(),
+                    chartType: res.chartType || 'LINE_CHART',
+                    title: res.title || 'Sección',
+                    sectionCategory: res.sectionCategory || 'ADS',
+                    platform: res.platform || 'META_ADS',
+                    dataset: cleanDataset,
+                    narrativeComment: ""
+                });
+            }
 
             if (res.narrativeDraft) {
                 narrativeDrafts.push(`Captura ${index + 1}: ${res.narrativeDraft}`);
             }
 
-            // Map extracted platform (FACEBOOK/INSTAGRAM/META_ADS) to valid MetricSourcePlatform enum (META_ADS/ORGANIC_RRSS)
+            // Map extracted platform to valid MetricSourcePlatform enum (META_ADS/ORGANIC_RRSS)
             let dbPlatform = 'META_ADS';
             if (res.sectionCategory === 'ORGANIC' || res.platform === 'ORGANIC_RRSS' || res.platform === 'FACEBOOK' || res.platform === 'INSTAGRAM') {
                 dbPlatform = 'ORGANIC_RRSS';
@@ -474,32 +453,20 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 storagePath: res.storagePath,
                 platform: dbPlatform,
                 screenType: res.screenType,
-                extractionData: res.extractionData,
-                confidence: res.confidence,
-                warnings: res.warnings
+                extractionData: res.metrics,
+                confidence: parseFloat(res.confidence) || 1.0,
+                warnings: res.warnings || []
             });
         });
 
-        // Overall theoretical CTR
-        let overallCtr = 0;
-        if (totalImpressions > 0) {
-            overallCtr = (totalClicks / totalImpressions) * 100;
-        }
+        // Finalize consolidated metrics
+        const validatedNormalizedMetrics = finalizeNormalizedMetrics(accumulator);
 
-        const rawNormalizedMetrics = {
-            spend: { key: 'spend', label: 'Inversión Total', value: totalSpend, unit: firstSourceSpendUnit, confidence: 1.0, evidence: 'Agregado de fuentes' },
-            impressions: { key: 'impressions', label: 'Impresiones Totales', value: totalImpressions, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
-            reach: { key: 'reach', label: 'Alcance Total', value: totalReach, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
-            clicks: { key: 'clicks', label: 'Clics Totales', value: totalClicks, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
-            ctr: { key: 'ctr', label: 'CTR Promedio', value: parseFloat(overallCtr.toFixed(4)), unit: '%', confidence: 1.0, evidence: 'Cálculo agregado' },
-            results: { key: 'results', label: 'Resultados Totales', value: totalResults, unit: 'count', confidence: 1.0, evidence: 'Agregado de fuentes' },
-            demographics: finalDemographics,
-            topContent: finalTopContent
-        };
+        // Inject processingSummary and warnings directly into the normalizedMetrics object
+        validatedNormalizedMetrics.processingSummary = processingSummary;
+        validatedNormalizedMetrics.warnings = allWarnings;
 
-        const validatedNormalizedMetrics = validateAndCleanNormalizedMetrics(rawNormalizedMetrics);
-
-        const combinedNarrative = narrativeDrafts.join('\n\n');
+        const combinedNarrative = narrativeDrafts.join('\n\n') || "No hay narrativa disponible.";
 
         const parsedStartDate = startDate ? new Date(startDate) : new Date(new Date().setDate(1));
         const parsedEndDate = endDate ? new Date(endDate) : new Date();
