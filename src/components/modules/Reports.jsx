@@ -331,7 +331,7 @@ const SectionInsight = ({ sectionId, comment, onChange }) => {
     <div className="mt-4 break-inside-avoid !h-auto !overflow-visible bg-[#f9fafb] border border-slate-200 rounded-xl p-4">
       <textarea
         rows={4}
-        className="w-full bg-transparent border-none text-sm text-[#0f172a] leading-relaxed font-bold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
+        className="w-full bg-transparent border-none text-sm text-[#334155] leading-relaxed font-normal focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
         style={{ height: 'auto', overflow: 'visible' }}
         value={comment || ''}
         onChange={(e) => onChange(sectionId, e.target.value)}
@@ -401,7 +401,7 @@ const GranularNarrativeBlock = ({ sectionKey, title, comment, onChange }) => {
       </div>
       <textarea
         rows={4}
-        className="w-full bg-transparent border-none text-sm text-[#0f172a] leading-relaxed font-bold focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
+        className="w-full bg-transparent border-none text-sm text-[#334155] leading-relaxed font-normal focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
         style={{ height: 'auto', overflow: 'visible' }}
         value={comment || ''}
         onChange={(e) => onChange(sectionKey, e.target.value)}
@@ -490,7 +490,7 @@ const ExecutiveSummary = ({ narrative, onUpdate }) => {
               {idx + 1}
             </div>
             <textarea
-              className="w-full bg-transparent border-none text-sm text-white leading-relaxed font-bold focus:ring-1 focus:ring-white/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
+              className="w-full bg-transparent border-none text-sm text-white leading-relaxed font-normal focus:ring-1 focus:ring-white/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
               rows={4}
               style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
               value={toSentenceCase(point)}
@@ -1061,6 +1061,31 @@ const Reports = () => {
       // Clone report element
       const element = reportRef.current.cloneNode(true);
 
+      // Locate all responsive chart containers in the actual visible DOM and clone SVGs
+      const realContainers = reportRef.current.querySelectorAll('.recharts-responsive-container');
+      const clonedContainers = element.querySelectorAll('.recharts-responsive-container');
+
+      realContainers.forEach((realCont, idx) => {
+        const clonedCont = clonedContainers[idx];
+        if (!clonedCont) return;
+
+        const realSvg = realCont.querySelector('svg');
+        if (realSvg) {
+          const clonedSvg = realSvg.cloneNode(true);
+          const width = realCont.clientWidth || 600;
+          const height = realCont.clientHeight || 280;
+
+          clonedSvg.setAttribute('width', String(width));
+          clonedSvg.setAttribute('height', String(height));
+          clonedSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+          clonedSvg.style.width = '100%';
+          clonedSvg.style.height = 'auto';
+
+          clonedCont.innerHTML = '';
+          clonedCont.appendChild(clonedSvg);
+        }
+      });
+
       // Hide no-print elements
       const noPrintElements = element.querySelectorAll('.no-print');
       noPrintElements.forEach(el => el.remove());
@@ -1413,7 +1438,7 @@ const Reports = () => {
                          <Card className="bg-[#009fb7] border-[#009fb7] p-6 text-white shadow-sm w-full">
                             <textarea
                                rows={4}
-                               className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-1 focus:ring-white/10 rounded-xl !h-auto !overflow-visible"
+                               className="w-full bg-transparent border-none text-white leading-relaxed font-normal text-base outline-none resize-none focus:ring-1 focus:ring-white/10 rounded-xl !h-auto !overflow-visible"
                                style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
                                value={toSentenceCase(narrativeState?.keyAchievements) || ''}
                                onChange={(e) => setNarrativeState({ ...narrativeState, keyAchievements: e.target.value })}
@@ -1427,12 +1452,12 @@ const Reports = () => {
                        <div className="border-t border-slate-100 pt-8 space-y-4 w-full page-break-after">
                          <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Logros y avances")}</h4>
                          <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 w-full">
-                           <ul className="list-disc pl-5 space-y-3 text-slate-700 text-sm font-semibold leading-relaxed w-full">
+                           <ul className="list-disc pl-5 space-y-3 text-slate-700 text-sm font-normal leading-relaxed w-full">
                              {narrativeState.logrosYAvances.map((bullet, idx) => (
                                <li key={idx} className="w-full">
                                  <input
                                    type="text"
-                                   className="w-full bg-transparent border-none text-slate-700 focus:ring-0 outline-none p-0 font-bold"
+                                   className="w-full bg-transparent border-none text-slate-700 focus:ring-0 outline-none p-0 font-normal"
                                    value={bullet}
                                    onChange={(e) => {
                                      const updated = [...narrativeState.logrosYAvances];
@@ -1543,7 +1568,7 @@ const Reports = () => {
                              <Card className="bg-[#f8fafc] border border-slate-100 p-6 rounded-3xl shadow-sm w-full">
                                <textarea
                                   rows={4}
-                                  className="w-full bg-transparent border-none text-slate-700 leading-relaxed font-bold text-sm outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
+                                  className="w-full bg-transparent border-none text-slate-700 leading-relaxed font-normal text-sm outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
                                   style={{ height: 'auto', overflow: 'visible' }}
                                   value={narrativeState.contenidoTopAnalisis}
                                   onChange={(e) => setNarrativeState({ ...narrativeState, contenidoTopAnalisis: e.target.value })}
@@ -1580,7 +1605,7 @@ const Reports = () => {
                          <Card className="bg-[#0F172A] border-[#0F172A] p-8 text-white rounded-[2rem] shadow-xl space-y-4 w-full">
                            <textarea
                               rows={5}
-                              className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
+                              className="w-full bg-transparent border-none text-white leading-relaxed font-normal text-base outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
                               style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
                               value={narrativeState.oportunidadesYAprendizajes}
                               onChange={(e) => setNarrativeState({ ...narrativeState, oportunidadesYAprendizajes: e.target.value })}
@@ -1601,7 +1626,7 @@ const Reports = () => {
                          <div className="bg-[#009fb7] text-white rounded-[2rem] p-8 shadow-lg w-full">
                            <textarea
                               rows={6}
-                              className="w-full bg-transparent border-none text-white leading-relaxed font-bold text-base outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
+                              className="w-full bg-transparent border-none text-white leading-relaxed font-normal text-base outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
                               style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
                               value={narrativeState.recomendacionesEstrategicas}
                               onChange={(e) => setNarrativeState({ ...narrativeState, recomendacionesEstrategicas: e.target.value })}
