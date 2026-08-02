@@ -483,21 +483,33 @@ const ExecutiveSummary = ({ narrative, onUpdate }) => {
         <div className="h-1 w-20 bg-primary/40 rounded-full" />
       </div>
 
-      <div className="grid grid-cols-1 gap-6">
-        {(narrative.summaryPoints || []).map((point, idx) => (
-          <Card key={idx} className="bg-[#009fb7] border-[#009fb7] p-6 flex gap-4 break-inside-avoid shadow-sm text-white">
-            <div className="w-8 h-8 rounded-xl bg-white/20 border border-white/10 text-white flex items-center justify-center shrink-0 font-black text-sm">
-              {idx + 1}
-            </div>
-            <textarea
-              className="w-full bg-transparent border-none text-sm text-white leading-relaxed font-normal focus:ring-1 focus:ring-white/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
-              rows={4}
-              style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
-              value={toSentenceCase(point)}
-              onChange={(e) => handlePointChange(idx, e.target.value)}
-            />
-          </Card>
-        ))}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {(narrative.summaryPoints || []).map((point, idx) => {
+          const text = toSentenceCase(point);
+          const words = text.split(' ');
+          const titleLimit = Math.min(words.length, 3);
+          const titlePart = words.slice(0, titleLimit).join(' ') + '...';
+
+          return (
+            <Card key={idx} className="bg-[#009fb7] border-[#009fb7] p-6 flex flex-col gap-4 break-inside-avoid shadow-sm text-white rounded-3xl">
+              <div className="w-8 h-8 rounded-full bg-white/20 border border-white/10 text-white flex items-center justify-center font-black text-sm shrink-0">
+                {idx + 1}
+              </div>
+              <div className="flex-1 space-y-2">
+                <h5 className="font-bold text-base text-white mb-2">
+                  {titlePart}
+                </h5>
+                <textarea
+                  className="w-full bg-transparent border-none text-sm text-white/90 leading-relaxed font-normal focus:ring-1 focus:ring-white/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
+                  rows={4}
+                  style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
+                  value={text}
+                  onChange={(e) => handlePointChange(idx, e.target.value)}
+                />
+              </div>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
@@ -1124,6 +1136,32 @@ const Reports = () => {
         }
 
         ta.parentNode.replaceChild(div, ta);
+      });
+
+      // Strip any inline style color rules that darken text inside cian #009fb7 or dark slate #0F172A containers
+      const allDivs = element.querySelectorAll('*');
+      allDivs.forEach(node => {
+        let isDarkBg = false;
+        let parent = node.parentElement;
+        while (parent) {
+          const classes = parent.className || '';
+          if (
+            classes.includes('bg-[#009fb7]') ||
+            classes.includes('bg-[#0F172A]') ||
+            classes.includes('text-white') ||
+            classes.includes('bg-primary')
+          ) {
+            isDarkBg = true;
+            break;
+          }
+          parent = parent.parentElement;
+        }
+
+        if (isDarkBg) {
+          if (node.style && node.style.color) {
+            node.style.color = '#ffffff';
+          }
+        }
       });
 
       // Construct a complete HTML file with Tailwind and fonts

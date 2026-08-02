@@ -362,7 +362,7 @@ export const validateAndCleanSourceExtraction = (extracted) => {
             key: key,
             label: typeof item.label === 'string' ? item.label : String(item.key || key),
             value: val,
-            unit: typeof item.unit === 'string' ? item.unit : 'count',
+            unit: typeof item.unit === 'string' && item.unit !== 'count' ? item.unit : (key === 'spend' ? 'COP' : 'count'),
             confidence: typeof item.confidence === 'number' ? item.confidence : 1.0,
             evidence: typeof item.evidence === 'string' ? item.evidence : ''
         };
@@ -430,7 +430,7 @@ export const validateAndCleanSourceExtraction = (extracted) => {
 export const mergeSourceMetricsIntoAccumulator = (accumulator, incomingExtraction) => {
     if (!accumulator) {
         accumulator = {
-            spend: { sum: 0, count: 0, label: 'Inversión Total', unit: 'USD' },
+            spend: { sum: 0, count: 0, label: 'Inversión Total', unit: 'COP' },
             impressions: { sum: 0, count: 0, label: 'Impresiones Totales', unit: 'count' },
             reach: { values: [], label: 'Alcance Total', unit: 'count' },
             clicks: { sum: 0, count: 0, label: 'Clics Totales', unit: 'count' },
