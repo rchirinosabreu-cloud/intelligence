@@ -161,6 +161,26 @@ test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) =>
         assert.strictEqual(updatedMetrics.spend.value, 1300.00);
     });
 
+    await t.test('Array metrics adaptation to key-indexed dictionary', async () => {
+        const { validateAndCleanSourceExtraction } = await import('../src/services/reportVisionService.js');
+
+        // Formatted as an Array from Gemini
+        const rawPayload = {
+            metrics: [
+                { key: "spend", label: "Importe", value: 1250 },
+                { key: "impressions", label: "Imp", value: 50000 }
+            ],
+            screenType: "Rendimiento",
+            sectionCategory: "ADS"
+        };
+
+        const cleaned = validateAndCleanSourceExtraction(rawPayload);
+        assert.strictEqual(cleaned.usable, true);
+        assert.strictEqual(cleaned.metrics.spend.value, 1250);
+        assert.strictEqual(cleaned.metrics.impressions.value, 50000);
+        assert.strictEqual(cleaned.metrics.clicks.value, null);
+    });
+
     await t.test('cleanNumericValue utility parsing styles', async () => {
         const { cleanNumericValue } = await import('../src/services/reportVisionService.js');
 

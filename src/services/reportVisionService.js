@@ -304,12 +304,10 @@ export const extractMetricsWithGemini = async (imageBuffer, mimeType = 'image/jp
             }
         ],
         config: {
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: schema,
-                maxOutputTokens: 8192,
-                temperature: 0.1
-            }
+            responseMimeType: "application/json",
+            responseSchema: schema,
+            maxOutputTokens: 8192,
+            temperature: 0.1
         }
     });
 
@@ -335,7 +333,18 @@ export const validateAndCleanSourceExtraction = (extracted) => {
         return { usable: false, warnings: ["Extracción vacía"] };
     }
 
-    const metrics = extracted.metrics || {};
+    let metrics = extracted.metrics || {};
+    // ADAPTER: If metrics is formatted as an Array from Gemini, convert it to a Dictionary indexable by key!
+    if (Array.isArray(metrics)) {
+        const dict = {};
+        metrics.forEach(item => {
+            if (item && item.key) {
+                dict[item.key] = item;
+            }
+        });
+        metrics = dict;
+    }
+
     const dataset = extracted.dataset || [];
     const demographics = extracted.demographics || {};
     const topContent = extracted.topContent || [];
@@ -432,7 +441,18 @@ export const mergeSourceMetricsIntoAccumulator = (accumulator, incomingExtractio
         };
     }
 
-    const { metrics, demographics, topContent } = incomingExtraction;
+    let { metrics, demographics, topContent } = incomingExtraction;
+
+    // ADAPTER: If metrics is formatted as an Array from Gemini, convert it to a Dictionary indexable by key!
+    if (Array.isArray(metrics)) {
+        const dict = {};
+        metrics.forEach(item => {
+            if (item && item.key) {
+                dict[item.key] = item;
+            }
+        });
+        metrics = dict;
+    }
 
     // Regla de Ausencia: Si la métrica entrante es null o undefined, preservar el acumulado anterior
     const cleanSpend = metrics.spend ? cleanNumericValue(metrics.spend.value) : null;
@@ -681,12 +701,10 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
         ],
         config: {
             systemInstruction: "Eres un Director Editorial de Estrategia Digital en Brainstudio, experto en redactar análisis consultivos y planes de acción accionables basados en datos reales.",
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: narrativeSchema,
-                maxOutputTokens: 8192,
-                temperature: 0.1
-            }
+            responseMimeType: "application/json",
+            responseSchema: narrativeSchema,
+            maxOutputTokens: 8192,
+            temperature: 0.1
         }
     });
 
