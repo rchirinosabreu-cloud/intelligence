@@ -36,7 +36,6 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import { adaptDatasetForChart, hasReadableChartData } from '@/lib/reportChartData';
-import { buildReportFileName, filterCanonicalMetrics, filterReportContentRows, isDemographicDataset, safeClassName, splitAchievement } from '@/lib/reportPresentation';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
@@ -372,7 +371,7 @@ const DemographicsBarChart = ({ data }) => {
 };
 
 const TopContentTable = ({ data }) => {
-  const publicationRows = filterReportContentRows(data);
+  const publicationRows = filterTopContentRows(data);
   if (publicationRows.length === 0) return null;
   return (
     <div className="overflow-x-auto border border-slate-100 rounded-2xl bg-white mt-4">

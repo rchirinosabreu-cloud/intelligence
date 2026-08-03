@@ -17,21 +17,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
-const REPORT_PIPELINE_VERSION = 'vision-2026-08-03.8';
-const REPORT_DEPLOY_COMMIT = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || 'unknown';
-
-// Runtime compatibility guard: Node ESM resolves missing unqualified identifiers
-// against the global environment. Install the legacy filter before any request so
-// an older cached service function cannot fail an entire image batch.
-globalThis.filterTopContentRows = (rows = []) => rows.filter((row) => {
-    if (!row || typeof row !== 'object' || !String(row.title || '').trim()) return false;
-    const aggregateLabels = new Set(['reel', 'reels', 'enlace', 'enlaces', 'historia', 'historias', 'foto', 'fotos', 'varias fotos', 'otros', 'otro', 'video', 'videos', 'carrusel', 'carruseles']);
-    const normalizedTitle = String(row.title).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-    const hasPublicationEvidence = row.impressions !== null && row.impressions !== undefined
-        || row.reach !== null && row.reach !== undefined;
-    return !aggregateLabels.has(normalizedTitle) || hasPublicationEvidence;
-});
-console.log(`[Reports API] Loaded ${REPORT_PIPELINE_VERSION} from commit ${REPORT_DEPLOY_COMMIT}; legacy filter guard installed.`);
+const REPORT_PIPELINE_VERSION = 'vision-2026-08-03.4';
 
 // Initialize AI
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
@@ -49,14 +35,12 @@ try {
     console.error("[Reports API] Failed to initialize AI client:", e);
 }
 
-export const getReportPipelineStatus = () => ({
+router.get('/pipeline-status', (_req, res) => {
+    res.json({
         pipelineVersion: REPORT_PIPELINE_VERSION,
         commit: REPORT_DEPLOY_COMMIT,
         legacyFilterGuard: typeof globalThis.filterTopContentRows === 'function'
-});
-
-router.get('/pipeline-status', (_req, res) => {
-    res.json(getReportPipelineStatus());
+    });
 });
 
 router.get('/image-proxy', async (req, res) => {
@@ -244,9 +228,8 @@ router.post('/generate', upload.any(), async (req, res) => {
 
 router.post('/extract-metrics', upload.any(), async (req, res) => {
     const requestId = uuidv4();
+    console.log(`[Reports API][ID:${requestId}] Pipeline ${REPORT_PIPELINE_VERSION}`);
     try {
-        res.setHeader('X-Report-Pipeline-Version', REPORT_PIPELINE_VERSION);
-        res.setHeader('X-Report-Deploy-Commit', REPORT_DEPLOY_COMMIT);
         console.log(`[Reports API][ID:${requestId}] Pipeline ${REPORT_PIPELINE_VERSION}`);
         const { clientId, periodKind, startDate, endDate } = req.body;
         if (!clientId) {
