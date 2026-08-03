@@ -1,6 +1,9 @@
 
 import { STYLES, GRADIENTS, ICONS, COLORS, SPACING, getBrainStudioLogoSVG, formatList, formatListAsCards } from './reportStyling';
 import { createMetricCard } from './chartVisualization';
+import { buildReportFileName } from '../lib/reportPresentation';
+
+export { buildReportFileName };
 
 export const generateSummaryHTML = (data, sourceTitle, reportMeta = {}) => {
   const date = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
