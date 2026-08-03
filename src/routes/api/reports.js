@@ -7,6 +7,7 @@ import { parseJsonResponse, extractModelText } from '../../services/aiService.js
 import {
     extractMetricsWithGemini,
     generateNarrativeWithGemini,
+    generateFallbackNarrative,
     validateAndCleanSourceExtraction,
     mergeSourceMetricsIntoAccumulator,
     finalizeNormalizedMetrics,
@@ -557,12 +558,18 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
 
         console.log(`[Reports API] Generating narrative for report ${reportId}...`);
 
-        // 35 seconds timeout for narrative generation
-        const narrativeResult = await withTimeout(
-            generateNarrativeWithGemini(metrics, sections),
-            35000,
-            "Gemini narrative generation timed out"
-        );
+        let narrativeResult;
+        try {
+            // 15 seconds timeout for narrative generation
+            narrativeResult = await withTimeout(
+                generateNarrativeWithGemini(metrics, sections),
+                15000,
+                "Gemini narrative generation timed out"
+            );
+        } catch (genError) {
+            console.warn(`[Reports API] Gemini generation failed/timed out for report ${reportId}. Generating fallback template.`, genError.message);
+            narrativeResult = generateFallbackNarrative(metrics, sections);
+        }
 
         const updatedReport = await prisma.metricReport.update({
             where: { id: reportId },
@@ -592,11 +599,10 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[Reports API] Error generating narrative:', error);
-        const isTimeout = error.message && error.message.includes('timed out');
-        res.status(isTimeout ? 504 : 500).json({
+        console.error('[Reports API] Fatal Error in narrative endpoint:', error);
+        res.status(500).json({
             error: "NARRATIVE_GENERATION_FAILED",
-            message: error.message || 'Fallo en la generación de narrativa'
+            message: error.message || 'Fallo general en la generación de narrativa'
         });
     }
 });
