@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import {
     extractMetricsWithGemini,
+    filterExtractedTopContentRows,
     validateAndCleanSourceExtraction,
     mergeSourceMetricsIntoAccumulator,
     finalizeNormalizedMetrics
@@ -9,6 +10,67 @@ import {
 
 // We can mock the fetch call to Gemini to test the vision service
 test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) => {
+
+    await t.test('Filters aggregate content labels inside the backend service without frontend helpers', () => {
+        const rows = filterExtractedTopContentRows([
+            { title: 'REEL - TESTIMONIO', impressions: 200, reach: 150 },
+            { title: 'Reels', results: 36 },
+            { title: 'Historias', results: 6 }
+        ]);
+        assert.deepStrictEqual(rows.map(row => row.title), ['REEL - TESTIMONIO']);
+    });
+
+    await t.test('Retries once when Gemini returns malformed structured JSON', async () => {
+        const originalFetch = globalThis.fetch;
+        const originalApiKey = process.env.GEMINI_API_KEY;
+        process.env.GEMINI_API_KEY = 'mock-key';
+        let calls = 0;
+        globalThis.fetch = async () => {
+            calls += 1;
+            const text = calls === 1
+                ? '{"metrics":{"spend":{"value":null} "impressions":{}}}'
+                : JSON.stringify({ metrics: { spend: { value: 2500, unit: 'COP' } }, screenType: 'Rendimiento Macro' });
+            return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        };
+
+        try {
+            const result = await extractMetricsWithGemini(Buffer.from('mock-image'), 'image/jpeg');
+            assert.strictEqual(calls, 2);
+            assert.strictEqual(result.metrics.spend.value, 2500);
+        } finally {
+            globalThis.fetch = originalFetch;
+            process.env.GEMINI_API_KEY = originalApiKey;
+        }
+    });
+
+    await t.test('Retries syntactically valid output when it contains no usable extraction signal', async () => {
+        const originalFetch = globalThis.fetch;
+        const originalApiKey = process.env.GEMINI_API_KEY;
+        process.env.GEMINI_API_KEY = 'mock-key';
+        let calls = 0;
+        globalThis.fetch = async () => {
+            calls += 1;
+            const payload = calls === 1
+                ? { metrics: { spend: { value: null } }, dataset: [], demographics: {}, topContent: [], narrativeDraft: '' }
+                : { metrics: { impressions: { value: 139593 } }, screenType: 'Rendimiento Macro' };
+            return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(payload) }] } }] }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        };
+
+        try {
+            const result = await extractMetricsWithGemini(Buffer.from('mock-image'), 'image/jpeg');
+            assert.strictEqual(calls, 2);
+            assert.strictEqual(result.metrics.impressions.value, 139593);
+        } finally {
+            globalThis.fetch = originalFetch;
+            process.env.GEMINI_API_KEY = originalApiKey;
+        }
+    });
 
     await t.test('Successfully extracts structured metrics from mock response', async () => {
         const mockResponse = {

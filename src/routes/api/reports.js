@@ -9,7 +9,9 @@ import {
     generateNarrativeWithGemini,
     validateAndCleanSourceExtraction,
     mergeSourceMetricsIntoAccumulator,
-    finalizeNormalizedMetrics
+    finalizeNormalizedMetrics,
+    preserveApprovedReportData,
+    reconcileNarrativeSections
 } from '../../services/reportVisionService.js';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -233,34 +235,6 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             return res.status(400).json({ error: 'At least one screenshot is required' });
         }
 
-        const sanitizeSectionDataset = (dataset) => {
-            if (!Array.isArray(dataset)) return [];
-            return dataset
-                .map(item => {
-                    const label = typeof item.label === 'string' ? item.label : String(item.label || '');
-                    const value = item.value === undefined || item.value === null ? 0 : Number(item.value);
-                    const hombres = item.hombres === undefined || item.hombres === null ? 0 : Number(item.hombres);
-                    const mujeres = item.mujeres === undefined || item.mujeres === null ? 0 : Number(item.mujeres);
-
-                    const clean = {
-                        label,
-                        value: isNaN(value) ? 0 : value
-                    };
-
-                    if (item.hombres !== undefined && item.hombres !== null) {
-                        clean.hombres = isNaN(hombres) ? 0 : hombres;
-                    }
-                    if (item.mujeres !== undefined && item.mujeres !== null) {
-                        clean.mujeres = isNaN(mujeres) ? 0 : mujeres;
-                    }
-
-                    return clean;
-                })
-                .filter(item => {
-                    return item.value !== 0 || item.hombres !== 0 || item.mujeres !== 0;
-                });
-        };
-
         // Process files in parallel with Promise.allSettled
         const filePromises = files.map(async (file) => {
             const sourceId = uuidv4();
@@ -308,6 +282,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 }
             } else {
                 const err = res.reason || {};
+                console.error(`[Reports API][ID:${requestId}] Source failed (${originalName}):`, err.message || String(err));
                 failed.push({
                     originalName,
                     error: err.message || String(err)
@@ -345,14 +320,13 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
 
             // Register sections
             if (res.dataset && res.dataset.length > 0) {
-                const cleanDataset = sanitizeSectionDataset(res.dataset);
                 extractedSections.push({
                     sectionId: uuidv4(),
                     chartType: res.chartType || 'LINE_CHART',
                     title: res.title || 'Sección',
                     sectionCategory: res.sectionCategory || 'ADS',
                     platform: res.platform || 'META_ADS',
-                    dataset: cleanDataset,
+                    dataset: res.dataset,
                     narrativeComment: ""
                 });
             }
@@ -372,7 +346,16 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 storagePath: res.storagePath,
                 platform: dbPlatform,
                 screenType: res.screenType,
-                extractionData: res.metrics,
+                extractionData: {
+                    metrics: res.metrics,
+                    chartType: res.chartType,
+                    title: res.title,
+                    sectionCategory: res.sectionCategory,
+                    platform: res.platform,
+                    dataset: res.dataset,
+                    demographics: res.demographics,
+                    topContent: res.topContent
+                },
                 confidence: parseFloat(res.confidence) || 1.0,
                 warnings: res.warnings || []
             });
@@ -485,10 +468,8 @@ router.patch('/:reportId/metrics', async (req, res) => {
         }
 
         const dbMetrics = existingReport.normalizedMetrics || {};
-        const updatedMetrics = {};
-
-        const keys = ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'];
-        keys.forEach(key => {
+        const reviewedMetrics = {};
+        for (const key of ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results']) {
             const dbMetric = dbMetrics[key] || {};
             const newMetric = newMetrics[key] || {};
 
@@ -497,12 +478,13 @@ router.patch('/:reportId/metrics', async (req, res) => {
             const newVal = newMetric.value !== undefined ? newMetric.value : null;
             const isEdited = dbVal !== newVal || dbMetric.isManuallyEdited === true;
 
-            updatedMetrics[key] = {
+            reviewedMetrics[key] = {
                 ...dbMetric,
                 ...newMetric,
                 isManuallyEdited: isEdited
             };
-        });
+        }
+        const updatedMetrics = preserveApprovedReportData(dbMetrics, reviewedMetrics);
 
         const updatedReport = await prisma.metricReport.update({
             where: { id: reportId },
@@ -558,7 +540,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
                     oportunidadesYAprendizajes: narrativeResult.oportunidadesYAprendizajes || "",
                     recomendacionesEstrategicas: narrativeResult.recomendacionesEstrategicas || ""
                 },
-                sections: narrativeResult.sections,
+                sections: reconcileNarrativeSections(sections, narrativeResult.sections || []),
                 status: 'PUBLISHED'
             },
             include: {
