@@ -9,12 +9,29 @@ import {
     generateNarrativeWithGemini,
     validateAndCleanSourceExtraction,
     mergeSourceMetricsIntoAccumulator,
-    finalizeNormalizedMetrics
+    finalizeNormalizedMetrics,
+    preserveApprovedReportData,
+    reconcileNarrativeSections
 } from '../../services/reportVisionService.js';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
+const REPORT_PIPELINE_VERSION = 'vision-2026-08-03.8';
+const REPORT_DEPLOY_COMMIT = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || 'unknown';
+
+// Runtime compatibility guard: Node ESM resolves missing unqualified identifiers
+// against the global environment. Install the legacy filter before any request so
+// an older cached service function cannot fail an entire image batch.
+globalThis.filterTopContentRows = (rows = []) => rows.filter((row) => {
+    if (!row || typeof row !== 'object' || !String(row.title || '').trim()) return false;
+    const aggregateLabels = new Set(['reel', 'reels', 'enlace', 'enlaces', 'historia', 'historias', 'foto', 'fotos', 'varias fotos', 'otros', 'otro', 'video', 'videos', 'carrusel', 'carruseles']);
+    const normalizedTitle = String(row.title).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+    const hasPublicationEvidence = row.impressions !== null && row.impressions !== undefined
+        || row.reach !== null && row.reach !== undefined;
+    return !aggregateLabels.has(normalizedTitle) || hasPublicationEvidence;
+});
+console.log(`[Reports API] Loaded ${REPORT_PIPELINE_VERSION} from commit ${REPORT_DEPLOY_COMMIT}; legacy filter guard installed.`);
 
 // Initialize AI
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
@@ -31,6 +48,16 @@ try {
 } catch (e) {
     console.error("[Reports API] Failed to initialize AI client:", e);
 }
+
+export const getReportPipelineStatus = () => ({
+        pipelineVersion: REPORT_PIPELINE_VERSION,
+        commit: REPORT_DEPLOY_COMMIT,
+        legacyFilterGuard: typeof globalThis.filterTopContentRows === 'function'
+});
+
+router.get('/pipeline-status', (_req, res) => {
+    res.json(getReportPipelineStatus());
+});
 
 router.get('/image-proxy', async (req, res) => {
     try {
@@ -218,6 +245,9 @@ router.post('/generate', upload.any(), async (req, res) => {
 router.post('/extract-metrics', upload.any(), async (req, res) => {
     const requestId = uuidv4();
     try {
+        res.setHeader('X-Report-Pipeline-Version', REPORT_PIPELINE_VERSION);
+        res.setHeader('X-Report-Deploy-Commit', REPORT_DEPLOY_COMMIT);
+        console.log(`[Reports API][ID:${requestId}] Pipeline ${REPORT_PIPELINE_VERSION}`);
         const { clientId, periodKind, startDate, endDate } = req.body;
         if (!clientId) {
             return res.status(400).json({ error: 'Client ID is required' });
@@ -232,34 +262,6 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
         if (files.length === 0) {
             return res.status(400).json({ error: 'At least one screenshot is required' });
         }
-
-        const sanitizeSectionDataset = (dataset) => {
-            if (!Array.isArray(dataset)) return [];
-            return dataset
-                .map(item => {
-                    const label = typeof item.label === 'string' ? item.label : String(item.label || '');
-                    const value = item.value === undefined || item.value === null ? 0 : Number(item.value);
-                    const hombres = item.hombres === undefined || item.hombres === null ? 0 : Number(item.hombres);
-                    const mujeres = item.mujeres === undefined || item.mujeres === null ? 0 : Number(item.mujeres);
-
-                    const clean = {
-                        label,
-                        value: isNaN(value) ? 0 : value
-                    };
-
-                    if (item.hombres !== undefined && item.hombres !== null) {
-                        clean.hombres = isNaN(hombres) ? 0 : hombres;
-                    }
-                    if (item.mujeres !== undefined && item.mujeres !== null) {
-                        clean.mujeres = isNaN(mujeres) ? 0 : mujeres;
-                    }
-
-                    return clean;
-                })
-                .filter(item => {
-                    return item.value !== 0 || item.hombres !== 0 || item.mujeres !== 0;
-                });
-        };
 
         // Process files in parallel with Promise.allSettled
         const filePromises = files.map(async (file) => {
@@ -308,6 +310,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 }
             } else {
                 const err = res.reason || {};
+                console.error(`[Reports API][ID:${requestId}] Source failed (${originalName}):`, err.message || String(err));
                 failed.push({
                     originalName,
                     error: err.message || String(err)
@@ -330,6 +333,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 details: 'Ninguna de las imágenes del lote proporcionó datos utilizables (métricas, gráficos o audiencias).',
                 processingSummary,
                 warnings: allWarnings,
+                pipelineVersion: REPORT_PIPELINE_VERSION,
                 requestId
             });
         }
@@ -345,14 +349,13 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
 
             // Register sections
             if (res.dataset && res.dataset.length > 0) {
-                const cleanDataset = sanitizeSectionDataset(res.dataset);
                 extractedSections.push({
                     sectionId: uuidv4(),
                     chartType: res.chartType || 'LINE_CHART',
                     title: res.title || 'Sección',
                     sectionCategory: res.sectionCategory || 'ADS',
                     platform: res.platform || 'META_ADS',
-                    dataset: cleanDataset,
+                    dataset: res.dataset,
                     narrativeComment: ""
                 });
             }
@@ -372,7 +375,16 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 storagePath: res.storagePath,
                 platform: dbPlatform,
                 screenType: res.screenType,
-                extractionData: res.metrics,
+                extractionData: {
+                    metrics: res.metrics,
+                    chartType: res.chartType,
+                    title: res.title,
+                    sectionCategory: res.sectionCategory,
+                    platform: res.platform,
+                    dataset: res.dataset,
+                    demographics: res.demographics,
+                    topContent: res.topContent
+                },
                 confidence: parseFloat(res.confidence) || 1.0,
                 warnings: res.warnings || []
             });
@@ -441,6 +453,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
 
         res.status(201).json({
             success: true,
+            pipelineVersion: REPORT_PIPELINE_VERSION,
             report
         });
 
@@ -485,10 +498,8 @@ router.patch('/:reportId/metrics', async (req, res) => {
         }
 
         const dbMetrics = existingReport.normalizedMetrics || {};
-        const updatedMetrics = {};
-
-        const keys = ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'];
-        keys.forEach(key => {
+        const reviewedMetrics = {};
+        for (const key of ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results']) {
             const dbMetric = dbMetrics[key] || {};
             const newMetric = newMetrics[key] || {};
 
@@ -497,12 +508,13 @@ router.patch('/:reportId/metrics', async (req, res) => {
             const newVal = newMetric.value !== undefined ? newMetric.value : null;
             const isEdited = dbVal !== newVal || dbMetric.isManuallyEdited === true;
 
-            updatedMetrics[key] = {
+            reviewedMetrics[key] = {
                 ...dbMetric,
                 ...newMetric,
                 isManuallyEdited: isEdited
             };
-        });
+        }
+        const updatedMetrics = preserveApprovedReportData(dbMetrics, reviewedMetrics);
 
         const updatedReport = await prisma.metricReport.update({
             where: { id: reportId },
@@ -558,7 +570,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
                     oportunidadesYAprendizajes: narrativeResult.oportunidadesYAprendizajes || "",
                     recomendacionesEstrategicas: narrativeResult.recomendacionesEstrategicas || ""
                 },
-                sections: narrativeResult.sections,
+                sections: reconcileNarrativeSections(sections, narrativeResult.sections || []),
                 status: 'PUBLISHED'
             },
             include: {
