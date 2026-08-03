@@ -1,6 +1,9 @@
 import { parseJsonResponse } from './aiService.js';
 import { GoogleGenAI } from '@google/genai';
 import { adaptDatasetForChart } from '../lib/reportChartData.js';
+import { filterTopContentRows } from '../lib/reportPresentation.js';
+
+export { filterTopContentRows as filterExtractedTopContentRows };
 
 /**
  * Sanitizes and cleans formatted text string values into valid floats or integers.
