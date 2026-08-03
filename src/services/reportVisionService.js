@@ -657,8 +657,8 @@ ${JSON.stringify(sections, null, 2)}
 REGLAS DE REDACCIÓN DE LA NARRATIVA:
 1. TONO: Consultivo, positivo, profesional, motivador y orientado a metas comerciales de alto nivel.
 2. REGLA ESTRICTA DE INTEGRIDAD DE DATOS (PROHIBIDO HALLUCINAR): Queda terminantemente prohibido que menciones o inventes valores numéricos, métricas, cantidades o porcentajes que no existan de forma explícita en el objeto de métricas o secciones provisto arriba. No asumas divisas ni cifras que no estén allí.
-3. PROFUNDIDAD NARRATIVA EDITORIAL (REGLA DE DOS PÁRRAFOS POR GRÁFICO): Cada comentario explicativo o interpretativo en el campo 'narrativeComment' de cada sección/gráfico de 'sections' debe constar estrictamente de al menos DOS PÁRRAFOS completos, separados por un salto de línea (\\n\\n):
-   - Primer Párrafo (Análisis de Datos y Audiencia): Traducción directa de las cifras a un lenguaje claro y accesible, explicando el comportamiento observado de la audiencia y los hitos alcanzados sin jerga técnica abrumadora.
+3. PROFUNDIDAD NARRATIVA EDITORIAL (REGLA DE DOS PÁRRAFOS POR GRÁFICO): Cada comentario explicativo o interpretativo en el campo 'narrativeComment' de 'sections' y 'consultativeComment' de 'granularNarratives' debe constar estrictamente de al menos DOS PÁRRAFOS completos, separados por un salto de línea (\\n\\n):
+   - Primer Párrafo (Análisis de Datos y Audiencia): Traducción directa de las cifras a un lenguaje claro y accesible, citando estrictamente los nombres de las categorías líderes y sus números exactos de la gráfica o tabla (por ejemplo: "En Instagram, las Historias alcanzaron un 22% de interacción superando a las Publicaciones tradicionales con un 13%..."). Queda prohibido usar textos genéricos sin mencionar datos numéricos reales de la gráfica.
    - Segundo Párrafo (Proyección Estratégica y Motivación): Enfoque consultivo y entusiasta de cierre que celebre el progreso del periodo, conecte el logro con los objetivos de negocio del cliente y lo motive hacia los siguientes pasos.
    Asegura que cada string comience desde el inicio de la oración y no sufra ningún recorte, truncamiento o abreviación.
 4. ESTRUCTURA REQUERIDA (JSON):
@@ -668,8 +668,8 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
    - actionPlan: Un plan de acción con exactamente 3 compromisos recomendados. Cada compromiso debe ser un objeto con 'action' (Acción, capitalizado strictly en Sentence Case), 'kpi' (KPI de éxito, capitalizado strictly en Sentence Case) y 'suggestedAssignee' (Responsable sugerido).
    - logrosYAvances: Un arreglo de exactamente 4 a 5 strings (viñetas analíticas con encabezado en negrita y explicación de valor, por ejemplo: "*Alcance orgánico sólido:* Se alcanzaron..."), capitalizado strictly en Sentence Case.
    - contenidoTopAnalisis: Texto explicativo de las piezas creativas de mayor rendimiento con ranking detallado (Top 1 - Imagen, Top 2 - Reel, etc.), capitalizado strictly en Sentence Case.
-   - oportunidadesYAprendizajes: Lecciones clave extraídas de la pauta y el contenido orgánico, capitalizado strictly en Sentence Case.
-   - recomendacionesEstrategicas: 2 a 3 párrafos de aconsejamiento consultivo y motivador de cierre, capitalizado strictly en Sentence Case.
+   - oportunidadesYAprendizajes: Lecciones clave extraídas de la pauta y el contenido orgánico, redactando exactamente entre 3 y 4 párrafos ricos en consultoría de marketing y aprendizaje de audiencias, capitalizado strictly en Sentence Case.
+   - recomendacionesEstrategicas: Exactamente entre 3 y 4 párrafos de aconsejamiento consultivo, motivador y hoja de ruta táctica detallada para la marca, capitalizado strictly en Sentence Case.
    - sections: Un arreglo que contenga exactamente los mismos objetos que se te pasaron en SECCIONES VISUALES REGISTRADAS, pero agregando en cada uno un campo 'narrativeComment' con una explicación consultiva profunda, positiva y estructurada estrictamente en al menos DOS PÁRRAFOS completos separados por un salto de línea (\\n\\n) según la regla de DOS PÁRRAFOS descrita arriba, capitalizado con Sentence Case.
    - granularNarratives: Un arreglo que contenga exactamente dos objetos con 'sectionKey' ('macro_performance' y 'demographics' respectivamente), 'title' ('Rendimiento y Tendencia' y 'Distribución Demográfica' respectivamente), y 'consultativeComment' (explicación consultiva profunda, positiva y estructurada estrictamente en al menos DOS PÁRRAFOS completos separados por un salto de línea (\\n\\n) según la regla de DOS PÁRRAFOS descrita arriba, capitalizado con Sentence Case).
 `;
@@ -795,6 +795,40 @@ const formatMetricValue = (key, metric) => {
     return Number(val).toLocaleString('es-ES');
 };
 
+const findMaxDataPoint = (dataset) => {
+    if (!Array.isArray(dataset) || dataset.length === 0) return null;
+    let maxItem = null;
+    let maxVal = -1;
+    dataset.forEach(item => {
+        const val = Number(item.value !== undefined && item.value !== null ? item.value : 0);
+        const h = Number(item.hombres !== undefined && item.hombres !== null ? item.hombres : 0);
+        const m = Number(item.mujeres !== undefined && item.mujeres !== null ? item.mujeres : 0);
+        const total = val + h + m;
+        if (total > maxVal) {
+            maxVal = total;
+            maxItem = item;
+        }
+    });
+    return maxItem ? { label: maxItem.label || 'Principal', value: maxVal } : null;
+};
+
+const findTopDemographic = (list) => {
+    if (!Array.isArray(list) || list.length === 0) return null;
+    let maxItem = null;
+    let maxVal = -1;
+    list.forEach(item => {
+        const val = Number(item.value !== undefined && item.value !== null ? item.value : 0);
+        const h = Number(item.hombres !== undefined && item.hombres !== null ? item.hombres : 0);
+        const m = Number(item.mujeres !== undefined && item.mujeres !== null ? item.mujeres : 0);
+        const total = val + h + m;
+        if (total > maxVal) {
+            maxVal = total;
+            maxItem = item;
+        }
+    });
+    return maxItem ? { label: maxItem.label || 'Principal', value: maxVal } : null;
+};
+
 export const generateFallbackNarrative = (normalizedMetrics, sections = []) => {
     const spendStr = formatMetricValue('spend', normalizedMetrics.spend);
     const reachStr = formatMetricValue('reach', normalizedMetrics.reach);
@@ -840,14 +874,29 @@ export const generateFallbackNarrative = (normalizedMetrics, sections = []) => {
 
     const contenidoTopAnalisis = `La revisión detallada de las publicaciones y creativos destacados confirma que los formatos dinámicos y de valor educativo lideran el rendimiento. Las piezas comunicacionales orientadas a resolver inquietudes de los usuarios generaron el mayor volumen de interacciones y conversiones del periodo. Se recomienda mantener una línea conceptual basada en testimonios y demostraciones prácticas para sostener el desempeño observado.`;
 
-    const oportunidadesYAprendizajes = `Se identifica una clara ventana de oportunidad para expandir las audiencias mediante segmentaciones similares basadas en los usuarios que más interactúan. Asimismo, diversificar las variaciones de textos e imágenes de los anuncios de campaña permitirá contrarrestar la fatiga creativa, sosteniendo la eficiencia en el CTR promedio durante campañas extendidas.`;
+    const oportunidadesYAprendizajes = `Se identifica una clara ventana de oportunidad para expandir las audiencias activas de la marca mediante la creación de públicos similares y personalizados, basados en los usuarios que demostraron mayor volumen de interacción en pauta.\n\nAsimismo, diversificar de manera ágil las variaciones de textos explicativos y creativos visuales en las campañas activas será determinante para contrarrestar la fatiga creativa del público objetivo, garantizando la sostenibilidad de los resultados.\n\nFinalmente, capitalizar el aprendizaje del comportamiento de la audiencia del periodo actual nos permitirá anticipar tendencias de consumo de contenido en redes, optimizando la asignación de pauta para las próximas activaciones.`;
 
-    const recomendacionesEstrategicas = `Para los próximos periodos, se recomienda enfocar los recursos en la amplificación de contenidos que demuestren tracción orgánica inicial. Integrar análisis multivariados de manera ágil y fortalecer la retención en los primeros segundos de video serán factores determinantes para potenciar la rentabilidad general de la pauta.`;
+    const recomendacionesEstrategicas = `Para los próximos periodos de trabajo, se aconseja de forma muy especial enfocar los recursos y esfuerzos presupuestarios en la amplificación de las piezas de contenido que demuestren tracción orgánica inicial sobresaliente.\n\nIntegrar análisis multivariados de manera ágil y dinámica en cada campaña, junto con robustecer la retención en los primeros tres segundos de los videos cortos, serán factores altamente determinantes para potenciar la rentabilidad de la pauta.\n\nComo pilar de cierre, se sugiere establecer un esquema continuo de pruebas A/B de audiencias personalizadas, lo cual permitirá blindar el costo por resultado frente a la saturación comercial, guiando a la marca hacia una fase de escalabilidad eficiente y sostenible.`;
 
-    const updatedSections = (Array.isArray(sections) ? sections : []).map(section => ({
-        ...section,
-        narrativeComment: `El gráfico correspondiente a ${section.title || 'esta sección'} ilustra detalladamente el comportamiento táctico observado de la audiencia y los hitos alcanzados durante este ciclo de trabajo. La visualización de estas cifras demuestra un desempeño altamente favorable y una asimilación muy positiva por parte del público objetivo, consolidando la relevancia de la marca en sus canales activos.\n\nEste progreso representa una base sumamente sólida para proyectar las próximas iniciativas, permitiéndonos celebrar el crecimiento y enfocar con gran entusiasmo los nuevos desafíos estratégicos para potenciar los resultados de negocio.`
-    }));
+    const updatedSections = (Array.isArray(sections) ? sections : []).map(section => {
+        const maxPoint = findMaxDataPoint(section.dataset);
+        const title = section.title || 'esta sección';
+        let detailText = `El análisis estratégico para ${title} muestra un comportamiento de audiencia estable, equilibrado y altamente positivo.`;
+        if (maxPoint) {
+            detailText = `El análisis estratégico para ${title} identifica un punto de desempeño líder en la categoría "${maxPoint.label}" con un total registrado de ${maxPoint.value.toLocaleString('es-ES')} interacciones directas. Esta cifra consolida el liderazgo y la tracción que posee este formato específico dentro de la combinación creativa del periodo.`;
+        }
+        return {
+            ...section,
+            narrativeComment: `${detailText}\n\nEste rendimiento valida de forma concluyente las hipótesis de segmentación y comunicación activa diseñadas para el cliente. Se recomienda priorizar la asignación presupuestaria hacia estas tendencias ganadoras en los ciclos venideros para potenciar de forma sostenida los resultados generales.`
+        };
+    });
+
+    const ageGenderList = normalizedMetrics.demographics?.ageGender || [];
+    const topAge = findTopDemographic(ageGenderList);
+    let demographicsComment = `La distribución demográfica activa del periodo revela un núcleo de audiencia altamente concentrado en los segmentos etarios más rentables y participativos de la marca. Se evidencia un balance y equilibrio muy saludable de interacción entre géneros, lo cual amplía significativamente nuestro espectro de comunicación efectiva en redes sociales.\n\nEste comportamiento demográfico nos brinda una oportunidad excepcional para refinar y personalizar los mensajes tácticos de pauta. Se recomienda direccionar variaciones creativas específicas a cada grupo etario para consolidar y expandir nuestro posicionamiento actual en el mercado.`;
+    if (topAge) {
+        demographicsComment = `La distribución demográfica activa del periodo identifica una concentración de impacto sumamente relevante en el segmento de edad "${topAge.label}", el cual lidera la interacción general con un porcentaje de participación muy destacado. El equilibrio observado entre géneros en este segmento consolida la alta receptividad del mensaje.\n\nEste comportamiento característico de la audiencia nos brinda una oportunidad estratégica excepcional para personalizar y optimizar los mensajes visuales de campaña. Se aconseja direccionar variaciones creativas específicas adaptadas a este grupo líder para rentabilizar de forma óptima cada impacto en el ecosistema digital.`;
+    }
 
     const granularNarratives = [
         {
@@ -858,7 +907,7 @@ export const generateFallbackNarrative = (normalizedMetrics, sections = []) => {
         {
             sectionKey: "demographics",
             title: "Distribución Demográfica",
-            consultativeComment: `La distribución demográfica activa del periodo revela un núcleo de audiencia altamente concentrado en los segmentos etarios más rentables y participativos de la marca. Se evidencia un balance y equilibrio muy saludable de interacción entre géneros, lo cual amplía significativamente nuestro espectro de comunicación efectiva en redes sociales.\n\nEste comportamiento demográfico nos brinda una oportunidad excepcional para refinar y personalizar los mensajes tácticos de pauta. Se recomienda direccionar variaciones creativas específicas a cada grupo etario para consolidar y expandir nuestro posicionamiento actual en el mercado.`
+            consultativeComment: demographicsComment
         }
     ];
 
