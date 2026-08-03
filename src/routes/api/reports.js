@@ -11,8 +11,7 @@ import {
     mergeSourceMetricsIntoAccumulator,
     finalizeNormalizedMetrics,
     preserveApprovedReportData,
-    reconcileNarrativeSections,
-    REPORT_PIPELINE_VERSION
+    reconcileNarrativeSections
 } from '../../services/reportVisionService.js';
 import { v4 as uuidv4 } from 'uuid';
 
