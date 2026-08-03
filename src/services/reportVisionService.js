@@ -269,6 +269,19 @@ RIGOROUS META ADS TABLE PARSING RULES:
 5. Aggregate format labels such as "Reels", "Enlaces", "Historias", "Foto", "Varias fotos" or "Otros" are distribution categories, not publications or ads. NEVER include them in topContent unless the row is an actual named creative with its own impressions or reach.
 `;
 
+const hasUsableExtractionSignal = (extracted) => {
+    if (!extracted || typeof extracted !== 'object') return false;
+    const metricItems = Array.isArray(extracted.metrics)
+        ? extracted.metrics
+        : Object.values(extracted.metrics || {});
+    if (metricItems.some(item => cleanNumericValue(item?.value) !== null)) return true;
+    if (adaptDatasetForChart(extracted.dataset || []).length > 0) return true;
+    const demographics = extracted.demographics || {};
+    if (['ageGender', 'cities', 'countries'].some(key => Array.isArray(demographics[key]) && demographics[key].length > 0)) return true;
+    if (filterTopContentRows(extracted.topContent || []).length > 0) return true;
+    return typeof extracted.narrativeDraft === 'string' && extracted.narrativeDraft.trim().length > 10;
+};
+
 /**
  * Analyzes a screenshot of Meta Ads using Gemini Vision with Structured Outputs.
  * @param {Buffer} imageBuffer - The binary image data.
