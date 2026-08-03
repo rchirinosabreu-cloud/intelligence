@@ -35,6 +35,14 @@ try {
     console.error("[Reports API] Failed to initialize AI client:", e);
 }
 
+router.get('/pipeline-status', (_req, res) => {
+    res.json({
+        pipelineVersion: REPORT_PIPELINE_VERSION,
+        commit: REPORT_DEPLOY_COMMIT,
+        legacyFilterGuard: typeof globalThis.filterTopContentRows === 'function'
+    });
+});
+
 router.get('/image-proxy', async (req, res) => {
     try {
         const { path: rawPath } = req.query;
