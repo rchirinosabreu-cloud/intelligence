@@ -36,7 +36,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import { adaptDatasetForChart, hasReadableChartData } from '@/lib/reportChartData';
-import { filterCanonicalMetrics, isDemographicDataset, filterTopContentRows, splitAchievement, safeClassName } from '@/lib/reportPresentation';
+import { filterCanonicalMetrics, isDemographicDataset, filterTopContentRows, splitAchievement, safeClassName, buildReportFileName } from '@/lib/reportPresentation';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
@@ -338,7 +338,7 @@ const SectionInsight = ({ sectionId, comment, onChange }) => {
     <div className="mt-4 break-inside-avoid !h-auto !overflow-visible bg-[#f9fafb] border border-slate-200 rounded-xl p-4">
       <textarea
         rows={4}
-        className="w-full bg-transparent border-none text-sm leading-relaxed text-slate-700 font-normal focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible space-y-4"
+        className="w-full bg-transparent border-none text-sm leading-relaxed text-slate-700 font-normal focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible space-y-4 whitespace-pre-wrap"
         style={{ height: 'auto', overflow: 'visible' }}
         value={comment || ''}
         onChange={(e) => onChange(sectionId, e.target.value)}
