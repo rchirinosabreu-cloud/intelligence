@@ -671,6 +671,7 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
    - oportunidadesYAprendizajes: Lecciones clave extraídas de la pauta y el contenido orgánico, capitalizado strictly en Sentence Case.
    - recomendacionesEstrategicas: 2 a 3 párrafos de aconsejamiento consultivo y motivador de cierre, capitalizado strictly en Sentence Case.
    - sections: Un arreglo que contenga exactamente los mismos objetos que se te pasaron en SECCIONES VISUALES REGISTRADAS, pero agregando en cada uno un campo 'narrativeComment' con una explicación consultiva profunda, positiva y estructurada estrictamente en al menos DOS PÁRRAFOS completos separados por un salto de línea (\\n\\n) según la regla de DOS PÁRRAFOS descrita arriba, capitalizado con Sentence Case.
+   - granularNarratives: Un arreglo que contenga exactamente dos objetos con 'sectionKey' ('macro_performance' y 'demographics' respectivamente), 'title' ('Rendimiento y Tendencia' y 'Distribución Demográfica' respectivamente), y 'consultativeComment' (explicación consultiva profunda, positiva y estructurada estrictamente en al menos DOS PÁRRAFOS completos separados por un salto de línea (\\n\\n) según la regla de DOS PÁRRAFOS descrita arriba, capitalizado con Sentence Case).
 `;
 
     const narrativeSchema = {
@@ -731,9 +732,22 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
             required: ["sectionId", "chartType", "title", "sectionCategory", "platform", "dataset", "narrativeComment"],
             additionalProperties: false
           }
+        },
+        granularNarratives: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              sectionKey: { type: "string" },
+              title: { type: "string" },
+              consultativeComment: { type: "string" }
+            },
+            required: ["sectionKey", "title", "consultativeComment"],
+            additionalProperties: false
+          }
         }
       },
-      required: ["headline", "summaryPoints", "keyAchievements", "actionPlan", "logrosYAvances", "contenidoTopAnalisis", "oportunidadesYAprendizajes", "recomendacionesEstrategicas", "sections"],
+      required: ["headline", "summaryPoints", "keyAchievements", "actionPlan", "logrosYAvances", "contenidoTopAnalisis", "oportunidadesYAprendizajes", "recomendacionesEstrategicas", "sections", "granularNarratives"],
       additionalProperties: false
     };
 
@@ -835,6 +849,19 @@ export const generateFallbackNarrative = (normalizedMetrics, sections = []) => {
         narrativeComment: `El gráfico correspondiente a ${section.title || 'esta sección'} ilustra detalladamente el comportamiento táctico observado de la audiencia y los hitos alcanzados durante este ciclo de trabajo. La visualización de estas cifras demuestra un desempeño altamente favorable y una asimilación muy positiva por parte del público objetivo, consolidando la relevancia de la marca en sus canales activos.\n\nEste progreso representa una base sumamente sólida para proyectar las próximas iniciativas, permitiéndonos celebrar el crecimiento y enfocar con gran entusiasmo los nuevos desafíos estratégicos para potenciar los resultados de negocio.`
     }));
 
+    const granularNarratives = [
+        {
+            sectionKey: "macro_performance",
+            title: "Rendimiento y Tendencia",
+            consultativeComment: `El análisis de tendencias temporales del periodo muestra una evolución sumamente favorable en el desempeño de la pauta publicitaria. El comportamiento diario de clics, alcance e impresiones refleja picos de interacción altamente correlacionados con el lanzamiento de nuestras campañas de conversión principales.\n\nEste comportamiento ratifica que la receptividad de la audiencia se mantiene en un nivel óptimo de enganche estratégico. Se proyecta continuar con esta distribución presupuestaria para capitalizar los periodos de mayor actividad y maximizar la rentabilidad de cada impacto publicitario en los siguientes ciclos.`
+        },
+        {
+            sectionKey: "demographics",
+            title: "Distribución Demográfica",
+            consultativeComment: `La distribución demográfica activa del periodo revela un núcleo de audiencia altamente concentrado en los segmentos etarios más rentables y participativos de la marca. Se evidencia un balance y equilibrio muy saludable de interacción entre géneros, lo cual amplía significativamente nuestro espectro de comunicación efectiva en redes sociales.\n\nEste comportamiento demográfico nos brinda una oportunidad excepcional para refinar y personalizar los mensajes tácticos de pauta. Se recomienda direccionar variaciones creativas específicas a cada grupo etario para consolidar y expandir nuestro posicionamiento actual en el mercado.`
+        }
+    ];
+
     return {
         headline,
         summaryPoints,
@@ -844,6 +871,7 @@ export const generateFallbackNarrative = (normalizedMetrics, sections = []) => {
         contenidoTopAnalisis,
         oportunidadesYAprendizajes,
         recomendacionesEstrategicas,
-        sections: updatedSections
+        sections: updatedSections,
+        granularNarratives
     };
 };
