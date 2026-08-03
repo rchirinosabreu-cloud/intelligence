@@ -17,6 +17,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
+const REPORT_PIPELINE_VERSION = 'vision-2026-08-03.4';
 
 // Initialize AI
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
@@ -221,6 +222,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
     const requestId = uuidv4();
     console.log(`[Reports API][ID:${requestId}] Pipeline ${REPORT_PIPELINE_VERSION}`);
     try {
+        console.log(`[Reports API][ID:${requestId}] Pipeline ${REPORT_PIPELINE_VERSION}`);
         const { clientId, periodKind, startDate, endDate } = req.body;
         if (!clientId) {
             return res.status(400).json({ error: 'Client ID is required' });

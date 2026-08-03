@@ -123,6 +123,8 @@ test('MediaPreviewModal Decoupled Structural Integrity - Absolute Centering and 
     assert.ok(code.includes('DialogPortal'), 'MediaPreviewModal must use DialogPortal to decouple from parent rendering nodes.');
     assert.ok(code.includes('DialogOverlay'), 'MediaPreviewModal must use DialogOverlay as a dedicated full-screen backdrop.');
     assert.ok(code.includes('DialogPrimitive.Content'), 'MediaPreviewModal must use DialogPrimitive.Content for its custom layout wrapper.');
+    assert.ok(code.includes('<DialogPrimitive.Title className="sr-only">Vista previa de imagen</DialogPrimitive.Title>'), 'MediaPreviewModal must expose an accessible dialog title.');
+    assert.ok(code.includes('<DialogPrimitive.Description className="sr-only">'), 'MediaPreviewModal must expose an accessible dialog description.');
 
     // Assert absolute positioning layout rules
     assert.ok(code.includes('fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'), 'MediaPreviewModal Content must use fixed translations for geometric centering.');
