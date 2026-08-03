@@ -220,6 +220,7 @@ router.post('/generate', upload.any(), async (req, res) => {
 
 router.post('/extract-metrics', upload.any(), async (req, res) => {
     const requestId = uuidv4();
+    console.log(`[Reports API][ID:${requestId}] Pipeline ${REPORT_PIPELINE_VERSION}`);
     try {
         console.log(`[Reports API][ID:${requestId}] Pipeline ${REPORT_PIPELINE_VERSION}`);
         const { clientId, periodKind, startDate, endDate } = req.body;

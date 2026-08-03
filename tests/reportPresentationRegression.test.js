@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   filterCanonicalMetrics,
-  filterReportContentRows,
+  filterTopContentRows,
   isDemographicDataset,
   splitAchievement,
   safeClassName,
@@ -21,7 +21,7 @@ test('report presentation regressions', async (t) => {
   });
 
   await t.test('format distribution labels are excluded from ad publications', () => {
-    const rows = filterReportContentRows([
+    const rows = filterTopContentRows([
       { title: 'REEL - ELEGIR COLEGIO', results: 3, impressions: 1105, reach: 869 },
       { title: 'Reels', results: 36 },
       { title: 'Enlaces', results: 10 },
