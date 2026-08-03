@@ -266,6 +266,7 @@ RIGOROUS META ADS TABLE PARSING RULES:
 2. It is STRICTLY PROHIBITED to use metric names (like "Importe gastado", "Impresiones", "Alcance", "Resultados") as row titles.
 3. Each column MUST map its actual numeric value from the screenshot: results (real conversions), impressions (actual impressions), and reach (actual accounts reached).
 4. It is STRICTLY PROHIBITED to copy or repeat the investment/spend value in all columns or cells of a row. Keep the metric columns completely distinct and separate.
+5. Aggregate format labels such as "Reels", "Enlaces", "Historias", "Foto", "Varias fotos" or "Otros" are distribution categories, not publications or ads. NEVER include them in topContent unless the row is an actual named creative with its own impressions or reach.
 `;
 
 /**
@@ -348,7 +349,7 @@ export const validateAndCleanSourceExtraction = (extracted) => {
 
     const dataset = adaptDatasetForChart(extracted.dataset || []);
     const demographics = extracted.demographics || {};
-    const topContent = extracted.topContent || [];
+    const topContent = filterTopContentRows(extracted.topContent || []);
     const narrativeDraft = extracted.narrativeDraft || "";
 
     const allowedKeys = ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'];
