@@ -119,6 +119,7 @@ model Client {
   responsible         TeamMember?          @relation("ClientResponsible", fields: [responsibleId], references: [id])
   financialRecords    FinancialRecord[]
   accountsReceivables AccountsReceivable[]
+  metricReports       MetricReport[]
 }
 
 model ClientHealth {
@@ -685,4 +686,51 @@ model Quotation {
   terms_and_conditions String
   created_at           DateTime        @default(now())
   expires_at           DateTime
+}
+
+enum MetricPeriodKind {
+  MONTHLY
+  QUARTERLY
+}
+
+enum MetricReportStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+}
+
+enum MetricSourcePlatform {
+  META_ADS
+  ORGANIC_RRSS
+}
+
+model MetricReport {
+  id                String             @id @default(uuid())
+  clientId          String
+  client            Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  periodKind        MetricPeriodKind
+  startDate         DateTime
+  endDate           DateTime
+  status            MetricReportStatus @default(DRAFT)
+  normalizedMetrics Json
+  narrative         Json
+  sections          Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  sources           MetricReportSource[]
+}
+
+model MetricReportSource {
+  id             String               @id @default(uuid())
+  reportId       String
+  report         MetricReport         @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  sourceId       String               @unique @default(uuid())
+  storagePath    String
+  platform       MetricSourcePlatform @default(META_ADS)
+  screenType     String
+  extractionData Json
+  confidence     Float
+  warnings       Json
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 }

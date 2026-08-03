@@ -5,19 +5,19 @@
   "private": true,
   "description": "Brainstudio Intelligence - Minimal ChatGPT-style conversational assistant",
   "scripts": {
-    "start": "npx prisma generate && node scripts/pre-push-enum.js && npx prisma db push --accept-data-loss && npx prisma generate && npx prisma db seed && node scripts/add_status_message.js && node server.js",
+    "start": "npx prisma generate && node server.js",
     "dev": "vite --host :: --port 3000",
     "build": "npm run test:activity-build && prisma generate && vite build",
     "postinstall": "prisma generate",
     "preview": "vite preview --host :: --port 3000",
-    "lint": "eslint . --quiet",
+    "lint": "node scripts/fix-richtext-lint.js && eslint . --quiet",
     "lint:warn": "eslint .",
     "db:fix": "node scripts/fix_content_arrays.js",
     "db:status": "node scripts/add_status_message.js",
     "db:seed:financials": "node scripts/seed-financials.js",
     "db:seed:team": "node scripts/seed-team.js",
     "db:hard-cleanup": "node scripts/hard-cleanup.js",
-    "test": "node --test tests/kanbanLifecycle.test.js tests/draftAndLightbox.test.js tests/commentInteractions.test.js tests/richTextAndEmojis.test.js",
+    "test": "node --test tests/kanbanLifecycle.test.js tests/draftAndLightbox.test.js tests/commentInteractions.test.js tests/richTextAndEmojis.test.js tests/composerActionLayout.test.js tests/reportsExtraction.test.js",
     "test:activity-build": "node --test tests/activityComponentsCompile.test.js"
   },
   "prisma": {

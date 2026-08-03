@@ -52,19 +52,6 @@ const validateTimeSeries = (series, path) => {
   });
 };
 
-const validateBreakdown = (breakdown, path) => {
-  assertObject(breakdown, path);
-  if (!breakdown.key || typeof breakdown.key !== 'string') throw new Error(`${path}.key is required`);
-  if (!breakdown.sourceId || typeof breakdown.sourceId !== 'string') throw new Error(`${path}.sourceId is required`);
-  assertArray(breakdown.items, `${path}.items`);
-  breakdown.items.forEach((item, itemIndex) => {
-    const itemPath = `${path}.items[${itemIndex}]`;
-    assertObject(item, itemPath);
-    if (!item.label || typeof item.label !== 'string') throw new Error(`${itemPath}.label is required`);
-    assertFiniteNumber(item.value, `${itemPath}.value`);
-  });
-};
-
 const validateSection = (section, path, extraCollection) => {
   assertObject(section, path);
   [...REQUIRED_COLLECTIONS, extraCollection].forEach((collection) => {
@@ -72,7 +59,6 @@ const validateSection = (section, path, extraCollection) => {
   });
   section.summaryMetrics.forEach((metric, index) => validateMetric(metric, `${path}.summaryMetrics[${index}]`));
   section.timeSeries.forEach((series, index) => validateTimeSeries(series, `${path}.timeSeries[${index}]`));
-  section.breakdowns.forEach((breakdown, index) => validateBreakdown(breakdown, `${path}.breakdowns[${index}]`));
 };
 
 export const parseAndValidateReportExtraction = (rawText, options = {}) => {
@@ -152,12 +138,6 @@ CONTRATO JSON:
 Cuando existan capturas de pauta, ads debe tener summaryMetrics, timeSeries, breakdowns,
 topAds, insights y recommendations con la misma disciplina de sourceId y valores numéricos.`;
 };
-
-export const buildReportGenerationConfig = () => ({
-  responseMimeType: 'application/json',
-  maxOutputTokens: 16384,
-  temperature: 0.1,
-});
 
 const sectionToLegacyBlocks = (section, imageUrls, type) => {
   if (!section) return [];

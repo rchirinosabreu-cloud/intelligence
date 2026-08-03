@@ -231,7 +231,18 @@ export const parseJsonResponse = (text) => {
     }
 
     try {
-        const cleanText = text.replace(/\`\`\`json|\`\`\`/gi, '').trim();
+        let cleanText = text.trim();
+        // Extract content between first { or [ and last } or ]
+        const firstBrace = cleanText.search(/[{[]/);
+        const lastBrace = Math.max(cleanText.lastIndexOf('}'), cleanText.lastIndexOf(']'));
+
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+        } else {
+            // Fallback: strip markdown code blocks
+            cleanText = cleanText.replace(/\`\`\`json|\`\`\`/gi, '').trim();
+        }
+
         return JSON.parse(cleanText);
     } catch (e) {
         console.error("[AiService] JSON Parse Error. Raw text snippet:", text.substring(0, 100));

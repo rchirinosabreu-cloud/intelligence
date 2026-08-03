@@ -1,13 +1,15 @@
 import React from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import * as Popover from '@radix-ui/react-popover';
+import { useEditor, EditorContent, useEditorState } from '@tiptap/react';
+import { runEditorFormat } from './editorFormatting';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import Mention from '@tiptap/extension-mention';
 import { Extension } from '@tiptap/core';
-import * as Popover from '@radix-ui/react-popover';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
+import ComposerActionLayout from '@/components/ui/ComposerActionLayout';
+import TopToolbarSurface from '@/components/ui/TopToolbarSurface';
 
 // Custom Tiptap extension to handle Mod-Enter (Ctrl+Enter / Cmd+Enter) key action
 const CustomKeymap = Extension.create({
@@ -30,7 +32,20 @@ const CustomKeymap = Extension.create({
   },
 });
 
-const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder, className, showToolbar, onToggleToolbar, onTextChange, teamMembers = [] }, ref) => {
+const RichTextEditor = React.forwardRef(({
+  value,
+  onChange,
+  onSend,
+  placeholder,
+  className,
+  showToolbar,
+  onToggleToolbar,
+  onTextChange,
+  teamMembers = [],
+  attachmentAction,
+  emojiAction,
+  sendAction,
+}, ref) => {
   // Memorize the onSend callback in a mutable ref to prevent Tiptap editor reconstructions
   const onSendRef = React.useRef(onSend);
   React.useEffect(() => {
@@ -42,6 +57,30 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
   React.useEffect(() => {
     teamMembersRef.current = teamMembers;
   }, [teamMembers]);
+
+  // Support both controlled and uncontrolled states for the Popover formatting toolbar
+  const [internalShowToolbar, setInternalShowToolbar] = React.useState(false);
+  const isControlled = showToolbar !== undefined;
+  const isToolbarOpen = isControlled ? showToolbar : internalShowToolbar;
+
+  const handleToggleToolbar = (isOpen) => {
+    if (onToggleToolbar) {
+      onToggleToolbar(isOpen);
+    } else {
+      setInternalShowToolbar(isOpen);
+    }
+  };
+
+  // Execute against ProseMirror's live selection. Restoring a selection captured
+  // when the toolbar opened makes subsequent formatting jump to an old block.
+  const executeFormat = (event, command) => {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    runEditorFormat(editor, command);
+  };
 
   // React State for native cursor-positioned suggestions list
   const [suggestion, setSuggestion] = React.useState({
@@ -65,7 +104,6 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
           levels: [1, 2],
         },
       }),
-      Underline,
       Placeholder.configure({
         placeholder: placeholder || 'Escribe un mensaje...',
       }),
@@ -96,10 +134,8 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
                   selectedIndex: 0,
                   command: props.command,
                 });
-                if (onToggleToolbar) {
-                  // Hide formatting toolbar to avoid overlay conflicts
-                  onToggleToolbar(false);
-                }
+                // Auto-hide the formatting toolbar to prevent Visual Overlay Conflicts
+                handleToggleToolbar(false);
               },
               onUpdate: (props) => {
                 const rect = props.clientRect ? props.clientRect() : null;
@@ -150,7 +186,7 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
     editorProps: {
       attributes: {
         class: cn(
-          "w-full text-sm font-medium outline-none prose dark:prose-invert max-w-none text-zinc-800 dark:text-zinc-200 px-4 py-3",
+          "w-full text-sm font-medium outline-none prose dark:prose-invert max-w-none text-zinc-800 dark:text-zinc-200 px-4 py-3 pb-12",
           "focus:outline-none focus-visible:outline-none [&_.ProseMirror]:outline-none"
         ),
       },
@@ -164,6 +200,26 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
       }
     },
   }, []); // Run exact ONCE on mount, preventing reconstruction on prop changes!
+
+  const formattingState = useEditorState({
+    editor,
+    selector: ({ editor: currentEditor }) => ({
+      bold: currentEditor?.isActive('bold') ?? false,
+      italic: currentEditor?.isActive('italic') ?? false,
+      underline: currentEditor?.isActive('underline') ?? false,
+      heading1: currentEditor?.isActive('heading', { level: 1 }) ?? false,
+      heading2: currentEditor?.isActive('heading', { level: 2 }) ?? false,
+      bulletList: currentEditor?.isActive('bulletList') ?? false,
+      orderedList: currentEditor?.isActive('orderedList') ?? false,
+    }),
+  });
+
+  const composerRef = React.useRef(null);
+  React.useLayoutEffect(() => {
+    if (isToolbarOpen) {
+      composerRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [isToolbarOpen]);
 
   // Expose imperatively controlled functions via Ref
   React.useImperativeHandle(ref, () => ({
@@ -207,42 +263,58 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
   if (!editor) return null;
 
   return (
-    <Popover.Root open={showToolbar} onOpenChange={onToggleToolbar}>
-      <Popover.Anchor asChild>
-        <div className={cn(
-          "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus-within:border-primary/30 rounded-xl shadow-inner transition-all relative flex flex-col",
-          className
-        )}>
-          {/* Dynamic heights and scroll wrapped at React container level instead of Tiptap editorProps */}
+    <Popover.Root open={isToolbarOpen} onOpenChange={handleToggleToolbar}>
+      <div className={cn("relative w-full flex h-12 flex-col justify-end", isToolbarOpen && "z-20")}>
+        <Popover.Anchor asChild>
           <div className={cn(
-            "w-full overflow-y-auto transition-[min-height] duration-200 ease-in-out scrollbar-thin",
-            "min-h-[48px] max-h-[120px]",
-            showToolbar && "min-h-[144px] max-h-[280px]",
-            "[&_.ProseMirror]:min-h-full [&_.ProseMirror]:focus:outline-none"
+            "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus-within:border-primary/30 rounded-xl shadow-inner transition-all relative flex flex-col justify-end",
+            isToolbarOpen && "absolute inset-x-0 bottom-0 min-h-[144px]",
+            className
           )}>
-            <EditorContent editor={editor} />
+            {/* Dynamic heights and scroll wrapped at React container level instead of Tiptap editorProps */}
+            <div className={cn(
+              "w-full overflow-y-auto transition-[min-height] duration-200 ease-in-out scrollbar-thin",
+              "min-h-[48px] max-h-[120px]",
+              isToolbarOpen && "min-h-[144px] max-h-[280px]",
+              "[&_.ProseMirror]:min-h-full [&_.ProseMirror]:focus:outline-none"
+            )}>
+              <EditorContent editor={editor} />
+            </div>
           </div>
-        </div>
-      </Popover.Anchor>
+        </Popover.Anchor>
 
-      <Popover.Portal>
-        <Popover.Content
-          side="top"
-          align="center"
-          sideOffset={8}
-          collisionPadding={16}
-          avoidCollisions
-          data-task-format-toolbar="true"
-          className="flex flex-wrap items-center gap-1.5 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg z-[120] animate-in slide-in-from-bottom-2 duration-150"
-          onOpenAutoFocus={(e) => e.preventDefault()}
-        >
+        <ComposerActionLayout
+          attachmentAction={attachmentAction}
+          formatAction={(
+            <Popover.Trigger asChild>
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              className={cn(
+                "w-9 h-9 flex items-center justify-center rounded-lg text-xs font-bold transition-all select-none hover:bg-zinc-200 dark:hover:bg-zinc-800",
+                isToolbarOpen ? "text-primary bg-primary/10" : "text-zinc-400"
+              )}
+              title="Formato"
+              aria-label="Opciones de formato"
+            >
+              A
+            </button>
+            </Popover.Trigger>
+          )}
+          emojiAction={emojiAction}
+          sendAction={sendAction}
+        />
+      </div>
+
+      {isToolbarOpen && (
+        <TopToolbarSurface>
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleBold().run()}
+            aria-pressed={formattingState.bold}
+            onMouseDown={(e) => executeFormat(e, chain => chain.toggleBold())}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('bold') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.bold ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Negrita"
           >
@@ -250,11 +322,11 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
           </button>
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleItalic().run()}
+            aria-pressed={formattingState.italic}
+            onMouseDown={(e) => executeFormat(e, chain => chain.toggleItalic())}
             className={cn(
               "px-2 py-1 rounded text-xs italic transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('italic') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.italic ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Cursiva"
           >
@@ -262,11 +334,11 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
           </button>
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleUnderline().run()}
+            aria-pressed={formattingState.underline}
+            onMouseDown={(e) => executeFormat(e, chain => chain.toggleUnderline())}
             className={cn(
               "px-2 py-1 rounded text-xs underline transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('underline') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.underline ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Subrayado"
           >
@@ -275,11 +347,11 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
           <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1" />
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+            aria-pressed={formattingState.heading1}
+            onMouseDown={(e) => executeFormat(e, chain => chain.toggleHeading({ level: 1 }))}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('heading', { level: 1 }) ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.heading1 ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Título 1"
           >
@@ -287,11 +359,11 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
           </button>
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+            aria-pressed={formattingState.heading2}
+            onMouseDown={(e) => executeFormat(e, chain => chain.toggleHeading({ level: 2 }))}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('heading', { level: 2 }) ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.heading2 ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Título 2"
           >
@@ -300,11 +372,11 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
           <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1" />
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            aria-pressed={formattingState.bulletList}
+            onMouseDown={(e) => executeFormat(e, chain => chain.toggleBulletList())}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('bulletList') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.bulletList ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Lista de Viñetas"
           >
@@ -312,18 +384,18 @@ const RichTextEditor = React.forwardRef(({ value, onChange, onSend, placeholder,
           </button>
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            aria-pressed={formattingState.orderedList}
+            onMouseDown={(e) => executeFormat(e, chain => chain.toggleOrderedList())}
             className={cn(
               "px-2 py-1 rounded text-xs font-bold transition-all select-none hover:bg-zinc-100 dark:hover:bg-zinc-800",
-              editor.isActive('orderedList') ? "bg-primary/10 text-primary" : "text-zinc-500"
+              formattingState.orderedList ? "bg-primary/10 text-primary" : "text-zinc-500"
             )}
             title="Lista Numerada"
           >
             1. Lista
           </button>
-        </Popover.Content>
-      </Popover.Portal>
+        </TopToolbarSurface>
+      )}
 
       {/* Render suggestion list inside React Portal anchored dynamically to parsed cursor coordinates */}
       {suggestion.isOpen && suggestion.items.length > 0 && createPortal(

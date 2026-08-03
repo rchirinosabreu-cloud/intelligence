@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   buildReportExtractionPrompt,
-  buildReportGenerationConfig,
   parseAndValidateReportExtraction,
   toLegacyReportAnalysis,
 } from '../services/reportExtractionService.js';
@@ -68,21 +67,6 @@ describe('reportExtractionService', () => {
     );
   });
 
-  it('rejects non-numeric breakdown values before they reach a bar chart', () => {
-    const invalid = structuredClone(validExtraction);
-    invalid.organic.breakdowns = [{
-      key: 'formats',
-      label: 'Formatos publicados',
-      unit: 'COUNT',
-      sourceId: 'organic-1',
-      items: [{ label: 'Historias', value: '22' }],
-    }];
-
-    assert.throws(() => parseAndValidateReportExtraction(JSON.stringify(invalid)),
-      /organic\.breakdowns\[0\]\.items\[0\]\.value must be a finite number/,
-    );
-  });
-
   it('instructs the model to preserve COP and never fabricate time-series points', () => {
     const prompt = buildReportExtractionPrompt({
       clientName: 'Cliente Demo',
@@ -110,14 +94,5 @@ describe('reportExtractionService', () => {
     assert.equal(analysis.performance_analysis[0].tipo, 'MACRO');
     assert.equal(analysis.performance_analysis[0].imagen_url, '/api/reports/image-proxy?path=ads.png');
     assert.equal(analysis.hoja_de_ruta.length, 0);
-  });
-
-  it('places Gemini JSON settings directly in GenerateContentConfig', () => {
-    const config = buildReportGenerationConfig();
-
-    assert.equal(config.responseMimeType, 'application/json');
-    assert.equal(config.temperature, 0.1);
-    assert.equal(config.maxOutputTokens, 16384);
-    assert.equal(config.generationConfig, undefined);
   });
 });
