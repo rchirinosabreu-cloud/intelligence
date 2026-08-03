@@ -219,6 +219,7 @@ router.post('/generate', upload.any(), async (req, res) => {
 
 router.post('/extract-metrics', upload.any(), async (req, res) => {
     const requestId = uuidv4();
+    console.log(`[Reports API][ID:${requestId}] Pipeline ${REPORT_PIPELINE_VERSION}`);
     try {
         const { clientId, periodKind, startDate, endDate } = req.body;
         if (!clientId) {
@@ -305,6 +306,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 details: 'Ninguna de las imágenes del lote proporcionó datos utilizables (métricas, gráficos o audiencias).',
                 processingSummary,
                 warnings: allWarnings,
+                pipelineVersion: REPORT_PIPELINE_VERSION,
                 requestId
             });
         }
@@ -424,6 +426,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
 
         res.status(201).json({
             success: true,
+            pipelineVersion: REPORT_PIPELINE_VERSION,
             report
         });
 
