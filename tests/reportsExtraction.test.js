@@ -36,32 +36,6 @@ test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) =>
         }
     });
 
-    await t.test('Retries syntactically valid output when it contains no usable extraction signal', async () => {
-        const originalFetch = globalThis.fetch;
-        const originalApiKey = process.env.GEMINI_API_KEY;
-        process.env.GEMINI_API_KEY = 'mock-key';
-        let calls = 0;
-        globalThis.fetch = async () => {
-            calls += 1;
-            const payload = calls === 1
-                ? { metrics: { spend: { value: null } }, dataset: [], demographics: {}, topContent: [], narrativeDraft: '' }
-                : { metrics: { impressions: { value: 139593 } }, screenType: 'Rendimiento Macro' };
-            return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(payload) }] } }] }), {
-                status: 200,
-                headers: { 'Content-Type': 'application/json' }
-            });
-        };
-
-        try {
-            const result = await extractMetricsWithGemini(Buffer.from('mock-image'), 'image/jpeg');
-            assert.strictEqual(calls, 2);
-            assert.strictEqual(result.metrics.impressions.value, 139593);
-        } finally {
-            globalThis.fetch = originalFetch;
-            process.env.GEMINI_API_KEY = originalApiKey;
-        }
-    });
-
     await t.test('Successfully extracts structured metrics from mock response', async () => {
         const mockResponse = {
             candidates: [

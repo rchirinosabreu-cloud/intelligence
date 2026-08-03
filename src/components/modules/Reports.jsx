@@ -36,7 +36,6 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import { adaptDatasetForChart, hasReadableChartData } from '@/lib/reportChartData';
-import { buildReportFileName, filterCanonicalMetrics, filterTopContentRows, isDemographicDataset, safeClassName, splitAchievement } from '@/lib/reportPresentation';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
