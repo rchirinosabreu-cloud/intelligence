@@ -380,7 +380,7 @@ export const validateAndCleanSourceExtraction = (extracted) => {
             key: key,
             label: typeof item.label === 'string' ? item.label : String(item.key || key),
             value: val,
-            unit: typeof item.unit === 'string' && item.unit !== 'count' ? item.unit : (key === 'spend' ? 'COP' : 'count'),
+            unit: key === 'spend' ? 'COP' : (typeof item.unit === 'string' && item.unit !== 'count' ? item.unit : 'count'),
             confidence: typeof item.confidence === 'number' ? item.confidence : 1.0,
             evidence: typeof item.evidence === 'string' ? item.evidence : ''
         };
@@ -657,7 +657,10 @@ ${JSON.stringify(sections, null, 2)}
 REGLAS DE REDACCIÓN DE LA NARRATIVA:
 1. TONO: Consultivo, positivo, profesional, motivador y orientado a metas comerciales de alto nivel.
 2. REGLA ESTRICTA DE INTEGRIDAD DE DATOS (PROHIBIDO HALLUCINAR): Queda terminantemente prohibido que menciones o inventes valores numéricos, métricas, cantidades o porcentajes que no existan de forma explícita en el objeto de métricas o secciones provisto arriba. No asumas divisas ni cifras que no estén allí.
-3. PROFUNDIDAD NARRATIVA EDITORIAL: Cada comentario explicativo o interpretativo debe constar de explicaciones consultivas profundas de exactamente 3 a 4 oraciones completas y bien estructuradas. Asegura que el string comience desde el inicio de la oración y no sufra ningún recorte, truncamiento o abreviación.
+3. PROFUNDIDAD NARRATIVA EDITORIAL (REGLA DE DOS PÁRRAFOS POR GRÁFICO): Cada comentario explicativo o interpretativo en el campo 'narrativeComment' de cada sección/gráfico de 'sections' debe constar estrictamente de al menos DOS PÁRRAFOS completos, separados por un salto de línea (\\n\\n):
+   - Primer Párrafo (Análisis de Datos y Audiencia): Traducción directa de las cifras a un lenguaje claro y accesible, explicando el comportamiento observado de la audiencia y los hitos alcanzados sin jerga técnica abrumadora.
+   - Segundo Párrafo (Proyección Estratégica y Motivación): Enfoque consultivo y entusiasta de cierre que celebre el progreso del periodo, conecte el logro con los objetivos de negocio del cliente y lo motive hacia los siguientes pasos.
+   Asegura que cada string comience desde el inicio de la oración y no sufra ningún recorte, truncamiento o abreviación.
 4. ESTRUCTURA REQUERIDA (JSON):
    - headline: Un titular de impacto, corto y motivador, capitalizado strictly en Sentence Case (solo la primera letra en mayúscula).
    - summaryPoints: Un arreglo de exactamente 3 puntos clave resumidos, cada uno capitalizado strictly en Sentence Case.
@@ -667,7 +670,7 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
    - contenidoTopAnalisis: Texto explicativo de las piezas creativas de mayor rendimiento con ranking detallado (Top 1 - Imagen, Top 2 - Reel, etc.), capitalizado strictly en Sentence Case.
    - oportunidadesYAprendizajes: Lecciones clave extraídas de la pauta y el contenido orgánico, capitalizado strictly en Sentence Case.
    - recomendacionesEstrategicas: 2 a 3 párrafos de aconsejamiento consultivo y motivador de cierre, capitalizado strictly en Sentence Case.
-   - sections: Un arreglo que contenga exactamente los mismos objetos que se te pasaron en SECCIONES VISUALES REGISTRADAS, pero agregando en cada uno un campo 'narrativeComment' con una explicación consultiva profunda, positiva y de exactamente 3 a 4 oraciones completas explicando dicho gráfico o tabla, capitalizado strictly en Sentence Case.
+   - sections: Un arreglo que contenga exactamente los mismos objetos que se te pasaron en SECCIONES VISUALES REGISTRADAS, pero agregando en cada uno un campo 'narrativeComment' con una explicación consultiva profunda, positiva y estructurada estrictamente en al menos DOS PÁRRAFOS completos separados por un salto de línea (\\n\\n) según la regla de DOS PÁRRAFOS descrita arriba, capitalizado con Sentence Case.
 `;
 
     const narrativeSchema = {
@@ -829,7 +832,7 @@ export const generateFallbackNarrative = (normalizedMetrics, sections = []) => {
 
     const updatedSections = (Array.isArray(sections) ? sections : []).map(section => ({
         ...section,
-        narrativeComment: `El gráfico correspondiente a ${section.title || 'esta sección'} ilustra el comportamiento táctico observado. Se evidencia una evolución estable alineada con los objetivos de posicionamiento del periodo.`
+        narrativeComment: `El gráfico correspondiente a ${section.title || 'esta sección'} ilustra detalladamente el comportamiento táctico observado de la audiencia y los hitos alcanzados durante este ciclo de trabajo. La visualización de estas cifras demuestra un desempeño altamente favorable y una asimilación muy positiva por parte del público objetivo, consolidando la relevancia de la marca en sus canales activos.\n\nEste progreso representa una base sumamente sólida para proyectar las próximas iniciativas, permitiéndonos celebrar el crecimiento y enfocar con gran entusiasmo los nuevos desafíos estratégicos para potenciar los resultados de negocio.`
     }));
 
     return {

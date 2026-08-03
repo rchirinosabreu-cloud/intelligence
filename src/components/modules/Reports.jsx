@@ -36,7 +36,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import { adaptDatasetForChart, hasReadableChartData } from '@/lib/reportChartData';
-import { filterCanonicalMetrics, isDemographicDataset, filterTopContentRows, splitAchievement } from '@/lib/reportPresentation';
+import { filterCanonicalMetrics, isDemographicDataset, filterTopContentRows, splitAchievement, safeClassName } from '@/lib/reportPresentation';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
@@ -338,7 +338,7 @@ const SectionInsight = ({ sectionId, comment, onChange }) => {
     <div className="mt-4 break-inside-avoid !h-auto !overflow-visible bg-[#f9fafb] border border-slate-200 rounded-xl p-4">
       <textarea
         rows={4}
-        className="w-full bg-transparent border-none text-sm text-[#334155] leading-relaxed font-normal focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
+        className="w-full bg-transparent border-none text-sm leading-relaxed text-slate-700 font-normal focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible space-y-4"
         style={{ height: 'auto', overflow: 'visible' }}
         value={comment || ''}
         onChange={(e) => onChange(sectionId, e.target.value)}
@@ -537,11 +537,7 @@ const formatMetricValue = (key, metric) => {
   if (metric.value === null || metric.value === undefined) return 'N/A';
 
   if (key === 'spend') {
-    const unit = metric.unit || 'COP';
-    if (unit.toUpperCase() === 'COP') {
-      return `COP $${Math.round(metric.value).toLocaleString('es-ES')}`;
-    }
-    return `${unit} $${metric.value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `COP $${Number(metric.value).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
   if (key === 'ctr') {
@@ -1140,7 +1136,14 @@ const Reports = () => {
       const textareas = element.querySelectorAll('textarea, input');
       textareas.forEach(ta => {
         const div = document.createElement('div');
-        div.innerText = ta.value;
+        const val = ta.value || '';
+        if (ta.tagName.toLowerCase() === 'textarea' && val.includes('\n')) {
+          div.innerHTML = val.split('\n\n')
+            .map(para => `<p class="space-y-4 text-sm leading-relaxed text-slate-700 font-normal" style="margin-top: 0; margin-bottom: 12px; font-size: 14px; line-height: 1.625; font-weight: 400;">${para.replace(/\n/g, '<br/>')}</p>`)
+            .join('');
+        } else {
+          div.innerText = val;
+        }
         div.className = ta.className;
         div.style.height = 'auto';
         div.style.whiteSpace = 'pre-wrap';
