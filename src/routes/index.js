@@ -22,7 +22,7 @@ import servicesRouter from './api/services.js';
 import clientFileRouter from './api/clientFiles.js';
 import talentRadarRouter from './api/talentRadar.js';
 import activityRouter from './api/activity.js';
-import reportsRouter from './api/reports.js';
+import reportsRouter, { getReportPipelineStatus } from './api/reports.js';
 import brainCoreRouter from './api/brainCore.js';
 import boardsRouter from './api/boards.js';
 import quotationsRouter from './api/quotations.js';
@@ -39,6 +39,7 @@ router.post('/public/items/:id/approve', publicController.approvePublicItem);
 router.post('/public/items/:id/comment', publicController.commentPublicItem);
 router.use('/quotations', quotationsRouter);
 router.use('/services', servicesRouter);
+router.get('/reports/pipeline-status', (_req, res) => res.json(getReportPipelineStatus()));
 
 // Aliases for services catalog (ensuring compatibility with various frontend versions)
 router.get('/services-catalog', (req, res) => res.redirect(307, '/api/services'));
