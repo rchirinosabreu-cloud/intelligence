@@ -36,7 +36,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import { adaptDatasetForChart, hasReadableChartData } from '@/lib/reportChartData';
-import { filterCanonicalMetrics, isDemographicDataset, filterTopContentRows } from '@/lib/reportPresentation';
+import { filterCanonicalMetrics, isDemographicDataset, filterTopContentRows, splitAchievement } from '@/lib/reportPresentation';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
@@ -1533,10 +1533,12 @@ const Reports = () => {
                        <div className="border-t border-slate-100 pt-8 space-y-4 w-full page-break-after">
                          <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Logros y avances")}</h4>
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-                           {narrativeState.logrosYAvances.map((bullet, idx) => {
-                             const achievement = splitAchievement(bullet);
+                           {(Array.isArray(narrativeState?.logrosYAvances) ? narrativeState.logrosYAvances : []).map((bullet, idx) => {
+                             const safeBullet = typeof bullet === 'string' ? bullet : '';
+                             const achievement = splitAchievement(safeBullet);
                              const updateAchievement = (field, value) => {
-                               const updated = [...narrativeState.logrosYAvances];
+                               const achievementsList = Array.isArray(narrativeState?.logrosYAvances) ? narrativeState.logrosYAvances : [];
+                               const updated = [...achievementsList];
                                const next = { ...achievement, [field]: value };
                                updated[idx] = `**${next.title}:** ${next.description}`;
                                setNarrativeState({ ...narrativeState, logrosYAvances: updated });

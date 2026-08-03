@@ -527,6 +527,19 @@ router.patch('/:reportId/metrics', async (req, res) => {
     }
 });
 
+const withTimeout = (promise, ms, errorMessage = "Timeout exceeded") => {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+            reject(new Error(errorMessage));
+        }, ms);
+    });
+    return Promise.race([
+        promise,
+        timeoutPromise
+    ]).finally(() => clearTimeout(timeoutId));
+};
+
 router.post('/:reportId/generate-narrative', async (req, res) => {
     try {
         const { reportId } = req.params;
@@ -543,7 +556,13 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
         const sections = report.sections || [];
 
         console.log(`[Reports API] Generating narrative for report ${reportId}...`);
-        const narrativeResult = await generateNarrativeWithGemini(metrics, sections);
+
+        // 35 seconds timeout for narrative generation
+        const narrativeResult = await withTimeout(
+            generateNarrativeWithGemini(metrics, sections),
+            35000,
+            "Gemini narrative generation timed out"
+        );
 
         const updatedReport = await prisma.metricReport.update({
             where: { id: reportId },
@@ -574,7 +593,8 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
 
     } catch (error) {
         console.error('[Reports API] Error generating narrative:', error);
-        res.status(500).json({
+        const isTimeout = error.message && error.message.includes('timed out');
+        res.status(isTimeout ? 504 : 500).json({
             error: "NARRATIVE_GENERATION_FAILED",
             message: error.message || 'Fallo en la generación de narrativa'
         });
