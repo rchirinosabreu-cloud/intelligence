@@ -2,21 +2,6 @@ import { parseJsonResponse } from './aiService.js';
 import { GoogleGenAI } from '@google/genai';
 import { adaptDatasetForChart } from '../lib/reportChartData.js';
 
-const AGGREGATE_FORMAT_LABELS = new Set([
-    'reel', 'reels', 'enlace', 'enlaces', 'historia', 'historias', 'foto', 'fotos',
-    'varias fotos', 'otros', 'otro', 'video', 'videos', 'carrusel', 'carruseles'
-]);
-
-export const filterExtractedTopContentRows = (rows = []) => rows.filter((row) => {
-    if (!row || typeof row !== 'object' || !String(row.title || '').trim()) return false;
-    const normalizedTitle = String(row.title).normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-    const isAggregateFormat = AGGREGATE_FORMAT_LABELS.has(normalizedTitle);
-    const hasPublicationEvidence = row.impressions !== null && row.impressions !== undefined
-        || row.reach !== null && row.reach !== undefined;
-    return !isAggregateFormat || hasPublicationEvidence;
-});
-
 /**
  * Sanitizes and cleans formatted text string values into valid floats or integers.
  */
@@ -293,7 +278,7 @@ const hasUsableExtractionSignal = (extracted) => {
     if (adaptDatasetForChart(extracted.dataset || []).length > 0) return true;
     const demographics = extracted.demographics || {};
     if (['ageGender', 'cities', 'countries'].some(key => Array.isArray(demographics[key]) && demographics[key].length > 0)) return true;
-    if (filterExtractedTopContentRows(extracted.topContent || []).length > 0) return true;
+    if (filterTopContentRows(extracted.topContent || []).length > 0) return true;
     return typeof extracted.narrativeDraft === 'string' && extracted.narrativeDraft.trim().length > 10;
 };
 
@@ -326,7 +311,7 @@ export const extractMetricsWithGemini = async (imageBuffer, mimeType = 'image/jp
                     { text: SYSTEM_PROMPT },
                     { text: attempt === 1
                         ? "Extract key metrics from this Meta Ads/organic screenshot."
-                        : "Retry the extraction from the image carefully. Read every visible metric, chart point, audience breakdown, or named content row. Return one complete, strictly valid JSON object with every comma and closing delimiter. Do not repeat keys and do not return every field empty when visible data exists." },
+                        : "Retry the extraction. Return one complete, strictly valid JSON object with every comma and closing delimiter. Do not repeat keys." },
                     { inlineData: { data: base64Image, mimeType } }
                 ]
             }],
@@ -343,20 +328,13 @@ export const extractMetricsWithGemini = async (imageBuffer, mimeType = 'image/jp
             lastParseError = new Error("Gemini Vision response content is empty");
         } else {
             try {
-                const parsed = parseJsonResponse(content);
-                if (hasUsableExtractionSignal(parsed)) return parsed;
-                lastParseError = new Error('Gemini returned valid JSON without usable metrics, charts, audiences, or content');
-                console.warn(`[Vision Service] Empty extraction on attempt ${attempt}/2.`, {
-                    screenType: parsed?.screenType || 'unknown',
-                    metricKeys: Object.keys(parsed?.metrics || {}),
-                    datasetPoints: Array.isArray(parsed?.dataset) ? parsed.dataset.length : 0
-                });
+                return parseJsonResponse(content);
             } catch (parseError) {
                 lastParseError = parseError;
                 console.error(`[Vision Service] Invalid JSON on attempt ${attempt}/2:`, parseError.message, "Raw snippet:", content.slice(0, 500));
             }
         }
-        if (attempt === 1) console.warn('[Vision Service] Retrying invalid or empty Gemini structured output once.');
+        if (attempt === 1) console.warn('[Vision Service] Retrying malformed Gemini structured output once.');
     }
     throw lastParseError;
 };
@@ -384,7 +362,7 @@ export const validateAndCleanSourceExtraction = (extracted) => {
 
     const dataset = adaptDatasetForChart(extracted.dataset || []);
     const demographics = extracted.demographics || {};
-    const topContent = filterExtractedTopContentRows(extracted.topContent || []);
+    const topContent = filterTopContentRows(extracted.topContent || []);
     const narrativeDraft = extracted.narrativeDraft || "";
 
     const allowedKeys = ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'];
