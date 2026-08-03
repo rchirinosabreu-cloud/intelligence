@@ -182,13 +182,7 @@ router.post('/generate', upload.any(), async (req, res) => {
                     ...imageParts
                 ]
             }],
-            config: {
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    maxOutputTokens: 8192,
-                    temperature: 0.1
-                }
-            }
+            config: buildReportGenerationConfig()
         });
 
         const rawText = extractModelText(result);
