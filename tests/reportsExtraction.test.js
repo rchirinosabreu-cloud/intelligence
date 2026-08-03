@@ -10,6 +10,32 @@ import {
 // We can mock the fetch call to Gemini to test the vision service
 test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) => {
 
+    await t.test('Retries once when Gemini returns malformed structured JSON', async () => {
+        const originalFetch = globalThis.fetch;
+        const originalApiKey = process.env.GEMINI_API_KEY;
+        process.env.GEMINI_API_KEY = 'mock-key';
+        let calls = 0;
+        globalThis.fetch = async () => {
+            calls += 1;
+            const text = calls === 1
+                ? '{"metrics":{"spend":{"value":null} "impressions":{}}}'
+                : JSON.stringify({ metrics: { spend: { value: 2500, unit: 'COP' } }, screenType: 'Rendimiento Macro' });
+            return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        };
+
+        try {
+            const result = await extractMetricsWithGemini(Buffer.from('mock-image'), 'image/jpeg');
+            assert.strictEqual(calls, 2);
+            assert.strictEqual(result.metrics.spend.value, 2500);
+        } finally {
+            globalThis.fetch = originalFetch;
+            process.env.GEMINI_API_KEY = originalApiKey;
+        }
+    });
+
     await t.test('Successfully extracts structured metrics from mock response', async () => {
         const mockResponse = {
             candidates: [
