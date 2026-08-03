@@ -574,7 +574,10 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
 
     } catch (error) {
         console.error('[Reports API] Error generating narrative:', error);
-        res.status(500).json({ error: 'Internal Server Error during narrative generation', details: error.message });
+        res.status(500).json({
+            error: "NARRATIVE_GENERATION_FAILED",
+            message: error.message || 'Fallo en la generación de narrativa'
+        });
     }
 });
 
