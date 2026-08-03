@@ -1692,18 +1692,64 @@ const Reports = () => {
                      </div>
 
                      {/* 7. Oportunidades & Aprendizajes */}
-                     {narrativeState?.oportunidadesYAprendizajes && (
+                     {Array.isArray(narrativeState?.oportunidadesYAprendizajes) && narrativeState.oportunidadesYAprendizajes.length > 0 && (
                        <div className="space-y-3 pt-8 border-t border-slate-100 page-break-after w-full">
                          <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Oportunidades & aprendizajes")}</h4>
-                         <Card className="bg-[#0F172A] border-[#0F172A] p-8 text-white rounded-[2rem] shadow-xl space-y-4 w-full">
-                           <textarea
-                              rows={5}
-                              className="w-full bg-transparent border-none text-white leading-relaxed font-normal text-base outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
-                              style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
-                              value={narrativeState.oportunidadesYAprendizajes}
-                              onChange={(e) => setNarrativeState({ ...narrativeState, oportunidadesYAprendizajes: e.target.value })}
-                           />
-                         </Card>
+                         <div className="grid grid-cols-1 gap-6 w-full">
+                           {narrativeState.oportunidadesYAprendizajes.map((item, idx) => {
+                             const updateItem = (field, value) => {
+                               const updated = [...narrativeState.oportunidadesYAprendizajes];
+                               updated[idx] = { ...updated[idx], [field]: value };
+                               setNarrativeState({ ...narrativeState, oportunidadesYAprendizajes: updated });
+                             };
+                             return (
+                               <Card key={idx} className="bg-[#0F172A] border-[#0F172A] p-6 text-white rounded-[2rem] shadow-xl space-y-4 w-full">
+                                 <div className="border-b border-white/10 pb-3 flex items-center justify-between">
+                                   <input
+                                     type="text"
+                                     className="bg-transparent border-none text-white focus:ring-0 outline-none p-0 text-base font-black w-full"
+                                     value={item.title || ''}
+                                     onChange={(e) => updateItem('title', e.target.value)}
+                                     placeholder="Título de la Oportunidad"
+                                   />
+                                   <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider bg-cyan-400/10 px-2.5 py-0.5 rounded-full shrink-0">Oportunidad</span>
+                                 </div>
+                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-normal">
+                                   <div className="space-y-1">
+                                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Evidencia:</span>
+                                     <textarea
+                                       rows={2}
+                                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white outline-none resize-none focus:ring-1 focus:ring-white/10 !h-auto"
+                                       value={item.evidence || ''}
+                                       onChange={(e) => updateItem('evidence', e.target.value)}
+                                       placeholder="Evidencia observada..."
+                                     />
+                                   </div>
+                                   <div className="space-y-1">
+                                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Aprendizaje:</span>
+                                     <textarea
+                                       rows={2}
+                                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white outline-none resize-none focus:ring-1 focus:ring-white/10 !h-auto"
+                                       value={item.learning || ''}
+                                       onChange={(e) => updateItem('learning', e.target.value)}
+                                       placeholder="Aprendizaje clave..."
+                                     />
+                                   </div>
+                                   <div className="space-y-1">
+                                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Aplicación:</span>
+                                     <textarea
+                                       rows={2}
+                                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white outline-none resize-none focus:ring-1 focus:ring-white/10 !h-auto"
+                                       value={item.application || ''}
+                                       onChange={(e) => updateItem('application', e.target.value)}
+                                       placeholder="Aplicación táctica..."
+                                     />
+                                   </div>
+                                 </div>
+                               </Card>
+                             );
+                           })}
+                         </div>
                        </div>
                      )}
 
@@ -1713,17 +1759,58 @@ const Reports = () => {
                      </div>
 
                      {/* 9. Recomendaciones Estratégicas */}
-                     {narrativeState?.recomendacionesEstrategicas && (
+                     {Array.isArray(narrativeState?.recomendacionesEstrategicas) && narrativeState.recomendacionesEstrategicas.length > 0 && (
                        <div className="space-y-4 pt-8 border-t border-slate-100 w-full">
                          <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Recomendaciones estratégicas")}</h4>
-                         <div className="bg-[#009fb7] text-white rounded-[2rem] p-8 shadow-lg w-full">
-                           <textarea
-                              rows={6}
-                              className="w-full bg-transparent border-none text-white leading-relaxed font-normal text-base outline-none resize-none focus:ring-0 rounded-xl !h-auto !overflow-visible"
-                              style={{ height: 'auto', overflow: 'visible', color: '#ffffff' }}
-                              value={narrativeState.recomendacionesEstrategicas}
-                              onChange={(e) => setNarrativeState({ ...narrativeState, recomendacionesEstrategicas: e.target.value })}
-                           />
+                         <div className="grid grid-cols-1 gap-6 w-full">
+                           {narrativeState.recomendacionesEstrategicas.map((item, idx) => {
+                             const updateItem = (field, value) => {
+                               const updated = [...narrativeState.recomendacionesEstrategicas];
+                               updated[idx] = { ...updated[idx], [field]: value };
+                               setNarrativeState({ ...narrativeState, recomendacionesEstrategicas: updated });
+                             };
+                             return (
+                               <Card key={idx} className="bg-[#009fb7] border-[#009fb7] p-6 text-white rounded-[2rem] shadow-xl space-y-4 w-full">
+                                 <div className="border-b border-white/20 pb-3 flex items-center justify-between">
+                                   <input
+                                     type="text"
+                                     className="bg-transparent border-none text-white focus:ring-0 outline-none p-0 text-base font-black w-full"
+                                     value={item.action || ''}
+                                     onChange={(e) => updateItem('action', e.target.value)}
+                                     placeholder="Acción Recomendada"
+                                   />
+                                   <span className={cn(
+                                     "text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full shrink-0",
+                                     item.priority === 'ALTA' ? "bg-red-500/20 text-red-200" : "bg-amber-500/20 text-amber-200"
+                                   )}>
+                                     Prioridad {item.priority || 'ALTA'}
+                                   </span>
+                                 </div>
+                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm font-normal">
+                                   <div className="space-y-1">
+                                     <span className="text-[10px] font-bold uppercase tracking-widest text-white/60 block">Justificación Estratégica:</span>
+                                     <textarea
+                                       rows={2}
+                                       className="w-full bg-white/5 border border-white/20 rounded-xl px-3 py-2 text-white outline-none resize-none focus:ring-1 focus:ring-white/20 !h-auto"
+                                       value={item.rationale || ''}
+                                       onChange={(e) => updateItem('rationale', e.target.value)}
+                                       placeholder="Justificación de la recomendación..."
+                                     />
+                                   </div>
+                                   <div className="space-y-1">
+                                     <span className="text-[10px] font-bold uppercase tracking-widest text-white/60 block">KPI / Métrica de Éxito:</span>
+                                     <textarea
+                                       rows={2}
+                                       className="w-full bg-white/5 border border-white/20 rounded-xl px-3 py-2 text-white outline-none resize-none focus:ring-1 focus:ring-white/20 !h-auto"
+                                       value={item.kpi || ''}
+                                       onChange={(e) => updateItem('kpi', e.target.value)}
+                                       placeholder="KPI de éxito..."
+                                     />
+                                   </div>
+                                 </div>
+                               </Card>
+                             );
+                           })}
                          </div>
                        </div>
                      )}
