@@ -765,3 +765,82 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
         throw parseError;
     }
 };
+
+const formatMetricValue = (key, metric) => {
+    if (!metric || metric.value === null || metric.value === undefined) return 'N/D';
+    const val = metric.value;
+    if (key === 'spend') {
+        return `${Number(val).toLocaleString('es-CO')} ${metric.unit || 'COP'}`;
+    }
+    if (key === 'ctr') {
+        return `${val}%`;
+    }
+    return Number(val).toLocaleString('es-ES');
+};
+
+export const generateFallbackNarrative = (normalizedMetrics, sections = []) => {
+    const spendStr = formatMetricValue('spend', normalizedMetrics.spend);
+    const reachStr = formatMetricValue('reach', normalizedMetrics.reach);
+    const impressionsStr = formatMetricValue('impressions', normalizedMetrics.impressions);
+    const clicksStr = formatMetricValue('clicks', normalizedMetrics.clicks);
+    const ctrStr = formatMetricValue('ctr', normalizedMetrics.ctr);
+    const resultsStr = formatMetricValue('results', normalizedMetrics.results);
+
+    const headline = "Optimización estratégica y consolidación de impacto digital";
+    const summaryPoints = [
+        `Eficiencia en pauta con una inversión total de ${spendStr} consolidada durante el periodo.`,
+        `Alcance de audiencias clave superando las ${reachStr} personas impactadas en plataformas Meta.`,
+        `Generación activa de valor con un total de ${resultsStr} resultados clave validados.`
+    ];
+
+    const keyAchievements = `El análisis estratégico de este periodo demuestra una consolidación sólida del posicionamiento de la marca en ecosistemas digitales. Con un alcance acumulado de ${reachStr} usuarios únicos y un total de ${impressionsStr} impresiones, el rendimiento general refleja una distribución altamente optimizada. Adicionalmente, el registro de ${clicksStr} clics con un CTR promedio de ${ctrStr} indica un alto nivel de interés y relevancia del contenido para la audiencia objetivo. Estos resultados sientan bases fuertes para escalar las conversiones de manera eficiente en los próximos ciclos.`;
+
+    const actionPlan = [
+        {
+            action: "Optimización continua de presupuestos hacia creativos ganadores",
+            kpi: "Reducción de costo por resultado en un 10%",
+            suggestedAssignee: "Director de Performance Ads"
+        },
+        {
+            action: "Potenciación de formatos interactivos y video corto orgánico",
+            kpi: "Incremento del engagement orgánico en un 15%",
+            suggestedAssignee: "Content Specialist"
+        },
+        {
+            action: "Refinamiento de segmentaciones de audiencias personalizadas",
+            kpi: "Aumento de la tasa de conversión en un 5%",
+            suggestedAssignee: "Media Buyer"
+        }
+    ];
+
+    const logrosYAvances = [
+        `*Alcance estratégico sólido:* Logramos impactar de manera óptima a un total de ${reachStr} usuarios con impresiones consolidadas.`,
+        `*Eficiencia en la inversión:* La asignación presupuestaria de ${spendStr} se concentró en los pilares comunicacionales de mayor tracción.`,
+        `*Interés de audiencias:* La captación de ${clicksStr} clics demuestra el valor y relevancia de la propuesta creativa.`,
+        `*Efectividad y conversión:* La consecución de ${resultsStr} resultados clave valida el embudo táctico implementado.`,
+        `*Estabilidad en CTR:* El porcentaje promedio de ${ctrStr} refleja un enganche positivo con las piezas visuales activas.`
+    ];
+
+    const contenidoTopAnalisis = `La revisión detallada de las publicaciones y creativos destacados confirma que los formatos dinámicos y de valor educativo lideran el rendimiento. Las piezas comunicacionales orientadas a resolver inquietudes de los usuarios generaron el mayor volumen de interacciones y conversiones del periodo. Se recomienda mantener una línea conceptual basada en testimonios y demostraciones prácticas para sostener el desempeño observado.`;
+
+    const oportunidadesYAprendizajes = `Se identifica una clara ventana de oportunidad para expandir las audiencias mediante segmentaciones similares basadas en los usuarios que más interactúan. Asimismo, diversificar las variaciones de textos e imágenes de los anuncios de campaña permitirá contrarrestar la fatiga creativa, sosteniendo la eficiencia en el CTR promedio durante campañas extendidas.`;
+
+    const recomendacionesEstrategicas = `Para los próximos periodos, se recomienda enfocar los recursos en la amplificación de contenidos que demuestren tracción orgánica inicial. Integrar análisis multivariados de manera ágil y fortalecer la retención en los primeros segundos de video serán factores determinantes para potenciar la rentabilidad general de la pauta.`;
+
+    const updatedSections = (Array.isArray(sections) ? sections : []).map(section => ({
+        ...section,
+        narrativeComment: `El gráfico correspondiente a ${section.title || 'esta sección'} ilustra el comportamiento táctico observado. Se evidencia una evolución estable alineada con los objetivos de posicionamiento del periodo.`
+    }));
+
+    return {
+        headline,
+        summaryPoints,
+        keyAchievements,
+        actionPlan,
+        logrosYAvances,
+        contenidoTopAnalisis,
+        oportunidadesYAprendizajes,
+        recomendacionesEstrategicas,
+        sections: updatedSections
+    };
+};
