@@ -93,7 +93,7 @@ test('Ref Actions - useImperativeHandle exposes emoji insertion command', () => 
 });
 
 // 5. ProseMirror Height Constraints Code Inspection
-test('RichTextEditor - Tiptap Wrapper, Popover Toolbar Portal and Height Class Verification', () => {
+test('RichTextEditor - Tiptap Wrapper, in-flow toolbar and Height Class Verification', () => {
     const editorCode = readFileSync('src/components/ui/RichTextEditor.jsx', 'utf8');
 
     // Assert forwardRef and imperative handle exist
@@ -107,8 +107,7 @@ test('RichTextEditor - Tiptap Wrapper, Popover Toolbar Portal and Height Class V
     // Assert the use of Popover components from Radix Popover Portal
     assert.ok(editorCode.includes('Popover.Root'), 'RichTextEditor must import and use Popover.Root.');
     assert.ok(editorCode.includes('Popover.Anchor'), 'RichTextEditor must use Popover.Anchor as visual position target.');
-    assert.ok(editorCode.includes('Popover.Portal'), 'RichTextEditor must use Popover.Portal to render toolbar in a decoupled overlay layer.');
-    assert.ok(editorCode.includes('Popover.Content'), 'RichTextEditor must use Popover.Content to configure alignment/collision padding.');
+    assert.ok(editorCode.includes('TopToolbarSurface'), 'RichTextEditor must use the top-anchored toolbar surface.');
 
     // Assert ProseMirror Height Rules are present in container wrappers
     assert.ok(editorCode.includes('min-h-[48px]'), 'RichTextEditor must support min-h-[48px] in compact mode.');

@@ -2,13 +2,16 @@ import express from 'express';
 import multer from 'multer';
 import prisma from '../../lib/prisma.js';
 import { GoogleGenAI } from '@google/genai';
-import { uploadClientFile, getClientFileStream } from '../../services/storageService.js';
-import { extractModelText } from '../../services/aiService.js';
+import { uploadClientFile, getSignedUrl, getClientFileStream } from '../../services/storageService.js';
+import { parseJsonResponse, extractModelText } from '../../services/aiService.js';
 import {
-    buildReportExtractionPrompt,
-    parseAndValidateReportExtraction,
-    toLegacyReportAnalysis
-} from '../../services/reportExtractionService.js';
+    extractMetricsWithGemini,
+    generateNarrativeWithGemini,
+    validateAndCleanSourceExtraction,
+    mergeSourceMetricsIntoAccumulator,
+    finalizeNormalizedMetrics
+} from '../../services/reportVisionService.js';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -214,6 +217,370 @@ router.post('/generate', upload.any(), async (req, res) => {
     } catch (error) {
         console.error('[Reports API] Fatal Error:', error);
         res.status(500).json({ error: 'Internal Server Error during analysis' });
+    }
+});
+
+
+router.post('/extract-metrics', upload.any(), async (req, res) => {
+    const requestId = uuidv4();
+    try {
+        const { clientId, periodKind, startDate, endDate } = req.body;
+        if (!clientId) {
+            return res.status(400).json({ error: 'Client ID is required' });
+        }
+
+        const client = await prisma.client.findUnique({ where: { id: clientId } });
+        if (!client) {
+            return res.status(404).json({ error: 'Client not found' });
+        }
+
+        const files = req.files || [];
+        if (files.length === 0) {
+            return res.status(400).json({ error: 'At least one screenshot is required' });
+        }
+
+        const sanitizeSectionDataset = (dataset) => {
+            if (!Array.isArray(dataset)) return [];
+            return dataset
+                .map(item => {
+                    const label = typeof item.label === 'string' ? item.label : String(item.label || '');
+                    const value = item.value === undefined || item.value === null ? 0 : Number(item.value);
+                    const hombres = item.hombres === undefined || item.hombres === null ? 0 : Number(item.hombres);
+                    const mujeres = item.mujeres === undefined || item.mujeres === null ? 0 : Number(item.mujeres);
+
+                    const clean = {
+                        label,
+                        value: isNaN(value) ? 0 : value
+                    };
+
+                    if (item.hombres !== undefined && item.hombres !== null) {
+                        clean.hombres = isNaN(hombres) ? 0 : hombres;
+                    }
+                    if (item.mujeres !== undefined && item.mujeres !== null) {
+                        clean.mujeres = isNaN(mujeres) ? 0 : mujeres;
+                    }
+
+                    return clean;
+                })
+                .filter(item => {
+                    return item.value !== 0 || item.hombres !== 0 || item.mujeres !== 0;
+                });
+        };
+
+        // Process files in parallel with Promise.allSettled
+        const filePromises = files.map(async (file) => {
+            const sourceId = uuidv4();
+
+            // 1. Upload to GCS
+            const uploadResult = await uploadClientFile(file, client.name);
+
+            // 2. Vision analysis
+            const extracted = await extractMetricsWithGemini(file.buffer, file.mimetype);
+
+            // 3. Validation and cleaning by Source
+            const cleaned = validateAndCleanSourceExtraction(extracted);
+
+            return {
+                sourceId,
+                storagePath: uploadResult.gcsPath,
+                ...cleaned,
+                originalName: file.originalname
+            };
+        });
+
+        const settleResults = await Promise.allSettled(filePromises);
+
+        const successful = [];
+        const partial = [];
+        const failed = [];
+        const allWarnings = [];
+
+        settleResults.forEach((res, index) => {
+            const originalName = files[index]?.originalname || `Captura ${index + 1}`;
+            if (res.status === 'fulfilled') {
+                const val = res.value;
+                if (val.usable) {
+                    successful.push(val);
+                    if (val.warnings && val.warnings.length > 0) {
+                        allWarnings.push(...val.warnings);
+                    }
+                } else {
+                    partial.push({
+                        originalName: val.originalName || originalName,
+                        reason: "Información extraída no contiene datos utilizables o métricas reconocibles.",
+                        ...val
+                    });
+                    allWarnings.push(`Archivo parcial (${originalName}): No se detectaron métricas ni audiencias.`);
+                }
+            } else {
+                const err = res.reason || {};
+                failed.push({
+                    originalName,
+                    error: err.message || String(err)
+                });
+                allWarnings.push(`Fallo en lectura (${originalName}): ${err.message || String(err)}`);
+            }
+        });
+
+        const processingSummary = {
+            totalFiles: files.length,
+            successfulFiles: successful.length,
+            partialFiles: partial.length,
+            failedFiles: failed.length
+        };
+
+        // Responder con estado HTTP 422 única y exclusivamente si ninguna imagen del lote aportó información utilizable
+        if (successful.length === 0) {
+            return res.status(422).json({
+                error: 'AI response validation failed',
+                details: 'Ninguna de las imágenes del lote proporcionó datos utilizables (métricas, gráficos o audiencias).',
+                processingSummary,
+                warnings: allWarnings,
+                requestId
+            });
+        }
+
+        let accumulator = null;
+        const processedSources = [];
+        const extractedSections = [];
+        const narrativeDrafts = [];
+
+        successful.forEach((res, index) => {
+            // Merge into semantic accumulator
+            accumulator = mergeSourceMetricsIntoAccumulator(accumulator, res);
+
+            // Register sections
+            if (res.dataset && res.dataset.length > 0) {
+                const cleanDataset = sanitizeSectionDataset(res.dataset);
+                extractedSections.push({
+                    sectionId: uuidv4(),
+                    chartType: res.chartType || 'LINE_CHART',
+                    title: res.title || 'Sección',
+                    sectionCategory: res.sectionCategory || 'ADS',
+                    platform: res.platform || 'META_ADS',
+                    dataset: cleanDataset,
+                    narrativeComment: ""
+                });
+            }
+
+            if (res.narrativeDraft) {
+                narrativeDrafts.push(`Captura ${index + 1}: ${res.narrativeDraft}`);
+            }
+
+            // Map extracted platform to valid MetricSourcePlatform enum (META_ADS/ORGANIC_RRSS)
+            let dbPlatform = 'META_ADS';
+            if (res.sectionCategory === 'ORGANIC' || res.platform === 'ORGANIC_RRSS' || res.platform === 'FACEBOOK' || res.platform === 'INSTAGRAM') {
+                dbPlatform = 'ORGANIC_RRSS';
+            }
+
+            processedSources.push({
+                sourceId: res.sourceId,
+                storagePath: res.storagePath,
+                platform: dbPlatform,
+                screenType: res.screenType,
+                extractionData: res.metrics,
+                confidence: parseFloat(res.confidence) || 1.0,
+                warnings: res.warnings || []
+            });
+        });
+
+        // Finalize consolidated metrics
+        const validatedNormalizedMetrics = finalizeNormalizedMetrics(accumulator);
+
+        // Inject processingSummary and warnings directly into the normalizedMetrics object
+        validatedNormalizedMetrics.processingSummary = processingSummary;
+        validatedNormalizedMetrics.warnings = allWarnings;
+
+        const combinedNarrative = narrativeDrafts.join('\n\n') || "No hay narrativa disponible.";
+
+        const parsedStartDate = startDate ? new Date(startDate) : new Date(new Date().setDate(1));
+        const parsedEndDate = endDate ? new Date(endDate) : new Date();
+
+        // Enforce valid enums MONTHLY and DRAFT
+        const validPeriodKinds = ['MONTHLY', 'QUARTERLY'];
+        const finalPeriodKind = validPeriodKinds.includes(periodKind) ? periodKind : 'MONTHLY';
+
+        // Save DRAFT report in database under a secure transaction with no spread fields
+        let report;
+        try {
+            report = await prisma.$transaction(async (tx) => {
+                return await tx.metricReport.create({
+                    data: {
+                        clientId: client.id,
+                        periodKind: finalPeriodKind,
+                        startDate: parsedStartDate,
+                        endDate: parsedEndDate,
+                        status: 'DRAFT',
+                        normalizedMetrics: validatedNormalizedMetrics,
+                        narrative: {
+                            draft: combinedNarrative,
+                            final: combinedNarrative,
+                            headline: "",
+                            summaryPoints: [],
+                            keyAchievements: combinedNarrative,
+                            actionPlan: [],
+                            logrosYAvances: [],
+                            contenidoTopAnalisis: "",
+                            oportunidadesYAprendizajes: "",
+                            recomendacionesEstrategicas: ""
+                        },
+                        sections: extractedSections,
+                        sources: {
+                            create: processedSources
+                        }
+                    },
+                    include: {
+                        sources: true,
+                        client: true
+                    }
+                });
+            });
+            console.log(`[Reports API] MetricReport created successfully with ID ${report.id}.`);
+        } catch (dbError) {
+            console.error(`[Reports API][ID:${requestId}] Prisma insertion failed:`, dbError.message || dbError);
+            return res.status(500).json({
+                error: 'Database validation or insertion error',
+                message: 'Internal Database Error',
+                requestId
+            });
+        }
+
+        res.status(201).json({
+            success: true,
+            report
+        });
+
+    } catch (error) {
+        console.error(`[Reports API][ID:${requestId}] Error extracting metrics:`, error.message);
+        if (error.isAIUnavailable) {
+            return res.status(502).json({
+                error: 'AI service unavailable or failed',
+                details: error.message,
+                requestId
+            });
+        } else if (error.isAIInvalidResponse || error.message.includes('validation') || error.message.includes('schema') || error.message.includes('Unexpected') || error.message.includes('Metric')) {
+            return res.status(422).json({
+                error: 'AI response validation failed',
+                details: error.message,
+                requestId
+            });
+        }
+        res.status(500).json({
+            error: 'Internal Server Error during metrics extraction',
+            message: error.message,
+            requestId
+        });
+    }
+});
+
+router.patch('/:reportId/metrics', async (req, res) => {
+    try {
+        const { reportId } = req.params;
+        const { normalizedMetrics: newMetrics } = req.body;
+
+        if (!newMetrics) {
+            return res.status(400).json({ error: "normalizedMetrics is required in payload" });
+        }
+
+        const existingReport = await prisma.metricReport.findUnique({
+            where: { id: reportId }
+        });
+
+        if (!existingReport) {
+            return res.status(404).json({ error: "Metric report not found" });
+        }
+
+        const dbMetrics = existingReport.normalizedMetrics || {};
+        const updatedMetrics = {};
+
+        const keys = ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'];
+        keys.forEach(key => {
+            const dbMetric = dbMetrics[key] || {};
+            const newMetric = newMetrics[key] || {};
+
+            // Determine if the value was manually modified from the DB value
+            const dbVal = dbMetric.value !== undefined ? dbMetric.value : null;
+            const newVal = newMetric.value !== undefined ? newMetric.value : null;
+            const isEdited = dbVal !== newVal || dbMetric.isManuallyEdited === true;
+
+            updatedMetrics[key] = {
+                ...dbMetric,
+                ...newMetric,
+                isManuallyEdited: isEdited
+            };
+        });
+
+        const updatedReport = await prisma.metricReport.update({
+            where: { id: reportId },
+            data: {
+                normalizedMetrics: updatedMetrics,
+                status: 'REVIEW'
+            },
+            include: {
+                sources: true,
+                client: true
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            report: updatedReport
+        });
+
+    } catch (error) {
+        console.error('[Reports API] Error updating report metrics:', error);
+        res.status(500).json({ error: 'Internal Server Error during metrics update', details: error.message });
+    }
+});
+
+router.post('/:reportId/generate-narrative', async (req, res) => {
+    try {
+        const { reportId } = req.params;
+
+        const report = await prisma.metricReport.findUnique({
+            where: { id: reportId }
+        });
+
+        if (!report) {
+            return res.status(404).json({ error: "Metric report not found" });
+        }
+
+        const metrics = report.normalizedMetrics || {};
+        const sections = report.sections || [];
+
+        console.log(`[Reports API] Generating narrative for report ${reportId}...`);
+        const narrativeResult = await generateNarrativeWithGemini(metrics, sections);
+
+        const updatedReport = await prisma.metricReport.update({
+            where: { id: reportId },
+            data: {
+                narrative: {
+                    headline: narrativeResult.headline,
+                    summaryPoints: narrativeResult.summaryPoints,
+                    keyAchievements: narrativeResult.keyAchievements,
+                    actionPlan: narrativeResult.actionPlan,
+                    logrosYAvances: narrativeResult.logrosYAvances || [],
+                    contenidoTopAnalisis: narrativeResult.contenidoTopAnalisis || "",
+                    oportunidadesYAprendizajes: narrativeResult.oportunidadesYAprendizajes || "",
+                    recomendacionesEstrategicas: narrativeResult.recomendacionesEstrategicas || ""
+                },
+                sections: narrativeResult.sections,
+                status: 'PUBLISHED'
+            },
+            include: {
+                sources: true,
+                client: true
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            report: updatedReport
+        });
+
+    } catch (error) {
+        console.error('[Reports API] Error generating narrative:', error);
+        res.status(500).json({ error: 'Internal Server Error during narrative generation', details: error.message });
     }
 });
 
