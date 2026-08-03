@@ -243,7 +243,35 @@ export const parseJsonResponse = (text) => {
             cleanText = cleanText.replace(/\`\`\`json|\`\`\`/gi, '').trim();
         }
 
-        return JSON.parse(cleanText);
+        try {
+            return JSON.parse(cleanText);
+        } catch (parseError) {
+            // Gemini occasionally exhausts its output while emitting a needlessly long
+            // decimal. Only repair this narrow, deterministic truncation shape; never
+            // fabricate missing strings, arrays, keys, or values.
+            const withoutFence = text.replace(/```json|```/gi, '').trim();
+            if (!/\.\d{8,}$/.test(withoutFence)) throw parseError;
+
+            const roundedTail = withoutFence.replace(
+                /(-?\d+\.\d{4})\d*$/,
+                (_, precision) => String(Number(Number(precision).toFixed(4)))
+            );
+            const stack = [];
+            let inString = false;
+            let escaped = false;
+            for (const char of roundedTail) {
+                if (inString) {
+                    if (escaped) escaped = false;
+                    else if (char === '\\') escaped = true;
+                    else if (char === '"') inString = false;
+                } else if (char === '"') inString = true;
+                else if (char === '{' || char === '[') stack.push(char);
+                else if (char === '}' || char === ']') stack.pop();
+            }
+            if (inString || stack.length === 0) throw parseError;
+            const repaired = roundedTail + stack.reverse().map(char => char === '{' ? '}' : ']').join('');
+            return JSON.parse(repaired);
+        }
     } catch (e) {
         console.error("[AiService] JSON Parse Error. Raw text snippet:", text.substring(0, 100));
         throw new Error(`Failed to parse AI response as JSON: ${e.message}`);
