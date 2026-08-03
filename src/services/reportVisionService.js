@@ -1,5 +1,6 @@
 import { parseJsonResponse } from './aiService.js';
 import { GoogleGenAI } from '@google/genai';
+import { adaptDatasetForChart } from '../lib/reportChartData.js';
 
 /**
  * Sanitizes and cleans formatted text string values into valid floats or integers.
@@ -345,7 +346,7 @@ export const validateAndCleanSourceExtraction = (extracted) => {
         metrics = dict;
     }
 
-    const dataset = extracted.dataset || [];
+    const dataset = adaptDatasetForChart(extracted.dataset || []);
     const demographics = extracted.demographics || {};
     const topContent = extracted.topContent || [];
     const narrativeDraft = extracted.narrativeDraft || "";
@@ -417,6 +418,9 @@ export const validateAndCleanSourceExtraction = (extracted) => {
         missingMetrics,
         invalidMetrics,
         warnings,
+        chartType: extracted.chartType || 'LINE_CHART',
+        title: extracted.title || 'Sección',
+        narrativeDraft,
         screenType: extracted.screenType || 'Desconocido',
         sectionCategory: extracted.sectionCategory || 'ADS',
         platform: extracted.platform || 'META_ADS'
@@ -437,7 +441,8 @@ export const mergeSourceMetricsIntoAccumulator = (accumulator, incomingExtractio
             results: { sum: 0, count: 0, label: 'Resultados Totales', unit: 'count' },
             ctr: { label: 'CTR Promedio', unit: '%' },
             demographics: { ageGender: [], cities: [], countries: [] },
-            topContent: []
+            topContent: [],
+            observedTotals: new Set()
         };
     }
 
@@ -454,28 +459,33 @@ export const mergeSourceMetricsIntoAccumulator = (accumulator, incomingExtractio
         metrics = dict;
     }
 
+    const totalSignature = ['spend', 'impressions', 'clicks', 'results']
+        .map(key => `${key}:${metrics[key]?.value ?? ''}`).join('|');
+    const isRepeatedTotal = accumulator.observedTotals.has(totalSignature);
+    if (!isRepeatedTotal) accumulator.observedTotals.add(totalSignature);
+
     // Regla de Ausencia: Si la métrica entrante es null o undefined, preservar el acumulado anterior
     const cleanSpend = metrics.spend ? cleanNumericValue(metrics.spend.value) : null;
-    if (cleanSpend !== null) {
+    if (cleanSpend !== null && !isRepeatedTotal) {
         accumulator.spend.sum += cleanSpend;
         accumulator.spend.count++;
         if (metrics.spend.unit) accumulator.spend.unit = metrics.spend.unit;
     }
 
     const cleanImpressions = metrics.impressions ? cleanNumericValue(metrics.impressions.value) : null;
-    if (cleanImpressions !== null) {
+    if (cleanImpressions !== null && !isRepeatedTotal) {
         accumulator.impressions.sum += cleanImpressions;
         accumulator.impressions.count++;
     }
 
     const cleanClicks = metrics.clicks ? cleanNumericValue(metrics.clicks.value) : null;
-    if (cleanClicks !== null) {
+    if (cleanClicks !== null && !isRepeatedTotal) {
         accumulator.clicks.sum += cleanClicks;
         accumulator.clicks.count++;
     }
 
     const cleanResults = metrics.results ? cleanNumericValue(metrics.results.value) : null;
-    if (cleanResults !== null) {
+    if (cleanResults !== null && !isRepeatedTotal) {
         accumulator.results.sum += cleanResults;
         accumulator.results.count++;
     }
@@ -584,6 +594,24 @@ export const finalizeNormalizedMetrics = (accumulator) => {
     };
 
     return finalMetrics;
+};
+
+export const preserveApprovedReportData = (existingMetrics = {}, approvedMetrics = {}) => {
+    const result = { ...existingMetrics };
+    for (const key of ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results']) {
+        result[key] = { ...(existingMetrics[key] || {}), ...(approvedMetrics[key] || {}) };
+    }
+    return result;
+};
+
+export const reconcileNarrativeSections = (storedSections = [], narrativeSections = []) => {
+    const comments = new Map(narrativeSections.map(section => [section.sectionId, section.narrativeComment]));
+    return storedSections.map(section => ({
+        ...section,
+        narrativeComment: typeof comments.get(section.sectionId) === 'string'
+            ? comments.get(section.sectionId)
+            : (section.narrativeComment || '')
+    }));
 };
 
 /**

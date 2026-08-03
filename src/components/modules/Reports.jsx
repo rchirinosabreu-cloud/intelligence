@@ -34,6 +34,7 @@ import axios from 'axios';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
+import { adaptDatasetForChart, hasReadableChartData } from '@/lib/reportChartData';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
@@ -146,10 +147,10 @@ const DemographicsChart = ({ demographics }) => {
 };
 
 const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => {
-  if (!dataset || dataset.length === 0) return null;
+  if (!hasReadableChartData(dataset)) return null;
 
   // Intercept and sanitize labels for organic comparison chart and orthographic errors
-  const sanitizedDataset = dataset.map(item => {
+  const sanitizedDataset = adaptDatasetForChart(dataset, chartType).map(item => {
     let cleanLabel = item.label || '';
     if (cleanLabel.toLowerCase().includes('publ') || cleanLabel.toLowerCase().startsWith('pub')) {
       cleanLabel = 'Publicaciones';
@@ -687,7 +688,10 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
     onApprove(localMetrics);
   };
 
-  const allWarnings = report.sources?.flatMap(s => s.warnings || []) || [];
+  const allWarnings = [
+    ...(report.normalizedMetrics?.warnings || []),
+    ...(report.sources?.flatMap(s => s.warnings || []) || [])
+  ].filter((warning, index, warnings) => warnings.indexOf(warning) === index);
 
   const hasWarning = (key) => {
     if (key === 'ctr' || key === 'clicks' || key === 'impressions') {
@@ -697,9 +701,9 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
   };
 
   return (
-    <div className="space-y-8 bg-white border border-[#e2e8f0] rounded-[2.5rem] p-10 shadow-lg no-print">
+    <div className="space-y-8 bg-white dark:bg-slate-900 border border-[#e2e8f0] dark:border-slate-700 rounded-[2.5rem] p-10 shadow-lg no-print">
       <div className="border-b border-slate-100 pb-6 space-y-2">
-        <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+        <h2 className="text-2xl font-black text-slate-800 dark:text-slate-50 flex items-center gap-2">
           <Sparkles className="w-6 h-6 text-primary" />
           Auditoría de Métricas Extraídas (Visión AI)
         </h2>
@@ -709,7 +713,7 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
       </div>
 
       {allWarnings.length > 0 && (
-        <div className="p-6 bg-amber-50 border border-amber-200 rounded-2xl space-y-2">
+        <div className="p-6 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl space-y-2">
           <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
             <Info className="w-5 h-5 text-amber-600 animate-pulse" />
             Alertas de Coherencia Matemática y Calidad
@@ -723,7 +727,8 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {Object.entries(localMetrics).map(([key, metric]) => {
+        {['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'].map((key) => {
+          const metric = localMetrics[key];
           if (!metric) return null;
           const warningActive = hasWarning(key) || (metric.confidence !== undefined && metric.confidence < 0.8);
 
@@ -1013,7 +1018,7 @@ const Reports = () => {
     } catch (error) {
       const errMsg = error.response?.data?.error || 'Fallo en la extracción de IA. Reintenta.';
       toast.error(errMsg);
-      console.error('[Reports Frontend] Extraction error:', error);
+      console.error('[Reports Frontend] Extraction error:', error.response?.data || error);
     } finally {
       setIsGenerating(false);
       isGeneratingRef.current = false;
@@ -1058,7 +1063,7 @@ const Reports = () => {
     } catch (error) {
       const errMsg = error.response?.data?.error || 'Error en el proceso. Intenta de nuevo.';
       toast.error(errMsg);
-      console.error('[Reports Frontend] Flow error:', error);
+      console.error('[Reports Frontend] Flow error:', error.response?.data || error);
     } finally {
       setIsSubmittingReview(false);
       setIsGeneratingNarrative(false);
@@ -1526,7 +1531,7 @@ const Reports = () => {
                        </div>
 
                        {/* Filter Facebook */}
-                       {report.sections && report.sections.filter(s => s.sectionCategory === 'ORGANIC' && s.platform === 'FACEBOOK').map((sect, idx) => {
+                       {report.sections && report.sections.filter(s => s.sectionCategory === 'ORGANIC' && (s.platform === 'FACEBOOK' || s.platform === 'ORGANIC_RRSS')).map((sect, idx) => {
                          if (!sect.dataset || sect.dataset.length === 0 || sumDatasetValues(sect.dataset) === 0) return null;
                          return (
                          <div key={sect.sectionId || `fb-org-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid w-full">
