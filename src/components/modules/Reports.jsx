@@ -25,7 +25,8 @@ import {
   Calendar,
   Layout,
   ExternalLink,
-  Monitor
+  Monitor,
+  Eye
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -216,6 +217,10 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
     return label.includes('visua') || label.includes('alcan') || label.includes('interac') || label.includes('clic') || label.includes('visit') || label.includes('seguidor');
   });
 
+  if (isDemographicDataset(sanitizedDataset)) {
+    return <DemographicsBarChart data={sanitizedDataset} />;
+  }
+
   if (chartType === 'LINE_CHART' && isFunnelDataset) {
     // Render funnel metrics as isolatedMetricCards to prevent rendering continuos line charts on funnel stages
     return (
@@ -366,7 +371,8 @@ const DemographicsBarChart = ({ data }) => {
 };
 
 const TopContentTable = ({ data }) => {
-  if (!data || data.length === 0) return null;
+  const publicationRows = filterTopContentRows(data);
+  if (publicationRows.length === 0) return null;
   return (
     <div className="overflow-x-auto border border-slate-100 rounded-2xl bg-white mt-4">
       <table className="w-full border-collapse text-left text-xs text-slate-500">
@@ -379,7 +385,7 @@ const TopContentTable = ({ data }) => {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50 font-medium">
-          {data.map((item, idx) => (
+          {publicationRows.map((item, idx) => (
             <tr key={idx} className="hover:bg-slate-50/50 break-inside-avoid">
               <td className="px-6 py-4 font-bold text-slate-700">{item.title}</td>
               <td className="px-6 py-4 text-right text-slate-600 font-semibold">{item.results?.toLocaleString('es-ES') || item.views?.toLocaleString('es-ES') || 'N/A'}</td>
@@ -443,8 +449,9 @@ const ReportCover = ({ report }) => {
          </div>
 
          {/* Giant Title */}
-         <h1 className="text-5xl md:text-6xl font-black text-[#0F172A] tracking-tight leading-none">
-            Reporte de desempeño digital de {clientName}
+         <h1 className="text-6xl md:text-7xl font-black text-[#0F172A] tracking-tight leading-[0.95] max-w-5xl">
+            <span className="block">Reporte de desempeño digital</span>
+            <span className="block mt-3 text-[#009fb7]">de {clientName}</span>
          </h1>
 
          {/* Subtitle with separator */}
@@ -544,27 +551,37 @@ const formatMetricValue = (key, metric) => {
 };
 
 const MetricGrid = ({ metrics }) => {
+  const metricStyles = {
+    spend: { component: Trophy, card: 'bg-violet-50 dark:bg-violet-950/30 border-violet-100 dark:border-violet-800', icon: 'bg-violet-600' },
+    impressions: { component: Eye, card: 'bg-cyan-50 dark:bg-cyan-950/30 border-cyan-100 dark:border-cyan-800', icon: 'bg-cyan-600' },
+    reach: { component: User, card: 'bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-800', icon: 'bg-blue-600' },
+    clicks: { component: ArrowUpRight, card: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-800', icon: 'bg-emerald-600' },
+    ctr: { component: TrendingUp, card: 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-800', icon: 'bg-amber-500' },
+    results: { component: Target, card: 'bg-rose-50 dark:bg-rose-950/30 border-rose-100 dark:border-rose-800', icon: 'bg-rose-500' }
+  };
+  const canonicalMetrics = filterCanonicalMetrics(metrics);
   return (
-    <div className="grid grid-cols-1 gap-6 break-inside-avoid">
-      {Object.entries(metrics).map(([key, metric]) => {
-        if (!metric || key === 'series' || key === 'demographics' || key === 'topContent') return null;
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 break-inside-avoid">
+      {Object.entries(canonicalMetrics).map(([key, metric]) => {
+        const style = metricStyles[key];
+        const MetricIcon = style.component;
         return (
           <div key={key} className={cn(
-            "border p-6 space-y-4 rounded-2xl transition-all break-inside-avoid shadow-sm",
-            metric.isManuallyEdited
-              ? "bg-slate-50 border-primary/40 shadow-sm shadow-primary/5"
-              : "bg-slate-50 border-slate-100 hover:border-primary/20 shadow-sm"
+            'border p-5 rounded-2xl transition-all break-inside-avoid shadow-sm flex items-center gap-4 hover:-translate-y-0.5',
+            style.card,
+            metric.isManuallyEdited && 'ring-2 ring-primary/20'
           )}>
-            <div className="flex justify-between items-start">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0', style.icon)}>
+              <MetricIcon className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
                 {CANONICAL_METRICS[key] || metric.label || key}
                 {metric.isManuallyEdited && (
                   <span className="ml-1 text-[9px] text-primary font-bold lowercase tracking-normal">(editado)</span>
                 )}
               </span>
-            </div>
-            <div className="space-y-1">
-              <h4 className="text-3xl font-black text-slate-800">
+              <h4 className="text-2xl font-black text-slate-900 dark:text-slate-50 truncate">
                 {formatMetricValue(key, metric)}
               </h4>
             </div>
@@ -825,6 +842,11 @@ const Reports = () => {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [isGeneratingNarrative, setIsGeneratingNarrative] = useState(false);
   const [report, setReport] = useState(null);
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
+  });
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [viewMode, setViewMode] = useState('web'); // 'web' (Ver Reporte Web) | 'deck' (PDF Deck)
   const [editedTexts, setEditedTexts] = useState({
     title: '',
@@ -979,6 +1001,10 @@ const Reports = () => {
         toast.error('Sube al menos un pantallazo');
         return;
     }
+    if (!startDate || !endDate || startDate > endDate) {
+      toast.error('Selecciona un período de reporte válido');
+      return;
+    }
 
     isGeneratingRef.current = true;
     setIsGenerating(true);
@@ -992,6 +1018,8 @@ const Reports = () => {
     const formData = new FormData();
     formData.append('clientId', selectedClientId);
     formData.append('periodKind', 'MONTHLY');
+    formData.append('startDate', startDate);
+    formData.append('endDate', endDate);
     adsFiles.forEach(file => formData.append('files', file));
     organicFiles.forEach(file => formData.append('files', file));
     if (logoFile) formData.append('logo', logoFile);
@@ -1121,7 +1149,7 @@ const Reports = () => {
         let isDarkBg = false;
         let parent = ta.parentElement;
         while (parent) {
-          const classes = parent.className || '';
+          const classes = safeClassName(parent.className);
           if (
             classes.includes('bg-[#009fb7]') ||
             classes.includes('bg-[#0F172A]') ||
@@ -1149,7 +1177,7 @@ const Reports = () => {
         let isDarkBg = false;
         let parent = node.parentElement;
         while (parent) {
-          const classes = parent.className || '';
+          const classes = safeClassName(parent.className);
           if (
             classes.includes('bg-[#009fb7]') ||
             classes.includes('bg-[#0F172A]') ||
@@ -1258,12 +1286,11 @@ const Reports = () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const fileName = editedTexts.title.replace(/[^a-z0-9]/gi, '_').substring(0, 50);
-      link.download = `${fileName}.html`;
+      link.download = buildReportFileName(editedTexts.title);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast.success('Descarga HTML lista', { id: toastId });
     } catch (err) {
       console.error('HTML Export Error:', err);
@@ -1323,6 +1350,16 @@ const Reports = () => {
                 <option value="">Marca...</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="space-y-1.5">
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Desde</span>
+                  <input type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-700 dark:text-slate-100" />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Hasta</span>
+                  <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-700 dark:text-slate-100" />
+                </label>
+              </div>
               <div className="relative group border border-dashed border-slate-200 rounded-xl p-3 hover:bg-slate-50 transition-all cursor-pointer">
                  <input type="file" accept="image/*" onChange={(e) => handleFilesChange('logo', e)} className="absolute inset-0 opacity-0 cursor-pointer" />
                  <div className="flex items-center gap-3">
@@ -1494,23 +1531,24 @@ const Reports = () => {
                      {narrativeState?.logrosYAvances && narrativeState.logrosYAvances.length > 0 && (
                        <div className="border-t border-slate-100 pt-8 space-y-4 w-full page-break-after">
                          <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Logros y avances")}</h4>
-                         <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 w-full">
-                           <ul className="list-disc pl-5 space-y-3 text-slate-700 text-sm font-normal leading-relaxed w-full">
-                             {narrativeState.logrosYAvances.map((bullet, idx) => (
-                               <li key={idx} className="w-full">
-                                 <input
-                                   type="text"
-                                   className="w-full bg-transparent border-none text-slate-700 focus:ring-0 outline-none p-0 font-normal"
-                                   value={bullet}
-                                   onChange={(e) => {
-                                     const updated = [...narrativeState.logrosYAvances];
-                                     updated[idx] = e.target.value;
-                                     setNarrativeState({ ...narrativeState, logrosYAvances: updated });
-                                   }}
-                                 />
-                               </li>
-                             ))}
-                           </ul>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                           {narrativeState.logrosYAvances.map((bullet, idx) => {
+                             const achievement = splitAchievement(bullet);
+                             const updateAchievement = (field, value) => {
+                               const updated = [...narrativeState.logrosYAvances];
+                               const next = { ...achievement, [field]: value };
+                               updated[idx] = `**${next.title}:** ${next.description}`;
+                               setNarrativeState({ ...narrativeState, logrosYAvances: updated });
+                             };
+                             return (
+                               <div key={idx} className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm break-inside-avoid">
+                                 <div className="bg-[#0F172A] px-5 py-4">
+                                   <input type="text" className="w-full bg-transparent border-none text-white focus:ring-0 outline-none p-0 text-sm font-black" value={achievement.title} onChange={(e) => updateAchievement('title', e.target.value)} />
+                                 </div>
+                                 <textarea rows={3} className="w-full bg-white dark:bg-slate-900 border-none text-slate-600 dark:text-slate-200 focus:ring-0 outline-none p-5 text-sm leading-relaxed resize-none" value={achievement.description} onChange={(e) => updateAchievement('description', e.target.value)} />
+                               </div>
+                             );
+                           })}
                          </div>
                        </div>
                      )}
