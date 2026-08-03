@@ -18,6 +18,15 @@ import { v4 as uuidv4 } from 'uuid';
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 const REPORT_PIPELINE_VERSION = 'vision-2026-08-03.4';
+const REPORT_DEPLOY_COMMIT = process.env.REPORT_DEPLOY_COMMIT || 'development';
+
+export function getReportPipelineStatus() {
+    return {
+        pipelineVersion: REPORT_PIPELINE_VERSION,
+        commit: REPORT_DEPLOY_COMMIT,
+        legacyFilterGuard: typeof globalThis.filterTopContentRows === 'function'
+    };
+}
 
 // Initialize AI
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
@@ -36,11 +45,7 @@ try {
 }
 
 router.get('/pipeline-status', (_req, res) => {
-    res.json({
-        pipelineVersion: REPORT_PIPELINE_VERSION,
-        commit: REPORT_DEPLOY_COMMIT,
-        legacyFilterGuard: typeof globalThis.filterTopContentRows === 'function'
-    });
+    res.json(getReportPipelineStatus());
 });
 
 router.get('/image-proxy', async (req, res) => {
