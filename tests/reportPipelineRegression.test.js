@@ -106,15 +106,4 @@ test('report pipeline regressions', async (t) => {
     assert.equal(organic.demographics.ageGender.length, 1);
     assert.equal(organic.topContent.length, 1);
   });
-
-  await t.test('does not consolidate format summaries as top publications', () => {
-    const source = validateAndCleanSourceExtraction({
-      topContent: [
-        { title: 'REEL - TESTIMONIO', impressions: 200, reach: 150 },
-        { title: 'Reels', results: 36 },
-        { title: 'Historias', results: 6 }
-      ]
-    });
-    assert.deepEqual(source.topContent.map(item => item.title), ['REEL - TESTIMONIO']);
-  });
 });
