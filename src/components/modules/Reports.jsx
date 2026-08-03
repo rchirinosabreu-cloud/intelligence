@@ -1617,6 +1617,12 @@ const Reports = () => {
                          <div className="space-y-4 pt-6 border-t border-slate-100/60 w-full">
                            <h4 className="text-sm font-black text-slate-800">{toSentenceCase("Distribución demográfica")}</h4>
                            <DemographicsChart demographics={report.normalizedMetrics.demographics} />
+                           <GranularNarrativeBlock
+                             sectionKey="demographics"
+                             title={toSentenceCase("Análisis de distribución demográfica")}
+                             comment={getGranularComment("demographics")}
+                             onChange={handleGranularCommentChange}
+                           />
                          </div>
                        )}
                      </div>

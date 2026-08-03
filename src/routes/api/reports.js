@@ -582,7 +582,8 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
                     logrosYAvances: narrativeResult.logrosYAvances || [],
                     contenidoTopAnalisis: narrativeResult.contenidoTopAnalisis || "",
                     oportunidadesYAprendizajes: narrativeResult.oportunidadesYAprendizajes || "",
-                    recomendacionesEstrategicas: narrativeResult.recomendacionesEstrategicas || ""
+                    recomendacionesEstrategicas: narrativeResult.recomendacionesEstrategicas || "",
+                    granularNarratives: narrativeResult.granularNarratives || []
                 },
                 sections: reconcileNarrativeSections(sections, narrativeResult.sections || []),
                 status: 'PUBLISHED'
