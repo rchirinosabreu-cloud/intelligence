@@ -282,6 +282,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 }
             } else {
                 const err = res.reason || {};
+                console.error(`[Reports API][ID:${requestId}] Source failed (${originalName}):`, err.message || String(err));
                 failed.push({
                     originalName,
                     error: err.message || String(err)
