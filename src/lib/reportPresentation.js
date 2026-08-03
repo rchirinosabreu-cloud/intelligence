@@ -16,7 +16,7 @@ export const isDemographicDataset = (dataset) => Array.isArray(dataset) && datas
   point && (Number.isFinite(Number(point.hombres)) || Number.isFinite(Number(point.mujeres)))
 );
 
-export const filterReportContentRows = (rows = []) => rows.filter((row) => {
+export const filterTopContentRows = (rows = []) => rows.filter((row) => {
   if (!row || typeof row !== 'object' || !String(row.title || '').trim()) return false;
   const isFormatSummary = FORMAT_SUMMARY_LABELS.has(normalizeLabel(row.title));
   const hasPublicationEvidence = row.impressions !== null && row.impressions !== undefined
