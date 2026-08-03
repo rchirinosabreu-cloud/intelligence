@@ -288,42 +288,42 @@ export const extractMetricsWithGemini = async (imageBuffer, mimeType = 'image/jp
 
     const base64Image = imageBuffer.toString('base64');
 
-    const result = await genAI.models.generateContent({
-        model: model,
-        contents: [
-            {
+    let lastParseError;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+        const result = await genAI.models.generateContent({
+            model: model,
+            contents: [{
                 role: 'user',
                 parts: [
                     { text: SYSTEM_PROMPT },
-                    { text: "Extract key metrics from this Meta Ads/organic screenshot." },
-                    {
-                        inlineData: {
-                            data: base64Image,
-                            mimeType: mimeType
-                        }
-                    }
+                    { text: attempt === 1
+                        ? "Extract key metrics from this Meta Ads/organic screenshot."
+                        : "Retry the extraction. Return one complete, strictly valid JSON object with every comma and closing delimiter. Do not repeat keys." },
+                    { inlineData: { data: base64Image, mimeType } }
                 ]
+            }],
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                maxOutputTokens: 16384,
+                temperature: 0
             }
-        ],
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: schema,
-            maxOutputTokens: 8192,
-            temperature: 0.1
+        });
+
+        const content = result.text;
+        if (!content) {
+            lastParseError = new Error("Gemini Vision response content is empty");
+        } else {
+            try {
+                return parseJsonResponse(content);
+            } catch (parseError) {
+                lastParseError = parseError;
+                console.error(`[Vision Service] Invalid JSON on attempt ${attempt}/2:`, parseError.message, "Raw snippet:", content.slice(0, 500));
+            }
         }
-    });
-
-    const content = result.text;
-    if (!content) {
-        throw new Error("Gemini Vision response content is empty");
+        if (attempt === 1) console.warn('[Vision Service] Retrying malformed Gemini structured output once.');
     }
-
-    try {
-        return parseJsonResponse(content);
-    } catch (parseError) {
-        console.error("[Vision Service] Error parsing extracted JSON schema:", parseError, "Raw content:", content);
-        throw parseError;
-    }
+    throw lastParseError;
 };
 
 /**
