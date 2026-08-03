@@ -2,8 +2,14 @@ import express from 'express';
 import multer from 'multer';
 import prisma from '../../lib/prisma.js';
 import { GoogleGenAI } from '@google/genai';
-import { uploadClientFile, getSignedUrl, getClientFileStream } from '../../services/storageService.js';
-import { parseJsonResponse, extractModelText } from '../../services/aiService.js';
+import { uploadClientFile, getClientFileStream } from '../../services/storageService.js';
+import { extractModelText } from '../../services/aiService.js';
+import {
+    buildReportExtractionPrompt,
+    buildReportGenerationConfig,
+    parseAndValidateReportExtraction,
+    toLegacyReportAnalysis
+} from '../../services/reportExtractionService.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -71,6 +77,7 @@ router.get('/image-proxy', async (req, res) => {
 router.post('/generate', upload.any(), async (req, res) => {
     try {
         const { clientId } = req.body;
+        const currency = /^[A-Z]{3}$/.test(req.body.currency || '') ? req.body.currency : 'COP';
         if (!clientId) {
             return res.status(400).json({ error: 'Client ID is required' });
         }
@@ -112,7 +119,9 @@ router.post('/generate', upload.any(), async (req, res) => {
             try {
                 const uploadResult = await uploadClientFile(file, client.name);
 
+                const sourceIndex = file.fieldname === 'organic' ? organicData.length + 1 : adsData.length + 1;
                 const imageData = {
+                    sourceId: `${file.fieldname}-${sourceIndex}`,
                     originalname: file.originalname,
                     gcsPath: uploadResult.gcsPath,
                     mimeType: file.mimetype,
@@ -155,42 +164,12 @@ router.post('/generate', upload.any(), async (req, res) => {
         organicData.forEach(img => imageParts.push({ inlineData: { data: img.buffer.toString('base64'), mimeType: img.mimeType } }));
         adsData.forEach(img => imageParts.push({ inlineData: { data: img.buffer.toString('base64'), mimeType: img.mimeType } }));
 
-        const promptText = `Analiza los siguientes pantallazos de métricas para el cliente ${client.name}.
-
-        INSTRUCCIONES DE PROCESAMIENTO:
-        1. Recibirás una serie de imágenes en este orden:
-           - Primero: ${organicData.length} imágenes de Redes Sociales (Orgánico).
-           - Segundo: ${adsData.length} imágenes de Meta Ads (Pauta).
-
-        2. TU OBJETIVO:
-           - Por cada imagen de Redes Sociales, genera un bloque de análisis detallado. Identifica si es Avance General, Radiografía del Público o Resumen de Contenido.
-           - Por cada imagen de Meta Ads, genera un bloque de análisis detallado. Identifica si es Rendimiento Macro o Desglose Micro.
-
-           REGLA DE TONO OBLIGATORIA (OPTIMISMO RADICAL):
-           - Está ESTRICTAMENTE PROHIBIDO usar palabras negativas o alarmistas: "caída", "pérdida", "mal rendimiento", "bajo", "negativo", "disminución", "problema".
-           - Si una métrica bajó, redáctalo como una "estabilización necesaria para el siguiente salto", "fase de consolidación" o una "ventana de oportunidad estratégica para optimizar".
-           - El informe siempre debe transmitir progreso, dirección y confianza comercial.
-           - Los textos deben ser breves y directos (máximo 4 líneas).
-
-        3. ESTRUCTURA DE RESPUESTA:
-           - Devuelve un array 'organic_analysis' con exactamente ${organicData.length} objetos.
-           - Devuelve un array 'performance_analysis' con exactamente ${adsData.length} objetos.
-           - Devuelve un array 'hoja_de_ruta' con 3 pasos estratégicos finales.
-
-        IMPORTANTE: NO intentes generar URLs de imágenes. El backend se encargará de eso basándose en el orden de tus arrays.
-
-        Devuelve este JSON exacto:
-        {
-          "organic_analysis": [
-             { "tipo": "AVANCE/RADIOGRAFIA/RESUMEN", "texto_analisis": "..." }
-          ],
-          "performance_analysis": [
-             { "tipo": "MACRO/MICRO", "texto_analisis": "..." }
-          ],
-          "hoja_de_ruta": [
-             { "step": 1, "title": "...", "description": "..." }
-          ]
-        }`;
+        const promptText = buildReportExtractionPrompt({
+            clientName: client.name,
+            currency,
+            organicSources: organicData.map(({ sourceId, originalname }) => ({ sourceId, filename: originalname })),
+            adsSources: adsData.map(({ sourceId, originalname }) => ({ sourceId, filename: originalname }))
+        });
 
         const result = await genAI.models.generateContent({
             model: MODEL_NAME,
@@ -201,36 +180,20 @@ router.post('/generate', upload.any(), async (req, res) => {
                     ...imageParts
                 ]
             }],
-            config: {
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    maxOutputTokens: 8192,
-                    temperature: 0.1
-                }
-            }
+            config: buildReportGenerationConfig()
         });
 
         const rawText = extractModelText(result);
-        const analysis = parseJsonResponse(rawText);
+        const reportData = parseAndValidateReportExtraction(rawText, { currency });
 
-        // 4. Manual Assembly: Stitch GCS Paths to AI Text by Index
+        // 4. Preserve source traceability with stable IDs instead of array positions
         const buildProxyUrl = (gcsPath) => `/api/reports/image-proxy?path=${encodeURIComponent(gcsPath)}`;
 
-        if (Array.isArray(analysis.organic_analysis)) {
-            analysis.organic_analysis.forEach((block, idx) => {
-                if (organicData[idx]) {
-                    block.imagen_url = buildProxyUrl(organicData[idx].gcsPath);
-                }
-            });
-        }
-
-        if (Array.isArray(analysis.performance_analysis)) {
-            analysis.performance_analysis.forEach((block, idx) => {
-                if (adsData[idx]) {
-                    block.imagen_url = buildProxyUrl(adsData[idx].gcsPath);
-                }
-            });
-        }
+        const imageUrls = {
+            organic: Object.fromEntries(organicData.map((source) => [source.sourceId, buildProxyUrl(source.gcsPath)])),
+            ads: Object.fromEntries(adsData.map((source) => [source.sourceId, buildProxyUrl(source.gcsPath)]))
+        };
+        const analysis = toLegacyReportAnalysis(reportData, imageUrls);
 
         res.json({
             client: {
@@ -239,6 +202,7 @@ router.post('/generate', upload.any(), async (req, res) => {
             },
             transparencyLog,
             sourcesAudit,
+            reportData,
             analysis
         });
 

@@ -35,6 +35,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import ClientAvatar from '@/components/ui/ClientAvatar';
+import StructuredReportSection from '@/components/modules/Reports/StructuredReportSection';
 
 const Reports = () => {
   const { currentUser } = useAuth();
@@ -397,8 +398,27 @@ const Reports = () => {
                   </div>
                </div>
 
+               {report.reportData && (
+                 <div className="space-y-20">
+                   <StructuredReportSection
+                     section={report.reportData.organic}
+                     title="Análisis Orgánico (RRSS)"
+                     badge="Social Media"
+                     currency={report.reportData.currency}
+                   />
+                   {report.reportData.ads && (
+                     <StructuredReportSection
+                       section={report.reportData.ads}
+                       title="Performance Digital (Ads)"
+                       badge="Meta Ads"
+                       currency={report.reportData.currency}
+                     />
+                   )}
+                 </div>
+               )}
+
                {/* Sección: Análisis orgánico (RRSS) */}
-               {report.analysis.organic_analysis?.length > 0 && (
+               {!report.reportData && report.analysis.organic_analysis?.length > 0 && (
                <div className="space-y-12">
                   <SectionHeader title="Análisis orgánico (RRSS)" client={report.client} />
 
@@ -440,7 +460,7 @@ const Reports = () => {
                )}
 
                {/* Sección: Performance digital */}
-               {report.analysis.performance_analysis?.length > 0 && (
+               {!report.reportData && report.analysis.performance_analysis?.length > 0 && (
                <div className="space-y-12 pt-24 border-t border-slate-100">
                   <SectionHeader title="Performance digital (Pauta ADS)" client={report.client} />
 
