@@ -91,6 +91,10 @@ const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage 
                     onPointerDownOutside={onClose}
                     onEscapeKeyDown={onClose}
                 >
+                    <DialogPrimitive.Title className="sr-only">Vista previa de imagen</DialogPrimitive.Title>
+                    <DialogPrimitive.Description className="sr-only">
+                        Vista ampliada del archivo adjunto con opciones para descargarlo o cerrar el visor.
+                    </DialogPrimitive.Description>
                     <div
                         className="w-full h-full flex flex-col"
                         onPointerDown={(e) => {
