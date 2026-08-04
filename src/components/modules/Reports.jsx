@@ -66,6 +66,9 @@ const toSentenceCase = (str) => {
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
 };
 
+const hasReportValue = (value) => value !== null && value !== undefined && value !== ''
+  && Number.isFinite(Number(value)) && Number(value) !== 0;
+
 const sumDatasetValues = (dataset) => {
   if (!Array.isArray(dataset)) return 0;
   return dataset.reduce((sum, item) => {
