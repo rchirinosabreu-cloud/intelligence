@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import {
   filterCanonicalMetrics,
   filterTopContentRows,
@@ -45,4 +46,34 @@ test('report presentation regressions', async (t) => {
     assert.equal(safeClassName(undefined), '');
     assert.equal(buildReportFileName(undefined), 'reporte_de_desempeno_digital.html');
   });
+
+  await t.test('report presents scoped organic results before paid results', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    const organicHeading = component.indexOf('Resultados generales — Desempeño orgánico');
+    const adsHeading = component.indexOf('Resultados generales — Desempeño de pauta');
+    assert.ok(organicHeading > -1, 'missing organic summary heading');
+    assert.ok(adsHeading > organicHeading, 'paid summary must appear after organic summary');
+    assert.match(component, /report\.normalizedMetrics\?\.organicSummary/);
+    assert.match(component, /report\.normalizedMetrics\?\.adsSummary/);
+  });
+
+  await t.test('report sections expose their source id for chart traceability', async () => {
+    const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
+    assert.match(route, /sourceId:\s*res\.sourceId/);
+    assert.match(route, /buildScopedReportData/);
+  });
+
+  await t.test('fallback narratives are visibly marked for human review', async () => {
+    const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    assert.match(route, /generationMode:\s*narrativeGenerationMode/);
+    assert.match(component, /Narrativa de contingencia/);
+  });
+
+  await t.test('vision prompt does not restrict organic metrics to paid keys', async () => {
+    const service = await fs.readFile('src/services/reportVisionService.js', 'utf8');
+    assert.doesNotMatch(service, /key name \(strictly: "spend"/);
+    assert.match(service, /organic semantic keys listed above/);
+  });
+
 });

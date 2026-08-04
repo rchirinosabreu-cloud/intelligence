@@ -530,7 +530,16 @@ const CANONICAL_METRICS = {
   reach: "Alcance Total",
   clicks: "Clics Totales",
   ctr: "CTR Promedio",
-  results: "Resultados Totales"
+  results: "Resultados Totales",
+  views: "Visualizaciones",
+  viewers: "Espectadores",
+  interactions: "Interacciones",
+  linkClicks: "Clics en el enlace",
+  profileVisits: "Visitas al perfil",
+  follows: "Nuevos seguidores",
+  videoViews: "Reproducciones de video",
+  reachOrganic: "Alcance orgánico",
+  reachPaid: "Alcance de anuncios"
 };
 
 const formatMetricValue = (key, metric) => {
@@ -554,7 +563,16 @@ const MetricGrid = ({ metrics }) => {
     reach: { component: User, card: 'bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-800', icon: 'bg-blue-600' },
     clicks: { component: ArrowUpRight, card: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-800', icon: 'bg-emerald-600' },
     ctr: { component: TrendingUp, card: 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-800', icon: 'bg-amber-500' },
-    results: { component: Target, card: 'bg-rose-50 dark:bg-rose-950/30 border-rose-100 dark:border-rose-800', icon: 'bg-rose-500' }
+    results: { component: Target, card: 'bg-rose-50 dark:bg-rose-950/30 border-rose-100 dark:border-rose-800', icon: 'bg-rose-500' },
+    views: { component: Eye, card: 'bg-cyan-50 dark:bg-cyan-950/30 border-cyan-100 dark:border-cyan-800', icon: 'bg-cyan-600' },
+    viewers: { component: User, card: 'bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-800', icon: 'bg-blue-600' },
+    interactions: { component: Sparkles, card: 'bg-violet-50 dark:bg-violet-950/30 border-violet-100 dark:border-violet-800', icon: 'bg-violet-600' },
+    linkClicks: { component: ArrowUpRight, card: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-800', icon: 'bg-emerald-600' },
+    profileVisits: { component: User, card: 'bg-sky-50 dark:bg-sky-950/30 border-sky-100 dark:border-sky-800', icon: 'bg-sky-600' },
+    follows: { component: Plus, card: 'bg-fuchsia-50 dark:bg-fuchsia-950/30 border-fuchsia-100 dark:border-fuchsia-800', icon: 'bg-fuchsia-600' },
+    videoViews: { component: Monitor, card: 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-100 dark:border-indigo-800', icon: 'bg-indigo-600' },
+    reachOrganic: { component: User, card: 'bg-teal-50 dark:bg-teal-950/30 border-teal-100 dark:border-teal-800', icon: 'bg-teal-600' },
+    reachPaid: { component: Target, card: 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-800', icon: 'bg-amber-500' }
   };
   const canonicalMetrics = filterCanonicalMetrics(metrics || {});
   return (
@@ -857,7 +875,7 @@ const Reports = () => {
   const isApprovingRef = useRef(false);
 
   useEffect(() => {
-    if (report?.narrative && report.status === 'PUBLISHED') {
+    if (report?.narrative && (report.status === 'PUBLISHED' || report.status === 'REVIEW')) {
       let parsed = report.narrative;
       if (typeof parsed === 'string') {
         try {
@@ -1528,6 +1546,11 @@ const Reports = () => {
 
                    {/* UNIFIED executive monocolumn continuous vertical layout */}
                    <div className="p-8 md:p-12 space-y-12 w-full">
+                     {narrativeState?.generationMode === 'FALLBACK' && (
+                       <div className="no-print rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 text-sm text-amber-800 dark:text-amber-200">
+                         <strong>Narrativa de contingencia:</strong> la generación editorial no pudo completarse. Revisa los textos y vuelve a generar la narrativa antes de entregar el informe.
+                       </div>
+                     )}
                      {/* 1. Portada Monumental */}
                      <div className="page-break-after">
                        <ReportCover report={report} />
@@ -1579,16 +1602,24 @@ const Reports = () => {
                        </div>
                      )}
 
-                     {/* 4. Resultados Generales (pure MetricGrid) */}
-                     {report.normalizedMetrics && (
-                       <div className="border-t border-slate-100 pt-8 space-y-4 page-break-after w-full">
-                         <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Resultados generales")}</h3>
-                         <MetricGrid metrics={report.normalizedMetrics} />
+                     {/* 4. Resultados orgánicos: nunca mezcla Facebook, Instagram o pauta */}
+                     {Object.keys(report.normalizedMetrics?.organicSummary || {}).length > 0 && (
+                       <div className="border-t border-slate-100 pt-8 space-y-6 page-break-after w-full">
+                         <div className="space-y-1">
+                           <h3 className="text-xl font-black tracking-tight text-slate-800">Resultados generales — Desempeño orgánico</h3>
+                           <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Cifras separadas por plataforma y captura de origen</p>
+                         </div>
+                         {Object.entries(report.normalizedMetrics.organicSummary).map(([platform, metrics]) => (
+                           <section key={platform} className="space-y-4 break-inside-avoid">
+                             <h4 className="text-sm font-black text-slate-700">{platform === 'FACEBOOK' ? 'Facebook' : platform === 'INSTAGRAM' ? 'Instagram' : platform}</h4>
+                             <MetricGrid metrics={metrics} />
+                           </section>
+                         ))}
                        </div>
                      )}
 
                      {/* 5. Sección Orgánica (Redes Sociales): Distribución de Formatos, Demografía con Ciudades/Países, y Contenido Top */}
-                     <div className="space-y-8 border-t border-slate-100 pt-8 w-full page-break-after">
+                     {report.sections?.some(s => s.sectionCategory === 'ORGANIC') && <div className="space-y-8 border-t border-slate-100 pt-8 w-full page-break-after">
                        <div className="space-y-1">
                          <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Sección orgánica (redes sociales)")}</h3>
                          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{toSentenceCase("Evolución y rendimiento en redes sociales")}</p>
@@ -1645,14 +1676,21 @@ const Reports = () => {
                            />
                          </div>
                        )}
-                     </div>
+                     </div>}
 
                      {/* 6. Sección de Pauta Digital (Meta Ads): Tabla de Desempeño de Anuncios y Tendencias Temporales */}
-                     <div className="space-y-8 border-t border-slate-100 pt-8 w-full page-break-after">
+                     {(report.sections?.some(s => s.sectionCategory === 'ADS') || Object.keys(report.normalizedMetrics?.adsSummary || {}).length > 0) && <div className="space-y-8 border-t border-slate-100 pt-8 w-full page-break-after">
                        <div className="space-y-1">
                          <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Sección de pauta digital (Meta Ads)")}</h3>
                          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{toSentenceCase("Inversión y retorno en pauta publicitaria")}</p>
                        </div>
+
+                       {Object.keys(report.normalizedMetrics?.adsSummary || {}).length > 0 && (
+                         <div className="space-y-4 break-inside-avoid">
+                           <h3 className="text-xl font-black tracking-tight text-slate-800">Resultados generales — Desempeño de pauta</h3>
+                           <MetricGrid metrics={report.normalizedMetrics.adsSummary} />
+                         </div>
+                       )}
 
                        {/* Performance trend chart stacked cleanly at the top of paid ads */}
                        {report.normalizedMetrics?.series && report.normalizedMetrics.series.length > 0 && (
@@ -1709,7 +1747,7 @@ const Reports = () => {
                          </div>
                          );
                        })}
-                     </div>
+                     </div>}
 
                      {/* 7. Oportunidades & Aprendizajes */}
                      {Array.isArray(narrativeState?.oportunidadesYAprendizajes) && narrativeState.oportunidadesYAprendizajes.length > 0 && (

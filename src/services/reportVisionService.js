@@ -137,7 +137,20 @@ const schema = {
           },
           required: ["key", "label", "value", "unit", "confidence", "evidence"],
           additionalProperties: false
-        }
+        },
+        ...Object.fromEntries([
+          'views', 'viewers', 'interactions', 'linkClicks', 'profileVisits', 'follows', 'videoViews', 'reachOrganic', 'reachPaid'
+        ].map((key) => [key, {
+          type: "object",
+          properties: {
+            key: { type: "string" }, label: { type: "string" },
+            value: { anyOf: [{ type: "number" }, { type: "null" }] },
+            unit: { type: "string" }, changePct: { anyOf: [{ type: "number" }, { type: "null" }] },
+            confidence: { type: "number" }, evidence: { type: "string" }
+          },
+          required: ["key", "label", "value", "unit", "changePct", "confidence", "evidence"],
+          additionalProperties: false
+        }]))
       },
       required: ["spend", "impressions", "reach", "clicks", "ctr", "results"],
       additionalProperties: false
@@ -149,6 +162,17 @@ const schema = {
     title: { type: "string" },
     sectionCategory: { type: "string" },
     platform: { type: "string" },
+    entityLevel: { type: "string" },
+    resultType: { type: "string" },
+    period: {
+      type: "object",
+      properties: {
+        start: { anyOf: [{ type: "string" }, { type: "null" }] },
+        end: { anyOf: [{ type: "string" }, { type: "null" }] }
+      },
+      required: ["start", "end"],
+      additionalProperties: false
+    },
     dataset: {
       type: "array",
       items: {
@@ -228,7 +252,7 @@ const schema = {
 };
 
 const SYSTEM_PROMPT = `You are a professional Meta Ads and Organic Social Media data extraction expert using Google Generative AI (Gemini).
-Analyze the provided screenshot and extract the 6 key metrics strictly:
+Analyze the provided screenshot and extract metrics using their real semantics. Paid screenshots may contain the 6 canonical paid keys:
 - spend: Inversión (e.g. amount spent in USD, COP, EUR, etc.)
 - impressions: Impresiones
 - reach: Alcance
@@ -236,24 +260,29 @@ Analyze the provided screenshot and extract the 6 key metrics strictly:
 - ctr: CTR (prioritize CTR (en el enlace) or CTR (todos))
 - results: Resultados / conversiones (e.g., Purchases, Leads, etc.)
 
+Organic screenshots may additionally use: views, viewers, interactions, linkClicks, profileVisits, follows, videoViews, reachOrganic, and reachPaid. Never rename organic views as impressions or interactions as paid results merely to fill a canonical slot. Include visible changePct with its original sign.
+
 For each metric, extract the following:
-- key: the key name (strictly: "spend", "impressions", "reach", "clicks", "ctr", "results")
+- key: use the paid canonical keys or organic semantic keys listed above; never substitute one concept for another.
 - label: the label as seen in the screenshot or translation (e.g., "Importe gastado", "Impresiones", "Alcance", "Clics en el enlace", "CTR (porcentaje de clics en el enlace)", "Resultados")
 - value: the numeric value extracted from the image. It must be a raw float/integer number. Remove currency symbols, commas, percent signs, and dots used as thousands separator. Keep decimals (e.g. if CTR is "1.52%", value is 1.52. If spend is "$1,250.50", value is 1250.50). If the metric is completely missing or not visible in the screenshot, return null.
 - unit: the unit of measurement (e.g. "USD", "COP", "count", "%", etc.). If not applicable, return a blank string or "count".
 - confidence: Your confidence score for this extraction between 0.0 (unreadable) and 1.0 (perfectly clear).
 - evidence: Quote the exact text and location/context where the metric was found on the screen.
 
-Also identify:
-- screenType: The type of screen (e.g., "Rendimiento Macro" or "Desglose Micro" or "Tabla General").
+Also identify each screenshot independently. Never merge it with another source:
+- screenType: classify strictly as "CONTENT_SUMMARY", "METRIC_TRENDS", "AUDIENCE_DEMOGRAPHICS", "CONTENT_FORMATS", "AD_SET_SUMMARY", "AD_TABLE", or "UNKNOWN".
+- entityLevel: for paid tables return "CAMPAIGN", "AD_SET", "AD", or "UNKNOWN". For organic screens return "ORGANIC".
+- resultType: preserve the exact semantic result, e.g. "CONVERSATIONS", "LEADS", "PURCHASES", "INTERACTIONS", or "UNKNOWN". A conversation is not a sale or final conversion.
+- period: extract the visible start/end dates as ISO YYYY-MM-DD when legible; otherwise use null. This is the screenshot period, not an inferred report month.
 - confidence: Overall confidence score for the whole screenshot extraction (0.0 to 1.0).
-- narrativeDraft: A short narrative explanation of these metrics in Spanish (exactly 3 to 4 complete, well-structured sentences), highlighting the progress and using extremely positive, forward-looking terminology. Never use negative/alarmist words (e.g. instead of "bajo" or "caída", use "fase de consolidación" or "ventana de oportunidad"). Ensure it does not truncate or cut off. Ensure the general strategy maintains a balanced 50/50 overview between organic social media content and paid performance results.
+- narrativeDraft: exactly two complete Spanish paragraphs separated by \n\n. Paragraph one reports the most relevant visible figures honestly; paragraph two explains business meaning and one concrete next decision. Be constructive but never disguise a decline or claim sales, profitability, causation, or final conversions without evidence.
 
 Also extract graphic points and visual data as a structured section:
 - chartType: Detect or choose the most appropriate chart type to display this visual: "LINE_CHART" (for trend curves or daily data), "BAR_CHART" (for age/gender bar breakdowns), "DONUT_CHART" (for platform split or percentage distribution), or "RANKING_TABLE" (for listing contents, ads, or posts).
 - title: A descriptive and clear Spanish title for this chart/visualization block.
 - sectionCategory: Categorize this screenshot section strictly as "ORGANIC" (for organic reels, posts, feed reach, likes, story views, organic Facebook/Instagram profile stats) or "ADS" (for campaigns, ad manager charts, spend/inversión, campaign results, paid conversions).
-- platform: Identify the specific platform category strictly: return 'ORGANIC_RRSS' (for Instagram/Facebook organic posts, reach, stories, feed demographics) or 'PAID_ADS' (for Meta Ads Manager paid campaigns, ad sets, impressions, investment).
+- platform: return "FACEBOOK" or "INSTAGRAM" for organic screenshots, using explicit text and header icons together; return "CROSS_PLATFORM" only when the screen itself is truly combined; return "META_ADS" for Ads Manager; return "UNKNOWN" when signals conflict. Do not collapse Facebook and Instagram into ORGANIC_RRSS.
 - dataset: An array of data points following this strict schema based on chartType:
   - For BAR_CHART and LINE_CHART: return array of { "label": string, "value": number }.
   - For DEMOGRAPHICS_CHART: return array of { "label": string, "hombres": number, "mujeres": number }.
@@ -368,7 +397,11 @@ export const validateAndCleanSourceExtraction = (extracted) => {
     const topContent = filterTopContentRows(extracted.topContent || []);
     const narrativeDraft = extracted.narrativeDraft || "";
 
-    const allowedKeys = ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'];
+    const allowedKeys = [
+        'spend', 'impressions', 'reach', 'clicks', 'ctr', 'results',
+        'views', 'viewers', 'interactions', 'linkClicks', 'profileVisits', 'follows',
+        'videoViews', 'reachOrganic', 'reachPaid'
+    ];
     const cleanMetrics = {};
     let hasValidCanonicalMetric = false;
 
@@ -382,7 +415,8 @@ export const validateAndCleanSourceExtraction = (extracted) => {
             value: val,
             unit: key === 'spend' ? 'COP' : (typeof item.unit === 'string' && item.unit !== 'count' ? item.unit : 'count'),
             confidence: typeof item.confidence === 'number' ? item.confidence : 1.0,
-            evidence: typeof item.evidence === 'string' ? item.evidence : ''
+            evidence: typeof item.evidence === 'string' ? item.evidence : '',
+            changePct: typeof item.changePct === 'number' ? item.changePct : null
         };
 
         if (cleanMetrics[key].value !== null) {
@@ -440,7 +474,10 @@ export const validateAndCleanSourceExtraction = (extracted) => {
         narrativeDraft,
         screenType: extracted.screenType || 'Desconocido',
         sectionCategory: extracted.sectionCategory || 'ADS',
-        platform: extracted.platform || 'META_ADS'
+        platform: extracted.platform || 'META_ADS',
+        entityLevel: extracted.entityLevel || (extracted.sectionCategory === 'ORGANIC' ? 'ORGANIC' : 'UNKNOWN'),
+        resultType: extracted.resultType || 'UNKNOWN',
+        period: extracted.period || { start: null, end: null }
     };
 };
 
@@ -668,8 +705,8 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
    - actionPlan: Un plan de acción con exactamente 3 compromisos recomendados. Cada compromiso debe ser un objeto con 'action' (Acción, capitalizado strictly en Sentence Case), 'kpi' (KPI de éxito, capitalizado strictly en Sentence Case) y 'suggestedAssignee' (Responsable sugerido).
    - logrosYAvances: Un arreglo de exactamente 4 a 5 strings (viñetas analíticas con encabezado en negrita y explicación de valor, por ejemplo: "*Alcance orgánico sólido:* Se alcanzaron..."), capitalizado strictly en Sentence Case.
    - contenidoTopAnalisis: Texto explicativo de las piezas creativas de mayor rendimiento con ranking detallado (Top 1 - Imagen, Top 2 - Reel, etc.), capitalizado strictly en Sentence Case.
-   - oportunidadesYAprendizajes: Lecciones clave extraídas de la pauta y el contenido orgánico, redactando exactamente entre 3 y 4 párrafos ricos en consultoría de marketing y aprendizaje de audiencias, capitalizado strictly en Sentence Case.
-   - recomendacionesEstrategicas: Exactamente entre 3 y 4 párrafos de aconsejamiento consultivo, motivador y hoja de ruta táctica detallada para la marca, capitalizado strictly en Sentence Case.
+   - oportunidadesYAprendizajes: Arreglo de 3 a 4 objetos separados con 'title', 'evidence', 'learning' y 'application'. Cada evidencia debe citar datos provistos y cada aplicación debe ser concreta.
+   - recomendacionesEstrategicas: Arreglo de 3 a 4 objetos separados con 'priority' ('ALTA' o 'MEDIA'), 'action', 'rationale' y 'kpi'. No recomiendes pauta cuando solo existan fuentes orgánicas.
    - sections: Un arreglo que contenga exactamente los mismos objetos que se te pasaron en SECCIONES VISUALES REGISTRADAS, pero agregando en cada uno un campo 'narrativeComment' con una explicación consultiva profunda, positiva y estructurada estrictamente en al menos DOS PÁRRAFOS completos separados por un salto de línea (\\n\\n) según la regla de DOS PÁRRAFOS descrita arriba, capitalizado con Sentence Case.
    - granularNarratives: Un arreglo que contenga exactamente dos objetos con 'sectionKey' ('macro_performance' y 'demographics' respectivamente), 'title' ('Rendimiento y Tendencia' y 'Distribución Demográfica' respectivamente), y 'consultativeComment' (explicación consultiva profunda, positiva y estructurada estrictamente en al menos DOS PÁRRAFOS completos separados por un salto de línea (\\n\\n) según la regla de DOS PÁRRAFOS descrita arriba, capitalizado con Sentence Case).
 `;
@@ -701,8 +738,30 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
           items: { type: "string" }
         },
         contenidoTopAnalisis: { type: "string" },
-        oportunidadesYAprendizajes: { type: "string" },
-        recomendacionesEstrategicas: { type: "string" },
+        oportunidadesYAprendizajes: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string" }, evidence: { type: "string" },
+              learning: { type: "string" }, application: { type: "string" }
+            },
+            required: ["title", "evidence", "learning", "application"],
+            additionalProperties: false
+          }
+        },
+        recomendacionesEstrategicas: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              priority: { type: "string" }, action: { type: "string" },
+              rationale: { type: "string" }, kpi: { type: "string" }
+            },
+            required: ["priority", "action", "rationale", "kpi"],
+            additionalProperties: false
+          }
+        },
         sections: {
           type: "array",
           items: {
@@ -874,20 +933,30 @@ export const generateFallbackNarrative = (normalizedMetrics, sections = []) => {
 
     const contenidoTopAnalisis = `La revisión detallada de las publicaciones y creativos destacados confirma que los formatos dinámicos y de valor educativo lideran el rendimiento. Las piezas comunicacionales orientadas a resolver inquietudes de los usuarios generaron el mayor volumen de interacciones y conversiones del periodo. Se recomienda mantener una línea conceptual basada en testimonios y demostraciones prácticas para sostener el desempeño observado.`;
 
-    const oportunidadesYAprendizajes = `Se identifica una clara ventana de oportunidad para expandir las audiencias activas de la marca mediante la creación de públicos similares y personalizados, basados en los usuarios que demostraron mayor volumen de interacción en pauta.\n\nAsimismo, diversificar de manera ágil las variaciones de textos explicativos y creativos visuales en las campañas activas será determinante para contrarrestar la fatiga creativa del público objetivo, garantizando la sostenibilidad de los resultados.\n\nFinalmente, capitalizar el aprendizaje del comportamiento de la audiencia del periodo actual nos permitirá anticipar tendencias de consumo de contenido en redes, optimizando la asignación de pauta para las próximas activaciones.`;
+    const oportunidadesYAprendizajes = [
+        { title: "Concentración de la respuesta", evidence: `La fuente registra ${resultsStr} resultados y ${clicksStr} clics.`, learning: "La exposición debe contrastarse con acciones de interés para identificar qué parte de la audiencia avanza en el embudo.", application: "Revisar las piezas y fechas asociadas a los picos antes de replicar el enfoque." },
+        { title: "Lectura separada por canal", evidence: `El alcance observado fue de ${reachStr} y las impresiones de ${impressionsStr}.`, learning: "Alcance e impresiones cumplen funciones distintas y no deben presentarse como personas únicas equivalentes.", application: "Mantener el desglose por plataforma y comparar cada canal contra su propio periodo anterior." },
+        { title: "Trazabilidad comercial", evidence: "Las capturas muestran actividad digital, pero no incluyen ventas ni ingresos confirmados.", learning: "Un resultado de plataforma representa una señal de interés, no necesariamente una conversión final.", application: "Cruzar clics, conversaciones o visitas con los registros comerciales del cliente." }
+    ];
 
-    const recomendacionesEstrategicas = `Para los próximos periodos de trabajo, se aconseja de forma muy especial enfocar los recursos y esfuerzos presupuestarios en la amplificación de las piezas de contenido que demuestren tracción orgánica inicial sobresaliente.\n\nIntegrar análisis multivariados de manera ágil y dinámica en cada campaña, junto con robustecer la retención en los primeros tres segundos de los videos cortos, serán factores altamente determinantes para potenciar la rentabilidad de la pauta.\n\nComo pilar de cierre, se sugiere establecer un esquema continuo de pruebas A/B de audiencias personalizadas, lo cual permitirá blindar el costo por resultado frente a la saturación comercial, guiando a la marca hacia una fase de escalabilidad eficiente y sostenible.`;
+    const recomendacionesEstrategicas = [
+        { priority: "ALTA", action: "Conectar las métricas digitales con el resultado comercial", rationale: "La plataforma demuestra exposición e interés, pero no confirma por sí sola ventas, reservas o matrículas.", kpi: "Tasa de avance desde contacto digital hasta conversión confirmada" },
+        { priority: "ALTA", action: "Revisar los contenidos asociados a los picos del periodo", rationale: "La comparación por fecha permite identificar patrones sin atribuir causalidad antes de revisar la pieza publicada.", kpi: "Interacciones, visitas o resultados por pieza evaluada" },
+        { priority: "MEDIA", action: "Mantener comparaciones separadas por plataforma", rationale: "Facebook e Instagram tienen comunidades y dinámicas distintas; combinarlas ocultaría el aporte real de cada canal.", kpi: "Variación mensual por plataforma y tipo de métrica" }
+    ];
 
     const updatedSections = (Array.isArray(sections) ? sections : []).map(section => {
         const maxPoint = findMaxDataPoint(section.dataset);
         const title = section.title || 'esta sección';
-        let detailText = `El análisis estratégico para ${title} muestra un comportamiento de audiencia estable, equilibrado y altamente positivo.`;
+        const platformName = section.platform === 'FACEBOOK' ? 'Facebook' : section.platform === 'INSTAGRAM' ? 'Instagram' : section.platform === 'META_ADS' ? 'Meta Ads' : 'Redes sociales';
+        const metricName = section.metricLabel || (section.sectionCategory === 'ADS' ? 'resultados' : 'registros');
+        let detailText = `${platformName}: esta sección de ${title} no contiene suficientes valores cuantitativos legibles para establecer una comparación concluyente. Aun así, se conserva como evidencia del periodo para revisión editorial.`;
         if (maxPoint) {
-            detailText = `El análisis estratégico para ${title} identifica un punto de desempeño líder en la categoría "${maxPoint.label}" con un total registrado de ${maxPoint.value.toLocaleString('es-ES')} interacciones directas. Esta cifra consolida el liderazgo y la tracción que posee este formato específico dentro de la combinación creativa del periodo.`;
+            detailText = `${platformName}: en ${title}, la categoría "${maxPoint.label}" registró ${maxPoint.value.toLocaleString('es-ES')} ${metricName}. Este es el valor más alto visible en la gráfica y debe interpretarse dentro del periodo y la unidad mostrados en la fuente.`;
         }
         return {
             ...section,
-            narrativeComment: `${detailText}\n\nEste rendimiento valida de forma concluyente las hipótesis de segmentación y comunicación activa diseñadas para el cliente. Se recomienda priorizar la asignación presupuestaria hacia estas tendencias ganadoras en los ciclos venideros para potenciar de forma sostenida los resultados generales.`
+            narrativeComment: `${detailText}\n\nPara el negocio, este dato permite identificar dónde se concentró la respuesta de la audiencia, pero no demuestra por sí solo ventas, reservas o rentabilidad. El siguiente paso es contrastarlo con las demás métricas de esta misma fuente y revisar el contenido o la acción comercial asociada antes de decidir qué replicar o escalar.`
         };
     });
 
