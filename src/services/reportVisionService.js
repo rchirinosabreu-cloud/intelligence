@@ -273,7 +273,7 @@ visionExtractionSchema.properties.metrics = {
 };
 
 const SYSTEM_PROMPT = `You are a professional Meta Ads and Organic Social Media data extraction expert using Google Generative AI (Gemini).
-Analyze this screenshot as ONE independent source. Extract only metrics that are visibly present; do not emit null placeholder metrics. Paid screenshots may contain these canonical paid keys:
+Analyze the provided screenshot and extract metrics using their real semantics. Paid screenshots may contain the 6 canonical paid keys:
 - spend: Inversión (e.g. amount spent in USD, COP, EUR, etc.)
 - impressions: Impresiones
 - reach: Alcance
@@ -281,10 +281,10 @@ Analyze this screenshot as ONE independent source. Extract only metrics that are
 - ctr: CTR (prioritize CTR (en el enlace) or CTR (todos))
 - results: Resultados / conversiones (e.g., Purchases, Leads, etc.)
 
-Organic screenshots may use: views, viewsOrganic, viewsPaid, viewers, interactions, linkClicks, profileVisits, follows, followersTotal, videoViews, reach, reachOrganic, and reachPaid. Never rename organic views as impressions or interactions as paid results merely to fill a canonical slot. Use follows only for followers gained during the period; use followersTotal for the audience total shown on demographic screens. Include visible changePct with its original sign.
+Organic screenshots may additionally use: views, viewers, interactions, linkClicks, profileVisits, follows, videoViews, reachOrganic, and reachPaid. Never rename organic views as impressions or interactions as paid results merely to fill a canonical slot. Include visible changePct with its original sign.
 
 For each metric, extract the following:
-- key: use the paid canonical keys or organic semantic keys listed above; never substitute one concept for another. Return metrics as an array containing visible metrics only.
+- key: use the paid canonical keys or organic semantic keys listed above; never substitute one concept for another.
 - label: the label as seen in the screenshot or translation (e.g., "Importe gastado", "Impresiones", "Alcance", "Clics en el enlace", "CTR (porcentaje de clics en el enlace)", "Resultados")
 - value: the numeric value extracted from the image. It must be a raw float/integer number. Remove currency symbols, commas, percent signs, and dots used as thousands separator. Keep decimals (e.g. if CTR is "1.52%", value is 1.52. If spend is "$1,250.50", value is 1250.50). If the metric is completely missing or not visible in the screenshot, return null.
 - unit: the unit of measurement (e.g. "USD", "COP", "count", "%", etc.). If not applicable, return a blank string or "count".
@@ -423,7 +423,7 @@ export const validateAndCleanSourceExtraction = (extracted) => {
     const allowedKeys = [
         'spend', 'impressions', 'reach', 'clicks', 'ctr', 'results',
         'views', 'viewers', 'interactions', 'linkClicks', 'profileVisits', 'follows',
-        'followersTotal', 'videoViews', 'viewsOrganic', 'viewsPaid', 'reachOrganic', 'reachPaid'
+        'videoViews', 'reachOrganic', 'reachPaid'
     ];
     const cleanMetrics = {};
     let hasValidCanonicalMetric = false;
@@ -439,7 +439,6 @@ export const validateAndCleanSourceExtraction = (extracted) => {
             unit: key === 'spend' ? 'COP' : (typeof item.unit === 'string' && item.unit !== 'count' ? item.unit : 'count'),
             confidence: typeof item.confidence === 'number' ? item.confidence : 1.0,
             evidence: typeof item.evidence === 'string' ? item.evidence : '',
-            scope: typeof item.scope === 'string' ? item.scope.toUpperCase() : (extracted.sectionCategory === 'ADS' ? 'PAID' : 'ORGANIC'),
             changePct: typeof item.changePct === 'number' ? item.changePct : null
         };
 
@@ -1019,7 +1018,7 @@ export const generateFallbackNarrative = (normalizedMetrics, sections = []) => {
                 : "Esta cifra aporta una señal específica del comportamiento orgánico. Para convertirla en una decisión, debe contrastarse con las otras métricas de la misma captura y con el contenido publicado durante el periodo.");
         return {
             ...section,
-            narrativeComment: `${detailText}\n\n${businessText}`
+            narrativeComment: `${detailText}\n\nPara el negocio, este dato permite identificar dónde se concentró la respuesta de la audiencia, pero no demuestra por sí solo ventas, reservas o rentabilidad. El siguiente paso es contrastarlo con las demás métricas de esta misma fuente y revisar el contenido o la acción comercial asociada antes de decidir qué replicar o escalar.`
         };
     });
 

@@ -138,21 +138,6 @@ test('report pipeline regressions', async (t) => {
     assert.equal(source.metrics.spend.value, null);
   });
 
-  await t.test('vision schema requests only visible metrics as array items', () => {
-    assert.equal(visionExtractionSchema.properties.metrics.type, 'array');
-    assert.deepEqual(visionExtractionSchema.properties.metrics.items.required, [
-      'key', 'label', 'value', 'unit', 'scope', 'changePct', 'confidence', 'evidence'
-    ]);
-  });
-
-  await t.test('preserves whether an extracted metric is organic, paid or mixed', () => {
-    const source = validateAndCleanSourceExtraction({
-      sectionCategory: 'ORGANIC', platform: 'FACEBOOK',
-      metrics: [{ key: 'views', label: 'Visualizaciones', value: 15525, unit: 'count', scope: 'MIXED' }]
-    });
-    assert.equal(source.metrics.views.scope, 'MIXED');
-  });
-
   await t.test('fallback narrative explains a chart without calling every value an interaction', async () => {
     const { generateFallbackNarrative } = await import('../src/services/reportVisionService.js');
     const narrative = generateFallbackNarrative({
@@ -162,19 +147,12 @@ test('report pipeline regressions', async (t) => {
       sectionId: 'instagram-summary', sectionCategory: 'ORGANIC', platform: 'INSTAGRAM',
       screenType: 'CONTENT_SUMMARY', title: 'Resumen de contenido', metricLabel: 'Visualizaciones',
       dataset: [{ label: 'Total', value: 4899 }]
-    }, {
-      sectionId: 'instagram-formats', sectionCategory: 'ORGANIC', platform: 'INSTAGRAM',
-      screenType: 'CONTENT_FORMATS', title: 'Formatos de contenido', metricLabel: 'Contenidos publicados',
-      dataset: [{ label: 'Historias', value: 22 }, { label: 'Publicaciones', value: 13 }]
     }]);
     const comment = narrative.sections[0].narrativeComment;
     assert.equal(comment.split('\n\n').length, 2);
     assert.match(comment, /^Instagram:/);
     assert.doesNotMatch(comment, /interacciones directas/i);
     assert.doesNotMatch(comment, /valida de forma concluyente/i);
-    assert.doesNotMatch(narrative.headline, /pauta/i);
-    assert.doesNotMatch(narrative.summaryPoints.join(' '), /inversión/i);
-    assert.notEqual(narrative.sections[0].narrativeComment, narrative.sections[1].narrativeComment);
     assert.equal(Array.isArray(narrative.oportunidadesYAprendizajes), true);
     assert.deepEqual(Object.keys(narrative.oportunidadesYAprendizajes[0]), ['title', 'evidence', 'learning', 'application']);
     assert.equal(Array.isArray(narrative.recomendacionesEstrategicas), true);

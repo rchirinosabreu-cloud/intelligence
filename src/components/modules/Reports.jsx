@@ -36,7 +36,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import { adaptDatasetForChart, hasReadableChartData } from '@/lib/reportChartData';
-import { collectDocumentStyles, filterCanonicalMetrics, getOrganicPlatformLabel, getReviewMetricEntries, isDemographicDataset, filterTopContentRows, readLiveControlValue, selectOrganicSummaryMetrics, splitAchievement, safeClassName, buildReportFileName } from '@/lib/reportPresentation';
+import { filterCanonicalMetrics, getOrganicPlatformLabel, getReviewMetricEntries, isDemographicDataset, filterTopContentRows, splitAchievement, safeClassName, buildReportFileName } from '@/lib/reportPresentation';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
@@ -543,9 +543,6 @@ const CANONICAL_METRICS = {
   profileVisits: "Visitas al perfil",
   follows: "Nuevos seguidores",
   videoViews: "Reproducciones de video",
-  viewsOrganic: "Visualizaciones orgánicas",
-  viewsPaid: "Visualizaciones de anuncios",
-  followersTotal: "Seguidores totales",
   reachOrganic: "Alcance orgánico",
   reachPaid: "Alcance de anuncios"
 };
@@ -579,9 +576,6 @@ const MetricGrid = ({ metrics }) => {
     profileVisits: { component: User, card: 'bg-sky-50 dark:bg-sky-950/30 border-sky-100 dark:border-sky-800', icon: 'bg-sky-600' },
     follows: { component: Plus, card: 'bg-fuchsia-50 dark:bg-fuchsia-950/30 border-fuchsia-100 dark:border-fuchsia-800', icon: 'bg-fuchsia-600' },
     videoViews: { component: Monitor, card: 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-100 dark:border-indigo-800', icon: 'bg-indigo-600' },
-    viewsOrganic: { component: Eye, card: 'bg-teal-50 dark:bg-teal-950/30 border-teal-100 dark:border-teal-800', icon: 'bg-teal-600' },
-    viewsPaid: { component: Target, card: 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-800', icon: 'bg-amber-500' },
-    followersTotal: { component: User, card: 'bg-fuchsia-50 dark:bg-fuchsia-950/30 border-fuchsia-100 dark:border-fuchsia-800', icon: 'bg-fuchsia-600' },
     reachOrganic: { component: User, card: 'bg-teal-50 dark:bg-teal-950/30 border-teal-100 dark:border-teal-800', icon: 'bg-teal-600' },
     reachPaid: { component: Target, card: 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-800', icon: 'bg-amber-500' }
   };
@@ -769,13 +763,13 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
         </div>
       )}
 
-      {Object.keys(selectOrganicSummaryMetrics(report.normalizedMetrics?.organicSummary)).length > 0 && (
+      {Object.keys(report.normalizedMetrics?.organicSummary || {}).length > 0 && (
         <section className="space-y-4">
           <div className="space-y-1">
             <h3 className="text-lg font-black text-slate-800 dark:text-slate-50">Resumen orgánico detectado</h3>
             <p className="text-xs text-slate-500">Un único grupo con cifras orgánicas verificables; los totales mixtos y de anuncios quedan excluidos.</p>
           </div>
-          <MetricGrid metrics={selectOrganicSummaryMetrics(report.normalizedMetrics.organicSummary)} />
+          <MetricGrid metrics={report.normalizedMetrics.organicSummary} />
         </section>
       )}
 
@@ -1580,13 +1574,18 @@ const Reports = () => {
                      )}
 
                      {/* 4. Resultados orgánicos: nunca mezcla Facebook, Instagram o pauta */}
-                     {Object.keys(selectOrganicSummaryMetrics(report.normalizedMetrics?.organicSummary)).length > 0 && (
+                     {Object.keys(report.normalizedMetrics?.organicSummary || {}).length > 0 && (
                        <div className="border-t border-slate-100 pt-8 space-y-6 page-break-after w-full">
                          <div className="space-y-1">
                            <h3 className="text-xl font-black tracking-tight text-slate-800">Resultados generales — Desempeño orgánico</h3>
-                           <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Indicadores orgánicos verificados en las capturas del periodo</p>
+                           <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Cifras separadas por plataforma y captura de origen</p>
                          </div>
-                         <MetricGrid metrics={selectOrganicSummaryMetrics(report.normalizedMetrics.organicSummary)} />
+                         {Object.entries(report.normalizedMetrics.organicSummary).map(([platform, metrics]) => (
+                           <section key={platform} className="space-y-4 break-inside-avoid">
+                             <h4 className="text-sm font-black text-slate-700">{platform === 'FACEBOOK' ? 'Facebook' : platform === 'INSTAGRAM' ? 'Instagram' : platform}</h4>
+                             <MetricGrid metrics={metrics} />
+                           </section>
+                         ))}
                        </div>
                      )}
 
@@ -1622,6 +1621,20 @@ const Reports = () => {
                          </div>
                          );
                        })}
+
+                       {/* Demographics stacked cleanly under formats */}
+                       {report.normalizedMetrics?.demographics && (
+                         <div className="space-y-4 pt-6 border-t border-slate-100/60 w-full">
+                           <h4 className="text-sm font-black text-slate-800">{toSentenceCase("Distribución demográfica")}</h4>
+                           <DemographicsChart demographics={report.normalizedMetrics.demographics} />
+                           <GranularNarrativeBlock
+                             sectionKey="demographics"
+                             title={toSentenceCase("Análisis de distribución demográfica")}
+                             comment={getGranularComment("demographics")}
+                             onChange={handleGranularCommentChange}
+                           />
+                         </div>
+                       )}
                      </div>}
 
                      {/* 6. Sección de Pauta Digital (Meta Ads): Tabla de Desempeño de Anuncios y Tendencias Temporales */}

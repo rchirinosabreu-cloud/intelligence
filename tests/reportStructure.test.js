@@ -27,24 +27,19 @@ test('keeps organic source metrics isolated by platform and source id', () => {
   ]);
 
   assert.deepEqual(scoped.organic.map((source) => source.sourceId), ['facebook-summary', 'instagram-summary']);
-  assert.equal(scoped.organicSummary.impressions, undefined);
-  assert.equal(scoped.organicSummary.results, undefined);
+  assert.equal(scoped.organicSummary.FACEBOOK.impressions.value, 15525);
+  assert.equal(scoped.organicSummary.INSTAGRAM.impressions.value, 39609);
+  assert.equal(scoped.organicSummary.COMBINED, undefined);
   assert.equal(scoped.ads.length, 0);
 });
 
-test('organic summary contains only the six approved general performance metrics', () => {
+test('organic summary reconciles complementary screenshots without adding repeated totals', () => {
   const scoped = buildScopedReportData([
-    { sourceId: 'unknown', sectionCategory: 'ORGANIC', platform: 'UNKNOWN', screenType: 'AUDIENCE_DEMOGRAPHICS', metrics: { spend: metric(0, 'Inversión'), follows: metric(1209, 'Seguidores totales') } },
-    { sourceId: 'facebook', sectionCategory: 'ORGANIC', platform: 'FACEBOOK', screenType: 'CONTENT_SUMMARY', metrics: { views: { ...metric(15525, 'Visualizaciones'), scope: 'MIXED' }, videoViews: metric(965, 'Reproducciones'), reachPaid: metric(12155, 'De anuncios') } },
-    { sourceId: 'instagram', sectionCategory: 'ORGANIC', platform: 'INSTAGRAM', screenType: 'CONTENT_SUMMARY', metrics: { viewsOrganic: metric(27064, 'Visualizaciones orgánicas'), interactions: metric(844, 'Interacciones'), viewers: metric(6700, 'Espectadores') } },
-    { sourceId: 'cross', sectionCategory: 'ORGANIC', platform: 'CROSS_PLATFORM', screenType: 'METRIC_TRENDS', metrics: { linkClicks: metric(64, 'Clics'), profileVisits: metric(825, 'Visitas'), follows: metric(51, 'Nuevos seguidores'), reachOrganic: metric(6700, 'Alcance orgánico'), videoViews: metric(965, 'Reproducciones') } },
+    { sourceId: 'summary', sectionCategory: 'ORGANIC', platform: 'FACEBOOK', screenType: 'CONTENT_SUMMARY', metrics: { views: metric(15525, 'Visualizaciones') } },
+    { sourceId: 'trends', sectionCategory: 'ORGANIC', platform: 'FACEBOOK', screenType: 'METRIC_TRENDS', metrics: { views: metric(15525, 'Visualizaciones'), profileVisits: metric(424, 'Visitas') } },
   ]);
-  assert.deepEqual(Object.keys(scoped.organicSummary), ['views', 'viewers', 'follows', 'profileVisits', 'linkClicks', 'reachOrganic']);
-  assert.equal(scoped.organicSummary.views.value, 27064);
-  assert.equal(scoped.organicSummary.interactions, undefined);
-  assert.equal(scoped.organicSummary.videoViews, undefined);
-  assert.equal(scoped.organicSummary.spend, undefined);
-  assert.equal(scoped.organicSummary.reachPaid, undefined);
+  assert.equal(scoped.organicSummary.FACEBOOK.views.value, 15525);
+  assert.equal(scoped.organicSummary.FACEBOOK.profileVisits.value, 424);
 });
 
 test('deduplicates matching ad-set and ad-table totals without summing reach or spend', () => {
@@ -53,7 +48,6 @@ test('deduplicates matching ad-set and ad-table totals without summing reach or 
     impressions: metric(23568, 'Impresiones'),
     reach: metric(8978, 'Alcance'),
     results: metric(52, 'Conversaciones'),
-    clicks: { value: null, label: 'Clics' },
   };
   const scoped = buildScopedReportData([
     { sourceId: 'ad-set', sectionCategory: 'ADS', platform: 'META_ADS', entityLevel: 'AD_SET', metrics: sharedMetrics },
@@ -65,7 +59,6 @@ test('deduplicates matching ad-set and ad-table totals without summing reach or 
   assert.equal(scoped.adsSummary.impressions.value, 23568);
   assert.equal(scoped.adsSummary.reach.value, 8978);
   assert.equal(scoped.adsSummary.results.value, 52);
-  assert.equal(scoped.adsSummary.clicks, undefined);
   assert.equal(scoped.adsSummary.ctr, undefined);
 });
 
