@@ -8,7 +8,7 @@ import {
 
 const metric = (value, label) => ({ value, label, unit: 'count' });
 
-test('keeps organic source metrics isolated by platform and source id', () => {
+test('keeps sources traceable while producing one restricted organic summary', () => {
   const scoped = buildScopedReportData([
     {
       sourceId: 'facebook-summary',
@@ -27,9 +27,7 @@ test('keeps organic source metrics isolated by platform and source id', () => {
   ]);
 
   assert.deepEqual(scoped.organic.map((source) => source.sourceId), ['facebook-summary', 'instagram-summary']);
-  assert.equal(scoped.organicSummary.FACEBOOK.impressions.value, 15525);
-  assert.equal(scoped.organicSummary.INSTAGRAM.impressions.value, 39609);
-  assert.equal(scoped.organicSummary.COMBINED, undefined);
+  assert.deepEqual(Object.keys(scoped.organicSummary), []);
   assert.equal(scoped.ads.length, 0);
 });
 
@@ -38,8 +36,17 @@ test('organic summary reconciles complementary screenshots without adding repeat
     { sourceId: 'summary', sectionCategory: 'ORGANIC', platform: 'FACEBOOK', screenType: 'CONTENT_SUMMARY', metrics: { views: metric(15525, 'Visualizaciones') } },
     { sourceId: 'trends', sectionCategory: 'ORGANIC', platform: 'FACEBOOK', screenType: 'METRIC_TRENDS', metrics: { views: metric(15525, 'Visualizaciones'), profileVisits: metric(424, 'Visitas') } },
   ]);
-  assert.equal(scoped.organicSummary.FACEBOOK.views.value, 15525);
-  assert.equal(scoped.organicSummary.FACEBOOK.profileVisits.value, 424);
+  assert.equal(scoped.organicSummary.views.value, 15525);
+  assert.deepEqual(Object.keys(scoped.organicSummary), ['views']);
+});
+
+test('organic summary exposes only followers, views, interactions and reach', () => {
+  const scoped = buildScopedReportData([
+    { sourceId: 'fb', sectionCategory: 'ORGANIC', platform: 'FACEBOOK', screenType: 'CONTENT_SUMMARY', metrics: { follows: metric(7), views: metric(100), interactions: metric(12), reach: metric(80), spend: metric(500), impressions: metric(900), ctr: metric(3) } },
+    { sourceId: 'ig', sectionCategory: 'ORGANIC', platform: 'INSTAGRAM', screenType: 'CONTENT_SUMMARY', metrics: { follows: metric(5), views: metric(200), interactions: metric(18), reachOrganic: metric(120), reachPaid: metric(40) } },
+  ]);
+  assert.deepEqual(Object.keys(scoped.organicSummary), ['follows', 'views', 'interactions', 'reach']);
+  assert.deepEqual(Object.values(scoped.organicSummary).map(metric => metric.value), [12, 300, 30, 200]);
 });
 
 test('deduplicates matching ad-set and ad-table totals without summing reach or spend', () => {

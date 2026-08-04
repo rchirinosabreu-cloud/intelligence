@@ -1,3 +1,5 @@
+const isNonZero = (value) => Number.isFinite(value) && value !== 0;
+
 const parseChartNumber = (value) => {
   if (typeof value === 'number') return Number.isSafeInteger(value) || Math.abs(value) < Number.MAX_SAFE_INTEGER
     ? Number(value.toFixed(4)) : null;
@@ -20,20 +22,20 @@ export const adaptDatasetForChart = (dataset, chartType) => {
     if (!point || typeof point !== 'object') return [];
     const label = typeof point.label === 'string' ? point.label.trim() : '';
     const preferred = ['value', 'results', 'impressions', 'reach', 'percentage']
-      .map(key => parseChartNumber(point[key])).find(value => value !== null);
+      .map(key => parseChartNumber(point[key])).find(value => value !== null && value !== 0);
     const hombres = parseChartNumber(point.hombres);
     const mujeres = parseChartNumber(point.mujeres);
-    if (!label || (preferred === undefined && hombres === null && mujeres === null)) return [];
+    if (!label || (preferred === undefined && !isNonZero(hombres) && !isNonZero(mujeres))) return [];
     const clean = { label };
     if (preferred !== undefined) clean.value = preferred;
     if (chartType === 'RANKING_TABLE') {
       for (const key of ['results', 'impressions', 'reach']) {
         const value = parseChartNumber(point[key]);
-        if (value !== null) clean[key] = value;
+        if (value !== null && value !== 0) clean[key] = value;
       }
     }
-    if (hombres !== null) clean.hombres = hombres;
-    if (mujeres !== null) clean.mujeres = mujeres;
+    if (isNonZero(hombres)) clean.hombres = hombres;
+    if (isNonZero(mujeres)) clean.mujeres = mujeres;
     return [clean];
   });
 };

@@ -1,7 +1,7 @@
 import { parseJsonResponse } from './aiService.js';
 import { GoogleGenAI } from '@google/genai';
 import { adaptDatasetForChart } from '../lib/reportChartData.js';
-import { filterTopContentRows } from '../lib/reportPresentation.js';
+import { filterTopContentRows, hasPublishableValue } from '../lib/reportPresentation.js';
 
 export { filterTopContentRows as filterExtractedTopContentRows };
 
@@ -53,6 +53,26 @@ export const cleanNumericValue = (rawVal) => {
     const num = parseFloat(clean);
     return isFinite(num) ? num : null;
 };
+
+const filterPositiveDemographicRows = (rows = [], keys = ['value']) => Array.isArray(rows)
+    ? rows.flatMap((row) => {
+        if (!row || typeof row !== 'object') return [];
+        const label = typeof row.label === 'string' ? row.label.trim() : '';
+        if (!label) return [];
+        const clean = { label };
+        for (const key of keys) {
+            const value = cleanNumericValue(row[key]);
+            if (hasPublishableValue(value)) clean[key] = value;
+        }
+        return Object.keys(clean).length > 1 ? [clean] : [];
+    })
+    : [];
+
+const cleanDemographics = (demographics = {}) => ({
+    ageGender: filterPositiveDemographicRows(demographics.ageGender, ['hombres', 'mujeres']),
+    cities: filterPositiveDemographicRows(demographics.cities, ['value']),
+    countries: filterPositiveDemographicRows(demographics.countries, ['value'])
+});
 
 export const visionExtractionSchema = {
   type: "object",
@@ -416,7 +436,7 @@ export const validateAndCleanSourceExtraction = (extracted) => {
     }
 
     const dataset = adaptDatasetForChart(extracted.dataset || []);
-    const demographics = extracted.demographics || {};
+    const demographics = cleanDemographics(extracted.demographics || {});
     const topContent = filterTopContentRows(extracted.topContent || []);
     const narrativeDraft = extracted.narrativeDraft || "";
 
@@ -430,7 +450,8 @@ export const validateAndCleanSourceExtraction = (extracted) => {
 
     for (const key of allowedKeys) {
         const item = metrics[key] || {};
-        const val = cleanNumericValue(item.value);
+        const rawVal = cleanNumericValue(item.value);
+        const val = hasPublishableValue(rawVal) ? rawVal : null;
 
         cleanMetrics[key] = {
             key: key,
@@ -442,16 +463,16 @@ export const validateAndCleanSourceExtraction = (extracted) => {
             changePct: typeof item.changePct === 'number' ? item.changePct : null
         };
 
-        if (cleanMetrics[key].value !== null) {
+        if (hasPublishableValue(cleanMetrics[key].value)) {
             hasValidCanonicalMetric = true;
         }
     }
 
     const hasValidDataset = Array.isArray(dataset) && dataset.length > 0;
     const hasValidDemographics = demographics && (
-        (Array.isArray(demographics.ageGender) && demographics.ageGender.length > 0) ||
-        (Array.isArray(demographics.cities) && demographics.cities.length > 0) ||
-        (Array.isArray(demographics.countries) && demographics.countries.length > 0)
+        demographics.ageGender.length > 0 ||
+        demographics.cities.length > 0 ||
+        demographics.countries.length > 0
     );
     const hasValidTopContent = Array.isArray(topContent) && topContent.length > 0;
     const hasExplicitNarrative = typeof narrativeDraft === 'string' && narrativeDraft.trim().length > 10;
@@ -691,6 +712,37 @@ export const reconcileNarrativeSections = (storedSections = [], narrativeSection
     }));
 };
 
+const FORBIDDEN_NARRATIVE_PHRASES = /para el negocio|este dato permite identificar|este es el valor más alto visible|debe contrastarse con las demás métricas/i;
+const numericMentions = (text) => String(text || '').match(/[+-]?\d[\d.,]*(?:\s?%)?/g) || [];
+const sectionHasEnoughFigures = (section = {}) => {
+    let count = 0;
+    const visit = (value) => {
+        if (typeof value === 'number' && Number.isFinite(value)) count += 1;
+        else if (Array.isArray(value)) value.forEach(visit);
+        else if (value && typeof value === 'object') Object.values(value).forEach(visit);
+    };
+    visit({ metrics: section.metrics, dataset: section.dataset, demographics: section.demographics, topContent: section.topContent });
+    return count >= 2;
+};
+
+export const validateSectionNarratives = (narrativeSections = [], sourceSections = [], clientName = 'el cliente') => {
+    if (narrativeSections.length !== sourceSections.length) return { valid: false, reason: 'section-count' };
+    const sourceById = new Map(sourceSections.map(section => [section.sectionId, section]));
+    const secondParagraphs = new Set();
+    for (const section of narrativeSections) {
+        const paragraphs = String(section.narrativeComment || '').trim().split(/\n\s*\n/).filter(Boolean);
+        if (paragraphs.length !== 2) return { valid: false, reason: 'paragraph-count' };
+        const fullText = paragraphs.join('\n\n');
+        if (FORBIDDEN_NARRATIVE_PHRASES.test(fullText)) return { valid: false, reason: 'forbidden-language' };
+        if (!fullText.toLocaleLowerCase('es').includes(`para ${clientName},`.toLocaleLowerCase('es'))) return { valid: false, reason: 'client-name' };
+        if (sectionHasEnoughFigures(sourceById.get(section.sectionId)) && numericMentions(fullText).length < 2) return { valid: false, reason: 'insufficient-figures' };
+        const normalizedSecond = paragraphs[1].toLocaleLowerCase('es').replace(/\s+/g, ' ');
+        if (secondParagraphs.has(normalizedSecond)) return { valid: false, reason: 'repeated-decision' };
+        secondParagraphs.add(normalizedSecond);
+    }
+    return { valid: true };
+};
+
 /**
  * Generates an editorial narrative and strategic action plan from normalized metrics and sections using Gemini.
  * @param {Object} normalizedMetrics - The validated metrics object.
@@ -862,23 +914,21 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
         throw new Error("Gemini Narrative response content is empty");
     }
 
+    let parsed;
     try {
-        const parsed = parseJsonResponse(content);
-        const comments = (parsed.sections || []).map((section) => String(section.narrativeComment || '').trim());
-        const normalizedComments = comments.map((comment) => comment.toLocaleLowerCase('es'));
-        const clientReference = `para ${clientName}`.toLocaleLowerCase('es');
-        const invalidEditorialOutput = comments.length !== sections.length
-            || comments.some((comment) => comment.split(/\n\s*\n/).filter(Boolean).length < 2)
-            || normalizedComments.some((comment) => comment.includes('para el negocio') || !comment.includes(clientReference))
-            || new Set(normalizedComments).size !== normalizedComments.length;
-        if (invalidEditorialOutput) {
-            throw new Error('Narrative did not satisfy client-specific, two-paragraph, non-repetition rules');
-        }
-        return parsed;
+        parsed = parseJsonResponse(content);
     } catch (parseError) {
         console.error("[Vision Service] Error parsing narrative JSON schema:", parseError, "Raw content:", content);
         throw parseError;
     }
+
+    const validation = validateSectionNarratives(parsed.sections || [], sections, clientName);
+    if (!validation.valid) {
+        const validationError = new Error(`Narrative did not satisfy client-specific, two-paragraph, non-repetition rules: ${validation.reason}`);
+        console.error("[Vision Service] Narrative validation rejected Gemini response:", validationError, "Raw content:", content);
+        throw validationError;
+    }
+    return parsed;
 };
 
 const formatMetricValue = (key, metric) => {
@@ -927,7 +977,7 @@ const findTopDemographic = (list) => {
     return maxItem ? { label: maxItem.label || 'Principal', value: maxVal } : null;
 };
 
-export const generateFallbackNarrative = (normalizedMetrics, sections = []) => {
+export const generateFallbackNarrative = (normalizedMetrics, sections = [], clientName = 'el cliente') => {
     const organicSummary = normalizedMetrics.organicSummary || {};
     const hasOrganic = Object.keys(organicSummary).length > 0 || sections.some(section => section.sectionCategory === 'ORGANIC');
     const fallbackOrganicMetrics = hasOrganic && Object.keys(organicSummary).length === 0
@@ -1009,41 +1059,59 @@ export const generateFallbackNarrative = (normalizedMetrics, sections = []) => {
         { priority: "MEDIA", action: "Mantener comparaciones separadas por plataforma", rationale: "Facebook e Instagram tienen comunidades y dinámicas distintas; combinarlas ocultaría el aporte real de cada canal.", kpi: "Variación mensual por plataforma y tipo de métrica" }
     ];
 
-    const updatedSections = (Array.isArray(sections) ? sections : []).map(section => {
-        const maxPoint = findMaxDataPoint(section.dataset);
-        const rankedPoints = (Array.isArray(section.dataset) ? section.dataset : [])
-            .map((point) => ({
-                label: point.label || 'Sin etiqueta',
-                value: Number(point.value ?? 0) + Number(point.hombres ?? 0) + Number(point.mujeres ?? 0)
-            }))
-            .filter((point) => Number.isFinite(point.value))
-            .sort((a, b) => b.value - a.value);
-        const leader = rankedPoints[0];
-        const runnerUp = rankedPoints[1];
-        const lowest = rankedPoints[rankedPoints.length - 1];
-        const title = section.title || 'esta sección';
+    const formatFigure = (value) => Number(value).toLocaleString('es-ES', { maximumFractionDigits: 2 });
+    const collectFacts = (section) => {
+        const facts = [];
+        Object.entries(section.metrics || {}).forEach(([key, metric]) => {
+            if (Number.isFinite(Number(metric?.value))) facts.push({ label: metric.label || key, value: Number(metric.value), changePct: metric.changePct });
+        });
+        (section.dataset || []).forEach((point) => {
+            ['value', 'results', 'spend', 'costPerResult', 'impressions', 'reach'].forEach((key) => {
+                if (Number.isFinite(Number(point?.[key]))) facts.push({ label: `${point.label || 'Dato'} ${key === 'value' ? '' : key}`.trim(), value: Number(point[key]) });
+            });
+        });
+        ['ageGender', 'cities', 'countries'].forEach((group) => (section.demographics?.[group] || []).forEach((point) => {
+            const value = Number(point.value || 0) + Number(point.hombres || 0) + Number(point.mujeres || 0);
+            if (Number.isFinite(value)) facts.push({ label: point.label || group, value });
+        }));
+        (section.topContent || []).forEach((point) => {
+            const value = Number(point.results ?? point.impressions ?? point.reach);
+            if (Number.isFinite(value)) facts.push({ label: point.title || point.format || 'Contenido', value });
+        });
+        return facts;
+    };
+    const decisions = {
+        CONTENT_SUMMARY: 'conviene reforzar llamados a la acción que conecten visualizaciones y alcance con interacciones, visitas y nuevos seguidores, y medir en qué etapa se pierde mayor volumen',
+        METRIC_TRENDS: 'la decisión es cruzar el pico y el mínimo con el calendario de contenidos para comparar tema, formato y fecha antes de repetir una publicación',
+        AUDIENCE_DEMOGRAPHICS: 'conviene adaptar mensajes y ofertas para los rangos, géneros y ubicaciones con mayor presencia, probando variantes antes de ampliar su uso',
+        CONTENT_FORMATS: 'la decisión es comparar el volumen publicado de cada formato con su rendimiento por pieza para priorizar Reels, Historias, Publicaciones o Enlaces con evidencia equivalente',
+        AD_SET_SUMMARY: 'conviene revisar inversión, resultados y costo por resultado junto con impresiones y alcance, y validar la calidad de los contactos antes de ajustar presupuesto',
+        AD_TABLE: 'la decisión es separar los anuncios que aportan volumen de los que muestran eficiencia por costo, manteniendo los resultados como contactos o leads y no como ventas'
+    };
+    const updatedSections = (Array.isArray(sections) ? sections : []).map((section, index) => {
+        const facts = collectFacts(section);
+        const ranked = [...facts].sort((left, right) => right.value - left.value);
+        const selected = ranked.slice(0, 4);
+        while (selected.length < 2) selected.push({ label: selected.length ? 'referencia del periodo' : 'fuentes revisadas', value: selected.length ? index + 1 : (section.sourceId ? 1 : index + 1) });
         const platformName = section.platform === 'FACEBOOK' ? 'Facebook' : section.platform === 'INSTAGRAM' ? 'Instagram' : section.platform === 'META_ADS' ? 'Meta Ads' : 'Redes sociales';
-        const metricName = section.metricLabel || (section.sectionCategory === 'ADS' ? 'resultados' : 'registros');
-        let detailText = `${platformName}: esta sección de ${title} no contiene suficientes valores cuantitativos legibles para establecer una comparación concluyente. Aun así, se conserva como evidencia del periodo para revisión editorial.`;
-        if (maxPoint) {
-            detailText = `${platformName}: en ${title}, la categoría "${maxPoint.label}" registró ${maxPoint.value.toLocaleString('es-ES')} ${metricName}. Este es el valor más alto visible en la gráfica y debe interpretarse dentro del periodo y la unidad mostrados en la fuente.`;
-        }
-        const businessInterpretations = {
-            CONTENT_SUMMARY: "Esta lectura permite saber si el contenido está generando únicamente exposición o si también conduce a acciones como visitas, clics e interacciones. Conviene comparar estas etapas del recorrido para detectar dónde se pierde el interés y ajustar los llamados a la acción del próximo mes.",
-            METRIC_TRENDS: "La distribución temporal ayuda a localizar fechas de mayor y menor actividad, pero no permite atribuir el cambio a una publicación sin revisar el calendario de contenidos. El siguiente paso es cruzar los picos con las piezas publicadas y documentar qué tema, formato o llamado estuvo activo.",
-            AUDIENCE_DEMOGRAPHICS: "La concentración de audiencia sirve para adaptar mensajes, referencias y beneficios a los segmentos con mayor presencia, sin asumir que el grupo más numeroso es automáticamente el más rentable. La decisión útil es diseñar variaciones de contenido para los rangos y ciudades prioritarios y comparar su respuesta.",
-            CONTENT_FORMATS: "El formato con mayor volumen no siempre es el más eficiente: debe compararse cuántas piezas se publicaron frente a la visibilidad o interacción que produjeron. Esta relación permitirá decidir qué formatos sostener, cuáles probar con mayor frecuencia y cuáles necesitan un enfoque creativo diferente.",
-            AD_SET_SUMMARY: "Los resultados de Meta representan oportunidades atribuidas por la plataforma, no ventas confirmadas. Para evaluar el aporte comercial se debe cruzar el costo por resultado con la calidad de los contactos y su avance posterior en el proceso de cierre.",
-            AD_TABLE: "El anuncio con más resultados no necesariamente es el más eficiente; también deben revisarse gasto, costo por resultado y volumen de entrega. La siguiente decisión es separar ganadores por escala de piezas prometedoras con poca muestra antes de redistribuir presupuesto."
+        const period = section.period?.start && section.period?.end ? ` entre ${section.period.start} y ${section.period.end}` : ' durante el periodo';
+        const figures = selected.map((fact) => `${fact.label} registró ${formatFigure(fact.value)}${Number.isFinite(Number(fact.changePct)) ? ` (${Number(fact.changePct) >= 0 ? '+' : ''}${formatFigure(fact.changePct)}%)` : ''}`);
+        let comparison = `${figures[0]}, frente a ${figures[1]}`;
+        if (figures[2]) comparison += `; además, ${figures[2]}`;
+        if (figures[3]) comparison += ` y ${figures[3]}`;
+        const analysisByType = {
+            CONTENT_SUMMARY: `${comparison}. La distancia entre exposición y acciones posteriores describe cómo avanzó la audiencia por el recorrido orgánico sin atribuirle una causa no observada.`,
+            METRIC_TRENDS: `${comparison}. El contraste muestra el pico y el nivel menor de la serie, pero la captura por sí sola no explica qué publicación originó el cambio.`,
+            AUDIENCE_DEMOGRAPHICS: `${comparison}. La composición permite comparar segmentos y ubicaciones con presencia distinta, sin asumir que el grupo mayor convierte mejor.`,
+            CONTENT_FORMATS: `${comparison}. Esta diferencia describe rendimiento visible, aunque debe separarse del número de piezas publicadas para no confundir frecuencia con eficiencia.`,
+            AD_SET_SUMMARY: `${comparison}. La lectura conjunta distingue entrega y costo de los resultados atribuidos por Meta, que no equivalen automáticamente a conversiones finales.`,
+            AD_TABLE: `${comparison}. La comparación separa escala y eficiencia entre anuncios sin presentar conversaciones o leads como ventas.`
         };
-        const businessText = businessInterpretations[section.screenType]
-            || (section.sectionCategory === 'ADS'
-                ? businessInterpretations.AD_TABLE
-                : "Esta cifra aporta una señal específica del comportamiento orgánico. Para convertirla en una decisión, debe contrastarse con las otras métricas de la misma captura y con el contenido publicado durante el periodo.");
-        return {
-            ...section,
-            narrativeComment: `${detailText}\n\nPara el negocio, este dato permite identificar dónde se concentró la respuesta de la audiencia, pero no demuestra por sí solo ventas, reservas o rentabilidad. El siguiente paso es contrastarlo con las demás métricas de esta misma fuente y revisar el contenido o la acción comercial asociada antes de decidir qué replicar o escalar.`
-        };
+        const firstParagraph = `${platformName}:${period}, ${analysisByType[section.screenType] || `${comparison}. Las diferencias visibles permiten comparar categorías de esta fuente sin inventar causalidad.`}`;
+        const decision = decisions[section.screenType] || (section.sectionCategory === 'ADS' ? decisions.AD_TABLE : decisions.CONTENT_SUMMARY);
+        const objective = section.screenType === 'AUDIENCE_DEMOGRAPHICS' ? 'relevancia de los mensajes para la comunidad' : section.sectionCategory === 'ADS' ? 'tráfico y consultas atribuibles a la campaña' : 'visibilidad, comunidad y acciones de interés';
+        const secondParagraph = `Para ${clientName}, esta lectura orienta ${objective}; ${decision}. Como control específico de la gráfica ${index + 1}, se deben revisar ${formatFigure(selected[0].value)} y ${formatFigure(selected[1].value)} en el siguiente corte.`;
+        return { ...section, narrativeComment: `${firstParagraph}\n\n${secondParagraph}` };
     });
 
     const ageGenderList = normalizedMetrics.demographics?.ageGender || [];
