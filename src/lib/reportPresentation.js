@@ -1,7 +1,7 @@
 const CANONICAL_KEYS = [
   'spend', 'impressions', 'reach', 'clicks', 'ctr', 'results',
   'views', 'viewers', 'interactions', 'linkClicks', 'profileVisits', 'follows',
-  'followersTotal', 'videoViews', 'viewsOrganic', 'viewsPaid', 'reachOrganic', 'reachPaid'
+  'videoViews', 'reachOrganic', 'reachPaid'
 ];
 const FORMAT_SUMMARY_LABELS = new Set([
   'reel', 'reels', 'enlace', 'enlaces', 'historia', 'historias', 'foto', 'fotos',
@@ -23,21 +23,6 @@ export const getReviewMetricEntries = (metrics = {}) => ['spend', 'impressions',
 export const getOrganicPlatformLabel = (platform) => platform === 'FACEBOOK'
   ? 'Facebook'
   : platform === 'INSTAGRAM' ? 'Instagram' : 'Orgánico';
-
-const ORGANIC_SUMMARY_KEYS = ['follows', 'views', 'interactions', 'reachOrganic'];
-
-export const selectOrganicSummaryMetrics = (summary = {}) => {
-  const values = Object.values(summary);
-  const isLegacyGrouped = values.some((value) => value && typeof value === 'object' && value.value === undefined);
-  const groups = isLegacyGrouped ? values : [summary];
-  return Object.fromEntries(ORGANIC_SUMMARY_KEYS.flatMap((key) => {
-    const candidates = groups.map((group) => group?.[key])
-      .filter((metric) => metric?.value !== null && metric?.value !== undefined && Number(metric.value) > 0);
-    if (!candidates.length) return [];
-    const selected = candidates.reduce((best, metric) => Number(metric.value) > Number(best.value) ? metric : best);
-    return [[key, selected]];
-  }));
-};
 
 export const isDemographicDataset = (dataset) => Array.isArray(dataset) && dataset.some(point =>
   point && (Number.isFinite(Number(point.hombres)) || Number.isFinite(Number(point.mujeres)))

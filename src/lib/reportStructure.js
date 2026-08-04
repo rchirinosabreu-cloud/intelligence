@@ -1,14 +1,10 @@
 const METRIC_KEYS = [
   'spend', 'impressions', 'reach', 'clicks', 'ctr', 'results',
   'views', 'viewers', 'interactions', 'linkClicks', 'profileVisits', 'follows',
-  'followersTotal', 'videoViews', 'viewsOrganic', 'viewsPaid', 'reachOrganic', 'reachPaid',
+  'videoViews', 'reachOrganic', 'reachPaid',
 ];
 
-const ORGANIC_SUMMARY_KEYS = [
-  'follows', 'views', 'interactions', 'reachOrganic',
-];
-
-const hasValue = (metric) => metric && metric.value !== null && metric.value !== undefined && metric.value !== '' && Number.isFinite(Number(metric.value));
+const hasValue = (metric) => metric && Number.isFinite(Number(metric.value));
 
 const cleanMetrics = (metrics = {}) => Object.fromEntries(
   METRIC_KEYS
@@ -27,22 +23,23 @@ const sourcePriority = (source) => {
 };
 
 const buildOrganicSummary = (sources) => {
-  const candidates = {};
+  const summary = {};
   for (const source of sources) {
+    const platform = source.platform;
+    if (!platform || platform === 'META_ADS' || platform === 'ORGANIC_RRSS') continue;
+    if (!summary[platform]) summary[platform] = {};
     for (const [key, metric] of Object.entries(cleanMetrics(source.metrics))) {
-      const summaryKey = key === 'viewsOrganic' ? 'views' : key === 'reach' && metric.scope === 'ORGANIC' ? 'reachOrganic' : key;
-      if (!ORGANIC_SUMMARY_KEYS.includes(summaryKey) || Number(metric.value) <= 0) continue;
-      if (metric.scope === 'PAID' || metric.scope === 'MIXED') continue;
-      if (key === 'follows' && /total/i.test(String(metric.label || ''))) continue;
-      const current = candidates[summaryKey];
+      const current = summary[platform][key];
       if (!current || sourcePriority(source) > current._priority) {
-        candidates[summaryKey] = { ...metric, key: summaryKey, _priority: sourcePriority(source), sourceId: source.sourceId };
+        summary[platform][key] = { ...metric, _priority: sourcePriority(source), sourceId: source.sourceId };
       }
     }
   }
-  return Object.fromEntries(ORGANIC_SUMMARY_KEYS.filter((key) => candidates[key]).map((key) => {
-    const { _priority, ...metric } = candidates[key];
-    return [key, metric];
+  return Object.fromEntries(Object.entries(summary).map(([platform, metrics]) => {
+    return [platform, Object.fromEntries(Object.entries(metrics).map(([key, metric]) => {
+      const { _priority, ...publicMetric } = metric;
+      return [key, publicMetric];
+    }))];
   }));
 };
 

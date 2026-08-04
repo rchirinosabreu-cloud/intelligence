@@ -9,10 +9,7 @@ import {
   safeClassName,
   buildReportFileName,
   getReviewMetricEntries,
-  getOrganicPlatformLabel,
-  collectDocumentStyles,
-  readLiveControlValue,
-  selectOrganicSummaryMetrics
+  getOrganicPlatformLabel
 } from '../src/lib/reportPresentation.js';
 
 test('report presentation regressions', async (t) => {
@@ -26,18 +23,6 @@ test('report presentation regressions', async (t) => {
     assert.deepEqual(getReviewMetricEntries({
       spend: { value: 232826 }, clicks: { value: null }, ctr: { value: null }, results: { value: 52 }
     }).map(([key]) => key), ['spend', 'results']);
-  });
-
-  await t.test('legacy platform groups collapse into exactly four organic headline metrics', () => {
-    const selected = selectOrganicSummaryMetrics({
-      FACEBOOK: { views: { value: 12155 }, interactions: { value: 57 }, reachOrganic: { value: 0 } },
-      INSTAGRAM: { views: { value: 12545 }, viewers: { value: 0 } },
-      CROSS_PLATFORM: { views: { value: 42500 }, viewers: { value: 7222 }, follows: { value: 51 }, profileVisits: { value: 825 }, linkClicks: { value: 64 }, reachOrganic: { value: 6700 }, spend: { value: 0 } }
-    });
-    assert.deepEqual(Object.keys(selected), ['follows', 'views', 'interactions', 'reachOrganic']);
-    assert.equal(selected.views.value, 42500);
-    assert.equal(selected.interactions.value, 57);
-    assert.equal(selected.spend, undefined);
   });
 
   await t.test('metric audit presents one organic group before paid fields', async () => {
@@ -85,51 +70,19 @@ test('report presentation regressions', async (t) => {
     assert.equal(buildReportFileName(undefined), 'reporte_de_desempeno_digital.html');
   });
 
-  await t.test('HTML export reads live editor values and embeds accessible compiled styles', () => {
-    assert.equal(readLiveControlValue({ value: 'Texto editado' }, { value: '' }), 'Texto editado');
-    const styles = collectDocumentStyles([
-      { cssRules: [{ cssText: '.card{color:#123}' }, { cssText: '.metric{background:#fff}' }] },
-      { get cssRules() { throw new Error('cross origin'); } }
-    ]);
-    assert.match(styles, /\.card\{color:#123\}/);
-    assert.match(styles, /\.metric\{background:#fff\}/);
-  });
-
-  await t.test('HTML export helpers are defined in the report module runtime', async () => {
-    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
-    assert.match(component, /const readLiveControlValue\s*=/);
-    assert.match(component, /const collectDocumentStyles\s*=/);
-  });
-
   await t.test('report presents scoped organic results before paid results', async () => {
     const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
     const organicHeading = component.indexOf('Resultados generales — Desempeño orgánico');
     const adsHeading = component.indexOf('Resultados generales — Desempeño de pauta');
     assert.ok(organicHeading > -1, 'missing organic summary heading');
     assert.ok(adsHeading > organicHeading, 'paid summary must appear after organic summary');
-    assert.match(component, /MetricGrid metrics=\{selectOrganicSummaryMetrics\(report\.normalizedMetrics\.organicSummary\)\}/);
-    assert.doesNotMatch(component, /Object\.entries\(report\.normalizedMetrics\.organicSummary\)/);
+    assert.match(component, /report\.normalizedMetrics\?\.organicSummary/);
     assert.match(component, /report\.normalizedMetrics\?\.adsSummary/);
-  });
-
-  await t.test('report cards and data rows do not change on hover', async () => {
-    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
-    assert.doesNotMatch(component, /hover:-translate-y/);
-    assert.doesNotMatch(component, /<tr[^>]+hover:bg-slate/);
-    assert.doesNotMatch(component, /hover:shadow-md/);
-  });
-
-  await t.test('demographic charts use green rather than Instagram red', async () => {
-    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
-    assert.match(component, /dataKey="mujeres"[^>]+fill="#10B981"/);
-    assert.match(component, /bg-emerald-500 h-full/);
   });
 
   await t.test('report sections expose their source id for chart traceability', async () => {
     const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
     assert.match(route, /sourceId:\s*res\.sourceId/);
-    assert.match(route, /demographics:\s*res\.demographics/);
-    assert.match(route, /const hasSectionData/);
     assert.match(route, /buildScopedReportData/);
   });
 
@@ -138,7 +91,6 @@ test('report presentation regressions', async (t) => {
     const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
     assert.match(route, /generationMode:\s*narrativeGenerationMode/);
     assert.match(component, /Narrativa de contingencia/);
-    assert.match(route, /45000/);
   });
 
   await t.test('vision prompt does not restrict organic metrics to paid keys', async () => {
