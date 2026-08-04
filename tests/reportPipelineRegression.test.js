@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { parseJsonResponse } from '../src/services/aiService.js';
 import {
   validateAndCleanSourceExtraction,
+  visionExtractionSchema,
   mergeSourceMetricsIntoAccumulator,
   finalizeNormalizedMetrics,
   preserveApprovedReportData,
@@ -105,5 +106,91 @@ test('report pipeline regressions', async (t) => {
     assert.equal(organic.dataset.length, 1);
     assert.equal(organic.demographics.ageGender.length, 1);
     assert.equal(organic.topContent.length, 1);
+  });
+
+  await t.test('preserves platform, screen type, entity level and result semantics per screenshot', () => {
+    const source = validateAndCleanSourceExtraction({
+      sectionCategory: 'ADS', platform: 'META_ADS', screenType: 'AD_TABLE', entityLevel: 'AD',
+      resultType: 'CONVERSATIONS', period: { start: '2026-06-25', end: '2026-07-30' },
+      metrics: { results: { value: 52, label: 'Conversaciones' } }
+    });
+    assert.equal(source.platform, 'META_ADS');
+    assert.equal(source.screenType, 'AD_TABLE');
+    assert.equal(source.entityLevel, 'AD');
+    assert.equal(source.resultType, 'CONVERSATIONS');
+    assert.deepEqual(source.period, { start: '2026-06-25', end: '2026-07-30' });
+  });
+
+  await t.test('preserves organic metric names instead of coercing them into paid canonical keys', () => {
+    const source = validateAndCleanSourceExtraction({
+      sectionCategory: 'ORGANIC', platform: 'FACEBOOK', screenType: 'METRIC_TRENDS',
+      metrics: {
+        views: { value: 15500, label: 'Visualizaciones', changePct: -17.6 },
+        viewers: { value: 7200, label: 'Espectadores', changePct: -26.2 },
+        interactions: { value: 57, label: 'Interacciones', changePct: -67.4 },
+        profileVisits: { value: 424, label: 'Visitas', changePct: 2.7 },
+        follows: { value: 7, label: 'Seguidores', changePct: -46.2 }
+      }
+    });
+    assert.equal(source.metrics.views.value, 15500);
+    assert.equal(source.metrics.views.changePct, -17.6);
+    assert.equal(source.metrics.profileVisits.value, 424);
+    assert.equal(source.metrics.spend.value, null);
+  });
+
+  await t.test('vision schema requests only visible metrics as array items', () => {
+    assert.equal(visionExtractionSchema.properties.metrics.type, 'array');
+    assert.deepEqual(visionExtractionSchema.properties.metrics.items.required, [
+      'key', 'label', 'value', 'unit', 'scope', 'changePct', 'confidence', 'evidence'
+    ]);
+  });
+
+  await t.test('preserves whether an extracted metric is organic, paid or mixed', () => {
+    const source = validateAndCleanSourceExtraction({
+      sectionCategory: 'ORGANIC', platform: 'FACEBOOK',
+      metrics: [{ key: 'views', label: 'Visualizaciones', value: 15525, unit: 'count', scope: 'MIXED' }]
+    });
+    assert.equal(source.metrics.views.scope, 'MIXED');
+  });
+
+  await t.test('fallback narrative explains a chart without calling every value an interaction', async () => {
+    const { generateFallbackNarrative } = await import('../src/services/reportVisionService.js');
+    const narrative = generateFallbackNarrative({
+      spend: { value: null }, reach: { value: 1300 }, impressions: { value: 4899 },
+      clicks: { value: 64 }, ctr: { value: null }, results: { value: 241 }
+    }, [{
+      sectionId: 'instagram-summary', sectionCategory: 'ORGANIC', platform: 'INSTAGRAM',
+      screenType: 'CONTENT_SUMMARY', title: 'Resumen de contenido', metricLabel: 'Visualizaciones',
+      dataset: [{ label: 'Total', value: 4899 }]
+    }, {
+      sectionId: 'instagram-formats', sectionCategory: 'ORGANIC', platform: 'INSTAGRAM',
+      screenType: 'CONTENT_FORMATS', title: 'Formatos de contenido', metricLabel: 'Contenidos publicados',
+      dataset: [{ label: 'Historias', value: 22 }, { label: 'Publicaciones', value: 13 }]
+    }]);
+    const comment = narrative.sections[0].narrativeComment;
+    assert.equal(comment.split('\n\n').length, 2);
+    assert.match(comment, /^Instagram:/);
+    assert.doesNotMatch(comment, /interacciones directas/i);
+    assert.doesNotMatch(comment, /valida de forma concluyente/i);
+    assert.doesNotMatch(narrative.headline, /pauta/i);
+    assert.doesNotMatch(narrative.summaryPoints.join(' '), /inversión/i);
+    assert.notEqual(narrative.sections[0].narrativeComment, narrative.sections[1].narrativeComment);
+    assert.equal(Array.isArray(narrative.oportunidadesYAprendizajes), true);
+    assert.deepEqual(Object.keys(narrative.oportunidadesYAprendizajes[0]), ['title', 'evidence', 'learning', 'application']);
+    assert.equal(Array.isArray(narrative.recomendacionesEstrategicas), true);
+    assert.deepEqual(Object.keys(narrative.recomendacionesEstrategicas[0]), ['priority', 'action', 'rationale', 'kpi']);
+  });
+
+  await t.test('fallback narratives name the client and vary interpretation by chart type', async () => {
+    const { generateFallbackNarrative } = await import('../src/services/reportVisionService.js');
+    const sections = [
+      { sectionId: 'formats', title: 'Formatos', screenType: 'CONTENT_FORMATS', sectionCategory: 'ORGANIC', platform: 'FACEBOOK', dataset: [{ label: 'Reels', value: 20 }, { label: 'Fotos', value: 5 }] },
+      { sectionId: 'trend', title: 'Tendencia', screenType: 'METRIC_TRENDS', sectionCategory: 'ORGANIC', platform: 'INSTAGRAM', dataset: [{ label: '1 jul', value: 100 }, { label: '2 jul', value: 300 }] }
+    ];
+    const result = generateFallbackNarrative({ organicSummary: {} }, sections, 'New Pueblito Suites');
+    assert.match(result.sections[0].narrativeComment, /Para New Pueblito Suites/);
+    assert.match(result.sections[1].narrativeComment, /Para New Pueblito Suites/);
+    assert.doesNotMatch(result.sections.map(section => section.narrativeComment).join(' '), /Para el negocio/i);
+    assert.notEqual(result.sections[0].narrativeComment.split('\n\n')[1], result.sections[1].narrativeComment.split('\n\n')[1]);
   });
 });
