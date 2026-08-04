@@ -559,6 +559,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
         console.log(`[Reports API] Generating narrative for report ${reportId}...`);
 
         let narrativeResult;
+        let isFallback = false;
         try {
             // 15 seconds timeout for narrative generation
             narrativeResult = await withTimeout(
@@ -569,6 +570,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
         } catch (genError) {
             console.warn(`[Reports API] Gemini generation failed/timed out for report ${reportId}. Generating fallback template.`, genError.message);
             narrativeResult = generateFallbackNarrative(metrics, sections);
+            isFallback = true;
         }
 
         const updatedReport = await prisma.metricReport.update({
@@ -586,7 +588,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
                     granularNarratives: narrativeResult.granularNarratives || []
                 },
                 sections: reconcileNarrativeSections(sections, narrativeResult.sections || []),
-                status: 'PUBLISHED'
+                status: isFallback ? 'NEEDS_REVIEW' : 'PUBLISHED'
             },
             include: {
                 sources: true,
