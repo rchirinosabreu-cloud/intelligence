@@ -338,7 +338,10 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             accumulator = mergeSourceMetricsIntoAccumulator(accumulator, res);
 
             // Register sections
-            if (res.dataset && res.dataset.length > 0) {
+            const hasDemographics = ['ageGender', 'cities', 'countries']
+                .some(key => Array.isArray(res.demographics?.[key]) && res.demographics[key].length > 0);
+            const hasSectionData = (Array.isArray(res.dataset) && res.dataset.length > 0) || hasDemographics;
+            if (hasSectionData) {
                 extractedSections.push({
                     sectionId: uuidv4(),
                     sourceId: res.sourceId,
@@ -590,10 +593,10 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
         let isFallback = false;
         let narrativeGenerationMode = 'AI';
         try {
-            // 15 seconds timeout for narrative generation
+            // Editorial structured output is larger than extraction output; allow a realistic response window.
             narrativeResult = await withTimeout(
                 generateNarrativeWithGemini(metrics, sections),
-                15000,
+                45000,
                 "Gemini narrative generation timed out"
             );
         } catch (genError) {

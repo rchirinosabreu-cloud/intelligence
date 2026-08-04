@@ -7,7 +7,9 @@ import {
   isDemographicDataset,
   splitAchievement,
   safeClassName,
-  buildReportFileName
+  buildReportFileName,
+  getReviewMetricEntries,
+  getOrganicPlatformLabel
 } from '../src/lib/reportPresentation.js';
 
 test('report presentation regressions', async (t) => {
@@ -17,8 +19,29 @@ test('report presentation regressions', async (t) => {
     })), ['spend']);
   });
 
+  await t.test('metric review omits missing placeholder cards', () => {
+    assert.deepEqual(getReviewMetricEntries({
+      spend: { value: 232826 }, clicks: { value: null }, ctr: { value: null }, results: { value: 52 }
+    }).map(([key]) => key), ['spend', 'results']);
+  });
+
+  await t.test('metric audit presents one organic group before paid fields', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    const organicReview = component.indexOf('Resumen orgánico detectado');
+    const paidReview = component.indexOf('Métricas de pauta detectadas');
+    assert.ok(organicReview > -1);
+    assert.ok(paidReview > organicReview);
+  });
+
   await t.test('demographic points are recognized without a generic value key', () => {
     assert.equal(isDemographicDataset([{ label: '25-34', hombres: 40, mujeres: 60 }]), true);
+  });
+
+  await t.test('ambiguous organic sources use a neutral label instead of unknown or cross platform', () => {
+    assert.equal(getOrganicPlatformLabel('FACEBOOK'), 'Facebook');
+    assert.equal(getOrganicPlatformLabel('INSTAGRAM'), 'Instagram');
+    assert.equal(getOrganicPlatformLabel('UNKNOWN'), 'Orgánico');
+    assert.equal(getOrganicPlatformLabel('CROSS_PLATFORM'), 'Orgánico');
   });
 
   await t.test('format distribution labels are excluded from ad publications', () => {

@@ -16,6 +16,14 @@ export const filterCanonicalMetrics = (metrics = {}) => Object.fromEntries(
     .map(key => [key, metrics[key]])
 );
 
+export const getReviewMetricEntries = (metrics = {}) => ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results']
+  .filter((key) => metrics[key]?.value !== null && metrics[key]?.value !== undefined && metrics[key]?.value !== '')
+  .map((key) => [key, metrics[key]]);
+
+export const getOrganicPlatformLabel = (platform) => platform === 'FACEBOOK'
+  ? 'Facebook'
+  : platform === 'INSTAGRAM' ? 'Instagram' : 'Orgánico';
+
 export const isDemographicDataset = (dataset) => Array.isArray(dataset) && dataset.some(point =>
   point && (Number.isFinite(Number(point.hombres)) || Number.isFinite(Number(point.mujeres)))
 );

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { parseJsonResponse } from '../src/services/aiService.js';
 import {
   validateAndCleanSourceExtraction,
+  visionExtractionSchema,
   mergeSourceMetricsIntoAccumulator,
   finalizeNormalizedMetrics,
   preserveApprovedReportData,
