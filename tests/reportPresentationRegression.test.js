@@ -1,12 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import {
   filterCanonicalMetrics,
   filterTopContentRows,
   isDemographicDataset,
   splitAchievement,
   safeClassName,
-  buildReportFileName
+  buildReportFileName,
+  getReviewMetricEntries,
+  getOrganicPlatformLabel,
+  collectDocumentStyles,
+  readLiveControlValue,
+  selectOrganicSummaryMetrics
 } from '../src/lib/reportPresentation.js';
 
 test('report presentation regressions', async (t) => {
@@ -16,8 +22,40 @@ test('report presentation regressions', async (t) => {
     })), ['spend']);
   });
 
+  await t.test('metric review omits missing placeholder cards', () => {
+    assert.deepEqual(getReviewMetricEntries({
+      spend: { value: 232826 }, clicks: { value: null }, ctr: { value: null }, results: { value: 52 }
+    }).map(([key]) => key), ['spend', 'results']);
+  });
+
+  await t.test('legacy platform groups collapse into one six-metric organic summary', () => {
+    const selected = selectOrganicSummaryMetrics({
+      FACEBOOK: { views: { value: 12155 }, interactions: { value: 57 }, reachOrganic: { value: 0 } },
+      INSTAGRAM: { views: { value: 12545 }, viewers: { value: 0 } },
+      CROSS_PLATFORM: { views: { value: 42500 }, viewers: { value: 7222 }, follows: { value: 51 }, profileVisits: { value: 825 }, linkClicks: { value: 64 }, reachOrganic: { value: 6700 }, spend: { value: 0 } }
+    });
+    assert.deepEqual(Object.keys(selected), ['views', 'viewers', 'follows', 'profileVisits', 'linkClicks', 'reachOrganic']);
+    assert.equal(selected.views.value, 42500);
+    assert.equal(selected.spend, undefined);
+  });
+
+  await t.test('metric audit presents one organic group before paid fields', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    const organicReview = component.indexOf('Resumen orgánico detectado');
+    const paidReview = component.indexOf('Métricas de pauta detectadas');
+    assert.ok(organicReview > -1);
+    assert.ok(paidReview > organicReview);
+  });
+
   await t.test('demographic points are recognized without a generic value key', () => {
     assert.equal(isDemographicDataset([{ label: '25-34', hombres: 40, mujeres: 60 }]), true);
+  });
+
+  await t.test('ambiguous organic sources use a neutral label instead of unknown or cross platform', () => {
+    assert.equal(getOrganicPlatformLabel('FACEBOOK'), 'Facebook');
+    assert.equal(getOrganicPlatformLabel('INSTAGRAM'), 'Instagram');
+    assert.equal(getOrganicPlatformLabel('UNKNOWN'), 'Orgánico');
+    assert.equal(getOrganicPlatformLabel('CROSS_PLATFORM'), 'Orgánico');
   });
 
   await t.test('format distribution labels are excluded from ad publications', () => {
@@ -45,4 +83,61 @@ test('report presentation regressions', async (t) => {
     assert.equal(safeClassName(undefined), '');
     assert.equal(buildReportFileName(undefined), 'reporte_de_desempeno_digital.html');
   });
+
+  await t.test('HTML export reads live editor values and embeds accessible compiled styles', () => {
+    assert.equal(readLiveControlValue({ value: 'Texto editado' }, { value: '' }), 'Texto editado');
+    const styles = collectDocumentStyles([
+      { cssRules: [{ cssText: '.card{color:#123}' }, { cssText: '.metric{background:#fff}' }] },
+      { get cssRules() { throw new Error('cross origin'); } }
+    ]);
+    assert.match(styles, /\.card\{color:#123\}/);
+    assert.match(styles, /\.metric\{background:#fff\}/);
+  });
+
+  await t.test('report presents scoped organic results before paid results', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    const organicHeading = component.indexOf('Resultados generales — Desempeño orgánico');
+    const adsHeading = component.indexOf('Resultados generales — Desempeño de pauta');
+    assert.ok(organicHeading > -1, 'missing organic summary heading');
+    assert.ok(adsHeading > organicHeading, 'paid summary must appear after organic summary');
+    assert.match(component, /MetricGrid metrics=\{selectOrganicSummaryMetrics\(report\.normalizedMetrics\.organicSummary\)\}/);
+    assert.doesNotMatch(component, /Object\.entries\(report\.normalizedMetrics\.organicSummary\)/);
+    assert.match(component, /report\.normalizedMetrics\?\.adsSummary/);
+  });
+
+  await t.test('report cards and data rows do not change on hover', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    assert.doesNotMatch(component, /hover:-translate-y/);
+    assert.doesNotMatch(component, /<tr[^>]+hover:bg-slate/);
+    assert.doesNotMatch(component, /hover:shadow-md/);
+  });
+
+  await t.test('demographic charts use green rather than Instagram red', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    assert.match(component, /dataKey="mujeres"[^>]+fill="#10B981"/);
+    assert.match(component, /bg-emerald-500 h-full/);
+  });
+
+  await t.test('report sections expose their source id for chart traceability', async () => {
+    const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
+    assert.match(route, /sourceId:\s*res\.sourceId/);
+    assert.match(route, /demographics:\s*res\.demographics/);
+    assert.match(route, /const hasSectionData/);
+    assert.match(route, /buildScopedReportData/);
+  });
+
+  await t.test('fallback narratives are visibly marked for human review', async () => {
+    const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    assert.match(route, /generationMode:\s*narrativeGenerationMode/);
+    assert.match(component, /Narrativa de contingencia/);
+    assert.match(route, /45000/);
+  });
+
+  await t.test('vision prompt does not restrict organic metrics to paid keys', async () => {
+    const service = await fs.readFile('src/services/reportVisionService.js', 'utf8');
+    assert.doesNotMatch(service, /key name \(strictly: "spend"/);
+    assert.match(service, /organic semantic keys listed above/);
+  });
+
 });

@@ -37,6 +37,31 @@ test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) =>
         }
     });
 
+    await t.test('recovers when two structured responses are malformed', async () => {
+        const originalFetch = globalThis.fetch;
+        const originalApiKey = process.env.GEMINI_API_KEY;
+        process.env.GEMINI_API_KEY = 'mock-key';
+        let calls = 0;
+        globalThis.fetch = async () => {
+            calls += 1;
+            const text = calls < 3
+                ? '{"metrics":[{"key":"views","value":42500}'
+                : JSON.stringify({ metrics: [{ key: 'views', value: 42500, label: 'Visualizaciones' }], sectionCategory: 'ORGANIC' });
+            return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        };
+        try {
+            const result = await extractMetricsWithGemini(Buffer.from('mock-image'), 'image/jpeg');
+            assert.strictEqual(calls, 3);
+            assert.strictEqual(result.metrics[0].value, 42500);
+        } finally {
+            globalThis.fetch = originalFetch;
+            process.env.GEMINI_API_KEY = originalApiKey;
+        }
+    });
+
     await t.test('Successfully extracts structured metrics from mock response', async () => {
         const mockResponse = {
             candidates: [
