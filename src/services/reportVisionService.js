@@ -1094,7 +1094,7 @@ export const buildNarrativeFailureUpdate = (attempts = [], technicalDraft = null
     status: 'REVIEW'
 });
 
-export const generatePublishableNarrative = async (normalizedMetrics, sections = [], clientName = 'el cliente', deps = {}) => {
+export const generatePublishableNarrative = async (normalizedMetrics, sections = [], clientName = 'el cliente', deps = {}, timeoutContext = { cancelled: false }) => {
     const attempts = [];
     const fullGenerator = deps.generateFullNarrative || generateNarrativeWithGemini;
     const repairGenerator = deps.repairNarrativeJson || repairNarrativeJsonWithGemini;
@@ -1102,19 +1102,58 @@ export const generatePublishableNarrative = async (normalizedMetrics, sections =
 
     let candidate;
     let rawFailure;
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
-        try {
-            candidate = parseNarrativeCandidate(await fullGenerator(normalizedMetrics, sections, clientName), sections, clientName);
-            break;
-        } catch (error) {
-            if (isFatalNarrativeDependencyError(error)) throw error;
-            rawFailure = error;
-            attempts.push({ step: attempt === 1 ? 'generate' : 'retry', error: error.message, rawContent: error.rawContent });
+
+    // Check cancellation
+    if (timeoutContext && timeoutContext.cancelled) {
+        return {
+            status: 'REVIEW',
+            publishable: false,
+            narrative: null,
+            sections,
+            technicalDraft: generateFallbackNarrative(normalizedMetrics, sections, clientName),
+            attempts: [{ step: 'timeout-pre-execution', error: 'Operación cancelada por timeout antes de iniciar' }]
+        };
+    }
+
+    try {
+        const fullGenerated = await fullGenerator(normalizedMetrics, sections, clientName);
+        if (timeoutContext && timeoutContext.cancelled) {
+            console.warn('[Vision Service] Generation finished but discarded due to timeout context.');
+            return {
+                status: 'REVIEW',
+                publishable: false,
+                narrative: null,
+                sections,
+                technicalDraft: generateFallbackNarrative(normalizedMetrics, sections, clientName),
+                attempts: [{ step: 'timeout-discarded', error: 'Generación completada tarde y descartada' }]
+            };
+        }
+        candidate = parseNarrativeCandidate(fullGenerated, sections, clientName);
+    } catch (error) {
+        if (isFatalNarrativeDependencyError(error)) throw error;
+        rawFailure = error;
+        attempts.push({ step: 'generate', error: error.message, rawContent: error.rawContent });
+
+        // retry strategy: immediately attempt to repair JSON using rawContent on failure rather than running a second redundant full generation
+        if (error.rawContent) {
+            console.log('[Vision Service] First attempt JSON parsing failed. Proceeding immediately to repair stage with rawContent.');
+        } else {
+            console.log('[Vision Service] JSON parsing failed without rawContent. Moving immediately to review state.');
         }
     }
 
-    if (!candidate) {
+    if (!candidate && rawFailure?.rawContent) {
         try {
+            if (timeoutContext && timeoutContext.cancelled) {
+                return {
+                    status: 'REVIEW',
+                    publishable: false,
+                    narrative: null,
+                    sections,
+                    technicalDraft: generateFallbackNarrative(normalizedMetrics, sections, clientName),
+                    attempts: [{ step: 'timeout-discarded', error: 'Reparación cancelada por timeout' }]
+                };
+            }
             candidate = parseNarrativeCandidate(await repairGenerator({ normalizedMetrics, sections, clientName, error: rawFailure?.message, rawContent: rawFailure?.rawContent }), sections, clientName);
             attempts.push({ step: 'repair' });
         } catch (error) {
@@ -1124,6 +1163,16 @@ export const generatePublishableNarrative = async (normalizedMetrics, sections =
     }
 
     if (candidate) {
+        if (timeoutContext && timeoutContext.cancelled) {
+            return {
+                status: 'REVIEW',
+                publishable: false,
+                narrative: null,
+                sections,
+                technicalDraft: generateFallbackNarrative(normalizedMetrics, sections, clientName),
+                attempts: [{ step: 'timeout-discarded', error: 'Validación cancelada por timeout' }]
+            };
+        }
         let validation = validateSectionNarratives(candidate.sections || [], sections, clientName);
         if (!validation.valid) {
             const invalidSections = findInvalidNarrativeSections(candidate.sections || [], sections, clientName);
