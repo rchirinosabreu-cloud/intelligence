@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import { parseJsonResponse } from '../src/services/aiService.js';
 import {
   validateAndCleanSourceExtraction,
@@ -244,10 +245,74 @@ test('report pipeline regressions', async (t) => {
       repairNarrativeJson: async () => { throw new Error('repair failed'); },
       regenerateSections: async () => { throw new Error('regen failed'); }
     });
-    assert.equal(result.status, 'NARRATIVE_FAILED');
+    assert.equal(result.status, 'REVIEW');
     assert.equal(result.publishable, false);
     assert.equal(result.narrative, null);
     assert.ok(result.technicalDraft);
   });
 
+});
+
+test('narrative failure update keeps Prisma status in REVIEW and flags regeneration', async () => {
+  const { buildNarrativeFailureUpdate } = await import('../src/routes/api/reports.js');
+  const update = buildNarrativeFailureUpdate([{ step: 'generate', error: 'broken JSON' }]);
+  assert.equal(update.status, 'REVIEW');
+  assert.equal(update.narrative.generationMode, 'NARRATIVE_FAILED');
+  assert.equal(update.narrative.needsRegeneration, true);
+  assert.notEqual(update.status, 'NARRATIVE_FAILED');
+});
+
+test('narrative parse errors preserve raw Gemini content', async () => {
+  const { parseNarrativeResponse } = await import('../src/services/reportVisionService.js');
+  const rawContent = '{ "\n],\n"keyAchievements": "roto" }';
+  assert.throws(() => parseNarrativeResponse(rawContent, [], 'Cliente Demo'), (error) => {
+    assert.equal(error.rawContent, rawContent);
+    return true;
+  });
+});
+
+test('publishable narrative repair receives rawContent after parse failure', async () => {
+  const { generatePublishableNarrative } = await import('../src/services/reportVisionService.js');
+  const rawContent = '{ "\n],\n"keyAchievements": "roto" }';
+  let repairInput;
+  await generatePublishableNarrative({}, [], 'Cliente Demo', {
+    generateFullNarrative: async () => rawContent,
+    repairNarrativeJson: async (input) => {
+      repairInput = input;
+      throw new Error('repair failed');
+    }
+  });
+  assert.equal(repairInput.rawContent, rawContent);
+});
+
+test('publishable narrative returns non-publishable REVIEW-safe result when repair fails', async () => {
+  const { generatePublishableNarrative, buildNarrativeFailureUpdate } = await import('../src/services/reportVisionService.js');
+  const result = await generatePublishableNarrative({}, [], 'Cliente Demo', {
+    generateFullNarrative: async () => '{ "\n],\n"keyAchievements": "roto" }',
+    repairNarrativeJson: async () => { throw new Error('repair failed'); }
+  });
+  assert.equal(result.publishable, false);
+  assert.equal(result.status, 'REVIEW');
+  const update = buildNarrativeFailureUpdate(result.attempts);
+  assert.equal(update.status, 'REVIEW');
+});
+
+test('technical fallback is not published into final sections after narrative failure', async () => {
+  const { generatePublishableNarrative, buildNarrativeFailureUpdate } = await import('../src/services/reportVisionService.js');
+  const sections = [{ sectionId: 'one', platform: 'Instagram', dataset: [{ label: 'Vistas', value: 100 }, { label: 'Clics', value: 5 }] }];
+  const result = await generatePublishableNarrative({}, sections, 'Cliente Demo', {
+    generateFullNarrative: async () => '{ "\n],\n"keyAchievements": "roto" }',
+    repairNarrativeJson: async () => { throw new Error('repair failed'); }
+  });
+  const update = buildNarrativeFailureUpdate(result.attempts, result.technicalDraft);
+  assert.ok(result.technicalDraft?.sections?.[0]?.narrativeComment);
+  assert.equal(update.sections, undefined);
+  assert.equal(update.narrative.technicalDraft.sections[0].narrativeComment, result.technicalDraft.sections[0].narrativeComment);
+});
+
+test('reports route never writes NARRATIVE_FAILED as Prisma status', async () => {
+  const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
+  assert.doesNotMatch(route, /status:\s*'NARRATIVE_FAILED'/);
+  assert.match(route, /generationMode:\s*'NARRATIVE_FAILED'/);
+  assert.match(route, /status:\s*'REVIEW'/);
 });

@@ -932,16 +932,62 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
     }
 
     try {
-        parsed = parseJsonResponse(content);
-        const validation = validateSectionNarratives(parsed.sections || [], sections, clientName);
-        if (!validation.valid) {
-            throw new Error('Narrative did not satisfy client-specific, two-paragraph, non-repetition rules');
-        }
-        return parsed;
+        return parseNarrativeResponse(content, sections, clientName);
     } catch (parseError) {
+        parseError.rawContent = parseError.rawContent || content;
         console.error("[Vision Service] Error parsing narrative JSON schema:", parseError, "Raw content:", content);
         throw parseError;
     }
+};
+
+
+export const repairNarrativeJsonWithGemini = async ({ rawContent, normalizedMetrics, sections = [], clientName = 'el cliente', error } = {}) => {
+    if (!rawContent) {
+        const missingRawError = new Error('Narrative JSON repair skipped because rawContent is unavailable');
+        missingRawError.recoverable = true;
+        throw missingRawError;
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        throw new Error('Missing GEMINI_API_KEY in server configuration');
+    }
+
+    const genAI = new GoogleGenAI({ apiKey });
+    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const prompt = `Repara la siguiente respuesta JSON rota de Gemini para una narrativa de reportes. Devuelve SOLO JSON válido, sin markdown, sin explicación y sin texto fuera del JSON. No inventes métricas ni modifiques los IDs de secciones. Si falta contenido, completa únicamente la estructura editorial usando las métricas y secciones reales provistas.
+
+ERROR ORIGINAL:
+${error || 'JSON inválido'}
+
+RAW CONTENT REAL A REPARAR:
+${rawContent}
+
+MÉTRICAS NORMALIZADAS:
+${JSON.stringify(normalizedMetrics || {}, null, 2)}
+
+SECCIONES REALES:
+${JSON.stringify(sections || [], null, 2)}
+
+CLIENTE:
+${clientName}`;
+
+    const response = await genAI.models.generateContent({
+        model,
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: {
+            systemInstruction: 'Eres un reparador estricto de JSON editorial. Responde exclusivamente con JSON válido parseable.',
+            responseMimeType: 'application/json',
+            maxOutputTokens: 8192,
+            temperature: 0
+        }
+    });
+
+    const repairedContent = response.text;
+    if (!repairedContent) {
+        throw new Error('Gemini JSON repair response content is empty');
+    }
+    return parseNarrativeResponse(repairedContent, sections, clientName);
 };
 
 const formatMetricValue = (key, metric) => {
@@ -1010,7 +1056,9 @@ const findInvalidNarrativeSections = (narrativeSections = [], sourceSections = [
     });
 };
 
-const parseNarrativeCandidate = (candidate) => typeof candidate === 'string' ? parseJsonResponse(candidate) : candidate;
+const parseNarrativeCandidate = (candidate, sections = [], clientName = 'el cliente') => typeof candidate === 'string' ? parseNarrativeResponse(candidate, sections, clientName) : candidate;
+
+const isFatalNarrativeDependencyError = (error) => /Missing GEMINI_API_KEY/i.test(error?.message || '');
 
 const mergeRegeneratedSections = (narrative, regeneratedSections = []) => {
     const replacements = new Map(regeneratedSections.map(section => [section.sectionId, section]));
@@ -1022,29 +1070,55 @@ const mergeRegeneratedSections = (narrative, regeneratedSections = []) => {
     };
 };
 
+
+export const buildNarrativeFailureUpdate = (attempts = [], technicalDraft = null) => ({
+    narrative: {
+        headline: 'Narrativa pendiente de regeneración',
+        summaryPoints: [
+            'La narrativa automática no superó la validación editorial.',
+            'El reporte conserva métricas y gráficas para revisión interna.',
+            'Regenera la narrativa antes de publicar o exportar el informe.'
+        ],
+        keyAchievements: 'La generación automática no produjo una narrativa publicable. Las métricas y secciones se mantienen sin reemplazarse por textos de contingencia.',
+        actionPlan: [],
+        logrosYAvances: [],
+        contenidoTopAnalisis: '',
+        oportunidadesYAprendizajes: [],
+        recomendacionesEstrategicas: [],
+        granularNarratives: [],
+        generationMode: 'NARRATIVE_FAILED',
+        needsRegeneration: true,
+        attempts,
+        ...(technicalDraft ? { technicalDraft } : {})
+    },
+    status: 'REVIEW'
+});
+
 export const generatePublishableNarrative = async (normalizedMetrics, sections = [], clientName = 'el cliente', deps = {}) => {
     const attempts = [];
     const fullGenerator = deps.generateFullNarrative || generateNarrativeWithGemini;
-    const repairGenerator = deps.repairNarrativeJson || (async () => { throw new Error('Narrative JSON repair is not configured'); });
+    const repairGenerator = deps.repairNarrativeJson || repairNarrativeJsonWithGemini;
     const sectionRegenerator = deps.regenerateSections || (async (invalidSections) => generateFallbackNarrative(normalizedMetrics, invalidSections, clientName).sections);
 
     let candidate;
     let rawFailure;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
         try {
-            candidate = parseNarrativeCandidate(await fullGenerator(normalizedMetrics, sections, clientName));
+            candidate = parseNarrativeCandidate(await fullGenerator(normalizedMetrics, sections, clientName), sections, clientName);
             break;
         } catch (error) {
+            if (isFatalNarrativeDependencyError(error)) throw error;
             rawFailure = error;
-            attempts.push({ step: attempt === 1 ? 'generate' : 'retry', error: error.message });
+            attempts.push({ step: attempt === 1 ? 'generate' : 'retry', error: error.message, rawContent: error.rawContent });
         }
     }
 
     if (!candidate) {
         try {
-            candidate = parseNarrativeCandidate(await repairGenerator({ normalizedMetrics, sections, clientName, error: rawFailure?.message }));
+            candidate = parseNarrativeCandidate(await repairGenerator({ normalizedMetrics, sections, clientName, error: rawFailure?.message, rawContent: rawFailure?.rawContent }), sections, clientName);
             attempts.push({ step: 'repair' });
         } catch (error) {
+            if (isFatalNarrativeDependencyError(error)) throw error;
             attempts.push({ step: 'repair', error: error.message });
         }
     }
@@ -1055,7 +1129,7 @@ export const generatePublishableNarrative = async (normalizedMetrics, sections =
             const invalidSections = findInvalidNarrativeSections(candidate.sections || [], sections, clientName);
             try {
                 const regenerated = await sectionRegenerator(invalidSections, { normalizedMetrics, clientName, narrative: candidate, validation });
-                candidate = mergeRegeneratedSections(candidate, parseNarrativeCandidate(regenerated));
+                candidate = mergeRegeneratedSections(candidate, parseNarrativeCandidate(regenerated, invalidSections, clientName));
                 validation = validateSectionNarratives(candidate.sections || [], sections, clientName);
                 attempts.push({ step: 'regenerate-sections', sectionIds: invalidSections.map(section => section.sectionId) });
             } catch (error) {
@@ -1070,7 +1144,7 @@ export const generatePublishableNarrative = async (normalizedMetrics, sections =
     }
 
     return {
-        status: 'NARRATIVE_FAILED',
+        status: 'REVIEW',
         publishable: false,
         narrative: null,
         sections,
