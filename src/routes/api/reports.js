@@ -350,12 +350,10 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                     sectionCategory: res.sectionCategory || 'ADS',
                     platform: res.platform || 'META_ADS',
                     dataset: res.dataset,
-                    demographics: res.demographics,
                     screenType: res.screenType,
                     entityLevel: res.entityLevel,
                     resultType: res.resultType,
                     period: res.period,
-                    metrics: res.metrics,
                     narrativeComment: ""
                 });
             }
@@ -598,7 +596,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
         try {
             // Editorial structured output is larger than extraction output; allow a realistic response window.
             narrativeResult = await withTimeout(
-                generateNarrativeWithGemini(metrics, sections, report.client.name),
+                generateNarrativeWithGemini(metrics, sections),
                 45000,
                 "Gemini narrative generation timed out"
             );

@@ -273,7 +273,7 @@ visionExtractionSchema.properties.metrics = {
 };
 
 const SYSTEM_PROMPT = `You are a professional Meta Ads and Organic Social Media data extraction expert using Google Generative AI (Gemini).
-Analyze this screenshot as ONE independent source. Extract only metrics that are visibly present; do not emit null placeholder metrics. Paid screenshots may contain these canonical paid keys:
+Analyze the provided screenshot and extract metrics using their real semantics. Paid screenshots may contain the 6 canonical paid keys:
 - spend: Inversión (e.g. amount spent in USD, COP, EUR, etc.)
 - impressions: Impresiones
 - reach: Alcance
@@ -281,10 +281,10 @@ Analyze this screenshot as ONE independent source. Extract only metrics that are
 - ctr: CTR (prioritize CTR (en el enlace) or CTR (todos))
 - results: Resultados / conversiones (e.g., Purchases, Leads, etc.)
 
-Organic screenshots may use: views, viewsOrganic, viewsPaid, viewers, interactions, linkClicks, profileVisits, follows, followersTotal, videoViews, reach, reachOrganic, and reachPaid. Never rename organic views as impressions or interactions as paid results merely to fill a canonical slot. Use follows only for followers gained during the period; use followersTotal for the audience total shown on demographic screens. Include visible changePct with its original sign.
+Organic screenshots may additionally use: views, viewers, interactions, linkClicks, profileVisits, follows, videoViews, reachOrganic, and reachPaid. Never rename organic views as impressions or interactions as paid results merely to fill a canonical slot. Include visible changePct with its original sign.
 
 For each metric, extract the following:
-- key: use the paid canonical keys or organic semantic keys listed above; never substitute one concept for another. Return metrics as an array containing visible metrics only.
+- key: use the paid canonical keys or organic semantic keys listed above; never substitute one concept for another.
 - label: the label as seen in the screenshot or translation (e.g., "Importe gastado", "Impresiones", "Alcance", "Clics en el enlace", "CTR (porcentaje de clics en el enlace)", "Resultados")
 - value: the numeric value extracted from the image. It must be a raw float/integer number. Remove currency symbols, commas, percent signs, and dots used as thousands separator. Keep decimals (e.g. if CTR is "1.52%", value is 1.52. If spend is "$1,250.50", value is 1250.50). If the metric is completely missing or not visible in the screenshot, return null.
 - unit: the unit of measurement (e.g. "USD", "COP", "count", "%", etc.). If not applicable, return a blank string or "count".
@@ -423,7 +423,7 @@ export const validateAndCleanSourceExtraction = (extracted) => {
     const allowedKeys = [
         'spend', 'impressions', 'reach', 'clicks', 'ctr', 'results',
         'views', 'viewers', 'interactions', 'linkClicks', 'profileVisits', 'follows',
-        'followersTotal', 'videoViews', 'viewsOrganic', 'viewsPaid', 'reachOrganic', 'reachPaid'
+        'videoViews', 'reachOrganic', 'reachPaid'
     ];
     const cleanMetrics = {};
     let hasValidCanonicalMetric = false;
@@ -439,7 +439,6 @@ export const validateAndCleanSourceExtraction = (extracted) => {
             unit: key === 'spend' ? 'COP' : (typeof item.unit === 'string' && item.unit !== 'count' ? item.unit : 'count'),
             confidence: typeof item.confidence === 'number' ? item.confidence : 1.0,
             evidence: typeof item.evidence === 'string' ? item.evidence : '',
-            scope: typeof item.scope === 'string' ? item.scope.toUpperCase() : (extracted.sectionCategory === 'ADS' ? 'PAID' : 'ORGANIC'),
             changePct: typeof item.changePct === 'number' ? item.changePct : null
         };
 
@@ -723,7 +722,6 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
 2. REGLA ESTRICTA DE INTEGRIDAD DE DATOS (PROHIBIDO HALLUCINAR): Queda terminantemente prohibido que menciones o inventes valores numéricos, métricas, cantidades o porcentajes que no existan de forma explícita en el objeto de métricas o secciones provisto arriba. No asumas divisas ni cifras que no estén allí.
 2.1. ORDEN EDITORIAL: Si existen fuentes orgánicas, headline, summaryPoints, keyAchievements y logrosYAvances deben abrir exclusivamente con desempeño orgánico. La inversión, CTR, resultados y recomendaciones de pauta se reservan para la sección ADS posterior. Nunca abras un informe combinado hablando de inversión publicitaria.
 2.2. ESPECIFICIDAD: Cada gráfica debe tener una lectura distinta según su screenType, plataforma, categorías y valores. Prohibido repetir un mismo segundo párrafo entre secciones. CONTENT_SUMMARY interpreta el embudo; METRIC_TRENDS analiza distribución temporal sin inventar causas; AUDIENCE_DEMOGRAPHICS interpreta composición sin llamarla rentable; CONTENT_FORMATS compara uso y rendimiento; AD_TABLE diferencia volumen y eficiencia.
-2.3. PERSONALIZACIÓN: En el segundo párrafo escribe siempre "Para ${clientName}," y conecta los datos con una decisión concreta para ese cliente. Está prohibida la frase "Para el negocio" y cualquier sustituto impersonal equivalente.
 3. PROFUNDIDAD NARRATIVA EDITORIAL (REGLA DE DOS PÁRRAFOS POR GRÁFICO): Cada comentario explicativo o interpretativo en el campo 'narrativeComment' de 'sections' y 'consultativeComment' de 'granularNarratives' debe constar estrictamente de al menos DOS PÁRRAFOS completos, separados por un salto de línea (\\n\\n):
    - Primer Párrafo (Análisis de Datos y Audiencia): Traducción directa de las cifras a un lenguaje claro y accesible, citando estrictamente los nombres de las categorías líderes y sus números exactos de la gráfica o tabla (por ejemplo: "En Instagram, las Historias alcanzaron un 22% de interacción superando a las Publicaciones tradicionales con un 13%..."). Queda prohibido usar textos genéricos sin mencionar datos numéricos reales de la gráfica.
    - Segundo Párrafo (Proyección Estratégica y Motivación): Enfoque consultivo y entusiasta de cierre que celebre el progreso del periodo, conecte el logro con los objetivos de negocio del cliente y lo motive hacia los siguientes pasos.
@@ -868,12 +866,11 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
         const parsed = parseJsonResponse(content);
         const comments = (parsed.sections || []).map((section) => String(section.narrativeComment || '').trim());
         const normalizedComments = comments.map((comment) => comment.toLocaleLowerCase('es'));
-        const strategicParagraphs = normalizedComments.map((comment) => comment.split(/\n\s*\n/).filter(Boolean)[1] || '');
         const clientReference = `para ${clientName}`.toLocaleLowerCase('es');
         const invalidEditorialOutput = comments.length !== sections.length
             || comments.some((comment) => comment.split(/\n\s*\n/).filter(Boolean).length < 2)
-            || normalizedComments.some((comment) => comment.includes('para el negocio') || comment.includes('este dato permite identificar') || !comment.includes(clientReference))
-            || new Set(strategicParagraphs).size !== strategicParagraphs.length;
+            || normalizedComments.some((comment) => comment.includes('para el negocio') || !comment.includes(clientReference))
+            || new Set(normalizedComments).size !== normalizedComments.length;
         if (invalidEditorialOutput) {
             throw new Error('Narrative did not satisfy client-specific, two-paragraph, non-repetition rules');
         }
@@ -930,7 +927,7 @@ const findTopDemographic = (list) => {
     return maxItem ? { label: maxItem.label || 'Principal', value: maxVal } : null;
 };
 
-export const generateFallbackNarrative = (normalizedMetrics, sections = [], clientName = 'el cliente') => {
+export const generateFallbackNarrative = (normalizedMetrics, sections = []) => {
     const organicSummary = normalizedMetrics.organicSummary || {};
     const hasOrganic = Object.keys(organicSummary).length > 0 || sections.some(section => section.sectionCategory === 'ORGANIC');
     const fallbackOrganicMetrics = hasOrganic && Object.keys(organicSummary).length === 0
@@ -1027,59 +1024,25 @@ export const generateFallbackNarrative = (normalizedMetrics, sections = [], clie
         const title = section.title || 'esta sección';
         const platformName = section.platform === 'FACEBOOK' ? 'Facebook' : section.platform === 'INSTAGRAM' ? 'Instagram' : section.platform === 'META_ADS' ? 'Meta Ads' : 'Redes sociales';
         const metricName = section.metricLabel || (section.sectionCategory === 'ADS' ? 'resultados' : 'registros');
-        const visibleMetrics = Object.entries(section.metrics || {})
-            .filter(([, metric]) => metric?.value !== null && metric?.value !== undefined && Number.isFinite(Number(metric.value)))
-            .filter(([, metric]) => Number(metric.value) > 0)
-            .slice(0, 4);
-        const metricSentence = visibleMetrics.map(([key, metric]) => {
-            const label = String(metric.label || organicMetricLabels[key] || key).toLocaleLowerCase('es');
-            const variation = Number.isFinite(Number(metric.changePct))
-                ? ` (${Number(metric.changePct) > 0 ? '+' : ''}${Number(metric.changePct).toLocaleString('es-ES')}%)`
-                : '';
-            return `${Number(metric.value).toLocaleString('es-ES')} ${label}${variation}`;
-        }).join(', ');
         let detailText = `${platformName}: esta sección de ${title} no contiene suficientes valores cuantitativos legibles para establecer una comparación concluyente. Aun así, se conserva como evidencia del periodo para revisión editorial.`;
-        if (metricSentence) {
-            detailText = `${platformName}: durante el periodo, ${title.toLocaleLowerCase('es')} registró ${metricSentence}. Leídas en conjunto, estas cifras distinguen la visibilidad obtenida de las acciones que realmente realizó la audiencia, sin confundir desempeño orgánico con pauta.`;
-        }
         if (maxPoint) {
-            const comparisons = {
-                CONTENT_FORMATS: runnerUp
-                    ? `${platformName}: en ${title}, "${leader.label}" lideró con ${leader.value.toLocaleString('es-ES')} ${metricName}, frente a ${runnerUp.value.toLocaleString('es-ES')} de "${runnerUp.label}". La diferencia de ${(leader.value - runnerUp.value).toLocaleString('es-ES')} confirma qué formato concentró la mayor parte de la respuesta visible en esta captura.`
-                    : `${platformName}: en ${title}, "${leader.label}" concentró ${leader.value.toLocaleString('es-ES')} ${metricName}; al no existir una segunda categoría legible, el resultado debe evaluarse contra la frecuencia de publicación del formato.`,
-                METRIC_TRENDS: lowest && lowest.label !== leader.label
-                    ? `${platformName}: la tendencia de ${title} alcanzó su punto más alto en "${leader.label}" con ${leader.value.toLocaleString('es-ES')} ${metricName}, mientras "${lowest.label}" marcó ${lowest.value.toLocaleString('es-ES')}. La amplitud de ${(leader.value - lowest.value).toLocaleString('es-ES')} muestra una actividad irregular que exige revisar qué se publicó en ambos momentos.`
-                    : `${platformName}: la tendencia de ${title} registró ${leader.value.toLocaleString('es-ES')} ${metricName} en "${leader.label}"; la captura no ofrece suficientes puntos distintos para describir una evolución temporal completa.`,
-                CONTENT_SUMMARY: runnerUp
-                    ? `${platformName}: el resumen de ${title} estuvo encabezado por "${leader.label}" con ${leader.value.toLocaleString('es-ES')} ${metricName}, seguido de "${runnerUp.label}" con ${runnerUp.value.toLocaleString('es-ES')}. Esta relación permite leer cuánto de la visibilidad avanzó hacia una segunda señal de interés sin mezclar resultados de pauta.`
-                    : `${platformName}: el resumen de ${title} registró ${leader.value.toLocaleString('es-ES')} ${metricName} en "${leader.label}". Es la principal cifra legible de la captura y debe complementarse con alcance, interacción o visitas antes de valorar la profundidad de la respuesta.`,
-                AUDIENCE_DEMOGRAPHICS: runnerUp
-                    ? `${platformName}: en ${title}, el segmento "${leader.label}" concentró ${leader.value.toLocaleString('es-ES')}%, seguido por "${runnerUp.label}" con ${runnerUp.value.toLocaleString('es-ES')}%. La diferencia de ${(leader.value - runnerUp.value).toLocaleString('es-ES')} puntos permite reconocer la composición dominante sin convertir presencia en intención de compra.`
-                    : `${platformName}: en ${title}, el segmento "${leader.label}" concentró el mayor valor visible con ${leader.value.toLocaleString('es-ES')}%. La cifra describe composición de audiencia, no una conversión comercial.`,
-                AD_TABLE: runnerUp
-                    ? `${platformName}: en ${title}, "${leader.label}" obtuvo ${leader.value.toLocaleString('es-ES')} ${metricName}, por encima de los ${runnerUp.value.toLocaleString('es-ES')} de "${runnerUp.label}". El liderazgo por volumen debe contrastarse con gasto y costo por resultado antes de definir el anuncio ganador.`
-                    : `${platformName}: en ${title}, "${leader.label}" registró ${leader.value.toLocaleString('es-ES')} ${metricName}. Sin una segunda pieza comparable, todavía no existe evidencia suficiente para redistribuir presupuesto.`
-            };
-            detailText = metricSentence && ['CONTENT_SUMMARY', 'METRIC_TRENDS'].includes(section.screenType)
-                ? detailText
-                : comparisons[section.screenType]
-                || `${platformName}: en ${title}, "${maxPoint.label}" registró ${maxPoint.value.toLocaleString('es-ES')} ${metricName}. La cifra se conserva con su plataforma y captura de origen para compararla con los demás indicadores del mismo periodo.`;
+            detailText = `${platformName}: en ${title}, la categoría "${maxPoint.label}" registró ${maxPoint.value.toLocaleString('es-ES')} ${metricName}. Este es el valor más alto visible en la gráfica y debe interpretarse dentro del periodo y la unidad mostrados en la fuente.`;
         }
         const businessInterpretations = {
-            CONTENT_SUMMARY: `Para ${clientName}, esta lectura permite distinguir si el contenido solo obtuvo exposición o también impulsó visitas, clics e interacciones. La decisión del próximo periodo es reforzar los llamados a la acción en la etapa con mayor pérdida de interés y medir si aumenta el avance hacia el perfil o el enlace.`,
-            METRIC_TRENDS: `Para ${clientName}, la secuencia temporal sirve para localizar días de aceleración y caídas, sin atribuirlas automáticamente a una publicación. Conviene cruzar cada pico con el calendario, identificar el tema y formato activos y convertir ese hallazgo en una prueba editorial medible.`,
-            AUDIENCE_DEMOGRAPHICS: `Para ${clientName}, la composición de la comunidad orienta el lenguaje, los beneficios y las referencias creativas que deberían priorizarse. El siguiente paso es preparar variaciones dirigidas a los rangos y ubicaciones dominantes y comparar cuál genera más visitas, clics o interacción.`,
-            CONTENT_FORMATS: `Para ${clientName}, la diferencia entre formatos indica dónde se concentra la atención, pero debe contrastarse con la cantidad de piezas publicadas. La ruta práctica es sostener el formato líder, probar una variación del mensaje y evaluar rendimiento por pieza para decidir qué escalar.`,
-            AD_SET_SUMMARY: `Para ${clientName}, estos resultados representan oportunidades atribuidas por Meta y no ventas confirmadas. La decisión correcta es cruzar costo por resultado con calidad del contacto y avance comercial antes de aumentar o reducir presupuesto.`,
-            AD_TABLE: `Para ${clientName}, la comparación entre anuncios debe equilibrar volumen, gasto y costo por resultado. El siguiente ajuste es separar las piezas ganadoras por eficiencia de las que aún tienen poca muestra y redistribuir inversión solo después de validar la calidad de los contactos.`
+            CONTENT_SUMMARY: "Esta lectura permite saber si el contenido está generando únicamente exposición o si también conduce a acciones como visitas, clics e interacciones. Conviene comparar estas etapas del recorrido para detectar dónde se pierde el interés y ajustar los llamados a la acción del próximo mes.",
+            METRIC_TRENDS: "La distribución temporal ayuda a localizar fechas de mayor y menor actividad, pero no permite atribuir el cambio a una publicación sin revisar el calendario de contenidos. El siguiente paso es cruzar los picos con las piezas publicadas y documentar qué tema, formato o llamado estuvo activo.",
+            AUDIENCE_DEMOGRAPHICS: "La concentración de audiencia sirve para adaptar mensajes, referencias y beneficios a los segmentos con mayor presencia, sin asumir que el grupo más numeroso es automáticamente el más rentable. La decisión útil es diseñar variaciones de contenido para los rangos y ciudades prioritarios y comparar su respuesta.",
+            CONTENT_FORMATS: "El formato con mayor volumen no siempre es el más eficiente: debe compararse cuántas piezas se publicaron frente a la visibilidad o interacción que produjeron. Esta relación permitirá decidir qué formatos sostener, cuáles probar con mayor frecuencia y cuáles necesitan un enfoque creativo diferente.",
+            AD_SET_SUMMARY: "Los resultados de Meta representan oportunidades atribuidas por la plataforma, no ventas confirmadas. Para evaluar el aporte comercial se debe cruzar el costo por resultado con la calidad de los contactos y su avance posterior en el proceso de cierre.",
+            AD_TABLE: "El anuncio con más resultados no necesariamente es el más eficiente; también deben revisarse gasto, costo por resultado y volumen de entrega. La siguiente decisión es separar ganadores por escala de piezas prometedoras con poca muestra antes de redistribuir presupuesto."
         };
         const businessText = businessInterpretations[section.screenType]
             || (section.sectionCategory === 'ADS'
                 ? businessInterpretations.AD_TABLE
-                : `Para ${clientName}, esta cifra aporta una señal concreta del comportamiento orgánico. Debe contrastarse con las otras métricas de la captura y con el contenido publicado para definir qué mantener, ajustar o probar durante el siguiente periodo.`);
+                : "Esta cifra aporta una señal específica del comportamiento orgánico. Para convertirla en una decisión, debe contrastarse con las otras métricas de la misma captura y con el contenido publicado durante el periodo.");
         return {
             ...section,
-            narrativeComment: `${detailText}\n\n${businessText}`
+            narrativeComment: `${detailText}\n\nPara el negocio, este dato permite identificar dónde se concentró la respuesta de la audiencia, pero no demuestra por sí solo ventas, reservas o rentabilidad. El siguiente paso es contrastarlo con las demás métricas de esta misma fuente y revisar el contenido o la acción comercial asociada antes de decidir qué replicar o escalar.`
         };
     });
 
