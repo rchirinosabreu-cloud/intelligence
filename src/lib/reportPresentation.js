@@ -1,4 +1,8 @@
-const CANONICAL_KEYS = ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'];
+const CANONICAL_KEYS = [
+  'spend', 'impressions', 'reach', 'clicks', 'ctr', 'results',
+  'views', 'viewers', 'interactions', 'linkClicks', 'profileVisits', 'follows',
+  'followersTotal', 'videoViews', 'viewsOrganic', 'viewsPaid', 'reachOrganic', 'reachPaid'
+];
 const FORMAT_SUMMARY_LABELS = new Set([
   'reel', 'reels', 'enlace', 'enlaces', 'historia', 'historias', 'foto', 'fotos',
   'varias fotos', 'otros', 'otro', 'video', 'videos', 'carrusel', 'carruseles'
@@ -11,6 +15,14 @@ export const filterCanonicalMetrics = (metrics = {}) => Object.fromEntries(
   CANONICAL_KEYS.filter(key => metrics[key] && typeof metrics[key] === 'object')
     .map(key => [key, metrics[key]])
 );
+
+export const getReviewMetricEntries = (metrics = {}) => ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results']
+  .filter((key) => metrics[key]?.value !== null && metrics[key]?.value !== undefined && metrics[key]?.value !== '')
+  .map((key) => [key, metrics[key]]);
+
+export const getOrganicPlatformLabel = (platform) => platform === 'FACEBOOK'
+  ? 'Facebook'
+  : platform === 'INSTAGRAM' ? 'Instagram' : 'Orgánico';
 
 export const isDemographicDataset = (dataset) => Array.isArray(dataset) && dataset.some(point =>
   point && (Number.isFinite(Number(point.hombres)) || Number.isFinite(Number(point.mujeres)))

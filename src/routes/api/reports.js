@@ -15,6 +15,7 @@ import {
     reconcileNarrativeSections
 } from '../../services/reportVisionService.js';
 import { v4 as uuidv4 } from 'uuid';
+import { buildScopedReportData, normalizeAdsTableRows, orderReportSections } from '../../lib/reportStructure.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -337,14 +338,23 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             accumulator = mergeSourceMetricsIntoAccumulator(accumulator, res);
 
             // Register sections
-            if (res.dataset && res.dataset.length > 0) {
+            const hasDemographics = ['ageGender', 'cities', 'countries']
+                .some(key => Array.isArray(res.demographics?.[key]) && res.demographics[key].length > 0);
+            const hasSectionData = (Array.isArray(res.dataset) && res.dataset.length > 0) || hasDemographics;
+            if (hasSectionData) {
                 extractedSections.push({
                     sectionId: uuidv4(),
+                    sourceId: res.sourceId,
                     chartType: res.chartType || 'LINE_CHART',
                     title: res.title || 'Sección',
                     sectionCategory: res.sectionCategory || 'ADS',
                     platform: res.platform || 'META_ADS',
                     dataset: res.dataset,
+                    demographics: res.demographics,
+                    screenType: res.screenType,
+                    entityLevel: res.entityLevel,
+                    resultType: res.resultType,
+                    period: res.period,
                     narrativeComment: ""
                 });
             }
@@ -372,7 +382,10 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                     platform: res.platform,
                     dataset: res.dataset,
                     demographics: res.demographics,
-                    topContent: res.topContent
+                    topContent: res.topContent,
+                    entityLevel: res.entityLevel,
+                    resultType: res.resultType,
+                    period: res.period
                 },
                 confidence: parseFloat(res.confidence) || 1.0,
                 warnings: res.warnings || []
@@ -381,6 +394,25 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
 
         // Finalize consolidated metrics
         const validatedNormalizedMetrics = finalizeNormalizedMetrics(accumulator);
+
+        const scopedReportData = buildScopedReportData(successful.map((source) => ({
+            sourceId: source.sourceId,
+            platform: source.platform,
+            sectionCategory: source.sectionCategory,
+            screenType: source.screenType,
+            entityLevel: source.entityLevel,
+            resultType: source.resultType,
+            period: source.period,
+            metrics: source.metrics,
+            dataset: source.dataset,
+            demographics: source.demographics,
+            topContent: source.sectionCategory === 'ADS'
+                ? normalizeAdsTableRows(source.topContent)
+                : source.topContent
+        })));
+        validatedNormalizedMetrics.organicSummary = scopedReportData.organicSummary;
+        validatedNormalizedMetrics.adsSummary = scopedReportData.adsSummary;
+        validatedNormalizedMetrics.sourceExtractions = scopedReportData.sources;
 
         // Inject processingSummary and warnings directly into the normalizedMetrics object
         validatedNormalizedMetrics.processingSummary = processingSummary;
@@ -416,10 +448,10 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                             actionPlan: [],
                             logrosYAvances: [],
                             contenidoTopAnalisis: "",
-                            oportunidadesYAprendizajes: "",
-                            recomendacionesEstrategicas: ""
+                            oportunidadesYAprendizajes: [],
+                            recomendacionesEstrategicas: []
                         },
-                        sections: extractedSections,
+                        sections: orderReportSections(extractedSections),
                         sources: {
                             create: processedSources
                         }
@@ -560,17 +592,19 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
 
         let narrativeResult;
         let isFallback = false;
+        let narrativeGenerationMode = 'AI';
         try {
-            // 15 seconds timeout for narrative generation
+            // Editorial structured output is larger than extraction output; allow a realistic response window.
             narrativeResult = await withTimeout(
                 generateNarrativeWithGemini(metrics, sections),
-                15000,
+                45000,
                 "Gemini narrative generation timed out"
             );
         } catch (genError) {
             console.warn(`[Reports API] Gemini generation failed/timed out for report ${reportId}. Generating fallback template.`, genError.message);
             narrativeResult = generateFallbackNarrative(metrics, sections);
             isFallback = true;
+            narrativeGenerationMode = 'FALLBACK';
         }
 
         const updatedReport = await prisma.metricReport.update({
@@ -583,9 +617,10 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
                     actionPlan: narrativeResult.actionPlan,
                     logrosYAvances: narrativeResult.logrosYAvances || [],
                     contenidoTopAnalisis: narrativeResult.contenidoTopAnalisis || "",
-                    oportunidadesYAprendizajes: narrativeResult.oportunidadesYAprendizajes || "",
-                    recomendacionesEstrategicas: narrativeResult.recomendacionesEstrategicas || "",
-                    granularNarratives: narrativeResult.granularNarratives || []
+                    oportunidadesYAprendizajes: narrativeResult.oportunidadesYAprendizajes || [],
+                    recomendacionesEstrategicas: narrativeResult.recomendacionesEstrategicas || [],
+                    granularNarratives: narrativeResult.granularNarratives || [],
+                    generationMode: narrativeGenerationMode
                 },
                 sections: reconcileNarrativeSections(sections, narrativeResult.sections || []),
                 status: isFallback ? 'REVIEW' : 'PUBLISHED'
