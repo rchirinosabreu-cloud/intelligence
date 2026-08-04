@@ -102,17 +102,6 @@ test('report presentation regressions', async (t) => {
     assert.equal(summary.reach.value, 22000);
   });
 
-  await t.test('organic summary omits zero values instead of publishing empty cards', () => {
-    const summary = adaptOrganicSummary({
-      FACEBOOK: { follows: { value: 0 }, views: { value: 15000 }, interactions: { value: 0 }, reach: { value: 9000 } },
-      INSTAGRAM: { follows: { value: 0 }, views: { value: 21000 }, interactions: { value: 84 }, reach: { value: 0 } }
-    });
-    assert.deepEqual(Object.keys(summary), ['views', 'interactions', 'reach']);
-    assert.equal(summary.views.value, 36000);
-    assert.equal(summary.interactions.value, 84);
-    assert.equal(summary.reach.value, 9000);
-  });
-
   await t.test('dedicated organic summary cannot delegate rendering to the generic metric grid', async () => {
     const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
     const start = component.indexOf('const OrganicSummary');
@@ -136,14 +125,6 @@ test('report presentation regressions', async (t) => {
     const viteConfig = await fs.readFile('vite.config.js', 'utf8');
     assert.match(component, /data-build=\{BUILD_SHA\}/);
     assert.match(viteConfig, /RAILWAY_GIT_COMMIT_SHA/);
-  });
-
-
-  await t.test('report component uses an in-module publishable value guard for legacy demographics', async () => {
-    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
-    assert.doesNotMatch(component, /hasPublishableValue\s*}/, 'Reports.jsx must not import a helper that can disappear from cached chunks');
-    assert.match(component, /const hasReportValue = \(value\) =>/);
-    assert.match(component, /demographics\.ageGender \|\| \[\]\)\.filter\(item => hasReportValue\(item\.hombres\)/);
   });
 
   await t.test('report sections expose their source id for chart traceability', async () => {

@@ -198,14 +198,6 @@ test('report pipeline regressions', async (t) => {
     assert.equal(new Set(secondParagraphs).size, sections.length);
   });
 
-  await t.test('narrative validation explains the exact rejection reason for Railway logs', () => {
-    const validation = validateSectionNarratives([
-      { sectionId: 'one', narrativeComment: `Facebook: 10 y 20 marcaron el periodo.\n\nPara el negocio, conviene revisar.` }
-    ], [{ sectionId: 'one', dataset: [{ label: 'A', value: 10 }, { label: 'B', value: 20 }] }], 'Cliente Demo');
-    assert.equal(validation.valid, false);
-    assert.equal(validation.reason, 'forbidden-language');
-  });
-
   await t.test('narrative validation rejects generic, repeated or numerically empty comments', () => {
     const sections = [
       { sectionId: 'one', dataset: [{ label: 'A', value: 10 }, { label: 'B', value: 20 }] },

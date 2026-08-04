@@ -30,7 +30,8 @@ export const getOrganicPlatformLabel = (platform) => platform === 'FACEBOOK'
 export const ORGANIC_SUMMARY_KEYS = ['follows', 'views', 'interactions', 'reach'];
 
 export const adaptOrganicSummary = (summary = {}) => {
-  const isMetric = (value) => value && typeof value === 'object' && hasPublishableValue(value.value);
+  const isMetric = (value) => value && typeof value === 'object'
+    && value.value !== null && value.value !== undefined && Number.isFinite(Number(value.value));
   const groups = Object.values(summary).filter((value) => value && typeof value === 'object');
   const flat = ORGANIC_SUMMARY_KEYS.some((key) => isMetric(summary[key]));
   const explicitGroups = flat ? [summary] : ['FACEBOOK', 'INSTAGRAM'].map((key) => summary[key]).filter(Boolean);
