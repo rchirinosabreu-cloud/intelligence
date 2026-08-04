@@ -1,4 +1,4 @@
-import { parseJsonResponse } from './aiService.js';
+import { extractModelText, parseJsonResponse } from './aiService.js';
 import { GoogleGenAI } from '@google/genai';
 import { adaptDatasetForChart } from '../lib/reportChartData.js';
 import { filterTopContentRows, hasPublishableValue } from '../lib/reportPresentation.js';
@@ -743,6 +743,23 @@ export const validateSectionNarratives = (narrativeSections = [], sourceSections
     return { valid: true };
 };
 
+export const parseNarrativeResponse = (content, sections = [], clientName = 'el cliente') => {
+    try {
+        const parsed = parseJsonResponse(content);
+        const validation = validateSectionNarratives(parsed.sections || [], sections, clientName);
+        if (!validation.valid) {
+            const validationError = new Error(`Narrative did not satisfy client-specific, two-paragraph, non-repetition rules: ${validation.reason}`);
+            validationError.rawContent = content;
+            validationError.validation = validation;
+            throw validationError;
+        }
+        return parsed;
+    } catch (error) {
+        error.rawContent = error.rawContent || content;
+        throw error;
+    }
+};
+
 /**
  * Generates an editorial narrative and strategic action plan from normalized metrics and sections using Gemini.
  * @param {Object} normalizedMetrics - The validated metrics object.
@@ -914,7 +931,6 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
         throw new Error("Gemini Narrative response content is empty");
     }
 
-    let parsed;
     try {
         parsed = parseJsonResponse(content);
         const validation = validateSectionNarratives(parsed.sections || [], sections, clientName);
@@ -926,14 +942,6 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
         console.error("[Vision Service] Error parsing narrative JSON schema:", parseError, "Raw content:", content);
         throw parseError;
     }
-
-    const validation = validateSectionNarratives(parsed.sections || [], sections, clientName);
-    if (!validation.valid) {
-        const validationError = new Error(`Narrative did not satisfy client-specific, two-paragraph, non-repetition rules: ${validation.reason}`);
-        console.error("[Vision Service] Narrative validation rejected Gemini response:", validationError, "Raw content:", content);
-        throw validationError;
-    }
-    return parsed;
 };
 
 const formatMetricValue = (key, metric) => {
