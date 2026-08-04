@@ -596,7 +596,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
         try {
             // Editorial structured output is larger than extraction output; allow a realistic response window.
             narrativeResult = await withTimeout(
-                generateNarrativeWithGemini(metrics, sections),
+                generateNarrativeWithGemini(metrics, sections, report.client.name),
                 45000,
                 "Gemini narrative generation timed out"
             );
