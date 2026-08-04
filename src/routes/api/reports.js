@@ -588,7 +588,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
                     granularNarratives: narrativeResult.granularNarratives || []
                 },
                 sections: reconcileNarrativeSections(sections, narrativeResult.sections || []),
-                status: isFallback ? 'NEEDS_REVIEW' : 'PUBLISHED'
+                status: isFallback ? 'REVIEW' : 'PUBLISHED'
             },
             include: {
                 sources: true,
