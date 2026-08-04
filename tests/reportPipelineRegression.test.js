@@ -64,7 +64,9 @@ test('report pipeline regressions', async (t) => {
     assert.deepEqual(adaptDatasetForChart([
       { label: 'A', impressions: '1.200' },
       { label: 'B', results: 12 },
-      { label: 'C', value: null }
+      { label: 'C', value: null },
+      { label: 'D', value: 0 },
+      { label: 'E', hombres: 0, mujeres: 0 }
     ], 'LINE_CHART'), [
       { label: 'A', value: 1200 },
       { label: 'B', value: 12 }
@@ -108,6 +110,20 @@ test('report pipeline regressions', async (t) => {
     assert.equal(organic.dataset.length, 1);
     assert.equal(organic.demographics.ageGender.length, 1);
     assert.equal(organic.topContent.length, 1);
+  });
+
+  await t.test('source extraction removes zero-only metrics and chart rows before reporting', () => {
+    const source = validateAndCleanSourceExtraction({
+      metrics: { clicks: { value: 0 }, ctr: { value: '0.00%' }, impressions: { value: 1200 } },
+      dataset: [{ label: 'Clics', value: 0 }, { label: 'Impresiones', value: 1200 }],
+      demographics: { ageGender: [{ label: '25-34', hombres: 0, mujeres: 0 }, { label: '35-44', hombres: 3, mujeres: 7 }], cities: [{ label: 'Sin datos', value: 0 }, { label: 'Cartagena', value: 45.4 }], countries: [] }
+    });
+    assert.equal(source.metrics.clicks.value, null);
+    assert.equal(source.metrics.ctr.value, null);
+    assert.equal(source.metrics.impressions.value, 1200);
+    assert.deepEqual(source.dataset, [{ label: 'Impresiones', value: 1200 }]);
+    assert.deepEqual(source.demographics.ageGender, [{ label: '35-44', hombres: 3, mujeres: 7 }]);
+    assert.deepEqual(source.demographics.cities, [{ label: 'Cartagena', value: 45.4 }]);
   });
 
   await t.test('preserves platform, screen type, entity level and result semantics per screenshot', () => {

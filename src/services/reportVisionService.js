@@ -1,7 +1,7 @@
 import { parseJsonResponse } from './aiService.js';
 import { GoogleGenAI } from '@google/genai';
 import { adaptDatasetForChart } from '../lib/reportChartData.js';
-import { filterTopContentRows } from '../lib/reportPresentation.js';
+import { filterTopContentRows, hasPublishableValue } from '../lib/reportPresentation.js';
 
 export { filterTopContentRows as filterExtractedTopContentRows };
 
@@ -53,6 +53,26 @@ export const cleanNumericValue = (rawVal) => {
     const num = parseFloat(clean);
     return isFinite(num) ? num : null;
 };
+
+const filterPositiveDemographicRows = (rows = [], keys = ['value']) => Array.isArray(rows)
+    ? rows.flatMap((row) => {
+        if (!row || typeof row !== 'object') return [];
+        const label = typeof row.label === 'string' ? row.label.trim() : '';
+        if (!label) return [];
+        const clean = { label };
+        for (const key of keys) {
+            const value = cleanNumericValue(row[key]);
+            if (hasPublishableValue(value)) clean[key] = value;
+        }
+        return Object.keys(clean).length > 1 ? [clean] : [];
+    })
+    : [];
+
+const cleanDemographics = (demographics = {}) => ({
+    ageGender: filterPositiveDemographicRows(demographics.ageGender, ['hombres', 'mujeres']),
+    cities: filterPositiveDemographicRows(demographics.cities, ['value']),
+    countries: filterPositiveDemographicRows(demographics.countries, ['value'])
+});
 
 export const visionExtractionSchema = {
   type: "object",
@@ -416,7 +436,7 @@ export const validateAndCleanSourceExtraction = (extracted) => {
     }
 
     const dataset = adaptDatasetForChart(extracted.dataset || []);
-    const demographics = extracted.demographics || {};
+    const demographics = cleanDemographics(extracted.demographics || {});
     const topContent = filterTopContentRows(extracted.topContent || []);
     const narrativeDraft = extracted.narrativeDraft || "";
 
@@ -430,7 +450,8 @@ export const validateAndCleanSourceExtraction = (extracted) => {
 
     for (const key of allowedKeys) {
         const item = metrics[key] || {};
-        const val = cleanNumericValue(item.value);
+        const rawVal = cleanNumericValue(item.value);
+        const val = hasPublishableValue(rawVal) ? rawVal : null;
 
         cleanMetrics[key] = {
             key: key,
@@ -442,16 +463,16 @@ export const validateAndCleanSourceExtraction = (extracted) => {
             changePct: typeof item.changePct === 'number' ? item.changePct : null
         };
 
-        if (cleanMetrics[key].value !== null) {
+        if (hasPublishableValue(cleanMetrics[key].value)) {
             hasValidCanonicalMetric = true;
         }
     }
 
     const hasValidDataset = Array.isArray(dataset) && dataset.length > 0;
     const hasValidDemographics = demographics && (
-        (Array.isArray(demographics.ageGender) && demographics.ageGender.length > 0) ||
-        (Array.isArray(demographics.cities) && demographics.cities.length > 0) ||
-        (Array.isArray(demographics.countries) && demographics.countries.length > 0)
+        demographics.ageGender.length > 0 ||
+        demographics.cities.length > 0 ||
+        demographics.countries.length > 0
     );
     const hasValidTopContent = Array.isArray(topContent) && topContent.length > 0;
     const hasExplicitNarrative = typeof narrativeDraft === 'string' && narrativeDraft.trim().length > 10;
@@ -893,6 +914,7 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
         throw new Error("Gemini Narrative response content is empty");
     }
 
+    let parsed;
     try {
         const parsed = parseJsonResponse(content);
         const validation = validateSectionNarratives(parsed.sections || [], sections, clientName);
@@ -904,6 +926,14 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
         console.error("[Vision Service] Error parsing narrative JSON schema:", parseError, "Raw content:", content);
         throw parseError;
     }
+
+    const validation = validateSectionNarratives(parsed.sections || [], sections, clientName);
+    if (!validation.valid) {
+        const validationError = new Error(`Narrative did not satisfy client-specific, two-paragraph, non-repetition rules: ${validation.reason}`);
+        console.error("[Vision Service] Narrative validation rejected Gemini response:", validationError, "Raw content:", content);
+        throw validationError;
+    }
+    return parsed;
 };
 
 const formatMetricValue = (key, metric) => {

@@ -20,10 +20,16 @@ test('report presentation regressions', async (t) => {
     })), ['spend']);
   });
 
-  await t.test('metric review omits missing placeholder cards', () => {
+  await t.test('metric review omits missing or zero placeholder cards', () => {
     assert.deepEqual(getReviewMetricEntries({
-      spend: { value: 232826 }, clicks: { value: null }, ctr: { value: null }, results: { value: 52 }
+      spend: { value: 232826 }, clicks: { value: 0 }, ctr: { value: 0 }, results: { value: 52 }
     }).map(([key]) => key), ['spend', 'results']);
+  });
+
+  await t.test('canonical metric grids omit zero-valued cards from published reports', () => {
+    assert.deepEqual(Object.keys(filterCanonicalMetrics({
+      spend: { value: 233058 }, clicks: { value: 0 }, ctr: { value: 0 }, impressions: { value: '0' }, results: { value: 104 }
+    })), ['spend', 'results']);
   });
 
   await t.test('metric audit presents one organic group before paid fields', async () => {
@@ -53,7 +59,8 @@ test('report presentation regressions', async (t) => {
       { title: 'Historias', results: 6 },
       { title: 'Foto', results: 3 },
       { title: 'Varias fotos', results: 1 },
-      { title: 'Otros', results: 1 }
+      { title: 'Otros', results: 1 },
+      { title: 'POST SIN RESULTADOS', results: 0, impressions: 0, reach: 0 }
     ]);
     assert.deepEqual(rows.map(row => row.title), ['REEL - ELEGIR COLEGIO']);
   });

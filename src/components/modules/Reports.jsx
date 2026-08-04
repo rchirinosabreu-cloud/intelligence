@@ -102,9 +102,9 @@ const PerformanceTrendChart = ({ data }) => {
 const DemographicsChart = ({ demographics }) => {
   if (!demographics) return null;
 
-  const ageGenderData = demographics.ageGender || [];
-  const citiesData = demographics.cities || [];
-  const countriesData = demographics.countries || [];
+  const ageGenderData = (demographics.ageGender || []).filter(item => hasPublishableValue(item.hombres) || hasPublishableValue(item.mujeres));
+  const citiesData = (demographics.cities || []).filter(item => hasPublishableValue(item.value));
+  const countriesData = (demographics.countries || []).filter(item => hasPublishableValue(item.value));
 
   const totalAgeGender = ageGenderData.reduce((acc, item) => acc + (Number(item.hombres) || 0) + (Number(item.mujeres) || 0), 0);
   const totalCities = citiesData.reduce((acc, item) => acc + (Number(item.value) || 0), 0);

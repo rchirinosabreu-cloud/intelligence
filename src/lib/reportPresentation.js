@@ -11,13 +11,16 @@ const FORMAT_SUMMARY_LABELS = new Set([
 const normalizeLabel = (value) => String(value || '')
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 
+export const hasPublishableValue = (value) => value !== null && value !== undefined && value !== ''
+  && Number.isFinite(Number(value)) && Number(value) !== 0;
+
 export const filterCanonicalMetrics = (metrics = {}) => Object.fromEntries(
-  CANONICAL_KEYS.filter(key => metrics[key] && typeof metrics[key] === 'object')
+  CANONICAL_KEYS.filter(key => metrics[key] && typeof metrics[key] === 'object' && hasPublishableValue(metrics[key].value))
     .map(key => [key, metrics[key]])
 );
 
 export const getReviewMetricEntries = (metrics = {}) => ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results']
-  .filter((key) => metrics[key]?.value !== null && metrics[key]?.value !== undefined && metrics[key]?.value !== '')
+  .filter((key) => hasPublishableValue(metrics[key]?.value))
   .map((key) => [key, metrics[key]]);
 
 export const getOrganicPlatformLabel = (platform) => platform === 'FACEBOOK'
@@ -55,9 +58,10 @@ export const isDemographicDataset = (dataset) => Array.isArray(dataset) && datas
 export const filterTopContentRows = (rows = []) => rows.filter((row) => {
   if (!row || typeof row !== 'object' || !String(row.title || '').trim()) return false;
   const isFormatSummary = FORMAT_SUMMARY_LABELS.has(normalizeLabel(row.title));
-  const hasPublicationEvidence = row.impressions !== null && row.impressions !== undefined
-    || row.reach !== null && row.reach !== undefined;
-  return !isFormatSummary || hasPublicationEvidence;
+  const hasPublicationEvidence = hasPublishableValue(row.impressions) || hasPublishableValue(row.reach);
+  const hasAnyPublishableResult = ['results', 'views', 'impressions', 'interactions', 'reach', 'clicks', 'spend']
+    .some((key) => hasPublishableValue(row[key]));
+  return hasAnyPublishableResult && (!isFormatSummary || hasPublicationEvidence);
 });
 
 export const splitAchievement = (value) => {
