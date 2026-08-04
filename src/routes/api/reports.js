@@ -12,7 +12,8 @@ import {
     mergeSourceMetricsIntoAccumulator,
     finalizeNormalizedMetrics,
     preserveApprovedReportData,
-    reconcileNarrativeSections
+    reconcileNarrativeSections,
+    buildNarrativeFailureUpdate
 } from '../../services/reportVisionService.js';
 import { v4 as uuidv4 } from 'uuid';
 import { buildScopedReportData, normalizeAdsTableRows, orderReportSections } from '../../lib/reportStructure.js';
@@ -21,6 +22,9 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 const REPORT_PIPELINE_VERSION = 'vision-2026-08-03.4';
 const REPORT_DEPLOY_COMMIT = process.env.REPORT_DEPLOY_COMMIT || 'development';
+
+export { buildNarrativeFailureUpdate };
+export const narrativeFailureRouteContract = { status: 'REVIEW', narrative: { generationMode: 'NARRATIVE_FAILED' } };
 
 export function getReportPipelineStatus() {
     return {
@@ -600,9 +604,10 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
                 "Gemini narrative generation timed out"
             );
         } catch (generationError) {
+            if (/Missing GEMINI_API_KEY/i.test(generationError?.message || '')) throw generationError;
             console.error('[Reports API] Narrative generation did not produce publishable content:', generationError);
             publishableResult = {
-                status: 'NARRATIVE_FAILED',
+                status: 'REVIEW',
                 publishable: false,
                 narrative: null,
                 attempts: [{ step: 'fatal', error: generationError.message }]
@@ -622,27 +627,12 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
                 recomendacionesEstrategicas: narrativeResult.recomendacionesEstrategicas || [],
                 granularNarratives: narrativeResult.granularNarratives || [],
                 generationMode: 'AI',
+                needsRegeneration: false,
                 attempts: publishableResult.attempts || []
             },
             sections: reconcileNarrativeSections(sections, narrativeResult.sections || []),
             status: 'PUBLISHED'
-        } : {
-            narrative: {
-                headline: 'Narrativa pendiente de regeneración',
-                summaryPoints: ['La narrativa automática no superó la validación editorial.', 'El reporte conserva métricas y gráficas para revisión interna.', 'Regenera la narrativa antes de publicar o exportar el informe.'],
-                keyAchievements: 'La generación automática no produjo una narrativa publicable. Las métricas y secciones se mantienen sin reemplazarse por textos de contingencia.',
-                actionPlan: [],
-                logrosYAvances: [],
-                contenidoTopAnalisis: '',
-                oportunidadesYAprendizajes: [],
-                recomendacionesEstrategicas: [],
-                granularNarratives: [],
-                generationMode: 'NARRATIVE_FAILED',
-                needsRegeneration: true,
-                attempts: publishableResult.attempts || []
-            },
-            status: 'NARRATIVE_FAILED'
-        };
+        } : buildNarrativeFailureUpdate(publishableResult.attempts || [], publishableResult.technicalDraft);
 
         const updatedReport = await prisma.metricReport.update({
             where: { id: reportId },
@@ -654,7 +644,8 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
         });
 
         res.status(200).json({
-            success: true,
+            success: Boolean(publishableResult.publishable),
+            needsRegeneration: !publishableResult.publishable,
             report: updatedReport
         });
 
