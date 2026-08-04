@@ -24,6 +24,30 @@ export const getOrganicPlatformLabel = (platform) => platform === 'FACEBOOK'
   ? 'Facebook'
   : platform === 'INSTAGRAM' ? 'Instagram' : 'Orgánico';
 
+export const ORGANIC_SUMMARY_KEYS = ['follows', 'views', 'interactions', 'reach'];
+
+export const adaptOrganicSummary = (summary = {}) => {
+  const isMetric = (value) => value && typeof value === 'object'
+    && value.value !== null && value.value !== undefined && Number.isFinite(Number(value.value));
+  const groups = Object.values(summary).filter((value) => value && typeof value === 'object');
+  const flat = ORGANIC_SUMMARY_KEYS.some((key) => isMetric(summary[key]));
+  const explicitGroups = flat ? [summary] : ['FACEBOOK', 'INSTAGRAM'].map((key) => summary[key]).filter(Boolean);
+  const fallbackGroups = flat ? [] : ['CROSS_PLATFORM', 'UNKNOWN', 'COMBINED'].map((key) => summary[key]).filter(Boolean);
+  const aliases = { follows: ['follows'], views: ['views'], interactions: ['interactions'], reach: ['reach', 'reachOrganic'] };
+
+  return Object.fromEntries(ORGANIC_SUMMARY_KEYS.flatMap((key) => {
+    const read = (group) => aliases[key].map((alias) => group?.[alias]).find(isMetric);
+    const explicit = explicitGroups.map(read).filter(Boolean);
+    const candidates = explicit.length ? explicit : fallbackGroups.map(read).filter(Boolean);
+    if (!candidates.length && !flat && groups.length === 1) {
+      const metric = read(groups[0]);
+      if (metric) candidates.push(metric);
+    }
+    if (!candidates.length) return [];
+    return [[key, { ...candidates[0], key, value: candidates.reduce((total, metric) => total + Number(metric.value), 0) }]];
+  }));
+};
+
 export const isDemographicDataset = (dataset) => Array.isArray(dataset) && dataset.some(point =>
   point && (Number.isFinite(Number(point.hombres)) || Number.isFinite(Number(point.mujeres)))
 );

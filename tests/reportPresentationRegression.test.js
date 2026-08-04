@@ -9,7 +9,8 @@ import {
   safeClassName,
   buildReportFileName,
   getReviewMetricEntries,
-  getOrganicPlatformLabel
+  getOrganicPlatformLabel,
+  adaptOrganicSummary
 } from '../src/lib/reportPresentation.js';
 
 test('report presentation regressions', async (t) => {
@@ -78,6 +79,45 @@ test('report presentation regressions', async (t) => {
     assert.ok(adsHeading > organicHeading, 'paid summary must appear after organic summary');
     assert.match(component, /report\.normalizedMetrics\?\.organicSummary/);
     assert.match(component, /report\.normalizedMetrics\?\.adsSummary/);
+  });
+
+  await t.test('legacy platform summaries collapse into four organic headline metrics', () => {
+    const summary = adaptOrganicSummary({
+      FACEBOOK: { follows: { value: 7 }, views: { value: 15000 }, interactions: { value: 26 }, reach: { value: 9000 }, spend: { value: 1000 }, ctr: { value: 2 } },
+      INSTAGRAM: { follows: { value: 12 }, views: { value: 21000 }, interactions: { value: 84 }, reachOrganic: { value: 13000 }, impressions: { value: 30000 } },
+      UNKNOWN: { clicks: { value: 90 }, reachPaid: { value: 5000 } },
+      CROSS_PLATFORM: { results: { value: 50 } }
+    });
+    assert.deepEqual(Object.keys(summary), ['follows', 'views', 'interactions', 'reach']);
+    assert.equal(summary.follows.value, 19);
+    assert.equal(summary.views.value, 36000);
+    assert.equal(summary.interactions.value, 110);
+    assert.equal(summary.reach.value, 22000);
+  });
+
+  await t.test('dedicated organic summary cannot delegate rendering to the generic metric grid', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    const start = component.indexOf('const OrganicSummary');
+    const end = component.indexOf('\nconst ', start + 10);
+    const implementation = component.slice(start, end);
+    assert.ok(start > -1, 'missing dedicated OrganicSummary component');
+    assert.doesNotMatch(implementation, /<MetricGrid/);
+    assert.doesNotMatch(implementation, /Object\.entries\(report\.normalizedMetrics\.organicSummary\)/);
+    assert.doesNotMatch(implementation, /UNKNOWN|CROSS_PLATFORM|Inversión|Impresiones|CTR|Pauta/);
+  });
+
+  await t.test('cover encodes exactly two deliberate title lines and protects the first on desktop', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    assert.match(component, /data-cover-line="title"[^>]*whitespace-nowrap[^>]*>Reporte de desempeño digital<\/span>/);
+    assert.match(component, /data-cover-line="client"[^>]*text-\[#009fb7\][^>]*>de \{clientName\}<\/span>/);
+    assert.equal((component.match(/data-cover-line=/g) || []).length, 2);
+  });
+
+  await t.test('report root exposes the compiled deployment SHA for DevTools verification', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    const viteConfig = await fs.readFile('vite.config.js', 'utf8');
+    assert.match(component, /data-build=\{BUILD_SHA\}/);
+    assert.match(viteConfig, /RAILWAY_GIT_COMMIT_SHA/);
   });
 
   await t.test('report sections expose their source id for chart traceability', async () => {

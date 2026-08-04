@@ -36,10 +36,12 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import { adaptDatasetForChart, hasReadableChartData } from '@/lib/reportChartData';
-import { filterCanonicalMetrics, getOrganicPlatformLabel, getReviewMetricEntries, isDemographicDataset, filterTopContentRows, splitAchievement, safeClassName, buildReportFileName } from '@/lib/reportPresentation';
+import { adaptOrganicSummary, filterCanonicalMetrics, getOrganicPlatformLabel, getReviewMetricEntries, isDemographicDataset, filterTopContentRows, splitAchievement, safeClassName, buildReportFileName } from '@/lib/reportPresentation';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
+
+const BUILD_SHA = typeof __BUILD_SHA__ === 'string' ? __BUILD_SHA__ : 'development';
 
 // Keep export-only helpers in this module so the click handler cannot reference a
 // missing named binding in an independently cached production chunk.
@@ -472,9 +474,9 @@ const ReportCover = ({ report }) => {
          </div>
 
          {/* Giant Title */}
-         <h1 className="text-6xl md:text-7xl font-black text-[#0F172A] tracking-tight leading-[0.95] max-w-5xl">
-            <span className="block">Reporte de desempeño digital</span>
-            <span className="block mt-3 text-[#009fb7]">de {clientName}</span>
+         <h1 className="text-[clamp(2.5rem,6vw,4.5rem)] font-black text-[#0F172A] tracking-tight leading-[0.95] max-w-6xl">
+            <span data-cover-line="title" className="block md:whitespace-nowrap">Reporte de desempeño digital</span>
+            <span data-cover-line="client" className="block mt-3 text-[#009fb7]">de {clientName}</span>
          </h1>
 
          {/* Subtitle with separator */}
@@ -630,10 +632,25 @@ const MetricGrid = ({ metrics }) => {
   );
 };
 
-const OrganicHeadlineCards = ({ summary }) => {
-  const headlineMetrics = selectOrganicSummaryMetrics(summary || {});
-  if (Object.keys(headlineMetrics).length === 0) return null;
-  return <MetricGrid metrics={headlineMetrics} />;
+const OrganicSummary = ({ summary }) => {
+  const metrics = adaptOrganicSummary(summary);
+  const styles = {
+    follows: { label: 'Nuevos seguidores', icon: Plus, card: 'bg-fuchsia-50 dark:bg-fuchsia-950/30 border-fuchsia-100 dark:border-fuchsia-800', iconClass: 'bg-fuchsia-600' },
+    views: { label: 'Visualizaciones', icon: Eye, card: 'bg-cyan-50 dark:bg-cyan-950/30 border-cyan-100 dark:border-cyan-800', iconClass: 'bg-cyan-600' },
+    interactions: { label: 'Interacciones', icon: Sparkles, card: 'bg-violet-50 dark:bg-violet-950/30 border-violet-100 dark:border-violet-800', iconClass: 'bg-violet-600' },
+    reach: { label: 'Alcance', icon: User, card: 'bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-800', iconClass: 'bg-blue-600' }
+  };
+  if (!Object.keys(metrics).length) return null;
+  return <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 break-inside-avoid">
+    {Object.entries(metrics).map(([key, metric]) => {
+      const style = styles[key];
+      const Icon = style.icon;
+      return <div key={key} className={cn('border p-5 rounded-2xl shadow-sm flex items-center gap-4', style.card)}>
+        <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0', style.iconClass)}><Icon className="w-5 h-5" /></div>
+        <div className="min-w-0 space-y-1"><span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{style.label}</span><h4 className="text-2xl font-black text-slate-900 dark:text-slate-50 truncate">{formatMetricValue(key, metric)}</h4></div>
+      </div>;
+    })}
+  </div>;
 };
 
 const ActionPlan = ({ narrative, onUpdate }) => {
@@ -793,7 +810,7 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
             <h3 className="text-lg font-black text-slate-800 dark:text-slate-50">Resumen orgánico detectado</h3>
             <p className="text-xs text-slate-500">Un único grupo con cifras orgánicas verificables; los totales mixtos y de anuncios quedan excluidos.</p>
           </div>
-          <MetricGrid metrics={report.normalizedMetrics.organicSummary} />
+          <OrganicSummary summary={report.normalizedMetrics.organicSummary} />
         </section>
       )}
 
@@ -1351,7 +1368,7 @@ const Reports = () => {
   );
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-10 min-h-screen bg-[#f8fafc] text-slate-900 font-inter">
+    <div data-build={BUILD_SHA} className="p-6 max-w-7xl mx-auto space-y-10 min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-50 font-inter">
       {/* Control Panel */}
       <div className="bg-white border border-[#e2e8f0] rounded-[2rem] p-8 shadow-sm space-y-8 no-print">
          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 pb-8">
@@ -1602,14 +1619,9 @@ const Reports = () => {
                        <div className="border-t border-slate-100 pt-8 space-y-6 page-break-after w-full">
                          <div className="space-y-1">
                            <h3 className="text-xl font-black tracking-tight text-slate-800">Resultados generales — Desempeño orgánico</h3>
-                           <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Cifras separadas por plataforma y captura de origen</p>
+                         <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Lectura consolidada de la actividad orgánica</p>
                          </div>
-                         {Object.entries(report.normalizedMetrics.organicSummary).map(([platform, metrics]) => (
-                           <section key={platform} className="space-y-4 break-inside-avoid">
-                             <h4 className="text-sm font-black text-slate-700">{platform === 'FACEBOOK' ? 'Facebook' : platform === 'INSTAGRAM' ? 'Instagram' : platform}</h4>
-                             <MetricGrid metrics={metrics} />
-                           </section>
-                         ))}
+                         <OrganicSummary summary={report.normalizedMetrics.organicSummary} />
                        </div>
                      )}
 
