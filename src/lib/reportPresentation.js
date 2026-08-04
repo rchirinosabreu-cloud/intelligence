@@ -100,3 +100,56 @@ export const buildReportFileName = (title) => {
     .slice(0, 60) || 'reporte_de_desempeno_digital';
   return `${safeTitle}.html`;
 };
+
+export const buildNarrativeErrorLog = (error, rawContent, options = {}) => {
+  const errMsg = error?.message || String(error || '');
+  const rawLength = typeof rawContent === 'string' ? rawContent.length : 0;
+  const snippet = rawLength > 150 ? rawContent.slice(0, 150) + '... [TRUNCATED]' : (rawContent || 'N/A');
+  const attemptInfo = options.step ? ` [Step: ${options.step}]` : '';
+  const reportInfo = options.reportId ? ` [Report ID: ${options.reportId}]` : '';
+  const isFatal = options.isFatal ? 'FATAL ERROR' : 'RECOVERABLE ERROR';
+  return `[${isFatal}] ${errMsg}${attemptInfo}${reportInfo} | Raw content length: ${rawLength} | Snippet: ${snippet}`;
+};
+
+export const processNarrativeResponse = (apiData) => {
+  if (!apiData || !apiData.report) {
+    return {
+      shouldUpdateReport: false,
+      shouldShowWarning: false,
+      shouldShowSuccess: false,
+      shouldThrowError: true,
+      errorMsg: apiData?.error || apiData?.message || "Fallo al generar la narrativa"
+    };
+  }
+
+  const isFailedNarrative = apiData.success === false && (apiData.needsRegeneration === true || apiData.report?.narrative?.generationMode === 'NARRATIVE_FAILED' || apiData.report?.narrative?.needsRegeneration === true);
+
+  if (apiData.success) {
+    return {
+      shouldUpdateReport: true,
+      shouldShowWarning: false,
+      shouldShowSuccess: true,
+      shouldThrowError: false,
+      report: apiData.report
+    };
+  }
+
+  if (isFailedNarrative) {
+    return {
+      shouldUpdateReport: true,
+      shouldShowWarning: true,
+      shouldShowSuccess: false,
+      shouldThrowError: false,
+      report: apiData.report,
+      warningMsg: "Narrativa pendiente de regeneración"
+    };
+  }
+
+  return {
+    shouldUpdateReport: false,
+    shouldShowWarning: false,
+    shouldShowSuccess: false,
+    shouldThrowError: true,
+    errorMsg: apiData.error || apiData.message || "Fallo al generar la narrativa"
+  };
+};

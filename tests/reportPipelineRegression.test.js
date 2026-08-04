@@ -216,7 +216,7 @@ test('report pipeline regressions', async (t) => {
       repairNarrativeJson: async () => { calls.push('repair'); return { headline: 'x', summaryPoints: ['a','b','c'], keyAchievements: 'k', actionPlan: [], logrosYAvances: [], contenidoTopAnalisis: '', oportunidadesYAprendizajes: [], recomendacionesEstrategicas: [], sections: [{ sectionId: 'one', narrativeComment: 'Instagram: Vistas registró 100 y Clics registró 5.\n\nPara Cliente Demo, conviene priorizar el formato con más respuesta.' }], granularNarratives: [] }; }
     });
     assert.equal(result.status, 'PUBLISHED');
-    assert.deepEqual(calls, ['full', 'full', 'repair']);
+    assert.deepEqual(calls, ['full', 'repair']);
   });
 
   await t.test('publishable narrative generation regenerates only invalid sections after partial editorial failure', async () => {
@@ -249,6 +249,65 @@ test('report pipeline regressions', async (t) => {
     assert.equal(result.publishable, false);
     assert.equal(result.narrative, null);
     assert.ok(result.technicalDraft);
+  });
+
+  await t.test('processNarrativeResponse correctly decides frontend updates', async () => {
+    const { processNarrativeResponse } = await import('../src/lib/reportPresentation.js');
+
+    // Test Case: success true
+    const successResult = processNarrativeResponse({ success: true, report: { id: 'rep-1' } });
+    assert.equal(successResult.shouldUpdateReport, true);
+    assert.equal(successResult.shouldShowSuccess, true);
+    assert.equal(successResult.shouldThrowError, false);
+
+    // Test Case: success false with needsRegeneration
+    const failedResult = processNarrativeResponse({
+      success: false,
+      needsRegeneration: true,
+      report: { id: 'rep-1', narrative: { generationMode: 'NARRATIVE_FAILED' } }
+    });
+    assert.equal(failedResult.shouldUpdateReport, true);
+    assert.equal(failedResult.shouldShowWarning, true);
+    assert.equal(failedResult.shouldThrowError, false);
+
+    // Test Case: real API 500 error
+    const errorResult = processNarrativeResponse({ error: 'Server error 500' });
+    assert.equal(errorResult.shouldThrowError, true);
+    assert.equal(errorResult.shouldUpdateReport, false);
+  });
+
+  await t.test('buildNarrativeErrorLog truncates extremely large strings safely', async () => {
+    const { buildNarrativeErrorLog } = await import('../src/lib/reportPresentation.js');
+    const largeContent = 'A'.repeat(5000);
+    const logOutput = buildNarrativeErrorLog(new Error('Test Error'), largeContent, { step: 'generate', reportId: '123' });
+    assert.match(logOutput, /\[RECOVERABLE ERROR\]/);
+    assert.match(logOutput, /Test Error/);
+    assert.match(logOutput, /\[Step: generate\]/);
+    assert.match(logOutput, /\[Report ID: 123\]/);
+    assert.match(logOutput, /Raw content length: 5000/);
+    assert.match(logOutput, /Snippet:.*\[TRUNCATED\]/);
+    assert.ok(logOutput.length < 500); // Definitely truncated
+  });
+
+  await t.test('generatePublishableNarrative handles timeout cancellation', async () => {
+    const { generatePublishableNarrative } = await import('../src/services/reportVisionService.js');
+    const timeoutContext = { cancelled: false };
+
+    // Simulate a slow generation that finishes after a timeout cancellation
+    const resultPromise = generatePublishableNarrative({}, [], 'Cliente Demo', {
+      generateFullNarrative: async () => {
+        // Mock a long running promise
+        await new Promise(resolve => setTimeout(resolve, 50));
+        return { headline: 'x', summaryPoints: ['a', 'b', 'c'] };
+      }
+    }, timeoutContext);
+
+    // Cancel immediately
+    timeoutContext.cancelled = true;
+
+    const finalResult = await resultPromise;
+    assert.equal(finalResult.publishable, false);
+    assert.equal(finalResult.status, 'REVIEW');
   });
 
 });

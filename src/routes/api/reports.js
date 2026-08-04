@@ -576,7 +576,10 @@ const withTimeout = (promise, ms, errorMessage = "Timeout exceeded") => {
     ]).finally(() => clearTimeout(timeoutId));
 };
 
+import { buildNarrativeErrorLog } from '../../lib/reportPresentation.js';
+
 router.post('/:reportId/generate-narrative', async (req, res) => {
+    const timeoutContext = { cancelled: false };
     try {
         const { reportId } = req.params;
 
@@ -599,13 +602,17 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
             publishableResult = await withTimeout(
                 generatePublishableNarrative(metrics, sections, report.client.name, {
                     generateFullNarrative: generateNarrativeWithGemini
-                }),
+                }, timeoutContext),
                 90000,
                 "Gemini narrative generation timed out"
             );
         } catch (generationError) {
+            timeoutContext.cancelled = true;
             if (/Missing GEMINI_API_KEY/i.test(generationError?.message || '')) throw generationError;
-            console.error('[Reports API] Narrative generation did not produce publishable content:', generationError);
+
+            const loggedError = buildNarrativeErrorLog(generationError, null, { step: 'withTimeout', reportId, isFatal: false });
+            console.error('[Reports API] Narrative generation did not produce publishable content:', loggedError);
+
             publishableResult = {
                 status: 'REVIEW',
                 publishable: false,

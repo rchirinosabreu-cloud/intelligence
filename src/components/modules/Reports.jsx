@@ -36,7 +36,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import { adaptDatasetForChart, hasReadableChartData } from '@/lib/reportChartData';
-import { adaptOrganicSummary, filterCanonicalMetrics, getOrganicPlatformLabel, getReviewMetricEntries, isDemographicDataset, filterTopContentRows, splitAchievement, safeClassName, buildReportFileName } from '@/lib/reportPresentation';
+import { adaptOrganicSummary, filterCanonicalMetrics, getOrganicPlatformLabel, getReviewMetricEntries, isDemographicDataset, filterTopContentRows, splitAchievement, safeClassName, buildReportFileName, processNarrativeResponse } from '@/lib/reportPresentation';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
@@ -1154,17 +1154,26 @@ const Reports = () => {
           }
         });
 
-        if (narrativeResponse.data?.success && narrativeResponse.data?.report) {
-          setReport(narrativeResponse.data.report);
+        const decision = processNarrativeResponse(narrativeResponse.data);
+
+        if (decision.shouldUpdateReport) {
+          setReport(decision.report);
+        }
+
+        if (decision.shouldShowSuccess) {
           toast.success('Reporte narrativo editorial generado exitosamente!');
-        } else {
-          throw new Error('Fallo al generar la narrativa');
+        } else if (decision.shouldShowWarning) {
+          toast.error(decision.warningMsg || 'Narrativa pendiente de regeneración');
+        }
+
+        if (decision.shouldThrowError) {
+          throw new Error(decision.errorMsg || 'Fallo al generar la narrativa');
         }
       } else {
         throw new Error('Fallo al guardar la auditoría');
       }
     } catch (error) {
-      const errMsg = error.response?.data?.error || 'Error en el proceso. Intenta de nuevo.';
+      const errMsg = error.response?.data?.error || error.message || 'Error en el proceso. Intenta de nuevo.';
       toast.error(errMsg);
       console.error('[Reports Frontend] Flow error:', error.response?.data || error);
     } finally {
