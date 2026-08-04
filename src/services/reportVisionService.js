@@ -697,7 +697,7 @@ export const reconcileNarrativeSections = (storedSections = [], narrativeSection
  * @param {Array} sections - The structured sections array.
  * @returns {Promise<Object>} The parsed narrative structure.
  */
-export const generateNarrativeWithGemini = async (normalizedMetrics, sections = []) => {
+export const generateNarrativeWithGemini = async (normalizedMetrics, sections = [], clientName = 'el cliente') => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
         throw new Error("Missing GEMINI_API_KEY in server configuration");
@@ -713,6 +713,9 @@ ${JSON.stringify(normalizedMetrics, null, 2)}
 
 SECCIONES VISUALES REGISTRADAS:
 ${JSON.stringify(sections, null, 2)}
+
+CLIENTE DEL INFORME:
+${clientName}
 
 REGLAS DE REDACCIÓN DE LA NARRATIVA:
 1. TONO: Consultivo, positivo, profesional, motivador y orientado a metas comerciales de alto nivel.
@@ -860,7 +863,18 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
     }
 
     try {
-        return parseJsonResponse(content);
+        const parsed = parseJsonResponse(content);
+        const comments = (parsed.sections || []).map((section) => String(section.narrativeComment || '').trim());
+        const normalizedComments = comments.map((comment) => comment.toLocaleLowerCase('es'));
+        const clientReference = `para ${clientName}`.toLocaleLowerCase('es');
+        const invalidEditorialOutput = comments.length !== sections.length
+            || comments.some((comment) => comment.split(/\n\s*\n/).filter(Boolean).length < 2)
+            || normalizedComments.some((comment) => comment.includes('para el negocio') || !comment.includes(clientReference))
+            || new Set(normalizedComments).size !== normalizedComments.length;
+        if (invalidEditorialOutput) {
+            throw new Error('Narrative did not satisfy client-specific, two-paragraph, non-repetition rules');
+        }
+        return parsed;
     } catch (parseError) {
         console.error("[Vision Service] Error parsing narrative JSON schema:", parseError, "Raw content:", content);
         throw parseError;

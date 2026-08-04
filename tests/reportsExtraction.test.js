@@ -387,7 +387,7 @@ test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) =>
                                             sectionCategory: "ADS",
                                             platform: "META_ADS",
                                             dataset: [{ label: "Día 1", value: 100, hombres: null, mujeres: null }],
-                                            narrativeComment: "Comentario optimista sobre rendimiento macro."
+                                            narrativeComment: "Meta Ads registró 100 resultados visibles durante el periodo, una base que permite revisar la entrega de la campaña sin asumir ventas confirmadas.\n\nPara Cliente Demo, este resultado debe contrastarse con costo y calidad de los contactos antes de redistribuir inversión hacia el siguiente ciclo."
                                         }
                                     ]
                                 })
@@ -414,7 +414,7 @@ test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) =>
             const { generateNarrativeWithGemini } = await import('../src/services/reportVisionService.js');
             const metrics = { spend: { value: 1300 } };
             const sections = [{ sectionId: "sec-1", chartType: "LINE_CHART", title: "Rendimiento y Tendencia", sectionCategory: "ADS", platform: "META_ADS", dataset: [{ label: "Día 1", value: 100, hombres: null, mujeres: null }] }];
-            const result = await generateNarrativeWithGemini(metrics, sections);
+            const result = await generateNarrativeWithGemini(metrics, sections, 'Cliente Demo');
 
 
             assert.ok(result);

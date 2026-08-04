@@ -577,7 +577,8 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
         const { reportId } = req.params;
 
         const report = await prisma.metricReport.findUnique({
-            where: { id: reportId }
+            where: { id: reportId },
+            include: { client: { select: { name: true } } }
         });
 
         if (!report) {
@@ -601,7 +602,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
             );
         } catch (genError) {
             console.warn(`[Reports API] Gemini generation failed/timed out for report ${reportId}. Generating fallback template.`, genError.message);
-            narrativeResult = generateFallbackNarrative(metrics, sections);
+            narrativeResult = generateFallbackNarrative(metrics, sections, report.client.name);
             isFallback = true;
             narrativeGenerationMode = 'FALLBACK';
         }

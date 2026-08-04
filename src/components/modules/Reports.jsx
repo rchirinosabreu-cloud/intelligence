@@ -41,6 +41,23 @@ import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
 
+// Keep export-only helpers in this module so the click handler cannot reference a
+// missing named binding in an independently cached production chunk.
+const readLiveControlValue = (liveControl, clonedControl) => String(
+  liveControl?.value ?? clonedControl?.value ?? ''
+);
+
+const collectDocumentStyles = (styleSheets = []) => Array.from(styleSheets)
+  .map((sheet) => {
+    try {
+      return Array.from(sheet.cssRules || []).map((rule) => rule.cssText).join('\n');
+    } catch {
+      return '';
+    }
+  })
+  .filter(Boolean)
+  .join('\n');
+
 const toSentenceCase = (str) => {
   if (typeof str !== 'string' || !str) return '';
   const trimmed = str.trim();
@@ -580,8 +597,9 @@ const MetricGrid = ({ metrics }) => {
     reachPaid: { component: Target, card: 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-800', icon: 'bg-amber-500' }
   };
   const canonicalMetrics = filterCanonicalMetrics(metrics || {});
+  const gridColumns = Object.keys(canonicalMetrics).length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3';
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 break-inside-avoid">
+    <div className={cn('grid grid-cols-1 sm:grid-cols-2 gap-4 break-inside-avoid', gridColumns)}>
       {Object.entries(canonicalMetrics).map(([key, metric]) => {
         const style = metricStyles[key];
         const MetricIcon = style.component;
