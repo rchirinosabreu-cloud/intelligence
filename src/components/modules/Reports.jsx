@@ -1229,13 +1229,33 @@ const Reports = () => {
       width: 100%;
       max-width: 80rem;
     }
-    textarea, input, select, div, p, span, h1, h2, h3, h4, h5, h6 {
+    textarea, input, select {
       outline: none;
       border: none;
       background: transparent;
       resize: none;
       height: auto !important;
       overflow: visible !important;
+    }
+    .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+      margin-top: 1rem !important;
+      margin-bottom: 0 !important;
+    }
+    .text-sm {
+      font-size: 0.875rem !important;
+      line-height: 1.25rem !important;
+    }
+    .leading-relaxed {
+      line-height: 1.625 !important;
+    }
+    .text-slate-700 {
+      color: #334155 !important;
+    }
+    .font-normal {
+      font-weight: 400 !important;
+    }
+    .whitespace-pre-wrap {
+      white-space: pre-wrap !important;
     }
     /* Enforce corporate and dark blue background & contrast styles */
     .bg-\\[\\#009fb7\\], .bg-\\[\\#009fb7\\] * {
