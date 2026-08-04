@@ -9,7 +9,8 @@ import {
   safeClassName,
   buildReportFileName,
   getReviewMetricEntries,
-  getOrganicPlatformLabel
+  getOrganicPlatformLabel,
+  adaptOrganicSummary
 } from '../src/lib/reportPresentation.js';
 
 test('report presentation regressions', async (t) => {
@@ -19,10 +20,16 @@ test('report presentation regressions', async (t) => {
     })), ['spend']);
   });
 
-  await t.test('metric review omits missing placeholder cards', () => {
+  await t.test('metric review omits missing or zero placeholder cards', () => {
     assert.deepEqual(getReviewMetricEntries({
-      spend: { value: 232826 }, clicks: { value: null }, ctr: { value: null }, results: { value: 52 }
+      spend: { value: 232826 }, clicks: { value: 0 }, ctr: { value: 0 }, results: { value: 52 }
     }).map(([key]) => key), ['spend', 'results']);
+  });
+
+  await t.test('canonical metric grids omit zero-valued cards from published reports', () => {
+    assert.deepEqual(Object.keys(filterCanonicalMetrics({
+      spend: { value: 233058 }, clicks: { value: 0 }, ctr: { value: 0 }, impressions: { value: '0' }, results: { value: 104 }
+    })), ['spend', 'results']);
   });
 
   await t.test('metric audit presents one organic group before paid fields', async () => {
@@ -52,7 +59,8 @@ test('report presentation regressions', async (t) => {
       { title: 'Historias', results: 6 },
       { title: 'Foto', results: 3 },
       { title: 'Varias fotos', results: 1 },
-      { title: 'Otros', results: 1 }
+      { title: 'Otros', results: 1 },
+      { title: 'POST SIN RESULTADOS', results: 0, impressions: 0, reach: 0 }
     ]);
     assert.deepEqual(rows.map(row => row.title), ['REEL - ELEGIR COLEGIO']);
   });
@@ -78,6 +86,64 @@ test('report presentation regressions', async (t) => {
     assert.ok(adsHeading > organicHeading, 'paid summary must appear after organic summary');
     assert.match(component, /report\.normalizedMetrics\?\.organicSummary/);
     assert.match(component, /report\.normalizedMetrics\?\.adsSummary/);
+  });
+
+  await t.test('legacy platform summaries collapse into four organic headline metrics', () => {
+    const summary = adaptOrganicSummary({
+      FACEBOOK: { follows: { value: 7 }, views: { value: 15000 }, interactions: { value: 26 }, reach: { value: 9000 }, spend: { value: 1000 }, ctr: { value: 2 } },
+      INSTAGRAM: { follows: { value: 12 }, views: { value: 21000 }, interactions: { value: 84 }, reachOrganic: { value: 13000 }, impressions: { value: 30000 } },
+      UNKNOWN: { clicks: { value: 90 }, reachPaid: { value: 5000 } },
+      CROSS_PLATFORM: { results: { value: 50 } }
+    });
+    assert.deepEqual(Object.keys(summary), ['follows', 'views', 'interactions', 'reach']);
+    assert.equal(summary.follows.value, 19);
+    assert.equal(summary.views.value, 36000);
+    assert.equal(summary.interactions.value, 110);
+    assert.equal(summary.reach.value, 22000);
+  });
+
+  await t.test('organic summary omits zero values instead of publishing empty cards', () => {
+    const summary = adaptOrganicSummary({
+      FACEBOOK: { follows: { value: 0 }, views: { value: 15000 }, interactions: { value: 0 }, reach: { value: 9000 } },
+      INSTAGRAM: { follows: { value: 0 }, views: { value: 21000 }, interactions: { value: 84 }, reach: { value: 0 } }
+    });
+    assert.deepEqual(Object.keys(summary), ['views', 'interactions', 'reach']);
+    assert.equal(summary.views.value, 36000);
+    assert.equal(summary.interactions.value, 84);
+    assert.equal(summary.reach.value, 9000);
+  });
+
+  await t.test('dedicated organic summary cannot delegate rendering to the generic metric grid', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    const start = component.indexOf('const OrganicSummary');
+    const end = component.indexOf('\nconst ', start + 10);
+    const implementation = component.slice(start, end);
+    assert.ok(start > -1, 'missing dedicated OrganicSummary component');
+    assert.doesNotMatch(implementation, /<MetricGrid/);
+    assert.doesNotMatch(implementation, /Object\.entries\(report\.normalizedMetrics\.organicSummary\)/);
+    assert.doesNotMatch(implementation, /UNKNOWN|CROSS_PLATFORM|Inversión|Impresiones|CTR|Pauta/);
+  });
+
+  await t.test('cover encodes exactly two deliberate title lines and protects the first on desktop', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    assert.match(component, /data-cover-line="title"[^>]*whitespace-nowrap[^>]*>Reporte de desempeño digital<\/span>/);
+    assert.match(component, /data-cover-line="client"[^>]*text-\[#009fb7\][^>]*>de \{clientName\}<\/span>/);
+    assert.equal((component.match(/data-cover-line=/g) || []).length, 2);
+  });
+
+  await t.test('report root exposes the compiled deployment SHA for DevTools verification', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    const viteConfig = await fs.readFile('vite.config.js', 'utf8');
+    assert.match(component, /data-build=\{BUILD_SHA\}/);
+    assert.match(viteConfig, /RAILWAY_GIT_COMMIT_SHA/);
+  });
+
+
+  await t.test('report component uses an in-module publishable value guard for legacy demographics', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    assert.doesNotMatch(component, /hasPublishableValue\s*}/, 'Reports.jsx must not import a helper that can disappear from cached chunks');
+    assert.match(component, /const hasReportValue = \(value\) =>/);
+    assert.match(component, /demographics\.ageGender \|\| \[\]\)\.filter\(item => hasReportValue\(item\.hombres\)/);
   });
 
   await t.test('report sections expose their source id for chart traceability', async () => {

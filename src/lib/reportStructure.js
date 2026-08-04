@@ -25,21 +25,21 @@ const sourcePriority = (source) => {
 const buildOrganicSummary = (sources) => {
   const summary = {};
   for (const source of sources) {
-    const platform = source.platform;
-    if (!platform || platform === 'META_ADS' || platform === 'ORGANIC_RRSS') continue;
-    if (!summary[platform]) summary[platform] = {};
-    for (const [key, metric] of Object.entries(cleanMetrics(source.metrics))) {
-      const current = summary[platform][key];
+    for (const key of ['follows', 'views', 'interactions', 'reach']) {
+      const metric = source.metrics?.[key] || (key === 'reach' ? source.metrics?.reachOrganic : null);
+      if (!hasValue(metric)) continue;
+      if (!summary[key]) summary[key] = new Map();
+      const platform = ['FACEBOOK', 'INSTAGRAM'].includes(source.platform) ? source.platform : 'ORGANIC';
+      const current = summary[key].get(platform);
       if (!current || sourcePriority(source) > current._priority) {
-        summary[platform][key] = { ...metric, _priority: sourcePriority(source), sourceId: source.sourceId };
+        summary[key].set(platform, { ...metric, sourceId: source.sourceId, _priority: sourcePriority(source) });
       }
     }
   }
-  return Object.fromEntries(Object.entries(summary).map(([platform, metrics]) => {
-    return [platform, Object.fromEntries(Object.entries(metrics).map(([key, metric]) => {
-      const { _priority, ...publicMetric } = metric;
-      return [key, publicMetric];
-    }))];
+  return Object.fromEntries(Object.entries(summary).map(([key, metricsByPlatform]) => {
+    const metrics = [...metricsByPlatform.values()];
+    const { _priority, ...first } = metrics[0];
+    return [key, { ...first, key, value: metrics.reduce((total, metric) => total + Number(metric.value), 0) }];
   }));
 };
 

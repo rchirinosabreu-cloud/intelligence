@@ -7,7 +7,9 @@ import {
   mergeSourceMetricsIntoAccumulator,
   finalizeNormalizedMetrics,
   preserveApprovedReportData,
-  reconcileNarrativeSections
+  reconcileNarrativeSections,
+  validateSectionNarratives,
+  generateFallbackNarrative
 } from '../src/services/reportVisionService.js';
 import { adaptDatasetForChart, hasReadableChartData } from '../src/lib/reportChartData.js';
 
@@ -62,7 +64,9 @@ test('report pipeline regressions', async (t) => {
     assert.deepEqual(adaptDatasetForChart([
       { label: 'A', impressions: '1.200' },
       { label: 'B', results: 12 },
-      { label: 'C', value: null }
+      { label: 'C', value: null },
+      { label: 'D', value: 0 },
+      { label: 'E', hombres: 0, mujeres: 0 }
     ], 'LINE_CHART'), [
       { label: 'A', value: 1200 },
       { label: 'B', value: 12 }
@@ -106,6 +110,20 @@ test('report pipeline regressions', async (t) => {
     assert.equal(organic.dataset.length, 1);
     assert.equal(organic.demographics.ageGender.length, 1);
     assert.equal(organic.topContent.length, 1);
+  });
+
+  await t.test('source extraction removes zero-only metrics and chart rows before reporting', () => {
+    const source = validateAndCleanSourceExtraction({
+      metrics: { clicks: { value: 0 }, ctr: { value: '0.00%' }, impressions: { value: 1200 } },
+      dataset: [{ label: 'Clics', value: 0 }, { label: 'Impresiones', value: 1200 }],
+      demographics: { ageGender: [{ label: '25-34', hombres: 0, mujeres: 0 }, { label: '35-44', hombres: 3, mujeres: 7 }], cities: [{ label: 'Sin datos', value: 0 }, { label: 'Cartagena', value: 45.4 }], countries: [] }
+    });
+    assert.equal(source.metrics.clicks.value, null);
+    assert.equal(source.metrics.ctr.value, null);
+    assert.equal(source.metrics.impressions.value, 1200);
+    assert.deepEqual(source.dataset, [{ label: 'Impresiones', value: 1200 }]);
+    assert.deepEqual(source.demographics.ageGender, [{ label: '35-44', hombres: 3, mujeres: 7 }]);
+    assert.deepEqual(source.demographics.cities, [{ label: 'Cartagena', value: 45.4 }]);
   });
 
   await t.test('preserves platform, screen type, entity level and result semantics per screenshot', () => {
@@ -157,5 +175,44 @@ test('report pipeline regressions', async (t) => {
     assert.deepEqual(Object.keys(narrative.oportunidadesYAprendizajes[0]), ['title', 'evidence', 'learning', 'application']);
     assert.equal(Array.isArray(narrative.recomendacionesEstrategicas), true);
     assert.deepEqual(Object.keys(narrative.recomendacionesEstrategicas[0]), ['priority', 'action', 'rationale', 'kpi']);
+  });
+
+  await t.test('fallback writes distinct client-specific narratives for every supported screen type', () => {
+    const sections = [
+      { sectionId: 'fb', platform: 'FACEBOOK', screenType: 'CONTENT_SUMMARY', period: { start: '2026-06-01', end: '2026-06-30' }, metrics: { views: { value: 15891, changePct: -14.2 }, interactions: { value: 26 }, follows: { value: 9 } }, dataset: [{ label: 'Visualizaciones', value: 15891 }, { label: 'Interacciones', value: 26 }] },
+      { sectionId: 'ig', platform: 'INSTAGRAM', screenType: 'CONTENT_SUMMARY', metrics: { views: { value: 39609 }, interactions: { value: 844 }, profileVisits: { value: 521 } }, dataset: [{ label: 'Visualizaciones', value: 39609 }, { label: 'Interacciones', value: 844 }] },
+      { sectionId: 'trend', platform: 'FACEBOOK', screenType: 'METRIC_TRENDS', dataset: [{ label: '1 jun', value: 120 }, { label: '15 jun', value: 480 }, { label: '30 jun', value: 90 }] },
+      { sectionId: 'formats', platform: 'INSTAGRAM', screenType: 'CONTENT_FORMATS', dataset: [{ label: 'Reels', value: 12000 }, { label: 'Historias', value: 4300 }, { label: 'Publicaciones', value: 2100 }] },
+      { sectionId: 'demo', platform: 'INSTAGRAM', screenType: 'AUDIENCE_DEMOGRAPHICS', demographics: { ageGender: [{ label: '25-34', hombres: 28, mujeres: 42 }, { label: '35-44', hombres: 15, mujeres: 20 }], cities: [{ label: 'Bogotá', value: 54 }], countries: [{ label: 'Colombia', value: 91 }] } },
+      { sectionId: 'ads', platform: 'META_ADS', screenType: 'AD_TABLE', dataset: [{ label: 'Anuncio A', results: 52, spend: 232826, impressions: 23568, reach: 8978 }, { label: 'Anuncio B', results: 16, spend: 54993, impressions: 5200, reach: 4100 }] },
+    ];
+    const result = generateFallbackNarrative({}, sections, 'New Pueblito Suites');
+    const secondParagraphs = result.sections.map(section => section.narrativeComment.split(/\n\s*\n/)[1]);
+    for (const section of result.sections) {
+      assert.equal(section.narrativeComment.split(/\n\s*\n/).length, 2);
+      assert.match(section.narrativeComment, /Para New Pueblito Suites,/);
+      assert.doesNotMatch(section.narrativeComment, /Para el negocio|este dato permite identificar|este es el valor más alto visible/i);
+      assert.doesNotMatch(section.narrativeComment, /ventas? (confirmadas?|generadas?)|rentabilidad (positiva|lograda|generada)/i);
+      assert.ok((section.narrativeComment.match(/\d[\d.,%]*/g) || []).length >= 2, section.sectionId);
+    }
+    assert.equal(new Set(secondParagraphs).size, sections.length);
+  });
+
+  await t.test('narrative validation explains the exact rejection reason for Railway logs', () => {
+    const validation = validateSectionNarratives([
+      { sectionId: 'one', narrativeComment: `Facebook: 10 y 20 marcaron el periodo.\n\nPara el negocio, conviene revisar.` }
+    ], [{ sectionId: 'one', dataset: [{ label: 'A', value: 10 }, { label: 'B', value: 20 }] }], 'Cliente Demo');
+    assert.equal(validation.valid, false);
+    assert.equal(validation.reason, 'forbidden-language');
+  });
+
+  await t.test('narrative validation rejects generic, repeated or numerically empty comments', () => {
+    const sections = [
+      { sectionId: 'one', dataset: [{ label: 'A', value: 10 }, { label: 'B', value: 20 }] },
+      { sectionId: 'two', dataset: [{ label: 'A', value: 30 }, { label: 'B', value: 40 }] },
+    ];
+    const repeated = 'Facebook: registró actividad durante el periodo.\n\nPara Cliente Demo, conviene revisar el contenido.';
+    assert.equal(validateSectionNarratives([{ sectionId: 'one', narrativeComment: repeated }, { sectionId: 'two', narrativeComment: repeated }], sections, 'Cliente Demo').valid, false);
+    assert.equal(validateSectionNarratives([{ sectionId: 'one', narrativeComment: 'Facebook: 10 y 20 marcaron el periodo.\n\nPara el negocio, conviene revisar.' }], [sections[0]], 'Cliente Demo').valid, false);
   });
 });
