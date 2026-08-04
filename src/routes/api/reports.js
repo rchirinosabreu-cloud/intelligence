@@ -602,7 +602,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
         } catch (generationError) {
             console.error('[Reports API] Narrative generation did not produce publishable content:', generationError);
             publishableResult = {
-                status: 'REVIEW',
+                status: 'NARRATIVE_FAILED',
                 publishable: false,
                 narrative: null,
                 attempts: [{ step: 'fatal', error: generationError.message }]
@@ -641,7 +641,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
                 needsRegeneration: true,
                 attempts: publishableResult.attempts || []
             },
-            status: 'REVIEW'
+            status: 'NARRATIVE_FAILED'
         };
 
         const updatedReport = await prisma.metricReport.update({

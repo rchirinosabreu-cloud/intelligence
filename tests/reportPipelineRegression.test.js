@@ -207,16 +207,6 @@ test('report pipeline regressions', async (t) => {
     assert.equal(validateSectionNarratives([{ sectionId: 'one', narrativeComment: repeated }, { sectionId: 'two', narrativeComment: repeated }], sections, 'Cliente Demo').valid, false);
     assert.equal(validateSectionNarratives([{ sectionId: 'one', narrativeComment: 'Facebook: 10 y 20 marcaron el periodo.\n\nPara el negocio, conviene revisar.' }], [sections[0]], 'Cliente Demo').valid, false);
   });
-
-  await t.test('Gemini narrative parse failures expose raw content for AI repair', async () => {
-    const { parseNarrativeResponse } = await import('../src/services/reportVisionService.js');
-    assert.throws(() => parseNarrativeResponse('{"sections":[', [], 'Cliente Demo'), (error) => {
-      assert.match(error.message, /Failed to parse AI response as JSON/);
-      assert.equal(error.rawContent, '{"sections":[');
-      return true;
-    });
-  });
-
   await t.test('publishable narrative generation repairs broken Gemini JSON before technical fallback', async () => {
     const { generatePublishableNarrative } = await import('../src/services/reportVisionService.js');
     const calls = [];
