@@ -1011,6 +1011,16 @@ export const generateFallbackNarrative = (normalizedMetrics, sections = []) => {
 
     const updatedSections = (Array.isArray(sections) ? sections : []).map(section => {
         const maxPoint = findMaxDataPoint(section.dataset);
+        const rankedPoints = (Array.isArray(section.dataset) ? section.dataset : [])
+            .map((point) => ({
+                label: point.label || 'Sin etiqueta',
+                value: Number(point.value ?? 0) + Number(point.hombres ?? 0) + Number(point.mujeres ?? 0)
+            }))
+            .filter((point) => Number.isFinite(point.value))
+            .sort((a, b) => b.value - a.value);
+        const leader = rankedPoints[0];
+        const runnerUp = rankedPoints[1];
+        const lowest = rankedPoints[rankedPoints.length - 1];
         const title = section.title || 'esta sección';
         const platformName = section.platform === 'FACEBOOK' ? 'Facebook' : section.platform === 'INSTAGRAM' ? 'Instagram' : section.platform === 'META_ADS' ? 'Meta Ads' : 'Redes sociales';
         const metricName = section.metricLabel || (section.sectionCategory === 'ADS' ? 'resultados' : 'registros');

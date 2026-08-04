@@ -630,6 +630,12 @@ const MetricGrid = ({ metrics }) => {
   );
 };
 
+const OrganicHeadlineCards = ({ summary }) => {
+  const headlineMetrics = selectOrganicSummaryMetrics(summary || {});
+  if (Object.keys(headlineMetrics).length === 0) return null;
+  return <MetricGrid metrics={headlineMetrics} />;
+};
+
 const ActionPlan = ({ narrative, onUpdate }) => {
   if (!narrative || !narrative.actionPlan) return null;
 
