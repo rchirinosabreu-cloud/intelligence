@@ -916,7 +916,12 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
 
     let parsed;
     try {
-        parsed = parseJsonResponse(content);
+        const parsed = parseJsonResponse(content);
+        const validation = validateSectionNarratives(parsed.sections || [], sections, clientName);
+        if (!validation.valid) {
+            throw new Error('Narrative did not satisfy client-specific, two-paragraph, non-repetition rules');
+        }
+        return parsed;
     } catch (parseError) {
         console.error("[Vision Service] Error parsing narrative JSON schema:", parseError, "Raw content:", content);
         throw parseError;
