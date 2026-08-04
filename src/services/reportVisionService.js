@@ -916,7 +916,7 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
 
     let parsed;
     try {
-        const parsed = parseJsonResponse(content);
+        parsed = parseJsonResponse(content);
         const validation = validateSectionNarratives(parsed.sections || [], sections, clientName);
         if (!validation.valid) {
             throw new Error('Narrative did not satisfy client-specific, two-paragraph, non-repetition rules');
@@ -980,6 +980,95 @@ const findTopDemographic = (list) => {
         }
     });
     return maxItem ? { label: maxItem.label || 'Principal', value: maxVal } : null;
+};
+
+
+const findInvalidNarrativeSections = (narrativeSections = [], sourceSections = [], clientName = 'el cliente') => {
+    const narrativeById = new Map((narrativeSections || []).map(section => [section.sectionId, section]));
+    const secondParagraphs = new Set();
+    return (sourceSections || []).filter((source) => {
+        const section = narrativeById.get(source.sectionId);
+        if (!section) return true;
+        const paragraphs = String(section.narrativeComment || '').trim().split(/\n\s*\n/).filter(Boolean);
+        if (paragraphs.length !== 2) return true;
+        const fullText = paragraphs.join('\n\n');
+        if (FORBIDDEN_NARRATIVE_PHRASES.test(fullText)) return true;
+        if (!fullText.toLocaleLowerCase('es').includes(`para ${clientName},`.toLocaleLowerCase('es'))) return true;
+        if (sectionHasEnoughFigures(source) && numericMentions(fullText).length < 2) return true;
+        const normalizedSecond = paragraphs[1].toLocaleLowerCase('es').replace(/\s+/g, ' ');
+        if (secondParagraphs.has(normalizedSecond)) return true;
+        secondParagraphs.add(normalizedSecond);
+        return false;
+    });
+};
+
+const parseNarrativeCandidate = (candidate) => typeof candidate === 'string' ? parseJsonResponse(candidate) : candidate;
+
+const mergeRegeneratedSections = (narrative, regeneratedSections = []) => {
+    const replacements = new Map(regeneratedSections.map(section => [section.sectionId, section]));
+    return {
+        ...narrative,
+        sections: (narrative.sections || []).map(section => replacements.has(section.sectionId)
+            ? { ...section, narrativeComment: replacements.get(section.sectionId).narrativeComment }
+            : section)
+    };
+};
+
+export const generatePublishableNarrative = async (normalizedMetrics, sections = [], clientName = 'el cliente', deps = {}) => {
+    const attempts = [];
+    const fullGenerator = deps.generateFullNarrative || generateNarrativeWithGemini;
+    const repairGenerator = deps.repairNarrativeJson || (async () => { throw new Error('Narrative JSON repair is not configured'); });
+    const sectionRegenerator = deps.regenerateSections || (async (invalidSections) => generateFallbackNarrative(normalizedMetrics, invalidSections, clientName).sections);
+
+    let candidate;
+    let rawFailure;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+            candidate = parseNarrativeCandidate(await fullGenerator(normalizedMetrics, sections, clientName));
+            break;
+        } catch (error) {
+            rawFailure = error;
+            attempts.push({ step: attempt === 1 ? 'generate' : 'retry', error: error.message });
+        }
+    }
+
+    if (!candidate) {
+        try {
+            candidate = parseNarrativeCandidate(await repairGenerator({ normalizedMetrics, sections, clientName, error: rawFailure?.message }));
+            attempts.push({ step: 'repair' });
+        } catch (error) {
+            attempts.push({ step: 'repair', error: error.message });
+        }
+    }
+
+    if (candidate) {
+        let validation = validateSectionNarratives(candidate.sections || [], sections, clientName);
+        if (!validation.valid) {
+            const invalidSections = findInvalidNarrativeSections(candidate.sections || [], sections, clientName);
+            try {
+                const regenerated = await sectionRegenerator(invalidSections, { normalizedMetrics, clientName, narrative: candidate, validation });
+                candidate = mergeRegeneratedSections(candidate, parseNarrativeCandidate(regenerated));
+                validation = validateSectionNarratives(candidate.sections || [], sections, clientName);
+                attempts.push({ step: 'regenerate-sections', sectionIds: invalidSections.map(section => section.sectionId) });
+            } catch (error) {
+                attempts.push({ step: 'regenerate-sections', error: error.message });
+            }
+        }
+        validation = validateSectionNarratives(candidate.sections || [], sections, clientName);
+        if (validation.valid) {
+            return { status: 'PUBLISHED', publishable: true, narrative: candidate, sections: candidate.sections || [], attempts };
+        }
+        attempts.push({ step: 'validate', error: validation.reason });
+    }
+
+    return {
+        status: 'NARRATIVE_FAILED',
+        publishable: false,
+        narrative: null,
+        sections,
+        technicalDraft: generateFallbackNarrative(normalizedMetrics, sections, clientName),
+        attempts
+    };
 };
 
 export const generateFallbackNarrative = (normalizedMetrics, sections = [], clientName = 'el cliente') => {

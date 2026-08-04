@@ -105,9 +105,9 @@ const PerformanceTrendChart = ({ data }) => {
 const DemographicsChart = ({ demographics }) => {
   if (!demographics) return null;
 
-  const ageGenderData = (demographics.ageGender || []).filter(item => hasPublishableValue(item.hombres) || hasPublishableValue(item.mujeres));
-  const citiesData = (demographics.cities || []).filter(item => hasPublishableValue(item.value));
-  const countriesData = (demographics.countries || []).filter(item => hasPublishableValue(item.value));
+  const ageGenderData = (demographics.ageGender || []).filter(item => hasReportValue(item.hombres) || hasReportValue(item.mujeres));
+  const citiesData = (demographics.cities || []).filter(item => hasReportValue(item.value));
+  const countriesData = (demographics.countries || []).filter(item => hasReportValue(item.value));
 
   const totalAgeGender = ageGenderData.reduce((acc, item) => acc + (Number(item.hombres) || 0) + (Number(item.mujeres) || 0), 0);
   const totalCities = citiesData.reduce((acc, item) => acc + (Number(item.value) || 0), 0);
@@ -1561,9 +1561,9 @@ const Reports = () => {
 
                    {/* UNIFIED executive monocolumn continuous vertical layout */}
                    <div className="p-8 md:p-12 space-y-12 w-full">
-                     {narrativeState?.generationMode === 'FALLBACK' && (
+                     {['FALLBACK', 'NARRATIVE_FAILED'].includes(narrativeState?.generationMode) && (
                        <div className="no-print rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 text-sm text-amber-800 dark:text-amber-200">
-                         <strong>Narrativa de contingencia:</strong> la generación editorial no pudo completarse. Revisa los textos y vuelve a generar la narrativa antes de entregar el informe.
+                         <strong>Narrativa necesita regeneración:</strong> la generación editorial no produjo una versión publicable. El reporte conserva métricas y gráficas, pero debes regenerar la narrativa antes de entregar o exportar el informe.
                        </div>
                      )}
                      {/* 1. Portada Monumental */}
