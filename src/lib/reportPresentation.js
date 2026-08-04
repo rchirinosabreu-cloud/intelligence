@@ -1,7 +1,7 @@
 const CANONICAL_KEYS = [
   'spend', 'impressions', 'reach', 'clicks', 'ctr', 'results',
   'views', 'viewers', 'interactions', 'linkClicks', 'profileVisits', 'follows',
-  'followersTotal', 'videoViews', 'viewsOrganic', 'viewsPaid', 'reachOrganic', 'reachPaid'
+  'videoViews', 'reachOrganic', 'reachPaid'
 ];
 const FORMAT_SUMMARY_LABELS = new Set([
   'reel', 'reels', 'enlace', 'enlaces', 'historia', 'historias', 'foto', 'fotos',

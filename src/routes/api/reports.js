@@ -350,7 +350,6 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                     sectionCategory: res.sectionCategory || 'ADS',
                     platform: res.platform || 'META_ADS',
                     dataset: res.dataset,
-                    demographics: res.demographics,
                     screenType: res.screenType,
                     entityLevel: res.entityLevel,
                     resultType: res.resultType,

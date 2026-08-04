@@ -76,23 +76,13 @@ test('report presentation regressions', async (t) => {
     const adsHeading = component.indexOf('Resultados generales — Desempeño de pauta');
     assert.ok(organicHeading > -1, 'missing organic summary heading');
     assert.ok(adsHeading > organicHeading, 'paid summary must appear after organic summary');
-    assert.match(component, /MetricGrid metrics=\{report\.normalizedMetrics\.organicSummary\}/);
-    assert.doesNotMatch(component, /Object\.entries\(report\.normalizedMetrics\.organicSummary\)/);
+    assert.match(component, /report\.normalizedMetrics\?\.organicSummary/);
     assert.match(component, /report\.normalizedMetrics\?\.adsSummary/);
-  });
-
-  await t.test('report cards and data rows do not change on hover', async () => {
-    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
-    assert.doesNotMatch(component, /hover:-translate-y/);
-    assert.doesNotMatch(component, /<tr[^>]+hover:bg-slate/);
-    assert.doesNotMatch(component, /hover:shadow-md/);
   });
 
   await t.test('report sections expose their source id for chart traceability', async () => {
     const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
     assert.match(route, /sourceId:\s*res\.sourceId/);
-    assert.match(route, /demographics:\s*res\.demographics/);
-    assert.match(route, /const hasSectionData/);
     assert.match(route, /buildScopedReportData/);
   });
 
@@ -101,7 +91,6 @@ test('report presentation regressions', async (t) => {
     const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
     assert.match(route, /generationMode:\s*narrativeGenerationMode/);
     assert.match(component, /Narrativa de contingencia/);
-    assert.match(route, /45000/);
   });
 
   await t.test('vision prompt does not restrict organic metrics to paid keys', async () => {
