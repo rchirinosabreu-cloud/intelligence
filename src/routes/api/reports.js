@@ -7,7 +7,7 @@ import { parseJsonResponse, extractModelText } from '../../services/aiService.js
 import {
     extractMetricsWithGemini,
     generateNarrativeWithGemini,
-    generateFallbackNarrative,
+    generatePublishableNarrative,
     validateAndCleanSourceExtraction,
     mergeSourceMetricsIntoAccumulator,
     finalizeNormalizedMetrics,
@@ -590,41 +590,63 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
 
         console.log(`[Reports API] Generating narrative for report ${reportId}...`);
 
-        let narrativeResult;
-        let isFallback = false;
-        let narrativeGenerationMode = 'AI';
+        let publishableResult;
         try {
-            // Editorial structured output is larger than extraction output; allow a realistic response window.
-            narrativeResult = await withTimeout(
-                generateNarrativeWithGemini(metrics, sections, report.client.name),
-                45000,
+            publishableResult = await withTimeout(
+                generatePublishableNarrative(metrics, sections, report.client.name, {
+                    generateFullNarrative: generateNarrativeWithGemini
+                }),
+                90000,
                 "Gemini narrative generation timed out"
             );
-        } catch (genError) {
-            console.warn(`[Reports API] Gemini generation failed/timed out for report ${reportId}. Generating fallback template.`, genError.message);
-            narrativeResult = generateFallbackNarrative(metrics, sections, report.client.name);
-            isFallback = true;
-            narrativeGenerationMode = 'FALLBACK';
+        } catch (generationError) {
+            console.error('[Reports API] Narrative generation did not produce publishable content:', generationError);
+            publishableResult = {
+                status: 'REVIEW',
+                publishable: false,
+                narrative: null,
+                attempts: [{ step: 'fatal', error: generationError.message }]
+            };
         }
+
+        const narrativeResult = publishableResult.narrative;
+        const updateData = publishableResult.publishable ? {
+            narrative: {
+                headline: narrativeResult.headline,
+                summaryPoints: narrativeResult.summaryPoints,
+                keyAchievements: narrativeResult.keyAchievements,
+                actionPlan: narrativeResult.actionPlan,
+                logrosYAvances: narrativeResult.logrosYAvances || [],
+                contenidoTopAnalisis: narrativeResult.contenidoTopAnalisis || "",
+                oportunidadesYAprendizajes: narrativeResult.oportunidadesYAprendizajes || [],
+                recomendacionesEstrategicas: narrativeResult.recomendacionesEstrategicas || [],
+                granularNarratives: narrativeResult.granularNarratives || [],
+                generationMode: 'AI',
+                attempts: publishableResult.attempts || []
+            },
+            sections: reconcileNarrativeSections(sections, narrativeResult.sections || []),
+            status: 'PUBLISHED'
+        } : {
+            narrative: {
+                headline: 'Narrativa pendiente de regeneración',
+                summaryPoints: ['La narrativa automática no superó la validación editorial.', 'El reporte conserva métricas y gráficas para revisión interna.', 'Regenera la narrativa antes de publicar o exportar el informe.'],
+                keyAchievements: 'La generación automática no produjo una narrativa publicable. Las métricas y secciones se mantienen sin reemplazarse por textos de contingencia.',
+                actionPlan: [],
+                logrosYAvances: [],
+                contenidoTopAnalisis: '',
+                oportunidadesYAprendizajes: [],
+                recomendacionesEstrategicas: [],
+                granularNarratives: [],
+                generationMode: 'NARRATIVE_FAILED',
+                needsRegeneration: true,
+                attempts: publishableResult.attempts || []
+            },
+            status: 'REVIEW'
+        };
 
         const updatedReport = await prisma.metricReport.update({
             where: { id: reportId },
-            data: {
-                narrative: {
-                    headline: narrativeResult.headline,
-                    summaryPoints: narrativeResult.summaryPoints,
-                    keyAchievements: narrativeResult.keyAchievements,
-                    actionPlan: narrativeResult.actionPlan,
-                    logrosYAvances: narrativeResult.logrosYAvances || [],
-                    contenidoTopAnalisis: narrativeResult.contenidoTopAnalisis || "",
-                    oportunidadesYAprendizajes: narrativeResult.oportunidadesYAprendizajes || [],
-                    recomendacionesEstrategicas: narrativeResult.recomendacionesEstrategicas || [],
-                    granularNarratives: narrativeResult.granularNarratives || [],
-                    generationMode: narrativeGenerationMode
-                },
-                sections: reconcileNarrativeSections(sections, narrativeResult.sections || []),
-                status: isFallback ? 'REVIEW' : 'PUBLISHED'
-            },
+            data: updateData,
             include: {
                 sources: true,
                 client: true

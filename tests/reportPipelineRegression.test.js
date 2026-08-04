@@ -207,4 +207,57 @@ test('report pipeline regressions', async (t) => {
     assert.equal(validateSectionNarratives([{ sectionId: 'one', narrativeComment: repeated }, { sectionId: 'two', narrativeComment: repeated }], sections, 'Cliente Demo').valid, false);
     assert.equal(validateSectionNarratives([{ sectionId: 'one', narrativeComment: 'Facebook: 10 y 20 marcaron el periodo.\n\nPara el negocio, conviene revisar.' }], [sections[0]], 'Cliente Demo').valid, false);
   });
+
+  await t.test('Gemini narrative parse failures expose raw content for AI repair', async () => {
+    const { parseNarrativeResponse } = await import('../src/services/reportVisionService.js');
+    assert.throws(() => parseNarrativeResponse('{"sections":[', [], 'Cliente Demo'), (error) => {
+      assert.match(error.message, /Failed to parse AI response as JSON/);
+      assert.equal(error.rawContent, '{"sections":[');
+      return true;
+    });
+  });
+
+  await t.test('publishable narrative generation repairs broken Gemini JSON before technical fallback', async () => {
+    const { generatePublishableNarrative } = await import('../src/services/reportVisionService.js');
+    const calls = [];
+    const result = await generatePublishableNarrative({}, [{ sectionId: 'one', platform: 'Instagram', dataset: [{ label: 'Vistas', value: 100 }, { label: 'Clics', value: 5 }] }], 'Cliente Demo', {
+      generateFullNarrative: async () => { calls.push('full'); return '{"headline":"x","summaryPoints":["a","b","c"],"keyAchievements":"k","actionPlan":[],"logrosYAvances":[],"contenidoTopAnalisis":"","oportunidadesYAprendizajes":[],"recomendacionesEstrategicas":[],"sections":[{"sectionId":"one","narrativeComment":"Instagram: Vistas registró 100 y Clics registró 5.\\n\\nPara Cliente Demo, conviene priorizar el formato con más respuesta."}],"granularNarratives":[]'; },
+      repairNarrativeJson: async () => { calls.push('repair'); return { headline: 'x', summaryPoints: ['a','b','c'], keyAchievements: 'k', actionPlan: [], logrosYAvances: [], contenidoTopAnalisis: '', oportunidadesYAprendizajes: [], recomendacionesEstrategicas: [], sections: [{ sectionId: 'one', narrativeComment: 'Instagram: Vistas registró 100 y Clics registró 5.\n\nPara Cliente Demo, conviene priorizar el formato con más respuesta.' }], granularNarratives: [] }; }
+    });
+    assert.equal(result.status, 'PUBLISHED');
+    assert.deepEqual(calls, ['full', 'full', 'repair']);
+  });
+
+  await t.test('publishable narrative generation regenerates only invalid sections after partial editorial failure', async () => {
+    const { generatePublishableNarrative } = await import('../src/services/reportVisionService.js');
+    const sections = [
+      { sectionId: 'ok', platform: 'Facebook', dataset: [{ label: 'Alcance', value: 200 }, { label: 'Visitas', value: 40 }] },
+      { sectionId: 'bad', platform: 'Instagram', dataset: [{ label: 'Reels', value: 300 }, { label: 'Historias', value: 90 }] }
+    ];
+    const calls = [];
+    const base = { headline: 'x', summaryPoints: ['a','b','c'], keyAchievements: 'k', actionPlan: [], logrosYAvances: [], contenidoTopAnalisis: '', oportunidadesYAprendizajes: [], recomendacionesEstrategicas: [], granularNarratives: [] };
+    const result = await generatePublishableNarrative({}, sections, 'Cliente Demo', {
+      generateFullNarrative: async () => ({ ...base, sections: [
+        { sectionId: 'ok', narrativeComment: 'Facebook: Alcance registró 200 y Visitas registró 40.\n\nPara Cliente Demo, conviene sostener la lectura de alcance con visitas.' },
+        { sectionId: 'bad', narrativeComment: 'Instagram: registró actividad.\n\nPara el negocio, conviene revisar.' }
+      ] }),
+      regenerateSections: async (invalid) => { calls.push(invalid.map(s => s.sectionId)); return invalid.map(s => ({ sectionId: s.sectionId, narrativeComment: 'Instagram: Reels registró 300 e Historias registró 90.\n\nPara Cliente Demo, conviene convertir esta diferencia en una prueba de formatos para el próximo calendario.' })); }
+    });
+    assert.equal(result.status, 'PUBLISHED');
+    assert.deepEqual(calls, [['bad']]);
+  });
+
+  await t.test('publishable narrative generation returns NARRATIVE_FAILED without exposing technical fallback', async () => {
+    const { generatePublishableNarrative } = await import('../src/services/reportVisionService.js');
+    const result = await generatePublishableNarrative({}, [{ sectionId: 'one', dataset: [{ label: 'A', value: 10 }, { label: 'B', value: 20 }] }], 'Cliente Demo', {
+      generateFullNarrative: async () => { throw new Error('bad json'); },
+      repairNarrativeJson: async () => { throw new Error('repair failed'); },
+      regenerateSections: async () => { throw new Error('regen failed'); }
+    });
+    assert.equal(result.status, 'NARRATIVE_FAILED');
+    assert.equal(result.publishable, false);
+    assert.equal(result.narrative, null);
+    assert.ok(result.technicalDraft);
+  });
+
 });

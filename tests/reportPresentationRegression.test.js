@@ -136,14 +136,32 @@ test('report presentation regressions', async (t) => {
   await t.test('fallback narratives are visibly marked for human review', async () => {
     const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
     const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
-    assert.match(route, /generationMode:\s*narrativeGenerationMode/);
-    assert.match(component, /Narrativa de contingencia/);
+    assert.match(route, /generationMode:\s*'NARRATIVE_FAILED'/);
+    assert.match(component, /Narrativa necesita regeneración/);
+  });
+
+  await t.test('narrative failures persist a Prisma-valid REVIEW status with a failure generation mode', async () => {
+    const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
+    assert.match(route, /generationMode:\s*'NARRATIVE_FAILED'/);
+    assert.match(route, /status:\s*'REVIEW'/);
+    assert.doesNotMatch(route, /status:\s*'NARRATIVE_FAILED'/);
   });
 
   await t.test('vision prompt does not restrict organic metrics to paid keys', async () => {
     const service = await fs.readFile('src/services/reportVisionService.js', 'utf8');
     assert.doesNotMatch(service, /key name \(strictly: "spend"/);
     assert.match(service, /organic semantic keys listed above/);
+  });
+
+  await t.test('Reports.jsx encapsulates publishable value guard locally and never references imported hasPublishableValue', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    assert.doesNotMatch(component, /hasPublishableValue/);
+    assert.match(component, /const hasReportValue =/);
+  });
+
+  await t.test('built frontend bundle must not carry the legacy hasPublishableValue symbol', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    assert.doesNotMatch(component, /hasPublishableValue/);
   });
 
 });

@@ -1,4 +1,4 @@
-import { parseJsonResponse } from './aiService.js';
+import { extractModelText, parseJsonResponse } from './aiService.js';
 import { GoogleGenAI } from '@google/genai';
 import { adaptDatasetForChart } from '../lib/reportChartData.js';
 import { filterTopContentRows, hasPublishableValue } from '../lib/reportPresentation.js';
@@ -743,6 +743,23 @@ export const validateSectionNarratives = (narrativeSections = [], sourceSections
     return { valid: true };
 };
 
+export const parseNarrativeResponse = (content, sections = [], clientName = 'el cliente') => {
+    try {
+        const parsed = parseJsonResponse(content);
+        const validation = validateSectionNarratives(parsed.sections || [], sections, clientName);
+        if (!validation.valid) {
+            const validationError = new Error(`Narrative did not satisfy client-specific, two-paragraph, non-repetition rules: ${validation.reason}`);
+            validationError.rawContent = content;
+            validationError.validation = validation;
+            throw validationError;
+        }
+        return parsed;
+    } catch (error) {
+        error.rawContent = error.rawContent || content;
+        throw error;
+    }
+};
+
 /**
  * Generates an editorial narrative and strategic action plan from normalized metrics and sections using Gemini.
  * @param {Object} normalizedMetrics - The validated metrics object.
@@ -914,26 +931,12 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
         throw new Error("Gemini Narrative response content is empty");
     }
 
-    let parsed;
     try {
-        const parsed = parseJsonResponse(content);
-        const validation = validateSectionNarratives(parsed.sections || [], sections, clientName);
-        if (!validation.valid) {
-            throw new Error('Narrative did not satisfy client-specific, two-paragraph, non-repetition rules');
-        }
-        return parsed;
+        return parseNarrativeResponse(content, sections, clientName);
     } catch (parseError) {
         console.error("[Vision Service] Error parsing narrative JSON schema:", parseError, "Raw content:", content);
         throw parseError;
     }
-
-    const validation = validateSectionNarratives(parsed.sections || [], sections, clientName);
-    if (!validation.valid) {
-        const validationError = new Error(`Narrative did not satisfy client-specific, two-paragraph, non-repetition rules: ${validation.reason}`);
-        console.error("[Vision Service] Narrative validation rejected Gemini response:", validationError, "Raw content:", content);
-        throw validationError;
-    }
-    return parsed;
 };
 
 const formatMetricValue = (key, metric) => {
@@ -980,6 +983,125 @@ const findTopDemographic = (list) => {
         }
     });
     return maxItem ? { label: maxItem.label || 'Principal', value: maxVal } : null;
+};
+
+
+const findInvalidNarrativeSections = (narrativeSections = [], sourceSections = [], clientName = 'el cliente') => {
+    const narrativeById = new Map((narrativeSections || []).map(section => [section.sectionId, section]));
+    const secondParagraphs = new Set();
+    return (sourceSections || []).filter((source) => {
+        const section = narrativeById.get(source.sectionId);
+        if (!section) return true;
+        const paragraphs = String(section.narrativeComment || '').trim().split(/\n\s*\n/).filter(Boolean);
+        if (paragraphs.length !== 2) return true;
+        const fullText = paragraphs.join('\n\n');
+        if (FORBIDDEN_NARRATIVE_PHRASES.test(fullText)) return true;
+        if (!fullText.toLocaleLowerCase('es').includes(`para ${clientName},`.toLocaleLowerCase('es'))) return true;
+        if (sectionHasEnoughFigures(source) && numericMentions(fullText).length < 2) return true;
+        const normalizedSecond = paragraphs[1].toLocaleLowerCase('es').replace(/\s+/g, ' ');
+        if (secondParagraphs.has(normalizedSecond)) return true;
+        secondParagraphs.add(normalizedSecond);
+        return false;
+    });
+};
+
+const parseNarrativeCandidate = (candidate) => typeof candidate === 'string' ? parseJsonResponse(candidate) : candidate;
+
+const mergeRegeneratedSections = (narrative, regeneratedSections = []) => {
+    const replacements = new Map(regeneratedSections.map(section => [section.sectionId, section]));
+    return {
+        ...narrative,
+        sections: (narrative.sections || []).map(section => replacements.has(section.sectionId)
+            ? { ...section, narrativeComment: replacements.get(section.sectionId).narrativeComment }
+            : section)
+    };
+};
+
+
+export const repairNarrativeJsonWithGemini = async ({ rawContent, normalizedMetrics, sections = [], clientName = 'el cliente', error }) => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('Missing GEMINI_API_KEY in server configuration');
+    const genAI = new GoogleGenAI({ apiKey });
+    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const response = await genAI.models.generateContent({
+        model,
+        contents: [{
+            role: 'user',
+            parts: [{ text: `Repara este JSON de narrativa de reporte sin inventar datos ni cambiar cifras. Devuelve SOLO JSON válido. Si faltan comentarios de secciones, completa únicamente con los datos provistos.
+
+CLIENTE: ${clientName}
+ERROR: ${error || 'JSON inválido'}
+SECCIONES FUENTE:
+${JSON.stringify(sections, null, 2)}
+MÉTRICAS:
+${JSON.stringify(normalizedMetrics, null, 2)}
+JSON ROTO:
+${rawContent || ''}` }]
+        }],
+        config: {
+            responseMimeType: 'application/json',
+            maxOutputTokens: 8192,
+            temperature: 0
+        }
+    });
+    return parseNarrativeResponse(extractModelText(response), sections, clientName);
+};
+
+export const generatePublishableNarrative = async (normalizedMetrics, sections = [], clientName = 'el cliente', deps = {}) => {
+    const attempts = [];
+    const fullGenerator = deps.generateFullNarrative || generateNarrativeWithGemini;
+    const repairGenerator = deps.repairNarrativeJson || repairNarrativeJsonWithGemini;
+    const sectionRegenerator = deps.regenerateSections || (async (invalidSections) => generateFallbackNarrative(normalizedMetrics, invalidSections, clientName).sections);
+
+    let candidate;
+    let rawFailure;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+            candidate = parseNarrativeCandidate(await fullGenerator(normalizedMetrics, sections, clientName));
+            break;
+        } catch (error) {
+            rawFailure = error;
+            attempts.push({ step: attempt === 1 ? 'generate' : 'retry', error: error.message });
+        }
+    }
+
+    if (!candidate) {
+        try {
+            candidate = parseNarrativeCandidate(await repairGenerator({ rawContent: rawFailure?.rawContent, normalizedMetrics, sections, clientName, error: rawFailure?.message }));
+            attempts.push({ step: 'repair' });
+        } catch (error) {
+            attempts.push({ step: 'repair', error: error.message });
+        }
+    }
+
+    if (candidate) {
+        let validation = validateSectionNarratives(candidate.sections || [], sections, clientName);
+        if (!validation.valid) {
+            const invalidSections = findInvalidNarrativeSections(candidate.sections || [], sections, clientName);
+            try {
+                const regenerated = await sectionRegenerator(invalidSections, { normalizedMetrics, clientName, narrative: candidate, validation });
+                candidate = mergeRegeneratedSections(candidate, parseNarrativeCandidate(regenerated));
+                validation = validateSectionNarratives(candidate.sections || [], sections, clientName);
+                attempts.push({ step: 'regenerate-sections', sectionIds: invalidSections.map(section => section.sectionId) });
+            } catch (error) {
+                attempts.push({ step: 'regenerate-sections', error: error.message });
+            }
+        }
+        validation = validateSectionNarratives(candidate.sections || [], sections, clientName);
+        if (validation.valid) {
+            return { status: 'PUBLISHED', publishable: true, narrative: candidate, sections: candidate.sections || [], attempts };
+        }
+        attempts.push({ step: 'validate', error: validation.reason });
+    }
+
+    return {
+        status: 'NARRATIVE_FAILED',
+        publishable: false,
+        narrative: null,
+        sections,
+        technicalDraft: generateFallbackNarrative(normalizedMetrics, sections, clientName),
+        attempts
+    };
 };
 
 export const generateFallbackNarrative = (normalizedMetrics, sections = [], clientName = 'el cliente') => {
