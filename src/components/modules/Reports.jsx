@@ -136,7 +136,7 @@ const DemographicsChart = ({ demographics }) => {
                     <span>{country.value}%</span>
                   </div>
                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div className="bg-[#e4405f] h-full rounded-full" style={{ width: `${country.value}%` }} />
+                    <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${country.value}%` }} />
                   </div>
                 </div>
               ))}
@@ -367,7 +367,7 @@ const DemographicsBarChart = ({ data }) => {
           <Bar dataKey="hombres" fill="#009fb7" radius={[0, 8, 8, 0]} barSize={12}>
             <LabelList dataKey="hombres" position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => `${val}%`} />
           </Bar>
-          <Bar dataKey="mujeres" fill="#e4405f" radius={[0, 8, 8, 0]} barSize={12}>
+          <Bar dataKey="mujeres" fill="#10B981" radius={[0, 8, 8, 0]} barSize={12}>
             <LabelList dataKey="mujeres" position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => `${val}%`} />
           </Bar>
         </BarChart>
@@ -1167,16 +1167,22 @@ const Reports = () => {
       noPrintElements.forEach(el => el.remove());
 
       // Replace textareas/inputs with static divs/spans
-      const textareas = element.querySelectorAll('textarea, input');
-      textareas.forEach(ta => {
+      const liveControls = reportRef.current.querySelectorAll('textarea, input');
+      const clonedControls = element.querySelectorAll('textarea, input');
+      clonedControls.forEach((ta, index) => {
         const div = document.createElement('div');
-        const val = ta.value || '';
+        const val = readLiveControlValue(liveControls[index], ta);
         if (ta.tagName.toLowerCase() === 'textarea' && val.includes('\n')) {
-          div.innerHTML = val.split('\n\n')
-            .map(para => `<p class="space-y-4 text-sm leading-relaxed text-slate-700 font-normal" style="margin-top: 0; margin-bottom: 12px; font-size: 14px; line-height: 1.625; font-weight: 400;">${para.replace(/\n/g, '<br/>')}</p>`)
-            .join('');
+          val.split('\n\n').filter(Boolean).forEach((paragraph) => {
+            const paragraphElement = document.createElement('p');
+            paragraphElement.className = 'text-sm leading-relaxed font-normal';
+            paragraphElement.style.margin = '0 0 12px';
+            paragraphElement.style.whiteSpace = 'pre-wrap';
+            paragraphElement.textContent = paragraph;
+            div.appendChild(paragraphElement);
+          });
         } else {
-          div.innerText = val;
+          div.textContent = val;
         }
         div.className = ta.className;
         div.style.height = 'auto';
@@ -1235,16 +1241,20 @@ const Reports = () => {
         }
       });
 
-      // Construct a complete HTML file with Tailwind and fonts
+      // Embed the exact compiled application CSS so the download does not depend on
+      // Tailwind CDN theme detection or a different Tailwind version.
+      const compiledStyles = collectDocumentStyles(document.styleSheets);
+
+      // Construct a complete, self-styled HTML file.
       const htmlContentRaw = `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${editedTexts.title || 'Reporte de Performance'}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
+    ${compiledStyles}
     body {
       font-family: 'Inter', sans-serif;
       background-color: #f8fafc;
@@ -1263,63 +1273,8 @@ const Reports = () => {
       width: 100%;
       max-width: 80rem;
     }
-    textarea, input, select {
-      outline: none;
-      border: none;
-      background: transparent;
-      resize: none;
-      height: auto !important;
-      overflow: visible !important;
-    }
-    .space-y-4 > :not([hidden]) ~ :not([hidden]) {
-      margin-top: 1rem !important;
-      margin-bottom: 0 !important;
-    }
-    .text-sm {
-      font-size: 0.875rem !important;
-      line-height: 1.25rem !important;
-    }
-    .leading-relaxed {
-      line-height: 1.625 !important;
-    }
-    .text-slate-700 {
-      color: #334155 !important;
-    }
-    .font-normal {
-      font-weight: 400 !important;
-    }
     .whitespace-pre-wrap {
       white-space: pre-wrap !important;
-    }
-    /* Enforce corporate and dark blue background & contrast styles */
-    .bg-\\[\\#009fb7\\], .bg-\\[\\#009fb7\\] * {
-      background-color: #009fb7 !important;
-      color: #ffffff !important;
-    }
-    .bg-\\[\\#0F172A\\], .bg-\\[\\#0F172A\\] * {
-      background-color: #0F172A !important;
-      color: #ffffff !important;
-    }
-    .text-white {
-      color: #ffffff !important;
-    }
-    .bg-white {
-      background-color: #ffffff !important;
-    }
-    .bg-slate-50 {
-      background-color: #f8fafc !important;
-    }
-    .border-slate-100 {
-      border-color: #f1f5f9 !important;
-    }
-    .text-slate-800 {
-      color: #1e293b !important;
-    }
-    .text-slate-700 {
-      color: #334155 !important;
-    }
-    .text-slate-500 {
-      color: #64748b !important;
     }
   </style>
 </head>

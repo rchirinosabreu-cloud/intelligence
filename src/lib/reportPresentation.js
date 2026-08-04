@@ -50,6 +50,21 @@ export const safeClassName = (className) => {
   return typeof className?.baseVal === 'string' ? className.baseVal : '';
 };
 
+export const readLiveControlValue = (liveControl, clonedControl) => String(
+  liveControl?.value ?? clonedControl?.value ?? ''
+);
+
+export const collectDocumentStyles = (styleSheets = []) => Array.from(styleSheets)
+  .map((sheet) => {
+    try {
+      return Array.from(sheet.cssRules || []).map((rule) => rule.cssText).join('\n');
+    } catch {
+      return '';
+    }
+  })
+  .filter(Boolean)
+  .join('\n');
+
 export const buildReportFileName = (title) => {
   const safeTitle = String(title || 'reporte de desempeño digital')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
