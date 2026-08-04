@@ -36,10 +36,27 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import { adaptDatasetForChart, hasReadableChartData } from '@/lib/reportChartData';
-import { filterCanonicalMetrics, isDemographicDataset, filterTopContentRows, splitAchievement, safeClassName, buildReportFileName } from '@/lib/reportPresentation';
+import { filterCanonicalMetrics, getOrganicPlatformLabel, getReviewMetricEntries, isDemographicDataset, filterTopContentRows, selectOrganicSummaryMetrics, splitAchievement, safeClassName, buildReportFileName } from '@/lib/reportPresentation';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
+
+// Keep export-only helpers in this module so the click handler cannot reference a
+// missing named binding in an independently cached production chunk.
+const readLiveControlValue = (liveControl, clonedControl) => String(
+  liveControl?.value ?? clonedControl?.value ?? ''
+);
+
+const collectDocumentStyles = (styleSheets = []) => Array.from(styleSheets)
+  .map((sheet) => {
+    try {
+      return Array.from(sheet.cssRules || []).map((rule) => rule.cssText).join('\n');
+    } catch {
+      return '';
+    }
+  })
+  .filter(Boolean)
+  .join('\n');
 
 const toSentenceCase = (str) => {
   if (typeof str !== 'string' || !str) return '';
@@ -136,7 +153,7 @@ const DemographicsChart = ({ demographics }) => {
                     <span>{country.value}%</span>
                   </div>
                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div className="bg-[#e4405f] h-full rounded-full" style={{ width: `${country.value}%` }} />
+                    <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${country.value}%` }} />
                   </div>
                 </div>
               ))}
@@ -208,6 +225,11 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
       stroke: '#7C3AED',
       fill: '#10B981',
       bg: 'bg-[#7C3AED]'
+    },
+    ORGANIC: {
+      stroke: '#009fb7',
+      fill: '#009fb7',
+      bg: 'bg-[#009fb7]'
     }
   };
 
@@ -317,7 +339,7 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
           </thead>
           <tbody className="divide-y divide-slate-50 font-medium">
             {sanitizedDataset.map((item, idx) => (
-              <tr key={idx} className="hover:bg-slate-50/50 break-inside-avoid">
+              <tr key={idx} className="break-inside-avoid">
                 <td className="px-6 py-4 font-bold text-slate-700">{item.label}</td>
                 <td className="px-6 py-4 text-right text-slate-600 font-semibold">{(item.results || item.value || 0).toLocaleString('es-ES')}</td>
                 <td className="px-6 py-4 text-right text-slate-600 font-semibold">{(item.impressions || item.value || 0).toLocaleString('es-ES')}</td>
@@ -362,7 +384,7 @@ const DemographicsBarChart = ({ data }) => {
           <Bar dataKey="hombres" fill="#009fb7" radius={[0, 8, 8, 0]} barSize={12}>
             <LabelList dataKey="hombres" position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => `${val}%`} />
           </Bar>
-          <Bar dataKey="mujeres" fill="#e4405f" radius={[0, 8, 8, 0]} barSize={12}>
+          <Bar dataKey="mujeres" fill="#10B981" radius={[0, 8, 8, 0]} barSize={12}>
             <LabelList dataKey="mujeres" position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => `${val}%`} />
           </Bar>
         </BarChart>
@@ -387,7 +409,7 @@ const TopContentTable = ({ data }) => {
         </thead>
         <tbody className="divide-y divide-slate-50 font-medium">
           {publicationRows.map((item, idx) => (
-            <tr key={idx} className="hover:bg-slate-50/50 break-inside-avoid">
+            <tr key={idx} className="break-inside-avoid">
               <td className="px-6 py-4 font-bold text-slate-700">{item.title}</td>
               <td className="px-6 py-4 text-right text-slate-600 font-semibold">{item.results?.toLocaleString('es-ES') || item.views?.toLocaleString('es-ES') || 'N/A'}</td>
               <td className="px-6 py-4 text-right text-slate-600 font-semibold">{item.impressions?.toLocaleString('es-ES') || item.interactions?.toLocaleString('es-ES') || 'N/A'}</td>
@@ -530,7 +552,19 @@ const CANONICAL_METRICS = {
   reach: "Alcance Total",
   clicks: "Clics Totales",
   ctr: "CTR Promedio",
-  results: "Resultados Totales"
+  results: "Resultados Totales",
+  views: "Visualizaciones",
+  viewers: "Espectadores",
+  interactions: "Interacciones",
+  linkClicks: "Clics en el enlace",
+  profileVisits: "Visitas al perfil",
+  follows: "Nuevos seguidores",
+  videoViews: "Reproducciones de video",
+  viewsOrganic: "Visualizaciones orgánicas",
+  viewsPaid: "Visualizaciones de anuncios",
+  followersTotal: "Seguidores totales",
+  reachOrganic: "Alcance orgánico",
+  reachPaid: "Alcance de anuncios"
 };
 
 const formatMetricValue = (key, metric) => {
@@ -554,17 +588,30 @@ const MetricGrid = ({ metrics }) => {
     reach: { component: User, card: 'bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-800', icon: 'bg-blue-600' },
     clicks: { component: ArrowUpRight, card: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-800', icon: 'bg-emerald-600' },
     ctr: { component: TrendingUp, card: 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-800', icon: 'bg-amber-500' },
-    results: { component: Target, card: 'bg-rose-50 dark:bg-rose-950/30 border-rose-100 dark:border-rose-800', icon: 'bg-rose-500' }
+    results: { component: Target, card: 'bg-rose-50 dark:bg-rose-950/30 border-rose-100 dark:border-rose-800', icon: 'bg-rose-500' },
+    views: { component: Eye, card: 'bg-cyan-50 dark:bg-cyan-950/30 border-cyan-100 dark:border-cyan-800', icon: 'bg-cyan-600' },
+    viewers: { component: User, card: 'bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-800', icon: 'bg-blue-600' },
+    interactions: { component: Sparkles, card: 'bg-violet-50 dark:bg-violet-950/30 border-violet-100 dark:border-violet-800', icon: 'bg-violet-600' },
+    linkClicks: { component: ArrowUpRight, card: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-800', icon: 'bg-emerald-600' },
+    profileVisits: { component: User, card: 'bg-sky-50 dark:bg-sky-950/30 border-sky-100 dark:border-sky-800', icon: 'bg-sky-600' },
+    follows: { component: Plus, card: 'bg-fuchsia-50 dark:bg-fuchsia-950/30 border-fuchsia-100 dark:border-fuchsia-800', icon: 'bg-fuchsia-600' },
+    videoViews: { component: Monitor, card: 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-100 dark:border-indigo-800', icon: 'bg-indigo-600' },
+    viewsOrganic: { component: Eye, card: 'bg-teal-50 dark:bg-teal-950/30 border-teal-100 dark:border-teal-800', icon: 'bg-teal-600' },
+    viewsPaid: { component: Target, card: 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-800', icon: 'bg-amber-500' },
+    followersTotal: { component: User, card: 'bg-fuchsia-50 dark:bg-fuchsia-950/30 border-fuchsia-100 dark:border-fuchsia-800', icon: 'bg-fuchsia-600' },
+    reachOrganic: { component: User, card: 'bg-teal-50 dark:bg-teal-950/30 border-teal-100 dark:border-teal-800', icon: 'bg-teal-600' },
+    reachPaid: { component: Target, card: 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-800', icon: 'bg-amber-500' }
   };
   const canonicalMetrics = filterCanonicalMetrics(metrics || {});
+  const gridColumns = Object.keys(canonicalMetrics).length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3';
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 break-inside-avoid">
+    <div className={cn('grid grid-cols-1 sm:grid-cols-2 gap-4 break-inside-avoid', gridColumns)}>
       {Object.entries(canonicalMetrics).map(([key, metric]) => {
         const style = metricStyles[key];
         const MetricIcon = style.component;
         return (
           <div key={key} className={cn(
-            'border p-5 rounded-2xl transition-all break-inside-avoid shadow-sm flex items-center gap-4 hover:-translate-y-0.5',
+            'border p-5 rounded-2xl break-inside-avoid shadow-sm flex items-center gap-4',
             style.card,
             metric.isManuallyEdited && 'ring-2 ring-primary/20'
           )}>
@@ -587,6 +634,12 @@ const MetricGrid = ({ metrics }) => {
       })}
     </div>
   );
+};
+
+const OrganicHeadlineCards = ({ summary }) => {
+  const headlineMetrics = selectOrganicSummaryMetrics(summary || {});
+  if (Object.keys(headlineMetrics).length === 0) return null;
+  return <MetricGrid metrics={headlineMetrics} />;
 };
 
 const ActionPlan = ({ narrative, onUpdate }) => {
@@ -616,7 +669,7 @@ const ActionPlan = ({ narrative, onUpdate }) => {
           </thead>
           <tbody className="divide-y divide-slate-50 font-medium">
             {narrative.actionPlan.map((item, idx) => (
-              <tr key={idx} className="hover:bg-slate-50/50 break-inside-avoid">
+              <tr key={idx} className="break-inside-avoid">
                 <td className="px-6 py-4">
                   <textarea
                     rows={2}
@@ -661,7 +714,7 @@ const SourceAppendix = ({ sources }) => {
       </div>
       <div className="grid grid-cols-1 gap-6">
         {sources.map((src, idx) => (
-          <Card key={idx} className="overflow-hidden border-slate-100 hover:shadow-md transition-all p-4 bg-slate-50/50">
+          <Card key={idx} className="overflow-hidden border-slate-100 p-4 bg-slate-50/50">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pb-3 border-b border-slate-200/60 mb-3 flex justify-between items-center">
               <span>{src.screenType || 'Evidencia'}</span>
               <span>{src.platform}</span>
@@ -740,10 +793,21 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
         </div>
       )}
 
+      {Object.keys(selectOrganicSummaryMetrics(report.normalizedMetrics?.organicSummary)).length > 0 && (
+        <section className="space-y-4">
+          <div className="space-y-1">
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-50">Resumen orgánico detectado</h3>
+            <p className="text-xs text-slate-500">Un único grupo con cifras orgánicas verificables; los totales mixtos y de anuncios quedan excluidos.</p>
+          </div>
+          <OrganicHeadlineCards summary={report.normalizedMetrics.organicSummary} />
+        </section>
+      )}
+
+      {getReviewMetricEntries(localMetrics).length > 0 && (
+        <h3 className="text-lg font-black text-slate-800 dark:text-slate-50">Métricas de pauta detectadas</h3>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results'].map((key) => {
-          const metric = localMetrics[key];
-          if (!metric) return null;
+        {getReviewMetricEntries(localMetrics).map(([key, metric]) => {
           const warningActive = hasWarning(key) || (metric.confidence !== undefined && metric.confidence < 0.8);
 
           return (
@@ -752,8 +816,8 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
               className={cn(
                 "border rounded-2xl p-6 space-y-4 transition-all duration-300",
                 warningActive
-                  ? "bg-amber-50/40 border-amber-300 shadow-amber-100/50 hover:border-amber-400"
-                  : "bg-slate-50/50 border-slate-200 hover:border-primary/20 shadow-sm"
+                  ? "bg-amber-50/40 border-amber-300 shadow-amber-100/50"
+                  : "bg-slate-50/50 border-slate-200 shadow-sm"
               )}
             >
               <div className="flex justify-between items-start">
@@ -857,7 +921,7 @@ const Reports = () => {
   const isApprovingRef = useRef(false);
 
   useEffect(() => {
-    if (report?.narrative && report.status === 'PUBLISHED') {
+    if (report?.narrative && (report.status === 'PUBLISHED' || report.status === 'REVIEW')) {
       let parsed = report.narrative;
       if (typeof parsed === 'string') {
         try {
@@ -1133,16 +1197,22 @@ const Reports = () => {
       noPrintElements.forEach(el => el.remove());
 
       // Replace textareas/inputs with static divs/spans
-      const textareas = element.querySelectorAll('textarea, input');
-      textareas.forEach(ta => {
+      const liveControls = reportRef.current.querySelectorAll('textarea, input');
+      const clonedControls = element.querySelectorAll('textarea, input');
+      clonedControls.forEach((ta, index) => {
         const div = document.createElement('div');
-        const val = ta.value || '';
+        const val = readLiveControlValue(liveControls[index], ta);
         if (ta.tagName.toLowerCase() === 'textarea' && val.includes('\n')) {
-          div.innerHTML = val.split('\n\n')
-            .map(para => `<p class="space-y-4 text-sm leading-relaxed text-slate-700 font-normal" style="margin-top: 0; margin-bottom: 12px; font-size: 14px; line-height: 1.625; font-weight: 400;">${para.replace(/\n/g, '<br/>')}</p>`)
-            .join('');
+          val.split('\n\n').filter(Boolean).forEach((paragraph) => {
+            const paragraphElement = document.createElement('p');
+            paragraphElement.className = 'text-sm leading-relaxed font-normal';
+            paragraphElement.style.margin = '0 0 12px';
+            paragraphElement.style.whiteSpace = 'pre-wrap';
+            paragraphElement.textContent = paragraph;
+            div.appendChild(paragraphElement);
+          });
         } else {
-          div.innerText = val;
+          div.textContent = val;
         }
         div.className = ta.className;
         div.style.height = 'auto';
@@ -1201,16 +1271,20 @@ const Reports = () => {
         }
       });
 
-      // Construct a complete HTML file with Tailwind and fonts
+      // Embed the exact compiled application CSS so the download does not depend on
+      // Tailwind CDN theme detection or a different Tailwind version.
+      const compiledStyles = collectDocumentStyles(document.styleSheets);
+
+      // Construct a complete, self-styled HTML file.
       const htmlContentRaw = `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${editedTexts.title || 'Reporte de Performance'}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
+    ${compiledStyles}
     body {
       font-family: 'Inter', sans-serif;
       background-color: #f8fafc;
@@ -1229,63 +1303,8 @@ const Reports = () => {
       width: 100%;
       max-width: 80rem;
     }
-    textarea, input, select {
-      outline: none;
-      border: none;
-      background: transparent;
-      resize: none;
-      height: auto !important;
-      overflow: visible !important;
-    }
-    .space-y-4 > :not([hidden]) ~ :not([hidden]) {
-      margin-top: 1rem !important;
-      margin-bottom: 0 !important;
-    }
-    .text-sm {
-      font-size: 0.875rem !important;
-      line-height: 1.25rem !important;
-    }
-    .leading-relaxed {
-      line-height: 1.625 !important;
-    }
-    .text-slate-700 {
-      color: #334155 !important;
-    }
-    .font-normal {
-      font-weight: 400 !important;
-    }
     .whitespace-pre-wrap {
       white-space: pre-wrap !important;
-    }
-    /* Enforce corporate and dark blue background & contrast styles */
-    .bg-\\[\\#009fb7\\], .bg-\\[\\#009fb7\\] * {
-      background-color: #009fb7 !important;
-      color: #ffffff !important;
-    }
-    .bg-\\[\\#0F172A\\], .bg-\\[\\#0F172A\\] * {
-      background-color: #0F172A !important;
-      color: #ffffff !important;
-    }
-    .text-white {
-      color: #ffffff !important;
-    }
-    .bg-white {
-      background-color: #ffffff !important;
-    }
-    .bg-slate-50 {
-      background-color: #f8fafc !important;
-    }
-    .border-slate-100 {
-      border-color: #f1f5f9 !important;
-    }
-    .text-slate-800 {
-      color: #1e293b !important;
-    }
-    .text-slate-700 {
-      color: #334155 !important;
-    }
-    .text-slate-500 {
-      color: #64748b !important;
     }
   </style>
 </head>
@@ -1528,6 +1547,11 @@ const Reports = () => {
 
                    {/* UNIFIED executive monocolumn continuous vertical layout */}
                    <div className="p-8 md:p-12 space-y-12 w-full">
+                     {narrativeState?.generationMode === 'FALLBACK' && (
+                       <div className="no-print rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 text-sm text-amber-800 dark:text-amber-200">
+                         <strong>Narrativa de contingencia:</strong> la generación editorial no pudo completarse. Revisa los textos y vuelve a generar la narrativa antes de entregar el informe.
+                       </div>
+                     )}
                      {/* 1. Portada Monumental */}
                      <div className="page-break-after">
                        <ReportCover report={report} />
@@ -1579,31 +1603,41 @@ const Reports = () => {
                        </div>
                      )}
 
-                     {/* 4. Resultados Generales (pure MetricGrid) */}
-                     {report.normalizedMetrics && (
-                       <div className="border-t border-slate-100 pt-8 space-y-4 page-break-after w-full">
-                         <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Resultados generales")}</h3>
-                         <MetricGrid metrics={report.normalizedMetrics} />
+                     {/* 4. Resultados orgánicos: nunca mezcla Facebook, Instagram o pauta */}
+                     {Object.keys(selectOrganicSummaryMetrics(report.normalizedMetrics?.organicSummary)).length > 0 && (
+                       <div className="border-t border-slate-100 pt-8 space-y-6 page-break-after w-full">
+                         <div className="space-y-1">
+                           <h3 className="text-xl font-black tracking-tight text-slate-800">Resultados generales — Desempeño orgánico</h3>
+                           <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Indicadores orgánicos verificados en las capturas del periodo</p>
+                         </div>
+                         <OrganicHeadlineCards summary={report.normalizedMetrics.organicSummary} />
                        </div>
                      )}
 
                      {/* 5. Sección Orgánica (Redes Sociales): Distribución de Formatos, Demografía con Ciudades/Países, y Contenido Top */}
-                     <div className="space-y-8 border-t border-slate-100 pt-8 w-full page-break-after">
+                     {report.sections?.some(s => s.sectionCategory === 'ORGANIC') && <div className="space-y-8 border-t border-slate-100 pt-8 w-full page-break-after">
                        <div className="space-y-1">
                          <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Sección orgánica (redes sociales)")}</h3>
                          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{toSentenceCase("Evolución y rendimiento en redes sociales")}</p>
                        </div>
 
-                       {/* Filter Facebook */}
-                       {report.sections && report.sections.filter(s => s.sectionCategory === 'ORGANIC' && (s.platform === 'FACEBOOK' || s.platform === 'ORGANIC_RRSS')).map((sect, idx) => {
-                         if (!sect.dataset || sect.dataset.length === 0 || sumDatasetValues(sect.dataset) === 0) return null;
+                       {report.sections && report.sections.filter(s => s.sectionCategory === 'ORGANIC').map((sect, idx) => {
+                         const hasDemographics = ['ageGender', 'cities', 'countries'].some(key => Array.isArray(sect.demographics?.[key]) && sect.demographics[key].length > 0);
+                         const hasDataset = Array.isArray(sect.dataset) && sect.dataset.length > 0 && sumDatasetValues(sect.dataset) > 0;
+                         if (!hasDataset && !hasDemographics) return null;
+                         const platformLabel = getOrganicPlatformLabel(sect.platform);
+                         const chartPlatform = sect.platform === 'FACEBOOK' || sect.platform === 'INSTAGRAM' ? sect.platform : 'ORGANIC';
                          return (
-                         <div key={sect.sectionId || `fb-org-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid w-full">
+                         <div key={sect.sectionId || `organic-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid w-full">
                            <div className="flex justify-between items-center">
-                             <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Facebook orgánico')}</h4>
-                             <span className="text-[10px] font-bold text-[#1877F2] uppercase tracking-wider bg-[#1877F2]/10 px-2.5 py-0.5 rounded-full">Facebook</span>
+                             <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Rendimiento orgánico')}</h4>
+                             <span className="text-[10px] font-bold text-[#009fb7] uppercase tracking-wider bg-[#009fb7]/10 px-2.5 py-0.5 rounded-full">{platformLabel}</span>
                            </div>
-                           <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform="FACEBOOK" />
+                           {sect.demographics ? (
+                             <DemographicsChart demographics={sect.demographics} />
+                           ) : (
+                             <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform={chartPlatform} />
+                           )}
                            <SectionInsight
                              sectionId={sect.sectionId}
                              comment={sect.narrativeComment}
@@ -1612,47 +1646,21 @@ const Reports = () => {
                          </div>
                          );
                        })}
-
-                       {/* Filter Instagram */}
-                       {report.sections && report.sections.filter(s => s.sectionCategory === 'ORGANIC' && s.platform === 'INSTAGRAM').map((sect, idx) => {
-                         if (!sect.dataset || sect.dataset.length === 0 || sumDatasetValues(sect.dataset) === 0) return null;
-                         return (
-                         <div key={sect.sectionId || `ig-org-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid w-full">
-                           <div className="flex justify-between items-center">
-                             <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Instagram orgánico')}</h4>
-                             <span className="text-[10px] font-bold text-[#E4405F] uppercase tracking-wider bg-[#E4405F]/10 px-2.5 py-0.5 rounded-full">Instagram</span>
-                           </div>
-                           <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform="INSTAGRAM" />
-                           <SectionInsight
-                             sectionId={sect.sectionId}
-                             comment={sect.narrativeComment}
-                             onChange={handleSectionCommentChange}
-                           />
-                         </div>
-                         );
-                       })}
-
-                       {/* Demographics stacked cleanly under formats */}
-                       {report.normalizedMetrics?.demographics && (
-                         <div className="space-y-4 pt-6 border-t border-slate-100/60 w-full">
-                           <h4 className="text-sm font-black text-slate-800">{toSentenceCase("Distribución demográfica")}</h4>
-                           <DemographicsChart demographics={report.normalizedMetrics.demographics} />
-                           <GranularNarrativeBlock
-                             sectionKey="demographics"
-                             title={toSentenceCase("Análisis de distribución demográfica")}
-                             comment={getGranularComment("demographics")}
-                             onChange={handleGranularCommentChange}
-                           />
-                         </div>
-                       )}
-                     </div>
+                     </div>}
 
                      {/* 6. Sección de Pauta Digital (Meta Ads): Tabla de Desempeño de Anuncios y Tendencias Temporales */}
-                     <div className="space-y-8 border-t border-slate-100 pt-8 w-full page-break-after">
+                     {(report.sections?.some(s => s.sectionCategory === 'ADS') || Object.keys(report.normalizedMetrics?.adsSummary || {}).length > 0) && <div className="space-y-8 border-t border-slate-100 pt-8 w-full page-break-after">
                        <div className="space-y-1">
                          <h3 className="text-xl font-black tracking-tight text-slate-800">{toSentenceCase("Sección de pauta digital (Meta Ads)")}</h3>
                          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{toSentenceCase("Inversión y retorno en pauta publicitaria")}</p>
                        </div>
+
+                       {Object.keys(report.normalizedMetrics?.adsSummary || {}).length > 0 && (
+                         <div className="space-y-4 break-inside-avoid">
+                           <h3 className="text-xl font-black tracking-tight text-slate-800">Resultados generales — Desempeño de pauta</h3>
+                           <MetricGrid metrics={report.normalizedMetrics.adsSummary} />
+                         </div>
+                       )}
 
                        {/* Performance trend chart stacked cleanly at the top of paid ads */}
                        {report.normalizedMetrics?.series && report.normalizedMetrics.series.length > 0 && (
@@ -1709,7 +1717,7 @@ const Reports = () => {
                          </div>
                          );
                        })}
-                     </div>
+                     </div>}
 
                      {/* 7. Oportunidades & Aprendizajes */}
                      {Array.isArray(narrativeState?.oportunidadesYAprendizajes) && narrativeState.oportunidadesYAprendizajes.length > 0 && (
