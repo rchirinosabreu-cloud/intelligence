@@ -444,24 +444,55 @@ router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res)
  * PERMITE ACCESO SIN TOKEN (para poder usarse en <img> tags directamente)
  */
 router.get('/member/:memberId/avatar-image', async (req, res) => {
+    const { memberId } = req.params;
     const { gcsPath } = req.query;
 
+    console.log("[TalentRadar][AvatarProxy] Request received", {
+        memberId,
+        rawUrl: req.originalUrl,
+        gcsPathType: Array.isArray(gcsPath) ? 'array' : typeof gcsPath,
+        gcsPath
+    });
+
     if (!gcsPath) {
+        console.warn("[TalentRadar][AvatarProxy] Missing gcsPath", { memberId, rawUrl: req.originalUrl });
         return res.status(400).send("Falta gcsPath");
     }
 
     try {
+        console.log("[TalentRadar][AvatarProxy] Step 1: decoding gcsPath", { memberId, gcsPath });
         const decodedPath = decodeURIComponent(gcsPath);
+        console.log("[TalentRadar][AvatarProxy] Step 1 OK: decoded gcsPath", { memberId, decodedPath });
 
         // Use storage SDK to get metadata (to set correct Content-Type)
         const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
         const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
         const projectId = process.env.GOOGLE_CLOUD_PROJECT;
+
+        console.log("[TalentRadar][AvatarProxy] Step 2: preparing GCS client", {
+            memberId,
+            bucketName,
+            projectId,
+            hasCredentialsJson: Boolean(credentialsJson),
+            credentialsJsonLength: credentialsJson?.length || 0
+        });
+
         const { Storage } = await import('@google-cloud/storage');
+        console.log("[TalentRadar][AvatarProxy] Step 2 OK: @google-cloud/storage imported", { memberId });
+
         const storage = new Storage({ projectId, credentials: JSON.parse(credentialsJson) });
+        console.log("[TalentRadar][AvatarProxy] Step 3 OK: GCS client created", { memberId, bucketName });
 
         const file = storage.bucket(bucketName).file(decodedPath);
+        console.log("[TalentRadar][AvatarProxy] Step 4: fetching GCS metadata", { memberId, bucketName, decodedPath });
+
         const [metadata] = await file.getMetadata();
+        console.log("[TalentRadar][AvatarProxy] Step 4 OK: GCS metadata fetched", {
+            memberId,
+            contentType: metadata.contentType,
+            size: metadata.size,
+            generation: metadata.generation
+        });
 
         // Set Headers (Ensuring correct Content-Type from metadata)
         const contentType = metadata.contentType || 'image/jpeg';
@@ -476,15 +507,32 @@ router.get('/member/:memberId/avatar-image', async (req, res) => {
             res.setHeader('ETag', metadata.etag);
         }
 
+        console.log("[TalentRadar][AvatarProxy] Step 5: creating GCS read stream", { memberId, decodedPath });
         const stream = file.createReadStream();
         stream.on('error', (err) => {
-            console.error("[TalentRadar] Avatar proxy stream error:", err.message);
+            console.error("[TalentRadar][AvatarProxy] Stream error", {
+                memberId,
+                decodedPath,
+                name: err.name,
+                message: err.message,
+                code: err.code,
+                stack: err.stack
+            });
             if (!res.headersSent) res.status(404).send("Imagen no encontrada");
         });
 
+        console.log("[TalentRadar][AvatarProxy] Step 5 OK: piping avatar stream", { memberId, decodedPath });
         stream.pipe(res);
     } catch (error) {
-        console.error("[TalentRadar] Avatar proxy error:", error);
+        console.error("[TalentRadar][AvatarProxy] Fatal error", {
+            memberId,
+            rawUrl: req.originalUrl,
+            gcsPath,
+            name: error.name,
+            message: error.message,
+            code: error.code,
+            stack: error.stack
+        });
         if (!res.headersSent) res.status(500).send("Error al cargar imagen");
     }
 });
