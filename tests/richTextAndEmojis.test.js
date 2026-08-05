@@ -31,7 +31,7 @@ test('DOMPurify Sanitization - Allow standard safe HTML markup, strip script and
 test('Legacy Plain Text Comment Detection and fallbacks', () => {
     const hasRichHTML = (text) => {
         if (!text) return false;
-        const richTagsRegex = /<(p|strong|em|u|h1|h2|ul|ol|li|br|a|span)(\s|>)/i;
+        const richTagsRegex = /<(p|strong|em|u|h1|h2|h3|ul|ol|li|br|a|span|mark)(\s|>)/i;
         return richTagsRegex.test(text);
     };
 
@@ -107,13 +107,34 @@ test('RichTextEditor - Tiptap Wrapper, in-flow toolbar and Height Class Verifica
     // Assert the use of Popover components from Radix Popover Portal
     assert.ok(editorCode.includes('Popover.Root'), 'RichTextEditor must import and use Popover.Root.');
     assert.ok(editorCode.includes('Popover.Anchor'), 'RichTextEditor must use Popover.Anchor as visual position target.');
-    assert.ok(editorCode.includes('TopToolbarSurface'), 'RichTextEditor must use the top-anchored toolbar surface.');
+    assert.ok(editorCode.includes('TopToolbarSurface'), 'RichTextEditor must use the in-flow toolbar surface.');
+    assert.ok(editorCode.includes('Heading3'), 'RichTextEditor must expose a visible H3 control.');
+    assert.ok(editorCode.includes('Highlighter'), 'RichTextEditor must expose a highlight control.');
+    assert.ok(editorCode.includes('ListOrdered'), 'Ordered lists must use an icon instead of text-only labels.');
+    assert.ok(editorCode.includes('List'), 'Bullet lists must use an icon instead of text-only labels.');
+    assert.ok(editorCode.includes('levels: [1, 2, 3]'), 'RichTextEditor must support H1, H2 and H3 heading levels.');
+    assert.ok(editorCode.includes('aria-label="Lista con bullets"'), 'Bullet list control must have a clear accessible label.');
+    assert.ok(editorCode.includes('aria-label="Lista numerada"'), 'Ordered list control must have a clear accessible label.');
+    assert.ok(!editorCode.includes('• Lista'), 'Bullet list control must not use a text label.');
+    assert.ok(!editorCode.includes('1. Lista'), 'Ordered list control must not use a text label.');
 
     // Assert ProseMirror Height Rules are present in container wrappers
     assert.ok(editorCode.includes('min-h-[48px]'), 'RichTextEditor must support min-h-[48px] in compact mode.');
     assert.ok(editorCode.includes('max-h-[120px]'), 'RichTextEditor must support max-h-[120px] in compact mode.');
     assert.ok(editorCode.includes('min-h-[144px]'), 'RichTextEditor must support min-h-[144px] in showToolbar format mode.');
-    assert.ok(editorCode.includes('max-h-[280px]'), 'RichTextEditor must support max-h-[280px] in showToolbar format mode.');
+    assert.ok(editorCode.includes('max-h-[min(42vh,260px)]'), 'RichTextEditor must cap long drafts inside the viewport.');
+    assert.ok(editorCode.includes('data-rich-text-editor-shell'), 'RichTextEditor must expose a stable shell for layout checks.');
+    assert.ok(editorCode.includes('editorContentClassName'), 'Task panel padding must be applied to the editable content, not the toolbar shell.');
+    assert.ok(editorCode.includes('[&_.ProseMirror]:break-all'), 'Long filenames and URLs must wrap inside the editor.');
+});
+
+test('RichCommentContent allows H3 and highlight markup to render safely', () => {
+    const commentCode = readFileSync('src/components/ui/RichCommentContent.jsx', 'utf8');
+
+    assert.ok(commentCode.includes("'h3'"), 'RichCommentContent must allow h3 tags.');
+    assert.ok(commentCode.includes("'mark'"), 'RichCommentContent must allow mark tags.');
+    assert.ok(commentCode.includes('[&_h3]'), 'RichCommentContent must style H3 distinctly.');
+    assert.ok(commentCode.includes('[&_mark]'), 'RichCommentContent must style highlighted text.');
 });
 
 // 6. Dialog Shielding Verification

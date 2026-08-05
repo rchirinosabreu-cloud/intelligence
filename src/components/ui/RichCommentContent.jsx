@@ -8,7 +8,7 @@ import { linkify } from '@/utils/chatUtils.jsx';
 const hasRichHTML = (text) => {
     if (!text) return false;
     // Look for any of the supported tags
-    const richTagsRegex = /<(p|strong|em|u|h1|h2|ul|ol|li|br|a|span)(\s|>)/i;
+    const richTagsRegex = /<(p|strong|em|u|h1|h2|h3|ul|ol|li|br|a|span|mark)(\s|>)/i;
     return richTagsRegex.test(text);
 };
 
@@ -29,7 +29,7 @@ export const RichCommentContent = ({ content, contextData = {}, onImageClick }) 
 
     // Client-side HTML sanitization with isomorphic-dompurify
     const cleanHTML = DOMPurify.sanitize(content, {
-        ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'h1', 'h2', 'ul', 'ol', 'li', 'br', 'span', 'a'],
+        ALLOWED_TAGS: ['p', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'br', 'span', 'mark', 'a'],
         ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'style', 'data-type', 'data-id', 'data-label', 'data-mention-id'],
         ADD_ATTR: ['target', 'rel'],
         FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed'],
@@ -47,6 +47,8 @@ export const RichCommentContent = ({ content, contextData = {}, onImageClick }) 
                        [&_u]:underline
                        [&_h1]:text-lg [&_h1]:font-extrabold [&_h1]:mt-3 [&_h1]:mb-1.5 [&_h1]:text-zinc-900 [&_h1]:dark:text-zinc-50
                        [&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-2.5 [&_h2]:mb-1 [&_h2]:text-zinc-800 [&_h2]:dark:text-zinc-100
+                       [&_h3]:text-sm [&_h3]:font-black [&_h3]:uppercase [&_h3]:tracking-wide [&_h3]:mt-2 [&_h3]:mb-1 [&_h3]:text-zinc-700 [&_h3]:dark:text-zinc-200
+                       [&_mark]:rounded [&_mark]:bg-amber-200/70 [&_mark]:px-0.5 [&_mark]:text-zinc-950 [&_mark]:dark:bg-amber-400/25 [&_mark]:dark:text-amber-50
                        [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2
                        [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2
                        [&_li]:my-0.5

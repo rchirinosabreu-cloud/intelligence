@@ -4,12 +4,13 @@ const TopToolbarSurface = ({ children }) => React.createElement(
     'div',
     {
         'data-task-format-toolbar': 'true',
+        'data-toolbar-placement': 'in-flow',
         className: [
-            'absolute bottom-full right-0 mb-2 z-[120]',
-            'flex max-w-[calc(100vw-2rem)] flex-nowrap items-center gap-1.5 overflow-x-auto',
-            'rounded-xl border border-zinc-200 bg-white p-2 shadow-lg scrollbar-none',
-            'dark:border-zinc-800 dark:bg-zinc-900',
-            'animate-in slide-in-from-bottom-2 duration-150',
+            'relative z-10',
+            'flex w-full flex-nowrap items-center gap-1.5 overflow-x-auto',
+            'border-b border-zinc-200 bg-white/80 px-2 py-1.5 scrollbar-none backdrop-blur-sm',
+            'dark:border-zinc-800 dark:bg-zinc-950/80',
+            'animate-in fade-in slide-in-from-bottom-1 duration-150',
         ].join(' '),
     },
     children,

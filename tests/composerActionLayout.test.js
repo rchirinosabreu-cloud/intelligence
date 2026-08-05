@@ -27,7 +27,7 @@ test('composer actions keep format before emoji and send', () => {
     assert.ok(sendIndex > emojiIndex, 'send must be the final action');
 });
 
-test('format toolbar surface is anchored completely above the composer', () => {
+test('format toolbar surface participates in composer layout', () => {
     const markup = renderToStaticMarkup(
         React.createElement(
             TopToolbarSurface,
@@ -36,7 +36,8 @@ test('format toolbar surface is anchored completely above the composer', () => {
         )
     );
 
-    assert.match(markup, /bottom-full/, 'toolbar must be anchored above the composer');
-    assert.doesNotMatch(markup, /top-full/, 'toolbar must never be anchored below the composer');
+    assert.match(markup, /data-toolbar-placement="in-flow"/, 'toolbar must reserve space inside the composer');
+    assert.doesNotMatch(markup, /absolute/, 'toolbar must not float over conversation messages');
+    assert.doesNotMatch(markup, /bottom-full/, 'toolbar must not overlay messages above the composer');
     assert.match(markup, /data-task-format-toolbar="true"/);
 });
