@@ -183,3 +183,16 @@ test('Task Attachment References - excludes chat-linked files from manual link s
     assert.ok(code.includes('!attachment.commentId'), 'Manual attachment sections must exclude files linked to conversation comments.');
     assert.ok(serviceCode.includes('content: initialCommentText'), 'Initial creation comments must not expose private bucket URLs as visible comment text.');
 });
+
+// 10. Verificar que el modo creacion use una composicion mas limpia y menos pesada
+test('Task Creation Composer - uses softer labels and lighter field chrome', async () => {
+    const { readFileSync } = await import('node:fs');
+    const code = readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');
+
+    assert.ok(code.includes('taskCreateLabelClass'), 'Creation mode must share a soft label class instead of repeated uppercase black labels.');
+    assert.ok(code.includes('taskCreateFieldClass'), 'Creation mode must share a lighter field class for compact metadata controls.');
+    assert.ok(code.includes('TaskCreateComposerV2'), 'Creation form must expose a scoped marker for the lighter composer treatment.');
+    assert.ok(code.includes('Nombre de la tarea'), 'The creation title label should use natural sentence casing.');
+    assert.ok(code.includes('Escribe el nombre de la tarea'), 'The creation title placeholder should feel closer to ClickUp-style task entry.');
+    assert.ok(code.includes('border-zinc-200/70 dark:border-zinc-800/70 bg-transparent'), 'Creation fields should reduce box weight with transparent surfaces.');
+});

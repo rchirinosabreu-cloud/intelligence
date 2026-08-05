@@ -115,6 +115,10 @@ const getFileVisualMeta = (file = {}) => {
     };
 };
 
+const taskCreateLabelClass = "text-[11px] font-medium text-zinc-500 dark:text-zinc-400";
+const taskCreateFieldClass = "w-full rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-transparent px-3 py-2 text-sm font-medium text-zinc-900 dark:text-zinc-100 shadow-none outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/10";
+const taskCreateSectionClass = "space-y-4 border-t border-zinc-200/70 dark:border-zinc-800/70 pt-5";
+
 const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage }) => {
     if (!previewImage) return null;
 
@@ -1655,8 +1659,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             {isEdition ? <ClipboardList size={20} /> : <Plus size={20} />}
                         </div>
                         <div>
-                            <DialogTitle className="text-base font-black text-zinc-900 dark:text-white uppercase tracking-wider">
-                                {isEdition ? `Tarea #${formData.id?.split('-')[0] || ''}` : "Nueva Tarea"}
+                            <DialogTitle className={cn(
+                                "text-zinc-900 dark:text-white",
+                                isEdition ? "text-base font-black uppercase tracking-wider" : "text-base font-semibold"
+                            )}>
+                                {isEdition ? `Tarea #${formData.id?.split('-')[0] || ''}` : "Nueva tarea"}
                             </DialogTitle>
                             <DialogDescription className="text-xs text-zinc-500 font-medium mt-0.5">
                                 {isEdition ? `ID: ${formData.id?.split('-')[0]} • Gestiona los metadatos y la conversación en tiempo real` : "Crea un nuevo pendiente operativo en el tablero Kanban"}
@@ -1742,7 +1749,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 >
 
                     {/* Metadata Grid Area - Full Width compact top section */}
-                    <div className="w-full border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 bg-white dark:bg-zinc-900 flex flex-col gap-3 shadow-sm">
+                    {/* TaskCreateComposerV2 */}
+                    <div className={cn(
+                        "w-full flex flex-col",
+                        isEdition
+                            ? "border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 bg-white dark:bg-zinc-900 gap-3 shadow-sm"
+                            : "gap-5 border-b border-zinc-200/70 dark:border-zinc-800/70 pb-6"
+                    )}>
 
                         {showReintegratePrompt && (
                             <motion.div
@@ -1784,30 +1797,43 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         )}
 
                         {/* Title Section */}
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Título de la Tarea</label>
+                        <div className={cn(isEdition ? "space-y-1" : "space-y-2")}>
+                            <label className={cn(isEdition ? "text-[10px] font-black uppercase tracking-widest text-zinc-400" : taskCreateLabelClass)}>
+                                {isEdition ? "Título de la Tarea" : "Nombre de la tarea"}
+                            </label>
                             <input
                                 type="text"
                                 required
                                 value={formData.title || ''}
                                 onChange={e => setFormData({...formData, title: e.target.value})}
-                                placeholder="Ej: Revisión de artes para campaña..."
-                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-1.5 text-sm font-black focus:ring-2 ring-primary/10 outline-none transition-all shadow-sm"
+                                placeholder={isEdition ? "Ej: Revisión de artes para campaña..." : "Escribe el nombre de la tarea"}
+                                className={cn(
+                                    isEdition
+                                        ? "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-1.5 text-sm font-black focus:ring-2 ring-primary/10 outline-none transition-all shadow-sm"
+                                        : "w-full bg-transparent border-0 border-b border-zinc-200/80 dark:border-zinc-800/80 rounded-none px-0 py-2 text-2xl font-semibold text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:ring-0 focus:border-primary/50 outline-none transition-colors"
+                                )}
                             />
                         </div>
 
                         {/* Metadata Grid */}
-                        <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">
+                        <div className={cn(
+                            "grid grid-cols-2",
+                            isEdition ? "gap-x-5 gap-y-2.5" : "gap-x-5 gap-y-4"
+                        )}>
 
                             {/* Cliente Selector */}
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Cliente</label>
+                                <label className={cn(isEdition ? "text-[10px] font-black uppercase tracking-widest text-zinc-400" : taskCreateLabelClass)}>Cliente</label>
                                 <select
                                     required
                                     value={formData.clientId}
                                     onChange={e => setFormData({...formData, clientId: e.target.value})}
                                     disabled={isEdition || !!defaultClientId}
-                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2 py-1.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm disabled:opacity-80 h-[32px] cursor-pointer"
+                                    className={cn(
+                                        isEdition
+                                            ? "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2 py-1.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm disabled:opacity-80 h-[32px] cursor-pointer"
+                                            : `${taskCreateFieldClass} h-[38px] cursor-pointer disabled:opacity-80`
+                                    )}
                                 >
                                     <option value="">Seleccionar cliente...</option>
                                     {clientsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1816,11 +1842,15 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                             {/* Responsable */}
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Responsable</label>
+                                <label className={cn(isEdition ? "text-[10px] font-black uppercase tracking-widest text-zinc-400" : taskCreateLabelClass)}>Responsable</label>
                                 <select
                                     value={formData.assigneeId || ''}
                                     onChange={e => setFormData({...formData, assigneeId: e.target.value})}
-                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2 py-1.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[32px] cursor-pointer"
+                                    className={cn(
+                                        isEdition
+                                            ? "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2 py-1.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[32px] cursor-pointer"
+                                            : `${taskCreateFieldClass} h-[38px] cursor-pointer`
+                                    )}
                                 >
                                     <option value="">Sin asignar</option>
                                     {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -1829,7 +1859,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                             {/* Deadline / Fecha Entrega */}
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Deadline</label>
+                                <label className={cn(isEdition ? "text-[10px] font-black uppercase tracking-widest text-zinc-400" : taskCreateLabelClass)}>Deadline</label>
                                 <div className="relative w-full">
                                     <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none z-10" />
                                     <DatePicker
@@ -1839,7 +1869,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             setFormData({...formData, dueDate: dateStr});
                                         }}
                                         dateFormat="dd/MM/yyyy"
-                                        className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-8 pr-2 py-1.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm cursor-pointer h-[32px]"
+                                        className={cn(
+                                            isEdition
+                                                ? "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-8 pr-2 py-1.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm cursor-pointer h-[32px]"
+                                                : `${taskCreateFieldClass} h-[38px] pl-8 cursor-pointer`
+                                        )}
                                         wrapperClassName="w-full"
                                         placeholderText="Elegir fecha..."
                                         isClearable
@@ -1849,11 +1883,15 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                             {/* Estado Actual */}
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Estado Actual</label>
+                                <label className={cn(isEdition ? "text-[10px] font-black uppercase tracking-widest text-zinc-400" : taskCreateLabelClass)}>Estado actual</label>
                                 <select
                                     value={formData.status}
                                     onChange={e => setFormData({...formData, status: e.target.value})}
-                                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2 py-1.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm cursor-pointer h-[32px]"
+                                    className={cn(
+                                        isEdition
+                                            ? "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2 py-1.5 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm cursor-pointer h-[32px]"
+                                            : `${taskCreateFieldClass} h-[38px] cursor-pointer`
+                                    )}
                                 >
                                     <option value="PENDIENTE">PENDIENTE</option>
                                     <option value="EN_CURSO">EN PROCESO</option>
@@ -1864,7 +1902,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                             {/* Prioridad */}
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Prioridad</label>
+                                <label className={cn(isEdition ? "text-[10px] font-black uppercase tracking-widest text-zinc-400" : taskCreateLabelClass)}>Prioridad</label>
                                 <div className="flex flex-col gap-1.5">
                                     <button
                                         type="button"
@@ -1877,12 +1915,16 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             }));
                                         }}
                                         className={cn(
-                                            "flex items-center justify-center gap-2 px-2 py-1.5 rounded-xl border transition-all shadow-sm h-[32px] w-full",
-                                            formData.isPriority ? "bg-red-500/10 text-red-600 border-red-500/30 font-black animate-in zoom-in-95 duration-150" : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400 font-bold hover:bg-zinc-100 transition-colors"
+                                            isEdition
+                                                ? "flex items-center justify-center gap-2 px-2 py-1.5 rounded-xl border transition-all shadow-sm h-[32px] w-full"
+                                                : "flex h-[38px] w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+                                            formData.isPriority
+                                                ? (isEdition ? "bg-red-500/10 text-red-600 border-red-500/30 font-black animate-in zoom-in-95 duration-150" : "bg-red-500/10 text-red-600 border-red-500/30 font-semibold animate-in zoom-in-95 duration-150")
+                                                : (isEdition ? "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400 font-bold hover:bg-zinc-100 transition-colors" : "bg-transparent border-zinc-200/70 dark:border-zinc-800/70 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/60")
                                         )}
                                     >
                                         <Zap size={12} fill={formData.isPriority ? "currentColor" : "none"} />
-                                        <span className="text-[9px] uppercase tracking-widest font-black">¿Es Prioritaria?</span>
+                                        <span className={cn(isEdition ? "text-[9px] uppercase tracking-widest font-black" : "text-sm font-medium")}>¿Es prioritaria?</span>
                                     </button>
 
                                     {formData.isPriority && (
@@ -1897,7 +1939,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                         isPriority: true
                                                     }));
                                                 }}
-                                                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2 py-1 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[30px] cursor-pointer"
+                                                className={cn(
+                                                    isEdition
+                                                        ? "w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2 py-1 text-xs font-bold focus:ring-2 ring-primary/10 outline-none shadow-sm h-[30px] cursor-pointer"
+                                                        : `${taskCreateFieldClass} h-[36px] cursor-pointer`
+                                                )}
                                             >
                                                 <option value="URGENTE">Urgente</option>
                                                 <option value="ALTA">Alta</option>
@@ -1923,26 +1969,34 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         });
                                     }}
                                     className={cn(
-                                        "flex items-center justify-center gap-2 px-2 py-1.5 rounded-xl border transition-all shadow-sm h-[32px] w-full",
-                                        formData.isSpecial ? "bg-purple-600 text-white border-purple-700 font-bold animate-pulse" : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400"
+                                        isEdition
+                                            ? "flex items-center justify-center gap-2 px-2 py-1.5 rounded-xl border transition-all shadow-sm h-[32px] w-full"
+                                            : "flex h-[38px] w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+                                        formData.isSpecial
+                                            ? (isEdition ? "bg-purple-600 text-white border-purple-700 font-bold animate-pulse" : "bg-purple-600 text-white border-purple-700 font-semibold animate-pulse")
+                                            : (isEdition ? "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-400" : "bg-transparent border-zinc-200/70 dark:border-zinc-800/70 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/60")
                                     )}
                                 >
                                     <Star size={14} fill={formData.isSpecial ? "currentColor" : "none"} />
-                                    <span className="text-[10px] uppercase tracking-widest font-black">Especial</span>
+                                    <span className={cn(isEdition ? "text-[10px] uppercase tracking-widest font-black" : "text-sm font-medium")}>Especial</span>
                                 </button>
                             </div>
                         </div>
 
                         {formData.isSpecial && (
                             <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="space-y-1.5">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400">Tipo de Pendiente Especial</label>
+                                <label className={cn(isEdition ? "text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400" : "text-[11px] font-medium text-purple-600 dark:text-purple-400")}>Tipo de pendiente especial</label>
                                 <input
                                     type="text"
                                     required
                                     value={formData.specialType}
                                     onChange={e => setFormData({...formData, specialType: e.target.value})}
                                     placeholder="Ej: Manual de Marca corporativo..."
-                                    className="w-full bg-purple-500/5 border border-purple-200 dark:border-purple-800/50 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 ring-purple-500/10 outline-none shadow-sm"
+                                    className={cn(
+                                        isEdition
+                                            ? "w-full bg-purple-500/5 border border-purple-200 dark:border-purple-800/50 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 ring-purple-500/10 outline-none shadow-sm"
+                                            : "w-full rounded-lg border border-purple-200/70 dark:border-purple-800/60 bg-purple-500/5 px-3 py-2 text-sm font-medium text-zinc-900 dark:text-zinc-100 outline-none transition-colors focus:border-purple-400 focus:ring-2 focus:ring-purple-500/10"
+                                    )}
                                 />
                             </motion.div>
                         )}
@@ -2069,11 +2123,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 </div>
                             </div>
                         ) : (
-                            <div className="space-y-4 pt-4 border-t border-zinc-100 dark:border-zinc-850">
+                            <div className={taskCreateSectionClass}>
 
                                 {/* Sección de Referencias */}
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block">
+                                    <label className={`${taskCreateLabelClass} block`}>
                                         Referencias iniciales
                                     </label>
                                     <div className="grid grid-cols-2 gap-3 items-center">
@@ -2082,7 +2136,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             placeholder="Nombre de la referencia (ej: Figma...)"
                                             value={newRefName}
                                             onChange={e => setNewRefName(e.target.value)}
-                                            className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-semibold outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                            className={taskCreateFieldClass}
                                         />
                                         <div className="flex gap-2">
                                             <input
@@ -2090,7 +2144,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 placeholder="URL (https://...)"
                                                 value={newRefUrl}
                                                 onChange={e => setNewRefUrl(e.target.value)}
-                                                className="flex-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-semibold outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                                className={`${taskCreateFieldClass} flex-1`}
                                             />
                                             <button
                                                 type="button"
@@ -2104,7 +2158,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                     setNewRefUrl("");
                                                     setNewRefName("");
                                                 }}
-                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-xl transition-all shrink-0 flex items-center justify-center h-[38px] w-[38px]"
+                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-lg transition-all shrink-0 flex items-center justify-center h-[38px] w-[38px]"
                                                 title="Agregar Referencia"
                                             >
                                                 <Plus size={16} />
@@ -2115,7 +2169,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     {tempReferences.length > 0 && (
                                         <div className="flex flex-wrap gap-2 pt-1">
                                             {tempReferences.map((ref, index) => (
-                                                <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
+                                                <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-transparent border border-zinc-200/70 dark:border-zinc-800/70 rounded-lg text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
                                                     <ExternalLink size={12} className="text-zinc-400 shrink-0" />
                                                     <span className="truncate max-w-[150px]">{ref.name}</span>
                                                     <button
@@ -2133,7 +2187,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                                 {/* Sección de Insumos */}
                                 <div className="space-y-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/40">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block">
+                                    <label className={`${taskCreateLabelClass} block`}>
                                         Insumos iniciales
                                     </label>
                                     <div className="grid grid-cols-2 gap-3 items-center">
@@ -2142,7 +2196,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             placeholder="Nombre del insumo (ej: Assets...)"
                                             value={newInpName}
                                             onChange={e => setNewInpName(e.target.value)}
-                                            className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-semibold outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                            className={taskCreateFieldClass}
                                         />
                                         <div className="flex gap-2">
                                             <input
@@ -2150,7 +2204,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 placeholder="URL (https://...)"
                                                 value={newInpUrl}
                                                 onChange={e => setNewInpUrl(e.target.value)}
-                                                className="flex-1 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-semibold outline-none focus:ring-2 ring-primary/10 shadow-sm"
+                                                className={`${taskCreateFieldClass} flex-1`}
                                             />
                                             <button
                                                 type="button"
@@ -2164,7 +2218,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                     setNewInpUrl("");
                                                     setNewInpName("");
                                                 }}
-                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-xl transition-all shrink-0 flex items-center justify-center h-[38px] w-[38px]"
+                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-lg transition-all shrink-0 flex items-center justify-center h-[38px] w-[38px]"
                                                 title="Agregar Insumo"
                                             >
                                                 <Plus size={16} />
@@ -2175,7 +2229,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     {tempInputs.length > 0 && (
                                         <div className="flex flex-wrap gap-2 pt-1">
                                             {tempInputs.map((inp, index) => (
-                                                <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm">
+                                                <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-transparent border border-zinc-200/70 dark:border-zinc-800/70 rounded-lg text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
                                                     <ExternalLink size={12} className="text-zinc-400 shrink-0" />
                                                     <span className="truncate max-w-[150px]">{inp.name}</span>
                                                     <button
@@ -2196,21 +2250,21 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                         {/* Footer Creation Actions */}
                         {!isEdition && (
-                            <div className="mt-auto pt-6 border-t border-zinc-100 dark:border-zinc-850 flex gap-3">
+                            <div className="mt-auto pt-6 border-t border-zinc-200/70 dark:border-zinc-800/70 flex gap-3">
                                 <button
                                     onClick={clearDraft}
                                     type="button"
-                                    className="flex-1 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-xl transition-all"
+                                    className="flex-1 px-4 py-2.5 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors"
                                 >
-                                    Descartar Borrador
+                                    Descartar borrador
                                 </button>
                                 <button
                                     onClick={handleSave}
                                     disabled={isSubmitting}
-                                    className="flex-[2] bg-primary text-primary-foreground px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                                    className="flex-[2] bg-primary text-primary-foreground px-6 py-2.5 rounded-lg text-xs font-semibold shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                                 >
                                     {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                                    Crear Tarea
+                                    Crear tarea
                                 </button>
                             </div>
                         )}
@@ -2269,7 +2323,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
                                                 <Paperclip size={24} />
                                             </div>
-                                            <p className="text-xs font-black uppercase tracking-widest text-primary">Suelta tus archivos aqui</p>
+                                            <p className={cn(isEdition ? "text-xs font-black uppercase tracking-widest text-primary" : "text-xs font-medium text-primary")}>Suelta tus archivos aqui</p>
                                         </div>
                                     </motion.div>
                                 )}
@@ -2279,7 +2333,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
                                 <div className="flex items-center gap-2 px-3 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full shadow-sm">
                                     <MessageSquare size={11} className="text-zinc-400" />
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Conversación & Eventos</span>
+                                    <span className={cn(isEdition ? "text-[9px] font-black uppercase tracking-widest text-zinc-400" : "text-[11px] font-medium text-zinc-500 dark:text-zinc-400")}>Conversación & eventos</span>
                                 </div>
                                 <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
                             </div>
@@ -2310,7 +2364,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         <div className="w-12 h-12 bg-white dark:bg-zinc-900 rounded-full flex items-center justify-center mb-3 text-zinc-300 dark:text-zinc-700 border border-zinc-200/50 dark:border-zinc-800 shadow-sm">
                                             <MessageSquare size={22} />
                                         </div>
-                                        <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Aún no hay comentarios</h4>
+                                        <h4 className={cn(isEdition ? "text-xs font-bold text-zinc-400 uppercase tracking-wider" : "text-sm font-medium text-zinc-500 dark:text-zinc-400")}>Aún no hay comentarios</h4>
                                         <p className="text-[10px] text-zinc-400 font-medium max-w-[200px] mt-1">Escribe o suelta un archivo abajo para iniciar la conversacion</p>
                                     </div>
                                 ) : (
