@@ -999,7 +999,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                             <AlertOctagon className="w-3 h-3" /> Vencido (+{daysOverdue}d)
                                         </span>
                                     )}
-                                    {!overdue && !isReturned && task.priority && (
+                                    {!isReturned && task.priority && (
                                         task.priority === 'URGENTE' ? (
                                             <span className="text-[10px] font-black text-white flex items-center gap-1 bg-red-600 px-1.5 py-0.5 rounded border border-red-500 shadow-sm">
                                                 <Zap className="w-3 h-3 fill-current" /> URGENTE
