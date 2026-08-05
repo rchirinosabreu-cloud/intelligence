@@ -219,4 +219,24 @@ test('report presentation regressions', async (t) => {
     assert.match(implementation, /=>\s*\(\s*<SectionInsight/);
   });
 
+  await t.test('report exposes a print-optimized PDF download path instead of canvas screenshots', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    assert.match(component, /const downloadPDF\s*=/);
+    assert.match(component, /Descargar PDF/);
+    assert.match(component, /buildReportExportHtml\(\{\s*mode:\s*'pdf'\s*\}\)/);
+    assert.match(component, /window\.print\(\)/);
+    const downloadPdfStart = component.indexOf('const downloadPDF');
+    const getImageUrlStart = component.indexOf('\n  const getImageUrl', downloadPdfStart);
+    const implementation = component.slice(downloadPdfStart, getImageUrlStart);
+    assert.doesNotMatch(implementation, /html2canvas|new jsPDF/);
+  });
+
+  await t.test('PDF export CSS controls page size, margins and section breaks', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    assert.match(component, /@page\s*\{\s*size:\s*A4 landscape;\s*margin:\s*10mm;/);
+    assert.match(component, /\.pdf-export \.report-wrapper/);
+    assert.match(component, /\.pdf-export \.page-break-after/);
+    assert.match(component, /#report-canvas\s*>\s*\.page-break-after:first-child/);
+  });
+
 });

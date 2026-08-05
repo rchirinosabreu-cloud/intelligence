@@ -32,8 +32,6 @@ import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { toast } from 'react-hot-toast';
 import axios from 'axios';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import { adaptDatasetForChart, hasReadableChartData } from '@/lib/reportChartData';
 import { adaptOrganicSummary, filterCanonicalMetrics, getOrganicPlatformLabel, getReviewMetricEntries, isDemographicDataset, filterTopContentRows, splitAchievement, safeClassName, buildReportFileName, processNarrativeResponse, sanitizeNarrativeForReport } from '@/lib/reportPresentation';
@@ -1166,123 +1164,102 @@ const Reports = () => {
     }
   };
 
-  const downloadHTML = () => {
+  const buildReportExportHtml = ({ mode = 'html' } = {}) => {
     if (!reportRef.current) return;
-    const toastId = toast.loading('Generando documento HTML...');
-    try {
-      // Clone report element
-      const element = reportRef.current.cloneNode(true);
+    const element = reportRef.current.cloneNode(true);
+    const realContainers = reportRef.current.querySelectorAll('.recharts-responsive-container');
+    const clonedContainers = element.querySelectorAll('.recharts-responsive-container');
 
-      // Locate all responsive chart containers in the actual visible DOM and clone SVGs
-      const realContainers = reportRef.current.querySelectorAll('.recharts-responsive-container');
-      const clonedContainers = element.querySelectorAll('.recharts-responsive-container');
+    realContainers.forEach((realCont, idx) => {
+      const clonedCont = clonedContainers[idx];
+      if (!clonedCont) return;
 
-      realContainers.forEach((realCont, idx) => {
-        const clonedCont = clonedContainers[idx];
-        if (!clonedCont) return;
+      const realSvg = realCont.querySelector('svg');
+      if (realSvg) {
+        const clonedSvg = realSvg.cloneNode(true);
+        const width = realCont.clientWidth || 600;
+        const height = realCont.clientHeight || 280;
 
-        const realSvg = realCont.querySelector('svg');
-        if (realSvg) {
-          const clonedSvg = realSvg.cloneNode(true);
-          const width = realCont.clientWidth || 600;
-          const height = realCont.clientHeight || 280;
+        clonedSvg.setAttribute('width', String(width));
+        clonedSvg.setAttribute('height', String(height));
+        clonedSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        clonedSvg.style.width = '100%';
+        clonedSvg.style.height = 'auto';
 
-          clonedSvg.setAttribute('width', String(width));
-          clonedSvg.setAttribute('height', String(height));
-          clonedSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-          clonedSvg.style.width = '100%';
-          clonedSvg.style.height = 'auto';
+        clonedCont.innerHTML = '';
+        clonedCont.appendChild(clonedSvg);
+      }
+    });
 
-          clonedCont.innerHTML = '';
-          clonedCont.appendChild(clonedSvg);
+    element.querySelectorAll('.no-print').forEach(el => el.remove());
+
+    const liveControls = reportRef.current.querySelectorAll('textarea, input');
+    const clonedControls = element.querySelectorAll('textarea, input');
+    clonedControls.forEach((ta, index) => {
+      const div = document.createElement('div');
+      const val = readLiveControlValue(liveControls[index], ta);
+      if (ta.tagName.toLowerCase() === 'textarea' && val.includes('\n')) {
+        val.split('\n\n').filter(Boolean).forEach((paragraph) => {
+          const paragraphElement = document.createElement('p');
+          paragraphElement.className = 'text-sm leading-relaxed font-normal';
+          paragraphElement.style.margin = '0 0 12px';
+          paragraphElement.style.whiteSpace = 'pre-wrap';
+          paragraphElement.textContent = paragraph;
+          div.appendChild(paragraphElement);
+        });
+      } else {
+        div.textContent = val;
+      }
+      div.className = ta.className;
+      div.style.height = 'auto';
+      div.style.whiteSpace = 'pre-wrap';
+      div.style.border = 'none';
+
+      let isDarkBg = false;
+      let parent = ta.parentElement;
+      while (parent) {
+        const classes = safeClassName(parent.className);
+        if (
+          classes.includes('bg-[#009fb7]') ||
+          classes.includes('bg-[#0F172A]') ||
+          classes.includes('text-white') ||
+          classes.includes('bg-primary')
+        ) {
+          isDarkBg = true;
+          break;
         }
-      });
+        parent = parent.parentElement;
+      }
 
-      // Hide no-print elements
-      const noPrintElements = element.querySelectorAll('.no-print');
-      noPrintElements.forEach(el => el.remove());
+      div.style.color = isDarkBg ? '#ffffff' : '#1e293b';
+      ta.parentNode.replaceChild(div, ta);
+    });
 
-      // Replace textareas/inputs with static divs/spans
-      const liveControls = reportRef.current.querySelectorAll('textarea, input');
-      const clonedControls = element.querySelectorAll('textarea, input');
-      clonedControls.forEach((ta, index) => {
-        const div = document.createElement('div');
-        const val = readLiveControlValue(liveControls[index], ta);
-        if (ta.tagName.toLowerCase() === 'textarea' && val.includes('\n')) {
-          val.split('\n\n').filter(Boolean).forEach((paragraph) => {
-            const paragraphElement = document.createElement('p');
-            paragraphElement.className = 'text-sm leading-relaxed font-normal';
-            paragraphElement.style.margin = '0 0 12px';
-            paragraphElement.style.whiteSpace = 'pre-wrap';
-            paragraphElement.textContent = paragraph;
-            div.appendChild(paragraphElement);
-          });
-        } else {
-          div.textContent = val;
+    element.querySelectorAll('*').forEach(node => {
+      let isDarkBg = false;
+      let parent = node.parentElement;
+      while (parent) {
+        const classes = safeClassName(parent.className);
+        if (
+          classes.includes('bg-[#009fb7]') ||
+          classes.includes('bg-[#0F172A]') ||
+          classes.includes('text-white') ||
+          classes.includes('bg-primary')
+        ) {
+          isDarkBg = true;
+          break;
         }
-        div.className = ta.className;
-        div.style.height = 'auto';
-        div.style.whiteSpace = 'pre-wrap';
-        div.style.border = 'none';
+        parent = parent.parentElement;
+      }
 
-        // Dynamic high contrast calculation
-        let isDarkBg = false;
-        let parent = ta.parentElement;
-        while (parent) {
-          const classes = safeClassName(parent.className);
-          if (
-            classes.includes('bg-[#009fb7]') ||
-            classes.includes('bg-[#0F172A]') ||
-            classes.includes('text-white') ||
-            classes.includes('bg-primary')
-          ) {
-            isDarkBg = true;
-            break;
-          }
-          parent = parent.parentElement;
-        }
+      if (isDarkBg && node.style && node.style.color) {
+        node.style.color = '#ffffff';
+      }
+    });
 
-        if (isDarkBg) {
-          div.style.color = '#ffffff';
-        } else {
-          div.style.color = '#1e293b'; // slate-800
-        }
-
-        ta.parentNode.replaceChild(div, ta);
-      });
-
-      // Strip any inline style color rules that darken text inside cian #009fb7 or dark slate #0F172A containers
-      const allDivs = element.querySelectorAll('*');
-      allDivs.forEach(node => {
-        let isDarkBg = false;
-        let parent = node.parentElement;
-        while (parent) {
-          const classes = safeClassName(parent.className);
-          if (
-            classes.includes('bg-[#009fb7]') ||
-            classes.includes('bg-[#0F172A]') ||
-            classes.includes('text-white') ||
-            classes.includes('bg-primary')
-          ) {
-            isDarkBg = true;
-            break;
-          }
-          parent = parent.parentElement;
-        }
-
-        if (isDarkBg) {
-          if (node.style && node.style.color) {
-            node.style.color = '#ffffff';
-          }
-        }
-      });
-
-      // Embed the exact compiled application CSS so the download does not depend on
-      // Tailwind CDN theme detection or a different Tailwind version.
-      const compiledStyles = collectDocumentStyles(document.styleSheets);
-
-      // Construct a complete, self-styled HTML file.
-      const htmlContentRaw = `<!DOCTYPE html>
+    const compiledStyles = collectDocumentStyles(document.styleSheets);
+    const isPdf = mode === 'pdf';
+    const htmlContentRaw = `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -1312,24 +1289,73 @@ const Reports = () => {
     .whitespace-pre-wrap {
       white-space: pre-wrap !important;
     }
+    ${isPdf ? `
+    @page { size: A4 landscape; margin: 10mm; }
+    body.pdf-export {
+      background: #ffffff;
+      padding: 0;
+      display: block;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .pdf-export .report-wrapper {
+      width: 100%;
+      max-width: none;
+      border: 0;
+      box-shadow: none;
+      border-radius: 0;
+      overflow: visible;
+    }
+    .pdf-export #report-canvas {
+      width: 100%;
+      display: block;
+    }
+    .pdf-export .page-break-after {
+      break-after: auto !important;
+      page-break-after: auto !important;
+    }
+    .pdf-export #report-canvas > .page-break-after:first-child {
+      break-after: page !important;
+      page-break-after: always !important;
+    }
+    .pdf-export .break-inside-avoid,
+    .pdf-export table,
+    .pdf-export svg {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .pdf-export textarea,
+    .pdf-export input {
+      border: 0 !important;
+      box-shadow: none !important;
+      background: transparent !important;
+    }
+    ` : ''}
   </style>
 </head>
-<body>
+<body class="${isPdf ? 'pdf-export' : ''}">
   <div class="report-wrapper">
     ${element.innerHTML}
   </div>
+  ${isPdf ? `<script>window.addEventListener('load', function () { window.focus(); window.print(); });</script>` : ''}
 </body>
 </html>`;
 
-      // Apply decimal formatting to percentages within the text to exactly 2 decimals (e.g., 0.8234% -> 0.82%)
-      const htmlContent = htmlContentRaw.replace(/(\d+)\.(\d+)(%)/g, (match, integerPart, decimalPart, percentSign) => {
-        if (decimalPart.length > 2) {
-          const roundedDecimal = Math.round(parseFloat(`0.${decimalPart}`) * 100) / 100;
-          const roundedStr = roundedDecimal.toFixed(2).split('.')[1] || '00';
-          return `${integerPart}.${roundedStr}${percentSign}`;
-        }
-        return match;
-      });
+    return htmlContentRaw.replace(/(\d+)\.(\d+)(%)/g, (match, integerPart, decimalPart, percentSign) => {
+      if (decimalPart.length > 2) {
+        const roundedDecimal = Math.round(parseFloat(`0.${decimalPart}`) * 100) / 100;
+        const roundedStr = roundedDecimal.toFixed(2).split('.')[1] || '00';
+        return `${integerPart}.${roundedStr}${percentSign}`;
+      }
+      return match;
+    });
+  };
+
+  const downloadHTML = () => {
+    if (!reportRef.current) return;
+    const toastId = toast.loading('Generando documento HTML...');
+    try {
+      const htmlContent = buildReportExportHtml({ mode: 'html' });
 
       const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -1344,6 +1370,25 @@ const Reports = () => {
     } catch (err) {
       console.error('HTML Export Error:', err);
       toast.error('Error al exportar HTML', { id: toastId });
+    }
+  };
+
+  const downloadPDF = () => {
+    if (!reportRef.current) return;
+    const toastId = toast.loading('Preparando PDF optimizado...');
+    try {
+      const htmlContent = buildReportExportHtml({ mode: 'pdf' });
+      const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+      if (!printWindow) {
+        throw new Error('El navegador bloqueó la ventana de impresión.');
+      }
+      printWindow.document.open();
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      toast.success('PDF listo para guardar desde el diálogo de impresión', { id: toastId });
+    } catch (err) {
+      console.error('PDF Export Error:', err);
+      toast.error('Error al preparar PDF', { id: toastId });
     }
   };
 
@@ -1373,9 +1418,14 @@ const Reports = () => {
             </div>
             <div className="flex gap-3">
                {report && (
-                 <button onClick={downloadHTML} className="px-6 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold transition-all">
-                  Descargar Reporte HTML
-                 </button>
+                 <>
+                   <button onClick={downloadPDF} className="px-6 py-2.5 bg-primary hover:opacity-90 text-white border border-primary rounded-xl text-xs font-bold transition-all">
+                    Descargar PDF
+                   </button>
+                   <button onClick={downloadHTML} className="px-6 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold transition-all">
+                    Descargar Reporte HTML
+                   </button>
+                 </>
                )}
                <button
                 onClick={generateReport}
