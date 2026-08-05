@@ -6,7 +6,7 @@ import { uploadClientFile, getSignedUrl, getClientFileStream } from '../../servi
 import { parseJsonResponse, extractModelText } from '../../services/aiService.js';
 import {
     extractMetricsWithGemini,
-    generateNarrativeWithGemini,
+    generateNarrativeWithAIProvider,
     generatePublishableNarrative,
     validateAndCleanSourceExtraction,
     mergeSourceMetricsIntoAccumulator,
@@ -601,7 +601,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
         try {
             publishableResult = await withTimeout(
                 generatePublishableNarrative(metrics, sections, report.client.name, {
-                    generateFullNarrative: generateNarrativeWithGemini
+                    generateFullNarrative: generateNarrativeWithAIProvider
                 }, timeoutContext),
                 90000,
                 "Gemini narrative generation timed out"

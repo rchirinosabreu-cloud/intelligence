@@ -760,6 +760,202 @@ export const parseNarrativeResponse = (content, sections = [], clientName = 'el 
     }
 };
 
+const buildOpenAINarrativePrompt = (normalizedMetrics, sections = [], clientName = 'el cliente') => `Analiza estas metricas validadas y escribe una narrativa ejecutiva para cliente.
+
+METRICAS DEL PERIODO:
+${JSON.stringify(normalizedMetrics, null, 2)}
+
+SECCIONES VISUALES:
+${JSON.stringify(sections, null, 2)}
+
+CLIENTE:
+${clientName}
+
+Reglas:
+1. Escribe en espanol claro para el cliente final, no para un analista tecnico.
+2. No inventes cifras, ventas, rentabilidad, reservas, matriculas ni causalidad no demostrada.
+3. Cada section.narrativeComment debe tener exactamente dos parrafos separados por \\n\\n.
+4. El primer parrafo debe leer los datos visibles con cifras reales.
+5. El segundo parrafo debe empezar o incluir "Para ${clientName}," y explicar impacto comercial o decision concreta.
+6. No repitas el mismo segundo parrafo entre secciones.
+7. Evita frases genericas como "para el negocio", "este dato permite identificar", "este es el valor mas alto visible" o "debe contrastarse con las demas metricas".
+8. Si hay organic y ads, abre el resumen con organic y deja pauta para su seccion.
+
+Devuelve solo JSON con esta forma:
+{
+  "headline": string,
+  "summaryPoints": string[3],
+  "keyAchievements": string,
+  "actionPlan": [{"action": string, "kpi": string, "suggestedAssignee": string}],
+  "logrosYAvances": string[],
+  "contenidoTopAnalisis": string,
+  "oportunidadesYAprendizajes": [{"title": string, "evidence": string, "learning": string, "application": string}],
+  "recomendacionesEstrategicas": [{"priority": "ALTA"|"MEDIA", "action": string, "rationale": string, "kpi": string}],
+  "sections": [{"sectionId": string, "narrativeComment": string}],
+  "granularNarratives": [{"sectionKey": string, "title": string, "consultativeComment": string}]
+}`;
+
+const openAINarrativeSchema = {
+    type: "object",
+    properties: {
+        headline: { type: "string" },
+        summaryPoints: { type: "array", items: { type: "string" } },
+        keyAchievements: { type: "string" },
+        actionPlan: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    action: { type: "string" },
+                    kpi: { type: "string" },
+                    suggestedAssignee: { type: "string" }
+                },
+                required: ["action", "kpi", "suggestedAssignee"],
+                additionalProperties: false
+            }
+        },
+        logrosYAvances: { type: "array", items: { type: "string" } },
+        contenidoTopAnalisis: { type: "string" },
+        oportunidadesYAprendizajes: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    title: { type: "string" },
+                    evidence: { type: "string" },
+                    learning: { type: "string" },
+                    application: { type: "string" }
+                },
+                required: ["title", "evidence", "learning", "application"],
+                additionalProperties: false
+            }
+        },
+        recomendacionesEstrategicas: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    priority: { type: "string" },
+                    action: { type: "string" },
+                    rationale: { type: "string" },
+                    kpi: { type: "string" }
+                },
+                required: ["priority", "action", "rationale", "kpi"],
+                additionalProperties: false
+            }
+        },
+        sections: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    sectionId: { type: "string" },
+                    narrativeComment: { type: "string" }
+                },
+                required: ["sectionId", "narrativeComment"],
+                additionalProperties: true
+            }
+        },
+        granularNarratives: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    sectionKey: { type: "string" },
+                    title: { type: "string" },
+                    consultativeComment: { type: "string" }
+                },
+                required: ["sectionKey", "title", "consultativeComment"],
+                additionalProperties: false
+            }
+        }
+    },
+    required: ["headline", "summaryPoints", "keyAchievements", "actionPlan", "logrosYAvances", "contenidoTopAnalisis", "oportunidadesYAprendizajes", "recomendacionesEstrategicas", "sections", "granularNarratives"],
+    additionalProperties: false
+};
+
+const extractOpenAIResponseText = (payload) => {
+    if (typeof payload?.output_text === 'string' && payload.output_text.trim()) return payload.output_text;
+    const contentItems = (payload?.output || []).flatMap((item) => item?.content || []);
+    const text = contentItems
+        .map((item) => item?.text || item?.content || '')
+        .filter(Boolean)
+        .join('');
+    if (text.trim()) return text;
+    throw new Error('OpenAI narrative response content is empty');
+};
+
+export const generateNarrativeWithOpenAI = async (normalizedMetrics, sections = [], clientName = 'el cliente') => {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        throw new Error("Missing OPENAI_API_KEY in server configuration");
+    }
+
+    const model = process.env.OPENAI_MODEL_NARRATIVE || process.env.OPENAI_MODEL || "gpt-5";
+    const response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'User-Agent': 'BrainStudioIntelligence/2.0'
+        },
+        body: JSON.stringify({
+            model,
+            instructions: 'Eres un Director Editorial de Estrategia Digital en Brainstudio. Devuelve solo JSON valido y escribe analisis consultivo para clientes de agencia.',
+            input: [{
+                role: 'user',
+                content: [{ type: 'input_text', text: buildOpenAINarrativePrompt(normalizedMetrics, sections, clientName) }]
+            }],
+            text: {
+                format: {
+                    type: 'json_schema',
+                    name: 'report_narrative',
+                    schema: openAINarrativeSchema,
+                    strict: false
+                }
+            },
+            temperature: 0.2
+        })
+    });
+
+    const payloadText = await response.text();
+    if (!response.ok) {
+        throw new Error(`OpenAI narrative generation failed (${response.status}): ${payloadText.slice(0, 500)}`);
+    }
+
+    return parseNarrativeResponse(extractOpenAIResponseText(JSON.parse(payloadText)), sections, clientName);
+};
+
+export const generateNarrativeWithAIProvider = async (normalizedMetrics, sections = [], clientName = 'el cliente', deps = {}) => {
+    const env = deps.env || process.env;
+    const openaiGenerator = deps.openaiGenerator || generateNarrativeWithOpenAI;
+    const geminiGenerator = deps.geminiGenerator || generateNarrativeWithGemini;
+    const errors = [];
+
+    if (env.OPENAI_API_KEY) {
+        try {
+            return await openaiGenerator(normalizedMetrics, sections, clientName);
+        } catch (error) {
+            errors.push(`OpenAI: ${error.message}`);
+            console.warn('[Vision Service] OpenAI narrative generation failed. Falling back to Gemini:', error.message);
+        }
+    }
+
+    if (env.GEMINI_API_KEY) {
+        try {
+            return await geminiGenerator(normalizedMetrics, sections, clientName);
+        } catch (error) {
+            errors.push(`Gemini: ${error.message}`);
+            if (error.rawContent) {
+                error.providerErrors = errors;
+                throw error;
+            }
+        }
+    }
+
+    throw new Error(errors.length ? `All narrative providers failed. ${errors.join(' | ')}` : 'No narrative AI provider configured');
+};
+
 /**
  * Generates an editorial narrative and strategic action plan from normalized metrics and sections using Gemini.
  * @param {Object} normalizedMetrics - The validated metrics object.
