@@ -17,6 +17,7 @@ import {
 } from '../../services/reportVisionService.js';
 import { v4 as uuidv4 } from 'uuid';
 import { buildScopedReportData, normalizeAdsTableRows, orderReportSections } from '../../lib/reportStructure.js';
+import { sanitizeNarrativeForReport } from '../../lib/reportPresentation.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -425,6 +426,10 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
 
         const parsedStartDate = startDate ? new Date(startDate) : new Date(new Date().setDate(1));
         const parsedEndDate = endDate ? new Date(endDate) : new Date();
+        validatedNormalizedMetrics.reportPeriod = {
+            start: parsedStartDate.toISOString().slice(0, 10),
+            end: parsedEndDate.toISOString().slice(0, 10)
+        };
 
         // Enforce valid enums MONTHLY and DRAFT
         const validPeriodKinds = ['MONTHLY', 'QUARTERLY'];
@@ -623,7 +628,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
             };
         }
 
-        const narrativeResult = publishableResult.narrative;
+        const narrativeResult = sanitizeNarrativeForReport(publishableResult.narrative);
         const updateData = publishableResult.publishable ? {
             narrative: {
                 headline: narrativeResult.headline,

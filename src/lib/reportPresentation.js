@@ -14,6 +14,48 @@ const normalizeLabel = (value) => String(value || '')
 export const hasPublishableValue = (value) => value !== null && value !== undefined && value !== ''
   && Number.isFinite(Number(value)) && Number(value) !== 0;
 
+const ZERO_NUMBER_PATTERN = '0(?:[,.]0+)?(?![,.]\\d)';
+const ZERO_METRIC_TERMS = 'clics?|clicks?|ctr|impresiones?|resultados?|alcance|visualizaciones?|interacciones?|visitas?|seguidores?';
+const ZERO_METRIC_REGEX = new RegExp(
+  `(?:^|[^\\d])${ZERO_NUMBER_PATTERN}\\s*(?:%\\s*(?:de\\s*)?)?(?:${ZERO_METRIC_TERMS})|(?:${ZERO_METRIC_TERMS})\\D{0,24}${ZERO_NUMBER_PATTERN}\\s*%?`,
+  'i'
+);
+
+export const hasZeroMetricReference = (text) => ZERO_METRIC_REGEX.test(String(text || ''));
+
+const removeZeroMetricSentences = (text) => String(text || '')
+  .split(/(?<=[.!?])\s+/)
+  .filter((sentence) => !hasZeroMetricReference(sentence))
+  .join(' ')
+  .trim();
+
+const itemText = (item = {}) => Object.values(item).join(' ');
+const withoutZeroMetricItems = (items = []) => (Array.isArray(items) ? items : [])
+  .filter((item) => !hasZeroMetricReference(itemText(item)));
+
+export const sanitizeNarrativeForReport = (narrative = {}) => {
+  if (!narrative || typeof narrative !== 'object') return narrative;
+  return {
+    ...narrative,
+    headline: removeZeroMetricSentences(narrative.headline),
+    summaryPoints: (narrative.summaryPoints || []).map(removeZeroMetricSentences).filter(Boolean),
+    keyAchievements: removeZeroMetricSentences(narrative.keyAchievements),
+    logrosYAvances: (narrative.logrosYAvances || []).map(removeZeroMetricSentences).filter(Boolean),
+    contenidoTopAnalisis: removeZeroMetricSentences(narrative.contenidoTopAnalisis),
+    actionPlan: withoutZeroMetricItems(narrative.actionPlan),
+    oportunidadesYAprendizajes: withoutZeroMetricItems(narrative.oportunidadesYAprendizajes),
+    recomendacionesEstrategicas: withoutZeroMetricItems(narrative.recomendacionesEstrategicas),
+    granularNarratives: (narrative.granularNarratives || []).map((item) => ({
+      ...item,
+      consultativeComment: removeZeroMetricSentences(item.consultativeComment)
+    })).filter((item) => String(item.consultativeComment || '').trim()),
+    sections: (narrative.sections || []).map((section) => ({
+      ...section,
+      narrativeComment: removeZeroMetricSentences(section.narrativeComment)
+    }))
+  };
+};
+
 export const filterCanonicalMetrics = (metrics = {}) => Object.fromEntries(
   CANONICAL_KEYS.filter(key => metrics[key] && typeof metrics[key] === 'object' && hasPublishableValue(metrics[key].value))
     .map(key => [key, metrics[key]])

@@ -760,7 +760,15 @@ export const parseNarrativeResponse = (content, sections = [], clientName = 'el 
     }
 };
 
+const formatOfficialReportPeriod = (normalizedMetrics = {}) => {
+    const period = normalizedMetrics.reportPeriod || {};
+    return period.start && period.end ? `${period.start} a ${period.end}` : 'periodo seleccionado por el usuario';
+};
+
 const buildOpenAINarrativePrompt = (normalizedMetrics, sections = [], clientName = 'el cliente') => `Analiza estas metricas validadas y escribe una narrativa ejecutiva para cliente.
+
+PERIODO OFICIAL DEL INFORME:
+${formatOfficialReportPeriod(normalizedMetrics)}
 
 METRICAS DEL PERIODO:
 ${JSON.stringify(normalizedMetrics, null, 2)}
@@ -780,6 +788,8 @@ Reglas:
 6. No repitas el mismo segundo parrafo entre secciones.
 7. Evita frases genericas como "para el negocio", "este dato permite identificar", "este es el valor mas alto visible" o "debe contrastarse con las demas metricas".
 8. Si hay organic y ads, abre el resumen con organic y deja pauta para su seccion.
+9. Usa el PERIODO OFICIAL DEL INFORME para fechas, titulares y conclusiones. Si alguna captura trae otro rango visible, no lo conviertas en el periodo del informe.
+10. No menciones estadisticas con valor 0, 0.00 o 0%. Si clics, CTR u otra metrica esta en cero, omite esa metrica y no construyas oportunidades, aprendizajes, recomendaciones ni KPIs alrededor de ese cero.
 
 Devuelve solo JSON con esta forma:
 {
@@ -971,6 +981,9 @@ export const generateNarrativeWithGemini = async (normalizedMetrics, sections = 
     const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
     const prompt = `Analiza las siguientes métricas cuantitativas ya validadas y la colección de secciones visuales, y genera una narración editorial estructurada en Español.
+
+PERIODO OFICIAL DEL INFORME:
+${formatOfficialReportPeriod(normalizedMetrics)}
 
 MÉTRICAS DEL PERIODO:
 ${JSON.stringify(normalizedMetrics, null, 2)}

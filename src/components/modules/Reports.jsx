@@ -36,7 +36,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { cn } from '@/lib/utils';
 import { adaptDatasetForChart, hasReadableChartData } from '@/lib/reportChartData';
-import { adaptOrganicSummary, filterCanonicalMetrics, getOrganicPlatformLabel, getReviewMetricEntries, isDemographicDataset, filterTopContentRows, splitAchievement, safeClassName, buildReportFileName, processNarrativeResponse } from '@/lib/reportPresentation';
+import { adaptOrganicSummary, filterCanonicalMetrics, getOrganicPlatformLabel, getReviewMetricEntries, isDemographicDataset, filterTopContentRows, splitAchievement, safeClassName, buildReportFileName, processNarrativeResponse, sanitizeNarrativeForReport } from '@/lib/reportPresentation';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
@@ -301,7 +301,7 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
             <YAxis width={110} dataKey="label" type="category" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
             <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
             <Bar dataKey="value" fill={currentTheme.fill} radius={[0, 8, 8, 0]} barSize={16}>
-              <LabelList dataKey="value" position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => `${val}%`} />
+              <LabelList dataKey="value" position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => Number(val).toLocaleString('es-ES')} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
@@ -427,24 +427,13 @@ const TopContentTable = ({ data }) => {
   );
 };
 
-const GranularNarrativeBlock = ({ sectionKey, title, comment, onChange }) => {
-  return (
-    <div className="bg-[#f9fafb] border border-slate-200 rounded-2xl p-6 mt-4 space-y-2 break-inside-avoid shadow-sm !h-auto !overflow-visible">
-      <div className="flex items-center gap-2">
-        <Sparkles className="w-4 h-4 text-primary" />
-        <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">{title}</h5>
-      </div>
-      <textarea
-        rows={4}
-        className="w-full bg-transparent border-none text-sm text-[#334155] leading-relaxed font-normal focus:ring-1 focus:ring-primary/10 rounded-xl resize-none outline-none !h-auto !overflow-visible"
-        style={{ height: 'auto', overflow: 'visible' }}
-        value={comment || ''}
-        onChange={(e) => onChange(sectionKey, e.target.value)}
-        placeholder="Escribe un comentario consultivo para esta sección..."
-      />
-    </div>
-  );
-};
+const GranularNarrativeBlock = ({ sectionKey, comment, onChange }) => (
+  <SectionInsight
+    sectionId={sectionKey}
+    comment={comment}
+    onChange={onChange}
+  />
+);
 
 const ReportCover = ({ report }) => {
   const formattedStart = report.startDate ? new Date(report.startDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
@@ -658,6 +647,8 @@ const OrganicSummary = ({ summary }) => {
 
 const ActionPlan = ({ narrative, onUpdate }) => {
   if (!narrative || !narrative.actionPlan) return null;
+  const actionPlan = sanitizeNarrativeForReport(narrative).actionPlan || [];
+  if (actionPlan.length === 0) return null;
 
   const handleChange = (idx, field, value) => {
     const updatedPlan = [...narrative.actionPlan];
@@ -678,11 +669,10 @@ const ActionPlan = ({ narrative, onUpdate }) => {
             <tr>
               <th className="px-6 py-4 font-bold">Compromiso / Acción Recomendada</th>
               <th className="px-6 py-4 font-bold">KPI de Éxito</th>
-              <th className="px-6 py-4 font-bold">Responsable</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50 font-medium">
-            {narrative.actionPlan.map((item, idx) => (
+            {actionPlan.map((item, idx) => (
               <tr key={idx} className="break-inside-avoid">
                 <td className="px-6 py-4">
                   <textarea
@@ -698,14 +688,6 @@ const ActionPlan = ({ narrative, onUpdate }) => {
                     className="w-full bg-transparent border-none text-slate-700 font-semibold focus:ring-1 focus:ring-primary/10 rounded-lg outline-none resize-none"
                     value={item.kpi}
                     onChange={(e) => handleChange(idx, 'kpi', e.target.value)}
-                  />
-                </td>
-                <td className="px-6 py-4">
-                  <input
-                    type="text"
-                    className="w-full bg-transparent border-none text-primary font-bold focus:ring-1 focus:ring-primary/10 rounded-lg outline-none"
-                    value={item.suggestedAssignee}
-                    onChange={(e) => handleChange(idx, 'suggestedAssignee', e.target.value)}
                   />
                 </td>
               </tr>
@@ -1758,11 +1740,11 @@ const Reports = () => {
                      </div>}
 
                      {/* 7. Oportunidades & Aprendizajes */}
-                     {Array.isArray(narrativeState?.oportunidadesYAprendizajes) && narrativeState.oportunidadesYAprendizajes.length > 0 && (
+                     {Array.isArray(sanitizeNarrativeForReport(narrativeState)?.oportunidadesYAprendizajes) && sanitizeNarrativeForReport(narrativeState).oportunidadesYAprendizajes.length > 0 && (
                        <div className="space-y-3 pt-8 border-t border-slate-100 page-break-after w-full">
                          <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Oportunidades & aprendizajes")}</h4>
                          <div className="grid grid-cols-1 gap-6 w-full">
-                           {narrativeState.oportunidadesYAprendizajes.map((item, idx) => {
+                           {sanitizeNarrativeForReport(narrativeState).oportunidadesYAprendizajes.map((item, idx) => {
                              const updateItem = (field, value) => {
                                const updated = [...narrativeState.oportunidadesYAprendizajes];
                                updated[idx] = { ...updated[idx], [field]: value };
@@ -1825,11 +1807,11 @@ const Reports = () => {
                      </div>
 
                      {/* 9. Recomendaciones Estratégicas */}
-                     {Array.isArray(narrativeState?.recomendacionesEstrategicas) && narrativeState.recomendacionesEstrategicas.length > 0 && (
+                     {Array.isArray(sanitizeNarrativeForReport(narrativeState)?.recomendacionesEstrategicas) && sanitizeNarrativeForReport(narrativeState).recomendacionesEstrategicas.length > 0 && (
                        <div className="space-y-4 pt-8 border-t border-slate-100 w-full">
                          <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Recomendaciones estratégicas")}</h4>
                          <div className="grid grid-cols-1 gap-6 w-full">
-                           {narrativeState.recomendacionesEstrategicas.map((item, idx) => {
+                           {sanitizeNarrativeForReport(narrativeState).recomendacionesEstrategicas.map((item, idx) => {
                              const updateItem = (field, value) => {
                                const updated = [...narrativeState.recomendacionesEstrategicas];
                                updated[idx] = { ...updated[idx], [field]: value };

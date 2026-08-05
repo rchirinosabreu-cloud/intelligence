@@ -10,7 +10,9 @@ import {
   buildReportFileName,
   getReviewMetricEntries,
   getOrganicPlatformLabel,
-  adaptOrganicSummary
+  adaptOrganicSummary,
+  hasZeroMetricReference,
+  sanitizeNarrativeForReport
 } from '../src/lib/reportPresentation.js';
 
 test('report presentation regressions', async (t) => {
@@ -165,6 +167,56 @@ test('report presentation regressions', async (t) => {
   await t.test('built frontend bundle must not carry the legacy hasPublishableValue symbol', async () => {
     const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
     assert.doesNotMatch(component, /hasPublishableValue/);
+  });
+
+  await t.test('published narrative removes recommendations based on zero metrics only', () => {
+    assert.equal(hasZeroMetricReference('Meta Ads reporta 0 clics y CTR 0%.'), true);
+    assert.equal(hasZeroMetricReference('CTR reportado >= 0.7% y clics al alza.'), false);
+
+    const sanitized = sanitizeNarrativeForReport({
+      oportunidadesYAprendizajes: [
+        { title: 'Trazabilidad ausente', evidence: 'Meta Ads reporta 23.568 impresiones, 52 resultados, pero 0 clics y CTR 0%.', learning: 'No refleja clics.', application: 'Auditar.' },
+        { title: 'Resultados visibles', evidence: 'Meta Ads reporta 52 resultados y 23.568 impresiones.', learning: 'Hay respuesta medible.', application: 'Revisar creatividades.' }
+      ],
+      actionPlan: [
+        { action: 'Auditar tracking por 0 clics', kpi: 'CTR 0%', suggestedAssignee: 'Paid Media' },
+        { action: 'Priorizar anuncios con resultados', kpi: 'Costo por resultado estable', suggestedAssignee: 'Paid Media' }
+      ],
+      recomendacionesEstrategicas: [
+        { priority: 'ALTA', action: 'Corregir medicion de clics/CTR', rationale: 'Sin senales de 0 clics no se puede optimizar.', kpi: 'CTR 0%' },
+        { priority: 'MEDIA', action: 'Reasignar presupuesto a piezas con resultados', rationale: 'Los resultados visibles permiten comparar volumen.', kpi: 'Resultados por 1.000 impresiones' }
+      ]
+    });
+
+    assert.deepEqual(sanitized.oportunidadesYAprendizajes.map(item => item.title), ['Resultados visibles']);
+    assert.deepEqual(sanitized.actionPlan.map(item => item.action), ['Priorizar anuncios con resultados']);
+    assert.deepEqual(sanitized.recomendacionesEstrategicas.map(item => item.action), ['Reasignar presupuesto a piezas con resultados']);
+  });
+
+  await t.test('report action plan no longer renders the responsible column', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    const start = component.indexOf('const ActionPlan');
+    const end = component.indexOf('\nconst SourceAppendix', start);
+    const implementation = component.slice(start, end);
+    assert.ok(start > -1, 'missing ActionPlan component');
+    assert.doesNotMatch(implementation, /Responsable|suggestedAssignee/);
+  });
+
+  await t.test('bar chart value labels are counts by default, not percentages', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    const barChartStart = component.indexOf("if (chartType === 'BAR_CHART')");
+    const donutStart = component.indexOf("if (chartType === 'DONUT_CHART')", barChartStart);
+    const implementation = component.slice(barChartStart, donutStart);
+    assert.doesNotMatch(implementation, /\$\{val\}%/);
+    assert.match(implementation, /toLocaleString\('es-ES'\)/);
+  });
+
+  await t.test('granular demographic comments reuse the same chart comment component', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    const start = component.indexOf('const GranularNarrativeBlock');
+    const end = component.indexOf('\nconst ReportCover', start);
+    const implementation = component.slice(start, end);
+    assert.match(implementation, /=>\s*\(\s*<SectionInsight/);
   });
 
 });

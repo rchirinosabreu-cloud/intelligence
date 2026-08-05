@@ -388,6 +388,13 @@ test('AI narrative provider uses OpenAI first when OPENAI_API_KEY is configured'
   assert.deepEqual(calls, ['openai']);
 });
 
+test('report creation stores the selected reporting period for narrative generation', async () => {
+  const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
+  assert.match(route, /validatedNormalizedMetrics\.reportPeriod\s*=\s*\{/);
+  assert.match(route, /start:\s*parsedStartDate\.toISOString\(\)\.slice\(0,\s*10\)/);
+  assert.match(route, /end:\s*parsedEndDate\.toISOString\(\)\.slice\(0,\s*10\)/);
+});
+
 test('AI narrative provider falls back to Gemini when OpenAI narrative generation fails', async () => {
   const { generateNarrativeWithAIProvider } = await import('../src/services/reportVisionService.js');
   const calls = [];
@@ -454,6 +461,42 @@ test('OpenAI narrative request omits unsupported temperature parameter', async (
     const result = await generateNarrativeWithOpenAI({}, [], 'Cliente Demo');
     assert.equal(result.headline, 'Narrativa lista');
     assert.equal(Object.hasOwn(requestBody, 'temperature'), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    process.env.OPENAI_API_KEY = originalKey;
+  }
+});
+
+test('AI narrative prompts include the official selected report period and reject zero metrics', async () => {
+  const { generateNarrativeWithOpenAI } = await import('../src/services/reportVisionService.js');
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.OPENAI_API_KEY;
+  let promptText = '';
+
+  globalThis.fetch = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    promptText = body.input[0].content[0].text;
+    return new Response(JSON.stringify({
+      output_text: JSON.stringify({
+        headline: 'Narrativa lista',
+        summaryPoints: ['Uno', 'Dos', 'Tres'],
+        keyAchievements: 'Lectura validada.',
+        actionPlan: [],
+        logrosYAvances: [],
+        contenidoTopAnalisis: '',
+        oportunidadesYAprendizajes: [],
+        recomendacionesEstrategicas: [],
+        sections: [],
+        granularNarratives: []
+      })
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  process.env.OPENAI_API_KEY = 'mock-openai-key';
+
+  try {
+    await generateNarrativeWithOpenAI({ reportPeriod: { start: '2026-07-01', end: '2026-07-31' } }, [], 'Cliente Demo');
+    assert.match(promptText, /PERIODO OFICIAL DEL INFORME:\s*2026-07-01 a 2026-07-31/);
+    assert.match(promptText, /no menciones estadisticas con valor 0/i);
   } finally {
     globalThis.fetch = originalFetch;
     process.env.OPENAI_API_KEY = originalKey;
