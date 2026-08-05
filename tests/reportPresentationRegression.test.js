@@ -44,11 +44,21 @@ test('report presentation regressions', async (t) => {
     assert.equal(isDemographicDataset([{ label: '25-34', hombres: 40, mujeres: 60 }]), true);
   });
 
-  await t.test('ambiguous organic sources use a neutral label instead of unknown or cross platform', () => {
+  await t.test('ambiguous organic sources use a precise cross-platform label', () => {
     assert.equal(getOrganicPlatformLabel('FACEBOOK'), 'Facebook');
     assert.equal(getOrganicPlatformLabel('INSTAGRAM'), 'Instagram');
     assert.equal(getOrganicPlatformLabel('UNKNOWN'), 'Orgánico');
-    assert.equal(getOrganicPlatformLabel('CROSS_PLATFORM'), 'Orgánico');
+    assert.equal(getOrganicPlatformLabel('CROSS_PLATFORM'), 'Instagram + Facebook');
+  });
+
+  await t.test('paid metric cards do not truncate large currency values', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    const start = component.indexOf('const MetricGrid');
+    const end = component.indexOf('\nconst OrganicSummary', start);
+    const implementation = component.slice(start, end);
+    assert.ok(start > -1, 'missing MetricGrid component');
+    assert.doesNotMatch(implementation, /<h4[^>]*\btruncate\b/);
+    assert.match(implementation, /break-words/);
   });
 
   await t.test('format distribution labels are excluded from ad publications', () => {

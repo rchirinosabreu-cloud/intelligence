@@ -617,14 +617,14 @@ const MetricGrid = ({ metrics }) => {
             <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0', style.icon)}>
               <MetricIcon className="w-5 h-5" />
             </div>
-            <div className="min-w-0 space-y-1">
+            <div className="min-w-0 flex-1 space-y-1">
               <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
                 {CANONICAL_METRICS[key] || metric.label || key}
                 {metric.isManuallyEdited && (
                   <span className="ml-1 text-[9px] text-primary font-bold lowercase tracking-normal">(editado)</span>
                 )}
               </span>
-              <h4 className="text-2xl font-black text-slate-900 dark:text-slate-50 truncate">
+              <h4 className="text-2xl font-black leading-tight text-slate-900 dark:text-slate-50 break-words">
                 {formatMetricValue(key, metric)}
               </h4>
             </div>

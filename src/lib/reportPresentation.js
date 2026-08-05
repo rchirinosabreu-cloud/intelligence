@@ -25,7 +25,7 @@ export const getReviewMetricEntries = (metrics = {}) => ['spend', 'impressions',
 
 export const getOrganicPlatformLabel = (platform) => platform === 'FACEBOOK'
   ? 'Facebook'
-  : platform === 'INSTAGRAM' ? 'Instagram' : 'Orgánico';
+  : platform === 'INSTAGRAM' ? 'Instagram' : platform === 'CROSS_PLATFORM' ? 'Instagram + Facebook' : 'Orgánico';
 
 export const ORGANIC_SUMMARY_KEYS = ['follows', 'views', 'interactions', 'reach'];
 

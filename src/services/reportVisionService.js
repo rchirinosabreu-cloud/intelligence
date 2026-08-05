@@ -913,8 +913,7 @@ export const generateNarrativeWithOpenAI = async (normalizedMetrics, sections = 
                     schema: openAINarrativeSchema,
                     strict: false
                 }
-            },
-            temperature: 0.2
+            }
         })
     });
 
