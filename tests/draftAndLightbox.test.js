@@ -150,3 +150,36 @@ test('Tiptap, Unified Popovers and Especial Attr Enablement', async () => {
     // Assert Especial button is not locked
     assert.ok(code.includes('nextIsSpecial'), 'Special button toggle must update nextIsSpecial state.');
 });
+
+// 7. Verificar que el banner de borrador solo aparezca si hay contenido real
+test('Task Draft Banner - ignores empty auto-saved snapshots', async () => {
+    const { readFileSync } = await import('node:fs');
+    const code = readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');
+
+    assert.ok(code.includes('hasMeaningfulTaskDraft'), 'TaskSidePanel must use a meaningful-draft guard instead of accepting any JSON snapshot.');
+    assert.ok(!code.includes('const hasRealDraft = () =>'), 'Legacy hasRealDraft accepted empty auto-saved snapshots and must be removed.');
+    assert.ok(code.includes('hasMeaningfulTaskDraft(parsed)'), 'Draft restoration must only hydrate meaningful snapshots.');
+    assert.ok(code.includes('hasMeaningfulTaskDraft(draftData)'), 'Draft autosave must persist only meaningful snapshots.');
+});
+
+// 8. Verificar que el chat acepte adjuntos generales por arrastre y no solo imagenes
+test('Task Chat Attachments - drag and drop accepts files and renders images as file cards', async () => {
+    const { readFileSync } = await import('node:fs');
+    const code = readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');
+
+    assert.ok(code.includes('handleDroppedChatFiles'), 'TaskSidePanel must route dropped files through a shared chat-file handler.');
+    assert.ok(!code.includes("file && file.type.startsWith('image/')"), 'Drop handling must not be limited to image MIME types.');
+    assert.ok(code.includes('getFileVisualMeta'), 'Attachments must use file metadata to choose icons and preview affordances.');
+    assert.ok(code.includes('Vista previa'), 'Image attachments must expose a preview action while remaining file-style cards.');
+});
+
+// 9. Verificar que adjuntos de conversacion no se mezclen con referencias/insumos manuales
+test('Task Attachment References - excludes chat-linked files from manual link sections', async () => {
+    const { readFileSync } = await import('node:fs');
+    const code = readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');
+    const serviceCode = readFileSync('src/services/nativeTaskService.js', 'utf8');
+
+    assert.ok(code.includes('getManualTaskAttachments'), 'TaskSidePanel must filter manual attachments separately from chat attachments.');
+    assert.ok(code.includes('!attachment.commentId'), 'Manual attachment sections must exclude files linked to conversation comments.');
+    assert.ok(serviceCode.includes('content: initialCommentText'), 'Initial creation comments must not expose private bucket URLs as visible comment text.');
+});

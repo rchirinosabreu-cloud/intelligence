@@ -1,6 +1,6 @@
 import React from 'react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { FileText, Music, FileSpreadsheet, File, Download } from 'lucide-react';
+import { FileText, Music, FileSpreadsheet, File, Download, Image as ImageIcon, Eye } from 'lucide-react';
 
 /**
  * Helper to determine file type based on extension
@@ -52,12 +52,16 @@ const getFileNameAndExtension = (url) => {
 /**
  * Component for rendering non-image attachments in Chat
  */
-export const AttachmentCard = ({ url, fileType, fileName, fileExt, downloadUrl }) => {
+export const AttachmentCard = ({ url, fileType, fileName, fileExt, downloadUrl, previewUrl, onPreview }) => {
     let Icon = File;
     let iconBgColor = 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400';
     let typeLabel = `${fileExt} • Archivo`;
 
-    if (fileType === 'pdf') {
+    if (fileType === 'image') {
+        Icon = ImageIcon;
+        iconBgColor = 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400';
+        typeLabel = `${fileExt} - Imagen`;
+    } else if (fileType === 'pdf') {
         Icon = FileText;
         iconBgColor = 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400';
         typeLabel = 'PDF • Documento';
@@ -95,17 +99,33 @@ export const AttachmentCard = ({ url, fileType, fileName, fileExt, downloadUrl }
                 </div>
             </div>
 
-            <a
-                href={downloadUrl}
-                download={fileName}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-400 rounded-lg shadow-sm transition-colors cursor-pointer shrink-0"
-                title="Descargar archivo"
-            >
-                <Download size={14} />
-            </a>
+            <div className="flex items-center gap-1.5 shrink-0">
+                {fileType === 'image' && onPreview && (
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onPreview(previewUrl || url);
+                        }}
+                        className="p-2 bg-white hover:bg-zinc-100 text-indigo-600 dark:bg-zinc-950 dark:hover:bg-zinc-800 dark:text-indigo-400 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm transition-colors cursor-pointer"
+                        title="Vista previa"
+                    >
+                        <Eye size={14} />
+                        <span className="sr-only">Vista previa</span>
+                    </button>
+                )}
+                <a
+                    href={downloadUrl}
+                    download={fileName}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-400 rounded-lg shadow-sm transition-colors cursor-pointer"
+                    title="Descargar archivo"
+                >
+                    <Download size={14} />
+                </a>
+            </div>
         </div>
     );
 };
@@ -141,46 +161,7 @@ export const linkify = (text, onImageClick = null, contextData = {}) => {
                 }
             }
 
-            if (isImage) {
-                return (
-                    <div key={index} className="my-2">
-                        {onImageClick ? (
-                            <img
-                                src={displaySrc}
-                                alt="Shared image"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onImageClick({ direct: href, proxy: displaySrc, commentId: contextData.commentId });
-                                }}
-                                className="max-w-[160px] max-h-[120px] object-cover rounded-md border border-zinc-200 dark:border-zinc-800 shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
-                                onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.style.display = 'none';
-                                }}
-                            />
-                        ) : (
-                            <a
-                                href={href}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <img
-                                    src={displaySrc}
-                                    alt="Shared image"
-                                    className="max-w-[160px] max-h-[120px] object-cover rounded-md border border-zinc-200 dark:border-zinc-800 shadow-sm hover:opacity-90 transition-opacity"
-                                    onError={(e) => {
-                                        e.target.onerror = null;
-                                        e.target.style.display = 'none';
-                                    }}
-                                />
-                            </a>
-                        )}
-                    </div>
-                );
-            }
-
-            // Render non-image files or S3 uploaded files as AttachmentCard
+            // Render files, including images, as AttachmentCard. Images keep a preview affordance.
             const { name, ext } = getFileNameAndExtension(href);
 
             if (fileType !== 'other' || isS3Bucket) {
@@ -200,6 +181,8 @@ export const linkify = (text, onImageClick = null, contextData = {}) => {
                         fileName={name}
                         fileExt={ext}
                         downloadUrl={downloadUrl}
+                        previewUrl={displaySrc}
+                        onPreview={isImage && onImageClick ? () => onImageClick({ direct: href, proxy: displaySrc, commentId: contextData.commentId, name }) : null}
                     />
                 );
             }

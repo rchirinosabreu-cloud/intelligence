@@ -73,6 +73,48 @@ const EMPTY_TASK_FORM = {
     taskAttachments: []
 };
 
+const hasMeaningfulTaskDraft = (draft) => {
+    if (!draft || typeof draft !== 'object') return false;
+
+    const textFields = [
+        draft.title,
+        draft.assigneeId,
+        draft.dueDate,
+        draft.specialType,
+        draft.newComment,
+        draft.newRefUrl,
+        draft.newRefName,
+        draft.newInpUrl,
+        draft.newInpName
+    ];
+
+    if (textFields.some(value => typeof value === 'string' && value.trim().length > 0)) {
+        return true;
+    }
+
+    if (draft.isPriority || draft.isSpecial || draft.isFollowing) return true;
+
+    return [draft.tempReferences, draft.tempInputs, draft.tempComments, draft.tempAttachments]
+        .some(value => Array.isArray(value) && value.length > 0);
+};
+
+const getManualTaskAttachments = (attachments = []) =>
+    (Array.isArray(attachments) ? attachments : []).filter(attachment => !attachment.commentId);
+
+const getFileVisualMeta = (file = {}) => {
+    const name = file.name || 'Adjunto de chat';
+    const type = file.mimeType || file.type || '';
+    const ext = name.includes('.') ? name.split('.').pop().toUpperCase() : 'ARCHIVO';
+    const isImage = type.startsWith('image/') || /\.(jpeg|jpg|gif|png|webp|svg)$/i.test(name);
+    const isPdf = type === 'application/pdf' || /\.pdf$/i.test(name);
+
+    return {
+        isImage,
+        icon: isPdf ? FileText : isImage ? ImageIcon : FileText,
+        label: isPdf ? 'PDF - Documento' : isImage ? `${ext} - Imagen` : `${ext} - Archivo`
+    };
+};
+
 const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage }) => {
     if (!previewImage) return null;
 
@@ -176,12 +218,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [inlineVal, setInlineVal] = useState("");
     const isDraftHydratedRef = useRef(false);
 
-    const hasRealDraft = () => {
+    const hasStoredMeaningfulDraft = () => {
         const saved = sessionStorage.getItem('task_focus_draft');
         if (!saved) return false;
         try {
-            JSON.parse(saved);
-            return true;
+            return hasMeaningfulTaskDraft(JSON.parse(saved));
         } catch (e) {
             return false;
         }
@@ -409,7 +450,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 newInpUrl,
                 newInpName
             };
-            sessionStorage.setItem('task_focus_draft', JSON.stringify(draftData));
+            if (hasMeaningfulTaskDraft(draftData)) {
+                sessionStorage.setItem('task_focus_draft', JSON.stringify(draftData));
+            } else {
+                sessionStorage.removeItem('task_focus_draft');
+            }
         }
     }, [
         formData, tempReferences, tempInputs, tempComments, tempAttachments,
@@ -553,6 +598,20 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 if (savedDraft) {
                     try {
                         const parsed = JSON.parse(savedDraft);
+                        if (!hasMeaningfulTaskDraft(parsed)) {
+                            sessionStorage.removeItem('task_focus_draft');
+                            setIsFollowing(false);
+                            setFormData({
+                                ...EMPTY_TASK_FORM,
+                                clientId: defaultClientId || ''
+                            });
+                            setTempReferences([]);
+                            setTempInputs([]);
+                            setTempComments([]);
+                            setTempAttachments([]);
+                            isDraftHydratedRef.current = true;
+                            return;
+                        }
                         setFormData({
                             ...EMPTY_TASK_FORM,
                             title: parsed.title || '',
@@ -591,6 +650,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         });
                     } catch (e) {
                         console.error("Error parsing task focus draft:", e);
+                        sessionStorage.removeItem('task_focus_draft');
                     } finally {
                         isDraftHydratedRef.current = true;
                     }
@@ -1148,7 +1208,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
             if (res.ok) {
                 const data = await res.json();
-                setTempAttachments(prev => [...prev, { url: data.url, name: data.name, category: 'INSUMO' }]);
+                setTempAttachments(prev => [...prev, { url: data.url, name: data.name, size: data.size, mimeType: data.mimeType, category: 'INSUMO' }]);
                 toast({ title: "Archivo adjuntado al borrador", description: data.name });
             } else {
                 throw new Error("Failed to upload temp file");
@@ -1161,6 +1221,19 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
     };
 
+    const handleChatFileSelected = (file) => {
+        if (!file) return;
+        if (isEdition) {
+            setSelectedFile(file);
+        } else {
+            handleUploadTempFile(file);
+        }
+    };
+
+    const handleDroppedChatFiles = (files) => {
+        const [file] = Array.from(files || []);
+        handleChatFileSelected(file);
+    };
 
     const handleImagePreview = (imgData) => {
         const accessToken = localStorage.getItem('authToken');
@@ -1230,6 +1303,57 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         });
 
         return rendered;
+    };
+
+    const renderCommentAttachment = (attachment, commentId) => {
+        const visualMeta = getFileVisualMeta({ name: attachment.name, mimeType: attachment.mimeType });
+        const FileIcon = visualMeta.icon;
+        const accessToken = localStorage.getItem('authToken');
+        const params = [];
+        if (accessToken) params.push(`token=${encodeURIComponent(accessToken)}`);
+        if (attachment.name) params.push(`filename=${encodeURIComponent(attachment.name)}`);
+        const suffix = params.length > 0 ? `?${params.join('&')}` : '';
+        const fileUrl = `${getApiBaseUrl()}/api/tasks/${formData.id}/comments/${commentId}/file${suffix}`;
+        const downloadUrl = `${getApiBaseUrl()}/api/tasks/${formData.id}/comments/${commentId}/download${suffix}`;
+
+        return (
+            <div key={attachment.id || attachment.url} className="mt-2 flex items-center justify-between gap-4 p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl max-w-md shadow-sm">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-primary/10 text-primary">
+                        <FileIcon size={18} />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 truncate" title={attachment.name || 'Adjunto de chat'}>
+                            {attachment.name || 'Adjunto de chat'}
+                        </p>
+                        <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mt-0.5">
+                            {visualMeta.label}
+                        </p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                    {visualMeta.isImage && (
+                        <button
+                            type="button"
+                            onClick={() => handleImagePreview({ proxy: fileUrl, commentId, name: attachment.name })}
+                            className="p-2 bg-white hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-primary rounded-lg border border-zinc-200 dark:border-zinc-800 transition-colors"
+                            title="Vista previa"
+                        >
+                            <Eye size={14} />
+                            <span className="sr-only">Vista previa</span>
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={() => handleDownloadImage(downloadUrl)}
+                        className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-400 rounded-lg shadow-sm transition-colors"
+                        title="Descargar archivo"
+                    >
+                        <Download size={14} />
+                    </button>
+                </div>
+            </div>
+        );
     };
 
     const renderComment = (comment) => {
@@ -1334,6 +1458,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         contextData={contextData}
                                         onImageClick={handleImagePreview}
                                     />
+                                    {Array.isArray(comment.attachments) && comment.attachments.length > 0 && (
+                                        <div className="mt-2 space-y-2">
+                                            {comment.attachments.map(attachment => renderCommentAttachment(attachment, comment.id))}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Basecamp Action Menu inside message card */}
@@ -1591,7 +1720,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 </div>
 
                 {/* Restore Draft Banner in Creation mode */}
-                {!isEdition && hasRealDraft() && (
+                {!isEdition && hasStoredMeaningfulDraft() && (
                     <div className="bg-amber-50 dark:bg-amber-900/10 border-b border-amber-200 dark:border-amber-900/20 px-6 py-2 flex items-center justify-between text-amber-800 dark:text-amber-300 text-xs font-semibold">
                         <div className="flex items-center gap-2">
                             <Star className="w-4 h-4 fill-current text-amber-500" />
@@ -1856,11 +1985,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             if (Array.isArray(formData.referenceLinks)) {
                                                 formData.referenceLinks.forEach((u, i) => refUrls.push({ id: `ref-link-${i}`, url: u, name: `Enlace de Parrilla ${i+1}` }));
                                             }
-                                            if (formData.taskAttachments) {
-                                                formData.taskAttachments
+                                            getManualTaskAttachments(formData.taskAttachments)
                                                     .filter(a => a.category === 'REFERENCIA')
                                                     .forEach(a => refUrls.push({ id: a.id, url: a.url, name: a.name }));
-                                            }
 
                                             if (refUrls.length === 0) {
                                                 return null;
@@ -1912,11 +2039,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             if (Array.isArray(formData.assetsLinks)) {
                                                 formData.assetsLinks.forEach((u, i) => inpUrls.push({ id: `inp-link-${i}`, url: u, name: `Insumo de Parrilla ${i+1}` }));
                                             }
-                                            if (formData.taskAttachments) {
-                                                formData.taskAttachments
+                                            getManualTaskAttachments(formData.taskAttachments)
                                                     .filter(a => a.category === 'INSUMO')
                                                     .forEach(a => inpUrls.push({ id: a.id, url: a.url, name: a.name }));
-                                            }
 
                                             if (inpUrls.length === 0) {
                                                 return null;
@@ -2118,28 +2243,22 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         {/* Chat Container */}
                         <div
                             onDragOver={(e) => {
-                                if (!isEdition) return;
                                 e.preventDefault();
                                 setIsDragging(true);
                             }}
                             onDragLeave={() => {
-                                if (!isEdition) return;
                                 setIsDragging(false);
                             }}
                             onDrop={(e) => {
-                                if (!isEdition) return;
                                 e.preventDefault();
                                 setIsDragging(false);
-                                const file = e.dataTransfer.files[0];
-                                if (file && file.type.startsWith('image/')) {
-                                    handleAddComment(file);
-                                }
+                                handleDroppedChatFiles(e.dataTransfer.files);
                             }}
                             className="w-full p-6 md:p-8 relative"
                         >
                             {/* Drag & Drop Overlay */}
                             <AnimatePresence>
-                                {isDragging && isEdition && (
+                                {isDragging && (
                                     <motion.div
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
@@ -2148,9 +2267,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     >
                                         <div className="w-full h-full border-2 border-dashed border-primary/40 rounded-3xl flex flex-col items-center justify-center gap-3 animate-in zoom-in-95">
                                             <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
-                                                <ImageIcon size={24} />
+                                                <Paperclip size={24} />
                                             </div>
-                                            <p className="text-xs font-black uppercase tracking-widest text-primary">Suelta tus imágenes aquí</p>
+                                            <p className="text-xs font-black uppercase tracking-widest text-primary">Suelta tus archivos aqui</p>
                                         </div>
                                     </motion.div>
                                 )}
@@ -2192,7 +2311,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             <MessageSquare size={22} />
                                         </div>
                                         <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Aún no hay comentarios</h4>
-                                        <p className="text-[10px] text-zinc-400 font-medium max-w-[200px] mt-1">Escribe o suelta una imagen abajo para iniciar la conversación</p>
+                                        <p className="text-[10px] text-zinc-400 font-medium max-w-[200px] mt-1">Escribe o suelta un archivo abajo para iniciar la conversacion</p>
                                     </div>
                                 ) : (
                                     renderCommentsWithDividers()
@@ -2204,21 +2323,42 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         <div className="shrink-0 bg-transparent">
                             <div className="flex flex-col gap-2">
                                 {selectedFile && isEdition && (
-                                    <div className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/10 rounded-lg animate-in fade-in slide-in-from-bottom-1">
-                                        <div className="w-8 h-8 bg-primary/10 rounded flex items-center justify-center text-primary">
-                                            <ImageIcon size={14} />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-[10px] font-bold text-primary truncate">{selectedFile.name}</p>
-                                            <p className="text-[8px] text-primary/60">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                                        </div>
-                                        <button
-                                            onClick={() => setSelectedFile(null)}
-                                            className="p-1 hover:bg-primary/10 rounded text-primary"
-                                        >
-                                            <X size={14} />
-                                        </button>
-                                    </div>
+                                    (() => {
+                                        const visualMeta = getFileVisualMeta(selectedFile);
+                                        const FileIcon = visualMeta.icon;
+                                        return (
+                                            <div className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/10 rounded-lg animate-in fade-in slide-in-from-bottom-1">
+                                                <div className="w-8 h-8 bg-primary/10 rounded flex items-center justify-center text-primary">
+                                                    <FileIcon size={14} />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-[10px] font-bold text-primary truncate">{selectedFile.name}</p>
+                                                    <p className="text-[8px] text-primary/60">{visualMeta.label} - {(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                                                </div>
+                                                {visualMeta.isImage && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const localUrl = URL.createObjectURL(selectedFile);
+                                                            setPreviewImage({ displayUrl: localUrl, downloadUrl: localUrl });
+                                                        }}
+                                                        className="p-1 hover:bg-primary/10 rounded text-primary"
+                                                        title="Vista previa"
+                                                    >
+                                                        <Eye size={14} />
+                                                        <span className="sr-only">Vista previa</span>
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedFile(null)}
+                                                    className="p-1 hover:bg-primary/10 rounded text-primary"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        );
+                                    })()
                                 )}
 
                                 {/* Temp attachments for creation mode */}
@@ -2226,21 +2366,30 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     <div className="flex flex-col gap-1.5 p-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl max-h-[120px] overflow-y-auto">
                                         <span className="text-[9px] font-black uppercase tracking-wider text-zinc-450 px-1">Adjuntos en borrador</span>
                                         {tempAttachments.map((file, i) => (
-                                            <div key={i} className="flex items-center justify-between gap-2 p-1.5 bg-primary/5 border border-primary/10 rounded-lg">
-                                                <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                    <div className="w-6 h-6 bg-primary/10 rounded flex items-center justify-center text-primary shrink-0">
-                                                        <ImageIcon size={12} />
+                                            (() => {
+                                                const visualMeta = getFileVisualMeta(file);
+                                                const FileIcon = visualMeta.icon;
+                                                return (
+                                                    <div key={i} className="flex items-center justify-between gap-2 p-1.5 bg-primary/5 border border-primary/10 rounded-lg">
+                                                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                            <div className="w-6 h-6 bg-primary/10 rounded flex items-center justify-center text-primary shrink-0">
+                                                                <FileIcon size={12} />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 truncate">{file.name}</p>
+                                                                <p className="text-[8px] text-zinc-400 uppercase tracking-wider">{visualMeta.label}</p>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setTempAttachments(prev => prev.filter((_, idx) => idx !== i))}
+                                                            className="p-1 hover:bg-red-50 dark:hover:bg-red-900/10 rounded text-red-500 shrink-0"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
                                                     </div>
-                                                    <p className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 truncate">{file.name}</p>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setTempAttachments(prev => prev.filter((_, idx) => idx !== i))}
-                                                    className="p-1 hover:bg-red-50 dark:hover:bg-red-900/10 rounded text-red-500 shrink-0"
-                                                >
-                                                    <X size={12} />
-                                                </button>
-                                            </div>
+                                                );
+                                            })()
                                         ))}
                                     </div>
                                 )}
@@ -2267,11 +2416,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                         onChange={(e) => {
                                                             const file = e.target.files[0];
                                                             if (!file) return;
-                                                            if (isEdition) {
-                                                                setSelectedFile(file);
-                                                            } else {
-                                                                handleUploadTempFile(file);
-                                                            }
+                                                            handleChatFileSelected(file);
+                                                            e.target.value = "";
                                                         }}
                                                     />
                                                     <label

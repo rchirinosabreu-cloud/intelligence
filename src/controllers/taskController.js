@@ -399,9 +399,6 @@ export const addTaskComment = async (req, res) => {
 
             const uploadResult = await uploadToS3(req.file, folderPrefix);
             publicUrl = uploadResult.url;
-
-            // If there's already content, append the image URL. If not, just the URL.
-            finalContent = finalContent ? `${finalContent}\n\n${publicUrl}` : publicUrl;
         }
 
         const comment = await prisma.$transaction(async (tx) => {

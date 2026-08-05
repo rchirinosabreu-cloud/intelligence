@@ -372,18 +372,20 @@ export const createTask = async ({
 
             // Create initial comment first to link tempAttachments
             let initialComment = null;
+            const initialCommentText = Array.isArray(initial_comments) && initial_comments.length > 0
+                ? (initial_comments[0].content || "")
+                : "";
             if (Array.isArray(initial_comments) && initial_comments.length > 0) {
-                const firstCommentText = initial_comments[0].content || "";
                 initialComment = await tx.taskComment.create({
                     data: {
                         taskId: task.id,
                         authorId: creatorId,
-                        content: firstCommentText,
+                        content: initialCommentText,
                         type: 'human'
                     }
                 });
 
-                await processMentionsAndNotifications(task.id, firstCommentText, creatorId);
+                await processMentionsAndNotifications(task.id, initialCommentText, creatorId);
 
                 // Create any remaining comments
                 for (let i = 1; i < initial_comments.length; i++) {
@@ -403,7 +405,7 @@ export const createTask = async ({
                     data: {
                         taskId: task.id,
                         authorId: creatorId,
-                        content: tempAttachments.map(f => f.url).join('\n\n'),
+                        content: initialCommentText,
                         type: 'human'
                     }
                 });
