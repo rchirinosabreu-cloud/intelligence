@@ -196,3 +196,15 @@ test('Task Creation Composer - uses softer labels and lighter field chrome', asy
     assert.ok(code.includes('Escribe el nombre de la tarea'), 'The creation title placeholder should feel closer to ClickUp-style task entry.');
     assert.ok(code.includes('border-zinc-200/70 dark:border-zinc-800/70 bg-transparent'), 'Creation fields should reduce box weight with transparent surfaces.');
 });
+
+// 11. Verificar que edicion comparta el nuevo lenguaje visual y cierre estados flotantes
+test('Task Edit Panel - shares clean composer language and resets transient toolbar state', async () => {
+    const { readFileSync } = await import('node:fs');
+    const code = readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');
+
+    assert.ok(code.includes('TaskComposerUnifiedV2'), 'Create and edit task forms must share one unified clean visual treatment.');
+    assert.ok(code.includes('setShowToolbar(false);'), 'Main format toolbar state must reset when opening, closing or changing tasks.');
+    assert.ok(code.includes('setShowEditToolbar(false);'), 'Inline edit format toolbar state must reset when opening, closing or changing tasks.');
+    assert.ok(code.includes('Guardar cambios'), 'Edit mode must keep the same save action while using sentence casing.');
+    assert.ok(!code.includes('isEdition ? "text-[10px] font-black uppercase tracking-widest text-zinc-400" : taskCreateLabelClass'), 'Edit labels must not keep the old heavy uppercase label branch.');
+});

@@ -242,7 +242,7 @@ const RichTextEditor = React.forwardRef(({
     if (!isToolbarOpen) return undefined;
 
     const keepComposerBottomVisible = () => {
-      composerRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+      composerRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     };
 
     keepComposerBottomVisible();
@@ -310,7 +310,11 @@ const RichTextEditor = React.forwardRef(({
 
   return (
     <Popover.Root open={isToolbarOpen} onOpenChange={handleToggleToolbar}>
-      <div ref={composerRef} className={cn('relative w-full flex flex-col justify-end transition-all duration-200 ease-out', isToolbarOpen && 'z-20')}>
+      <div
+        ref={composerRef}
+        style={{ scrollMarginBlock: isToolbarOpen ? '120px' : undefined }}
+        className={cn('relative w-full flex flex-col justify-end transition-all duration-200 ease-out', isToolbarOpen && 'z-20')}
+      >
         <Popover.Anchor asChild>
           <div
             data-rich-text-editor-shell="true"
