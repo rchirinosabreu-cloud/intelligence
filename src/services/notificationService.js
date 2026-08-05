@@ -1,5 +1,6 @@
 
 import prisma from '../lib/prisma.js';
+import { cleanNotificationPreview } from '../utils/notificationUtils.js';
 
 export const createNotification = async (data) => {
     try {
@@ -28,6 +29,7 @@ export const processMentionsAndNotifications = async (taskId, commentContent, au
             select: { id: true, title: true, assigneeId: true }
         });
         if (!task) return;
+        const commentPreview = cleanNotificationPreview(commentContent, 90);
 
         // Resolve assignee User ID
         let assigneeUserId = null;
@@ -72,7 +74,7 @@ export const processMentionsAndNotifications = async (taskId, commentContent, au
                     notifiedUserIds.add(user.id);
                     await createNotification({
                         userId: user.id,
-                        message: `Te han mencionado en la tarea "${task.title}": "${commentContent.substring(0, 60)}..."`,
+                        message: `Te han mencionado en la tarea "${task.title}": "${commentPreview}"`,
                         type: 'TASK_MENTION',
                         relatedId: task.id,
                         taskId: task.id
@@ -99,7 +101,7 @@ export const processMentionsAndNotifications = async (taskId, commentContent, au
                 notifiedUserIds.add(participantId);
                 await createNotification({
                     userId: participantId,
-                    message: `Nuevo mensaje en el hilo de la tarea "${task.title}": "${commentContent.substring(0, 60)}..."`,
+                    message: `Nuevo mensaje en el hilo de la tarea "${task.title}": "${commentPreview}"`,
                     type: 'TASK_COMMENT_REPLY',
                     relatedId: task.id,
                     taskId: task.id

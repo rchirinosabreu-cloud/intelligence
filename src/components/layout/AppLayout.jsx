@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import TeamAvatar from '../ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { getNotificationDisplayParts } from '@/utils/notificationUtils';
 
 const AppLayout = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -237,6 +238,7 @@ const AppLayout = ({ children }) => {
                         </div>
                     ) : (
                         notifications.map((notif) => {
+                            const display = getNotificationDisplayParts(notif);
                             let Icon = MessageSquare;
                             let bgColor = "bg-primary/10";
                             let iconColor = "text-primary";
@@ -285,13 +287,31 @@ const AppLayout = ({ children }) => {
                                         <div className={cn("p-1.5 rounded-xl shrink-0 mt-0.5", bgColor)}>
                                             <Icon className={cn("w-3.5 h-3.5", iconColor)} />
                                         </div>
-                                        <div className="flex-1">
-                                            <p className={cn(
-                                                "text-xs leading-relaxed transition-colors",
-                                                notif.isRead ? "text-zinc-500 font-normal" : "text-zinc-900 dark:text-white font-bold"
-                                            )}>
-                                                {notif.message}
-                                            </p>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="space-y-0.5">
+                                                <p className={cn(
+                                                    "text-xs leading-snug transition-colors font-black",
+                                                    notif.isRead ? "text-zinc-600 dark:text-zinc-300" : "text-zinc-900 dark:text-white"
+                                                )}>
+                                                    {display.title}
+                                                </p>
+                                                {display.context && (
+                                                    <p className={cn(
+                                                        "text-[11px] leading-snug font-semibold line-clamp-2",
+                                                        notif.isRead ? "text-zinc-500 dark:text-zinc-500" : "text-zinc-700 dark:text-zinc-300"
+                                                    )}>
+                                                        {display.context}
+                                                    </p>
+                                                )}
+                                                {display.body && (
+                                                    <p className={cn(
+                                                        "text-[11px] leading-snug font-medium line-clamp-2",
+                                                        notif.isRead ? "text-zinc-400 dark:text-zinc-500" : "text-zinc-600 dark:text-zinc-400"
+                                                    )}>
+                                                        {display.body}
+                                                    </p>
+                                                )}
+                                            </div>
                                             <span className="text-[10px] text-zinc-400 mt-1 block font-medium">
                                                 {new Date(notif.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                             </span>
