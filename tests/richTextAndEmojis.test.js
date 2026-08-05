@@ -126,6 +126,8 @@ test('RichTextEditor - Tiptap Wrapper, in-flow toolbar and Height Class Verifica
     assert.ok(editorCode.includes('data-rich-text-editor-shell'), 'RichTextEditor must expose a stable shell for layout checks.');
     assert.ok(editorCode.includes('editorContentClassName'), 'Task panel padding must be applied to the editable content, not the toolbar shell.');
     assert.ok(editorCode.includes('[&_.ProseMirror]:break-all'), 'Long filenames and URLs must wrap inside the editor.');
+    assert.ok(editorCode.includes("block: 'end'"), 'Opening the toolbar must keep composer actions visible at the bottom edge.');
+    assert.ok(editorCode.includes('requestAnimationFrame'), 'Toolbar opening must re-align after the expanded composer height is applied.');
 });
 
 test('RichCommentContent allows H3 and highlight markup to render safely', () => {

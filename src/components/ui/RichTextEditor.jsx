@@ -239,9 +239,20 @@ const RichTextEditor = React.forwardRef(({
 
   const composerRef = React.useRef(null);
   React.useLayoutEffect(() => {
-    if (isToolbarOpen) {
-      composerRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
+    if (!isToolbarOpen) return undefined;
+
+    const keepComposerBottomVisible = () => {
+      composerRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    };
+
+    keepComposerBottomVisible();
+    const frameId = requestAnimationFrame(keepComposerBottomVisible);
+    const timeoutId = window.setTimeout(keepComposerBottomVisible, 220);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      window.clearTimeout(timeoutId);
+    };
   }, [isToolbarOpen]);
 
   const executeFormat = (event, command) => {
