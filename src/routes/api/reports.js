@@ -578,6 +578,8 @@ const withTimeout = (promise, ms, errorMessage = "Timeout exceeded") => {
 
 import { buildNarrativeErrorLog } from '../../lib/reportPresentation.js';
 
+const NARRATIVE_GENERATION_TIMEOUT_MS = 180000;
+
 router.post('/:reportId/generate-narrative', async (req, res) => {
     const timeoutContext = { cancelled: false };
     try {
@@ -603,8 +605,8 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
                 generatePublishableNarrative(metrics, sections, report.client.name, {
                     generateFullNarrative: generateNarrativeWithAIProvider
                 }, timeoutContext),
-                90000,
-                "Gemini narrative generation timed out"
+                NARRATIVE_GENERATION_TIMEOUT_MS,
+                "AI narrative generation timed out"
             );
         } catch (generationError) {
             timeoutContext.cancelled = true;

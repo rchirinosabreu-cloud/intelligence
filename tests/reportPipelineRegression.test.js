@@ -460,6 +460,23 @@ test('OpenAI narrative request omits unsupported temperature parameter', async (
   }
 });
 
+test('reports narrative endpoint gives AI providers enough time to finish long reports', async () => {
+  const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
+  const timeoutConstMatch = route.match(/const\s+NARRATIVE_GENERATION_TIMEOUT_MS\s*=\s*(\d+)/);
+  const timeoutUseMatch = route.match(/generatePublishableNarrative[\s\S]*?,\s*NARRATIVE_GENERATION_TIMEOUT_MS,\s*["']([^"']+)["']/);
+  assert.ok(timeoutConstMatch, 'generate-narrative route should define an explicit narrative timeout constant');
+  assert.ok(timeoutUseMatch, 'generate-narrative route should use the narrative timeout constant');
+  assert.ok(Number(timeoutConstMatch[1]) >= 180000, `narrative timeout is too short: ${timeoutConstMatch[1]}ms`);
+  assert.doesNotMatch(timeoutUseMatch[1], /Gemini/i);
+});
+
+test('reports frontend waits at least as long as the backend narrative timeout', async () => {
+  const frontend = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+  const narrativePostMatch = frontend.match(/\/generate-narrative[\s\S]*?timeout:\s*(\d+)/);
+  assert.ok(narrativePostMatch, 'frontend generate-narrative request should configure an explicit timeout');
+  assert.ok(Number(narrativePostMatch[1]) >= 180000, `frontend narrative timeout is too short: ${narrativePostMatch[1]}ms`);
+});
+
 test('reports route never writes NARRATIVE_FAILED as Prisma status', async () => {
   const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
   assert.doesNotMatch(route, /status:\s*'NARRATIVE_FAILED'/);

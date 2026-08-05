@@ -1151,7 +1151,8 @@ const Reports = () => {
         const narrativeResponse = await axios.post(`${getApiBaseUrl()}/api/reports/${report.id}/generate-narrative`, {}, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
+          },
+          timeout: 180000
         });
 
         const decision = processNarrativeResponse(narrativeResponse.data);
