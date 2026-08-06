@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -17,6 +17,8 @@ const SharedContentPlan = () => {
   const [commentingItemId, setCommentingItemId] = useState(null);
   const [clientComment, setClientComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const commentFormRefs = useRef({});
+  const commentTextareaRefs = useRef({});
 
   const fetchPlan = async () => {
     try {
@@ -32,6 +34,23 @@ const SharedContentPlan = () => {
   useEffect(() => {
     fetchPlan();
   }, [token]);
+
+  useEffect(() => {
+    if (!commentingItemId) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      commentFormRefs.current[commentingItemId]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+
+      window.setTimeout(() => {
+        commentTextareaRefs.current[commentingItemId]?.focus({ preventScroll: true });
+      }, 250);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [commentingItemId]);
 
   const handleApprove = async (itemId) => {
     try {
@@ -311,6 +330,13 @@ const SharedContentPlan = () => {
                     <div
                       id={`comment-form-container-${item.id}`}
                       key={`comment-form-${item.id}`}
+                      ref={(node) => {
+                        if (node) {
+                          commentFormRefs.current[item.id] = node;
+                        } else {
+                          delete commentFormRefs.current[item.id];
+                        }
+                      }}
                       className="mt-8 pt-8 border-t border-zinc-100 dark:border-white/5"
                     >
                       <div className="flex flex-col gap-4">
@@ -319,6 +345,13 @@ const SharedContentPlan = () => {
                           <button onClick={() => setCommentingItemId(null)} className="text-zinc-400 hover:text-zinc-600"><X className="w-4 h-4" /></button>
                         </div>
                         <textarea
+                          ref={(node) => {
+                            if (node) {
+                              commentTextareaRefs.current[item.id] = node;
+                            } else {
+                              delete commentTextareaRefs.current[item.id];
+                            }
+                          }}
                           value={clientComment}
                           onChange={(e) => setClientComment(e.target.value)}
                           placeholder="Escribe tus sugerencias de cambio aquí..."

@@ -45,6 +45,15 @@ test('shared content plan shows strategic objectives and uses a softer correctio
   assert.doesNotMatch(shared, /bg-zinc-900 dark:bg-white text-white dark:text-zinc-900/);
 });
 
+test('client correction action scrolls to and focuses the feedback form', async () => {
+  const shared = await read('src/components/public/SharedContentPlan.jsx');
+
+  assert.match(shared, /commentFormRefs/);
+  assert.match(shared, /commentTextareaRefs/);
+  assert.match(shared, /scrollIntoView\(\{\s*behavior:\s*'smooth',\s*block:\s*'center'/);
+  assert.match(shared, /focus\(\{\s*preventScroll:\s*true\s*\}\)/);
+});
+
 test('DatePicker instances use the global Brainstudio calendar chrome', async () => {
   const files = [
     'src/components/modules/TaskSidePanel.jsx',
