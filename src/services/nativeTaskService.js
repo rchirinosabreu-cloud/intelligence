@@ -2,6 +2,16 @@ import prisma from '../lib/prisma.js';
 import { createNotification, processMentionsAndNotifications } from './notificationService.js';
 import { enqueueTaskClassification } from './taskClassificationService.js';
 
+const taskContentPlanSelect = {
+    id: true,
+    clientId: true,
+    month: true,
+    year: true,
+    status: true,
+    ownerId: true,
+    client: { select: { slug: true } }
+};
+
 /**
  * Normalizes a category string into one of the 8 official master labels.
  */
@@ -289,9 +299,7 @@ export const getTasks = async (clientId) => {
                 contentItem: {
                     include: {
                         plan: {
-                            include: {
-                                client: { select: { slug: true } }
-                            }
+                            select: taskContentPlanSelect
                         }
                     }
                 }
@@ -484,9 +492,7 @@ export const createTask = async ({
                     contentItem: {
                         include: {
                             plan: {
-                                include: {
-                                    client: { select: { slug: true } }
-                                }
+                                select: taskContentPlanSelect
                             }
                         }
                     }
@@ -738,7 +744,12 @@ export const updateTask = async (id, data, updaterId = null) => {
                             where: { id: currentTask.contentItemId || 'none' },
                             include: {
                                 plan: {
-                                    include: { owner: true }
+                                    select: {
+                                        id: true,
+                                        clientId: true,
+                                        ownerId: true,
+                                        owner: true
+                                    }
                                 }
                             }
                         });
@@ -837,9 +848,7 @@ export const updateTask = async (id, data, updaterId = null) => {
                 contentItem: {
                     include: {
                         plan: {
-                            include: {
-                                client: { select: { slug: true } }
-                            }
+                            select: taskContentPlanSelect
                         }
                     }
                 }

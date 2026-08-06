@@ -1,6 +1,64 @@
 import prisma from '../lib/prisma.js';
 import { createTask } from './nativeTaskService.js';
 
+let strategicObjectivesColumnExists = null;
+
+const contentPlanBaseSelect = {
+  id: true,
+  clientId: true,
+  month: true,
+  year: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  deletedAt: true,
+  ownerId: true,
+  internalNotes: true,
+  shareToken: true
+};
+
+const hasStrategicObjectivesColumn = async () => {
+  if (strategicObjectivesColumnExists !== null) return strategicObjectivesColumnExists;
+
+  const result = await prisma.$queryRaw`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'ContentPlan'
+        AND column_name = 'strategicObjectives'
+    ) AS "exists"
+  `;
+
+  strategicObjectivesColumnExists = Boolean(result?.[0]?.exists);
+  return strategicObjectivesColumnExists;
+};
+
+const getContentPlanSelect = async (extra = {}) => {
+  const hasColumn = await hasStrategicObjectivesColumn();
+  return {
+    ...contentPlanBaseSelect,
+    ...(hasColumn ? { strategicObjectives: true } : {}),
+    ...extra
+  };
+};
+
+const normalizeContentPlan = (plan) => {
+  if (!plan) return plan;
+  return {
+    ...plan,
+    strategicObjectives: plan.strategicObjectives ?? ''
+  };
+};
+
+const filterContentPlanData = async (data) => {
+  if (!data || !Object.prototype.hasOwnProperty.call(data, 'strategicObjectives')) return data;
+  if (await hasStrategicObjectivesColumn()) return data;
+
+  const { strategicObjectives, ...safeData } = data;
+  return safeData;
+};
+
 /**
  * ContentPlan Services
  */
@@ -13,14 +71,14 @@ export const getContentPlans = async (clientId) => {
 
     const plans = await prisma.contentPlan.findMany({
       where,
-      include: {
+      select: await getContentPlanSelect({
         client: {
           select: { id: true, name: true, slug: true }
         },
         _count: {
           select: { contentItems: true }
         }
-      },
+      }),
       orderBy: [
         { year: 'desc' },
         { month: 'desc' }
@@ -31,7 +89,7 @@ export const getContentPlans = async (clientId) => {
 
     // Map for frontend compatibility: contentItems -> items
     return plans.map(plan => ({
-      ...plan,
+      ...normalizeContentPlan(plan),
       _count: {
         ...plan._count,
         items: plan._count?.contentItems || 0
@@ -46,7 +104,7 @@ export const getContentPlans = async (clientId) => {
 export const getContentPlanById = async (id) => {
   const plan = await prisma.contentPlan.findUnique({
     where: { id },
-    include: {
+    select: await getContentPlanSelect({
       client: true,
       owner: true,
       contentItems: {
@@ -58,7 +116,7 @@ export const getContentPlanById = async (id) => {
         },
         orderBy: { publishDate: 'asc' }
       }
-    }
+    })
   });
 
   if (plan && plan.deletedAt) return null;
@@ -66,7 +124,7 @@ export const getContentPlanById = async (id) => {
   // Frontend Compatibility: items -> contentItems
   if (plan) {
     return {
-      ...plan,
+      ...normalizeContentPlan(plan),
       items: plan.contentItems || []
     };
   }
@@ -91,7 +149,7 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
       deletedAt: null
     },
     orderBy: { updatedAt: 'desc' },
-    include: {
+    select: await getContentPlanSelect({
       client: true,
       owner: true,
       contentItems: {
@@ -103,13 +161,13 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
         },
         orderBy: { publishDate: 'asc' }
       }
-    }
+    })
   });
 
   // Frontend Compatibility: items -> contentItems
   if (plan) {
     return {
-      ...plan,
+      ...normalizeContentPlan(plan),
       items: plan.contentItems || []
     };
   }
@@ -119,11 +177,13 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
 
 export const createContentPlan = async (data) => {
   const { clientId, month, year, status, strategicObjectives } = data;
+  const hasStrategicColumn = await hasStrategicObjectivesColumn();
 
   // Idempotency Shield: Check for existing plans for this period
   const existingPlan = await prisma.contentPlan.findFirst({
     where: { clientId, month, year },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: 'desc' },
+    select: await getContentPlanSelect()
   });
 
   if (existingPlan) {
@@ -135,16 +195,16 @@ export const createContentPlan = async (data) => {
         data: {
           deletedAt: null,
           status: status || 'PLANIFICACION',
-          strategicObjectives: strategicObjectives ?? existingPlan.strategicObjectives
+          ...(hasStrategicColumn ? { strategicObjectives: strategicObjectives ?? existingPlan.strategicObjectives } : {})
         },
-        include: { client: true }
+        select: await getContentPlanSelect({ client: true })
       });
     }
     // Case B: Plan is active -> Return it (idempotency)
     console.log(`[Service] createContentPlan: Returning existing active plan ${existingPlan.id}`);
     return await prisma.contentPlan.findUnique({
       where: { id: existingPlan.id },
-      include: { client: true }
+      select: await getContentPlanSelect({ client: true })
     });
   }
 
@@ -155,11 +215,11 @@ export const createContentPlan = async (data) => {
         month,
         year,
         status: status || 'PLANIFICACION',
-        strategicObjectives: strategicObjectives || null
+        ...(hasStrategicColumn ? { strategicObjectives: strategicObjectives || null } : {})
       },
-      include: {
+      select: await getContentPlanSelect({
         client: true
-      }
+      })
     });
   } catch (error) {
     // P2002: Unique constraint violation (Race Condition)
@@ -167,7 +227,7 @@ export const createContentPlan = async (data) => {
       console.warn(`[Service] createContentPlan: Conflict detected (P2002). Returning existing plan.`);
       return await prisma.contentPlan.findFirst({
         where: { clientId, month, year, deletedAt: null },
-        include: { client: true }
+        select: await getContentPlanSelect({ client: true })
       });
     }
     throw error;
@@ -177,7 +237,8 @@ export const createContentPlan = async (data) => {
 export const updateContentPlan = async (id, data) => {
   return await prisma.contentPlan.update({
     where: { id },
-    data
+    data: await filterContentPlanData(data),
+    select: await getContentPlanSelect()
   });
 };
 
@@ -185,27 +246,28 @@ export const generateShareToken = async (id) => {
   const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
   return await prisma.contentPlan.update({
     where: { id },
-    data: { shareToken: token }
+    data: { shareToken: token },
+    select: { shareToken: true }
   });
 };
 
 export const getContentPlanByToken = async (token) => {
   const plan = await prisma.contentPlan.findUnique({
     where: { shareToken: token },
-    include: {
+    select: await getContentPlanSelect({
       client: true,
       contentItems: {
         where: { deletedAt: null },
         orderBy: { publishDate: 'asc' }
       }
-    }
+    })
   });
 
   if (plan && plan.deletedAt) return null;
 
   if (plan) {
     return {
-      ...plan,
+      ...normalizeContentPlan(plan),
       items: plan.contentItems || []
     };
   }
@@ -224,7 +286,8 @@ export const deleteContentPlan = async (id) => {
     // Soft delete plan
     return await tx.contentPlan.update({
       where: { id },
-      data: { deletedAt: now }
+      data: { deletedAt: now },
+      select: { id: true }
     });
   });
 };
@@ -237,7 +300,13 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
     where: { id: itemId },
     include: {
       plan: {
-        include: { client: true }
+        select: {
+          id: true,
+          clientId: true,
+          month: true,
+          year: true,
+          client: true
+        }
       },
       tasks: {
         where: { status: { not: 'REALIZADA' } }
@@ -360,7 +429,8 @@ export const updateContentItem = async (id, data) => {
             console.log(`[Service] updateContentItem: All items published. Auto-finalizing plan ${updatedItem.planId}`);
             await prisma.contentPlan.update({
                 where: { id: updatedItem.planId },
-                data: { status: 'FINALIZADO' }
+                data: { status: 'FINALIZADO' },
+                select: { id: true }
             });
         }
     } catch (automationErr) {

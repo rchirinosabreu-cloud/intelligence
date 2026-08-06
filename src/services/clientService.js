@@ -103,7 +103,11 @@ export async function getClients(filters = {}) {
                 year: currentYear,
                 deletedAt: null
             },
-            include: {
+            select: {
+                id: true,
+                month: true,
+                year: true,
+                status: true,
                 contentItems: {
                     select: { format: true }
                 }
