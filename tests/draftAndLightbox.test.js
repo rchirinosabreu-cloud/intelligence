@@ -219,6 +219,9 @@ test('Task Composer Attributes - priority stays compact and special lives in the
     assert.ok(code.includes('taskPriorityOptions'), 'Priority options should be rendered from a compact option map.');
     assert.ok(code.includes('Prioridad</span>'), 'The priority trigger should be labeled as Prioridad instead of a question.');
     assert.ok(code.includes('role="radiogroup"'), 'Expanded priority choices should be inline selectable options.');
+    assert.ok(code.includes('showPriorityPopover'), 'Priority choices should be controlled by a popover state instead of expanding the field height.');
+    assert.ok(code.includes('data-task-priority-popover'), 'Priority choices should render in a scoped popover surface.');
+    assert.ok(!code.includes('border-t border-red-500/10 p-1.5'), 'Priority options should not render as an inline row that pushes the task form down.');
     assert.ok(code.includes('taskOperationalGridClass'), 'Deadline, status and priority should use a dedicated compact operational row.');
     assert.ok(code.includes('aria-pressed={formData.isSpecial}'), 'Special should be a pressed-state star action in the header.');
     assert.ok(!code.includes('taskSpecialInlinePanel'), 'Special should not render a secondary name/type panel.');
@@ -228,7 +231,20 @@ test('Task Composer Attributes - priority stays compact and special lives in the
     assert.ok(!code.includes('<select') || !code.includes('value={formData.priority ||'), 'Priority selection should not render as a second select row.');
 });
 
-// 13. Verificar que el selector de fecha use estilos propios del sistema
+// 13. Verificar que el indicador de borrador no empuje el layout
+test('Task Draft Status - uses subtle header pill without layout shift', async () => {
+    const { readFileSync } = await import('node:fs');
+    const code = readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');
+
+    assert.ok(code.includes('Borrador creado'), 'Draft status should use the shorter subtle copy.');
+    assert.ok(code.includes('<span className="text-amber-400 dark:text-amber-500">|</span>'), 'Draft status should separate copy and action with a simple pipe.');
+    assert.ok(code.includes('Limpiar'), 'Draft status should keep a compact clear action.');
+    assert.ok(code.includes('data-task-draft-status-pill'), 'Draft status should render as a scoped header pill.');
+    assert.ok(!code.includes('Borrador restaurado de tu'), 'The old restored-session banner copy should be removed.');
+    assert.ok(!code.includes('border-b border-amber-200'), 'Draft status should not render as a full-width banner that shifts the form down.');
+});
+
+// 14. Verificar que el selector de fecha use estilos propios del sistema
 test('Task Deadline DatePicker - uses Brainstudio themed calendar chrome', async () => {
     const { readFileSync } = await import('node:fs');
     const code = readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');

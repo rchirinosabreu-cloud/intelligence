@@ -226,6 +226,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [editingContent, setEditingContent] = useState("");
     const [showToolbar, setShowToolbar] = useState(false);
     const [showEditToolbar, setShowEditToolbar] = useState(false);
+    const [showPriorityPopover, setShowPriorityPopover] = useState(false);
 
     // Local state for atomic inline editing
     const [editingField, setEditingField] = useState(null); // 'title' | 'assigneeId' | 'dueDate' | 'status' | null
@@ -518,6 +519,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const handlePassiveClose = () => {
         setShowToolbar(false);
         setShowEditToolbar(false);
+        setShowPriorityPopover(false);
         setShowInputEmojiPicker(false);
         setCommentPopover({ commentId: null, view: null });
         onClose();
@@ -536,6 +538,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             setEditingField(null);
             setShowToolbar(false);
             setShowEditToolbar(false);
+            setShowPriorityPopover(false);
             setShowInputEmojiPicker(false);
             setCommentPopover({ commentId: null, view: null });
             setNewRefUrl("");
@@ -1718,6 +1721,23 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     </div>
 
                     <div className="flex items-center gap-3.5">
+                        {!isEdition && hasStoredMeaningfulDraft() && (
+                            <div
+                                data-task-draft-status-pill
+                                className="flex items-center gap-2 rounded-full border border-amber-200/70 dark:border-amber-900/50 bg-amber-50/80 dark:bg-amber-900/15 px-3 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300 shadow-sm"
+                            >
+                                <span>Borrador creado</span>
+                                <span className="text-amber-400 dark:text-amber-500">|</span>
+                                <button
+                                    type="button"
+                                    onClick={handleCleanDraftOnly}
+                                    className="text-[10px] font-semibold text-amber-800 dark:text-amber-200 hover:underline"
+                                >
+                                    Limpiar
+                                </button>
+                            </div>
+                        )}
+
                         {isEdition && (formData.plan || formData.contentPlanId) && (
                             <button
                                 onClick={() => {
@@ -1786,22 +1806,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         )}
                     </div>
                 </div>
-
-                {/* Restore Draft Banner in Creation mode */}
-                {!isEdition && hasStoredMeaningfulDraft() && (
-                    <div className="bg-amber-50 dark:bg-amber-900/10 border-b border-amber-200 dark:border-amber-900/20 px-6 py-2 flex items-center justify-between text-amber-800 dark:text-amber-300 text-xs font-semibold">
-                        <div className="flex items-center gap-2">
-                            <Star className="w-4 h-4 fill-current text-amber-500" />
-                            <span>Borrador restaurado de tu última sesión</span>
-                        </div>
-                        <button
-                            onClick={handleCleanDraftOnly}
-                            className="text-amber-700 dark:text-amber-400 hover:underline text-[10px] font-black uppercase tracking-wider"
-                        >
-                            Limpiar borrador
-                        </button>
-                    </div>
-                )}
 
                 {/* Main Single Column Layout (Basecamp Style) */}
                 <div
@@ -1942,19 +1946,15 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             <div className="col-span-2 space-y-1">
                                 <label className={taskComposerLabelClass}>Prioridad</label>
                                 <div className={cn(
-                                    "rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-transparent transition-colors",
+                                    "relative rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-transparent transition-colors",
                                     formData.isPriority && "border-red-500/30 bg-red-500/5"
                                 )}>
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            const nextIsPriority = !formData.isPriority;
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                isPriority: nextIsPriority,
-                                                priority: nextIsPriority ? 'NORMAL' : null
-                                            }));
+                                            setShowPriorityPopover(prev => !prev);
                                         }}
+                                        aria-expanded={showPriorityPopover}
                                         className={cn(
                                             "flex h-[38px] w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
                                             formData.isPriority
@@ -1966,41 +1966,47 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         <span className="text-sm font-medium">Prioridad</span>
                                     </button>
 
-                                    {formData.isPriority && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: -4 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            className="grid grid-cols-3 gap-1.5 border-t border-red-500/10 p-1.5"
-                                            role="radiogroup"
-                                            aria-label="Nivel de prioridad"
-                                        >
-                                            {taskPriorityOptions.map((option) => {
-                                                const selected = (formData.priority || 'NORMAL') === option.value;
-                                                return (
-                                                    <button
-                                                        key={option.value}
-                                                        type="button"
-                                                        role="radio"
-                                                        aria-checked={selected}
-                                                        onClick={() => {
-                                                            setFormData(prev => ({
-                                                                ...prev,
-                                                                priority: option.value,
-                                                                isPriority: true
-                                                            }));
-                                                        }}
-                                                        className={cn(
-                                                            "inline-flex h-[30px] min-w-0 items-center justify-center gap-1 rounded-md border px-2 text-[11px] font-semibold transition-all",
-                                                            selected ? option.className : "border-zinc-200/70 dark:border-zinc-800/70 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/70"
-                                                        )}
-                                                    >
-                                                        <Zap size={11} fill={selected ? "currentColor" : "none"} />
-                                                        {option.label}
-                                                    </button>
-                                                );
-                                            })}
-                                        </motion.div>
-                                    )}
+                                    <AnimatePresence>
+                                        {showPriorityPopover && (
+                                            <motion.div
+                                                data-task-priority-popover
+                                                initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                                                transition={{ duration: 0.14 }}
+                                                className="absolute left-0 right-0 top-[calc(100%+6px)] z-[125] grid grid-cols-3 gap-1.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 p-1.5 shadow-xl shadow-zinc-950/10 backdrop-blur"
+                                                role="radiogroup"
+                                                aria-label="Nivel de prioridad"
+                                            >
+                                                {taskPriorityOptions.map((option) => {
+                                                    const selected = formData.isPriority && (formData.priority || 'NORMAL') === option.value;
+                                                    return (
+                                                        <button
+                                                            key={option.value}
+                                                            type="button"
+                                                            role="radio"
+                                                            aria-checked={selected}
+                                                            onClick={() => {
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    priority: option.value,
+                                                                    isPriority: true
+                                                                }));
+                                                                setShowPriorityPopover(false);
+                                                            }}
+                                                            className={cn(
+                                                                "inline-flex h-[30px] min-w-0 items-center justify-center gap-1 rounded-lg border px-2 text-[11px] font-semibold transition-all",
+                                                                selected ? option.className : "border-zinc-200/70 dark:border-zinc-800/70 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/70"
+                                                            )}
+                                                        >
+                                                            <Zap size={11} fill={selected ? "currentColor" : "none"} />
+                                                            {option.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
                             </div>
                         </div>
