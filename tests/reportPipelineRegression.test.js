@@ -157,6 +157,32 @@ test('report pipeline regressions', async (t) => {
     assert.equal(source.metrics.spend.value, null);
   });
 
+  await t.test('repairs organic metrics when vision places them in paid canonical keys', () => {
+    const source = validateAndCleanSourceExtraction({
+      sectionCategory: 'ORGANIC',
+      platform: 'INSTAGRAM',
+      screenType: 'CONTENT_SUMMARY',
+      metrics: {
+        impressions: { value: '20,1 mil', label: 'Visualizaciones', changePct: -33.1 },
+        results: { value: 657, label: 'Interacciones con el contenido', changePct: -49.1 },
+        reach: { value: '7 mil', label: 'Alcance', changePct: 31.2 },
+        clicks: { value: 23, label: 'Clics en el enlace de Instagram', changePct: 228.6 },
+        ctr: { value: 102, label: 'Seguidores', changePct: -82.2 }
+      }
+    });
+
+    assert.equal(source.metrics.views.value, 20100);
+    assert.equal(source.metrics.views.changePct, -33.1);
+    assert.equal(source.metrics.interactions.value, 657);
+    assert.equal(source.metrics.reachOrganic.value, 7000);
+    assert.equal(source.metrics.linkClicks.value, 23);
+    assert.equal(source.metrics.follows.value, 102);
+    assert.equal(source.metrics.impressions.value, null);
+    assert.equal(source.metrics.results.value, null);
+    assert.equal(source.metrics.clicks.value, null);
+    assert.equal(source.metrics.ctr.value, null);
+  });
+
   await t.test('fallback narrative explains a chart without calling every value an interaction', async () => {
     const { generateFallbackNarrative } = await import('../src/services/reportVisionService.js');
     const narrative = generateFallbackNarrative({
@@ -501,6 +527,14 @@ test('AI narrative prompts include the official selected report period and rejec
     globalThis.fetch = originalFetch;
     process.env.OPENAI_API_KEY = originalKey;
   }
+});
+
+test('vision extraction prompt requires organic headline metrics by platform', async () => {
+  const service = await fs.readFile('src/services/reportVisionService.js', 'utf8');
+  assert.match(service, /For organic Facebook\/Instagram screenshots, extract visible headline cards/i);
+  assert.match(service, /Visualizaciones\s*->\s*views/);
+  assert.match(service, /Seguidores\s*->\s*follows/);
+  assert.match(service, /Clics en el enlace\s*->\s*linkClicks/);
 });
 
 test('reports narrative endpoint gives AI providers enough time to finish long reports', async () => {

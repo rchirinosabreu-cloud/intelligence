@@ -17,6 +17,10 @@ export const cleanNumericValue = (rawVal) => {
     }
 
     let clean = rawVal.trim();
+    const lowerRaw = clean.toLowerCase();
+    const multiplier = /\bmillones?\b/.test(lowerRaw)
+        ? 1000000
+        : /\bmil\b/.test(lowerRaw) ? 1000 : 1;
     // Remove symbols, currency words, letters, spaces, percent signs
     clean = clean.replace(/[^\d.,+-]/g, '');
 
@@ -51,7 +55,7 @@ export const cleanNumericValue = (rawVal) => {
     }
 
     const num = parseFloat(clean);
-    return isFinite(num) ? num : null;
+    return isFinite(num) ? num * multiplier : null;
 };
 
 const filterPositiveDemographicRows = (rows = [], keys = ['value']) => Array.isArray(rows)
@@ -73,6 +77,42 @@ const cleanDemographics = (demographics = {}) => ({
     cities: filterPositiveDemographicRows(demographics.cities, ['value']),
     countries: filterPositiveDemographicRows(demographics.countries, ['value'])
 });
+
+const normalizeMetricLabel = (value) => String(value || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const repairOrganicMetricAliases = (cleanMetrics, extracted = {}) => {
+    const isOrganicSource = extracted.sectionCategory === 'ORGANIC'
+        || extracted.platform === 'FACEBOOK'
+        || extracted.platform === 'INSTAGRAM';
+    if (!isOrganicSource) return cleanMetrics;
+
+    const moveMetric = (fromKey, toKey, labelPattern) => {
+        const sourceMetric = cleanMetrics[fromKey];
+        if (!hasPublishableValue(sourceMetric?.value)) return;
+        const label = normalizeMetricLabel(sourceMetric.label || sourceMetric.evidence || '');
+        if (!labelPattern.test(label)) return;
+        if (!hasPublishableValue(cleanMetrics[toKey]?.value)) {
+            cleanMetrics[toKey] = {
+                ...cleanMetrics[toKey],
+                ...sourceMetric,
+                key: toKey,
+                label: sourceMetric.label || cleanMetrics[toKey]?.label || toKey,
+                unit: toKey === 'follows' || toKey === 'views' || toKey === 'interactions' ? 'count' : sourceMetric.unit
+            };
+        }
+        cleanMetrics[fromKey] = { ...sourceMetric, value: null };
+    };
+
+    moveMetric('impressions', 'views', /visualizaciones?|vistas/);
+    moveMetric('results', 'interactions', /interacciones?|interacciones con el contenido/);
+    moveMetric('reach', 'reachOrganic', /alcance/);
+    moveMetric('clicks', 'linkClicks', /clics?|clicks?|enlace/);
+    moveMetric('ctr', 'follows', /seguidores?|nuevos seguidores/);
+
+    return cleanMetrics;
+};
 
 export const visionExtractionSchema = {
   type: "object",
@@ -303,6 +343,16 @@ Analyze the provided screenshot and extract metrics using their real semantics. 
 
 Organic screenshots may additionally use: views, viewers, interactions, linkClicks, profileVisits, follows, videoViews, reachOrganic, and reachPaid. Never rename organic views as impressions or interactions as paid results merely to fill a canonical slot. Include visible changePct with its original sign.
 
+For organic Facebook/Instagram screenshots, extract visible headline cards exhaustively and map them exactly:
+- Visualizaciones -> views
+- Espectadores -> viewers
+- Alcance -> reachOrganic
+- Interacciones con el contenido -> interactions
+- Clics en el enlace -> linkClicks
+- Visitas -> profileVisits
+- Seguidores -> follows
+Values such as "8,6 mil" or "20,1 mil" mean 8600 and 20100. If a screenshot is organic, never leave these visible cards only in paid keys such as impressions, results, clicks, or ctr.
+
 For each metric, extract the following:
 - key: use the paid canonical keys or organic semantic keys listed above; never substitute one concept for another.
 - label: the label as seen in the screenshot or translation (e.g., "Importe gastado", "Impresiones", "Alcance", "Clics en el enlace", "CTR (porcentaje de clics en el enlace)", "Resultados")
@@ -467,6 +517,9 @@ export const validateAndCleanSourceExtraction = (extracted) => {
             hasValidCanonicalMetric = true;
         }
     }
+
+    repairOrganicMetricAliases(cleanMetrics, extracted);
+    hasValidCanonicalMetric = allowedKeys.some((key) => hasPublishableValue(cleanMetrics[key]?.value));
 
     const hasValidDataset = Array.isArray(dataset) && dataset.length > 0;
     const hasValidDemographics = demographics && (
