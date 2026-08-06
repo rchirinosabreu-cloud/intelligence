@@ -39,10 +39,9 @@ import {
   setMinutes,
   subDays
 } from 'date-fns';
-import { es } from 'date-fns/locale';
-import DatePicker, { registerLocale } from 'react-datepicker';
+import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
-registerLocale('es', es);
+import { brainDatePickerProps } from '@/lib/brainDatePicker';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
@@ -707,10 +706,10 @@ const OperationalCalendar = () => {
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Hasta cuándo (Horizonte)</label>
                   <DatePicker
+                    {...brainDatePickerProps}
                     selected={formData.recurrenceEnd}
                     onChange={date => setFormData({...formData, recurrenceEnd: date})}
                     dateFormat="d MMMM, yyyy"
-                    locale="es"
                     placeholderText="Seleccionar fecha fin"
                     className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
                     wrapperClassName="w-full"
@@ -760,13 +759,13 @@ const OperationalCalendar = () => {
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Inicio</label>
                   <DatePicker
+                    {...brainDatePickerProps}
                     selected={formData.startAt}
                     onChange={date => setFormData({...formData, startAt: date})}
                     showTimeSelect
                     timeIntervals={15}
                     timeCaption="Hora"
                     dateFormat="d MMM, HH:mm"
-                    locale="es"
                     className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
                     wrapperClassName="w-full"
                   />
@@ -774,13 +773,13 @@ const OperationalCalendar = () => {
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Fin</label>
                   <DatePicker
+                    {...brainDatePickerProps}
                     selected={formData.endAt}
                     onChange={date => setFormData({...formData, endAt: date})}
                     showTimeSelect
                     timeIntervals={15}
                     timeCaption="Hora"
                     dateFormat="d MMM, HH:mm"
-                    locale="es"
                     className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-600/20 shadow-sm"
                     wrapperClassName="w-full"
                   />

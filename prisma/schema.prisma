@@ -180,6 +180,7 @@ model ContentPlan {
   deletedAt     DateTime?
   ownerId       String?
   internalNotes String?
+  strategicObjectives String?
   shareToken    String?           @unique
   contentItems  ContentItem[]
   client        Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)

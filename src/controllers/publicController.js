@@ -14,6 +14,7 @@ export const getPublicPlan = async (req, res) => {
       id: plan.id,
       month: plan.month,
       year: plan.year,
+      strategicObjectives: plan.strategicObjectives,
       client: {
         name: plan.client.name,
         logoUrl: plan.client.logoUrl

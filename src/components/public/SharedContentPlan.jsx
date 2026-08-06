@@ -152,6 +152,19 @@ const SharedContentPlan = () => {
           </div>
         </div>
 
+        {plan.strategicObjectives?.trim() && (
+          <section className="bg-white dark:bg-zinc-900 rounded-[2rem] border border-zinc-200 dark:border-white/10 p-7 lg:p-8 shadow-sm">
+            <div className="space-y-3 max-w-3xl">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">
+                Objetivos estratégicos
+              </p>
+              <div className="text-sm lg:text-base text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                {plan.strategicObjectives}
+              </div>
+            </div>
+          </section>
+        )}
+
         <div className="space-y-6">
           {plan.items.map((item, index) => {
             const isAprobado = item.status === 'APROBADO' || item.status === 'REALIZADO' || item.status === 'PUBLICADO';
@@ -262,7 +275,7 @@ const SharedContentPlan = () => {
                             </button>
                             <button
                               onClick={() => setCommentingItemId(commentingItemId === item.id ? null : item.id)}
-                              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-[1.5rem] transition-all font-black text-xs uppercase tracking-widest"
+                              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-500/20 rounded-[1.5rem] transition-all font-black text-xs uppercase tracking-widest"
                             >
                               <MessageSquare className="w-4 h-4" />
                               Corregir / Comentar

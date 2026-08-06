@@ -13,9 +13,9 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { triggerConfetti } from '@/utils/confetti';
-import { es } from 'date-fns/locale';
-import DatePicker, { registerLocale } from 'react-datepicker';
+import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
+import { brainDatePickerProps } from '@/lib/brainDatePicker';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { useAuth } from '@/context/AuthContext';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
@@ -37,8 +37,6 @@ import {
     DropdownMenuTrigger,
     DropdownMenuContent,
 } from '@/components/ui/dropdown-menu';
-
-registerLocale('es', es);
 
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
@@ -1917,10 +1915,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         dateFormat="dd/MM/yyyy"
                                         className={`${taskComposerFieldClass} h-[38px] pl-10 cursor-pointer`}
                                         wrapperClassName="w-full"
-                                        calendarClassName="brain-datepicker"
-                                        popperClassName="brain-datepicker-popper"
-                                        locale="es"
-                                        showPopperArrow={false}
+                                        {...brainDatePickerProps}
                                         placeholderText="Elegir fecha..."
                                         isClearable
                                     />

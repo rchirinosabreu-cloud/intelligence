@@ -6,6 +6,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
+import { brainDatePickerProps } from '@/lib/brainDatePicker';
 import {
   Dialog,
   DialogContent,
@@ -197,6 +198,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                         <div>
                             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Fecha límite</label>
                             <DatePicker
+                                {...brainDatePickerProps}
                                 selected={newTaskData.dueDate ? new Date(`${newTaskData.dueDate.split('T')[0]}T12:00:00.000Z`) : null}
                                 onChange={(date) => {
                                     if (date) {

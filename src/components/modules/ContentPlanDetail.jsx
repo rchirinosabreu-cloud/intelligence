@@ -16,6 +16,9 @@ import { toast } from 'react-hot-toast';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from '@/components/ui/dialog';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
+import { brainDatePickerProps } from '@/lib/brainDatePicker';
 
 const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }) => {
   const [links, setLinks] = useState(Array.isArray(values) ? values : (values ? [values] : []));
@@ -127,8 +130,28 @@ const AutoResizeTextarea = ({ defaultValue, onBlur, placeholder, disabled, class
   );
 };
 
-const FeedbackHistory = ({ comments, isEditing, onUpdate, isOpen }) => {
-  if (!isEditing && !isOpen) return null;
+const parsePlanInternalNotes = (value) => {
+  if (!value || typeof value !== 'string') return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.map(note => String(note || '').trim()).filter(Boolean);
+    }
+  } catch (error) {
+    // Legacy plans stored one plain textarea. Show that as the first note.
+  }
+
+  const legacyNote = value.trim();
+  return legacyNote ? [legacyNote] : [];
+};
+
+const serializePlanInternalNotes = (notes) => JSON.stringify(
+  notes.map(note => String(note || '').trim()).filter(Boolean)
+);
+
+const FeedbackHistory = ({ comments, isOpen }) => {
+  if (!isOpen || !comments) return null;
 
   return (
     <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-500 overflow-hidden">
@@ -141,22 +164,9 @@ const FeedbackHistory = ({ comments, isEditing, onUpdate, isOpen }) => {
         </label>
       </div>
 
-      {isEditing ? (
-        <AutoResizeTextarea
-          defaultValue={comments}
-          onBlur={(e) => {
-            if (e.target.value !== comments) {
-              onUpdate(e.target.value);
-            }
-          }}
-          placeholder="Escribe o edita el feedback del cliente aquí..."
-          className="w-full bg-slate-50 dark:bg-white/2 border border-slate-200 dark:border-white/5 rounded-2xl p-4 text-sm font-medium text-slate-700 dark:text-slate-300 focus:ring-4 focus:ring-slate-500/10 outline-none transition-all"
-        />
-      ) : (
-        <div className="bg-slate-50 dark:bg-white/2 border border-slate-100 dark:border-white/5 p-5 rounded-[2rem] text-sm text-slate-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed italic">
-          {comments || <span className="text-slate-400 dark:text-slate-600">Esperando feedback...</span>}
-        </div>
-      )}
+      <div className="bg-slate-50 dark:bg-white/2 border border-slate-100 dark:border-white/5 p-5 rounded-[2rem] text-sm text-slate-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed italic">
+        {comments}
+      </div>
     </div>
   );
 };
@@ -181,12 +191,12 @@ const ContentItemCard = ({
     <div
       ref={itemRef}
       id={`item-${item.id}`}
-      className={`group relative bg-white dark:bg-zinc-900 transition-all duration-300 rounded-3xl overflow-hidden shadow-sm ${
+      className={`group relative bg-white dark:bg-zinc-900 transition-all duration-300 rounded-3xl shadow-sm ${
         isEditing
-          ? 'ring-4 ring-indigo-600/5'
+          ? 'ring-4 ring-indigo-600/5 overflow-visible min-h-[520px] z-20'
           : isDevuelto
-          ? 'border border-amber-500/30'
-          : 'hover:shadow-md'
+          ? 'border border-amber-500/30 overflow-hidden'
+          : 'hover:shadow-md overflow-hidden'
       }`}
     >
       <div className="p-6 lg:p-8">
@@ -240,16 +250,22 @@ const ContentItemCard = ({
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] block mb-1">Fecha Publicación</label>
                 {isEditing ? (
-                  <input
+                  <DatePicker
+                    {...brainDatePickerProps}
                     key={`${item.id}-${item.publishDate}`}
-                    type="date"
-                    defaultValue={item.publishDate ? new Date(item.publishDate).toISOString().split('T')[0] : ''}
-                    onBlur={(e) => {
-                      if (e.target.value && e.target.value !== (item.publishDate ? new Date(item.publishDate).toISOString().split('T')[0] : '')) {
-                        onUpdate({ id: item.id, publishDate: e.target.value });
+                    selected={item.publishDate ? new Date(`${new Date(item.publishDate).toISOString().split('T')[0]}T12:00:00.000Z`) : null}
+                    onChange={(date) => {
+                      if (!date) return;
+                      const dateStr = date.toISOString().split('T')[0];
+                      const current = item.publishDate ? new Date(item.publishDate).toISOString().split('T')[0] : '';
+                      if (dateStr !== current) {
+                        onUpdate({ id: item.id, publishDate: dateStr });
                       }
                     }}
+                    dateFormat="dd/MM/yyyy"
                     className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-indigo-600/20 outline-none"
+                    wrapperClassName="w-full"
+                    placeholderText="Elegir fecha"
                   />
                 ) : (
                   <div className="flex items-center gap-2 text-sm font-bold text-indigo-600 dark:text-indigo-400">
@@ -323,7 +339,7 @@ const ContentItemCard = ({
                     }
                   }}
                   placeholder="Escribe el copy visual o guion aquí..."
-                  className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600/30 transition-all outline-none"
+                  className="w-full min-h-[120px] bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600/30 transition-all outline-none"
                 />
               ) : (
                 <div className="bg-zinc-50/50 dark:bg-white/2 p-4 rounded-2xl text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
@@ -345,7 +361,7 @@ const ContentItemCard = ({
                     }
                   }}
                   placeholder="Escribe el pie de foto para redes..."
-                  className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600/30 transition-all outline-none"
+                  className="w-full min-h-[120px] bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600/30 transition-all outline-none"
                 />
               ) : (
                 <div className="bg-zinc-50/50 dark:bg-white/2 p-4 rounded-2xl text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
@@ -356,9 +372,7 @@ const ContentItemCard = ({
 
             <FeedbackHistory
               comments={item.comments}
-              isEditing={isEditing}
               isOpen={showFeedback}
-              onUpdate={(val) => onUpdate({ id: item.id, comments: val })}
             />
           </div>
 
@@ -518,11 +532,15 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
 
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Fecha Límite</label>
-            <input
-              type="date"
-              value={data.dueDate}
-              onChange={(e) => setData({ ...data, dueDate: e.target.value })}
+            <DatePicker
+              {...brainDatePickerProps}
+              selected={data.dueDate ? new Date(`${data.dueDate}T12:00:00.000Z`) : null}
+              onChange={(date) => setData({ ...data, dueDate: date ? date.toISOString().split('T')[0] : '' })}
+              dateFormat="dd/MM/yyyy"
               className="w-full h-11 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all text-sm"
+              wrapperClassName="w-full"
+              placeholderText="Elegir fecha"
+              isClearable
             />
           </div>
 
@@ -577,6 +595,8 @@ const ContentPlanDetail = () => {
   const [editingItemId, setEditingItemId] = useState(null);
   const [dispatchItemId, setDispatchItemId] = useState(null);
   const [showInternalNotes, setShowInternalNotes] = useState(false);
+  const [newPlanInternalNote, setNewPlanInternalNote] = useState('');
+  const [newlyCreatedItemId, setNewlyCreatedItemId] = useState(null);
   const itemRefs = useRef({});
 
   // Parse period (month-year)
@@ -645,6 +665,7 @@ const ContentPlanDetail = () => {
   }, [location.search, plan]);
 
   const currentPlanId = plan?.id || planId;
+  const planInternalNotes = parsePlanInternalNotes(plan?.internalNotes);
 
   // Mutations
   const updatePlanMutation = useMutation({
@@ -683,6 +704,7 @@ const ContentPlanDetail = () => {
     },
     onSuccess: (newItem) => {
       queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+      setNewlyCreatedItemId(newItem.id);
       setEditingItemId(newItem.id);
       toast.success('Nueva pieza añadida');
     }
@@ -694,7 +716,10 @@ const ContentPlanDetail = () => {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      if (variables?.id === newlyCreatedItemId && Object.prototype.hasOwnProperty.call(variables, 'publishDate')) {
+        setNewlyCreatedItemId(null);
+      }
       queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
     }
   });
@@ -745,6 +770,22 @@ const ContentPlanDetail = () => {
     });
   };
 
+  const handleAddPlanInternalNote = () => {
+    const note = newPlanInternalNote.trim();
+    if (!note) return;
+
+    updatePlanMutation.mutate({
+      internalNotes: serializePlanInternalNotes([...planInternalNotes, note])
+    });
+    setNewPlanInternalNote('');
+  };
+
+  const handleRemovePlanInternalNote = (indexToRemove) => {
+    updatePlanMutation.mutate({
+      internalNotes: serializePlanInternalNotes(planInternalNotes.filter((_, index) => index !== indexToRemove))
+    });
+  };
+
   if (planLoading) {
     return (
       <div className="flex flex-col items-center justify-center p-20 gap-4">
@@ -755,6 +796,13 @@ const ContentPlanDetail = () => {
   }
 
   if (!plan) return <div className="p-20 text-center">Plan no encontrado.</div>;
+
+  const orderedPlanItems = newlyCreatedItemId
+    ? [
+        ...(plan.items || []).filter(item => item.id === newlyCreatedItemId),
+        ...(plan.items || []).filter(item => item.id !== newlyCreatedItemId)
+      ]
+    : (plan.items || []);
 
   return (
     <div className="space-y-8 pb-20 animate-in fade-in duration-500">
@@ -833,6 +881,29 @@ const ContentPlanDetail = () => {
           </div>
       </div>
 
+      <div className="bg-white/60 dark:bg-zinc-900/40 border border-zinc-200/60 dark:border-white/5 rounded-3xl p-6">
+        <div className="flex items-start gap-3 mb-5">
+          <div className="p-2 bg-indigo-600/10 text-indigo-600 rounded-xl">
+            <Table2 className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Objetivos estratégicos</h3>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Visible para el cliente en el portal de revisión.</p>
+          </div>
+        </div>
+
+        <AutoResizeTextarea
+          defaultValue={plan.strategicObjectives}
+          onBlur={(e) => {
+            if (e.target.value !== (plan.strategicObjectives || '')) {
+              updatePlanMutation.mutate({ strategicObjectives: e.target.value });
+            }
+          }}
+          placeholder="Escribe los objetivos estratégicos del mes..."
+          className="w-full min-h-[116px] bg-zinc-50/80 dark:bg-white/5 border border-zinc-200/70 dark:border-white/10 rounded-2xl p-4 text-sm text-zinc-800 dark:text-zinc-200 focus:ring-4 focus:ring-indigo-600/10 outline-none transition-all"
+        />
+      </div>
+
       {/* Internal Notes Panel */}
       <div className="bg-white/40 dark:bg-zinc-900/30 border border-zinc-200/60 dark:border-white/5 rounded-3xl overflow-hidden">
         <button
@@ -844,7 +915,7 @@ const ContentPlanDetail = () => {
               <StickyNote className="w-5 h-5" />
             </div>
             <div className="text-left">
-              <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider">Notas Internas / Cerebro del Proyecto</h3>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Notas internas</h3>
               <p className="text-[10px] text-zinc-500 font-medium">Solo visible para el equipo interno</p>
             </div>
           </div>
@@ -852,25 +923,53 @@ const ContentPlanDetail = () => {
         </button>
 
         {showInternalNotes && (
-          <div className="px-6 pb-6 animate-in slide-in-from-top-2 duration-300">
-            <AutoResizeTextarea
-              defaultValue={plan.internalNotes}
-              onBlur={(e) => {
-                if (e.target.value !== plan.internalNotes) {
-                  updatePlanMutation.mutate({ internalNotes: e.target.value });
-                }
-              }}
-              placeholder="Escribe aquí las instrucciones generales, insights del cliente o notas estratégicas..."
-              className="w-full bg-zinc-50/50 dark:bg-white/2 border border-zinc-200/60 dark:border-white/5 rounded-2xl p-6 text-sm text-zinc-700 dark:text-zinc-300 min-h-[120px] focus:ring-4 focus:ring-indigo-600/10 outline-none transition-all"
-            />
+          <div className="px-6 pb-6 space-y-4 animate-in slide-in-from-top-2 duration-300">
+            {planInternalNotes.length > 0 && (
+              <div className="space-y-2">
+                {planInternalNotes.map((note, index) => (
+                  <div
+                    key={`${note}-${index}`}
+                    className="group flex items-start gap-3 rounded-2xl border border-zinc-200/70 dark:border-white/10 bg-zinc-50/70 dark:bg-white/5 p-4"
+                  >
+                    <span className="mt-0.5 text-[11px] font-semibold text-indigo-600">#{index + 1}</span>
+                    <p className="flex-1 whitespace-pre-wrap text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{note}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePlanInternalNote(index)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-400 hover:text-red-500 rounded-lg transition-all"
+                      aria-label="Eliminar nota interna"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                value={newPlanInternalNote}
+                onChange={(e) => setNewPlanInternalNote(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAddPlanInternalNote();
+                }}
+                placeholder="Añade una nota interna..."
+                className="flex-1 min-h-[46px] bg-zinc-50/80 dark:bg-white/5 border border-zinc-200/70 dark:border-white/10 rounded-2xl px-4 py-3 text-sm text-zinc-800 dark:text-zinc-200 focus:ring-4 focus:ring-indigo-600/10 outline-none transition-all"
+              />
+              <Button type="button" onClick={handleAddPlanInternalNote} className="sm:w-auto">
+                <Plus className="w-4 h-4 mr-2" />
+                Añadir
+              </Button>
+            </div>
+
           </div>
         )}
       </div>
 
       {/* Items List */}
       <div className="space-y-6">
-        {plan.items?.length > 0 ? (
-          plan.items.map((item, index) => (
+        {orderedPlanItems.length > 0 ? (
+          orderedPlanItems.map((item, index) => (
             <ContentItemCard
               key={item.id}
               item={item}

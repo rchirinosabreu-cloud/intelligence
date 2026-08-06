@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { triggerConfetti } from '@/utils/confetti';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
+import { brainDatePickerProps } from '@/lib/brainDatePicker';
 import {
   Dialog,
   DialogContent,
@@ -267,6 +268,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                         <div>
                             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Fecha límite</label>
                             <DatePicker
+                                {...brainDatePickerProps}
                                 selected={editFormData.dueDate ? new Date(`${editFormData.dueDate.split('T')[0]}T12:00:00.000Z`) : null}
                                 onChange={(date) => {
                                     if (date) {
