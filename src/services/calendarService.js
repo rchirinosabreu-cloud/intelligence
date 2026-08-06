@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import { JWT } from 'google-auth-library';
 import crypto from 'crypto';
+import { createOpenGoogleMeetSpace, getAuthorizedGoogleOAuthClient } from './googleCalendarOAuthService.js';
 
 let calendarClient;
 let authClient;
@@ -96,6 +97,9 @@ export async function getUpcomingEvents(calendarId = process.env.GOOGLE_CALENDAR
  * Creates a Google Calendar event with a Google Meet link.
  */
 export async function createMeetEvent(title, startAt, endAt, description = '') {
+    const centralMeetLink = await createCentralOAuthMeetEvent(title, startAt, endAt, description);
+    if (centralMeetLink) return centralMeetLink;
+
     const calendar = getCalendarClient();
     if (!calendar) return null;
 
@@ -126,6 +130,35 @@ export async function createMeetEvent(title, startAt, endAt, description = '') {
     } catch (error) {
         console.error("[CalendarService] Failed to create Meet event:", error.message);
         // Fallback or return null so the UI can handle it
+        return null;
+    }
+}
+
+async function createCentralOAuthMeetEvent(title, startAt, endAt, description = '') {
+    try {
+        const auth = await getAuthorizedGoogleOAuthClient();
+        if (!auth) return null;
+
+        const meetSpace = await createOpenGoogleMeetSpace();
+        const meetingLink = meetSpace?.meetingUri;
+        const calendar = google.calendar({ version: 'v3', auth: auth.oauth2Client });
+        const calendarId = auth.connection.calendarId || 'primary';
+
+        const response = await calendar.events.insert({
+            calendarId,
+            sendUpdates: 'none',
+            requestBody: {
+                summary: title,
+                description: [description, meetingLink ? `Google Meet abierto: ${meetingLink}` : ''].filter(Boolean).join('\n\n'),
+                location: meetingLink || undefined,
+                start: { dateTime: new Date(startAt).toISOString(), timeZone: 'America/Bogota' },
+                end: { dateTime: new Date(endAt).toISOString(), timeZone: 'America/Bogota' }
+            }
+        });
+
+        return meetingLink || response.data.hangoutLink || response.data.htmlLink || null;
+    } catch (error) {
+        console.error("[CalendarService] Central OAuth Meet creation failed:", error.response?.data || error.message);
         return null;
     }
 }

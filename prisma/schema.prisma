@@ -256,8 +256,57 @@ model OperationalEvent {
   recurrence  String?  // NONE, WEEKLY
   recurrenceEnd DateTime?
   meetingLink String?
+  source      String   @default("BRAIN")
+  organizerEmail String?
+  googleCalendarId String?
+  googleEventId String?
+  googleICalUID String?
+  googleEtag String?
+  googleHtmlLink String?
+  googleMeetSpaceName String?
+  googleMeetAccessType String?
+  googleSyncStatus String?
+  googleLastSyncedAt DateTime?
+  googleUpdatedAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([startAt])
+  @@index([googleCalendarId, googleEventId])
+}
+
+model GoogleCalendarConnection {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  calendarId      String   @default("primary")
+  encryptedTokens String
+  scopes          String[] @default([])
+  isActive        Boolean  @default(true)
+  connectedById   String?
+  connectedAt     DateTime @default(now())
+  lastSyncedAt    DateTime?
+  syncToken        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  channels        GoogleCalendarSyncChannel[]
+
+  @@index([isActive])
+}
+
+model GoogleCalendarSyncChannel {
+  id           String   @id @default(uuid())
+  connectionId String
+  channelId    String   @unique
+  resourceId   String
+  resourceUri  String?
+  token        String?
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  connection   GoogleCalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId])
+  @@index([expiresAt])
 }
 
 model DeletedTaskLog {

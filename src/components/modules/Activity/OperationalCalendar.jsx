@@ -39,6 +39,7 @@ import {
   setMinutes,
   subDays
 } from 'date-fns';
+import { es } from 'date-fns/locale';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { brainDatePickerProps } from '@/lib/brainDatePicker';
@@ -51,6 +52,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { getFloatingCardPosition } from '@/lib/floatingCardPosition';
 import EventActivityCard from './EventActivityCard';
+
+const getAuthHeaders = () => ({
+  Authorization: `Bearer ${localStorage.getItem('authToken')}`
+});
 
 const OperationalCalendar = () => {
   const { currentUser } = useAuth();
@@ -81,7 +86,7 @@ const OperationalCalendar = () => {
   });
 
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
-  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PM';
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER';
 
   // Cleanup on unmount
   useEffect(() => {
@@ -116,7 +121,10 @@ const OperationalCalendar = () => {
   const { data: team = [] } = useQuery({
     queryKey: ['team-members'],
     queryFn: async () => {
-      const res = await fetch(`${getApiBaseUrl()}/api/team`);
+      const res = await fetch(`${getApiBaseUrl()}/api/team`, { headers: getAuthHeaders() });
+      if (!res.ok) {
+        throw new Error('Failed to fetch team');
+      }
       return res.json();
     }
   });
@@ -148,8 +156,12 @@ const OperationalCalendar = () => {
     queryKey: ['operational-events', timeframe.start.toISOString(), timeframe.end.toISOString()],
     queryFn: async () => {
       try {
-        const res = await fetch(`${getApiBaseUrl()}/api/activity/events?start=${timeframe.start.toISOString()}&end=${timeframe.end.toISOString()}`);
-        if (!res.ok) throw new Error('Failed to fetch events');
+        const res = await fetch(`${getApiBaseUrl()}/api/activity/events?start=${timeframe.start.toISOString()}&end=${timeframe.end.toISOString()}`, {
+          headers: getAuthHeaders()
+        });
+        if (!res.ok) {
+          throw new Error('Failed to fetch events');
+        }
         return res.json();
       } catch (err) {
         console.error("Calendar fetch error:", err);
@@ -160,6 +172,60 @@ const OperationalCalendar = () => {
 
   const events = apiEvents;
 
+  const { data: googleCalendarStatus } = useQuery({
+    queryKey: ['google-calendar-status'],
+    queryFn: async () => {
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/status`, { headers: getAuthHeaders() });
+      if (!res.ok) {
+        throw new Error('Failed to fetch Google Calendar status');
+      }
+      return res.json();
+    }
+  });
+
+  const connectGoogleCalendar = async () => {
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/auth-url`, { headers: getAuthHeaders() });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.details || error.error || 'No se pudo iniciar la conexion');
+      }
+      const data = await res.json();
+      window.location.href = data.url;
+    } catch (error) {
+      console.error('Google Calendar auth URL error:', error);
+      toast.error(error.message || 'No se pudo conectar Google Calendar');
+    }
+  };
+
+  const googleCalendarSyncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          start: timeframe.start.toISOString(),
+          end: timeframe.end.toISOString()
+        })
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.details || error.error || 'No se pudo sincronizar Google Calendar');
+      }
+      return res.json();
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries(['operational-events']);
+      queryClient.invalidateQueries(['team-activity-status']);
+      queryClient.invalidateQueries(['google-calendar-status']);
+      toast.success(`Google Calendar sincronizado (${result.imported || 0} nuevos, ${result.updated || 0} actualizados)`);
+    },
+    onError: (error) => {
+      console.error('Google Calendar sync error:', error);
+      toast.error(error.message || 'No se pudo sincronizar Google Calendar');
+    }
+  });
+
   const eventMutation = useMutation({
     mutationFn: async (eventData) => {
       const url = editingEventId
@@ -168,9 +234,13 @@ const OperationalCalendar = () => {
 
       const res = await fetch(url, {
         method: editingEventId ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(eventData)
       });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.details || error.error || 'Failed to save event');
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -179,12 +249,16 @@ const OperationalCalendar = () => {
       setIsModalOpen(false);
       setEditingEventId(null);
       toast.success(editingEventId ? 'Evento actualizado' : 'Evento creado');
+    },
+    onError: (error) => {
+      console.error('Operational event save error:', error);
+      toast.error(error.message || 'No se pudo guardar el evento');
     }
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id) => {
-      const res = await fetch(`${getApiBaseUrl()}/api/activity/events/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/events/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
       if (!res.ok) throw new Error('Failed to delete event');
       return res.json();
     },
@@ -215,7 +289,7 @@ const OperationalCalendar = () => {
     try {
       const res = await fetch(`${getApiBaseUrl()}/api/activity/events/generate-meet`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           title: formData.title,
           startAt: formData.startAt,
@@ -467,6 +541,32 @@ const OperationalCalendar = () => {
         </div>
 
         <div className="flex items-center gap-4">
+           {isAdmin && (
+            <div className="flex items-center gap-2">
+              {googleCalendarStatus?.connected ? (
+                <button
+                  type="button"
+                  onClick={() => googleCalendarSyncMutation.mutate()}
+                  disabled={googleCalendarSyncMutation.isPending}
+                  className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-700 transition-all hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"
+                  title={googleCalendarStatus.email}
+                >
+                  {googleCalendarSyncMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarIcon className="w-3.5 h-3.5" />}
+                  Sincronizar Google
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={connectGoogleCalendar}
+                  className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-600 transition-all hover:border-indigo-200 hover:text-indigo-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300"
+                >
+                  <CalendarIcon className="w-3.5 h-3.5" />
+                  Conectar Google
+                </button>
+              )}
+            </div>
+           )}
+
            {/* View Selector */}
            <div className="flex p-1 bg-zinc-100 dark:bg-white/5 rounded-xl border border-zinc-200 dark:border-white/10">
               {['Day', 'Week', 'Month'].map((v) => (

@@ -1,7 +1,18 @@
 import express from 'express';
-import { getOperationalEvents, createOperationalEvent, updateOperationalEvent, deleteOperationalEvent } from '../../services/operationalEventService.js';
+import {
+  getOperationalEvents,
+  createOperationalEvent,
+  updateOperationalEvent,
+  deleteOperationalEvent,
+  syncGoogleCalendarToOperationalEvents
+} from '../../services/operationalEventService.js';
 import { getTeamActivityStatus } from '../../services/activityStatusService.js';
 import { createMeetEvent } from '../../services/calendarService.js';
+import {
+  getGoogleCalendarAuthUrl,
+  storeGoogleCalendarOAuthCode,
+  getCentralGoogleCalendarConnectionStatus
+} from '../../services/googleCalendarOAuthService.js';
 
 const router = express.Router();
 
@@ -44,6 +55,45 @@ router.post('/events/generate-meet', async (req, res) => {
     res.json({ meetingLink });
   } catch (error) {
     res.status(500).json({ error: 'Failed to generate Meet link', details: error.message });
+  }
+});
+
+router.get('/google-calendar/status', async (req, res) => {
+  try {
+    const status = await getCentralGoogleCalendarConnectionStatus();
+    res.json(status);
+  } catch (error) {
+    console.error('[Activity API] Error fetching Google Calendar status:', error.response?.data || error);
+    res.status(500).json({ error: 'Failed to fetch Google Calendar status', details: error.message });
+  }
+});
+
+router.get('/google-calendar/auth-url', async (req, res) => {
+  try {
+    res.json({ url: getGoogleCalendarAuthUrl() });
+  } catch (error) {
+    console.error('[Activity API] Error generating Google Calendar OAuth URL:', error.response?.data || error);
+    res.status(500).json({ error: 'Failed to generate Google Calendar OAuth URL', details: error.message });
+  }
+});
+
+router.post('/google-calendar/oauth-callback', async (req, res) => {
+  try {
+    const connection = await storeGoogleCalendarOAuthCode(req.body.code, req.user?.userId || null);
+    res.json(connection);
+  } catch (error) {
+    console.error('[Activity API] Error completing Google Calendar OAuth:', error.response?.data || error);
+    res.status(500).json({ error: 'Failed to connect Google Calendar', details: error.message });
+  }
+});
+
+router.post('/google-calendar/sync', async (req, res) => {
+  try {
+    const result = await syncGoogleCalendarToOperationalEvents(req.body || {});
+    res.json(result);
+  } catch (error) {
+    console.error('[Activity API] Error syncing Google Calendar:', error.response?.data || error);
+    res.status(500).json({ error: 'Failed to sync Google Calendar', details: error.message });
   }
 });
 

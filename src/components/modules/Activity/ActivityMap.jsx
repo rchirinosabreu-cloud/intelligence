@@ -11,6 +11,10 @@ import { useAuth } from '@/context/AuthContext';
 import { getFloatingCardPosition } from '@/lib/floatingCardPosition';
 import MemberActivityCard from './MemberActivityCard';
 
+const getAuthHeaders = () => ({
+  Authorization: `Bearer ${localStorage.getItem('authToken')}`
+});
+
 const Zone = ({ id, name, icon: Icon, children, className, isActive }) => (
   <div className={cn(
     "relative flex flex-col min-h-[180px] p-10 transition-all duration-700 rounded-[32px] border-2 border-dashed overflow-visible",
@@ -117,7 +121,7 @@ const MemberAvatar = ({ member, hoveredMemberId, setHoveredMemberId, onDeleteEve
 
 const ActivityMap = () => {
   const { currentUser } = useAuth();
-  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PM';
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER';
   const queryClient = useQueryClient();
 
   const [hoveredMemberId, setHoveredMemberId] = useState(null);
@@ -130,7 +134,7 @@ const ActivityMap = () => {
   const { data: teamStatus = [], isLoading, refetch } = useQuery({
     queryKey: ['team-activity-status'],
     queryFn: async () => {
-      const res = await fetch(`${getApiBaseUrl()}/api/activity/status`);
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/status`, { headers: getAuthHeaders() });
       if (!res.ok) throw new Error('Failed to fetch status');
       return res.json();
     },
@@ -139,7 +143,7 @@ const ActivityMap = () => {
 
   const deleteMutation = useMutation({
     mutationFn: async (id) => {
-      const res = await fetch(`${getApiBaseUrl()}/api/activity/events/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/events/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
       if (!res.ok) throw new Error('Failed to delete event');
       return res.json();
     },

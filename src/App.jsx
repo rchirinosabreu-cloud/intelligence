@@ -15,6 +15,7 @@ import FinancialDashboard from './components/modules/FinancialDashboard';
 import TalentRadar from './components/modules/TalentRadar';
 import BrainCore from './components/modules/BrainCore';
 import Activity from './components/modules/Activity';
+import GoogleCalendarCallback from './components/modules/Activity/GoogleCalendarCallback';
 import Reports from './components/modules/Reports';
 import MoodboardDashboard from './components/modules/Moodboard/MoodboardDashboard';
 import MoodboardCanvas from './components/modules/Moodboard/MoodboardCanvas';
@@ -130,6 +131,14 @@ function AppContent() {
                       element={
                         <ModuleGuard module="actividad">
                           <Activity />
+                        </ModuleGuard>
+                      }
+                    />
+                    <Route
+                      path="/google-calendar/callback"
+                      element={
+                        <ModuleGuard module="actividad">
+                          <GoogleCalendarCallback />
                         </ModuleGuard>
                       }
                     />
