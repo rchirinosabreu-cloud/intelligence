@@ -32,6 +32,7 @@ export const getPublicPlan = async (req, res) => {
           name: item.finalAssetName,
           mimeType: item.finalAssetMimeType,
           size: item.finalAssetSize,
+          version: item.finalAssetKey,
           url: `/api/public/items/${item.id}/final-asset`
         } : null,
         status: item.status,

@@ -146,7 +146,9 @@ const parsePlanInternalNotes = (value) => {
   return legacyNote ? [legacyNote] : [];
 };
 
-const getFinalAssetUrl = (item) => item.finalAssetKey ? `${getApiBaseUrl()}/api/public/items/${item.id}/final-asset` : null;
+const getFinalAssetUrl = (item) => item.finalAssetKey
+  ? `${getApiBaseUrl()}/api/public/items/${item.id}/final-asset?v=${encodeURIComponent(item.finalAssetKey)}`
+  : null;
 const isFinalAssetVideo = (item) => (item.finalAssetMimeType || '').startsWith('video/');
 const isFinalAssetImage = (item) => (item.finalAssetMimeType || '').startsWith('image/');
 
@@ -186,7 +188,9 @@ const ContentItemCard = ({
   navigate,
   itemRef,
   onFinalAssetUpload,
-  isFinalAssetUploading
+  onFinalAssetDelete,
+  isFinalAssetUploading,
+  isFinalAssetDeleting
 }) => {
   const [showFeedback, setShowFeedback] = useState(false);
   const isRealizado = item.status === 'REALIZADO' || item.status === 'PUBLICADO';
@@ -413,14 +417,28 @@ const ContentItemCard = ({
                       <p className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300 truncate">
                         {item.finalAssetName || 'Archivo final'}
                       </p>
-                      <a
-                        href={getFinalAssetUrl(item)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700"
-                      >
-                        Ver
-                      </a>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <a
+                          href={getFinalAssetUrl(item)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700"
+                        >
+                          Ver
+                        </a>
+                        {isEditing && (
+                          <button
+                            type="button"
+                            onClick={() => onFinalAssetDelete(item.id)}
+                            disabled={isFinalAssetDeleting}
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                            title="Eliminar pieza final"
+                            aria-label="Eliminar pieza final"
+                          >
+                            {isFinalAssetDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -815,6 +833,23 @@ const ContentPlanDetail = () => {
     }
   });
 
+  const finalAssetDeleteMutation = useMutation({
+    mutationFn: async (itemId) => {
+      const response = await axios.delete(`${getApiBaseUrl()}/api/content/items/${itemId}/final-asset`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+      toast.success('Pieza final eliminada');
+    },
+    onError: (error) => {
+      console.error('Error deleting final content asset:', error.response?.data || error);
+      toast.error(error.response?.data?.error || 'Error al eliminar la pieza final');
+    }
+  });
+
   const deleteItemMutation = useMutation({
     mutationFn: async (id) => {
       await axios.delete(`${getApiBaseUrl()}/api/content/items/${id}`, {
@@ -873,6 +908,10 @@ const ContentPlanDetail = () => {
 
   const handleFinalAssetUpload = (itemId, file) => {
     finalAssetUploadMutation.mutate({ itemId, file });
+  };
+
+  const handleFinalAssetDelete = (itemId) => {
+    finalAssetDeleteMutation.mutate(itemId);
   };
 
   const handleRemovePlanInternalNote = (indexToRemove) => {
@@ -1079,7 +1118,9 @@ const ContentPlanDetail = () => {
               navigate={navigate}
               itemRef={el => itemRefs.current[item.id] = el}
               onFinalAssetUpload={handleFinalAssetUpload}
+              onFinalAssetDelete={handleFinalAssetDelete}
               isFinalAssetUploading={finalAssetUploadMutation.isPending}
+              isFinalAssetDeleting={finalAssetDeleteMutation.isPending}
             />
           ))
         ) : (

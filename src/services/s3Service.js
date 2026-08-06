@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, PutBucketCorsCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, PutBucketCorsCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 /**
  * S3-Compatible Storage Service (Railway / T3)
@@ -85,6 +85,22 @@ export const getFromS3Stream = async (key) => {
 
     const response = await s3Client.send(command);
     return response;
+};
+
+export const deleteFromS3 = async (key) => {
+    if (!key) return;
+
+    const s3Client = getS3Client();
+    const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
+
+    if (!s3Client) throw new Error("S3 client not initialized");
+
+    const command = new DeleteObjectCommand({
+        Bucket: bucketName,
+        Key: key,
+    });
+
+    await s3Client.send(command);
 };
 
 export const uploadToS3 = async (file, folder = "chat") => {

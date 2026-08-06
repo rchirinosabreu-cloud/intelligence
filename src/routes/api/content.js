@@ -14,7 +14,8 @@ import {
   sendItemToKanban,
   generateShareToken,
   uploadContentItemFinalAsset,
-  getContentItemFinalAsset
+  getContentItemFinalAsset,
+  deleteContentItemFinalAsset
 } from '../../services/contentService.js';
 import { getFromS3Stream } from '../../services/s3Service.js';
 
@@ -175,6 +176,16 @@ router.get('/items/:id/final-asset', async (req, res) => {
   } catch (error) {
     console.error('[API] Error streaming final content asset:', error.response?.data || error);
     return res.status(500).json({ error: 'Failed to load final asset', details: error.message });
+  }
+});
+
+router.delete('/items/:id/final-asset', async (req, res) => {
+  try {
+    const item = await deleteContentItemFinalAsset(req.params.id);
+    return res.json(item);
+  } catch (error) {
+    console.error('[API] Error deleting final content asset:', error.response?.data || error);
+    return res.status(500).json({ error: error.message || 'Failed to delete final asset', details: error.message });
   }
 });
 

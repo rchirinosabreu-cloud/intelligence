@@ -12,7 +12,13 @@ import ClientAvatar from '@/components/ui/ClientAvatar';
 
 const getPublicAssetUrl = (asset) => {
   if (!asset?.url) return null;
-  return asset.url.startsWith('http') ? asset.url : `${getApiBaseUrl()}${asset.url}`;
+  const baseUrl = asset.url.startsWith('http') ? asset.url : `${getApiBaseUrl()}${asset.url}`;
+  if (!asset.version) return baseUrl;
+
+  const [path, query = ''] = baseUrl.split('?');
+  const params = new URLSearchParams(query);
+  params.set('v', asset.version);
+  return `${path}?${params.toString()}`;
 };
 
 const FinalAssetPreview = ({ asset }) => {

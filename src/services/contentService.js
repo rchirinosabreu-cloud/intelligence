@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma.js';
 import { createTask } from './nativeTaskService.js';
-import { uploadToS3 } from './s3Service.js';
+import { uploadToS3, deleteFromS3 } from './s3Service.js';
 
 let strategicObjectivesColumnExists = null;
 let contentItemFinalAssetColumnsExist = null;
@@ -539,6 +539,7 @@ export const uploadContentItemFinalAsset = async (itemId, file) => {
     where: { id: itemId },
     select: {
       id: true,
+      finalAssetKey: true,
       plan: {
         select: {
           id: true,
@@ -551,18 +552,27 @@ export const uploadContentItemFinalAsset = async (itemId, file) => {
   });
 
   if (!item) throw new Error('Content item not found');
+  const previousAssetKey = item.finalAssetKey;
 
   const upload = await uploadToS3(
     file,
     `content-plans/${item.plan.client.slug}/${item.plan.year}-${String(item.plan.month).padStart(2, '0')}/${item.id}/final`
   );
 
-  return await updateContentItem(itemId, {
+  const updatedItem = await updateContentItem(itemId, {
     finalAssetKey: upload.key,
     finalAssetName: upload.name,
     finalAssetMimeType: upload.mimeType,
     finalAssetSize: upload.size
   });
+
+  if (previousAssetKey && previousAssetKey !== upload.key) {
+    deleteFromS3(previousAssetKey).catch(error => {
+      console.error('[Service] Failed to delete replaced final asset:', error.message);
+    });
+  }
+
+  return updatedItem;
 };
 
 export const getContentItemFinalAsset = async (itemId) => {
@@ -581,6 +591,33 @@ export const getContentItemFinalAsset = async (itemId) => {
 
   if (!item?.finalAssetKey) return null;
   return item;
+};
+
+export const deleteContentItemFinalAsset = async (itemId) => {
+  if (!(await hasContentItemFinalAssetColumns())) {
+    throw new Error('La base de datos aun no tiene habilitados los adjuntos finales');
+  }
+
+  const item = await prisma.contentItem.findUnique({
+    where: { id: itemId },
+    select: {
+      id: true,
+      finalAssetKey: true
+    }
+  });
+
+  if (!item) throw new Error('Content item not found');
+
+  if (item.finalAssetKey) {
+    await deleteFromS3(item.finalAssetKey);
+  }
+
+  return await updateContentItem(itemId, {
+    finalAssetKey: null,
+    finalAssetName: null,
+    finalAssetMimeType: null,
+    finalAssetSize: null
+  });
 };
 
 export const addClientComment = async (itemId, comment) => {
