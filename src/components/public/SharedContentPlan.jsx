@@ -10,6 +10,50 @@ import {
 import { toast } from 'react-hot-toast';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 
+const getPublicAssetUrl = (asset) => {
+  if (!asset?.url) return null;
+  return asset.url.startsWith('http') ? asset.url : `${getApiBaseUrl()}${asset.url}`;
+};
+
+const FinalAssetPreview = ({ asset }) => {
+  if (!asset) return null;
+
+  const src = getPublicAssetUrl(asset);
+  const isImage = (asset.mimeType || '').startsWith('image/');
+  const isVideo = (asset.mimeType || '').startsWith('video/');
+
+  return (
+    <div className="space-y-3">
+      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Pieza final</label>
+      <div className="overflow-hidden rounded-[2rem] border border-zinc-100 dark:border-white/10 bg-zinc-50 dark:bg-white/5">
+        <div className="bg-zinc-100 dark:bg-zinc-950">
+          {isImage ? (
+            <img
+              src={src}
+              alt={asset.name || 'Pieza final'}
+              className="w-full max-h-[520px] object-contain"
+            />
+          ) : isVideo ? (
+            <video
+              src={src}
+              className="w-full max-h-[580px] bg-black"
+              controls
+              preload="metadata"
+            />
+          ) : (
+            <div className="p-6 text-sm text-zinc-500">Archivo final disponible para revisi&oacute;n.</div>
+          )}
+        </div>
+        {asset.name && (
+          <div className="px-5 py-3 text-xs font-bold text-zinc-600 dark:text-zinc-300 truncate">
+            {asset.name}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const SharedContentPlan = () => {
   const { token } = useParams();
   const [plan, setPlan] = useState(null);
@@ -249,6 +293,8 @@ const SharedContentPlan = () => {
                           {item.captionText || <span className="italic text-zinc-400">Sin pie de foto...</span>}
                         </div>
                       </div>
+
+                      <FinalAssetPreview asset={item.finalAsset} />
 
                       {item.mediaUrl && item.mediaUrl.length > 0 && (
                         <div className="space-y-3">

@@ -54,6 +54,27 @@ test('client correction action scrolls to and focuses the feedback form', async 
   assert.match(shared, /focus\(\{\s*preventScroll:\s*true\s*\}\)/);
 });
 
+test('content pieces support final media uploads for client preview', async () => {
+  const schema = await read('prisma/schema.prisma');
+  const contentRoutes = await read('src/routes/api/content.js');
+  const publicRoutes = await read('src/routes/index.js');
+  const publicController = await read('src/controllers/publicController.js');
+  const editor = await read('src/components/modules/ContentPlanDetail.jsx');
+  const shared = await read('src/components/public/SharedContentPlan.jsx');
+
+  assert.match(schema, /model ContentItem[\s\S]*finalAssetKey\s+String\?/);
+  assert.match(schema, /model ContentItem[\s\S]*finalAssetMimeType\s+String\?/);
+  assert.match(contentRoutes, /upload\.single\('file'\)[\s\S]*uploadContentItemFinalAsset/);
+  assert.match(contentRoutes, /items\/:id\/final-asset/);
+  assert.match(publicRoutes, /public\/items\/:id\/final-asset/);
+  assert.match(publicController, /finalAsset:\s*item\.finalAssetKey/);
+  assert.match(editor, /handleFinalAssetUpload/);
+  assert.match(editor, /Pieza final/);
+  assert.match(shared, /FinalAssetPreview/);
+  assert.match(shared, /<video/);
+  assert.match(shared, /<img/);
+});
+
 test('DatePicker instances use the global Brainstudio calendar chrome', async () => {
   const files = [
     'src/components/modules/TaskSidePanel.jsx',

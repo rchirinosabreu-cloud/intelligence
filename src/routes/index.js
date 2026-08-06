@@ -35,6 +35,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // --- Public Routes (No Auth) ---
 router.get('/public/parrilla/:token', publicController.getPublicPlan);
+router.get('/public/items/:id/final-asset', publicController.getPublicFinalAsset);
 router.post('/public/items/:id/approve', publicController.approvePublicItem);
 router.post('/public/items/:id/comment', publicController.commentPublicItem);
 router.use('/quotations', quotationsRouter);

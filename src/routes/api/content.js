@@ -1,4 +1,5 @@
 import express from 'express';
+import multer from 'multer';
 import {
   getContentPlans,
   getContentPlanById,
@@ -11,10 +12,17 @@ import {
   updateContentItem,
   deleteContentItem,
   sendItemToKanban,
-  generateShareToken
+  generateShareToken,
+  uploadContentItemFinalAsset,
+  getContentItemFinalAsset
 } from '../../services/contentService.js';
+import { getFromS3Stream } from '../../services/s3Service.js';
 
 const router = express.Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 250 * 1024 * 1024 }
+});
 
 /**
  * ContentPlan Endpoints
@@ -141,6 +149,32 @@ router.patch('/items/:id', async (req, res) => {
   } catch (error) {
     console.error('[API] Error updating content item:', error);
     return res.status(500).json({ error: 'Failed to update content item', details: error.message });
+  }
+});
+
+router.post('/items/:id/final-asset', upload.single('file'), async (req, res) => {
+  try {
+    const item = await uploadContentItemFinalAsset(req.params.id, req.file);
+    return res.json(item);
+  } catch (error) {
+    console.error('[API] Error uploading final content asset:', error.response?.data || error);
+    return res.status(500).json({ error: error.message || 'Failed to upload final asset', details: error.message });
+  }
+});
+
+router.get('/items/:id/final-asset', async (req, res) => {
+  try {
+    const item = await getContentItemFinalAsset(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Final asset not found' });
+
+    const object = await getFromS3Stream(item.finalAssetKey);
+    res.setHeader('Content-Type', item.finalAssetMimeType || object.ContentType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(item.finalAssetName || 'pieza-final')}"`);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    return object.Body.pipe(res);
+  } catch (error) {
+    console.error('[API] Error streaming final content asset:', error.response?.data || error);
+    return res.status(500).json({ error: 'Failed to load final asset', details: error.message });
   }
 });
 

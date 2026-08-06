@@ -1,4 +1,5 @@
-import { getContentPlanByToken, updateContentItem, addClientComment } from '../services/contentService.js';
+import { getContentPlanByToken, updateContentItem, addClientComment, getContentItemFinalAsset } from '../services/contentService.js';
+import { getFromS3Stream } from '../services/s3Service.js';
 
 /**
  * GET /api/public/parrilla/:token
@@ -27,6 +28,12 @@ export const getPublicPlan = async (req, res) => {
         captionText: item.captionText,
         publishDate: item.publishDate,
         mediaUrl: item.mediaUrl,
+        finalAsset: item.finalAssetKey ? {
+          name: item.finalAssetName,
+          mimeType: item.finalAssetMimeType,
+          size: item.finalAssetSize,
+          url: `/api/public/items/${item.id}/final-asset`
+        } : null,
         status: item.status,
         comments: item.comments
       }))
@@ -65,5 +72,26 @@ export const commentPublicItem = async (req, res) => {
   } catch (error) {
     console.error('[API] Public comment error:', error);
     return res.status(500).json({ error: 'Failed to add comment' });
+  }
+};
+
+/**
+ * GET /api/public/items/:id/final-asset
+ * Streams the final image/video for client preview without exposing bucket URLs.
+ */
+export const getPublicFinalAsset = async (req, res) => {
+  try {
+    const item = await getContentItemFinalAsset(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Archivo final no encontrado' });
+
+    const object = await getFromS3Stream(item.finalAssetKey);
+    res.setHeader('Content-Type', item.finalAssetMimeType || object.ContentType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(item.finalAssetName || 'pieza-final')}"`);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+
+    return object.Body.pipe(res);
+  } catch (error) {
+    console.error('[API] Public final asset error:', error);
+    return res.status(500).json({ error: 'Failed to load final asset' });
   }
 };

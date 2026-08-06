@@ -8,7 +8,7 @@ import {
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
   Calendar, User, LayoutGrid, FileText, Instagram, Facebook, Video, Image as ImageIcon,
   Edit2, Check, AlertCircle, Sparkles, Users, UserCheck, StickyNote, ChevronUp, Share2,
-  MessageSquare, Table2
+  MessageSquare, Table2, UploadCloud
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -146,6 +146,10 @@ const parsePlanInternalNotes = (value) => {
   return legacyNote ? [legacyNote] : [];
 };
 
+const getFinalAssetUrl = (item) => item.finalAssetKey ? `${getApiBaseUrl()}/api/public/items/${item.id}/final-asset` : null;
+const isFinalAssetVideo = (item) => (item.finalAssetMimeType || '').startsWith('video/');
+const isFinalAssetImage = (item) => (item.finalAssetMimeType || '').startsWith('image/');
+
 const serializePlanInternalNotes = (notes) => JSON.stringify(
   notes.map(note => String(note || '').trim()).filter(Boolean)
 );
@@ -180,7 +184,9 @@ const ContentItemCard = ({
   onDelete,
   onDispatch,
   navigate,
-  itemRef
+  itemRef,
+  onFinalAssetUpload,
+  isFinalAssetUploading
 }) => {
   const [showFeedback, setShowFeedback] = useState(false);
   const isRealizado = item.status === 'REALIZADO' || item.status === 'PUBLICADO';
@@ -379,6 +385,69 @@ const ContentItemCard = ({
           {/* Column 3: Links & Production */}
           <div className="lg:col-span-3 flex flex-col justify-between gap-6">
             <div className="space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                  <UploadCloud className="w-3.5 h-3.5 text-indigo-600" /> Pieza final
+                </label>
+                {item.finalAssetKey ? (
+                  <div className="rounded-2xl border border-zinc-200/70 dark:border-white/10 overflow-hidden bg-zinc-50 dark:bg-white/5">
+                    <div className="aspect-video bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center overflow-hidden">
+                      {isFinalAssetImage(item) ? (
+                        <img
+                          src={getFinalAssetUrl(item)}
+                          alt={item.finalAssetName || 'Pieza final'}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : isFinalAssetVideo(item) ? (
+                        <video
+                          src={getFinalAssetUrl(item)}
+                          className="w-full h-full object-cover"
+                          controls
+                          preload="metadata"
+                        />
+                      ) : (
+                        <FileText className="w-8 h-8 text-zinc-300" />
+                      )}
+                    </div>
+                    <div className="p-3 flex items-center justify-between gap-3">
+                      <p className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300 truncate">
+                        {item.finalAssetName || 'Archivo final'}
+                      </p>
+                      <a
+                        href={getFinalAssetUrl(item)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700"
+                      >
+                        Ver
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-zinc-200 dark:border-white/10 bg-zinc-50/60 dark:bg-white/5 p-4 text-[10px] text-zinc-400">
+                    Sin pieza final cargada.
+                  </div>
+                )}
+
+                {isEditing && (
+                  <label className="flex items-center justify-center gap-2 rounded-xl border border-indigo-100 dark:border-indigo-500/20 bg-indigo-50 dark:bg-indigo-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors">
+                    {isFinalAssetUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                    {item.finalAssetKey ? 'Reemplazar archivo' : 'Cargar archivo'}
+                    <input
+                      type="file"
+                      accept="image/*,video/*"
+                      className="hidden"
+                      disabled={isFinalAssetUploading}
+                      onChange={(event) => {
+                        const [file] = Array.from(event.target.files || []);
+                        if (file) onFinalAssetUpload(item.id, file);
+                        event.target.value = '';
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
                   <ExternalLink className="w-3.5 h-3.5 text-indigo-600" /> Referencias (Links)
@@ -724,6 +793,28 @@ const ContentPlanDetail = () => {
     }
   });
 
+  const finalAssetUploadMutation = useMutation({
+    mutationFn: async ({ itemId, file }) => {
+      const uploadData = new FormData();
+      uploadData.append('file', file);
+      const response = await axios.post(`${getApiBaseUrl()}/api/content/items/${itemId}/final-asset`, uploadData, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('authToken')}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+      toast.success('Pieza final cargada');
+    },
+    onError: (error) => {
+      console.error('Error uploading final content asset:', error.response?.data || error);
+      toast.error(error.response?.data?.error || 'Error al cargar la pieza final');
+    }
+  });
+
   const deleteItemMutation = useMutation({
     mutationFn: async (id) => {
       await axios.delete(`${getApiBaseUrl()}/api/content/items/${id}`, {
@@ -778,6 +869,10 @@ const ContentPlanDetail = () => {
       internalNotes: serializePlanInternalNotes([...planInternalNotes, note])
     });
     setNewPlanInternalNote('');
+  };
+
+  const handleFinalAssetUpload = (itemId, file) => {
+    finalAssetUploadMutation.mutate({ itemId, file });
   };
 
   const handleRemovePlanInternalNote = (indexToRemove) => {
@@ -983,6 +1078,8 @@ const ContentPlanDetail = () => {
               onDispatch={() => setDispatchItemId(item.id)}
               navigate={navigate}
               itemRef={el => itemRefs.current[item.id] = el}
+              onFinalAssetUpload={handleFinalAssetUpload}
+              isFinalAssetUploading={finalAssetUploadMutation.isPending}
             />
           ))
         ) : (

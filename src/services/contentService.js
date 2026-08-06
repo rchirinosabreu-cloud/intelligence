@@ -1,7 +1,9 @@
 import prisma from '../lib/prisma.js';
 import { createTask } from './nativeTaskService.js';
+import { uploadToS3 } from './s3Service.js';
 
 let strategicObjectivesColumnExists = null;
+let contentItemFinalAssetColumnsExist = null;
 
 const contentPlanBaseSelect = {
   id: true,
@@ -59,6 +61,89 @@ const filterContentPlanData = async (data) => {
   return safeData;
 };
 
+const contentItemBaseSelect = {
+  id: true,
+  planId: true,
+  objective: true,
+  format: true,
+  copyText: true,
+  captionText: true,
+  publishDate: true,
+  mediaUrl: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  assetsLinks: true,
+  internalNotes: true,
+  comments: true,
+  deletedAt: true
+};
+
+const hasContentItemFinalAssetColumns = async () => {
+  if (contentItemFinalAssetColumnsExist !== null) return contentItemFinalAssetColumnsExist;
+
+  const result = await prisma.$queryRaw`
+    SELECT COUNT(*)::int AS "count"
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'ContentItem'
+      AND column_name IN ('finalAssetKey', 'finalAssetName', 'finalAssetMimeType', 'finalAssetSize')
+  `;
+
+  contentItemFinalAssetColumnsExist = Number(result?.[0]?.count || 0) === 4;
+  return contentItemFinalAssetColumnsExist;
+};
+
+const getContentItemSelect = async (extra = {}) => {
+  const hasFinalAssetColumns = await hasContentItemFinalAssetColumns();
+  return {
+    ...contentItemBaseSelect,
+    ...(hasFinalAssetColumns ? {
+      finalAssetKey: true,
+      finalAssetName: true,
+      finalAssetMimeType: true,
+      finalAssetSize: true
+    } : {}),
+    ...extra
+  };
+};
+
+const normalizeContentItem = (item) => {
+  if (!item) return item;
+  return {
+    ...item,
+    finalAssetKey: item.finalAssetKey ?? null,
+    finalAssetName: item.finalAssetName ?? null,
+    finalAssetMimeType: item.finalAssetMimeType ?? null,
+    finalAssetSize: item.finalAssetSize ?? null
+  };
+};
+
+const filterContentItemData = async (data) => {
+  if (!data) return data;
+  if (await hasContentItemFinalAssetColumns()) return data;
+
+  const {
+    finalAssetKey,
+    finalAssetName,
+    finalAssetMimeType,
+    finalAssetSize,
+    ...safeData
+  } = data;
+
+  return safeData;
+};
+
+const getPlanContentItemsSelect = async () => ({
+  where: { deletedAt: null },
+  select: await getContentItemSelect({
+    tasks: {
+      orderBy: { createdAt: 'desc' }
+    }
+  }),
+  orderBy: { publishDate: 'asc' }
+});
+
 /**
  * ContentPlan Services
  */
@@ -107,15 +192,7 @@ export const getContentPlanById = async (id) => {
     select: await getContentPlanSelect({
       client: true,
       owner: true,
-      contentItems: {
-        where: { deletedAt: null },
-        include: {
-          tasks: {
-            orderBy: { createdAt: 'desc' }
-          }
-        },
-        orderBy: { publishDate: 'asc' }
-      }
+      contentItems: await getPlanContentItemsSelect()
     })
   });
 
@@ -152,15 +229,7 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
     select: await getContentPlanSelect({
       client: true,
       owner: true,
-      contentItems: {
-        where: { deletedAt: null },
-        include: {
-          tasks: {
-            orderBy: { createdAt: 'desc' }
-          }
-        },
-        orderBy: { publishDate: 'asc' }
-      }
+      contentItems: await getPlanContentItemsSelect()
     })
   });
 
@@ -258,6 +327,7 @@ export const getContentPlanByToken = async (token) => {
       client: true,
       contentItems: {
         where: { deletedAt: null },
+        select: await getContentItemSelect(),
         orderBy: { publishDate: 'asc' }
       }
     })
@@ -298,7 +368,7 @@ export const deleteContentPlan = async (id) => {
 export const sendItemToKanban = async (itemId, creatorId, executionData = {}) => {
   const item = await prisma.contentItem.findUnique({
     where: { id: itemId },
-    include: {
+    select: await getContentItemSelect({
       plan: {
         select: {
           id: true,
@@ -311,7 +381,7 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
       tasks: {
         where: { status: { not: 'REALIZADA' } }
       }
-    }
+    })
   });
 
   if (!item) throw new Error('Content item not found');
@@ -344,7 +414,7 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
     data: {
       status: 'EN_PRODUCCION'
     },
-    include: {
+    select: await getContentItemSelect({
       plan: {
         select: { id: true, month: true, year: true, client: { select: { slug: true } } }
       },
@@ -355,7 +425,7 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
           creator: true
         }
       }
-    }
+    })
   });
 
   // Map for frontend compatibility to ensure plan info is present at task level
@@ -379,24 +449,29 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
  * ContentItem Services
  */
 export const getContentItemsByPlan = async (planId) => {
-  return await prisma.contentItem.findMany({
+  const items = await prisma.contentItem.findMany({
     where: {
       planId,
       deletedAt: null
     },
-    include: {
+    select: await getContentItemSelect({
       tasks: {
         orderBy: { createdAt: 'desc' }
       }
-    },
+    }),
     orderBy: { publishDate: 'asc' }
   });
+
+  return items.map(normalizeContentItem);
 };
 
 export const createContentItem = async (data) => {
-  return await prisma.contentItem.create({
-    data
+  const item = await prisma.contentItem.create({
+    data: await filterContentItemData(data),
+    select: await getContentItemSelect()
   });
+
+  return normalizeContentItem(item);
 };
 
 export const updateContentItem = async (id, data) => {
@@ -413,7 +488,8 @@ export const updateContentItem = async (id, data) => {
 
   const updatedItem = await prisma.contentItem.update({
     where: { id },
-    data
+    data: await filterContentItemData(data),
+    select: await getContentItemSelect()
   });
 
   // --- AUTOMATION: Auto-finalize ContentPlan ---
@@ -438,14 +514,72 @@ export const updateContentItem = async (id, data) => {
     }
   }
 
-  return updatedItem;
+  return normalizeContentItem(updatedItem);
 };
 
 export const deleteContentItem = async (id) => {
   return await prisma.contentItem.update({
     where: { id },
-    data: { deletedAt: new Date() }
+    data: { deletedAt: new Date() },
+    select: { id: true }
   });
+};
+
+export const uploadContentItemFinalAsset = async (itemId, file) => {
+  if (!file) throw new Error('No file uploaded');
+  if (!/^image\/|^video\//.test(file.mimetype || '')) {
+    throw new Error('Solo se permiten imagenes o videos para la pieza final');
+  }
+  if (!(await hasContentItemFinalAssetColumns())) {
+    throw new Error('La base de datos aun no tiene habilitados los adjuntos finales');
+  }
+
+  const item = await prisma.contentItem.findUnique({
+    where: { id: itemId },
+    select: {
+      id: true,
+      plan: {
+        select: {
+          id: true,
+          month: true,
+          year: true,
+          client: { select: { slug: true } }
+        }
+      }
+    }
+  });
+
+  if (!item) throw new Error('Content item not found');
+
+  const upload = await uploadToS3(
+    file,
+    `content-plans/${item.plan.client.slug}/${item.plan.year}-${String(item.plan.month).padStart(2, '0')}/${item.id}/final`
+  );
+
+  return await updateContentItem(itemId, {
+    finalAssetKey: upload.key,
+    finalAssetName: upload.name,
+    finalAssetMimeType: upload.mimeType,
+    finalAssetSize: upload.size
+  });
+};
+
+export const getContentItemFinalAsset = async (itemId) => {
+  if (!(await hasContentItemFinalAssetColumns())) return null;
+
+  const item = await prisma.contentItem.findUnique({
+    where: { id: itemId },
+    select: {
+      id: true,
+      finalAssetKey: true,
+      finalAssetName: true,
+      finalAssetMimeType: true,
+      finalAssetSize: true
+    }
+  });
+
+  if (!item?.finalAssetKey) return null;
+  return item;
 };
 
 export const addClientComment = async (itemId, comment) => {

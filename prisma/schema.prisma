@@ -202,6 +202,10 @@ model ContentItem {
   assetsLinks   String[]          @default([])
   internalNotes String?
   comments      String?
+  finalAssetKey String?
+  finalAssetName String?
+  finalAssetMimeType String?
+  finalAssetSize Int?
   deletedAt     DateTime?
   plan        ContentPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
   tasks       Task[]
