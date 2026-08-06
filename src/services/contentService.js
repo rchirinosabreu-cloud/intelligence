@@ -90,8 +90,9 @@ const hasContentItemFinalAssetColumns = async () => {
       AND column_name IN ('finalAssetKey', 'finalAssetName', 'finalAssetMimeType', 'finalAssetSize')
   `;
 
-  contentItemFinalAssetColumnsExist = Number(result?.[0]?.count || 0) === 4;
-  return contentItemFinalAssetColumnsExist;
+  const hasColumns = Number(result?.[0]?.count || 0) === 4;
+  if (hasColumns) contentItemFinalAssetColumnsExist = true;
+  return hasColumns;
 };
 
 const getContentItemSelect = async (extra = {}) => {

@@ -61,6 +61,7 @@ test('content pieces support final media uploads for client preview', async () =
   const publicController = await read('src/controllers/publicController.js');
   const editor = await read('src/components/modules/ContentPlanDetail.jsx');
   const shared = await read('src/components/public/SharedContentPlan.jsx');
+  const service = await read('src/services/contentService.js');
 
   assert.match(schema, /model ContentItem[\s\S]*finalAssetKey\s+String\?/);
   assert.match(schema, /model ContentItem[\s\S]*finalAssetMimeType\s+String\?/);
@@ -73,6 +74,8 @@ test('content pieces support final media uploads for client preview', async () =
   assert.match(shared, /FinalAssetPreview/);
   assert.match(shared, /<video/);
   assert.match(shared, /<img/);
+  assert.match(service, /if \(hasColumns\) contentItemFinalAssetColumnsExist = true/);
+  assert.doesNotMatch(service, /contentItemFinalAssetColumnsExist\s*=\s*Number\(result\?\.\[0\]\?\.count/);
 });
 
 test('DatePicker instances use the global Brainstudio calendar chrome', async () => {
