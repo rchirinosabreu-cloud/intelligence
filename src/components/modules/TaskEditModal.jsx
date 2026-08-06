@@ -67,7 +67,6 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 creatorName: taskData.creatorName || 'Sistema',
                 isPriority: taskData.isPriority || false,
                 isSpecial: taskData.isSpecial || false,
-                specialType: taskData.specialType || '',
                 hasReference: !!taskData.referenceUrl,
                 referenceUrl: taskData.referenceUrl || ''
             });
@@ -81,12 +80,6 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
 
     const handleEditTask = async (e) => {
         e.preventDefault();
-
-        // Validation logic
-        if (editFormData.isSpecial && !editFormData.specialType.trim()) {
-            toast({ variant: "destructive", title: "Campo obligatorio", description: "Por favor especifica el tipo de pendiente especial." });
-            return;
-        }
 
         if (editFormData.hasReference && !editFormData.referenceUrl.trim()) {
             toast({ variant: "destructive", title: "Campo obligatorio", description: "Por favor coloca el link de la referencia." });
@@ -156,7 +149,6 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 isReturned: finalIsReturned,
                 isPriority: editFormData.isPriority,
                 isSpecial: editFormData.isSpecial,
-                specialType: editFormData.isSpecial ? editFormData.specialType : null,
                 referenceUrl: editFormData.hasReference ? editFormData.referenceUrl : null
             };
 
@@ -318,24 +310,6 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                             />
                         </div>
                     </div>
-
-                    {editFormData.isSpecial && (
-                        <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            className="space-y-1"
-                        >
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300">Tipo de pendiente especial *</label>
-                            <input
-                                type="text"
-                                required
-                                value={editFormData.specialType}
-                                onChange={e => setEditFormData({...editFormData, specialType: e.target.value})}
-                                className="w-full bg-purple-50/30 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 text-zinc-900 dark:text-white"
-                                placeholder="Ej: Manual de Marca, PPT de Ventas..."
-                            />
-                        </motion.div>
-                    )}
 
                     <div className="space-y-2 py-2 border-b border-zinc-100 dark:border-zinc-800">
                         <div className="flex items-center justify-between">

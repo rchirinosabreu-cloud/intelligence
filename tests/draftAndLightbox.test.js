@@ -135,8 +135,8 @@ test('MediaPreviewModal Decoupled Structural Integrity - Absolute Centering and 
     assert.ok(code.includes('max-w-full max-h-full w-auto h-auto object-contain'), 'Image preview tag must be fully constrained (max-w-full, max-h-full, object-contain) to prevent viewport overflows.');
 });
 
-// 6. Verificar integración de Tiptap, popovers de comentarios y habilitación de atributo Especial
-test('Tiptap, Unified Popovers and Especial Attr Enablement', async () => {
+// 6. Verificar integración de Tiptap, popovers de comentarios y estrella especial sin campo extra
+test('Tiptap, Unified Popovers and Header Special Star', async () => {
     const { readFileSync } = await import('node:fs');
     const code = readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');
 
@@ -147,8 +147,10 @@ test('Tiptap, Unified Popovers and Especial Attr Enablement', async () => {
     assert.ok(code.includes('commentPopover'), 'Unified commentPopover state must manage reaction and CRUD view states.');
     assert.ok(!code.includes('openMenuCommentId'), 'Legacy openMenuCommentId must be completely removed.');
 
-    // Assert Especial button is not locked
-    assert.ok(code.includes('nextIsSpecial'), 'Special button toggle must update nextIsSpecial state.');
+    // Assert Especial is a header star action, not a typed metadata field
+    assert.ok(code.includes('handleToggleSpecial'), 'Special star must be controlled by a dedicated header toggle.');
+    assert.ok(code.includes('title={formData.isSpecial ? "Quitar especial" : "Marcar como especial"}'), 'Special star must expose a clear header action title.');
+    assert.ok(!code.includes('taskSpecialInlinePanel'), 'Special must not open an inline type/name field.');
 });
 
 // 7. Verificar que el banner de borrador solo aparezca si hay contenido real
@@ -207,4 +209,37 @@ test('Task Edit Panel - shares clean composer language and resets transient tool
     assert.ok(code.includes('setShowEditToolbar(false);'), 'Inline edit format toolbar state must reset when opening, closing or changing tasks.');
     assert.ok(code.includes('Guardar cambios'), 'Edit mode must keep the same save action while using sentence casing.');
     assert.ok(!code.includes('isEdition ? "text-[10px] font-black uppercase tracking-widest text-zinc-400" : taskCreateLabelClass'), 'Edit labels must not keep the old heavy uppercase label branch.');
+});
+
+// 12. Verificar controles compactos de prioridad y estrella especial en cabecera
+test('Task Composer Attributes - priority stays compact and special lives in the header', async () => {
+    const { readFileSync } = await import('node:fs');
+    const code = readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');
+
+    assert.ok(code.includes('taskPriorityOptions'), 'Priority options should be rendered from a compact option map.');
+    assert.ok(code.includes('Prioridad</span>'), 'The priority trigger should be labeled as Prioridad instead of a question.');
+    assert.ok(code.includes('role="radiogroup"'), 'Expanded priority choices should be inline selectable options.');
+    assert.ok(code.includes('taskOperationalGridClass'), 'Deadline, status and priority should use a dedicated compact operational row.');
+    assert.ok(code.includes('aria-pressed={formData.isSpecial}'), 'Special should be a pressed-state star action in the header.');
+    assert.ok(!code.includes('taskSpecialInlinePanel'), 'Special should not render a secondary name/type panel.');
+    assert.ok(!code.includes('<label className={taskComposerLabelClass}>Especial</label>'), 'The main metadata row should not show a Special label.');
+    assert.ok(!code.includes('specialType: formData.isSpecial ? formData.specialType : null'), 'Save payload should not send a custom special type anymore.');
+    assert.ok(!code.includes('¿Es prioritaria?'), 'The old question label should be removed.');
+    assert.ok(!code.includes('<select') || !code.includes('value={formData.priority ||'), 'Priority selection should not render as a second select row.');
+});
+
+// 13. Verificar que el selector de fecha use estilos propios del sistema
+test('Task Deadline DatePicker - uses Brainstudio themed calendar chrome', async () => {
+    const { readFileSync } = await import('node:fs');
+    const code = readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');
+    const css = readFileSync('src/index.css', 'utf8');
+
+    assert.ok(code.includes('calendarClassName="brain-datepicker"'), 'Task deadline picker should opt into the Brainstudio calendar theme.');
+    assert.ok(code.includes('popperClassName="brain-datepicker-popper"'), 'Task deadline picker should use a scoped popper class.');
+    assert.ok(code.includes("registerLocale('es', es)"), 'Task deadline picker should register the Spanish datepicker locale.');
+    assert.ok(code.includes('locale="es"'), 'Task deadline picker should render month and weekday labels in Spanish.');
+    assert.ok(code.includes('h-[38px] pl-10 cursor-pointer'), 'Task deadline input should leave enough space for the calendar icon.');
+    assert.ok(css.includes('.brain-datepicker'), 'Global CSS should include the themed datepicker shell.');
+    assert.ok(css.includes('.brain-datepicker .react-datepicker__day--selected'), 'Selected days should have explicit themed styling.');
+    assert.ok(css.includes('.dark .brain-datepicker'), 'The themed datepicker must support dark mode.');
 });

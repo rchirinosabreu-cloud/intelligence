@@ -13,7 +13,8 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { triggerConfetti } from '@/utils/confetti';
-import DatePicker from 'react-datepicker';
+import { es } from 'date-fns/locale';
+import DatePicker, { registerLocale } from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { useAuth } from '@/context/AuthContext';
@@ -36,6 +37,8 @@ import {
     DropdownMenuTrigger,
     DropdownMenuContent,
 } from '@/components/ui/dropdown-menu';
+
+registerLocale('es', es);
 
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
@@ -65,7 +68,6 @@ const EMPTY_TASK_FORM = {
     isPriority: false,
     priority: null,
     isSpecial: false,
-    specialType: '',
     hasReference: false,
     referenceUrl: '',
     referenceLinks: [],
@@ -80,7 +82,6 @@ const hasMeaningfulTaskDraft = (draft) => {
         draft.title,
         draft.assigneeId,
         draft.dueDate,
-        draft.specialType,
         draft.newComment,
         draft.newRefUrl,
         draft.newRefName,
@@ -118,9 +119,15 @@ const getFileVisualMeta = (file = {}) => {
 const taskComposerLabelClass = "text-[11px] font-medium text-zinc-500 dark:text-zinc-400";
 const taskComposerFieldClass = "w-full rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-transparent px-3 py-2 text-sm font-medium text-zinc-900 dark:text-zinc-100 shadow-none outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/10";
 const taskComposerSectionClass = "space-y-4 border-t border-zinc-200/70 dark:border-zinc-800/70 pt-5";
+const taskOperationalGridClass = "grid grid-cols-6 gap-x-5 gap-y-4";
 const taskCreateLabelClass = taskComposerLabelClass;
 const taskCreateFieldClass = taskComposerFieldClass;
 const taskCreateSectionClass = taskComposerSectionClass;
+const taskPriorityOptions = [
+    { value: 'URGENTE', label: 'Urgente', className: 'bg-red-600 text-white border-red-500' },
+    { value: 'ALTA', label: 'Alta', className: 'bg-amber-500 text-white border-amber-500' },
+    { value: 'NORMAL', label: 'Normal', className: 'bg-blue-600 text-white border-blue-500' }
+];
 
 const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage }) => {
     if (!previewImage) return null;
@@ -247,7 +254,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         isPriority: false,
         priority: null,
         isSpecial: false,
-        specialType: '',
         hasReference: false,
         referenceUrl: '',
         referenceLinks: [],
@@ -444,7 +450,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 isPriority: formData.isPriority,
                 priority: formData.priority,
                 isSpecial: formData.isSpecial,
-                specialType: formData.specialType,
                 status: formData.status,
                 tempReferences,
                 tempInputs,
@@ -593,7 +598,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     isPriority: taskData.isPriority || false,
                     priority: taskData.priority || null,
                     isSpecial: taskData.isSpecial || false,
-                    specialType: taskData.specialType || '',
                     hasReference: !!taskData.referenceUrl,
                     referenceUrl: taskData.referenceUrl || '',
                     referenceLinks: referenceLinks,
@@ -636,7 +640,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             isPriority: parsed.isPriority || false,
                             priority: parsed.priority || null,
                             isSpecial: parsed.isSpecial || false,
-                            specialType: parsed.specialType || '',
                             status: parsed.status || 'PENDIENTE'
                         });
 
@@ -777,11 +780,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             return;
         }
 
-        if (formData.isSpecial && !formData.specialType.trim()) {
-            toast({ variant: "destructive", title: "Campo obligatorio", description: "Por favor especifica el tipo de pendiente especial." });
-            return;
-        }
-
         setIsSubmitting(true);
         try {
             const baseUrl = getApiBaseUrl();
@@ -801,7 +799,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 isPriority: formData.isPriority,
                 priority: formData.isPriority ? (formData.priority || 'NORMAL') : null,
                 isSpecial: formData.isSpecial,
-                specialType: formData.isSpecial ? formData.specialType : null,
                 followOnCreate: !isEdition ? isFollowing : undefined,
                 initial_references: !isEdition ? tempReferences : undefined,
                 initial_inputs: !isEdition ? tempInputs : undefined,
@@ -872,6 +869,40 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             console.error("Error toggling follow:", err);
         } finally {
             setIsTogglingFollow(false);
+        }
+    };
+
+    const handleToggleSpecial = async () => {
+        const nextIsSpecial = !formData.isSpecial;
+
+        if (!isEdition) {
+            setFormData(prev => ({ ...prev, isSpecial: nextIsSpecial }));
+            return;
+        }
+
+        setFormData(prev => ({ ...prev, isSpecial: nextIsSpecial }));
+        try {
+            const token = localStorage.getItem('authToken');
+            const res = await fetch(`${getApiBaseUrl()}/api/tasks/${formData.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({ isSpecial: nextIsSpecial })
+            });
+
+            if (!res.ok) throw new Error('Failed to update special flag');
+
+            toast({
+                title: nextIsSpecial ? 'Tarea marcada como especial' : 'Tarea sin marca especial',
+                description: nextIsSpecial ? 'Se resaltará con borde morado en el tablero.' : 'La tarea vuelve a su estilo normal.'
+            });
+            onSuccess();
+        } catch (err) {
+            console.error('Error toggling special flag:', err);
+            setFormData(prev => ({ ...prev, isSpecial: !nextIsSpecial }));
+            toast({ title: 'Error', description: 'No se pudo actualizar la marca especial.', variant: 'destructive' });
         }
     };
 
@@ -1712,13 +1743,28 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         )}
 
                         <button
+                            type="button"
+                            onClick={handleToggleSpecial}
+                            aria-pressed={formData.isSpecial}
+                            className={cn(
+                                "flex items-center justify-center p-1.5 rounded-lg transition-all border shadow-sm",
+                                formData.isSpecial
+                                    ? "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-300"
+                                    : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-purple-500"
+                            )}
+                            title={formData.isSpecial ? "Quitar especial" : "Marcar como especial"}
+                        >
+                            <Star size={14} fill={formData.isSpecial ? "currentColor" : "none"} />
+                        </button>
+
+                        <button
                             onClick={handleToggleFollow}
                             disabled={isTogglingFollow}
                             className={cn(
                                 "flex items-center justify-center p-1.5 rounded-lg transition-all border shadow-sm",
                                 isFollowing
-                                    ? "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400"
-                                    : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:bg-zinc-50"
+                                    ? "bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-300"
+                                    : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-sky-500"
                             )}
                             title={isFollowing ? "Dejar de seguir" : "Seguir tarea"}
                         >
@@ -1823,10 +1869,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         </div>
 
                         {/* Metadata Grid */}
-                        <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+                        <div className={taskOperationalGridClass}>
 
                             {/* Cliente Selector */}
-                            <div className="space-y-1">
+                            <div className="col-span-3 space-y-1">
                                 <label className={taskComposerLabelClass}>Cliente</label>
                                 <select
                                     required
@@ -1841,7 +1887,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                             {/* Responsable */}
-                            <div className="space-y-1">
+                            <div className="col-span-3 space-y-1">
                                 <label className={taskComposerLabelClass}>Responsable</label>
                                 <select
                                     value={formData.assigneeId || ''}
@@ -1854,7 +1900,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                             {/* Deadline / Fecha Entrega */}
-                            <div className="space-y-1">
+                            <div className="col-span-2 space-y-1">
                                 <label className={taskComposerLabelClass}>Deadline</label>
                                 <div className="relative w-full">
                                     <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none z-10" />
@@ -1865,8 +1911,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             setFormData({...formData, dueDate: dateStr});
                                         }}
                                         dateFormat="dd/MM/yyyy"
-                                        className={`${taskComposerFieldClass} h-[38px] pl-8 cursor-pointer`}
+                                        className={`${taskComposerFieldClass} h-[38px] pl-10 cursor-pointer`}
                                         wrapperClassName="w-full"
+                                        calendarClassName="brain-datepicker"
+                                        popperClassName="brain-datepicker-popper"
+                                        locale="es"
+                                        showPopperArrow={false}
                                         placeholderText="Elegir fecha..."
                                         isClearable
                                     />
@@ -1874,7 +1924,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                             {/* Estado Actual */}
-                            <div className="space-y-1">
+                            <div className="col-span-2 space-y-1">
                                 <label className={taskComposerLabelClass}>Estado actual</label>
                                 <select
                                     value={formData.status}
@@ -1889,9 +1939,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                             {/* Prioridad */}
-                            <div className="space-y-1">
+                            <div className="col-span-2 space-y-1">
                                 <label className={taskComposerLabelClass}>Prioridad</label>
-                                <div className="flex flex-col gap-1.5">
+                                <div className={cn(
+                                    "rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-transparent transition-colors",
+                                    formData.isPriority && "border-red-500/30 bg-red-500/5"
+                                )}>
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -1903,79 +1956,54 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             }));
                                         }}
                                         className={cn(
-                                            "flex h-[38px] w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+                                            "flex h-[38px] w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
                                             formData.isPriority
-                                                ? "bg-red-500/10 text-red-600 border-red-500/30 font-semibold animate-in zoom-in-95 duration-150"
-                                                : "bg-transparent border-zinc-200/70 dark:border-zinc-800/70 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/60"
+                                                ? "text-red-600 font-semibold"
+                                                : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/60"
                                         )}
                                     >
                                         <Zap size={12} fill={formData.isPriority ? "currentColor" : "none"} />
-                                        <span className="text-sm font-medium">¿Es prioritaria?</span>
+                                        <span className="text-sm font-medium">Prioridad</span>
                                     </button>
 
                                     {formData.isPriority && (
-                                        <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}>
-                                            <select
-                                                value={formData.priority || 'NORMAL'}
-                                                onChange={e => {
-                                                    const val = e.target.value;
-                                                    setFormData(prev => ({
-                                                        ...prev,
-                                                        priority: val,
-                                                        isPriority: true
-                                                    }));
-                                                }}
-                                                className={`${taskComposerFieldClass} h-[36px] cursor-pointer`}
-                                            >
-                                                <option value="URGENTE">Urgente</option>
-                                                <option value="ALTA">Alta</option>
-                                                <option value="NORMAL">Normal</option>
-                                            </select>
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -4 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            className="grid grid-cols-3 gap-1.5 border-t border-red-500/10 p-1.5"
+                                            role="radiogroup"
+                                            aria-label="Nivel de prioridad"
+                                        >
+                                            {taskPriorityOptions.map((option) => {
+                                                const selected = (formData.priority || 'NORMAL') === option.value;
+                                                return (
+                                                    <button
+                                                        key={option.value}
+                                                        type="button"
+                                                        role="radio"
+                                                        aria-checked={selected}
+                                                        onClick={() => {
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                priority: option.value,
+                                                                isPriority: true
+                                                            }));
+                                                        }}
+                                                        className={cn(
+                                                            "inline-flex h-[30px] min-w-0 items-center justify-center gap-1 rounded-md border px-2 text-[11px] font-semibold transition-all",
+                                                            selected ? option.className : "border-zinc-200/70 dark:border-zinc-800/70 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/70"
+                                                        )}
+                                                    >
+                                                        <Zap size={11} fill={selected ? "currentColor" : "none"} />
+                                                        {option.label}
+                                                    </button>
+                                                );
+                                            })}
                                         </motion.div>
                                     )}
                                 </div>
                             </div>
-
-                            {/* Especial Flag (Read-Only / Button Toggle) */}
-                            <div className="space-y-1 flex flex-col justify-end">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setFormData(prev => {
-                                            const nextIsSpecial = !prev.isSpecial;
-                                            return {
-                                                ...prev,
-                                                isSpecial: nextIsSpecial,
-                                                specialType: nextIsSpecial ? prev.specialType : ''
-                                            };
-                                        });
-                                    }}
-                                    className={cn(
-                                        "flex h-[38px] w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
-                                        formData.isSpecial
-                                            ? "bg-purple-600 text-white border-purple-700 font-semibold animate-pulse"
-                                            : "bg-transparent border-zinc-200/70 dark:border-zinc-800/70 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/60"
-                                    )}
-                                >
-                                    <Star size={14} fill={formData.isSpecial ? "currentColor" : "none"} />
-                                    <span className="text-sm font-medium">Especial</span>
-                                </button>
-                            </div>
                         </div>
-
-                        {formData.isSpecial && (
-                            <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="space-y-1.5">
-                                <label className="text-[11px] font-medium text-purple-600 dark:text-purple-400">Tipo de pendiente especial</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={formData.specialType}
-                                    onChange={e => setFormData({...formData, specialType: e.target.value})}
-                                    placeholder="Ej: Manual de Marca corporativo..."
-                                    className="w-full rounded-lg border border-purple-200/70 dark:border-purple-800/60 bg-purple-500/5 px-3 py-2 text-sm font-medium text-zinc-900 dark:text-zinc-100 outline-none transition-colors focus:border-purple-400 focus:ring-2 focus:ring-purple-500/10"
-                                />
-                            </motion.div>
-                        )}
 
                         {/* Attachments Section (Interactive Insumos & Referencias) */}
                         {isEdition ? (

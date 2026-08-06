@@ -26,7 +26,6 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
         comments: '',
         isPriority: false,
         isSpecial: false,
-        specialType: '',
         hasReference: false,
         referenceUrl: ''
     });
@@ -52,7 +51,6 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                 comments: '',
                 isPriority: false,
                 isSpecial: false,
-                specialType: '',
                 hasReference: false,
                 referenceUrl: ''
             });
@@ -67,12 +65,6 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
     const handleCreateTask = async (e) => {
         e.preventDefault();
         if (!newTaskData.title || !newTaskData.clientId) return;
-
-        // Validation logic
-        if (newTaskData.isSpecial && !newTaskData.specialType.trim()) {
-            toast({ variant: "destructive", title: "Campo obligatorio", description: "Por favor especifica el tipo de pendiente especial." });
-            return;
-        }
 
         if (newTaskData.hasReference && !newTaskData.referenceUrl.trim()) {
             toast({ variant: "destructive", title: "Campo obligatorio", description: "Por favor coloca el link de la referencia." });
@@ -108,7 +100,6 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
             status: 'PENDIENTE',
             isPriority: newTaskData.isPriority,
             isSpecial: newTaskData.isSpecial,
-            specialType: newTaskData.isSpecial ? newTaskData.specialType : null,
             referenceUrl: newTaskData.hasReference ? newTaskData.referenceUrl : null
         };
 
@@ -248,24 +239,6 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                             />
                         </div>
                     </div>
-
-                    {newTaskData.isSpecial && (
-                        <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            className="space-y-1"
-                        >
-                            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300">Tipo de pendiente especial *</label>
-                            <input
-                                type="text"
-                                required
-                                value={newTaskData.specialType}
-                                onChange={e => setNewTaskData({...newTaskData, specialType: e.target.value})}
-                                className="w-full bg-purple-50/30 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 text-zinc-900 dark:text-white"
-                                placeholder="Ej: Manual de Marca, PPT de Ventas..."
-                            />
-                        </motion.div>
-                    )}
 
                     <div className="space-y-2 py-2 border-b border-zinc-100 dark:border-zinc-800">
                         <div className="flex items-center justify-between">

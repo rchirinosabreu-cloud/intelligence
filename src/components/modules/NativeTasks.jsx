@@ -17,7 +17,6 @@ import {
     User,
     Loader2,
     AlertTriangle,
-    AlertOctagon,
     MessageSquare,
     Edit2,
     X,
@@ -25,9 +24,6 @@ import {
     Send,
     Trash2,
     Zap,
-    Star,
-    Link as LinkIcon,
-    LayoutGrid,
     ClipboardList,
     Plus
 } from 'lucide-react';
@@ -109,6 +105,15 @@ const getDaysOverdue = (dateStr) => {
     return diffDays;
 };
 
+const formatTaskCardDate = (dateStr) => {
+    const taskDate = parseDate(dateStr);
+    if (!taskDate) return 'Sin fecha';
+
+    const monthLabels = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const day = String(taskDate.getDate()).padStart(2, '0');
+    return `${day} ${monthLabels[taskDate.getMonth()]}`;
+};
+
 // --- STYLES ---
 
 const CLIENT_COLORS = {
@@ -128,6 +133,12 @@ const CATEGORY_COLORS = {
     'Operaciones & Reuniones': '#10b981',
     'Administrativo & Finanzas': '#71717a',
     'Educación': '#f59e0b'
+};
+
+const taskPriorityBadgeConfig = {
+    URGENTE: 'bg-red-600 border-red-500 text-white',
+    ALTA: 'bg-amber-500 border-amber-500 text-white',
+    NORMAL: 'bg-blue-600 border-blue-500 text-white'
 };
 
 const getColumnId = (status) => {
@@ -210,7 +221,6 @@ const NativeTasks = () => {
                 isPriority: task.isPriority || false,
                 priority: task.priority || null,
                 isSpecial: task.isSpecial || false,
-                specialType: task.specialType,
                 referenceUrl: task.referenceUrl,
                 contentPlanId: task.contentItem?.planId,
                 contentItemId: task.contentItem?.id,
@@ -897,13 +907,25 @@ const NativeTasks = () => {
 };
 
 const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete }) => {
-    const navigate = useNavigate();
     const isHighlighted = highlightedTaskId === String(task.id);
     const columnId = getColumnId(task.status);
     const isDone = columnId === 'realizado';
     const isReturned = columnId === 'devuelto';
     const overdue = !isDone && isOverdue(task.dueDateFormatted);
     const daysOverdue = overdue ? getDaysOverdue(task.dueDateFormatted) : 0;
+    const priorityBadgeClass = task.priority ? taskPriorityBadgeConfig[task.priority] : null;
+    const taskCardFooterBadges = [
+        overdue && {
+            key: 'overdue',
+            className: 'min-w-[74px] justify-center text-red-600 bg-red-50 dark:bg-red-900/30 border-red-100 dark:border-red-800',
+            label: `Vencido (+${daysOverdue}d)`
+        },
+        !isReturned && task.priority && priorityBadgeClass && {
+            key: 'priority',
+            className: `min-w-[74px] justify-center ${priorityBadgeClass} shadow-sm`,
+            label: task.priority
+        }
+    ].filter(Boolean);
     // Client Color Logic handled by ClientAvatar component now
 
     return (
@@ -924,13 +946,14 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                         "transition-all duration-700 ease-in-out",
                         snapshot.isDragging ? "ring-2 ring-indigo-600 shadow-xl z-50 opacity-90 rotate-2 scale-105" : "",
                         !snapshot.isDragging && isHighlighted ? "ring-2 ring-red-500 scale-[1.02] z-10" : "ring-2 ring-transparent",
-                        !snapshot.isDragging && !isHighlighted && overdue ? "border-red-500/50 ring-1 ring-red-500/20" : "",
-                        !snapshot.isDragging && !isHighlighted && !overdue ? (
+                        !snapshot.isDragging && !isHighlighted && task.isSpecial ? "border-purple-500/70 ring-1 ring-purple-500/15" : "",
+                        !snapshot.isDragging && !isHighlighted && overdue && !task.isSpecial ? "border-red-500/50 ring-1 ring-red-500/20" : "",
+                        !snapshot.isDragging && !isHighlighted && !overdue && !task.isSpecial ? (
                             task.priority === 'URGENTE' ? "border-red-500/40 dark:border-red-500/30" :
                             task.priority === 'ALTA' ? "border-amber-500/40 dark:border-amber-500/30" :
                             task.priority === 'NORMAL' ? "border-blue-500/40 dark:border-blue-500/30" :
                             "border-zinc-200 dark:border-zinc-800"
-                        ) : "border-zinc-200 dark:border-zinc-800",
+                        ) : "",
                         isReturned && !isHighlighted && "border-red-500/30 bg-red-50/20 dark:bg-red-900/10 shadow-[inset_0_0_12px_rgba(239,68,68,0.05)]"
                     )}>
                         <div className="flex flex-col gap-3 p-4">
@@ -994,31 +1017,6 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                             <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
-                                    {overdue && (
-                                        <span className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-900/30 px-1.5 py-0.5 rounded border border-red-100 dark:border-red-800 flex items-center gap-1">
-                                            <AlertOctagon className="w-3 h-3" /> Vencido (+{daysOverdue}d)
-                                        </span>
-                                    )}
-                                    {!isReturned && task.priority && (
-                                        task.priority === 'URGENTE' ? (
-                                            <span className="text-[10px] font-black text-white flex items-center gap-1 bg-red-600 px-1.5 py-0.5 rounded border border-red-500 shadow-sm">
-                                                <Zap className="w-3 h-3 fill-current" /> URGENTE
-                                            </span>
-                                        ) : task.priority === 'ALTA' ? (
-                                            <span className="text-[10px] font-black text-zinc-950 flex items-center gap-1 bg-amber-400 px-1.5 py-0.5 rounded border border-amber-500 shadow-sm">
-                                                <Zap className="w-3 h-3 fill-current" /> ALTA
-                                            </span>
-                                        ) : task.priority === 'NORMAL' ? (
-                                            <span className="text-[10px] font-black text-white flex items-center gap-1 bg-blue-600 px-1.5 py-0.5 rounded border border-blue-500 shadow-sm">
-                                                <Zap className="w-3 h-3 fill-current" /> NORMAL
-                                            </span>
-                                        ) : null
-                                    )}
-                                    {task.isSpecial && !isReturned && (
-                                        <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 bg-purple-50 dark:bg-purple-900/30 px-1.5 py-0.5 rounded border border-purple-100 dark:border-purple-800">
-                                            <Star className="w-3 h-3 fill-current" /> {task.specialType || 'Especial'}
-                                        </span>
-                                    )}
                                 </div>
                             </div>
                             <div>
@@ -1030,42 +1028,34 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                     <span className="text-[9px] text-primary font-bold uppercase tracking-tighter">{task.creatorName}</span>
                                 </div>
                             </div>
-                            <div className="flex items-center justify-between mt-1 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
-                                <div className={cn(
-                                    "flex items-center gap-1.5 text-xs font-medium transition-colors",
+                            <div className="flex items-center justify-between gap-2 mt-1 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
+                                <div
+                                    title={task.dueDateFormatted || "Sin fecha"}
+                                    className={cn(
+                                    "flex items-center gap-1.5 text-xs font-medium transition-colors shrink-0",
                                     overdue ? "text-red-600 font-bold animate-pulse" : "text-zinc-400 dark:text-zinc-500"
-                                )}>
+                                    )}
+                                >
                                     <Calendar className={cn("w-3.5 h-3.5", overdue && "text-red-600")} />
-                                    {task.dueDateFormatted || "Sin fecha"}
+                                    {formatTaskCardDate(task.dueDateFormatted)}
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    {(task.contentPlanId || task.plan) && (
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (task.contentPlanId) {
-                                                    navigate(`/parrillas/${task.contentPlanId}?item=${task.contentItemId}`);
-                                                } else if (task.plan && task.plan.slug) {
-                                                    const monthStr = String(task.plan.month).padStart(2, '0');
-                                                    navigate(`/parrillas/${task.plan.slug}/${monthStr}-${task.plan.year}?itemId=${task.contentItemId}`);
-                                                }
-                                            }}
-                                            className="text-indigo-600 hover:text-indigo-800 transition-colors p-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-full"
-                                        >
-                                            <LayoutGrid className="w-3.5 h-3.5" />
-                                        </button>
-                                    )}
-                                    {task.referenceUrl && (
-                                        <a
-                                            href={task.referenceUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="text-primary hover:text-primary/80 transition-colors p-1 bg-primary/10 rounded-full"
-                                        >
-                                            <LinkIcon className="w-3.5 h-3.5" />
-                                        </a>
-                                    )}
+                                <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+                                    {taskCardFooterBadges.map((badge) => {
+                                        const BadgeIcon = badge.icon;
+                                        return (
+                                            <span
+                                                key={badge.key}
+                                                className={cn(
+                                                    "inline-flex h-[22px] items-center gap-1 rounded border px-1.5 text-[10px] font-bold leading-none",
+                                                    badge.className
+                                                )}
+                                                title={badge.label}
+                                            >
+                                                {BadgeIcon && <BadgeIcon className="h-3 w-3 fill-current shrink-0" />}
+                                                <span className="truncate">{badge.label}</span>
+                                            </span>
+                                        );
+                                    })}
                                     {task.comments && task.comments.trim() !== '' && (
                                         <div className="text-zinc-400 dark:text-zinc-500 mr-1">
                                             <MessageSquare className="w-3.5 h-3.5" />

@@ -163,3 +163,108 @@
 .ProseMirror:focus {
   outline: none;
 }
+
+/* Brainstudio task date picker */
+.brain-datepicker-popper {
+  z-index: 130 !important;
+}
+
+.brain-datepicker {
+  overflow: hidden;
+  border: 1px solid rgb(228 228 231) !important;
+  border-radius: 14px !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  box-shadow: 0 18px 45px rgba(24, 24, 27, 0.14), 0 2px 8px rgba(24, 24, 27, 0.06) !important;
+  color: rgb(39 39 42) !important;
+  font-family: "DM Sans", sans-serif !important;
+}
+
+.brain-datepicker .react-datepicker__header {
+  border-bottom: 1px solid rgb(244 244 245) !important;
+  background: linear-gradient(180deg, rgb(250 250 250), rgb(255 255 255)) !important;
+  padding: 12px 12px 8px !important;
+}
+
+.brain-datepicker .react-datepicker__current-month {
+  color: rgb(24 24 27) !important;
+  font-size: 0.875rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+
+.brain-datepicker .react-datepicker__day-name,
+.brain-datepicker .react-datepicker__day {
+  width: 2rem !important;
+  height: 2rem !important;
+  margin: 0.08rem !important;
+  line-height: 2rem !important;
+  border-radius: 10px !important;
+  font-size: 0.78rem !important;
+}
+
+.brain-datepicker .react-datepicker__day-name {
+  color: rgb(113 113 122) !important;
+  font-weight: 700 !important;
+}
+
+.brain-datepicker .react-datepicker__day {
+  color: rgb(39 39 42) !important;
+  transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.brain-datepicker .react-datepicker__day:hover {
+  background: rgb(244 244 245) !important;
+  color: rgb(24 24 27) !important;
+}
+
+.brain-datepicker .react-datepicker__day--selected,
+.brain-datepicker .react-datepicker__day--keyboard-selected {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  font-weight: 800 !important;
+  transform: translateY(-1px);
+}
+
+.brain-datepicker .react-datepicker__day--outside-month {
+  color: rgb(161 161 170) !important;
+}
+
+.brain-datepicker .react-datepicker__navigation {
+  top: 12px !important;
+}
+
+.brain-datepicker .react-datepicker__navigation-icon::before {
+  border-color: rgb(161 161 170) !important;
+  border-width: 2px 2px 0 0 !important;
+}
+
+.brain-datepicker .react-datepicker__navigation:hover .react-datepicker__navigation-icon::before {
+  border-color: hsl(var(--primary)) !important;
+}
+
+.dark .brain-datepicker {
+  border-color: rgb(39 39 42) !important;
+  background: rgba(24, 24, 27, 0.98) !important;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+  color: rgb(244 244 245) !important;
+}
+
+.dark .brain-datepicker .react-datepicker__header {
+  border-bottom-color: rgb(39 39 42) !important;
+  background: linear-gradient(180deg, rgb(39 39 42), rgb(24 24 27)) !important;
+}
+
+.dark .brain-datepicker .react-datepicker__current-month,
+.dark .brain-datepicker .react-datepicker__day {
+  color: rgb(244 244 245) !important;
+}
+
+.dark .brain-datepicker .react-datepicker__day-name,
+.dark .brain-datepicker .react-datepicker__day--outside-month {
+  color: rgb(161 161 170) !important;
+}
+
+.dark .brain-datepicker .react-datepicker__day:hover {
+  background: rgb(39 39 42) !important;
+  color: rgb(250 250 250) !important;
+}

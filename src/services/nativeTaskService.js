@@ -337,7 +337,7 @@ const statusMapper = {
 
 export const createTask = async ({
     title, dueDate, assigneeId, creatorId, comments, status, clientId,
-    isPriority = false, priority = null, isSpecial = false, specialType = null, referenceUrl = null,
+    isPriority = false, priority = null, isSpecial = false, referenceUrl = null,
     contentItemId = null, followOnCreate = false,
     initial_references = [], initial_inputs = [], initial_insumos = [], initial_comments = [],
     tempAttachments = []
@@ -360,7 +360,6 @@ export const createTask = async ({
                     isPriority,
                     priority: priority || null,
                     isSpecial,
-                    specialType,
                     referenceUrl,
                     contentItemId
                 }
