@@ -60,6 +60,20 @@ test('organic summary also exposes separate Facebook and Instagram rows', () => 
   assert.deepEqual(Object.values(scoped.organicSummaryByPlatform.INSTAGRAM).map(metric => metric.value), [5, 200, 18, 120]);
 });
 
+test('organic summary ignores zero placeholders and keeps real metrics from other screenshots', () => {
+  const scoped = buildScopedReportData([
+    { sourceId: 'facebook-audience', sectionCategory: 'ORGANIC', platform: 'FACEBOOK', screenType: 'CONTENT_SUMMARY', metrics: { follows: metric(7038), views: metric(0), interactions: metric(0), reach: metric(0) } },
+    { sourceId: 'facebook-trends', sectionCategory: 'ORGANIC', platform: 'FACEBOOK', screenType: 'METRIC_TRENDS', metrics: { views: metric(8600), interactions: metric(43), follows: metric(3) } },
+    { sourceId: 'instagram-empty', sectionCategory: 'ORGANIC', platform: 'INSTAGRAM', screenType: 'CONTENT_SUMMARY', metrics: { follows: metric(0), views: metric(0), interactions: metric(0), reach: metric(0) } },
+    { sourceId: 'instagram-trends', sectionCategory: 'ORGANIC', platform: 'INSTAGRAM', screenType: 'METRIC_TRENDS', metrics: { follows: metric(102), views: metric(20100), interactions: metric(657), reachOrganic: metric(7000) } },
+  ]);
+
+  assert.deepEqual(Object.keys(scoped.organicSummaryByPlatform.FACEBOOK), ['follows', 'views', 'interactions']);
+  assert.deepEqual(Object.values(scoped.organicSummaryByPlatform.FACEBOOK).map(item => item.value), [7038, 8600, 43]);
+  assert.deepEqual(Object.keys(scoped.organicSummaryByPlatform.INSTAGRAM), ['follows', 'views', 'interactions', 'reach']);
+  assert.deepEqual(Object.values(scoped.organicSummaryByPlatform.INSTAGRAM).map(item => item.value), [102, 20100, 657, 7000]);
+});
+
 test('deduplicates matching ad-set and ad-table totals without summing reach or spend', () => {
   const sharedMetrics = {
     spend: { value: 232826, label: 'Importe gastado', unit: 'COP' },

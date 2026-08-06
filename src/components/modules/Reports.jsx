@@ -652,11 +652,12 @@ const ORGANIC_PLATFORM_LABELS = {
 };
 
 const OrganicSummary = ({ summary, organicSummaryByPlatform, sourceExtractions }) => {
-  const derivedSummaryByPlatform = organicSummaryByPlatform || (
-    Array.isArray(sourceExtractions)
-      ? buildScopedReportData(sourceExtractions).organicSummaryByPlatform
-      : {}
-  );
+  const rebuiltSummaryByPlatform = Array.isArray(sourceExtractions)
+    ? buildScopedReportData(sourceExtractions).organicSummaryByPlatform
+    : {};
+  const derivedSummaryByPlatform = Object.keys(rebuiltSummaryByPlatform).length > 0
+    ? rebuiltSummaryByPlatform
+    : (organicSummaryByPlatform || {});
   const platformRows = Object.entries(derivedSummaryByPlatform || {})
     .map(([platform, platformSummary]) => ({
       key: platform,

@@ -5,6 +5,7 @@ const METRIC_KEYS = [
 ];
 
 const hasValue = (metric) => metric && Number.isFinite(Number(metric.value));
+const hasOrganicValue = (metric) => hasValue(metric) && Number(metric.value) !== 0;
 
 const cleanMetrics = (metrics = {}) => Object.fromEntries(
   METRIC_KEYS
@@ -27,7 +28,7 @@ const buildOrganicSummary = (sources) => {
   for (const source of sources) {
     for (const key of ['follows', 'views', 'interactions', 'reach']) {
       const metric = source.metrics?.[key] || (key === 'reach' ? source.metrics?.reachOrganic : null);
-      if (!hasValue(metric)) continue;
+      if (!hasOrganicValue(metric)) continue;
       if (!summary[key]) summary[key] = new Map();
       const platform = ['FACEBOOK', 'INSTAGRAM'].includes(source.platform) ? source.platform : 'ORGANIC';
       const current = summary[key].get(platform);

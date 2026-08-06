@@ -114,6 +114,18 @@ test('report presentation regressions', async (t) => {
     assert.equal(summary.reach.value, 22000);
   });
 
+  await t.test('organic summary presentation omits zero placeholders', () => {
+    const summary = adaptOrganicSummary({
+      follows: { value: 0 },
+      views: { value: 8600 },
+      interactions: { value: 0 },
+      reach: { value: null }
+    });
+
+    assert.deepEqual(Object.keys(summary), ['views']);
+    assert.equal(summary.views.value, 8600);
+  });
+
   await t.test('dedicated organic summary cannot delegate rendering to the generic metric grid', async () => {
     const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
     const start = component.indexOf('const OrganicSummary');
@@ -246,6 +258,7 @@ test('report presentation regressions', async (t) => {
     const implementation = component.slice(organicStart, actionPlanStart);
     assert.match(implementation, /organicSummaryByPlatform/);
     assert.match(implementation, /sourceExtractions/);
+    assert.match(implementation, /Object\.keys\(rebuiltSummaryByPlatform\)\.length > 0/);
     assert.match(component, /FACEBOOK:\s*'Facebook'/);
     assert.match(component, /INSTAGRAM:\s*'Instagram'/);
     assert.doesNotMatch(implementation, /Instagram \+ Facebook/);
