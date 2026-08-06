@@ -128,7 +128,7 @@ test('report presentation regressions', async (t) => {
   await t.test('cover encodes exactly two deliberate title lines and protects the first on desktop', async () => {
     const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
     assert.match(component, /data-cover-line="title"[^>]*whitespace-nowrap[^>]*>Reporte de desempeño digital<\/span>/);
-    assert.match(component, /data-cover-line="client"[^>]*text-\[#009fb7\][^>]*>de \{clientName\}<\/span>/);
+    assert.match(component, /data-cover-line="client"[^>]*text-\[#144c8c\][^>]*>de \{clientName\}<\/span>/);
     assert.equal((component.match(/data-cover-line=/g) || []).length, 2);
   });
 
@@ -237,6 +237,41 @@ test('report presentation regressions', async (t) => {
     assert.match(component, /\.pdf-export \.report-wrapper/);
     assert.match(component, /\.pdf-export \.page-break-after/);
     assert.match(component, /#report-canvas\s*>\s*\.page-break-after:first-child/);
+  });
+
+  await t.test('report organic summary renders one row per detected platform', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    const organicStart = component.indexOf('const OrganicSummary');
+    const actionPlanStart = component.indexOf('\nconst ActionPlan', organicStart);
+    const implementation = component.slice(organicStart, actionPlanStart);
+    assert.match(implementation, /organicSummaryByPlatform/);
+    assert.match(implementation, /Facebook/);
+    assert.match(implementation, /Instagram/);
+  });
+
+  await t.test('report cover formats selected date range in UTC to avoid timezone shifts', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    assert.match(component, /const formatReportDate\s*=/);
+    assert.match(component, /timeZone:\s*'UTC'/);
+    assert.match(component, /formatReportDate\(report\.startDate\)/);
+    assert.match(component, /formatReportDate\(report\.endDate\)/);
+  });
+
+  await t.test('PDF export writes to a live printable window and never uses noopener', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    const downloadPdfStart = component.indexOf('const downloadPDF');
+    const getImageUrlStart = component.indexOf('\n  const getImageUrl', downloadPdfStart);
+    const implementation = component.slice(downloadPdfStart, getImageUrlStart);
+    assert.match(implementation, /window\.open\('', '_blank'\)/);
+    assert.doesNotMatch(implementation, /noopener|noreferrer/);
+    assert.match(component, /setTimeout\(\(\)\s*=>\s*\{\s*window\.focus\(\);\s*window\.print\(\);/);
+  });
+
+  await t.test('report uses the requested corporate palette in report-specific UI', async () => {
+    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
+    for (const color of ['#144c8c', '#8ab9ee', '#1f3c58', '#627d9f', '#d3cebe', '#1c242c']) {
+      assert.match(component, new RegExp(color.replace('#', '#')));
+    }
   });
 
 });

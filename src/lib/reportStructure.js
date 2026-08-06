@@ -43,6 +43,19 @@ const buildOrganicSummary = (sources) => {
   }));
 };
 
+const buildOrganicSummaryByPlatform = (sources) => {
+  const grouped = {};
+  for (const source of sources) {
+    const platform = ['FACEBOOK', 'INSTAGRAM'].includes(source.platform) ? source.platform : null;
+    if (!platform) continue;
+    if (!grouped[platform]) grouped[platform] = [];
+    grouped[platform].push(source);
+  }
+  return Object.fromEntries(Object.entries(grouped)
+    .map(([platform, platformSources]) => [platform, buildOrganicSummary(platformSources)])
+    .filter(([, summary]) => Object.keys(summary).length > 0));
+};
+
 const buildAdsSummary = (sources) => {
   const uniqueSources = [];
   const signatures = new Set();
@@ -81,6 +94,7 @@ export const buildScopedReportData = (sources = []) => {
     organic,
     ads,
     organicSummary: buildOrganicSummary(organic),
+    organicSummaryByPlatform: buildOrganicSummaryByPlatform(organic),
     adsSummary: buildAdsSummary(ads),
   };
 };

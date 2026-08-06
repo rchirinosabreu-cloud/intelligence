@@ -49,6 +49,17 @@ test('organic summary exposes only followers, views, interactions and reach', ()
   assert.deepEqual(Object.values(scoped.organicSummary).map(metric => metric.value), [12, 300, 30, 200]);
 });
 
+test('organic summary also exposes separate Facebook and Instagram rows', () => {
+  const scoped = buildScopedReportData([
+    { sourceId: 'fb', sectionCategory: 'ORGANIC', platform: 'FACEBOOK', screenType: 'CONTENT_SUMMARY', metrics: { follows: metric(7), views: metric(100), interactions: metric(12), reach: metric(80) } },
+    { sourceId: 'ig', sectionCategory: 'ORGANIC', platform: 'INSTAGRAM', screenType: 'CONTENT_SUMMARY', metrics: { follows: metric(5), views: metric(200), interactions: metric(18), reachOrganic: metric(120) } },
+  ]);
+
+  assert.deepEqual(Object.keys(scoped.organicSummaryByPlatform), ['FACEBOOK', 'INSTAGRAM']);
+  assert.deepEqual(Object.values(scoped.organicSummaryByPlatform.FACEBOOK).map(metric => metric.value), [7, 100, 12, 80]);
+  assert.deepEqual(Object.values(scoped.organicSummaryByPlatform.INSTAGRAM).map(metric => metric.value), [5, 200, 18, 120]);
+});
+
 test('deduplicates matching ad-set and ad-table totals without summing reach or spend', () => {
   const sharedMetrics = {
     spend: { value: 232826, label: 'Importe gastado', unit: 'COP' },

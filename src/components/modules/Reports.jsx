@@ -41,6 +41,29 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, 
 
 const BUILD_SHA = typeof __BUILD_SHA__ === 'string' ? __BUILD_SHA__ : 'development';
 
+const REPORT_PALETTE = {
+  primary: '#144c8c',
+  lightBlue: '#8ab9ee',
+  navy: '#1f3c58',
+  steel: '#627d9f',
+  sand: '#d3cebe',
+  ink: '#1c242c'
+};
+
+const formatReportDate = (value) => {
+  if (!value) return '';
+  return new Date(value).toLocaleDateString('es-ES', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC'
+  });
+};
+
+const getReportYear = (value) => value
+  ? new Date(value).toLocaleDateString('es-ES', { year: 'numeric', timeZone: 'UTC' })
+  : new Date().getFullYear();
+
 // Keep export-only helpers in this module so the click handler cannot reference a
 // missing named binding in an independently cached production chunk.
 const readLiveControlValue = (liveControl, clonedControl) => String(
@@ -85,15 +108,15 @@ const PerformanceTrendChart = ({ data }) => {
         <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
           <defs>
             <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
-              <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+              <stop offset="5%" stopColor={REPORT_PALETTE.primary} stopOpacity={0.2}/>
+              <stop offset="95%" stopColor={REPORT_PALETTE.primary} stopOpacity={0}/>
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
           <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
           <YAxis width={80} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
           <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
-          <Area type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
+          <Area type="monotone" dataKey="value" stroke={REPORT_PALETTE.primary} strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
         </AreaChart>
       </ResponsiveContainer>
     </div>
@@ -137,7 +160,7 @@ const DemographicsChart = ({ demographics }) => {
                     <span>{city.value}%</span>
                   </div>
                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div className="bg-[#009fb7] h-full rounded-full" style={{ width: `${city.value}%` }} />
+                    <div className="bg-[#144c8c] h-full rounded-full" style={{ width: `${city.value}%` }} />
                   </div>
                 </div>
               ))}
@@ -156,7 +179,7 @@ const DemographicsChart = ({ demographics }) => {
                     <span>{country.value}%</span>
                   </div>
                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${country.value}%` }} />
+                    <div className="bg-[#627d9f] h-full rounded-full" style={{ width: `${country.value}%` }} />
                   </div>
                 </div>
               ))}
@@ -215,24 +238,24 @@ const DynamicChartRenderer = ({ chartType, dataset, platform = 'META_ADS' }) => 
   const normalizedPlatform = (platform || 'META_ADS').toUpperCase();
   const colors = {
     FACEBOOK: {
-      stroke: '#1877F2',
-      fill: '#1877F2',
-      bg: 'bg-[#1877F2]'
+      stroke: REPORT_PALETTE.primary,
+      fill: REPORT_PALETTE.primary,
+      bg: 'bg-[#144c8c]'
     },
     INSTAGRAM: {
-      stroke: '#E4405F',
-      fill: '#E4405F',
-      bg: 'bg-[#E4405F]'
+      stroke: REPORT_PALETTE.lightBlue,
+      fill: REPORT_PALETTE.lightBlue,
+      bg: 'bg-[#8ab9ee]'
     },
     META_ADS: {
-      stroke: '#7C3AED',
-      fill: '#10B981',
-      bg: 'bg-[#7C3AED]'
+      stroke: REPORT_PALETTE.navy,
+      fill: REPORT_PALETTE.steel,
+      bg: 'bg-[#1f3c58]'
     },
     ORGANIC: {
-      stroke: '#009fb7',
-      fill: '#009fb7',
-      bg: 'bg-[#009fb7]'
+      stroke: REPORT_PALETTE.steel,
+      fill: REPORT_PALETTE.steel,
+      bg: 'bg-[#627d9f]'
     }
   };
 
@@ -384,10 +407,10 @@ const DemographicsBarChart = ({ data }) => {
           <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }} />
           <YAxis width={80} dataKey="label" type="category" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
           <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 'bold' }} />
-          <Bar dataKey="hombres" fill="#009fb7" radius={[0, 8, 8, 0]} barSize={12}>
+          <Bar dataKey="hombres" fill={REPORT_PALETTE.primary} radius={[0, 8, 8, 0]} barSize={12}>
             <LabelList dataKey="hombres" position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => `${val}%`} />
           </Bar>
-          <Bar dataKey="mujeres" fill="#10B981" radius={[0, 8, 8, 0]} barSize={12}>
+          <Bar dataKey="mujeres" fill={REPORT_PALETTE.lightBlue} radius={[0, 8, 8, 0]} barSize={12}>
             <LabelList dataKey="mujeres" position="right" style={{ fill: '#334155', fontSize: 10, fontWeight: 'bold' }} formatter={(val) => `${val}%`} />
           </Bar>
         </BarChart>
@@ -434,9 +457,9 @@ const GranularNarrativeBlock = ({ sectionKey, comment, onChange }) => (
 );
 
 const ReportCover = ({ report }) => {
-  const formattedStart = report.startDate ? new Date(report.startDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
-  const formattedEnd = report.endDate ? new Date(report.endDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
-  const yearStr = report.startDate ? new Date(report.startDate).getFullYear() : new Date().getFullYear();
+  const formattedStart = formatReportDate(report.startDate);
+  const formattedEnd = formatReportDate(report.endDate);
+  const yearStr = getReportYear(report.startDate);
   const clientName = report.client?.name || 'Cliente';
 
   return (
@@ -458,15 +481,15 @@ const ReportCover = ({ report }) => {
       {/* Main Cover Body */}
       <div className="space-y-6 md:space-y-8 my-auto">
          {/* Badge redondeado */}
-         <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#009fb7]/10 text-[#009fb7] rounded-full text-xs font-extrabold tracking-wider uppercase">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#009fb7]" />
+         <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#8ab9ee]/20 text-[#144c8c] rounded-full text-xs font-extrabold tracking-wider uppercase">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#144c8c]" />
             Reporte oficial
          </div>
 
          {/* Giant Title */}
-         <h1 className="text-[clamp(2.5rem,6vw,4.5rem)] font-black text-[#0F172A] tracking-tight leading-[0.95] max-w-6xl">
+         <h1 className="text-[clamp(2.5rem,6vw,4.5rem)] font-black text-[#1c242c] tracking-tight leading-[0.95] max-w-6xl">
             <span data-cover-line="title" className="block md:whitespace-nowrap">Reporte de desempeño digital</span>
-            <span data-cover-line="client" className="block mt-3 text-[#009fb7]">de {clientName}</span>
+            <span data-cover-line="client" className="block mt-3 text-[#144c8c]">de {clientName}</span>
          </h1>
 
          {/* Subtitle with separator */}
@@ -514,7 +537,7 @@ const ExecutiveSummary = ({ narrative, onUpdate }) => {
           const titlePart = words.slice(0, titleLimit).join(' ') + '...';
 
           return (
-            <Card key={idx} className="bg-[#009fb7] border-[#009fb7] p-6 flex flex-col gap-4 break-inside-avoid shadow-sm text-white rounded-3xl">
+            <Card key={idx} className="bg-[#144c8c] border-[#144c8c] p-6 flex flex-col gap-4 break-inside-avoid shadow-sm text-white rounded-3xl">
               <div className="w-8 h-8 rounded-full bg-white/20 border border-white/10 text-white flex items-center justify-center font-black text-sm shrink-0">
                 {idx + 1}
               </div>
@@ -622,25 +645,58 @@ const MetricGrid = ({ metrics }) => {
   );
 };
 
-const OrganicSummary = ({ summary }) => {
-  const metrics = adaptOrganicSummary(summary);
+const ORGANIC_PLATFORM_LABELS = {
+  FACEBOOK: 'Facebook',
+  INSTAGRAM: 'Instagram'
+};
+
+const OrganicSummary = ({ summary, organicSummaryByPlatform }) => {
+  const platformRows = Object.entries(organicSummaryByPlatform || {})
+    .map(([platform, platformSummary]) => ({
+      key: platform,
+      label: ORGANIC_PLATFORM_LABELS[platform] || getOrganicPlatformLabel(platform),
+      metrics: adaptOrganicSummary(platformSummary)
+    }))
+    .filter((row) => Object.keys(row.metrics).length > 0);
+  const rows = platformRows.length > 0
+    ? platformRows
+    : [{ key: 'consolidated', label: 'Instagram + Facebook', metrics: adaptOrganicSummary(summary) }];
   const styles = {
-    follows: { label: 'Nuevos seguidores', icon: Plus, card: 'bg-fuchsia-50 dark:bg-fuchsia-950/30 border-fuchsia-100 dark:border-fuchsia-800', iconClass: 'bg-fuchsia-600' },
-    views: { label: 'Visualizaciones', icon: Eye, card: 'bg-cyan-50 dark:bg-cyan-950/30 border-cyan-100 dark:border-cyan-800', iconClass: 'bg-cyan-600' },
-    interactions: { label: 'Interacciones', icon: Sparkles, card: 'bg-violet-50 dark:bg-violet-950/30 border-violet-100 dark:border-violet-800', iconClass: 'bg-violet-600' },
-    reach: { label: 'Alcance', icon: User, card: 'bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-800', iconClass: 'bg-blue-600' }
+    follows: { label: 'Nuevos seguidores', icon: Plus, card: 'bg-[#d3cebe]/35 border-[#d3cebe]', iconClass: 'bg-[#144c8c]' },
+    views: { label: 'Visualizaciones', icon: Eye, card: 'bg-[#8ab9ee]/20 border-[#8ab9ee]/60', iconClass: 'bg-[#1f3c58]' },
+    interactions: { label: 'Interacciones', icon: Sparkles, card: 'bg-[#627d9f]/15 border-[#627d9f]/40', iconClass: 'bg-[#627d9f]' },
+    reach: { label: 'Alcance', icon: User, card: 'bg-[#1f3c58]/10 border-[#1f3c58]/30', iconClass: 'bg-[#1c242c]' }
   };
-  if (!Object.keys(metrics).length) return null;
-  return <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 break-inside-avoid">
-    {Object.entries(metrics).map(([key, metric]) => {
-      const style = styles[key];
-      const Icon = style.icon;
-      return <div key={key} className={cn('border p-5 rounded-2xl shadow-sm flex items-center gap-4', style.card)}>
-        <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0', style.iconClass)}><Icon className="w-5 h-5" /></div>
-        <div className="min-w-0 space-y-1"><span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{style.label}</span><h4 className="text-2xl font-black text-slate-900 dark:text-slate-50 truncate">{formatMetricValue(key, metric)}</h4></div>
-      </div>;
-    })}
-  </div>;
+  if (!rows.some((row) => Object.keys(row.metrics).length > 0)) return null;
+  return (
+    <div className="space-y-5 break-inside-avoid">
+      {rows.map((row) => (
+        <div key={row.key} className="space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#627d9f]">{row.label}</span>
+            <span className="h-px flex-1 bg-[#d3cebe]" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {Object.entries(row.metrics).map(([key, metric]) => {
+              const style = styles[key];
+              const Icon = style.icon;
+              return (
+                <div key={`${row.key}-${key}`} className={cn('border p-5 rounded-2xl shadow-sm flex items-center gap-4', style.card)}>
+                  <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0', style.iconClass)}>
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0 space-y-1">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{style.label}</span>
+                    <h4 className="text-2xl font-black text-slate-900 dark:text-slate-50 truncate">{formatMetricValue(key, metric)}</h4>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 };
 
 const ActionPlan = ({ narrative, onUpdate }) => {
@@ -793,7 +849,10 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
             <h3 className="text-lg font-black text-slate-800 dark:text-slate-50">Resumen orgánico detectado</h3>
             <p className="text-xs text-slate-500">Un único grupo con cifras orgánicas verificables; los totales mixtos y de anuncios quedan excluidos.</p>
           </div>
-          <OrganicSummary summary={report.normalizedMetrics.organicSummary} />
+          <OrganicSummary
+            summary={report.normalizedMetrics.organicSummary}
+            organicSummaryByPlatform={report.normalizedMetrics.organicSummaryByPlatform}
+          />
         </section>
       )}
 
@@ -1220,8 +1279,9 @@ const Reports = () => {
       while (parent) {
         const classes = safeClassName(parent.className);
         if (
-          classes.includes('bg-[#009fb7]') ||
-          classes.includes('bg-[#0F172A]') ||
+          classes.includes('bg-[#144c8c]') ||
+          classes.includes('bg-[#1f3c58]') ||
+          classes.includes('bg-[#1c242c]') ||
           classes.includes('text-white') ||
           classes.includes('bg-primary')
         ) {
@@ -1241,8 +1301,9 @@ const Reports = () => {
       while (parent) {
         const classes = safeClassName(parent.className);
         if (
-          classes.includes('bg-[#009fb7]') ||
-          classes.includes('bg-[#0F172A]') ||
+          classes.includes('bg-[#144c8c]') ||
+          classes.includes('bg-[#1f3c58]') ||
+          classes.includes('bg-[#1c242c]') ||
           classes.includes('text-white') ||
           classes.includes('bg-primary')
         ) {
@@ -1337,7 +1398,7 @@ const Reports = () => {
   <div class="report-wrapper">
     ${element.innerHTML}
   </div>
-  ${isPdf ? `<script>window.addEventListener('load', function () { window.focus(); window.print(); });</script>` : ''}
+  ${isPdf ? `<script>setTimeout(() => { window.focus(); window.print(); }, 350);</script>` : ''}
 </body>
 </html>`;
 
@@ -1378,7 +1439,7 @@ const Reports = () => {
     const toastId = toast.loading('Preparando PDF optimizado...');
     try {
       const htmlContent = buildReportExportHtml({ mode: 'pdf' });
-      const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+      const printWindow = window.open('', '_blank');
       if (!printWindow) {
         throw new Error('El navegador bloqueó la ventana de impresión.');
       }
@@ -1619,7 +1680,7 @@ const Reports = () => {
 
                        <div className="space-y-4 pt-6 border-t border-slate-100/60 w-full">
                          <h4 className="text-sm font-bold uppercase tracking-widest text-slate-400">{toSentenceCase("Análisis interpretativo de logros")}</h4>
-                         <Card className="bg-[#009fb7] border-[#009fb7] p-6 text-white shadow-sm w-full">
+                         <Card className="bg-[#144c8c] border-[#144c8c] p-6 text-white shadow-sm w-full">
                             <textarea
                                rows={4}
                                className="w-full bg-transparent border-none text-white leading-relaxed font-normal text-base outline-none resize-none focus:ring-1 focus:ring-white/10 rounded-xl !h-auto !overflow-visible"
@@ -1648,7 +1709,7 @@ const Reports = () => {
                              };
                              return (
                                <div key={idx} className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm break-inside-avoid">
-                                 <div className="bg-[#0F172A] px-5 py-4">
+                                 <div className="bg-[#1c242c] px-5 py-4">
                                    <input type="text" className="w-full bg-transparent border-none text-white focus:ring-0 outline-none p-0 text-sm font-black" value={achievement.title} onChange={(e) => updateAchievement('title', e.target.value)} />
                                  </div>
                                  <textarea rows={3} className="w-full bg-white dark:bg-slate-900 border-none text-slate-600 dark:text-slate-200 focus:ring-0 outline-none p-5 text-sm leading-relaxed resize-none" value={achievement.description} onChange={(e) => updateAchievement('description', e.target.value)} />
@@ -1666,7 +1727,10 @@ const Reports = () => {
                            <h3 className="text-xl font-black tracking-tight text-slate-800">Resultados generales — Desempeño orgánico</h3>
                          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Lectura consolidada de la actividad orgánica</p>
                          </div>
-                         <OrganicSummary summary={report.normalizedMetrics.organicSummary} />
+                         <OrganicSummary
+                           summary={report.normalizedMetrics.organicSummary}
+                           organicSummaryByPlatform={report.normalizedMetrics.organicSummaryByPlatform}
+                         />
                        </div>
                      )}
 
@@ -1687,7 +1751,7 @@ const Reports = () => {
                          <div key={sect.sectionId || `organic-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid w-full">
                            <div className="flex justify-between items-center">
                              <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Rendimiento orgánico')}</h4>
-                             <span className="text-[10px] font-bold text-[#009fb7] uppercase tracking-wider bg-[#009fb7]/10 px-2.5 py-0.5 rounded-full">{platformLabel}</span>
+                             <span className="text-[10px] font-bold text-[#144c8c] uppercase tracking-wider bg-[#8ab9ee]/20 px-2.5 py-0.5 rounded-full">{platformLabel}</span>
                            </div>
                            {sect.demographics ? (
                              <DemographicsChart demographics={sect.demographics} />
@@ -1776,7 +1840,7 @@ const Reports = () => {
                          <div key={sect.sectionId || `ads-${idx}`} className="space-y-3 p-6 bg-slate-50/20 border border-slate-100 rounded-[1.5rem] break-inside-avoid w-full">
                            <div className="flex justify-between items-center">
                              <h4 className="text-base font-black text-slate-800">{toSentenceCase(sect.title || 'Performance ads')}</h4>
-                             <span className="text-[10px] font-bold text-[#7C3AED] uppercase tracking-wider bg-[#7C3AED]/10 px-2.5 py-0.5 rounded-full">Meta Ads</span>
+                             <span className="text-[10px] font-bold text-[#1f3c58] uppercase tracking-wider bg-[#d3cebe]/40 px-2.5 py-0.5 rounded-full">Meta Ads</span>
                            </div>
                            <DynamicChartRenderer chartType={sect.chartType} dataset={sect.dataset} platform={sect.platform || 'META_ADS'} />
                            <SectionInsight
@@ -1801,7 +1865,7 @@ const Reports = () => {
                                setNarrativeState({ ...narrativeState, oportunidadesYAprendizajes: updated });
                              };
                              return (
-                               <Card key={idx} className="bg-[#0F172A] border-[#0F172A] p-6 text-white rounded-[2rem] shadow-xl space-y-4 w-full">
+                               <Card key={idx} className="bg-[#1c242c] border-[#1c242c] p-6 text-white rounded-[2rem] shadow-xl space-y-4 w-full">
                                  <div className="border-b border-white/10 pb-3 flex items-center justify-between">
                                    <input
                                      type="text"
@@ -1868,7 +1932,7 @@ const Reports = () => {
                                setNarrativeState({ ...narrativeState, recomendacionesEstrategicas: updated });
                              };
                              return (
-                               <Card key={idx} className="bg-[#009fb7] border-[#009fb7] p-6 text-white rounded-[2rem] shadow-xl space-y-4 w-full">
+                               <Card key={idx} className="bg-[#144c8c] border-[#144c8c] p-6 text-white rounded-[2rem] shadow-xl space-y-4 w-full">
                                  <div className="border-b border-white/20 pb-3 flex items-center justify-between">
                                    <input
                                      type="text"
