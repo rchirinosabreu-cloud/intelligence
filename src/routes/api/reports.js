@@ -269,7 +269,10 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             const extracted = await extractMetricsWithGemini(file.buffer, file.mimetype);
 
             // 3. Validation and cleaning by Source
-            const cleaned = validateAndCleanSourceExtraction(extracted);
+            const cleaned = validateAndCleanSourceExtraction({
+                ...extracted,
+                originalName: file.originalname
+            });
 
             return {
                 sourceId,

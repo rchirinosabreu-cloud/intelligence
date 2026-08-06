@@ -183,6 +183,46 @@ test('report pipeline regressions', async (t) => {
     assert.equal(source.metrics.ctr.value, null);
   });
 
+  await t.test('infers Instagram platform from uploaded organic screenshot filename', () => {
+    const source = validateAndCleanSourceExtraction({
+      originalName: 'RESUMEN ING.png',
+      sectionCategory: 'ORGANIC',
+      platform: 'UNKNOWN',
+      screenType: 'CONTENT_SUMMARY',
+      metrics: {
+        impressions: { value: '20,1 mil', label: 'Visualizaciones', changePct: -33.1 },
+        results: { value: 657, label: 'Interacciones con el contenido', changePct: -49.1 },
+        reach: { value: '7 mil', label: 'Alcance', changePct: 31.2 },
+        ctr: { value: 102, label: 'Seguidores', changePct: -82.2 }
+      }
+    });
+
+    assert.equal(source.platform, 'INSTAGRAM');
+    assert.equal(source.sectionCategory, 'ORGANIC');
+    assert.equal(source.entityLevel, 'ORGANIC');
+    assert.equal(source.metrics.views.value, 20100);
+    assert.equal(source.metrics.follows.value, 102);
+  });
+
+  await t.test('infers Facebook platform from uploaded organic screenshot filename', () => {
+    const source = validateAndCleanSourceExtraction({
+      originalName: 'CAP X6 FACE.png',
+      sectionCategory: 'ORGANIC',
+      platform: 'UNKNOWN',
+      screenType: 'METRIC_TRENDS',
+      metrics: {
+        impressions: { value: '8,6 mil', label: 'Visualizaciones', changePct: 106 },
+        results: { value: 43, label: 'Interacciones con el contenido', changePct: -12.2 },
+        ctr: { value: 3, label: 'Seguidores', changePct: -40 }
+      }
+    });
+
+    assert.equal(source.platform, 'FACEBOOK');
+    assert.equal(source.metrics.views.value, 8600);
+    assert.equal(source.metrics.interactions.value, 43);
+    assert.equal(source.metrics.follows.value, 3);
+  });
+
   await t.test('fallback narrative explains a chart without calling every value an interaction', async () => {
     const { generateFallbackNarrative } = await import('../src/services/reportVisionService.js');
     const narrative = generateFallbackNarrative({

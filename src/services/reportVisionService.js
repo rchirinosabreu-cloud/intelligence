@@ -82,10 +82,36 @@ const normalizeMetricLabel = (value) => String(value || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 
+const inferOrganicPlatform = (extracted = {}) => {
+    const currentPlatform = String(extracted.platform || '').toUpperCase();
+    if (currentPlatform === 'FACEBOOK' || currentPlatform === 'INSTAGRAM') return currentPlatform;
+
+    const metrics = Array.isArray(extracted.metrics)
+        ? extracted.metrics
+        : Object.values(extracted.metrics || {});
+    const evidenceText = metrics.map((metric) => `${metric?.label || ''} ${metric?.evidence || ''}`).join(' ');
+    const text = normalizeMetricLabel([
+        extracted.originalName,
+        extracted.title,
+        extracted.screenType,
+        evidenceText
+    ].filter(Boolean).join(' '));
+
+    const instagramSignal = /\b(instagram|insta|ig|ing)\b/.test(text)
+        || /enlace de instagram/.test(text);
+    const facebookSignal = /\b(facebook|face|fb)\b/.test(text)
+        || /enlace de facebook/.test(text);
+
+    if (instagramSignal && !facebookSignal) return 'INSTAGRAM';
+    if (facebookSignal && !instagramSignal) return 'FACEBOOK';
+    return currentPlatform && currentPlatform !== 'ORGANIC_RRSS' ? currentPlatform : 'UNKNOWN';
+};
+
 const repairOrganicMetricAliases = (cleanMetrics, extracted = {}) => {
+    const inferredPlatform = inferOrganicPlatform(extracted);
     const isOrganicSource = extracted.sectionCategory === 'ORGANIC'
-        || extracted.platform === 'FACEBOOK'
-        || extracted.platform === 'INSTAGRAM';
+        || inferredPlatform === 'FACEBOOK'
+        || inferredPlatform === 'INSTAGRAM';
     if (!isOrganicSource) return cleanMetrics;
 
     const moveMetric = (fromKey, toKey, labelPattern) => {
@@ -489,6 +515,12 @@ export const validateAndCleanSourceExtraction = (extracted) => {
     const demographics = cleanDemographics(extracted.demographics || {});
     const topContent = filterTopContentRows(extracted.topContent || []);
     const narrativeDraft = extracted.narrativeDraft || "";
+    const inferredPlatform = inferOrganicPlatform(extracted);
+    const inferredSectionCategory = extracted.sectionCategory === 'ORGANIC'
+        || inferredPlatform === 'FACEBOOK'
+        || inferredPlatform === 'INSTAGRAM'
+        ? 'ORGANIC'
+        : (extracted.sectionCategory || 'ADS');
 
     const allowedKeys = [
         'spend', 'impressions', 'reach', 'clicks', 'ctr', 'results',
@@ -570,9 +602,9 @@ export const validateAndCleanSourceExtraction = (extracted) => {
         title: extracted.title || 'Sección',
         narrativeDraft,
         screenType: extracted.screenType || 'Desconocido',
-        sectionCategory: extracted.sectionCategory || 'ADS',
-        platform: extracted.platform || 'META_ADS',
-        entityLevel: extracted.entityLevel || (extracted.sectionCategory === 'ORGANIC' ? 'ORGANIC' : 'UNKNOWN'),
+        sectionCategory: inferredSectionCategory,
+        platform: inferredPlatform === 'UNKNOWN' && inferredSectionCategory === 'ADS' ? 'META_ADS' : inferredPlatform,
+        entityLevel: extracted.entityLevel || (inferredSectionCategory === 'ORGANIC' ? 'ORGANIC' : 'UNKNOWN'),
         resultType: extracted.resultType || 'UNKNOWN',
         period: extracted.period || { start: null, end: null }
     };
