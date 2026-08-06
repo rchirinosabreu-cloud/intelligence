@@ -415,6 +415,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
                 : source.topContent
         })));
         validatedNormalizedMetrics.organicSummary = scopedReportData.organicSummary;
+        validatedNormalizedMetrics.organicSummaryByPlatform = scopedReportData.organicSummaryByPlatform;
         validatedNormalizedMetrics.adsSummary = scopedReportData.adsSummary;
         validatedNormalizedMetrics.sourceExtractions = scopedReportData.sources;
 
@@ -583,7 +584,7 @@ const withTimeout = (promise, ms, errorMessage = "Timeout exceeded") => {
 
 import { buildNarrativeErrorLog } from '../../lib/reportPresentation.js';
 
-const NARRATIVE_GENERATION_TIMEOUT_MS = 180000;
+const NARRATIVE_GENERATION_TIMEOUT_MS = 270000;
 
 router.post('/:reportId/generate-narrative', async (req, res) => {
     const timeoutContext = { cancelled: false };

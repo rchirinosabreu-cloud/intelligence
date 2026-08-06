@@ -245,8 +245,10 @@ test('report presentation regressions', async (t) => {
     const actionPlanStart = component.indexOf('\nconst ActionPlan', organicStart);
     const implementation = component.slice(organicStart, actionPlanStart);
     assert.match(implementation, /organicSummaryByPlatform/);
-    assert.match(implementation, /Facebook/);
-    assert.match(implementation, /Instagram/);
+    assert.match(implementation, /sourceExtractions/);
+    assert.match(component, /FACEBOOK:\s*'Facebook'/);
+    assert.match(component, /INSTAGRAM:\s*'Instagram'/);
+    assert.doesNotMatch(implementation, /Instagram \+ Facebook/);
   });
 
   await t.test('report cover formats selected date range in UTC to avoid timezone shifts', async () => {

@@ -35,6 +35,7 @@ import axios from 'axios';
 import { cn } from '@/lib/utils';
 import { adaptDatasetForChart, hasReadableChartData } from '@/lib/reportChartData';
 import { adaptOrganicSummary, filterCanonicalMetrics, getOrganicPlatformLabel, getReviewMetricEntries, isDemographicDataset, filterTopContentRows, splitAchievement, safeClassName, buildReportFileName, processNarrativeResponse, sanitizeNarrativeForReport } from '@/lib/reportPresentation';
+import { buildScopedReportData } from '@/lib/reportStructure';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { Card } from '@/components/ui/Card';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid, LabelList } from 'recharts';
@@ -650,8 +651,13 @@ const ORGANIC_PLATFORM_LABELS = {
   INSTAGRAM: 'Instagram'
 };
 
-const OrganicSummary = ({ summary, organicSummaryByPlatform }) => {
-  const platformRows = Object.entries(organicSummaryByPlatform || {})
+const OrganicSummary = ({ summary, organicSummaryByPlatform, sourceExtractions }) => {
+  const derivedSummaryByPlatform = organicSummaryByPlatform || (
+    Array.isArray(sourceExtractions)
+      ? buildScopedReportData(sourceExtractions).organicSummaryByPlatform
+      : {}
+  );
+  const platformRows = Object.entries(derivedSummaryByPlatform || {})
     .map(([platform, platformSummary]) => ({
       key: platform,
       label: ORGANIC_PLATFORM_LABELS[platform] || getOrganicPlatformLabel(platform),
@@ -660,7 +666,7 @@ const OrganicSummary = ({ summary, organicSummaryByPlatform }) => {
     .filter((row) => Object.keys(row.metrics).length > 0);
   const rows = platformRows.length > 0
     ? platformRows
-    : [{ key: 'consolidated', label: 'Instagram + Facebook', metrics: adaptOrganicSummary(summary) }];
+    : [{ key: 'organic', label: 'OrgÃ¡nico', metrics: adaptOrganicSummary(summary) }];
   const styles = {
     follows: { label: 'Nuevos seguidores', icon: Plus, card: 'bg-[#d3cebe]/35 border-[#d3cebe]', iconClass: 'bg-[#144c8c]' },
     views: { label: 'Visualizaciones', icon: Eye, card: 'bg-[#8ab9ee]/20 border-[#8ab9ee]/60', iconClass: 'bg-[#1f3c58]' },
@@ -852,6 +858,7 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
           <OrganicSummary
             summary={report.normalizedMetrics.organicSummary}
             organicSummaryByPlatform={report.normalizedMetrics.organicSummaryByPlatform}
+            sourceExtractions={report.normalizedMetrics.sourceExtractions}
           />
         </section>
       )}
@@ -1183,6 +1190,7 @@ const Reports = () => {
       });
 
       if (patchResponse.data?.success && patchResponse.data?.report) {
+        setReport(patchResponse.data.report);
         toast.success('Métricas auditadas correctamente!');
 
         // 2. Trigger Narrative Generation
@@ -1191,7 +1199,7 @@ const Reports = () => {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           },
-          timeout: 180000
+          timeout: 270000
         });
 
         const decision = processNarrativeResponse(narrativeResponse.data);
@@ -1730,6 +1738,7 @@ const Reports = () => {
                          <OrganicSummary
                            summary={report.normalizedMetrics.organicSummary}
                            organicSummaryByPlatform={report.normalizedMetrics.organicSummaryByPlatform}
+                           sourceExtractions={report.normalizedMetrics.sourceExtractions}
                          />
                        </div>
                      )}
