@@ -12,6 +12,24 @@ const getGoogleErrorDetails = (error) => {
   }
 };
 
+const formatGoogleDateTimeInBogota = (value) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).formatToParts(new Date(value)).reduce((acc, part) => {
+    if (part.type !== 'literal') acc[part.type] = part.value;
+    return acc;
+  }, {});
+
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
+};
+
 const getMeetLinkFromGoogleEvent = (event) => {
   if (event.hangoutLink) return event.hangoutLink;
   const videoEntry = event.conferenceData?.entryPoints?.find(entry => entry.entryPointType === 'video');
@@ -52,8 +70,8 @@ const toOperationalEventDataFromGoogle = (event, calendarId) => ({
 const toGoogleEventPayload = (event) => ({
   summary: event.title,
   description: event.description || '',
-  start: { dateTime: new Date(event.startAt).toISOString(), timeZone: 'America/Bogota' },
-  end: { dateTime: new Date(event.endAt).toISOString(), timeZone: 'America/Bogota' },
+  start: { dateTime: formatGoogleDateTimeInBogota(event.startAt), timeZone: 'America/Bogota' },
+  end: { dateTime: formatGoogleDateTimeInBogota(event.endAt), timeZone: 'America/Bogota' },
   extendedProperties: {
     private: {
       brainOperationalEventId: event.id,

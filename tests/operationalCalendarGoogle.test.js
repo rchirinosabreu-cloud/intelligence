@@ -38,6 +38,9 @@ test('operational calendar is ready for central Google Calendar OAuth sync', asy
   assert.match(eventService, /throw new Error\(`Google Calendar sync failed:/);
   assert.match(eventService, /if \(error\.code === 404 \|\| error\.response\?\.status === 404\)/);
   assert.match(eventService, /extendedProperties\?\.\private\?\.brainOperationalEventId/);
+  assert.match(eventService, /formatGoogleDateTimeInBogota/);
+  assert.match(eventService, /timeZone:\s*'America\/Bogota'/);
+  assert.doesNotMatch(eventService, /start:\s*\{\s*dateTime:\s*new Date\(event\.startAt\)\.toISOString\(\)/);
 });
 
 test('operational calendar fixes current render and role issues', async () => {
@@ -54,6 +57,16 @@ test('operational calendar fixes current render and role issues', async () => {
   assert.match(calendar, /Authorization:\s*`Bearer \$\{localStorage\.getItem\('authToken'\)\}`/);
   assert.match(calendar, /google-calendar\/auth-url/);
   assert.match(calendar, /google-calendar\/sync/);
+  assert.match(calendar, /monthCalendarDays/);
+  assert.match(calendar, /eventsByDay/);
+  assert.match(calendar, /getRoundedBogotaNow/);
+  assert.match(calendar, /data-operational-calendar="traditional-month-grid"/);
+  assert.match(calendar, /grid-cols-5/);
+  assert.match(calendar, /\['Lun', 'Mar', 'Mie', 'Jue', 'Vie'\]/);
+  assert.doesNotMatch(calendar, /Sab|Dom|Add event|Horario configurado en America\/Bogota/);
+  assert.match(calendar, /handleEmptyDayClick/);
+  assert.match(calendar, /getEventTypeStyles/);
+  assert.match(calendar, /error\.details \|\| error\.error \|\| 'Failed to delete event'/);
   assert.match(callback, /google-calendar\/oauth-callback/);
   assert.match(app, /google-calendar\/callback/);
   assert.match(activityMap, /role === 'PROJECT_MANAGER'/);
