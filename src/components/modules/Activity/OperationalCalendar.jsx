@@ -394,7 +394,7 @@ const OperationalCalendar = () => {
             <button
               type="button"
               onClick={() => openCreateModal(currentDate)}
-              className="inline-flex items-center gap-2 rounded-xl bg-zinc-950 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950"
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-indigo-600/20 transition hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
             >
               <Plus className="h-4 w-4" />
               Evento
@@ -436,7 +436,7 @@ const OperationalCalendar = () => {
                   <div className="mb-2 flex items-center justify-between">
                     <span className={cn(
                       'flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold',
-                      isSameDay(day, new Date()) ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950' : 'text-zinc-600 dark:text-zinc-300'
+                      isSameDay(day, new Date()) ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 dark:bg-indigo-500' : 'text-zinc-600 dark:text-zinc-300'
                     )}>
                       {format(day, 'd')}
                     </span>
