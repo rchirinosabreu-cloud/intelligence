@@ -12,6 +12,12 @@ const getGoogleErrorDetails = (error) => {
   }
 };
 
+const isGoogleEventAlreadyDeleted = (error) => {
+  const status = error.code || error.response?.status;
+  const errors = error.response?.data?.error?.errors || error.errors || [];
+  return status === 404 || status === 410 || errors.some(item => item.reason === 'deleted');
+};
+
 const formatGoogleDateTimeInBogota = (value) => {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Bogota',
@@ -241,7 +247,7 @@ async function deleteGoogleEventIfLinked(event) {
       sendUpdates: 'none'
     });
   } catch (error) {
-    if (error.code === 404 || error.response?.status === 404) {
+    if (isGoogleEventAlreadyDeleted(error)) {
       console.warn(`[OperationalEventService] Google Calendar event already missing: ${event.googleEventId}`);
       return;
     }

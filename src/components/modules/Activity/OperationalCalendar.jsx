@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Calendar as CalendarIcon,
@@ -83,6 +83,9 @@ const OperationalCalendar = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [hoveredEvent, setHoveredEvent] = useState(null);
+  const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const hoverCloseTimerRef = useRef(null);
   const [formData, setFormData] = useState({
     title: '',
     type: 'PRODUCTION',
@@ -244,6 +247,7 @@ const OperationalCalendar = () => {
       queryClient.invalidateQueries(['team-activity-status']);
       setIsModalOpen(false);
       setEditingEventId(null);
+      setDeleteCandidate(null);
       toast.success('Evento eliminado');
     },
     onError: (error) => {
@@ -331,6 +335,60 @@ const OperationalCalendar = () => {
   };
 
   const selectedMembers = team.filter(member => formData.memberIds.includes(member.id));
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingEventId(null);
+    setDeleteCandidate(null);
+  };
+
+  const handleModalBackdropClick = (event) => {
+    if (event.target === event.currentTarget) closeModal();
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        if (deleteCandidate) {
+          setDeleteCandidate(null);
+          return;
+        }
+        if (isModalOpen) closeModal();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [deleteCandidate, isModalOpen]);
+
+  const handleEventMouseEnter = (event, calendarEvent) => {
+    if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
+    const rect = event.currentTarget.getBoundingClientRect();
+    const width = 300;
+    const left = Math.min(Math.max(rect.left, 16), window.innerWidth - width - 16);
+    const top = Math.min(rect.bottom + 8, window.innerHeight - 190);
+    setHoveredEvent({
+      event: calendarEvent,
+      position: { left, top }
+    });
+  };
+
+  const handleEventMouseLeave = () => {
+    if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
+    hoverCloseTimerRef.current = setTimeout(() => setHoveredEvent(null), 180);
+  };
+
+  const handlePopoverMouseEnter = () => {
+    if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
+  };
+
+  const handlePopoverMouseLeave = () => {
+    setHoveredEvent(null);
+  };
+
+  const handleRequestDelete = () => {
+    setDeleteCandidate({ id: editingEventId, title: formData.title });
+  };
 
   return (
     <div className="space-y-6">
@@ -457,7 +515,14 @@ const OperationalCalendar = () => {
                       <button
                         key={event.id}
                         type="button"
-                        onClick={() => handleEdit(event)}
+                        onMouseEnter={(e) => handleEventMouseEnter(e, event)}
+                        onMouseLeave={handleEventMouseLeave}
+                        onFocus={(e) => handleEventMouseEnter(e, event)}
+                        onBlur={handleEventMouseLeave}
+                        onClick={() => {
+                          setHoveredEvent(null);
+                          handleEdit(event);
+                        }}
                         className={cn(
                           'flex w-full items-center gap-1.5 rounded-md border px-2 py-1 text-left text-[11px] font-bold leading-tight shadow-sm transition hover:shadow',
                           getEventTypeStyles(event.type)
@@ -486,8 +551,48 @@ const OperationalCalendar = () => {
         )}
       </div>
 
+      {hoveredEvent && (
+        <div
+          data-operational-event-popover="preview"
+          className="fixed z-[90] w-[300px] rounded-2xl border border-zinc-200 bg-white p-4 text-sm shadow-2xl shadow-zinc-950/10 dark:border-white/10 dark:bg-zinc-900 dark:shadow-black/30"
+          style={{ left: hoveredEvent.position.left, top: hoveredEvent.position.top }}
+          onMouseEnter={handlePopoverMouseEnter}
+          onMouseLeave={handlePopoverMouseLeave}
+        >
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-bold text-zinc-500">{getTypeLabel(hoveredEvent.event.type)}</p>
+              <h4 className="mt-1 line-clamp-2 font-bold text-zinc-950 dark:text-white">{hoveredEvent.event.title}</h4>
+            </div>
+            <span className={cn('mt-1 h-2.5 w-2.5 shrink-0 rounded-full border', getEventTypeStyles(hoveredEvent.event.type))} />
+          </div>
+          <div className="space-y-2 text-xs text-zinc-600 dark:text-zinc-300">
+            <div className="flex items-center gap-2">
+              <Clock className="h-3.5 w-3.5 text-indigo-500" />
+              <span>
+                {format(new Date(hoveredEvent.event.startAt), 'd MMM, HH:mm', { locale: es })} - {format(new Date(hoveredEvent.event.endAt), 'HH:mm')}
+              </span>
+            </div>
+            {hoveredEvent.event.meetingLink && (
+              <div className="flex items-center gap-2">
+                <Video className="h-3.5 w-3.5 text-indigo-500" />
+                <span>Google Meet disponible</span>
+              </div>
+            )}
+            {hoveredEvent.event.description && (
+              <p className="line-clamp-3 rounded-xl bg-zinc-50 p-3 text-zinc-500 dark:bg-white/5 dark:text-zinc-400">
+                {hoveredEvent.event.description}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onMouseDown={handleModalBackdropClick}
+        >
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-7 shadow-2xl dark:bg-zinc-900">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
@@ -495,7 +600,7 @@ const OperationalCalendar = () => {
               </div>
               <button
                 type="button"
-                onClick={() => { setIsModalOpen(false); setEditingEventId(null); }}
+                onClick={closeModal}
                 className="rounded-full p-2 text-zinc-400 transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
               >
                 <X className="h-5 w-5" />
@@ -665,7 +770,7 @@ const OperationalCalendar = () => {
                 {editingEventId && (
                   <button
                     type="button"
-                    onClick={() => deleteMutation.mutate(editingEventId)}
+                    onClick={handleRequestDelete}
                     disabled={deleteMutation.isPending}
                     className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-red-600 transition hover:bg-red-100 disabled:opacity-60 dark:border-red-500/20 dark:bg-red-500/10"
                   >
@@ -683,6 +788,43 @@ const OperationalCalendar = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {deleteCandidate && (
+        <div
+          data-operational-delete-dialog="event"
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setDeleteCandidate(null);
+          }}
+        >
+          <div className="w-full max-w-sm rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-zinc-900">
+            <div className="mb-5">
+              <h3 className="text-lg font-bold text-zinc-950 dark:text-white">Eliminar evento</h3>
+              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                Esta accion eliminara "{deleteCandidate.title || 'este evento'}" del calendario operativo.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteCandidate(null)}
+                className="flex-1 rounded-2xl border border-zinc-200 px-4 py-3 text-xs font-bold text-zinc-600 transition hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteMutation.mutate(deleteCandidate.id)}
+                disabled={deleteMutation.isPending}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-red-600 px-4 py-3 text-xs font-bold text-white transition hover:bg-red-700 disabled:opacity-60"
+              >
+                {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Eliminar
+              </button>
+            </div>
           </div>
         </div>
       )}

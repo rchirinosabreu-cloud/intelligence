@@ -5,24 +5,26 @@ import { readFileSync } from 'node:fs';
 const activityMap = readFileSync(new URL('../src/components/modules/Activity/ActivityMap.jsx', import.meta.url), 'utf8');
 const operationalCalendar = readFileSync(new URL('../src/components/modules/Activity/OperationalCalendar.jsx', import.meta.url), 'utf8');
 
-test('activity hover cards use a direct, inspectable portal without AnimatePresence ownership', () => {
-  assert.match(activityMap, /data-activity-floating-card="member"/);
+test('activity map hover cards use the member detail portal without legacy ownership', () => {
+  assert.match(activityMap, /activeCardData && createPortal/);
+  assert.match(activityMap, /<MemberActivityCard/);
   assert.doesNotMatch(activityMap, /<AnimatePresence>\s*\{hoveredMember === member\.id && createPortal/);
 });
 
-test('operational calendar hover cards use a direct, inspectable portal without AnimatePresence ownership', () => {
-  assert.match(operationalCalendar, /data-activity-floating-card="event"/);
+test('operational calendar hover cards show a direct read-only event preview', () => {
+  assert.match(operationalCalendar, /data-operational-event-popover="preview"/);
+  assert.match(operationalCalendar, /hoveredEvent/);
   assert.doesNotMatch(operationalCalendar, /<AnimatePresence>\s*\{hoveredEventData && createPortal/);
 });
 
-test('both avatar triggers retain native mouse hover handlers', () => {
-  assert.match(activityMap, /onMouseEnter=\{handleMouseEnter\}/);
-  assert.match(operationalCalendar, /onMouseEnter=\{\(e\) =>/);
+test('hover triggers retain direct pointer or mouse handlers', () => {
+  assert.match(activityMap, /onPointerEnter=\{handlePointerEnter\}/);
+  assert.match(operationalCalendar, /onMouseEnter=\{\(e\) => handleEventMouseEnter\(e, event\)\}/);
 });
 
-test('floating cards measure their rendered size before final positioning', () => {
-  assert.match(activityMap, /cardRef\s*=\s*React\.useRef\(null\)/);
-  assert.match(activityMap, /getBoundingClientRect\(\)\s*;\s*\n\s*setCardPosition\(getFloatingCardPosition/);
-  assert.match(operationalCalendar, /eventCardRef\s*=\s*React\.useRef\(null\)/);
-  assert.match(operationalCalendar, /triggerRect/);
+test('floating cards compute viewport-aware positions', () => {
+  assert.match(activityMap, /getFloatingCardPosition/);
+  assert.match(activityMap, /getBoundingClientRect\(\)/);
+  assert.match(operationalCalendar, /getBoundingClientRect\(\)/);
+  assert.match(operationalCalendar, /window\.innerWidth - width - 16/);
 });

@@ -36,7 +36,9 @@ test('operational calendar is ready for central Google Calendar OAuth sync', asy
   assert.match(eventService, /syncGoogleCalendarToOperationalEvents/);
   assert.match(eventService, /getGoogleErrorDetails/);
   assert.match(eventService, /throw new Error\(`Google Calendar sync failed:/);
-  assert.match(eventService, /if \(error\.code === 404 \|\| error\.response\?\.status === 404\)/);
+  assert.match(eventService, /isGoogleEventAlreadyDeleted/);
+  assert.match(eventService, /status === 404 \|\| status === 410/);
+  assert.match(eventService, /reason === 'deleted'/);
   assert.match(eventService, /extendedProperties\?\.\private\?\.brainOperationalEventId/);
   assert.match(eventService, /formatGoogleDateTimeInBogota/);
   assert.match(eventService, /timeZone:\s*'America\/Bogota'/);
@@ -69,6 +71,14 @@ test('operational calendar fixes current render and role issues', async () => {
   assert.match(calendar, /bg-indigo-600 text-white shadow-sm/);
   assert.match(calendar, /handleEmptyDayClick/);
   assert.match(calendar, /getEventTypeStyles/);
+  assert.match(calendar, /hoveredEvent/);
+  assert.match(calendar, /data-operational-event-popover="preview"/);
+  assert.match(calendar, /onMouseEnter=\{\(e\) => handleEventMouseEnter\(e, event\)\}/);
+  assert.match(calendar, /handleModalBackdropClick/);
+  assert.match(calendar, /event\.key === 'Escape'/);
+  assert.match(calendar, /deleteCandidate/);
+  assert.match(calendar, /data-operational-delete-dialog="event"/);
+  assert.doesNotMatch(calendar, /window\.confirm/);
   assert.match(calendar, /error\.details \|\| error\.error \|\| 'Failed to delete event'/);
   assert.match(callback, /google-calendar\/oauth-callback/);
   assert.match(app, /google-calendar\/callback/);
