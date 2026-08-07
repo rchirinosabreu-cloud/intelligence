@@ -2,6 +2,16 @@ import prisma from '../lib/prisma.js';
 import { google } from 'googleapis';
 import { getAuthorizedGoogleOAuthClient, CENTRAL_GOOGLE_CALENDAR_EMAIL } from './googleCalendarOAuthService.js';
 
+const getGoogleErrorDetails = (error) => {
+  const data = error.response?.data || error.errors || error.message || error;
+  if (typeof data === 'string') return data;
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return error.message || 'Unknown Google Calendar error';
+  }
+};
+
 const getMeetLinkFromGoogleEvent = (event) => {
   if (event.hangoutLink) return event.hangoutLink;
   const videoEntry = event.conferenceData?.entryPoints?.find(entry => entry.entryPointType === 'video');
@@ -125,14 +135,16 @@ export async function syncOperationalEventToGoogle(event) {
       }
     });
   } catch (error) {
-    console.error('[OperationalEventService] Google Calendar sync failed:', error.response?.data || error.message);
-    return await prisma.operationalEvent.update({
+    const details = getGoogleErrorDetails(error);
+    console.error(`[OperationalEventService] Google Calendar sync failed: ${details}`);
+    await prisma.operationalEvent.update({
       where: { id: event.id },
       data: {
         googleSyncStatus: 'ERROR',
         googleLastSyncedAt: new Date()
       }
     });
+    throw new Error(`Google Calendar sync failed: ${details}`);
   }
 }
 
@@ -204,11 +216,19 @@ async function deleteGoogleEventIfLinked(event) {
   if (!auth) return;
 
   const calendar = google.calendar({ version: 'v3', auth: auth.oauth2Client });
-  await calendar.events.delete({
-    calendarId: event.googleCalendarId || auth.connection.calendarId || 'primary',
-    eventId: event.googleEventId,
-    sendUpdates: 'none'
-  });
+  try {
+    await calendar.events.delete({
+      calendarId: event.googleCalendarId || auth.connection.calendarId || 'primary',
+      eventId: event.googleEventId,
+      sendUpdates: 'none'
+    });
+  } catch (error) {
+    if (error.code === 404 || error.response?.status === 404) {
+      console.warn(`[OperationalEventService] Google Calendar event already missing: ${event.googleEventId}`);
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function createOperationalEvent(data) {
@@ -257,7 +277,9 @@ export async function deleteOperationalEvent(id) {
     try {
       await deleteGoogleEventIfLinked(event);
     } catch (error) {
-      console.error('[OperationalEventService] Google Calendar delete failed:', error.response?.data || error.message);
+      const details = getGoogleErrorDetails(error);
+      console.error(`[OperationalEventService] Google Calendar delete failed: ${details}`);
+      throw new Error(`Google Calendar delete failed: ${details}`);
     }
   }
 

@@ -118,6 +118,52 @@ export const getCentralGoogleCalendarConnectionStatus = async () => {
   };
 };
 
+export const listAccessibleGoogleCalendars = async () => {
+  const auth = await getAuthorizedGoogleOAuthClient();
+  if (!auth) return [];
+
+  const calendar = google.calendar({ version: 'v3', auth: auth.oauth2Client });
+  const response = await calendar.calendarList.list({
+    minAccessRole: 'reader',
+    showHidden: false
+  });
+
+  return (response.data.items || []).map(item => ({
+    id: item.id,
+    summary: item.summary,
+    description: item.description,
+    primary: item.primary === true,
+    accessRole: item.accessRole,
+    backgroundColor: item.backgroundColor,
+    selected: item.id === auth.connection.calendarId || (item.primary && auth.connection.calendarId === 'primary')
+  }));
+};
+
+export const setActiveGoogleCalendar = async (calendarId) => {
+  if (!calendarId) throw new Error('calendarId is required');
+
+  const connection = await getCentralGoogleCalendarConnection();
+  if (!connection) throw new Error('Google Calendar is not connected');
+
+  return await prisma.googleCalendarConnection.update({
+    where: { id: connection.id },
+    data: {
+      calendarId,
+      syncToken: null,
+      lastSyncedAt: null
+    },
+    select: {
+      id: true,
+      email: true,
+      calendarId: true,
+      scopes: true,
+      isActive: true,
+      connectedAt: true,
+      lastSyncedAt: true
+    }
+  });
+};
+
 export const createOpenGoogleMeetSpace = async () => {
   const auth = await getAuthorizedGoogleOAuthClient();
   if (!auth) return null;

@@ -11,7 +11,9 @@ import { createMeetEvent } from '../../services/calendarService.js';
 import {
   getGoogleCalendarAuthUrl,
   storeGoogleCalendarOAuthCode,
-  getCentralGoogleCalendarConnectionStatus
+  getCentralGoogleCalendarConnectionStatus,
+  listAccessibleGoogleCalendars,
+  setActiveGoogleCalendar
 } from '../../services/googleCalendarOAuthService.js';
 
 const router = express.Router();
@@ -43,7 +45,8 @@ router.post('/events', async (req, res) => {
     const event = await createOperationalEvent(req.body);
     res.json(event);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create event' });
+    console.error('[Activity API] Error creating event:', error.response?.data || error);
+    res.status(500).json({ error: 'Failed to create event', details: error.message });
   }
 });
 
@@ -77,6 +80,26 @@ router.get('/google-calendar/auth-url', async (req, res) => {
   }
 });
 
+router.get('/google-calendar/calendars', async (req, res) => {
+  try {
+    const calendars = await listAccessibleGoogleCalendars();
+    res.json(calendars);
+  } catch (error) {
+    console.error('[Activity API] Error listing Google calendars:', error.response?.data || error);
+    res.status(500).json({ error: 'Failed to list Google calendars', details: error.message });
+  }
+});
+
+router.patch('/google-calendar/active-calendar', async (req, res) => {
+  try {
+    const connection = await setActiveGoogleCalendar(req.body.calendarId);
+    res.json(connection);
+  } catch (error) {
+    console.error('[Activity API] Error setting active Google calendar:', error.response?.data || error);
+    res.status(500).json({ error: 'Failed to set active Google calendar', details: error.message });
+  }
+});
+
 router.post('/google-calendar/oauth-callback', async (req, res) => {
   try {
     const connection = await storeGoogleCalendarOAuthCode(req.body.code, req.user?.userId || null);
@@ -102,7 +125,8 @@ router.patch('/events/:id', async (req, res) => {
     const event = await updateOperationalEvent(req.params.id, req.body);
     res.json(event);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update event' });
+    console.error('[Activity API] Error updating event:', error.response?.data || error);
+    res.status(500).json({ error: 'Failed to update event', details: error.message });
   }
 });
 
@@ -111,7 +135,8 @@ router.delete('/events/:id', async (req, res) => {
     await deleteOperationalEvent(req.params.id);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete event' });
+    console.error('[Activity API] Error deleting event:', error.response?.data || error);
+    res.status(500).json({ error: 'Failed to delete event', details: error.message });
   }
 });
 

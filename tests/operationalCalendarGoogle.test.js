@@ -23,13 +23,20 @@ test('operational calendar is ready for central Google Calendar OAuth sync', asy
   assert.match(oauthService, /coordinadorbrainstudio@gmail\.com/);
   assert.match(oauthService, /encrypt\(JSON\.stringify\(mergedTokens\)\)/);
   assert.match(oauthService, /decrypt\(connection\.encryptedTokens\)/);
+  assert.match(oauthService, /listAccessibleGoogleCalendars/);
+  assert.match(oauthService, /setActiveGoogleCalendar/);
 
   assert.match(activityRoutes, /google-calendar\/auth-url/);
   assert.match(activityRoutes, /google-calendar\/oauth-callback/);
   assert.match(activityRoutes, /google-calendar\/status/);
+  assert.match(activityRoutes, /google-calendar\/calendars/);
+  assert.match(activityRoutes, /google-calendar\/active-calendar/);
   assert.match(activityRoutes, /google-calendar\/sync/);
   assert.match(eventService, /syncOperationalEventToGoogle/);
   assert.match(eventService, /syncGoogleCalendarToOperationalEvents/);
+  assert.match(eventService, /getGoogleErrorDetails/);
+  assert.match(eventService, /throw new Error\(`Google Calendar sync failed:/);
+  assert.match(eventService, /if \(error\.code === 404 \|\| error\.response\?\.status === 404\)/);
   assert.match(eventService, /extendedProperties\?\.\private\?\.brainOperationalEventId/);
 });
 
