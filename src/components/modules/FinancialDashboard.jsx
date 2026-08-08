@@ -643,7 +643,7 @@ const FinancialDashboard = () => {
                                     </Card>
                                     <Card className="p-5 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl">
                                         <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Deudas grandes</p>
-                                        <p className="text-xl font-black mt-2 text-amber-500">{formatCurrency(importPreview.totals?.calculated?.debt || 0)}</p>
+                                        <p className="text-xl font-black mt-2 text-amber-500">{formatCurrency(importPreview.totals?.explicit?.debt || importPreview.totals?.calculated?.debt || 0)}</p>
                                     </Card>
                                     <Card className="p-5 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl">
                                         <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Registros mensuales</p>
@@ -658,6 +658,11 @@ const FinancialDashboard = () => {
                                             <p className="text-[11px] text-zinc-500 mt-1">
                                                 Archivo: {importPreview.filename || 'Sin nombre'} · Año {importPreview.year}
                                             </p>
+                                            {importPreview.workbook?.sheetNames?.length > 0 && (
+                                                <p className="text-[11px] text-zinc-500 mt-1">
+                                                    Hojas detectadas: {importPreview.workbook.sheetNames.join(', ')}
+                                                </p>
+                                            )}
                                         </div>
                                         <div className={cn(
                                             "inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-widest",
@@ -733,9 +738,56 @@ const FinancialDashboard = () => {
                                         </div>
                                     )}
 
+                                    {importPreview.payrollRoster?.length > 0 && (
+                                        <div className="mt-6 overflow-x-auto">
+                                            <div className="flex items-center justify-between gap-4 mb-3">
+                                                <div>
+                                                    <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Nómina detectada</p>
+                                                    <p className="text-xs text-zinc-500 mt-1">Base para crear contratos y vigencias del equipo dentro de la plataforma.</p>
+                                                </div>
+                                                <span className="rounded-full bg-pink-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-pink-600">
+                                                    {importPreview.payrollRoster.length} personas
+                                                </span>
+                                            </div>
+                                            <table className="min-w-[760px] w-full text-left text-xs">
+                                                <thead className="text-[10px] uppercase tracking-widest text-zinc-400">
+                                                    <tr>
+                                                        <th className="py-2 pr-4">Persona</th>
+                                                        <th className="py-2 pr-4">Cargo</th>
+                                                        <th className="py-2 text-right">Devengado</th>
+                                                        <th className="py-2 text-right">Seguridad social</th>
+                                                        <th className="py-2 text-right">Total mensual</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                                                    {importPreview.payrollRoster.map((person) => (
+                                                        <tr key={`${person.rowNumber}-${person.name}`} className="hover:bg-zinc-50/70 dark:hover:bg-white/5">
+                                                            <td className="py-3 pr-4 font-bold text-zinc-800 dark:text-zinc-100">{person.name}</td>
+                                                            <td className="py-3 pr-4 text-zinc-500">{person.role || '-'}</td>
+                                                            <td className="py-3 text-right font-bold">{person.baseSalary ? formatCurrency(person.baseSalary) : '-'}</td>
+                                                            <td className="py-3 text-right font-bold">{person.socialSecurity ? formatCurrency(person.socialSecurity) : '-'}</td>
+                                                            <td className="py-3 text-right font-black text-pink-600">{person.monthlyTotal ? formatCurrency(person.monthlyTotal) : '-'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+
                                     {importPreview.debts?.length > 0 && (
                                         <div className="mt-6 overflow-x-auto">
-                                            <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400 mb-3">Deudas detectadas</p>
+                                            <div className="flex items-center justify-between gap-4 mb-3">
+                                                <div>
+                                                    <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Morosos detectados</p>
+                                                    <p className="text-xs text-zinc-500 mt-1">
+                                                        Total operativo del Excel: {formatCurrency(importPreview.totals?.explicit?.debt || 0)}
+                                                        {importPreview.totals?.explicit?.debtComments ? ` · Comentarios: ${formatCurrency(importPreview.totals.explicit.debtComments)}` : ''}
+                                                    </p>
+                                                </div>
+                                                <span className="rounded-full bg-amber-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-600">
+                                                    {importPreview.debts.length} registros
+                                                </span>
+                                            </div>
                                             <table className="w-full text-left text-xs">
                                                 <thead className="text-[10px] uppercase tracking-widest text-zinc-400">
                                                     <tr>

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import XLSX from 'xlsx';
 import { parseFinancialImportWorkbook } from '../src/services/financialImportService.js';
 
 const fixtureCsv = `Clientes,Enero,Febrero,Marzo,Abril,Mayo,Junio,Julio,Agosto,Septiembre,Octubre,Noviembre,Diciembre,Total
@@ -41,6 +42,40 @@ Total gastos operativos,,$2.259.722,$3.808.080,,,,,,,,,,
 Total Costos y gastos,,$6.782.222,$8.330.580,$3.600.000,$3.600.000,$3.600.000,$3.600.000,$3.000.000,$3.000.000,$3.000.000,$3.000.000,$3.000.000,$3.000.000
 RESULTADO DEL EJERCICIO,,-$4.252.222,-$5.800.580,-$3.600.000,-$3.600.000,-$3.600.000,-$3.600.000,-$3.000.000,-$3.000.000,-$3.000.000,-$3.000.000,-$3.000.000,-$3.000.000
 `;
+
+const createWorkbookFixture = () => {
+    const workbook = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+            ['Nombre del empleado', 'Cargo', 'Fecha inicio', '# días', 'Devengado', 'Salud 12.5%', 'Pensión 16%', 'Arl 0,552 %', 'Total seguridad social', 'Bonificaciones / Comisiones', 'Total a pagar mensual'],
+            ['Francisco Villa', 'CEO', '01/02/26', 30, '$5.000.000', '$218.900', '$280.200', '$9.200', '$508.300', '', '$5.508.300'],
+            ['Gabriel / Kamila del toro', 'Project Manager', '', 30, '$3.000.000', '', '', '', '', '', '$3.000.000'],
+            ['Total', '', '', '', '$8.000.000', '', '', '', '$508.300', '', '$8.508.300']
+        ]),
+        'NOMINA 2026'
+    );
+
+    XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet(categorizedMonthlyFixtureCsv.split('\n').map((line) => line.split(','))),
+        'FLUJO MENSUAL MEMBRESIAS'
+    );
+
+    XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+            ['Morosos', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'ESTADO', 'COMENTARIOS'],
+            ['Javid Tramite y Asesorias', '$4.710.000', '', '', '', '', '', '', '', 'DEBE', ''],
+            ['Tambores', '$800.000', '', '', '', '', '', '', '', 'DEBE', ''],
+            ['Total', '$5.510.000', '', '', '', '', '', '', '', '$5.510.000', '$800.000']
+        ]),
+        'MOROSOS'
+    );
+
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+};
 
 test('parseFinancialImportWorkbook converts monthly finance rows into importable entries', () => {
     const result = parseFinancialImportWorkbook(Buffer.from(fixtureCsv, 'utf8'), {
@@ -126,4 +161,21 @@ test('parseFinancialImportWorkbook supports categorized monthly finance sheets',
     assert.equal(pauta.amount, 3193772);
 
     assert.equal(result.payrollContinuityFlags[0].label, 'Gabriel / Kamila del toro');
+});
+
+test('parseFinancialImportWorkbook reads the complete finance workbook using the right sheets', () => {
+    const result = parseFinancialImportWorkbook(createWorkbookFixture(), {
+        filename: 'FINANZAS BRAIN STUDIO 2026.xlsx',
+        year: 2026
+    });
+
+    assert.equal(result.sourceSheet, 'FLUJO MENSUAL MEMBRESIAS');
+    assert.deepEqual(result.workbook.sheetNames, ['NOMINA 2026', 'FLUJO MENSUAL MEMBRESIAS', 'MOROSOS']);
+    assert.equal(result.payrollRoster.length, 2);
+    assert.equal(result.payrollRoster[0].name, 'Francisco Villa');
+    assert.equal(result.payrollRoster[0].monthlyTotal, 5508300);
+    assert.equal(result.debts.length, 2);
+    assert.equal(result.totals.calculated.debt, 5510000);
+    assert.equal(result.totals.explicit.debt, 5510000);
+    assert.equal(result.totals.explicit.debtComments, 800000);
 });

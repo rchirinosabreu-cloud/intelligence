@@ -98,16 +98,31 @@ const classifyEntry = (label, section) => {
     };
 };
 
-const readWorkbookRows = (buffer) => {
-    const workbook = XLSX.read(buffer, { type: 'buffer', raw: false });
-    const [firstSheetName] = workbook.SheetNames;
-    if (!firstSheetName) return [];
+const rowsFromSheet = (sheet) => XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    blankrows: false,
+    defval: ''
+});
 
-    return XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], {
-        header: 1,
-        blankrows: false,
-        defval: ''
-    });
+const readWorkbookContext = (buffer, options = {}) => {
+    const workbook = XLSX.read(buffer, { type: 'buffer', raw: false });
+    const sheetNames = workbook.SheetNames;
+    const normalizedSheetNames = new Map(sheetNames.map((name) => [normalizeText(name), name]));
+    const sourceSheet = options.sheetName
+        || normalizedSheetNames.get('flujo mensual membresias')
+        || sheetNames[0];
+
+    return {
+        sheetNames,
+        sourceSheet,
+        rows: sourceSheet ? rowsFromSheet(workbook.Sheets[sourceSheet]) : [],
+        payrollRows: normalizedSheetNames.get('nomina 2026')
+            ? rowsFromSheet(workbook.Sheets[normalizedSheetNames.get('nomina 2026')])
+            : [],
+        debtRows: normalizedSheetNames.get('morosos')
+            ? rowsFromSheet(workbook.Sheets[normalizedSheetNames.get('morosos')])
+            : []
+    };
 };
 
 const detectLayout = (rows) => {
@@ -163,6 +178,67 @@ const getMonthlyValues = (row, monthStartIndex) => MONTHS.map((_month, monthInde
     parseMoney(row[monthStartIndex + monthIndex])
 ));
 
+const parsePayrollRoster = (rows) => {
+    const headerIndex = rows.findIndex((row) => normalizeText(row[0]).includes('nombre del empleado'));
+    if (headerIndex < 0) return [];
+
+    return rows.slice(headerIndex + 1)
+        .map((row, offset) => ({
+            rowNumber: headerIndex + offset + 2,
+            name: String(row[0] || '').trim(),
+            role: String(row[1] || '').trim(),
+            startDate: String(row[2] || '').trim(),
+            baseSalary: parseMoney(row[4]),
+            socialSecurity: parseMoney(row[8]),
+            bonusOrCommission: parseMoney(row[9]),
+            monthlyTotal: parseMoney(row[10]),
+            annualTotal: parseMoney(row[11]),
+            fortnightPayment: parseMoney(row[12])
+        }))
+        .filter((person) => person.name && normalizeText(person.name) !== 'total');
+};
+
+const parseDebtsSheet = (rows, year) => {
+    const headerIndex = rows.findIndex((row) => normalizeText(row[0]) === 'morosos');
+    if (headerIndex < 0) return { debts: [], totals: { debt: 0, debtComments: 0 } };
+
+    const header = rows[headerIndex].map(normalizeText);
+    const statusIndex = header.findIndex((value) => value === 'estado');
+    const commentsIndex = header.findIndex((value) => value === 'comentarios');
+    const monthLimit = statusIndex > 0 ? statusIndex : 9;
+    const totalRow = rows.find((row) => normalizeText(row[0]) === 'total') || [];
+
+    const debts = rows.slice(headerIndex + 1).flatMap((row, offset) => {
+        const client = String(row[0] || '').trim();
+        if (!client || normalizeText(client) === 'total') return [];
+        const status = statusIndex >= 0 ? String(row[statusIndex] || '').trim() : '';
+        const comments = commentsIndex >= 0 ? String(row[commentsIndex] || '').trim() : '';
+
+        return MONTHS.slice(0, Math.max(0, monthLimit - 1)).map((monthName, monthIndex) => {
+            const amount = parseMoney(row[monthIndex + 1]);
+            if (!amount) return null;
+            return {
+                rowNumber: headerIndex + offset + 2,
+                sourceLabel: client,
+                year,
+                month: monthIndex + 1,
+                monthName,
+                amount,
+                status: status || 'DEBE',
+                comments
+            };
+        }).filter(Boolean);
+    });
+
+    return {
+        debts,
+        totals: {
+            debt: statusIndex >= 0 ? parseMoney(totalRow[statusIndex]) : 0,
+            debtComments: commentsIndex >= 0 ? parseMoney(totalRow[commentsIndex]) : 0
+        }
+    };
+};
+
 const collectMonthEntries = ({ row, rowNumber, label, section, year }) => {
     const identity = classifyEntry(label, section);
 
@@ -191,18 +267,23 @@ collectMonthEntries.monthStartIndex = 1;
 
 export const parseFinancialImportWorkbook = (buffer, options = {}) => {
     const year = Number.parseInt(options.year, 10) || 2026;
-    const rows = readWorkbookRows(buffer);
+    const context = readWorkbookContext(buffer, options);
+    const rows = context.rows;
     const layout = detectLayout(rows);
 
     const entries = [];
-    const debts = [];
+    const debtSheet = parseDebtsSheet(context.debtRows, year);
+    const debts = debtSheet.debts;
+    const payrollRoster = parsePayrollRoster(context.payrollRows);
     const warnings = [];
     const totals = {
         explicit: {
             income: 0,
             expense: 0,
             utility: 0,
-            financing: 0
+            financing: 0,
+            debt: debtSheet.totals.debt,
+            debtComments: debtSheet.totals.debtComments
         },
         calculated: {
             income: 0,
@@ -310,6 +391,8 @@ export const parseFinancialImportWorkbook = (buffer, options = {}) => {
         if (entry.sourceSection === 'FINANCING') totals.monthly.calculated.financing[monthlyIndex] += entry.amount;
     }
 
+    totals.calculated.debt = debts.reduce((sum, debt) => sum + debt.amount, 0);
+
     const payrollContinuityFlags = Object.values(entries.reduce((acc, entry) => {
         const clean = normalizeText(entry.sourceLabel);
         const hasSharedName = /\/| y | - /.test(clean) && (
@@ -357,10 +440,15 @@ export const parseFinancialImportWorkbook = (buffer, options = {}) => {
     return {
         filename: options.filename || null,
         year,
+        workbook: {
+            sheetNames: context.sheetNames
+        },
+        sourceSheet: context.sourceSheet,
         layout: layout.type,
         months: MONTHS,
         entries,
         debts,
+        payrollRoster,
         payrollContinuityFlags,
         warnings,
         totals
