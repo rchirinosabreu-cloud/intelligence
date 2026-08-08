@@ -104,6 +104,56 @@ test('getFinancialClientReconciliation exposes unlinked imported income rows by 
     assert.equal(res.payload.clients[0].income, 1450000);
 });
 
+test('getFinancialClientReconciliation excludes expense-only rows from client reconciliation', async () => {
+    const prismaClient = {
+        financialImportBatch: {
+            findFirst: async () => ({ id: 'batch-1', year: 2026 })
+        },
+        financialRecord: {
+            findMany: async () => [
+                {
+                    id: 'record-income',
+                    clientId: null,
+                    amount: 1450000,
+                    type: 'INCOME',
+                    sourceLabel: 'Pablo Hoff',
+                    client: null
+                },
+                {
+                    id: 'record-payroll',
+                    clientId: null,
+                    amount: 5000000,
+                    type: 'EXPENSE',
+                    sourceLabel: 'Francisco Villa',
+                    client: null
+                },
+                {
+                    id: 'record-tool',
+                    clientId: null,
+                    amount: 800000,
+                    type: 'EXPENSE',
+                    sourceLabel: '(ChatGPT, Envato, Adobe, CatGut)',
+                    client: null
+                }
+            ]
+        },
+        accountsReceivable: {
+            findMany: async () => []
+        },
+        client: {
+            findMany: async () => [
+                { id: 'client-real', name: 'Pablo Hoff', slug: 'pablo-hoff-real' }
+            ]
+        }
+    };
+    const res = makeResponse();
+
+    await getFinancialClientReconciliation({ query: { year: 2026 } }, res, { prismaClient });
+
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.payload.clients.map((row) => row.client.name), ['Pablo Hoff']);
+});
+
 test('linkFinancialClient moves imported financial records and debts to the selected platform client', async () => {
     const calls = [];
     const prismaClient = {
@@ -180,7 +230,44 @@ test('linkFinancialClient can assign unlinked imported source-label records to a
     }, res, { prismaClient });
 
     assert.equal(res.statusCode, 200);
-    assert.deepEqual(calls[1][1].where, { clientId: null, sourceLabel: 'Pablo hoff' });
+    assert.deepEqual(calls[1][1].where, { clientId: null, sourceLabel: 'Pablo hoff', type: 'INCOME' });
     assert.equal(calls[1][1].data.clientId, 'target-client');
     assert.equal(res.payload.moved.financialRecords, 3);
+});
+
+test('linkFinancialClient only assigns unlinked income rows for source-label matches', async () => {
+    const calls = [];
+    const prismaClient = {
+        $transaction: async (fn) => fn({
+            client: {
+                findMany: async () => [{ id: 'target-client', name: 'Pablo Hoff' }]
+            },
+            financialRecord: {
+                updateMany: async (args) => {
+                    calls.push(['financialRecord.updateMany', args]);
+                    return { count: 1 };
+                }
+            },
+            accountsReceivable: {
+                updateMany: async (args) => {
+                    calls.push(['accountsReceivable.updateMany', args]);
+                    return { count: 0 };
+                }
+            }
+        })
+    };
+    const res = makeResponse();
+
+    await linkFinancialClient({
+        params: { sourceClientId: 'source-label:Francisco Villa' },
+        body: { targetClientId: 'target-client' },
+        user: { id: 'user-1' }
+    }, res, { prismaClient });
+
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(calls[0][1].where, {
+        clientId: null,
+        sourceLabel: 'Francisco Villa',
+        type: 'INCOME'
+    });
 });

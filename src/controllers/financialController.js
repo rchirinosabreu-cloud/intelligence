@@ -313,15 +313,12 @@ const buildClientReconciliationRows = (records, receivables) => {
     };
 
     records.forEach((record) => {
+        if (record.type !== 'INCOME') return;
         const sourceLabel = record.sourceLabel || record.description || record.id;
         const sourceId = record.clientId || `${SOURCE_LABEL_PREFIX}${sourceLabel}`;
         const row = ensureRow(sourceId, record.clientId || null, record.client, sourceLabel);
         const amount = toNum(record.amount);
-        if (record.type === 'INCOME') {
-            row.income = roundFloat(row.income + amount);
-        } else {
-            row.expense = roundFloat(row.expense + amount);
-        }
+        row.income = roundFloat(row.income + amount);
         row.recordCount += 1;
     });
 
@@ -462,7 +459,7 @@ export const linkFinancialClient = async (req, res, dependencies = {}) => {
                 reconciledAt: new Date().toISOString()
             };
             const sourceWhere = isSourceLabel
-                ? { clientId: null, sourceLabel }
+                ? { clientId: null, sourceLabel, type: 'INCOME' }
                 : { clientId: sourceClientId };
             const [financialRecords, receivables] = await Promise.all([
                 tx.financialRecord.updateMany({
