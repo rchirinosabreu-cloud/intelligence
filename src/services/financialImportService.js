@@ -148,6 +148,21 @@ const findTotalValue = (row) => {
     return 0;
 };
 
+const emptyMonthlyBuckets = () => ({
+    income: Array(12).fill(0),
+    expense: Array(12).fill(0),
+    operatingExpense: Array(12).fill(0),
+    investment: Array(12).fill(0),
+    financing: Array(12).fill(0),
+    totalCostAndExpense: Array(12).fill(0),
+    netResult: Array(12).fill(0),
+    debt: Array(12).fill(0)
+});
+
+const getMonthlyValues = (row, monthStartIndex) => MONTHS.map((_month, monthIndex) => (
+    parseMoney(row[monthStartIndex + monthIndex])
+));
+
 const collectMonthEntries = ({ row, rowNumber, label, section, year }) => {
     const identity = classifyEntry(label, section);
 
@@ -196,6 +211,10 @@ export const parseFinancialImportWorkbook = (buffer, options = {}) => {
             investment: 0,
             financing: 0,
             debt: 0
+        },
+        monthly: {
+            explicit: emptyMonthlyBuckets(),
+            calculated: emptyMonthlyBuckets()
         }
     };
 
@@ -249,9 +268,10 @@ export const parseFinancialImportWorkbook = (buffer, options = {}) => {
         }
 
         if (TOTAL_LABELS[clean]) {
-            totals.explicit[TOTAL_LABELS[clean]] = MONTHS.reduce((sum, _month, monthIndex) => (
-                sum + parseMoney(row[layout.monthStartIndex + monthIndex])
-            ), 0) || findTotalValue(row);
+            const totalKey = TOTAL_LABELS[clean];
+            const monthlyValues = getMonthlyValues(row, layout.monthStartIndex);
+            totals.monthly.explicit[totalKey] = monthlyValues;
+            totals.explicit[totalKey] = monthlyValues.reduce((sum, value) => sum + value, 0) || findTotalValue(row);
             return;
         }
 
@@ -282,6 +302,12 @@ export const parseFinancialImportWorkbook = (buffer, options = {}) => {
         if (entry.sourceSection === 'OPERATING_EXPENSE') totals.calculated.operatingExpense += entry.amount;
         if (entry.sourceSection === 'INVESTMENT') totals.calculated.investment += entry.amount;
         if (entry.sourceSection === 'FINANCING') totals.calculated.financing += entry.amount;
+        const monthlyIndex = entry.month - 1;
+        if (entry.type === 'INCOME') totals.monthly.calculated.income[monthlyIndex] += entry.amount;
+        if (entry.sourceSection === 'EXPENSE') totals.monthly.calculated.expense[monthlyIndex] += entry.amount;
+        if (entry.sourceSection === 'OPERATING_EXPENSE') totals.monthly.calculated.operatingExpense[monthlyIndex] += entry.amount;
+        if (entry.sourceSection === 'INVESTMENT') totals.monthly.calculated.investment[monthlyIndex] += entry.amount;
+        if (entry.sourceSection === 'FINANCING') totals.monthly.calculated.financing[monthlyIndex] += entry.amount;
     }
 
     const payrollContinuityFlags = Object.values(entries.reduce((acc, entry) => {

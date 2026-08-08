@@ -115,6 +115,10 @@ test('parseFinancialImportWorkbook supports categorized monthly finance sheets',
     assert.equal(result.totals.calculated.income, 5060000);
     assert.equal(result.totals.calculated.expense, 41445000);
     assert.equal(result.totals.calculated.operatingExpense, 6067802);
+    assert.deepEqual(result.totals.monthly.explicit.income.slice(0, 2), [2530000, 2530000]);
+    assert.deepEqual(result.totals.monthly.calculated.income.slice(0, 2), [2530000, 2530000]);
+    assert.deepEqual(result.totals.monthly.explicit.expense.slice(0, 2), [4522500, 4522500]);
+    assert.deepEqual(result.totals.monthly.explicit.operatingExpense.slice(0, 2), [2259722, 3808080]);
 
     const pauta = result.entries.find((entry) => entry.sourceLabel === 'Pautas' && entry.month === 2);
     assert.equal(pauta.category, 'PAUTA');

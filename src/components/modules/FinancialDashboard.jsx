@@ -127,6 +127,8 @@ const FinancialDashboard = () => {
         }).format(val);
     };
 
+    const monthLabels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
     // Donut chart formatted distribution data
     const expenseDistributionData = useMemo(() => {
         if (!data?.categoriesDistribution?.EXPENSE) return [];
@@ -678,6 +680,56 @@ const FinancialDashboard = () => {
                                                     <p className="text-[10px] text-zinc-500 mt-2">Fila {flag.rowNumber} · Meses: {flag.months.join(', ')}</p>
                                                 </div>
                                             ))}
+                                        </div>
+                                    )}
+
+                                    {importPreview.totals?.monthly && (
+                                        <div className="mt-6 overflow-x-auto">
+                                            <div className="flex items-start justify-between gap-4 mb-3">
+                                                <div>
+                                                    <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Resumen mensual importado</p>
+                                                    <p className="text-xs text-zinc-500 mt-1">Esta tabla es el puente entre el Excel y el módulo financiero operativo.</p>
+                                                </div>
+                                                <span className="shrink-0 rounded-full bg-violet-600/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-violet-600">
+                                                    {importPreview.layout === 'CATEGORIZED_MONTHLY' ? 'Formato nuevo' : 'Formato legado'}
+                                                </span>
+                                            </div>
+                                            <table className="min-w-[980px] w-full text-left text-[11px]">
+                                                <thead className="text-[9px] uppercase tracking-widest text-zinc-400">
+                                                    <tr>
+                                                        <th className="py-2 pr-4">Rubro</th>
+                                                        {monthLabels.map((month) => (
+                                                            <th key={month} className="py-2 px-2 text-right">{month}</th>
+                                                        ))}
+                                                        <th className="py-2 pl-2 text-right">Total</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                                                    {[
+                                                        ['Ingresos', importPreview.totals.monthly.explicit.income, 'text-emerald-600'],
+                                                        ['Costos administrativos', importPreview.totals.monthly.explicit.expense, 'text-red-500'],
+                                                        ['Gastos operativos', importPreview.totals.monthly.explicit.operatingExpense, 'text-orange-500'],
+                                                        ['Financiamiento / inversión', importPreview.totals.monthly.explicit.financing, 'text-cyan-600'],
+                                                        ['Resultado del ejercicio', importPreview.totals.monthly.explicit.netResult, 'text-violet-600']
+                                                    ].map(([label, values, colorClass]) => {
+                                                        const safeValues = Array.isArray(values) ? values : Array(12).fill(0);
+                                                        const total = safeValues.reduce((sum, value) => sum + value, 0);
+                                                        return (
+                                                            <tr key={label} className="hover:bg-zinc-50/70 dark:hover:bg-white/5">
+                                                                <td className="py-3 pr-4 font-bold text-zinc-800 dark:text-zinc-100">{label}</td>
+                                                                {safeValues.map((value, index) => (
+                                                                    <td key={`${label}-${index}`} className={cn("py-3 px-2 text-right font-bold", value < 0 ? "text-red-500" : value > 0 ? colorClass : "text-zinc-300")}>
+                                                                        {value ? formatCurrency(value) : '-'}
+                                                                    </td>
+                                                                ))}
+                                                                <td className={cn("py-3 pl-2 text-right font-black", total < 0 ? "text-red-500" : total > 0 ? colorClass : "text-zinc-300")}>
+                                                                    {total ? formatCurrency(total) : '-'}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
                                         </div>
                                     )}
 
