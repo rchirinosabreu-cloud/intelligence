@@ -399,6 +399,179 @@ export const updateFinancialReceivable = async (req, res, dependencies = {}) => 
     }
 };
 
+const serializePayrollContract = (contract) => ({
+    id: contract.id,
+    collaboratorId: contract.collaboratorId,
+    userId: contract.userId,
+    name: contract.collaborator?.displayName || contract.user?.name || contract.sourceLabel || 'Colaborador',
+    position: contract.position?.title || '',
+    baseSalary: toNum(contract.baseSalary),
+    socialSecurity: toNum(contract.socialSecurity),
+    monthlyTotal: Number.isFinite(Number(contract.metadata?.monthlyTotal))
+        ? Number(contract.metadata.monthlyTotal)
+        : roundFloat(toNum(contract.baseSalary) + toNum(contract.socialSecurity))
+});
+
+export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+
+    try {
+        const year = parseInt(req.query.year, 10) || 2026;
+        const activeImportBatch = await prismaClient.financialImportBatch.findFirst({
+            where: {
+                year,
+                status: 'IMPORTED'
+            },
+            orderBy: {
+                createdAt: 'desc'
+            },
+            select: {
+                id: true,
+                year: true
+            }
+        });
+
+        if (!activeImportBatch?.id) {
+            return res.json({
+                year,
+                importBatchId: null,
+                items: []
+            });
+        }
+
+        const contracts = await prismaClient.payrollContract.findMany({
+            where: {
+                importBatchId: activeImportBatch.id
+            },
+            include: {
+                collaborator: {
+                    select: {
+                        displayName: true
+                    }
+                },
+                user: {
+                    select: {
+                        name: true
+                    }
+                },
+                position: {
+                    select: {
+                        title: true
+                    }
+                }
+            },
+            orderBy: {
+                sourceRow: 'asc'
+            }
+        });
+
+        return res.json({
+            year,
+            importBatchId: activeImportBatch.id,
+            items: contracts.map(serializePayrollContract)
+        });
+    } catch (error) {
+        console.error('[Financials API] Payroll ledger failed:', error.response?.data || error);
+        return res.status(500).json({
+            error: 'FINANCIAL_PAYROLL_LEDGER_FAILED',
+            message: 'No fue posible cargar la nomina financiera.'
+        });
+    }
+};
+
+export const updateFinancialPayrollContract = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+
+    try {
+        const { id } = req.params;
+        const { baseSalary, socialSecurity, monthlyTotal } = req.body || {};
+        const existing = await prismaClient.payrollContract.findUnique({
+            where: { id }
+        });
+
+        if (!existing) {
+            return res.status(404).json({
+                error: 'FINANCIAL_PAYROLL_CONTRACT_NOT_FOUND',
+                message: 'No encontramos el contrato de nomina.'
+            });
+        }
+
+        const data = {
+            metadata: {
+                ...(existing.metadata || {}),
+                editedBy: req.user?.id || null,
+                editedAt: new Date().toISOString()
+            }
+        };
+
+        if (baseSalary !== undefined) {
+            const numericBaseSalary = Number(baseSalary);
+            if (!Number.isFinite(numericBaseSalary)) {
+                return res.status(400).json({
+                    error: 'FINANCIAL_PAYROLL_BASE_INVALID',
+                    message: 'El salario base no es valido.'
+                });
+            }
+            data.baseSalary = numericBaseSalary;
+        }
+
+        if (socialSecurity !== undefined) {
+            const numericSocialSecurity = Number(socialSecurity);
+            if (!Number.isFinite(numericSocialSecurity)) {
+                return res.status(400).json({
+                    error: 'FINANCIAL_PAYROLL_SOCIAL_SECURITY_INVALID',
+                    message: 'La seguridad social no es valida.'
+                });
+            }
+            data.socialSecurity = numericSocialSecurity;
+        }
+
+        if (monthlyTotal !== undefined) {
+            const numericMonthlyTotal = Number(monthlyTotal);
+            if (!Number.isFinite(numericMonthlyTotal)) {
+                return res.status(400).json({
+                    error: 'FINANCIAL_PAYROLL_MONTHLY_TOTAL_INVALID',
+                    message: 'El total mensual no es valido.'
+                });
+            }
+            data.metadata.monthlyTotal = numericMonthlyTotal;
+        }
+
+        const contract = await prismaClient.payrollContract.update({
+            where: { id },
+            data,
+            include: {
+                collaborator: {
+                    select: {
+                        displayName: true
+                    }
+                },
+                user: {
+                    select: {
+                        name: true
+                    }
+                },
+                position: {
+                    select: {
+                        title: true
+                    }
+                }
+            }
+        });
+
+        return res.json({
+            message: 'Nomina actualizada correctamente.',
+            contract: serializePayrollContract(contract)
+        });
+    } catch (error) {
+        console.error('[Financials API] Payroll contract update failed:', error.response?.data || error);
+        return res.status(500).json({
+            error: 'FINANCIAL_PAYROLL_UPDATE_FAILED',
+            message: 'No fue posible guardar el cambio de nomina.'
+        });
+    }
+};
+
 export const getFinancialDashboard = async (req, res, dependencies = {}) => {
     const prismaClient = dependencies.prismaClient || prisma;
 

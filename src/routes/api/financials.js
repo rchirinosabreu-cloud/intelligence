@@ -4,8 +4,10 @@ import {
     commitFinancialImport,
     getFinancialDashboard,
     getFinancialMonthlyLedger,
+    getFinancialPayrollLedger,
     getFinancialReceivablesLedger,
     previewFinancialImport,
+    updateFinancialPayrollContract,
     updateFinancialReceivable,
     updateFinancialMonthlySummary
 } from '../../controllers/financialController.js';
@@ -24,6 +26,8 @@ router.get('/monthly-ledger', requireFinancialAccess, getFinancialMonthlyLedger)
 router.patch('/monthly-summaries/:id', requireFinancialAccess, updateFinancialMonthlySummary);
 router.get('/receivables-ledger', requireFinancialAccess, getFinancialReceivablesLedger);
 router.patch('/receivables/:id', requireFinancialAccess, updateFinancialReceivable);
+router.get('/payroll-ledger', requireFinancialAccess, getFinancialPayrollLedger);
+router.patch('/payroll-contracts/:id', requireFinancialAccess, updateFinancialPayrollContract);
 router.post('/import/preview', requireFinancialAccess, upload.single('file'), previewFinancialImport);
 router.post('/import/commit', requireFinancialAccess, upload.single('file'), commitFinancialImport);
 

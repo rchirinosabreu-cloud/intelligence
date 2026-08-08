@@ -56,6 +56,7 @@ const FinancialDashboard = () => {
     const [isCommittingImport, setIsCommittingImport] = useState(false);
     const [savingMonthlyCell, setSavingMonthlyCell] = useState('');
     const [savingReceivableId, setSavingReceivableId] = useState('');
+    const [savingPayrollContractId, setSavingPayrollContractId] = useState('');
     const canAccessFinancials = currentUser?.role === 'ADMIN' || currentUser?.hasFinancialAccess === true;
 
     // Fetch analytical aggregation from protected backend endpoint
@@ -97,6 +98,19 @@ const FinancialDashboard = () => {
             return res.data;
         },
         enabled: !!(currentUser && canAccessFinancials && activeTab === 'receivables')
+    });
+
+    const { data: payrollLedger, isLoading: isPayrollLedgerLoading } = useQuery({
+        queryKey: ['financials-payroll-ledger', selectedYear],
+        queryFn: async () => {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const res = await axios.get(`${baseUrl}/api/financials/payroll-ledger?year=${selectedYear}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            return res.data;
+        },
+        enabled: !!(currentUser && canAccessFinancials && activeTab === 'payroll')
     });
 
     const toggleClientExpand = (clientId) => {
@@ -232,6 +246,33 @@ const FinancialDashboard = () => {
         }
     };
 
+    const handlePayrollContractUpdate = async (contract, patch) => {
+        const contractId = contract?.id || contract?.contractId;
+        if (!contractId) return;
+
+        setSavingPayrollContractId(contractId);
+        setImportError('');
+        setImportSuccess('');
+
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            await axios.patch(`${baseUrl}/api/financials/payroll-contracts/${contractId}`, patch, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] }),
+                queryClient.invalidateQueries({ queryKey: ['financials-payroll-ledger'] })
+            ]);
+            setImportSuccess('Nómina actualizada.');
+        } catch (error) {
+            console.error('Error updating financial payroll contract:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible guardar el cambio de nómina.');
+        } finally {
+            setSavingPayrollContractId('');
+        }
+    };
+
     // Processing high-precision calculated KPIs from fetched data
     const kpis = useMemo(() => {
         if (!data) return { totalIncome: 0, totalExpense: 0, netFlow: 0, totalReceivable: 0 };
@@ -303,6 +344,15 @@ const FinancialDashboard = () => {
 
         return Object.values(grouped).sort((a, b) => b.totalOutstanding - a.totalOutstanding);
     }, [receivablesLedger?.items]);
+
+    const payrollRows = useMemo(() => {
+        if (payrollLedger?.items?.length > 0) return payrollLedger.items;
+        return data?.payroll?.collaborators || [];
+    }, [data?.payroll?.collaborators, payrollLedger?.items]);
+
+    const editablePayrollTotal = useMemo(() => (
+        payrollRows.reduce((sum, item) => sum + (Number(item.monthlyTotal ?? item.totalPaid) || 0), 0)
+    ), [payrollRows]);
 
     // 2. Route Guard Security Check (After ALL Hook Declarations)
     if (!currentUser || !canAccessFinancials) {
@@ -791,12 +841,17 @@ const FinancialDashboard = () => {
                                     Resumen de costo de personal real para el periodo, aplicando salarios base, seguridad social y ajustes extraordinarios.
                                 </p>
                             </div>
-                            <div className="px-3 py-1.5 bg-violet-600/10 text-violet-600 rounded-xl text-[10px] font-bold">
+                            <div className="px-3 py-1.5 bg-violet-600/10 text-violet-600 rounded-xl text-[10px] font-bold" title={`Total editable: ${formatCurrency(editablePayrollTotal || 0)}`}>
                                 Costo Total Nómina: {formatCurrency(data?.payroll?.totalPayrollCost || 0)}
                             </div>
                         </div>
 
-                        {data?.payroll?.collaborators?.length > 0 ? (
+                        {isPayrollLedgerLoading ? (
+                            <div className="p-10 bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl text-center">
+                                <Loader2 className="w-5 h-5 animate-spin text-violet-600 mx-auto mb-3" />
+                                <p className="text-sm font-bold text-zinc-900 dark:text-white">Cargando nómina...</p>
+                            </div>
+                        ) : payrollRows.length > 0 ? (
                             <Card className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left border-collapse">
@@ -810,8 +865,8 @@ const FinancialDashboard = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                            {data.payroll.collaborators.map((collab) => (
-                                                <tr key={collab.collaboratorId || collab.userId || collab.contractId || collab.name} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 text-xs">
+                                            {payrollRows.map((collab) => (
+                                                <tr key={collab.id || collab.collaboratorId || collab.userId || collab.contractId || collab.name} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 text-xs">
                                                     <td className="p-4">
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-8 h-8 rounded-full bg-violet-600/10 flex items-center justify-center text-violet-600 font-bold text-[11px]">
@@ -823,15 +878,47 @@ const FinancialDashboard = () => {
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    <td className="p-4 font-medium">{formatCurrency(collab.baseSalary)}</td>
-                                                    <td className="p-4 text-zinc-500">{formatCurrency(collab.socialSecurity)}</td>
+                                                    <td className="p-4 font-medium">
+                                                        <input
+                                                            type="number"
+                                                            defaultValue={collab.baseSalary || 0}
+                                                            disabled={savingPayrollContractId === (collab.id || collab.contractId)}
+                                                            onBlur={(event) => {
+                                                                const nextValue = Number(event.target.value || 0);
+                                                                if (Number.isFinite(nextValue) && nextValue !== collab.baseSalary) {
+                                                                    handlePayrollContractUpdate(collab, { baseSalary: nextValue });
+                                                                }
+                                                            }}
+                                                            onKeyDown={(event) => {
+                                                                if (event.key === 'Enter') event.currentTarget.blur();
+                                                            }}
+                                                            className="w-32 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs font-bold text-zinc-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
+                                                        />
+                                                    </td>
+                                                    <td className="p-4 text-zinc-500">
+                                                        <input
+                                                            type="number"
+                                                            defaultValue={collab.socialSecurity || 0}
+                                                            disabled={savingPayrollContractId === (collab.id || collab.contractId)}
+                                                            onBlur={(event) => {
+                                                                const nextValue = Number(event.target.value || 0);
+                                                                if (Number.isFinite(nextValue) && nextValue !== collab.socialSecurity) {
+                                                                    handlePayrollContractUpdate(collab, { socialSecurity: nextValue });
+                                                                }
+                                                            }}
+                                                            onKeyDown={(event) => {
+                                                                if (event.key === 'Enter') event.currentTarget.blur();
+                                                            }}
+                                                            className="w-32 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs font-bold text-zinc-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
+                                                        />
+                                                    </td>
                                                     <td className="p-4">
                                                         <div className="space-y-1">
                                                             <span className={cn(
                                                                 "text-[10px] font-bold px-1.5 py-0.5 rounded",
-                                                                collab.adjustmentsTotal >= 0 ? "text-emerald-600 bg-emerald-500/10" : "text-red-500 bg-red-500/10"
+                                                                (collab.adjustmentsTotal || 0) >= 0 ? "text-emerald-600 bg-emerald-500/10" : "text-red-500 bg-red-500/10"
                                                             )}>
-                                                                {collab.adjustmentsTotal >= 0 ? '+' : ''}{formatCurrency(collab.adjustmentsTotal)}
+                                                                {(collab.adjustmentsTotal || 0) >= 0 ? '+' : ''}{formatCurrency(collab.adjustmentsTotal || 0)}
                                                             </span>
                                                             {collab.adjustments?.length > 0 && (
                                                                 <div className="text-[9px] text-zinc-400 line-clamp-1 italic max-w-xs">
@@ -841,7 +928,22 @@ const FinancialDashboard = () => {
                                                         </div>
                                                     </td>
                                                     <td className="p-4 text-right font-black text-zinc-900 dark:text-white">
-                                                        {formatCurrency(collab.totalPaid)}
+                                                        <input
+                                                            type="number"
+                                                            defaultValue={collab.monthlyTotal ?? collab.totalPaid ?? 0}
+                                                            disabled={savingPayrollContractId === (collab.id || collab.contractId)}
+                                                            onBlur={(event) => {
+                                                                const nextValue = Number(event.target.value || 0);
+                                                                const currentValue = Number(collab.monthlyTotal ?? collab.totalPaid ?? 0);
+                                                                if (Number.isFinite(nextValue) && nextValue !== currentValue) {
+                                                                    handlePayrollContractUpdate(collab, { monthlyTotal: nextValue });
+                                                                }
+                                                            }}
+                                                            onKeyDown={(event) => {
+                                                                if (event.key === 'Enter') event.currentTarget.blur();
+                                                            }}
+                                                            className="ml-auto w-36 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-right text-xs font-black text-zinc-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
+                                                        />
                                                     </td>
                                                 </tr>
                                             ))}
