@@ -20,6 +20,7 @@ import Reports from './components/modules/Reports';
 import MoodboardDashboard from './components/modules/Moodboard/MoodboardDashboard';
 import MoodboardCanvas from './components/modules/Moodboard/MoodboardCanvas';
 import Login from './components/Login';
+import ForcePasswordChange from './components/ForcePasswordChange';
 import PrivacyPolicy from './components/public/PrivacyPolicy';
 import TermsOfService from './components/public/TermsOfService';
 import SharedContentPlan from './components/public/SharedContentPlan';
@@ -85,6 +86,25 @@ function AppContent() {
 
   if (isLoading) {
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center">Cargando...</div>;
+  }
+
+  if (isAuthenticated && currentUser?.mustChangePassword) {
+    return (
+      <ThemeProvider>
+        <Router>
+          <Routes>
+            <Route path="/cambiar-password" element={<ForcePasswordChange />} />
+            <Route path="*" element={<Navigate to="/cambiar-password" replace />} />
+          </Routes>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              className: 'dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-800 border',
+            }}
+          />
+        </Router>
+      </ThemeProvider>
+    );
   }
 
   return (

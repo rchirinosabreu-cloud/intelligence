@@ -86,7 +86,12 @@ describe('userService', () => {
             expect(bcrypt.hash).toHaveBeenCalledWith('new_pass', 10);
             expect(prisma.user.update).toHaveBeenCalledWith({
                 where: { id: 'u1' },
-                data: { password: 'new_hash' }
+                data: {
+                    password: 'new_hash',
+                    mustChangePassword: false,
+                    passwordChangedAt: expect.any(Date),
+                    sessionVersion: { increment: 1 }
+                }
             });
             expect(result).toEqual({ success: true });
         });

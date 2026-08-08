@@ -71,7 +71,7 @@ router.put('/password', async (req, res) => {
             return res.status(400).json({ error: 'Contraseña actual y nueva son requeridas' });
         }
         await updateUserPassword(req.user.userId, currentPassword, newPassword);
-        return res.json({ message: 'Contraseña actualizada correctamente' });
+        return res.json({ message: 'Contraseña actualizada correctamente', requiresLogin: true });
     } catch (error) {
         const status = error.message === 'Contraseña actual incorrecta' ? 400 : 500;
         return res.status(status).json({ error: error.message });

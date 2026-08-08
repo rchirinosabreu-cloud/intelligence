@@ -12,7 +12,9 @@ export const getUserProfile = async (userId) => {
             avatarUrl: true,
             role: true,
             createdAt: true,
-            modulePermissions: true
+            modulePermissions: true,
+            mustChangePassword: true,
+            passwordChangedAt: true
         }
     });
     if (user && user.modulePermissions && typeof user.modulePermissions === 'string') {
@@ -79,7 +81,9 @@ export const updateUserProfile = async (userId, data) => {
                 avatarUrl: true,
                 role: true,
                 isActive: true,
-                modulePermissions: true
+                modulePermissions: true,
+                mustChangePassword: true,
+                passwordChangedAt: true
             }
         });
 
@@ -130,7 +134,12 @@ export const updateUserPassword = async (userId, currentPassword, newPassword) =
 
     await prisma.user.update({
         where: { id: userId },
-        data: { password: hashedNewPassword }
+        data: {
+            password: hashedNewPassword,
+            mustChangePassword: false,
+            passwordChangedAt: new Date(),
+            sessionVersion: { increment: 1 }
+        }
     });
 
     return { success: true };

@@ -33,6 +33,9 @@ model User {
   isActive            Boolean              @default(true)
   bio                 String?
   hasFinancialAccess  Boolean              @default(false)
+  mustChangePassword  Boolean              @default(false)
+  passwordChangedAt   DateTime?
+  sessionVersion      Int                  @default(0)
   authoredFeedback    FeedbackRecord[]     @relation("AuthoredFeedback")
   receivedFeedback    FeedbackRecord[]     @relation("ReceivedFeedback")
   generalChatMessages GeneralChatMessage[]

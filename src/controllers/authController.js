@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'brainstudio-secret-key-2025';
+const AUTH_TOKEN_EXPIRES_IN = process.env.AUTH_TOKEN_EXPIRES_IN || '8h';
 
 export const login = async (req, res) => {
   try {
@@ -26,6 +27,7 @@ export const login = async (req, res) => {
                   password: hashedAdminPassword,
                   role: 'ADMIN',
                   hasFinancialAccess: true,
+                  passwordChangedAt: new Date(),
                   modulePermissions: {
                       Inicio: true,
                       Manager: true,
@@ -61,13 +63,26 @@ export const login = async (req, res) => {
               email: user.email,
               role: user.role,
               hasFinancialAccess: user.hasFinancialAccess,
-              modulePermissions: user.modulePermissions
+              modulePermissions: user.modulePermissions,
+              sessionVersion: user.sessionVersion
           },
           JWT_SECRET,
-          { expiresIn: '30d' }
+          { expiresIn: AUTH_TOKEN_EXPIRES_IN }
       );
 
-      return res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, hasFinancialAccess: user.hasFinancialAccess, modulePermissions: user.modulePermissions } });
+      return res.json({
+          token,
+          user: {
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              hasFinancialAccess: user.hasFinancialAccess,
+              modulePermissions: user.modulePermissions,
+              mustChangePassword: user.mustChangePassword,
+              sessionVersion: user.sessionVersion
+          }
+      });
 
   } catch (error) {
       console.error('Error during login:', error);
@@ -109,7 +124,8 @@ export const syncUsers = async (req, res) => {
             name: member.name,
             email: normalizedEmail,
             password: hashedPassword,
-            role: 'EDITOR'
+            role: 'EDITOR',
+            mustChangePassword: true
           }
         });
         createdCount++;
@@ -161,9 +177,10 @@ export const createUser = async (req, res) => {
                 email,
                 password: hashedPassword,
                 role: role || 'EDITOR',
-                hasFinancialAccess: req.body.hasFinancialAccess || false
+                hasFinancialAccess: req.body.hasFinancialAccess || false,
+                mustChangePassword: true
             },
-            select: { id: true, name: true, email: true, role: true, hasFinancialAccess: true }
+            select: { id: true, name: true, email: true, role: true, hasFinancialAccess: true, mustChangePassword: true }
         });
 
         return res.status(201).json(newUser);

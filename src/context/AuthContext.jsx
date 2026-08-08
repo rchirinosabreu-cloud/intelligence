@@ -3,6 +3,36 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext(null);
 
+const clearAuthSession = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('currentUser');
+    sessionStorage.removeItem('authToken');
+    sessionStorage.removeItem('currentUser');
+};
+
+const decodeJwtPayload = (token) => {
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const json = decodeURIComponent(
+            atob(base64)
+                .split('')
+                .map((char) => `%${(`00${char.charCodeAt(0).toString(16)}`).slice(-2)}`)
+                .join('')
+        );
+        return JSON.parse(json);
+    } catch (error) {
+        console.error('Failed to decode auth token:', error);
+        return null;
+    }
+};
+
+const isJwtExpired = (token) => {
+    const payload = decodeJwtPayload(token);
+    if (!payload?.exp) return true;
+    return payload.exp * 1000 <= Date.now();
+};
+
 export const AuthProvider = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
@@ -12,29 +42,45 @@ export const AuthProvider = ({ children }) => {
         const token = localStorage.getItem('authToken');
         const userStr = localStorage.getItem('currentUser');
 
-        if (token && userStr) {
+        if (token && userStr && !isJwtExpired(token)) {
             setIsAuthenticated(true);
             try {
                 setCurrentUser(JSON.parse(userStr));
             } catch (e) {
                 console.error('Failed to parse user data');
-                sessionStorage.removeItem('authToken');
-                sessionStorage.removeItem('currentUser');
+                clearAuthSession();
             }
+        } else if (token || userStr) {
+            clearAuthSession();
         }
         setIsLoading(false);
 
         const handleAuthError = () => {
             setIsAuthenticated(false);
             setCurrentUser(null);
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('currentUser');
-            sessionStorage.removeItem('authToken');
-            sessionStorage.removeItem('currentUser');
+            clearAuthSession();
+        };
+
+        const handlePasswordChangeRequired = () => {
+            const current = localStorage.getItem('currentUser');
+            if (!current) return;
+            try {
+                const user = { ...JSON.parse(current), mustChangePassword: true };
+                localStorage.setItem('currentUser', JSON.stringify(user));
+                sessionStorage.setItem('currentUser', JSON.stringify(user));
+                setCurrentUser(user);
+                setIsAuthenticated(true);
+            } catch (error) {
+                console.error('Failed to mark password change as required:', error);
+            }
         };
 
         window.addEventListener('auth-error', handleAuthError);
-        return () => window.removeEventListener('auth-error', handleAuthError);
+        window.addEventListener('password-change-required', handlePasswordChangeRequired);
+        return () => {
+            window.removeEventListener('auth-error', handleAuthError);
+            window.removeEventListener('password-change-required', handlePasswordChangeRequired);
+        };
     }, []);
 
     const login = (token, user) => {
@@ -49,10 +95,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = () => {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('currentUser');
-        sessionStorage.removeItem('authToken');
-        sessionStorage.removeItem('currentUser');
+        clearAuthSession();
         setCurrentUser(null);
         setIsAuthenticated(false);
     };
