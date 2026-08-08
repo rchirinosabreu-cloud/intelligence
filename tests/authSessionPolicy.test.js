@@ -17,6 +17,7 @@ test('auth session policy supports revocation and mandatory password changes', a
   assert.match(schema, /sessionVersion\s+Int\s+@default\(0\)/);
 
   assert.match(authController, /AUTH_TOKEN_EXPIRES_IN/);
+  assert.match(authController, /AUTH_TOKEN_EXPIRES_IN\s*=\s*process\.env\.AUTH_TOKEN_EXPIRES_IN\s*\|\|\s*'12h'/);
   assert.match(authController, /sessionVersion:\s*user\.sessionVersion/);
   assert.match(authController, /mustChangePassword:\s*user\.mustChangePassword/);
   assert.doesNotMatch(authController, /expiresIn:\s*'30d'/);
@@ -29,6 +30,8 @@ test('auth session policy supports revocation and mandatory password changes', a
   assert.match(userService, /mustChangePassword:\s*false/);
   assert.match(userService, /passwordChangedAt:\s*new Date\(\)/);
   assert.match(userService, /sessionVersion:\s*\{\s*increment:\s*1\s*\}/);
+  assert.match(userService, /isSamePassword\s*=\s*await bcrypt\.compare\(newPassword,\s*user\.password\)/);
+  assert.match(userService, /La nueva contrasena debe ser diferente a la actual/);
   assert.match(userRoutes, /requiresLogin:\s*true/);
 
   assert.match(resetScript, /mustChangePassword:\s*true/);
@@ -58,6 +61,7 @@ test('frontend detects expired tokens before rendering the app and owns the pass
   assert.match(forcePassword, /\/api\/user\/password/);
   assert.match(forcePassword, /logout\(\)/);
   assert.match(forcePassword, /Tu nueva contrasena/);
+  assert.match(forcePassword, /newPassword === currentPassword/);
 
   assert.match(login, /Imagina\. Crea\. Conecta\. Trasciende\./);
   assert.match(login, /brainstudio-login-hero\.png/);

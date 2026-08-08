@@ -76,13 +76,16 @@ describe('userService', () => {
     describe('updateUserPassword', () => {
         it('debería actualizar la contraseña si la actual es correcta', async () => {
             prisma.user.findUnique.mockResolvedValue({ id: 'u1', password: 'old_hash' });
-            bcrypt.compare.mockResolvedValue(true);
+            bcrypt.compare
+                .mockResolvedValueOnce(true)
+                .mockResolvedValueOnce(false);
             bcrypt.hash.mockResolvedValue('new_hash');
             prisma.user.update.mockResolvedValue({ id: 'u1' });
 
             const result = await updateUserPassword('u1', 'old_pass', 'new_pass');
 
             expect(bcrypt.compare).toHaveBeenCalledWith('old_pass', 'old_hash');
+            expect(bcrypt.compare).toHaveBeenCalledWith('new_pass', 'old_hash');
             expect(bcrypt.hash).toHaveBeenCalledWith('new_pass', 10);
             expect(prisma.user.update).toHaveBeenCalledWith({
                 where: { id: 'u1' },
@@ -94,6 +97,18 @@ describe('userService', () => {
                 }
             });
             expect(result).toEqual({ success: true });
+        });
+
+        it('deberia rechazar una contrasena nueva igual a la actual', async () => {
+            prisma.user.findUnique.mockResolvedValue({ id: 'u1', password: 'old_hash' });
+            bcrypt.compare
+                .mockResolvedValueOnce(true)
+                .mockResolvedValueOnce(true);
+
+            await expect(updateUserPassword('u1', 'old_pass', 'old_pass'))
+                .rejects.toThrow('La nueva contrasena debe ser diferente a la actual');
+
+            expect(prisma.user.update).not.toHaveBeenCalled();
         });
 
         it('debería lanzar error si la contraseña actual es incorrecta', async () => {

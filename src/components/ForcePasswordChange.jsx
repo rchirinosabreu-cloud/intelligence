@@ -22,6 +22,11 @@ const ForcePasswordChange = () => {
       return;
     }
 
+    if (newPassword === currentPassword) {
+      setErrorMsg('Tu nueva contrasena debe ser diferente a la actual.');
+      return;
+    }
+
     if (newPassword !== confirmPassword) {
       setErrorMsg('La confirmacion no coincide con tu nueva contrasena.');
       return;

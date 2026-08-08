@@ -130,6 +130,11 @@ export const updateUserPassword = async (userId, currentPassword, newPassword) =
         throw new Error('Contraseña actual incorrecta');
     }
 
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+        throw new Error('La nueva contrasena debe ser diferente a la actual');
+    }
+
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
 
     await prisma.user.update({
