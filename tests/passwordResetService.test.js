@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildPasswordResetEmail
+} from '../src/services/passwordResetEmailService.js';
+import {
   PASSWORD_RESET_PUBLIC_MESSAGE,
   completePasswordReset,
   normalizeEmail,
@@ -58,6 +61,15 @@ const createDependencies = () => {
 
 test('normalizeEmail trims and lowercases addresses', () => {
   assert.equal(normalizeEmail('  Owner@BrainStudio.COM  '), 'owner@brainstudio.com');
+});
+
+test('buildPasswordResetEmail renders a branded recovery message', () => {
+  const html = buildPasswordResetEmail({ code: '680295', expiresInMinutes: 10 });
+
+  assert.match(html, /Brainstudio Intelligence/);
+  assert.match(html, /Recupera tu acceso/);
+  assert.match(html, /680295/);
+  assert.match(html, /10 minutos/);
 });
 
 test('requestPasswordReset stores a hashed code and sends the plain code only by email', async () => {
