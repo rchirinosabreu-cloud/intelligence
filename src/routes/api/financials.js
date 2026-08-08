@@ -3,9 +3,11 @@ import multer from 'multer';
 import {
     commitFinancialImport,
     getFinancialDashboard,
+    getFinancialClientReconciliation,
     getFinancialMonthlyLedger,
     getFinancialPayrollLedger,
     getFinancialReceivablesLedger,
+    linkFinancialClient,
     previewFinancialImport,
     updateFinancialPayrollContract,
     updateFinancialReceivable,
@@ -24,6 +26,8 @@ const upload = multer({
 router.get('/dashboard', requireFinancialAccess, getFinancialDashboard);
 router.get('/monthly-ledger', requireFinancialAccess, getFinancialMonthlyLedger);
 router.patch('/monthly-summaries/:id', requireFinancialAccess, updateFinancialMonthlySummary);
+router.get('/client-reconciliation', requireFinancialAccess, getFinancialClientReconciliation);
+router.patch('/client-links/:sourceClientId', requireFinancialAccess, linkFinancialClient);
 router.get('/receivables-ledger', requireFinancialAccess, getFinancialReceivablesLedger);
 router.patch('/receivables/:id', requireFinancialAccess, updateFinancialReceivable);
 router.get('/payroll-ledger', requireFinancialAccess, getFinancialPayrollLedger);

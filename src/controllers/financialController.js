@@ -281,6 +281,235 @@ const buildReceivableTotals = (items) => items.reduce((totals, item) => {
     total: 0
 });
 
+const serializeClientTarget = (client) => ({
+    id: client.id,
+    name: client.name,
+    slug: client.slug
+});
+
+const SOURCE_LABEL_PREFIX = 'source-label:';
+
+const buildClientReconciliationRows = (records, receivables) => {
+    const grouped = new Map();
+
+    const ensureRow = (sourceId, clientId, client, fallbackName = 'Cliente sin nombre') => {
+        if (!grouped.has(sourceId)) {
+            grouped.set(sourceId, {
+                sourceId,
+                clientId,
+                client: {
+                    id: client?.id || clientId,
+                    name: client?.name || fallbackName,
+                    slug: client?.slug || null
+                },
+                income: 0,
+                expense: 0,
+                receivable: 0,
+                recordCount: 0,
+                receivableCount: 0
+            });
+        }
+        return grouped.get(sourceId);
+    };
+
+    records.forEach((record) => {
+        const sourceLabel = record.sourceLabel || record.description || record.id;
+        const sourceId = record.clientId || `${SOURCE_LABEL_PREFIX}${sourceLabel}`;
+        const row = ensureRow(sourceId, record.clientId || null, record.client, sourceLabel);
+        const amount = toNum(record.amount);
+        if (record.type === 'INCOME') {
+            row.income = roundFloat(row.income + amount);
+        } else {
+            row.expense = roundFloat(row.expense + amount);
+        }
+        row.recordCount += 1;
+    });
+
+    receivables.forEach((receivable) => {
+        if (!receivable.clientId) return;
+        const row = ensureRow(receivable.clientId, receivable.clientId, receivable.client);
+        if (receivable.status === 'DEBE') {
+            row.receivable = roundFloat(row.receivable + toNum(receivable.amount));
+        }
+        row.receivableCount += 1;
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => (
+        (b.income + b.receivable + b.expense) - (a.income + a.receivable + a.expense)
+    ));
+};
+
+export const getFinancialClientReconciliation = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+
+    try {
+        const year = parseInt(req.query.year, 10) || 2026;
+        const activeImportBatch = await prismaClient.financialImportBatch.findFirst({
+            where: {
+                year,
+                status: 'IMPORTED'
+            },
+            orderBy: {
+                createdAt: 'desc'
+            },
+            select: {
+                id: true,
+                year: true
+            }
+        });
+
+        const importBatchFilter = activeImportBatch?.id ? { importBatchId: activeImportBatch.id } : {};
+        const [records, receivables, targets] = await Promise.all([
+            prismaClient.financialRecord.findMany({
+                where: {
+                    year,
+                    ...importBatchFilter
+                },
+                include: {
+                    client: {
+                        select: {
+                            id: true,
+                            name: true,
+                            slug: true
+                        }
+                    }
+                }
+            }),
+            prismaClient.accountsReceivable.findMany({
+                where: {
+                    year,
+                    ...importBatchFilter
+                },
+                include: {
+                    client: {
+                        select: {
+                            id: true,
+                            name: true,
+                            slug: true
+                        }
+                    }
+                }
+            }),
+            prismaClient.client.findMany({
+                where: {
+                    isArchived: false
+                },
+                select: {
+                    id: true,
+                    name: true,
+                    slug: true
+                },
+                orderBy: {
+                    name: 'asc'
+                }
+            })
+        ]);
+
+        return res.json({
+            year,
+            importBatchId: activeImportBatch?.id || null,
+            clients: buildClientReconciliationRows(records, receivables),
+            targets: targets.map(serializeClientTarget)
+        });
+    } catch (error) {
+        console.error('[Financials API] Client reconciliation failed:', error.response?.data || error);
+        return res.status(500).json({
+            error: 'FINANCIAL_CLIENT_RECONCILIATION_FAILED',
+            message: 'No fue posible cargar la conciliacion de clientes financieros.'
+        });
+    }
+};
+
+export const linkFinancialClient = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+
+    try {
+        const { sourceClientId } = req.params;
+        const { targetClientId } = req.body || {};
+        const isSourceLabel = sourceClientId?.startsWith(SOURCE_LABEL_PREFIX);
+        const sourceLabel = isSourceLabel
+            ? decodeURIComponent(sourceClientId.slice(SOURCE_LABEL_PREFIX.length))
+            : null;
+
+        if (!sourceClientId || !targetClientId || sourceClientId === targetClientId) {
+            return res.status(400).json({
+                error: 'FINANCIAL_CLIENT_LINK_INVALID',
+                message: 'Selecciona dos clientes distintos para conciliar.'
+            });
+        }
+
+        const result = await prismaClient.$transaction(async (tx) => {
+            const clients = await tx.client.findMany({
+                where: {
+                    id: {
+                        in: isSourceLabel ? [targetClientId] : [sourceClientId, targetClientId]
+                    }
+                },
+                select: {
+                    id: true,
+                    name: true
+                }
+            });
+
+            if (clients.length !== (isSourceLabel ? 1 : 2)) {
+                return null;
+            }
+
+            const trace = {
+                reconciledFromClientId: sourceClientId,
+                reconciledToClientId: targetClientId,
+                reconciledBy: req.user?.id || null,
+                reconciledAt: new Date().toISOString()
+            };
+            const sourceWhere = isSourceLabel
+                ? { clientId: null, sourceLabel }
+                : { clientId: sourceClientId };
+            const [financialRecords, receivables] = await Promise.all([
+                tx.financialRecord.updateMany({
+                    where: sourceWhere,
+                    data: {
+                        clientId: targetClientId,
+                        metadata: trace
+                    }
+                }),
+                tx.accountsReceivable.updateMany({
+                    where: isSourceLabel ? { id: '__never__' } : { clientId: sourceClientId },
+                    data: {
+                        clientId: targetClientId,
+                        metadata: trace
+                    }
+                })
+            ]);
+
+            return {
+                clients,
+                moved: {
+                    financialRecords: financialRecords.count,
+                    receivables: receivables.count
+                }
+            };
+        });
+
+        if (!result) {
+            return res.status(404).json({
+                error: 'FINANCIAL_CLIENT_LINK_NOT_FOUND',
+                message: 'No encontramos uno de los clientes para conciliar.'
+            });
+        }
+
+        return res.json({
+            message: 'Cliente financiero conciliado correctamente.',
+            ...result
+        });
+    } catch (error) {
+        console.error('[Financials API] Client link failed:', error.response?.data || error);
+        return res.status(500).json({
+            error: 'FINANCIAL_CLIENT_LINK_FAILED',
+            message: 'No fue posible conciliar el cliente financiero.'
+        });
+    }
+};
+
 export const getFinancialReceivablesLedger = async (req, res, dependencies = {}) => {
     const prismaClient = dependencies.prismaClient || prisma;
 

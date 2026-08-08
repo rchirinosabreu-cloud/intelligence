@@ -11,7 +11,7 @@ import {
 import {
     TrendingUp, TrendingDown, DollarSign, Wallet, ShieldCheck, AlertCircle,
     Users, ChevronDown, ChevronUp, Loader2, Sparkles, Calendar, PieChart as PieIcon, ListCollapse, ListCollapse as ExpandIcon,
-    UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2
+    UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2, Link2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -57,6 +57,8 @@ const FinancialDashboard = () => {
     const [savingMonthlyCell, setSavingMonthlyCell] = useState('');
     const [savingReceivableId, setSavingReceivableId] = useState('');
     const [savingPayrollContractId, setSavingPayrollContractId] = useState('');
+    const [savingClientLinkId, setSavingClientLinkId] = useState('');
+    const [clientLinkTargets, setClientLinkTargets] = useState({});
     const canAccessFinancials = currentUser?.role === 'ADMIN' || currentUser?.hasFinancialAccess === true;
 
     // Fetch analytical aggregation from protected backend endpoint
@@ -111,6 +113,19 @@ const FinancialDashboard = () => {
             return res.data;
         },
         enabled: !!(currentUser && canAccessFinancials && activeTab === 'payroll')
+    });
+
+    const { data: clientReconciliation, isLoading: isClientReconciliationLoading } = useQuery({
+        queryKey: ['financials-client-reconciliation', selectedYear],
+        queryFn: async () => {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const res = await axios.get(`${baseUrl}/api/financials/client-reconciliation?year=${selectedYear}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            return res.data;
+        },
+        enabled: !!(currentUser && canAccessFinancials && activeTab === 'clients')
     });
 
     const toggleClientExpand = (clientId) => {
@@ -270,6 +285,41 @@ const FinancialDashboard = () => {
             setImportError(error.response?.data?.message || 'No fue posible guardar el cambio de nómina.');
         } finally {
             setSavingPayrollContractId('');
+        }
+    };
+
+    const handleClientLink = async (sourceClientId) => {
+        const targetClientId = clientLinkTargets[sourceClientId];
+        if (!sourceClientId || !targetClientId || sourceClientId === targetClientId) return;
+
+        setSavingClientLinkId(sourceClientId);
+        setImportError('');
+        setImportSuccess('');
+
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            await axios.patch(`${baseUrl}/api/financials/client-links/${encodeURIComponent(sourceClientId)}`, {
+                targetClientId
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] }),
+                queryClient.invalidateQueries({ queryKey: ['financials-client-reconciliation'] }),
+                queryClient.invalidateQueries({ queryKey: ['financials-receivables-ledger'] })
+            ]);
+            setClientLinkTargets(prev => {
+                const next = { ...prev };
+                delete next[sourceClientId];
+                return next;
+            });
+            setImportSuccess('Cliente financiero conciliado.');
+        } catch (error) {
+            console.error('Error linking financial client:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible conciliar el cliente financiero.');
+        } finally {
+            setSavingClientLinkId('');
         }
     };
 
@@ -552,6 +602,15 @@ const FinancialDashboard = () => {
                     )}
                 >
                     Editor Mensual
+                </button>
+                <button
+                    onClick={() => setActiveTab('clients')}
+                    className={cn(
+                        "py-3 px-6 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all mr-2",
+                        activeTab === 'clients' ? "text-violet-600 border-violet-600 dark:text-white dark:border-white" : "text-zinc-400 border-transparent hover:text-zinc-600"
+                    )}
+                >
+                    Clientes
                 </button>
                 <button
                     onClick={() => setActiveTab('import')}
@@ -1053,6 +1112,110 @@ const FinancialDashboard = () => {
                                 <div className="py-16 text-center">
                                     <FileSpreadsheet className="w-10 h-10 mx-auto text-zinc-300 mb-3" />
                                     <p className="text-sm font-bold text-zinc-900 dark:text-white">No hay datos mensuales editables</p>
+                                    <p className="text-xs text-zinc-500 mt-1">Importa primero el financiero del año seleccionado.</p>
+                                </div>
+                            )}
+                        </Card>
+                    </div>
+                )}
+
+                {activeTab === 'clients' && (
+                    <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Conciliación de clientes</h2>
+                                <p className="text-[11px] text-zinc-500 mt-1">
+                                    Vincula clientes importados desde el Excel con el cliente real de la plataforma para unificar ingresos, cartera y decisiones.
+                                </p>
+                            </div>
+                            {clientReconciliation?.importBatchId && (
+                                <span className="rounded-full bg-violet-600/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-violet-600">
+                                    Importación activa
+                                </span>
+                            )}
+                        </div>
+
+                        <Card className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
+                            {isClientReconciliationLoading ? (
+                                <div className="flex items-center justify-center py-16 text-sm text-zinc-500">
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin text-violet-600" />
+                                    Cargando conciliación de clientes...
+                                </div>
+                            ) : clientReconciliation?.clients?.length > 0 ? (
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-[1040px] w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="border-b border-zinc-100 dark:border-white/5 bg-zinc-50/80 dark:bg-zinc-900/60 text-[10px] font-black uppercase text-zinc-400 tracking-wider">
+                                                <th className="p-4 min-w-[240px]">Cliente financiero</th>
+                                                <th className="p-4 text-right">Ingresos</th>
+                                                <th className="p-4 text-right">Cartera</th>
+                                                <th className="p-4 text-right">Registros</th>
+                                                <th className="p-4 min-w-[280px]">Cliente real</th>
+                                                <th className="p-4 text-right">Acción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                                            {clientReconciliation.clients.map((row) => {
+                                                const sourceId = row.sourceId || row.clientId;
+                                                const targetId = clientLinkTargets[sourceId] || '';
+                                                const isSaving = savingClientLinkId === sourceId;
+                                                return (
+                                                    <tr key={sourceId} className="text-xs hover:bg-zinc-50/60 dark:hover:bg-white/5">
+                                                        <td className="p-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="h-9 w-9 rounded-xl bg-violet-600/10 text-violet-600 flex items-center justify-center text-[11px] font-black">
+                                                                    {(row.client?.name || 'CL').substring(0, 2).toUpperCase()}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-black text-zinc-900 dark:text-white">{row.client?.name}</p>
+                                                                    <p className="text-[10px] text-zinc-400">{row.client?.slug || 'sin-slug'}</p>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-4 text-right font-black text-emerald-600">{formatCurrency(row.income || 0)}</td>
+                                                        <td className="p-4 text-right font-black text-amber-600">{formatCurrency(row.receivable || 0)}</td>
+                                                        <td className="p-4 text-right text-zinc-500">
+                                                            {(row.recordCount || 0) + (row.receivableCount || 0)}
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <select
+                                                                value={targetId}
+                                                                disabled={isSaving}
+                                                                onChange={(event) => setClientLinkTargets(prev => ({
+                                                                    ...prev,
+                                                                    [sourceId]: event.target.value
+                                                                }))}
+                                                                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
+                                                            >
+                                                                <option value="">Seleccionar cliente...</option>
+                                                                {clientReconciliation.targets
+                                                                    ?.filter((target) => target.id !== row.clientId)
+                                                                    .map((target) => (
+                                                                        <option key={target.id} value={target.id}>{target.name}</option>
+                                                                    ))}
+                                                            </select>
+                                                        </td>
+                                                        <td className="p-4 text-right">
+                                                            <button
+                                                                type="button"
+                                                                disabled={!targetId || isSaving}
+                                                                onClick={() => handleClientLink(sourceId)}
+                                                                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                                            >
+                                                                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+                                                                Vincular
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <div className="py-16 text-center">
+                                    <Users className="w-10 h-10 mx-auto text-zinc-300 mb-3" />
+                                    <p className="text-sm font-bold text-zinc-900 dark:text-white">No hay clientes financieros por conciliar</p>
                                     <p className="text-xs text-zinc-500 mt-1">Importa primero el financiero del año seleccionado.</p>
                                 </div>
                             )}
