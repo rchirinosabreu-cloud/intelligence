@@ -60,6 +60,8 @@ test('frontend detects expired tokens before rendering the app and owns the pass
 
   assert.match(forcePassword, /\/api\/user\/password/);
   assert.match(forcePassword, /logout\(\)/);
+  assert.match(forcePassword, /Usar otra cuenta/);
+  assert.match(forcePassword, /navigate\('\/login',\s*\{\s*replace:\s*true\s*\}\)/);
   assert.match(forcePassword, /Tu nueva contrasena/);
   assert.match(forcePassword, /newPassword === currentPassword/);
 

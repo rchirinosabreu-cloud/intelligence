@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, LockKeyhole } from 'lucide-react';
+import { ArrowLeft, Lock, LockKeyhole } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getApiBaseUrl } from '../lib/apiBaseUrl';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +12,11 @@ const ForcePasswordChange = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleUseAnotherAccount = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -148,6 +153,15 @@ const ForcePasswordChange = () => {
               >
                 <LockKeyhole className="h-4 w-4" />
                 {loading ? 'Actualizando...' : 'Guardar nueva contrasena'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleUseAnotherAccount}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:border-indigo-400/40 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-200"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Usar otra cuenta
               </button>
             </form>
           </div>
