@@ -36,6 +36,222 @@ const buildCashFlowFromSummaries = (summaries) => summaries.map((summary) => {
     };
 });
 
+const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+const MONTHLY_LEDGER_FIELDS = [
+    { key: 'explicitIncome', label: 'Ingresos', tone: 'income' },
+    { key: 'explicitAdminCost', label: 'Costos administrativos', tone: 'expense' },
+    { key: 'explicitOperatingExpense', label: 'Gastos operativos', tone: 'expense' },
+    { key: 'explicitFinancing', label: 'Financiacion / inversion', tone: 'financing' },
+    { key: 'explicitDebt', label: 'Cartera / morosos', tone: 'warning' },
+    { key: 'netResult', label: 'Resultado del ejercicio', tone: 'net' }
+];
+
+const EDITABLE_MONTHLY_FIELDS = new Set(MONTHLY_LEDGER_FIELDS.map((field) => field.key));
+
+const calculateNetResult = (summary) => roundFloat(
+    toNum(summary.explicitIncome) -
+    toNum(summary.explicitAdminCost) -
+    toNum(summary.explicitOperatingExpense) -
+    toNum(summary.explicitFinancing)
+);
+
+const buildImportSummaryTotals = (summaries) => summaries.reduce((totals, summary) => ({
+    income: roundFloat(totals.income + toNum(summary.explicitIncome)),
+    expense: roundFloat(totals.expense + toNum(summary.explicitAdminCost)),
+    operatingExpense: roundFloat(totals.operatingExpense + toNum(summary.explicitOperatingExpense)),
+    financing: roundFloat(totals.financing + toNum(summary.explicitFinancing)),
+    totalCostAndExpense: roundFloat(
+        totals.totalCostAndExpense +
+        toNum(summary.explicitAdminCost) +
+        toNum(summary.explicitOperatingExpense) +
+        toNum(summary.explicitFinancing)
+    ),
+    debt: roundFloat(totals.debt + toNum(summary.explicitDebt)),
+    netResult: roundFloat(totals.netResult + toNum(summary.netResult))
+}), {
+    income: 0,
+    expense: 0,
+    operatingExpense: 0,
+    financing: 0,
+    totalCostAndExpense: 0,
+    debt: 0,
+    netResult: 0
+});
+
+const buildMonthlyLedgerPayload = (activeImportBatch, summaries) => {
+    const summaryByMonth = new Map(summaries.map((summary) => [summary.month, summary]));
+
+    return {
+        year: activeImportBatch.year,
+        importBatchId: activeImportBatch.id,
+        months: MONTH_LABELS.map((label, index) => ({
+            month: index + 1,
+            label
+        })),
+        rows: MONTHLY_LEDGER_FIELDS.map((field) => ({
+            ...field,
+            values: Array.from({ length: 12 }, (_, index) => {
+                const month = index + 1;
+                const summary = summaryByMonth.get(month);
+                return {
+                    summaryId: summary?.id || null,
+                    month,
+                    amount: summary ? toNum(summary[field.key]) : 0
+                };
+            })
+        }))
+    };
+};
+
+export const getFinancialMonthlyLedger = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+
+    try {
+        const year = parseInt(req.query.year, 10) || 2026;
+        const activeImportBatch = await prismaClient.financialImportBatch.findFirst({
+            where: {
+                year,
+                status: 'IMPORTED'
+            },
+            orderBy: {
+                createdAt: 'desc'
+            },
+            select: {
+                id: true,
+                year: true
+            }
+        });
+
+        if (!activeImportBatch?.id) {
+            return res.json({
+                year,
+                importBatchId: null,
+                months: MONTH_LABELS.map((label, index) => ({ month: index + 1, label })),
+                rows: MONTHLY_LEDGER_FIELDS.map((field) => ({ ...field, values: [] }))
+            });
+        }
+
+        const summaries = await prismaClient.financialMonthlySummary.findMany({
+            where: {
+                year,
+                importBatchId: activeImportBatch.id
+            },
+            orderBy: {
+                month: 'asc'
+            }
+        });
+
+        return res.json(buildMonthlyLedgerPayload(activeImportBatch, summaries));
+    } catch (error) {
+        console.error('[Financials API] Monthly ledger failed:', error.response?.data || error);
+        return res.status(500).json({
+            error: 'FINANCIAL_MONTHLY_LEDGER_FAILED',
+            message: 'No fue posible cargar el editor financiero mensual.'
+        });
+    }
+};
+
+export const updateFinancialMonthlySummary = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+
+    try {
+        const { id } = req.params;
+        const { field, amount } = req.body || {};
+        const numericAmount = Number(amount);
+
+        if (!EDITABLE_MONTHLY_FIELDS.has(field) || !Number.isFinite(numericAmount)) {
+            return res.status(400).json({
+                error: 'FINANCIAL_MONTHLY_UPDATE_INVALID',
+                message: 'El campo o valor mensual no es valido.'
+            });
+        }
+
+        const result = await prismaClient.$transaction(async (tx) => {
+            const existing = await tx.financialMonthlySummary.findUnique({
+                where: { id }
+            });
+
+            if (!existing) {
+                return null;
+            }
+
+            const nextSummary = {
+                ...existing,
+                [field]: numericAmount
+            };
+            const nextNetResult = field === 'netResult'
+                ? numericAmount
+                : calculateNetResult(nextSummary);
+            const metadata = {
+                ...(existing.metadata || {}),
+                editedBy: req.user?.id || null,
+                editedAt: new Date().toISOString(),
+                editedField: field
+            };
+
+            const updatedSummary = await tx.financialMonthlySummary.update({
+                where: { id },
+                data: {
+                    [field]: numericAmount,
+                    netResult: nextNetResult,
+                    metadata
+                }
+            });
+
+            const summaries = await tx.financialMonthlySummary.findMany({
+                where: {
+                    year: updatedSummary.year,
+                    importBatchId: updatedSummary.importBatchId
+                }
+            });
+            const explicitTotals = buildImportSummaryTotals(summaries);
+
+            await tx.financialImportBatch.update({
+                where: { id: updatedSummary.importBatchId },
+                data: {
+                    summary: {
+                        totals: {
+                            explicit: explicitTotals,
+                            calculated: explicitTotals
+                        },
+                        editedAt: metadata.editedAt,
+                        editedBy: metadata.editedBy
+                    }
+                }
+            });
+
+            return updatedSummary;
+        });
+
+        if (!result) {
+            return res.status(404).json({
+                error: 'FINANCIAL_MONTHLY_SUMMARY_NOT_FOUND',
+                message: 'No encontramos el mes financiero que intentas editar.'
+            });
+        }
+
+        return res.json({
+            message: 'Mes financiero actualizado correctamente.',
+            summary: {
+                ...result,
+                explicitIncome: toNum(result.explicitIncome),
+                explicitAdminCost: toNum(result.explicitAdminCost),
+                explicitOperatingExpense: toNum(result.explicitOperatingExpense),
+                explicitFinancing: toNum(result.explicitFinancing),
+                explicitDebt: toNum(result.explicitDebt),
+                netResult: toNum(result.netResult)
+            }
+        });
+    } catch (error) {
+        console.error('[Financials API] Monthly summary update failed:', error.response?.data || error);
+        return res.status(500).json({
+            error: 'FINANCIAL_MONTHLY_UPDATE_FAILED',
+            message: 'No fue posible guardar el cambio financiero.'
+        });
+    }
+};
+
 export const getFinancialDashboard = async (req, res, dependencies = {}) => {
     const prismaClient = dependencies.prismaClient || prisma;
 

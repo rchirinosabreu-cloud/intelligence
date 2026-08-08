@@ -54,6 +54,7 @@ const FinancialDashboard = () => {
     const [importSuccess, setImportSuccess] = useState('');
     const [isImporting, setIsImporting] = useState(false);
     const [isCommittingImport, setIsCommittingImport] = useState(false);
+    const [savingMonthlyCell, setSavingMonthlyCell] = useState('');
     const canAccessFinancials = currentUser?.role === 'ADMIN' || currentUser?.hasFinancialAccess === true;
 
     // Fetch analytical aggregation from protected backend endpoint
@@ -69,6 +70,19 @@ const FinancialDashboard = () => {
             return res.data;
         },
         enabled: !!(currentUser && canAccessFinancials) // Dynamic safeguard to prevent 401s
+    });
+
+    const { data: monthlyLedger, isLoading: isMonthlyLedgerLoading } = useQuery({
+        queryKey: ['financials-monthly-ledger', selectedYear],
+        queryFn: async () => {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const res = await axios.get(`${baseUrl}/api/financials/monthly-ledger?year=${selectedYear}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            return res.data;
+        },
+        enabled: !!(currentUser && canAccessFinancials && activeTab === 'editor')
     });
 
     const toggleClientExpand = (clientId) => {
@@ -144,6 +158,38 @@ const FinancialDashboard = () => {
             setImportError(error.response?.data?.message || 'No fue posible guardar la importación financiera.');
         } finally {
             setIsCommittingImport(false);
+        }
+    };
+
+    const handleMonthlyCellSave = async (cell, field, rawValue) => {
+        if (!cell?.summaryId) return;
+        const normalizedValue = Number(String(rawValue || '0').replace(/[^\d.-]/g, ''));
+        if (!Number.isFinite(normalizedValue) || normalizedValue === cell.amount) return;
+
+        const cellKey = `${field}-${cell.month}`;
+        setSavingMonthlyCell(cellKey);
+        setImportError('');
+        setImportSuccess('');
+
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            await axios.patch(`${baseUrl}/api/financials/monthly-summaries/${cell.summaryId}`, {
+                field,
+                amount: normalizedValue
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] }),
+                queryClient.invalidateQueries({ queryKey: ['financials-monthly-ledger'] })
+            ]);
+            setImportSuccess('Cambio financiero guardado.');
+        } catch (error) {
+            console.error('Error updating monthly financial cell:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible guardar el cambio financiero.');
+        } finally {
+            setSavingMonthlyCell('');
         }
     };
 
@@ -381,6 +427,15 @@ const FinancialDashboard = () => {
                     )}
                 >
                     Nómina Operativa
+                </button>
+                <button
+                    onClick={() => setActiveTab('editor')}
+                    className={cn(
+                        "py-3 px-6 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all mr-2",
+                        activeTab === 'editor' ? "text-violet-600 border-violet-600 dark:text-white dark:border-white" : "text-zinc-400 border-transparent hover:text-zinc-600"
+                    )}
+                >
+                    Editor Mensual
                 </button>
                 <button
                     onClick={() => setActiveTab('import')}
@@ -695,6 +750,105 @@ const FinancialDashboard = () => {
                                 <p className="text-[10px] text-zinc-500 max-w-xs mt-1 mx-auto">No hay nóminas validadas ni pagadas en este periodo.</p>
                             </div>
                         )}
+                    </div>
+                )}
+
+                {activeTab === 'editor' && (
+                    <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Editor financiero mensual</h2>
+                                <p className="text-[11px] text-zinc-500 mt-1">
+                                    Ajusta los totales oficiales de cada mes. Al guardar, el dashboard se recalcula desde la base de datos.
+                                </p>
+                            </div>
+                            {monthlyLedger?.importBatchId && (
+                                <span className="rounded-full bg-violet-600/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-violet-600">
+                                    Fuente DB activa
+                                </span>
+                            )}
+                        </div>
+
+                        <Card className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
+                            {isMonthlyLedgerLoading ? (
+                                <div className="flex items-center justify-center py-16 text-sm text-zinc-500">
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Cargando editor financiero...
+                                </div>
+                            ) : monthlyLedger?.rows?.length > 0 ? (
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-[1120px] w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="border-b border-zinc-100 dark:border-white/5 bg-zinc-50/80 dark:bg-zinc-900/60 text-[10px] font-black uppercase text-zinc-400 tracking-wider">
+                                                <th className="sticky left-0 z-10 bg-zinc-50/95 dark:bg-zinc-900 p-4 min-w-[220px]">Rubro</th>
+                                                {monthlyLedger.months.map((month) => (
+                                                    <th key={month.month} className="p-3 text-right min-w-[110px]">{month.label}</th>
+                                                ))}
+                                                <th className="p-3 text-right min-w-[130px]">Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                                            {monthlyLedger.rows.map((row) => {
+                                                const rowTotal = row.values.reduce((sum, cell) => sum + (Number(cell.amount) || 0), 0);
+                                                return (
+                                                    <tr key={row.key} className="text-xs hover:bg-zinc-50/60 dark:hover:bg-white/5">
+                                                        <td className="sticky left-0 z-10 bg-white dark:bg-zinc-900 p-4">
+                                                            <div className="font-bold text-zinc-900 dark:text-white">{row.label}</div>
+                                                            <div className={cn(
+                                                                "mt-1 inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest",
+                                                                row.tone === 'income' && "bg-emerald-500/10 text-emerald-600",
+                                                                row.tone === 'expense' && "bg-red-500/10 text-red-500",
+                                                                row.tone === 'financing' && "bg-cyan-500/10 text-cyan-600",
+                                                                row.tone === 'warning' && "bg-amber-500/10 text-amber-600",
+                                                                row.tone === 'net' && "bg-violet-600/10 text-violet-600"
+                                                            )}>
+                                                                {row.tone}
+                                                            </div>
+                                                        </td>
+                                                        {row.values.map((cell) => {
+                                                            const cellKey = `${row.key}-${cell.month}`;
+                                                            return (
+                                                                <td key={cellKey} className="p-2 align-middle">
+                                                                    <div className="relative">
+                                                                        <input
+                                                                            type="number"
+                                                                            defaultValue={cell.amount || 0}
+                                                                            disabled={!cell.summaryId || savingMonthlyCell === cellKey}
+                                                                            onBlur={(event) => handleMonthlyCellSave(cell, row.key, event.target.value)}
+                                                                            onKeyDown={(event) => {
+                                                                                if (event.key === 'Enter') {
+                                                                                    event.currentTarget.blur();
+                                                                                }
+                                                                            }}
+                                                                            className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-right text-[11px] font-bold text-zinc-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
+                                                                        />
+                                                                        {savingMonthlyCell === cellKey && (
+                                                                            <Loader2 className="absolute left-2 top-2.5 h-3.5 w-3.5 animate-spin text-violet-600" />
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                            );
+                                                        })}
+                                                        <td className={cn(
+                                                            "p-3 text-right text-xs font-black",
+                                                            rowTotal < 0 ? "text-red-500" : row.tone === 'income' ? "text-emerald-600" : "text-zinc-900 dark:text-white"
+                                                        )}>
+                                                            {formatCurrency(rowTotal)}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <div className="py-16 text-center">
+                                    <FileSpreadsheet className="w-10 h-10 mx-auto text-zinc-300 mb-3" />
+                                    <p className="text-sm font-bold text-zinc-900 dark:text-white">No hay datos mensuales editables</p>
+                                    <p className="text-xs text-zinc-500 mt-1">Importa primero el financiero del año seleccionado.</p>
+                                </div>
+                            )}
+                        </Card>
                     </div>
                 )}
 
