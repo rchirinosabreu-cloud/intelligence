@@ -4,7 +4,9 @@ import {
     commitFinancialImport,
     getFinancialDashboard,
     getFinancialMonthlyLedger,
+    getFinancialReceivablesLedger,
     previewFinancialImport,
+    updateFinancialReceivable,
     updateFinancialMonthlySummary
 } from '../../controllers/financialController.js';
 import { requireFinancialAccess } from '../../middlewares/authMiddleware.js';
@@ -20,6 +22,8 @@ const upload = multer({
 router.get('/dashboard', requireFinancialAccess, getFinancialDashboard);
 router.get('/monthly-ledger', requireFinancialAccess, getFinancialMonthlyLedger);
 router.patch('/monthly-summaries/:id', requireFinancialAccess, updateFinancialMonthlySummary);
+router.get('/receivables-ledger', requireFinancialAccess, getFinancialReceivablesLedger);
+router.patch('/receivables/:id', requireFinancialAccess, updateFinancialReceivable);
 router.post('/import/preview', requireFinancialAccess, upload.single('file'), previewFinancialImport);
 router.post('/import/commit', requireFinancialAccess, upload.single('file'), commitFinancialImport);
 

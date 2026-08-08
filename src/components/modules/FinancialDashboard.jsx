@@ -55,6 +55,7 @@ const FinancialDashboard = () => {
     const [isImporting, setIsImporting] = useState(false);
     const [isCommittingImport, setIsCommittingImport] = useState(false);
     const [savingMonthlyCell, setSavingMonthlyCell] = useState('');
+    const [savingReceivableId, setSavingReceivableId] = useState('');
     const canAccessFinancials = currentUser?.role === 'ADMIN' || currentUser?.hasFinancialAccess === true;
 
     // Fetch analytical aggregation from protected backend endpoint
@@ -83,6 +84,19 @@ const FinancialDashboard = () => {
             return res.data;
         },
         enabled: !!(currentUser && canAccessFinancials && activeTab === 'editor')
+    });
+
+    const { data: receivablesLedger, isLoading: isReceivablesLedgerLoading } = useQuery({
+        queryKey: ['financials-receivables-ledger', selectedYear],
+        queryFn: async () => {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const res = await axios.get(`${baseUrl}/api/financials/receivables-ledger?year=${selectedYear}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            return res.data;
+        },
+        enabled: !!(currentUser && canAccessFinancials && activeTab === 'receivables')
     });
 
     const toggleClientExpand = (clientId) => {
@@ -193,6 +207,31 @@ const FinancialDashboard = () => {
         }
     };
 
+    const handleReceivableUpdate = async (debt, patch) => {
+        if (!debt?.id) return;
+        setSavingReceivableId(debt.id);
+        setImportError('');
+        setImportSuccess('');
+
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            await axios.patch(`${baseUrl}/api/financials/receivables/${debt.id}`, patch, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] }),
+                queryClient.invalidateQueries({ queryKey: ['financials-receivables-ledger'] })
+            ]);
+            setImportSuccess('Cartera actualizada.');
+        } catch (error) {
+            console.error('Error updating financial receivable:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible guardar el cambio de cartera.');
+        } finally {
+            setSavingReceivableId('');
+        }
+    };
+
     // Processing high-precision calculated KPIs from fetched data
     const kpis = useMemo(() => {
         if (!data) return { totalIncome: 0, totalExpense: 0, netFlow: 0, totalReceivable: 0 };
@@ -237,6 +276,33 @@ const FinancialDashboard = () => {
             }))
             .filter(item => item.value > 0);
     }, [data?.categoriesDistribution]);
+
+    const receivablesByClient = useMemo(() => {
+        const grouped = {};
+        const items = receivablesLedger?.items || [];
+
+        items.forEach((item) => {
+            const clientId = item.clientSlug || item.clientName || item.id;
+            if (!grouped[clientId]) {
+                grouped[clientId] = {
+                    clientId,
+                    client: {
+                        name: item.clientName,
+                        slug: item.clientSlug
+                    },
+                    totalOutstanding: 0,
+                    debts: []
+                };
+            }
+
+            if (item.status === 'DEBE') {
+                grouped[clientId].totalOutstanding += Number(item.amount) || 0;
+            }
+            grouped[clientId].debts.push(item);
+        });
+
+        return Object.values(grouped).sort((a, b) => b.totalOutstanding - a.totalOutstanding);
+    }, [receivablesLedger?.items]);
 
     // 2. Route Guard Security Check (After ALL Hook Declarations)
     if (!currentUser || !canAccessFinancials) {
@@ -592,9 +658,14 @@ const FinancialDashboard = () => {
                             </Card>
                         )}
 
-                        {data?.accountsReceivable?.length > 0 ? (
+                        {isReceivablesLedgerLoading ? (
+                            <div className="p-10 bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl text-center">
+                                <Loader2 className="w-5 h-5 animate-spin text-violet-600 mx-auto mb-3" />
+                                <p className="text-sm font-bold text-zinc-900 dark:text-white">Cargando cartera...</p>
+                            </div>
+                        ) : receivablesByClient.length > 0 ? (
                             <div className="space-y-3">
-                                {data.accountsReceivable.map((client) => {
+                                {receivablesByClient.map((client) => {
                                     const isExpanded = !!expandedClients[client.clientId];
                                     return (
                                         <Card key={client.clientId} className="p-4 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm">
@@ -611,7 +682,7 @@ const FinancialDashboard = () => {
                                                             {client.client.name}
                                                         </h4>
                                                         <p className="text-[10px] text-zinc-500">
-                                                            {client.debts?.length} periodos adeudados
+                                                            {client.debts?.length} registros de cartera
                                                         </p>
                                                     </div>
                                                 </div>
@@ -634,28 +705,63 @@ const FinancialDashboard = () => {
                                                     <p className="text-[10px] font-black uppercase text-zinc-400 tracking-wider mb-2">Desglose de Facturas Mensuales (Antigüedad)</p>
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                         {client.debts?.map((debt) => (
-                                                            <div key={debt.id} className="p-3 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5 flex flex-col justify-between">
+                                                            <div key={debt.id} className="p-3 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5 flex flex-col justify-between gap-3">
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <span className="text-[10px] font-bold text-zinc-400">
                                                                         Periodo: {new Date(debt.period).toLocaleDateString('es-CO', { year: 'numeric', month: 'long' }).toUpperCase()}
                                                                     </span>
-                                                                    <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/10 text-amber-500 rounded font-black uppercase">
-                                                                        {debt.status}
-                                                                    </span>
+                                                                    {savingReceivableId === debt.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600" />}
                                                                 </div>
-                                                                <p className="text-sm font-black text-zinc-900 dark:text-white">
-                                                                    {formatCurrency(debt.amount)}
-                                                                </p>
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                    <label className="space-y-1">
+                                                                        <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Monto</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            defaultValue={debt.amount || 0}
+                                                                            disabled={savingReceivableId === debt.id}
+                                                                            onBlur={(event) => {
+                                                                                const nextAmount = Number(event.target.value || 0);
+                                                                                if (Number.isFinite(nextAmount) && nextAmount !== debt.amount) {
+                                                                                    handleReceivableUpdate(debt, { amount: nextAmount });
+                                                                                }
+                                                                            }}
+                                                                            onKeyDown={(event) => {
+                                                                                if (event.key === 'Enter') event.currentTarget.blur();
+                                                                            }}
+                                                                            className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs font-bold text-zinc-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
+                                                                        />
+                                                                    </label>
+                                                                    <label className="space-y-1">
+                                                                        <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Estado</span>
+                                                                        <select
+                                                                            value={debt.status}
+                                                                            disabled={savingReceivableId === debt.id}
+                                                                            onChange={(event) => handleReceivableUpdate(debt, { status: event.target.value })}
+                                                                            className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs font-bold text-zinc-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
+                                                                        >
+                                                                            <option value="DEBE">Debe</option>
+                                                                            <option value="PROMESADO">Promesado</option>
+                                                                            <option value="PAGADO">Pagado</option>
+                                                                        </select>
+                                                                    </label>
+                                                                </div>
                                                                 {debt.dueDate && (
                                                                     <p className="text-[9px] text-zinc-500 mt-1">
                                                                         Vence: {new Date(debt.dueDate).toLocaleDateString('es-CO')}
                                                                     </p>
                                                                 )}
-                                                                {debt.notes && (
-                                                                    <p className="text-[9px] italic text-zinc-500 bg-white dark:bg-zinc-900/50 p-1.5 rounded border border-zinc-100 dark:border-white/5 mt-2">
-                                                                        Nota: {debt.notes}
-                                                                    </p>
-                                                                )}
+                                                                <textarea
+                                                                    defaultValue={debt.comments || debt.notes || ''}
+                                                                    disabled={savingReceivableId === debt.id}
+                                                                    onBlur={(event) => {
+                                                                        const nextComments = event.target.value;
+                                                                        if (nextComments !== (debt.comments || debt.notes || '')) {
+                                                                            handleReceivableUpdate(debt, { comments: nextComments });
+                                                                        }
+                                                                    }}
+                                                                    placeholder="Comentario de seguimiento..."
+                                                                    className="min-h-[64px] w-full resize-y rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs text-zinc-700 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-zinc-100"
+                                                                />
                                                             </div>
                                                         ))}
                                                     </div>

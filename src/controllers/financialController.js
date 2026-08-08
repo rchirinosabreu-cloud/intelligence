@@ -252,6 +252,153 @@ export const updateFinancialMonthlySummary = async (req, res, dependencies = {})
     }
 };
 
+const RECEIVABLE_STATUSES = new Set(['DEBE', 'PAGADO', 'PROMESADO']);
+
+const serializeReceivable = (receivable) => ({
+    id: receivable.id,
+    clientName: receivable.client?.name || receivable.sourceLabel || 'Cliente sin nombre',
+    clientSlug: receivable.client?.slug || null,
+    amount: toNum(receivable.amount),
+    period: receivable.period instanceof Date ? receivable.period.toISOString() : receivable.period,
+    month: receivable.month,
+    year: receivable.year,
+    dueDate: receivable.dueDate instanceof Date ? receivable.dueDate.toISOString() : receivable.dueDate,
+    status: receivable.status,
+    notes: receivable.notes,
+    comments: receivable.comments,
+    sourceLabel: receivable.sourceLabel
+});
+
+const buildReceivableTotals = (items) => items.reduce((totals, item) => {
+    const status = item.status || 'DEBE';
+    totals[status] = roundFloat((totals[status] || 0) + toNum(item.amount));
+    totals.total = roundFloat((totals.total || 0) + toNum(item.amount));
+    return totals;
+}, {
+    DEBE: 0,
+    PAGADO: 0,
+    PROMESADO: 0,
+    total: 0
+});
+
+export const getFinancialReceivablesLedger = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+
+    try {
+        const year = parseInt(req.query.year, 10) || 2026;
+        const activeImportBatch = await prismaClient.financialImportBatch.findFirst({
+            where: {
+                year,
+                status: 'IMPORTED'
+            },
+            orderBy: {
+                createdAt: 'desc'
+            },
+            select: {
+                id: true,
+                year: true
+            }
+        });
+
+        const where = activeImportBatch?.id
+            ? { year, importBatchId: activeImportBatch.id }
+            : { year };
+        const receivables = await prismaClient.accountsReceivable.findMany({
+            where,
+            include: {
+                client: {
+                    select: {
+                        name: true,
+                        slug: true
+                    }
+                }
+            },
+            orderBy: [
+                { status: 'asc' },
+                { period: 'desc' }
+            ]
+        });
+        const items = receivables.map(serializeReceivable);
+
+        return res.json({
+            year,
+            importBatchId: activeImportBatch?.id || null,
+            totals: buildReceivableTotals(items),
+            items
+        });
+    } catch (error) {
+        console.error('[Financials API] Receivables ledger failed:', error.response?.data || error);
+        return res.status(500).json({
+            error: 'FINANCIAL_RECEIVABLES_LEDGER_FAILED',
+            message: 'No fue posible cargar la cartera financiera.'
+        });
+    }
+};
+
+export const updateFinancialReceivable = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+
+    try {
+        const { id } = req.params;
+        const { amount, status, comments, notes, dueDate } = req.body || {};
+        const data = {
+            metadata: {
+                editedBy: req.user?.id || null,
+                editedAt: new Date().toISOString()
+            }
+        };
+
+        if (amount !== undefined) {
+            const numericAmount = Number(amount);
+            if (!Number.isFinite(numericAmount)) {
+                return res.status(400).json({
+                    error: 'FINANCIAL_RECEIVABLE_AMOUNT_INVALID',
+                    message: 'El monto de cartera no es valido.'
+                });
+            }
+            data.amount = numericAmount;
+        }
+
+        if (status !== undefined) {
+            if (!RECEIVABLE_STATUSES.has(status)) {
+                return res.status(400).json({
+                    error: 'FINANCIAL_RECEIVABLE_STATUS_INVALID',
+                    message: 'El estado de cartera no es valido.'
+                });
+            }
+            data.status = status;
+        }
+
+        if (comments !== undefined) data.comments = comments;
+        if (notes !== undefined) data.notes = notes;
+        if (dueDate !== undefined) data.dueDate = dueDate ? new Date(dueDate) : null;
+
+        const receivable = await prismaClient.accountsReceivable.update({
+            where: { id },
+            data,
+            include: {
+                client: {
+                    select: {
+                        name: true,
+                        slug: true
+                    }
+                }
+            }
+        });
+
+        return res.json({
+            message: 'Cartera actualizada correctamente.',
+            receivable: serializeReceivable(receivable)
+        });
+    } catch (error) {
+        console.error('[Financials API] Receivable update failed:', error.response?.data || error);
+        return res.status(500).json({
+            error: 'FINANCIAL_RECEIVABLE_UPDATE_FAILED',
+            message: 'No fue posible guardar el cambio de cartera.'
+        });
+    }
+};
+
 export const getFinancialDashboard = async (req, res, dependencies = {}) => {
     const prismaClient = dependencies.prismaClient || prisma;
 
