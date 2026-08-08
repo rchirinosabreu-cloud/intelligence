@@ -48,6 +48,7 @@ model User {
   payrollContracts    PayrollContract[]
   payrollTransactions PayrollTransaction[]
   financialRecords    FinancialRecord[]
+  financialImportBatches FinancialImportBatch[] @relation("FinancialImportUser")
   teamMember          TeamMember?
 }
 
@@ -624,36 +625,138 @@ enum FinancialType {
   EXPENSE
 }
 
+enum FinancialSection {
+  REVENUE
+  ADMIN_COST
+  OPERATING_EXPENSE
+  INVESTMENT
+  FINANCING
+  RECEIVABLE
+  PAYROLL
+  OTHER
+}
+
+enum FinancialImportStatus {
+  PREVIEW
+  IMPORTED
+  REPLACED
+  FAILED
+}
+
+model FinancialImportBatch {
+  id               String                    @id @default(uuid())
+  year             Int
+  sourceFilename   String
+  sourceHash       String?
+  sourceSheets     Json
+  status           FinancialImportStatus     @default(PREVIEW)
+  summary          Json?
+  importedById     String?
+  importedBy       User?                     @relation("FinancialImportUser", fields: [importedById], references: [id], onDelete: SetNull)
+  importedAt       DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  records          FinancialRecord[]
+  monthlySummaries FinancialMonthlySummary[]
+  payrollContracts PayrollContract[]
+  receivables      AccountsReceivable[]
+
+  @@index([year])
+  @@index([status])
+  @@index([importedById])
+}
+
 model FinancialRecord {
+  id            String                @id @default(uuid())
+  amount        Decimal
+  category      FinancialCategory
+  type          FinancialType
+  section       FinancialSection?
+  date          DateTime              // Accounting date (usually 1st day of month or exact transaction date)
+  year          Int?
+  month         Int?
+  clientId      String?
+  client        Client?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  userId        String?
+  user          User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  importBatchId String?
+  importBatch   FinancialImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  description   String?
+  sourceSheet   String?
+  sourceRow     Int?
+  sourceLabel   String?
+  isProjection  Boolean               @default(false)
+  metadata      Json?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@index([date])
+  @@index([year, month])
+  @@index([category])
+  @@index([type])
+  @@index([section])
+  @@index([clientId, year, month])
+  @@index([importBatchId])
+}
+
+model FinancialMonthlySummary {
+  id                         String               @id @default(uuid())
+  year                       Int
+  month                      Int
+  importBatchId              String
+  importBatch                FinancialImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+  explicitIncome             Decimal              @default(0)
+  calculatedIncome           Decimal              @default(0)
+  explicitAdminCost          Decimal              @default(0)
+  calculatedAdminCost        Decimal              @default(0)
+  explicitOperatingExpense   Decimal              @default(0)
+  calculatedOperatingExpense Decimal              @default(0)
+  explicitFinancing          Decimal              @default(0)
+  calculatedFinancing        Decimal              @default(0)
+  explicitDebt               Decimal              @default(0)
+  calculatedDebt             Decimal              @default(0)
+  netResult                  Decimal              @default(0)
+  metadata                   Json?
+  createdAt                  DateTime             @default(now())
+  updatedAt                  DateTime             @updatedAt
+
+  @@unique([year, month, importBatchId])
+  @@index([year, month])
+}
+
+model PayrollPosition {
   id          String            @id @default(uuid())
-  amount      Decimal
-  category    FinancialCategory
-  type        FinancialType
-  date        DateTime          // Accounting date (usually 1st day of month or exact transaction date)
-  clientId    String?
-  client      Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  userId      String?
-  user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  title       String            @unique
   description String?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
-
-  @@index([date])
-  @@index([category])
-  @@index([type])
+  contracts   PayrollContract[]
 }
 
 model PayrollContract {
-  id             String               @id @default(uuid())
+  id             String                @id @default(uuid())
   userId         String
-  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  positionId     String?
+  position       PayrollPosition?      @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  importBatchId  String?
+  importBatch    FinancialImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
   baseSalary     Decimal
-  socialSecurity Decimal              // Fixed absolute value
+  socialSecurity Decimal               // Fixed absolute value
   startDate      DateTime
   endDate        DateTime?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  sourceSheet    String?
+  sourceRow      Int?
+  sourceLabel    String?
+  metadata       Json?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
   transactions   PayrollTransaction[]
+
+  @@index([userId])
+  @@index([positionId])
+  @@index([importBatchId])
+  @@index([startDate, endDate])
 }
 
 model PayrollTransaction {
@@ -670,6 +773,8 @@ model PayrollTransaction {
   adjustments PayrollAdjustment[]
 
   @@unique([userId, month, year])
+  @@index([contractId])
+  @@index([year, month])
 }
 
 enum AdjustmentType {
@@ -688,6 +793,8 @@ model PayrollAdjustment {
   description   String?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
+
+  @@index([transactionId])
 }
 
 enum ReceivableStatus {
@@ -697,20 +804,32 @@ enum ReceivableStatus {
 }
 
 model AccountsReceivable {
-  id        String           @id @default(uuid())
-  clientId  String
-  client    Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  amount    Decimal
-  period    DateTime         // First day of month (e.g. 2026-04-01)
-  dueDate   DateTime?
-  status    ReceivableStatus @default(DEBE)
-  notes     String?
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id            String                @id @default(uuid())
+  clientId      String
+  client        Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  importBatchId String?
+  importBatch   FinancialImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  amount        Decimal
+  period        DateTime              // First day of month (e.g. 2026-04-01)
+  year          Int?
+  month         Int?
+  dueDate       DateTime?
+  status        ReceivableStatus      @default(DEBE)
+  notes         String?
+  comments      String?
+  sourceSheet   String?
+  sourceRow     Int?
+  sourceLabel   String?
+  metadata      Json?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
 
   @@index([clientId])
   @@index([period])
+  @@index([year, month])
   @@index([status])
+  @@index([clientId, year, month])
+  @@index([importBatchId])
 }
 
 model ServiceCatalog {
