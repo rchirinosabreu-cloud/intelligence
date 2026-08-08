@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, LockKeyhole, ShieldCheck } from 'lucide-react';
+import { Lock, LockKeyhole } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getApiBaseUrl } from '../lib/apiBaseUrl';
 import { useAuth } from '../context/AuthContext';
@@ -83,9 +83,6 @@ const ForcePasswordChange = () => {
           <div className="w-full max-w-md">
             <div className="mb-10">
               <img src="/brainstudio-logo.png" alt="Brainstudio" className="mb-7 h-16 w-auto object-contain" />
-              <div className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/20">
-                <ShieldCheck className="h-6 w-6" />
-              </div>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">Hola, {currentUser?.name || 'equipo Brain'}.</p>
               <h1 className="mt-3 text-4xl font-bold tracking-tight text-zinc-950 dark:text-white">
                 Actualiza tu contrasena
