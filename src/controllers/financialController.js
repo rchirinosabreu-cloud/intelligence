@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { parseFinancialImportWorkbook } from '../services/financialImportService.js';
 
 // Helper to convert Decimal fields safely
 const toNum = (val) => {
@@ -257,5 +258,30 @@ export const getFinancialDashboard = async (req, res) => {
     } catch (error) {
         console.error("[Financials API] Dashboard analytical aggregation failed:", error);
         res.status(500).json({ error: "Failed to compile financial intelligence data dashboard" });
+    }
+};
+
+export const previewFinancialImport = async (req, res) => {
+    try {
+        if (!req.file?.buffer) {
+            return res.status(400).json({
+                error: 'FINANCIAL_IMPORT_FILE_REQUIRED',
+                message: 'Debes subir un archivo CSV o Excel para auditar la informacion financiera.'
+            });
+        }
+
+        const year = parseInt(req.body?.year, 10) || 2026;
+        const preview = parseFinancialImportWorkbook(req.file.buffer, {
+            filename: req.file.originalname,
+            year
+        });
+
+        return res.json(preview);
+    } catch (error) {
+        console.error('[Financials API] Import preview failed:', error);
+        return res.status(500).json({
+            error: 'FINANCIAL_IMPORT_PREVIEW_FAILED',
+            message: 'No fue posible leer el archivo financiero. Revisa el formato e intenta nuevamente.'
+        });
     }
 };

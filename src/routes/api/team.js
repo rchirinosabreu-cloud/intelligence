@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
       where: whereClause,
       include: {
         user: {
-          select: { role: true, modulePermissions: true }
+          select: { role: true, modulePermissions: true, hasFinancialAccess: true }
         }
       },
       orderBy: { name: 'asc' },
@@ -61,6 +61,11 @@ const sanitizePermissions = (perms) => {
     return sanitized;
 };
 
+export const resolveFinancialAccessFlag = (systemRole, modulePermissions = {}) => {
+    if (systemRole === 'ADMIN') return true;
+    return modulePermissions.financiero === true;
+};
+
 // Crear un nuevo miembro del equipo (y auto-crear cuenta de User)
 router.post('/', async (req, res) => {
   if (req.user?.role !== 'ADMIN') {
@@ -74,6 +79,7 @@ router.post('/', async (req, res) => {
     }
 
     const sanitizedPerms = sanitizePermissions(modulePermissions);
+    const hasFinancialAccess = resolveFinancialAccessFlag(systemRole || 'VIEWER', sanitizedPerms);
 
     // Usamos una transacción para asegurar que ambas tablas se actualizan o ninguna
     const newMember = await prisma.$transaction(async (tx) => {
@@ -95,7 +101,8 @@ router.post('/', async (req, res) => {
                         email: normalizedEmail,
                         password: hashedPassword,
                         role: systemRole || 'VIEWER',
-                        modulePermissions: sanitizedPerms
+                        modulePermissions: sanitizedPerms,
+                        hasFinancialAccess
                     }
                 });
             } else {
@@ -103,7 +110,8 @@ router.post('/', async (req, res) => {
                     where: { id: user.id },
                     data: {
                         role: systemRole || undefined,
-                        modulePermissions: sanitizedPerms
+                        modulePermissions: sanitizedPerms,
+                        hasFinancialAccess
                     }
                 });
             }
@@ -160,7 +168,8 @@ router.put('/:id', async (req, res) => {
                 where: { id: member.userId },
                 data: {
                     role: systemRole,
-                    modulePermissions: sanitizedPerms
+                    modulePermissions: sanitizedPerms,
+                    hasFinancialAccess
                 }
             });
         }

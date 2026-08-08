@@ -1,5 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 
 const AuthContext = createContext(null);
 
@@ -45,7 +46,25 @@ export const AuthProvider = ({ children }) => {
         if (token && userStr && !isJwtExpired(token)) {
             setIsAuthenticated(true);
             try {
-                setCurrentUser(JSON.parse(userStr));
+                const cachedUser = JSON.parse(userStr);
+                setCurrentUser(cachedUser);
+
+                fetch(`${getApiBaseUrl()}/api/auth/me`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                })
+                    .then((response) => {
+                        if (!response.ok) throw new Error(`Auth refresh failed: ${response.status}`);
+                        return response.json();
+                    })
+                    .then((freshUser) => {
+                        const mergedUser = { ...cachedUser, ...freshUser };
+                        localStorage.setItem('currentUser', JSON.stringify(mergedUser));
+                        sessionStorage.setItem('currentUser', JSON.stringify(mergedUser));
+                        setCurrentUser(mergedUser);
+                    })
+                    .catch((error) => {
+                        console.error('Failed to refresh user session:', error);
+                    });
             } catch (e) {
                 console.error('Failed to parse user data');
                 clearAuthSession();

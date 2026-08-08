@@ -106,7 +106,6 @@ export const authenticateToken = async (req, res, next) => {
     return res.status(500).json({ error: "Failed to validate session" });
   }
 };
-
 export const requireRole = (role) => {
   return (req, res, next) => {
     if (!req.user) {
@@ -126,7 +125,6 @@ export const requireRole = (role) => {
     next();
   };
 };
-
 export const requireFinancialAccess = async (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ error: "Unauthorized", message: "Usuario no autenticado" });
@@ -136,10 +134,10 @@ export const requireFinancialAccess = async (req, res, next) => {
     const userId = req.user.userId || req.user.id;
     const dbUser = await prisma.user.findUnique({
       where: { id: userId },
-      select: { hasFinancialAccess: true }
+      select: { role: true, hasFinancialAccess: true }
     });
 
-    if (!dbUser || dbUser.hasFinancialAccess !== true) {
+    if (!dbUser || (dbUser.role !== 'ADMIN' && dbUser.hasFinancialAccess !== true)) {
       console.warn(`[Auth] Access denied for user ${req.user.email || req.user.id || userId}: hasFinancialAccess is false`);
       return res.status(403).json({
         error: "Acceso denegado. Se requiere permiso financiero explícito"

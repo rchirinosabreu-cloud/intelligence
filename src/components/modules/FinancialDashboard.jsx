@@ -10,7 +10,8 @@ import {
 } from 'recharts';
 import {
     TrendingUp, TrendingDown, DollarSign, Wallet, ShieldCheck, AlertCircle,
-    Users, ChevronDown, ChevronUp, Loader2, Sparkles, Calendar, PieChart as PieIcon, ListCollapse, ListCollapse as ExpandIcon
+    Users, ChevronDown, ChevronUp, Loader2, Sparkles, Calendar, PieChart as PieIcon, ListCollapse, ListCollapse as ExpandIcon,
+    UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -46,6 +47,10 @@ const FinancialDashboard = () => {
     const [selectedQuarter, setSelectedQuarter] = useState('ALL');
     const [activeTab, setActiveTab] = useState('flow');
     const [expandedClients, setExpandedClients] = useState({});
+    const [importPreview, setImportPreview] = useState(null);
+    const [importError, setImportError] = useState('');
+    const [isImporting, setIsImporting] = useState(false);
+    const canAccessFinancials = currentUser?.role === 'ADMIN' || currentUser?.hasFinancialAccess === true;
 
     // Fetch analytical aggregation from protected backend endpoint
     const { data, isLoading, error } = useQuery({
@@ -59,7 +64,7 @@ const FinancialDashboard = () => {
             });
             return res.data;
         },
-        enabled: !!(currentUser && currentUser.hasFinancialAccess === true) // Dynamic safeguard to prevent 401s
+        enabled: !!(currentUser && canAccessFinancials) // Dynamic safeguard to prevent 401s
     });
 
     const toggleClientExpand = (clientId) => {
@@ -67,6 +72,38 @@ const FinancialDashboard = () => {
             ...prev,
             [clientId]: !prev[clientId]
         }));
+    };
+
+    const handleFinancialImportPreview = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setIsImporting(true);
+        setImportError('');
+
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('year', String(selectedYear));
+
+            const res = await axios.post(`${baseUrl}/api/financials/import/preview`, formData, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+
+            setImportPreview(res.data);
+            setActiveTab('import');
+        } catch (error) {
+            console.error('Error previewing financial import:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible auditar el archivo financiero.');
+        } finally {
+            setIsImporting(false);
+            event.target.value = '';
+        }
     };
 
     // Processing high-precision calculated KPIs from fetched data
@@ -104,7 +141,7 @@ const FinancialDashboard = () => {
     }, [data?.categoriesDistribution]);
 
     // 2. Route Guard Security Check (After ALL Hook Declarations)
-    if (!currentUser || currentUser.hasFinancialAccess !== true) {
+    if (!currentUser || !canAccessFinancials) {
         console.warn(`[Financial Guard] User not authorized. Redirecting...`);
         return <Navigate to="/" replace />;
     }
@@ -155,7 +192,25 @@ const FinancialDashboard = () => {
                         <option value="4">Trimestre 4 (Oct-Dic)</option>
                     </select>
                 </div>
+                <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-black uppercase tracking-widest shadow-sm cursor-pointer transition-colors">
+                    {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                    Auditar archivo
+                    <input
+                        type="file"
+                        className="hidden"
+                        accept=".csv,.xlsx,.xls"
+                        onChange={handleFinancialImportPreview}
+                        disabled={isImporting}
+                    />
+                </label>
             </PageHeader>
+
+            {importError && (
+                <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-950/30 dark:text-red-200">
+                    <AlertCircle className="w-5 h-5 shrink-0" />
+                    <p>{importError}</p>
+                </div>
+            )}
 
             {/* --- SECTION 1: 4 HIGH-DENSITY KPI CARDS --- */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -262,11 +317,20 @@ const FinancialDashboard = () => {
                 <button
                     onClick={() => setActiveTab('payroll')}
                     className={cn(
-                        "py-3 px-6 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all",
+                        "py-3 px-6 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all mr-2",
                         activeTab === 'payroll' ? "text-violet-600 border-violet-600 dark:text-white dark:border-white" : "text-zinc-400 border-transparent hover:text-zinc-600"
                     )}
                 >
                     Nómina Operativa
+                </button>
+                <button
+                    onClick={() => setActiveTab('import')}
+                    className={cn(
+                        "py-3 px-6 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all",
+                        activeTab === 'import' ? "text-violet-600 border-violet-600 dark:text-white dark:border-white" : "text-zinc-400 border-transparent hover:text-zinc-600"
+                    )}
+                >
+                    Auditoría 2026
                 </button>
             </div>
 
@@ -550,6 +614,96 @@ const FinancialDashboard = () => {
                                 <h4 className="text-sm font-bold text-zinc-900 dark:text-white">Sin transacciones registradas</h4>
                                 <p className="text-[10px] text-zinc-500 max-w-xs mt-1 mx-auto">No hay nóminas validadas ni pagadas en este periodo.</p>
                             </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'import' && (
+                    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
+                        {!importPreview ? (
+                            <Card className="p-10 bg-white dark:bg-zinc-900 border border-dashed border-zinc-300 dark:border-white/10 rounded-2xl text-center">
+                                <FileSpreadsheet className="w-12 h-12 text-violet-500 mx-auto mb-4" />
+                                <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Auditor financiero 2026</h3>
+                                <p className="text-sm text-zinc-500 max-w-xl mx-auto mt-2">
+                                    Sube el CSV o Excel de finanzas para convertirlo en registros mensuales, revisar totales y detectar filas que necesitan separarse antes de entrar a la base de datos.
+                                </p>
+                            </Card>
+                        ) : (
+                            <>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <Card className="p-5 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl">
+                                        <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Ingresos detectados</p>
+                                        <p className="text-xl font-black mt-2 text-emerald-600">{formatCurrency(importPreview.totals?.calculated?.income || 0)}</p>
+                                    </Card>
+                                    <Card className="p-5 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl">
+                                        <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Egresos detectados</p>
+                                        <p className="text-xl font-black mt-2 text-red-500">{formatCurrency(importPreview.totals?.calculated?.expense || 0)}</p>
+                                    </Card>
+                                    <Card className="p-5 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl">
+                                        <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Deudas grandes</p>
+                                        <p className="text-xl font-black mt-2 text-amber-500">{formatCurrency(importPreview.totals?.calculated?.debt || 0)}</p>
+                                    </Card>
+                                    <Card className="p-5 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl">
+                                        <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Registros mensuales</p>
+                                        <p className="text-xl font-black mt-2 text-violet-600">{importPreview.entries?.length || 0}</p>
+                                    </Card>
+                                </div>
+
+                                <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl">
+                                    <div className="flex items-start justify-between gap-6">
+                                        <div>
+                                            <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Resultado de auditoría</h3>
+                                            <p className="text-[11px] text-zinc-500 mt-1">
+                                                Archivo: {importPreview.filename || 'Sin nombre'} · Año {importPreview.year}
+                                            </p>
+                                        </div>
+                                        <div className={cn(
+                                            "inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-widest",
+                                            importPreview.warnings?.length > 0
+                                                ? "bg-amber-500/10 text-amber-600"
+                                                : "bg-emerald-500/10 text-emerald-600"
+                                        )}>
+                                            {importPreview.warnings?.length > 0 ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                                            {importPreview.warnings?.length || 0} alertas
+                                        </div>
+                                    </div>
+
+                                    {importPreview.payrollContinuityFlags?.length > 0 && (
+                                        <div className="mt-6 space-y-3">
+                                            <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Continuidad de nómina por revisar</p>
+                                            {importPreview.payrollContinuityFlags.map((flag) => (
+                                                <div key={`${flag.rowNumber}-${flag.label}`} className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-950/20">
+                                                    <p className="text-sm font-bold text-zinc-900 dark:text-white">{flag.label}</p>
+                                                    <p className="text-xs text-amber-700 dark:text-amber-200 mt-1">{flag.reason}</p>
+                                                    <p className="text-[10px] text-zinc-500 mt-2">Fila {flag.rowNumber} · Meses: {flag.months.join(', ')}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {importPreview.debts?.length > 0 && (
+                                        <div className="mt-6 overflow-x-auto">
+                                            <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400 mb-3">Deudas detectadas</p>
+                                            <table className="w-full text-left text-xs">
+                                                <thead className="text-[10px] uppercase tracking-widest text-zinc-400">
+                                                    <tr>
+                                                        <th className="py-2">Cliente / tercero</th>
+                                                        <th className="py-2 text-right">Monto</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                                                    {importPreview.debts.map((debt) => (
+                                                        <tr key={`${debt.rowNumber}-${debt.sourceLabel}`}>
+                                                            <td className="py-3 font-bold text-zinc-800 dark:text-zinc-100">{debt.sourceLabel}</td>
+                                                            <td className="py-3 text-right font-black">{formatCurrency(debt.amount)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </Card>
+                            </>
                         )}
                     </div>
                 )}
