@@ -49,6 +49,7 @@ model User {
   payrollTransactions PayrollTransaction[]
   financialRecords    FinancialRecord[]
   financialImportBatches FinancialImportBatch[] @relation("FinancialImportUser")
+  financialCollaborators FinancialCollaborator[]
   teamMember          TeamMember?
 }
 
@@ -733,10 +734,43 @@ model PayrollPosition {
   contracts   PayrollContract[]
 }
 
+model FinancialCollaborator {
+  id             String                 @id @default(uuid())
+  displayName    String
+  normalizedName String                 @unique
+  userId         String?
+  user           User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  isActive       Boolean                @default(true)
+  metadata       Json?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  aliases        FinancialImportAlias[]
+  contracts      PayrollContract[]
+
+  @@index([userId])
+  @@index([isActive])
+}
+
+model FinancialImportAlias {
+  id             String                @id @default(uuid())
+  sourceType     String                @default("PAYROLL")
+  sourceLabel    String
+  normalizedLabel String
+  collaboratorId String
+  collaborator   FinancialCollaborator @relation(fields: [collaboratorId], references: [id], onDelete: Cascade)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@unique([sourceType, normalizedLabel])
+  @@index([collaboratorId])
+}
+
 model PayrollContract {
   id             String                @id @default(uuid())
-  userId         String
-  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  collaboratorId String?
+  collaborator   FinancialCollaborator? @relation(fields: [collaboratorId], references: [id], onDelete: SetNull)
   positionId     String?
   position       PayrollPosition?      @relation(fields: [positionId], references: [id], onDelete: SetNull)
   importBatchId  String?
@@ -754,6 +788,7 @@ model PayrollContract {
   transactions   PayrollTransaction[]
 
   @@index([userId])
+  @@index([collaboratorId])
   @@index([positionId])
   @@index([importBatchId])
   @@index([startDate, endDate])

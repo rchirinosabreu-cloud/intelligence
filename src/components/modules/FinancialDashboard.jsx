@@ -650,7 +650,7 @@ const FinancialDashboard = () => {
                                         </thead>
                                         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
                                             {data.payroll.collaborators.map((collab) => (
-                                                <tr key={collab.userId} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 text-xs">
+                                                <tr key={collab.collaboratorId || collab.userId || collab.contractId || collab.name} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 text-xs">
                                                     <td className="p-4">
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-8 h-8 rounded-full bg-violet-600/10 flex items-center justify-center text-violet-600 font-bold text-[11px]">

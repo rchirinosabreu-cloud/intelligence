@@ -22,6 +22,9 @@ test('financial records are enriched as editable monthly ledger entries', () => 
 
 test('payroll supports roles that change owner over time', () => {
     assert.match(schema, /model PayrollPosition \{/);
+    assert.match(schema, /model FinancialCollaborator \{/);
+    assert.match(schema, /model FinancialImportAlias \{/);
+    assert.match(schema, /model PayrollContract \{[\s\S]*collaboratorId\s+String\?/);
     assert.match(schema, /model PayrollContract \{[\s\S]*positionId\s+String\?/);
     assert.match(schema, /model PayrollContract \{[\s\S]*sourceRow\s+Int\?/);
 });

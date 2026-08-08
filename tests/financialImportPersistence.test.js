@@ -89,7 +89,11 @@ test('persistFinancialImportPlan replaces prior imported year data and writes no
         },
         findFirst: async (args) => {
             calls.push([name, 'findFirst', args]);
-            return { id: `${name}-id` };
+            return { id: `${name}-id`, name: 'Francisco Villa' };
+        },
+        findMany: async (args) => {
+            calls.push([name, 'findMany', args]);
+            return [{ id: `${name}-id`, name: 'Francisco Villa', email: 'francisco@example.com' }];
         }
     });
     const tx = {
@@ -100,6 +104,17 @@ test('persistFinancialImportPlan replaces prior imported year data and writes no
         client: makeModel('client', { id: 'client-1' }),
         payrollPosition: makeModel('payrollPosition', { id: 'position-1' }),
         user: makeModel('user', { id: 'user-1' }),
+        financialImportAlias: {
+            findUnique: async (args) => {
+                calls.push(['financialImportAlias', 'findUnique', args]);
+                return null;
+            },
+            upsert: async (args) => {
+                calls.push(['financialImportAlias', 'upsert', args]);
+                return { id: 'alias-1' };
+            }
+        },
+        financialCollaborator: makeModel('financialCollaborator', { id: 'collaborator-1' }),
         payrollContract: makeModel('payrollContract')
     };
     const prisma = {
@@ -133,4 +148,70 @@ test('persistFinancialImportPlan replaces prior imported year data and writes no
     const receivableCreate = calls.find(([model, action]) => model === 'accountsReceivable' && action === 'create');
     assert.equal(receivableCreate[2].data.clientId, 'client-1');
     assert.equal(receivableCreate[2].data.importBatchId, 'batch-1');
+
+    const collaboratorUpsert = calls.find(([model, action]) => model === 'financialCollaborator' && action === 'upsert');
+    assert.equal(collaboratorUpsert[2].where.normalizedName, 'francisco-villa');
+
+    const payrollCreate = calls.find(([model, action]) => model === 'payrollContract' && action === 'create');
+    assert.equal(payrollCreate[2].data.collaboratorId, 'collaborator-1');
+});
+
+test('persistFinancialImportPlan creates payroll contracts even when the payroll person has no user login', async () => {
+    const calls = [];
+    const tx = {
+        financialRecord: { deleteMany: async () => {}, createMany: async () => {} },
+        accountsReceivable: { deleteMany: async () => {}, create: async () => {} },
+        financialMonthlySummary: { deleteMany: async () => {}, createMany: async () => {} },
+        financialImportBatch: {
+            updateMany: async () => {},
+            create: async () => ({ id: 'batch-1' })
+        },
+        client: { upsert: async () => ({ id: 'client-1' }) },
+        payrollPosition: {
+            upsert: async () => ({ id: 'position-1' })
+        },
+        user: {
+            findMany: async () => []
+        },
+        financialImportAlias: {
+            findUnique: async () => null,
+            upsert: async () => ({ id: 'alias-1' })
+        },
+        financialCollaborator: {
+            upsert: async (args) => {
+                calls.push(['financialCollaborator.upsert', args]);
+                return { id: 'collaborator-1' };
+            }
+        },
+        payrollContract: {
+            create: async (args) => calls.push(['payrollContract.create', args])
+        }
+    };
+    const prisma = { $transaction: async (callback) => callback(tx) };
+    const plan = {
+        batch: { year: 2026 },
+        records: [],
+        monthlySummaries: [],
+        receivables: [],
+        payrollPositions: [{ title: 'Project Manager' }],
+        payrollContracts: [{
+            employeeName: 'Camila del toro',
+            positionTitle: 'Project Manager',
+            baseSalary: 3000000,
+            socialSecurity: 0,
+            startDate: new Date(Date.UTC(2026, 0, 1)),
+            endDate: null,
+            sourceSheet: 'NOMINA 2026',
+            sourceRow: 5,
+            sourceLabel: 'Camila del toro',
+            metadata: { monthlyTotal: 3000000 }
+        }]
+    };
+
+    const result = await persistFinancialImportPlan(prisma, plan);
+
+    assert.equal(result.counts.payrollContracts, 1);
+    assert.equal(calls[0][1].where.normalizedName, 'camila-del-toro');
+    assert.equal(calls[1][1].data.userId, null);
+    assert.equal(calls[1][1].data.collaboratorId, 'collaborator-1');
 });

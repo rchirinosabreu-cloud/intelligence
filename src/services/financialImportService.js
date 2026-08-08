@@ -126,6 +126,28 @@ const slugify = (value) => normalizeText(value)
     .replace(/^-+|-+$/g, '')
     || 'registro-financiero';
 
+const compactName = (value) => normalizeText(value).replace(/[^a-z0-9]/g, '');
+
+const findPayrollUser = (users, employeeName) => {
+    const normalizedEmployee = normalizeText(employeeName);
+    const compactEmployee = compactName(employeeName);
+    if (!normalizedEmployee) return null;
+
+    const exactMatch = users.find((user) => normalizeText(user.name) === normalizedEmployee);
+    if (exactMatch) return exactMatch;
+
+    if (compactEmployee.length < 4) return null;
+
+    return users.find((user) => {
+        const normalizedUser = normalizeText(user.name);
+        const compactUser = compactName(user.name);
+        return normalizedUser.includes(normalizedEmployee) ||
+            normalizedEmployee.includes(normalizedUser) ||
+            compactUser.includes(compactEmployee) ||
+            compactEmployee.includes(compactUser);
+    }) || null;
+};
+
 const uniqueBy = (items, getKey) => {
     const seen = new Set();
     return items.filter((item) => {
@@ -710,20 +732,81 @@ export const persistFinancialImportPlan = async (prismaClient, plan, options = {
         }
 
         let payrollContractsCreated = 0;
+        const users = await tx.user.findMany({
+            select: {
+                id: true,
+                name: true,
+                email: true
+            }
+        });
+
         for (const contract of plan.payrollContracts) {
-            const user = await tx.user.findFirst({
+            const normalizedLabel = slugify(contract.employeeName);
+            const alias = await tx.financialImportAlias.findUnique({
                 where: {
-                    name: {
-                        equals: contract.employeeName,
-                        mode: 'insensitive'
+                    sourceType_normalizedLabel: {
+                        sourceType: 'PAYROLL',
+                        normalizedLabel
+                    }
+                },
+                include: {
+                    collaborator: true
+                }
+            });
+            const matchedUser = findPayrollUser(users, contract.employeeName);
+            const collaboratorName = alias?.collaborator?.displayName || matchedUser?.name || contract.employeeName;
+            const collaboratorUpdate = {
+                displayName: collaboratorName,
+                metadata: {
+                    lastPayrollImportBatchId: batch.id,
+                    lastPayrollSourceLabel: contract.employeeName
+                }
+            };
+
+            if (matchedUser?.id) {
+                collaboratorUpdate.userId = matchedUser.id;
+            }
+
+            const collaborator = await tx.financialCollaborator.upsert({
+                where: {
+                    normalizedName: alias?.collaborator?.normalizedName || normalizedLabel
+                },
+                update: collaboratorUpdate,
+                create: {
+                    displayName: collaboratorName,
+                    normalizedName: normalizedLabel,
+                    userId: matchedUser?.id || null,
+                    metadata: {
+                        firstPayrollImportBatchId: batch.id,
+                        lastPayrollImportBatchId: batch.id,
+                        lastPayrollSourceLabel: contract.employeeName
                     }
                 }
             });
-            if (!user) continue;
+
+            await tx.financialImportAlias.upsert({
+                where: {
+                    sourceType_normalizedLabel: {
+                        sourceType: 'PAYROLL',
+                        normalizedLabel
+                    }
+                },
+                update: {
+                    sourceLabel: contract.employeeName,
+                    collaboratorId: collaborator.id
+                },
+                create: {
+                    sourceType: 'PAYROLL',
+                    sourceLabel: contract.employeeName,
+                    normalizedLabel,
+                    collaboratorId: collaborator.id
+                }
+            });
 
             await tx.payrollContract.create({
                 data: {
-                    userId: user.id,
+                    userId: matchedUser?.id || alias?.collaborator?.userId || null,
+                    collaboratorId: collaborator.id,
                     positionId: contract.positionTitle ? positionIdByTitle.get(contract.positionTitle) || null : null,
                     importBatchId: batch.id,
                     baseSalary: contract.baseSalary,

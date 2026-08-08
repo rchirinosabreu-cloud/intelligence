@@ -134,3 +134,62 @@ test('getFinancialDashboard uses UTC month boundaries when no imported batch exi
     assert.equal(calls[0].where.date.gte.toISOString(), '2026-01-01T00:00:00.000Z');
     assert.equal(calls[0].where.date.lt.toISOString(), '2027-01-01T00:00:00.000Z');
 });
+
+test('getFinancialDashboard surfaces imported payroll collaborators without platform users', async () => {
+    const prismaClient = {
+        financialImportBatch: {
+            findFirst: async () => ({
+                id: 'batch-1',
+                summary: {
+                    totals: {
+                        explicit: { income: 0, totalCostAndExpense: 0, netResult: 0, debt: 0 },
+                        calculated: { debt: 0 }
+                    }
+                }
+            })
+        },
+        financialMonthlySummary: { findMany: async () => [] },
+        financialRecord: { findMany: async () => [] },
+        accountsReceivable: { findMany: async () => [] },
+        payrollTransaction: { findMany: async () => [] },
+        payrollContract: {
+            findMany: async () => [{
+                id: 'contract-1',
+                userId: null,
+                collaboratorId: 'collaborator-1',
+                baseSalary: 3000000,
+                socialSecurity: 1000,
+                sourceLabel: 'Camila del toro',
+                metadata: {
+                    monthlyTotal: 3000000
+                },
+                user: null,
+                collaborator: {
+                    displayName: 'Camila del toro'
+                },
+                position: {
+                    title: 'Project Manager'
+                }
+            }]
+        }
+    };
+
+    const res = makeResponse();
+    await getFinancialDashboard({ query: { year: 2026 } }, res, { prismaClient });
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.payload.payroll.totalPayrollCost, 3000000);
+    assert.deepEqual(res.payload.payroll.collaborators, [{
+        userId: null,
+        collaboratorId: 'collaborator-1',
+        contractId: 'contract-1',
+        name: 'Camila del toro',
+        email: '',
+        position: 'Project Manager',
+        baseSalary: 3000000,
+        socialSecurity: 1000,
+        adjustmentsTotal: 0,
+        totalPaid: 3000000,
+        adjustments: []
+    }]);
+});

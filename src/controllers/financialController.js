@@ -344,6 +344,11 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                             email: true
                         }
                     },
+                    collaborator: {
+                        select: {
+                            displayName: true
+                        }
+                    },
                     position: {
                         select: {
                             title: true
@@ -358,15 +363,23 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
             collaborators = importedPayrollContracts.map((contract) => {
                 const baseSalary = toNum(contract.baseSalary);
                 const socialSecurity = toNum(contract.socialSecurity);
+                const officialMonthlyTotal = Number.isFinite(Number(contract.metadata?.monthlyTotal))
+                    ? Number(contract.metadata.monthlyTotal)
+                    : null;
+                const totalPaid = officialMonthlyTotal !== null
+                    ? officialMonthlyTotal
+                    : roundFloat(baseSalary + socialSecurity);
                 return {
                     userId: contract.userId,
-                    name: contract.user?.name || contract.sourceLabel || 'Colaborador',
+                    collaboratorId: contract.collaboratorId,
+                    contractId: contract.id,
+                    name: contract.collaborator?.displayName || contract.user?.name || contract.sourceLabel || 'Colaborador',
                     email: contract.user?.email || '',
                     position: contract.position?.title || '',
                     baseSalary,
                     socialSecurity,
                     adjustmentsTotal: 0,
-                    totalPaid: roundFloat(baseSalary + socialSecurity),
+                    totalPaid,
                     adjustments: []
                 };
             });
