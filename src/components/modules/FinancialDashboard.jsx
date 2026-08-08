@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Card } from '@/components/ui/Card';
@@ -41,6 +41,7 @@ const CATEGORY_LABELS = {
 
 const FinancialDashboard = () => {
     const { currentUser } = useAuth();
+    const queryClient = useQueryClient();
 
     // 1. React Hook Declarations (Inconditional - at the absolute top)
     const [selectedYear, setSelectedYear] = useState(2026);
@@ -48,8 +49,11 @@ const FinancialDashboard = () => {
     const [activeTab, setActiveTab] = useState('flow');
     const [expandedClients, setExpandedClients] = useState({});
     const [importPreview, setImportPreview] = useState(null);
+    const [importFile, setImportFile] = useState(null);
     const [importError, setImportError] = useState('');
+    const [importSuccess, setImportSuccess] = useState('');
     const [isImporting, setIsImporting] = useState(false);
+    const [isCommittingImport, setIsCommittingImport] = useState(false);
     const canAccessFinancials = currentUser?.role === 'ADMIN' || currentUser?.hasFinancialAccess === true;
 
     // Fetch analytical aggregation from protected backend endpoint
@@ -80,6 +84,7 @@ const FinancialDashboard = () => {
 
         setIsImporting(true);
         setImportError('');
+        setImportSuccess('');
 
         try {
             const baseUrl = getApiBaseUrl();
@@ -96,13 +101,49 @@ const FinancialDashboard = () => {
             });
 
             setImportPreview(res.data);
+            setImportFile(file);
             setActiveTab('import');
         } catch (error) {
             console.error('Error previewing financial import:', error.response?.data || error);
             setImportError(error.response?.data?.message || 'No fue posible auditar el archivo financiero.');
+            setImportFile(null);
         } finally {
             setIsImporting(false);
             event.target.value = '';
+        }
+    };
+
+    const handleFinancialImportCommit = async () => {
+        if (!importFile) {
+            setImportError('Primero debes auditar un archivo financiero.');
+            return;
+        }
+
+        setIsCommittingImport(true);
+        setImportError('');
+        setImportSuccess('');
+
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const formData = new FormData();
+            formData.append('file', importFile);
+            formData.append('year', String(selectedYear));
+
+            const res = await axios.post(`${baseUrl}/api/financials/import/commit`, formData, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+
+            setImportSuccess(`Importación guardada: ${res.data?.counts?.records || 0} registros mensuales, ${res.data?.counts?.receivables || 0} morosos.`);
+            await queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] });
+        } catch (error) {
+            console.error('Error committing financial import:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible guardar la importación financiera.');
+        } finally {
+            setIsCommittingImport(false);
         }
     };
 
@@ -211,6 +252,13 @@ const FinancialDashboard = () => {
                 <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-950/30 dark:text-red-200">
                     <AlertCircle className="w-5 h-5 shrink-0" />
                     <p>{importError}</p>
+                </div>
+            )}
+
+            {importSuccess && (
+                <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-950/30 dark:text-emerald-200">
+                    <CheckCircle2 className="w-5 h-5 shrink-0" />
+                    <p>{importSuccess}</p>
                 </div>
             )}
 
@@ -664,14 +712,25 @@ const FinancialDashboard = () => {
                                                 </p>
                                             )}
                                         </div>
-                                        <div className={cn(
-                                            "inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-widest",
-                                            importPreview.warnings?.length > 0
-                                                ? "bg-amber-500/10 text-amber-600"
-                                                : "bg-emerald-500/10 text-emerald-600"
-                                        )}>
-                                            {importPreview.warnings?.length > 0 ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-                                            {importPreview.warnings?.length || 0} alertas
+                                        <div className="flex flex-col items-end gap-3">
+                                            <div className={cn(
+                                                "inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-widest",
+                                                importPreview.warnings?.length > 0
+                                                    ? "bg-amber-500/10 text-amber-600"
+                                                    : "bg-emerald-500/10 text-emerald-600"
+                                            )}>
+                                                {importPreview.warnings?.length > 0 ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                                                {importPreview.warnings?.length || 0} alertas
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleFinancialImportCommit}
+                                                disabled={isCommittingImport || !importFile}
+                                                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                            >
+                                                {isCommittingImport ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                                                Importar a base de datos
+                                            </button>
                                         </div>
                                     </div>
 

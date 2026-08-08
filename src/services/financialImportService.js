@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import XLSX from 'xlsx';
 
 const MONTHS = [
@@ -96,6 +97,82 @@ const classifyEntry = (label, section) => {
         type: 'EXPENSE',
         category: classifyExpenseCategory(label)
     };
+};
+
+const toFinancialSection = (section) => {
+    const sectionMap = {
+        INCOME: 'REVENUE',
+        EXPENSE: 'ADMIN_COST',
+        OPERATING_EXPENSE: 'OPERATING_EXPENSE',
+        INVESTMENT: 'INVESTMENT',
+        FINANCING: 'FINANCING',
+        DEBT: 'RECEIVABLE'
+    };
+
+    return sectionMap[section] || 'OTHER';
+};
+
+const normalizeReceivableStatus = (status) => {
+    const clean = normalizeText(status);
+    if (clean.includes('pag')) return 'PAGADO';
+    if (clean.includes('prom')) return 'PROMESADO';
+    return 'DEBE';
+};
+
+const dateFromYearMonth = (year, month) => new Date(Date.UTC(year, month - 1, 1));
+
+const slugify = (value) => normalizeText(value)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    || 'registro-financiero';
+
+const uniqueBy = (items, getKey) => {
+    const seen = new Set();
+    return items.filter((item) => {
+        const key = getKey(item);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+};
+
+const buildMonthlySummaries = (preview) => {
+    const explicit = preview.totals?.monthly?.explicit || {};
+    const calculated = preview.totals?.monthly?.calculated || {};
+
+    return MONTHS.map((_monthName, monthIndex) => {
+        const explicitIncome = explicit.income?.[monthIndex] || 0;
+        const calculatedIncome = calculated.income?.[monthIndex] || 0;
+        const explicitAdminCost = explicit.expense?.[monthIndex] || 0;
+        const calculatedAdminCost = calculated.expense?.[monthIndex] || 0;
+        const explicitOperatingExpense = explicit.operatingExpense?.[monthIndex] || 0;
+        const calculatedOperatingExpense = calculated.operatingExpense?.[monthIndex] || 0;
+        const explicitFinancing = explicit.financing?.[monthIndex] || 0;
+        const calculatedFinancing = calculated.financing?.[monthIndex] || 0;
+        const explicitDebt = explicit.debt?.[monthIndex] || 0;
+        const calculatedDebt = calculated.debt?.[monthIndex] || 0;
+        const explicitNet = explicit.netResult?.[monthIndex];
+        const calculatedNet = calculatedIncome - calculatedAdminCost - calculatedOperatingExpense - calculatedFinancing;
+
+        return {
+            year: preview.year,
+            month: monthIndex + 1,
+            explicitIncome,
+            calculatedIncome,
+            explicitAdminCost,
+            calculatedAdminCost,
+            explicitOperatingExpense,
+            calculatedOperatingExpense,
+            explicitFinancing,
+            calculatedFinancing,
+            explicitDebt,
+            calculatedDebt,
+            netResult: explicitNet || calculatedNet,
+            metadata: {
+                monthName: MONTHS[monthIndex]
+            }
+        };
+    });
 };
 
 const rowsFromSheet = (sheet) => XLSX.utils.sheet_to_json(sheet, {
@@ -453,4 +530,226 @@ export const parseFinancialImportWorkbook = (buffer, options = {}) => {
         warnings,
         totals
     };
+};
+
+export const buildFinancialImportPersistencePlan = (buffer, options = {}) => {
+    const preview = parseFinancialImportWorkbook(buffer, options);
+    const sourceHash = crypto
+        .createHash('sha256')
+        .update(buffer)
+        .digest('hex');
+
+    const records = preview.entries.map((entry) => ({
+        amount: entry.amount,
+        category: entry.category,
+        type: entry.type,
+        section: toFinancialSection(entry.sourceSection),
+        date: dateFromYearMonth(entry.year, entry.month),
+        year: entry.year,
+        month: entry.month,
+        description: entry.sourceLabel,
+        sourceSheet: preview.sourceSheet,
+        sourceRow: entry.rowNumber,
+        sourceLabel: entry.sourceLabel,
+        metadata: {
+            monthName: entry.monthName,
+            sourceSection: entry.sourceSection
+        }
+    }));
+
+    const receivables = preview.debts.map((debt) => ({
+        amount: debt.amount,
+        period: dateFromYearMonth(debt.year || preview.year, debt.month || 1),
+        year: debt.year || preview.year,
+        month: debt.month || null,
+        status: normalizeReceivableStatus(debt.status),
+        notes: debt.sourceLabel,
+        comments: debt.comments || null,
+        sourceSheet: 'MOROSOS',
+        sourceRow: debt.rowNumber,
+        sourceLabel: debt.sourceLabel,
+        metadata: {
+            monthName: debt.monthName || null
+        }
+    }));
+
+    const payrollPositions = preview.payrollRoster
+        .filter((person) => person.role)
+        .map((person) => ({
+            title: person.role,
+            description: null
+        }));
+
+    const payrollContracts = preview.payrollRoster.map((person) => ({
+        employeeName: person.name,
+        positionTitle: person.role || null,
+        baseSalary: person.baseSalary,
+        socialSecurity: person.socialSecurity,
+        startDateRaw: person.startDate,
+        startDate: dateFromYearMonth(preview.year, 1),
+        endDate: null,
+        sourceSheet: 'NOMINA 2026',
+        sourceRow: person.rowNumber,
+        sourceLabel: person.name,
+        metadata: {
+            role: person.role,
+            monthlyTotal: person.monthlyTotal,
+            annualTotal: person.annualTotal,
+            fortnightPayment: person.fortnightPayment,
+            bonusOrCommission: person.bonusOrCommission,
+            startDateRaw: person.startDate
+        }
+    }));
+
+    return {
+        preview,
+        batch: {
+            year: preview.year,
+            sourceFilename: preview.filename || options.filename || 'archivo-financiero',
+            sourceHash,
+            sourceSheets: preview.workbook?.sheetNames || [],
+            status: 'IMPORTED',
+            summary: {
+                layout: preview.layout,
+                sourceSheet: preview.sourceSheet,
+                totals: preview.totals,
+                warnings: preview.warnings,
+                entries: preview.entries.length,
+                receivables: preview.debts.length,
+                payrollRoster: preview.payrollRoster.length
+            },
+            importedById: options.importedById || null,
+            importedAt: new Date()
+        },
+        records,
+        monthlySummaries: buildMonthlySummaries(preview),
+        receivables,
+        payrollPositions,
+        payrollContracts
+    };
+};
+
+export const persistFinancialImportPlan = async (prismaClient, plan, options = {}) => {
+    const replaceExisting = options.replaceExisting !== false;
+    const year = plan.batch.year;
+
+    return prismaClient.$transaction(async (tx) => {
+        if (replaceExisting) {
+            await tx.financialRecord.deleteMany({
+                where: { year, importBatchId: { not: null } }
+            });
+            await tx.accountsReceivable.deleteMany({
+                where: { year, importBatchId: { not: null } }
+            });
+            await tx.financialMonthlySummary.deleteMany({
+                where: { year }
+            });
+            await tx.financialImportBatch.updateMany({
+                where: { year, status: 'IMPORTED' },
+                data: { status: 'REPLACED' }
+            });
+        }
+
+        const batch = await tx.financialImportBatch.create({
+            data: plan.batch
+        });
+
+        if (plan.records.length > 0) {
+            await tx.financialRecord.createMany({
+                data: plan.records.map((record) => ({
+                    ...record,
+                    importBatchId: batch.id
+                }))
+            });
+        }
+
+        if (plan.monthlySummaries.length > 0) {
+            await tx.financialMonthlySummary.createMany({
+                data: plan.monthlySummaries.map((summary) => ({
+                    ...summary,
+                    importBatchId: batch.id
+                }))
+            });
+        }
+
+        const clientIdByLabel = new Map();
+        for (const receivable of plan.receivables) {
+            const label = receivable.sourceLabel || receivable.notes || 'Cartera sin cliente';
+            if (!clientIdByLabel.has(label)) {
+                const slug = slugify(label);
+                const client = await tx.client.upsert({
+                    where: { slug },
+                    update: {},
+                    create: {
+                        name: label,
+                        slug
+                    }
+                });
+                clientIdByLabel.set(label, client.id);
+            }
+
+            await tx.accountsReceivable.create({
+                data: {
+                    ...receivable,
+                    clientId: clientIdByLabel.get(label),
+                    importBatchId: batch.id
+                }
+            });
+        }
+
+        const positionIdByTitle = new Map();
+        for (const position of uniqueBy(plan.payrollPositions, (item) => item.title)) {
+            const savedPosition = await tx.payrollPosition.upsert({
+                where: { title: position.title },
+                update: {
+                    description: position.description
+                },
+                create: position
+            });
+            positionIdByTitle.set(position.title, savedPosition.id);
+        }
+
+        let payrollContractsCreated = 0;
+        for (const contract of plan.payrollContracts) {
+            const user = await tx.user.findFirst({
+                where: {
+                    name: {
+                        equals: contract.employeeName,
+                        mode: 'insensitive'
+                    }
+                }
+            });
+            if (!user) continue;
+
+            await tx.payrollContract.create({
+                data: {
+                    userId: user.id,
+                    positionId: contract.positionTitle ? positionIdByTitle.get(contract.positionTitle) || null : null,
+                    importBatchId: batch.id,
+                    baseSalary: contract.baseSalary,
+                    socialSecurity: contract.socialSecurity,
+                    startDate: contract.startDate,
+                    endDate: contract.endDate,
+                    sourceSheet: contract.sourceSheet,
+                    sourceRow: contract.sourceRow,
+                    sourceLabel: contract.sourceLabel,
+                    metadata: contract.metadata
+                }
+            });
+            payrollContractsCreated += 1;
+        }
+
+        return {
+            importBatchId: batch.id,
+            counts: {
+                records: plan.records.length,
+                monthlySummaries: plan.monthlySummaries.length,
+                receivables: plan.receivables.length,
+                payrollContracts: payrollContractsCreated
+            }
+        };
+    }, {
+        maxWait: 10000,
+        timeout: 60000
+    });
 };

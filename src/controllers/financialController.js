@@ -1,5 +1,9 @@
 import prisma from '../lib/prisma.js';
-import { parseFinancialImportWorkbook } from '../services/financialImportService.js';
+import {
+    buildFinancialImportPersistencePlan,
+    parseFinancialImportWorkbook,
+    persistFinancialImportPlan
+} from '../services/financialImportService.js';
 
 // Helper to convert Decimal fields safely
 const toNum = (val) => {
@@ -282,6 +286,43 @@ export const previewFinancialImport = async (req, res) => {
         return res.status(500).json({
             error: 'FINANCIAL_IMPORT_PREVIEW_FAILED',
             message: 'No fue posible leer el archivo financiero. Revisa el formato e intenta nuevamente.'
+        });
+    }
+};
+
+export const commitFinancialImport = async (req, res, dependencies = {}) => {
+    const buildPlan = dependencies.buildPlan || buildFinancialImportPersistencePlan;
+    const persistPlan = dependencies.persistPlan || persistFinancialImportPlan;
+    const prismaClient = dependencies.prismaClient || prisma;
+
+    try {
+        if (!req.file?.buffer) {
+            return res.status(400).json({
+                error: 'FINANCIAL_IMPORT_FILE_REQUIRED',
+                message: 'Debes subir un archivo CSV o Excel para importar la informacion financiera.'
+            });
+        }
+
+        const year = parseInt(req.body?.year, 10) || 2026;
+        const plan = buildPlan(req.file.buffer, {
+            filename: req.file.originalname,
+            year,
+            importedById: req.user?.id || null
+        });
+        const result = await persistPlan(prismaClient, plan);
+
+        return res.status(201).json({
+            message: 'Informacion financiera importada correctamente.',
+            importBatchId: result.importBatchId,
+            counts: result.counts,
+            warnings: plan.preview?.warnings || []
+        });
+    } catch (error) {
+        console.error('[Financials API] Import commit failed:', error.response?.data || error);
+        return res.status(500).json({
+            error: 'FINANCIAL_IMPORT_COMMIT_FAILED',
+            message: 'No fue posible guardar la importacion financiera en la base de datos.',
+            details: error.message
         });
     }
 };
