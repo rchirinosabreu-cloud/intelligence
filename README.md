@@ -174,6 +174,13 @@ The application communicates directly with Google Gemini API from the browser:
 |----------|-------------|---------|----------|
 | \`VITE_GEMINI_API_KEY\` | Google Gemini API key | - | Yes |
 | \`VITE_GEMINI_MODEL\` | Gemini model to use | \`gemini-1.5-pro\` | No |
+| \`DATABASE_URL\` | PostgreSQL connection string used by Prisma | - | Yes |
+| \`JWT_SECRET\` | Secret used to sign auth tokens | - | Yes |
+| \`SMTP_HOST\` | SMTP host for password reset emails | \`smtp.gmail.com\` | No |
+| \`SMTP_PORT\` | SMTP port for password reset emails | \`465\` | No |
+| \`SMTP_USER\` | Google/Gmail or Google Workspace sender address | - | Yes, for password reset |
+| \`SMTP_PASS\` | SMTP password or app password for the sender address | - | Yes, for password reset |
+| \`SMTP_FROM\` | Visible sender for transactional emails | \`SMTP_USER\` | No |
 
 ## API Configuration
 

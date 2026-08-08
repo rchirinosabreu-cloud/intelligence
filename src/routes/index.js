@@ -47,6 +47,8 @@ router.get('/services-catalog', (req, res) => res.redirect(307, '/api/services')
 
 // --- Auth Routes ---
 router.post('/login', authController.login);
+router.post('/password-reset/request', authController.sendPasswordReset);
+router.post('/password-reset/confirm', authController.resetPasswordWithCode);
 router.get('/sync-users', authController.syncUsers);
 router.post('/users', authenticateToken, authController.createUser);
 

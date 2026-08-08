@@ -1,6 +1,11 @@
 import prisma from '../lib/prisma.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import {
+  completePasswordReset,
+  PasswordResetError,
+  requestPasswordReset
+} from '../services/passwordResetService.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'brainstudio-secret-key-2025';
 const AUTH_TOKEN_EXPIRES_IN = process.env.AUTH_TOKEN_EXPIRES_IN || '12h';
@@ -88,6 +93,40 @@ export const login = async (req, res) => {
       console.error('Error during login:', error);
       return res.status(500).json({ message: 'Error interno del servidor', details: error.message });
   }
+};
+
+export const sendPasswordReset = async (req, res) => {
+    try {
+        const result = await requestPasswordReset({ email: req.body?.email });
+        return res.json(result);
+    } catch (error) {
+        console.error('[PasswordReset] Request error:', error);
+        const status = error instanceof PasswordResetError ? error.status : 500;
+        return res.status(status).json({
+            message: status === 500 ? 'No se pudo enviar el codigo de recuperacion' : error.message
+        });
+    }
+};
+
+export const resetPasswordWithCode = async (req, res) => {
+    try {
+        const result = await completePasswordReset({
+            email: req.body?.email,
+            code: req.body?.code,
+            newPassword: req.body?.newPassword
+        });
+
+        return res.json({
+            ...result,
+            message: 'Contrasena actualizada correctamente. Ingresa con tu nueva clave.'
+        });
+    } catch (error) {
+        console.error('[PasswordReset] Confirm error:', error);
+        const status = error instanceof PasswordResetError ? error.status : 500;
+        return res.status(status).json({
+            message: status === 500 ? 'No se pudo actualizar la contrasena' : error.message
+        });
+    }
 };
 
 export const syncUsers = async (req, res) => {

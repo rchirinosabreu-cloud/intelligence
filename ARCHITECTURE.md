@@ -151,6 +151,11 @@ Variables backend criticas:
 - `GOOGLE_APPLICATION_CREDENTIALS_JSON`: service account Google en JSON.
 - `GOOGLE_CLOUD_PROJECT`: proyecto GCP.
 - `GCS_BUCKET_NAME`: bucket GCS, por defecto `brainstudio-unstructured-v2`.
+- `SMTP_USER`: correo Google/Gmail o Google Workspace usado para enviar recuperacion de contrasena.
+- `SMTP_PASS`: app password o credencial SMTP del correo emisor.
+- `SMTP_HOST`: host SMTP, por defecto `smtp.gmail.com`.
+- `SMTP_PORT`: puerto SMTP, por defecto `465`.
+- `SMTP_FROM`: remitente visible de los correos transaccionales.
 
 Variables externas adicionales:
 
@@ -191,6 +196,8 @@ Rutas publicas definidas antes del middleware global de autenticacion:
 - Catalogo de servicios montado en `/api/services`
 - `GET /api/reports/pipeline-status`
 - `POST /api/login`
+- `POST /api/password-reset/request`
+- `POST /api/password-reset/confirm`
 - `GET /api/sync-users`
 
 Ademas, `authenticateToken` permite bypass para recursos usados en tags de imagen:
@@ -212,6 +219,16 @@ Flujo:
 5. Frontend guarda token y usuario en `localStorage`.
 6. Interceptores globales de `axios` y `fetch` agregan `Authorization: Bearer <token>`.
 7. `authenticateToken` valida el JWT en rutas protegidas.
+
+Recuperacion de contrasena:
+
+1. El usuario solicita un codigo desde `/login`.
+2. Frontend envia el correo a `POST /api/password-reset/request`.
+3. Backend normaliza el correo, busca el usuario y, si existe, genera un codigo de 6 digitos.
+4. El codigo se guarda hasheado en `PasswordResetCode`, expira en 10 minutos y permite hasta 5 intentos.
+5. El correo se envia por SMTP Google/Gmail configurado con `SMTP_*`.
+6. Frontend envia correo, codigo y nueva contrasena a `POST /api/password-reset/confirm`.
+7. Backend valida el codigo, actualiza password con bcrypt, marca el codigo como usado e incrementa `sessionVersion` para invalidar sesiones previas.
 
 Los permisos de modulos viven en `modulePermissions`. ADMIN tiene bypass general.
 
@@ -412,4 +429,3 @@ Recomendacion:
 - El build pasa.
 - El cambio tiene explicacion clara.
 - Se sabe como revertirlo.
-

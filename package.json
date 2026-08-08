@@ -17,7 +17,7 @@
     "db:seed:financials": "node scripts/seed-financials.js",
     "db:seed:team": "node scripts/seed-team.js",
     "db:hard-cleanup": "node scripts/hard-cleanup.js",
-    "test": "node --test tests/kanbanLifecycle.test.js tests/draftAndLightbox.test.js tests/commentInteractions.test.js tests/richTextAndEmojis.test.js tests/composerActionLayout.test.js tests/reportsExtraction.test.js tests/reportPipelineRegression.test.js",
+    "test": "node --test tests/kanbanLifecycle.test.js tests/draftAndLightbox.test.js tests/commentInteractions.test.js tests/richTextAndEmojis.test.js tests/composerActionLayout.test.js tests/reportsExtraction.test.js tests/reportPipelineRegression.test.js tests/passwordResetService.test.js",
     "test:activity-build": "node --test tests/activityComponentsCompile.test.js"
   },
   "prisma": {
@@ -75,6 +75,7 @@
     "lucide-react": "^0.469.0",
     "mammoth": "^1.11.0",
     "multer": "^1.4.5-lts.1",
+    "nodemailer": "^9.0.5",
     "openclaw": "^2026.5.7",
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^5.5.207",
