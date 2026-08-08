@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LockKeyhole, ShieldCheck } from 'lucide-react';
+import { Lock, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getApiBaseUrl } from '../lib/apiBaseUrl';
 import { useAuth } from '../context/AuthContext';
@@ -51,85 +51,105 @@ const ForcePasswordChange = () => {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 px-4 py-10 text-white">
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-5xl items-center justify-center">
-        <div className="grid w-full overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-2xl shadow-black/40 lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="relative hidden min-h-[560px] overflow-hidden lg:block">
-            <img
-              src="/brainstudio-login-hero.png"
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
-            <div className="absolute bottom-8 left-8 right-8">
-              <img src="/brainstudio-logo.png" alt="Brainstudio" className="mb-5 h-14 w-14 object-contain" />
-              <p className="text-2xl font-bold leading-tight">Imagina. Crea. Conecta. Trasciende.</p>
+    <div className="min-h-screen bg-white text-zinc-950 dark:bg-zinc-950 dark:text-white">
+      <div className="grid min-h-screen lg:grid-cols-[0.95fr_1.05fr]">
+        <section className="relative hidden overflow-hidden bg-indigo-50 lg:block">
+          <img
+            src="/brainstudio-login-hero.png"
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-indigo-950/35 via-indigo-950/5 to-white/0" />
+          <div className="absolute inset-x-0 bottom-0 p-12">
+            <div className="mb-10 inline-flex items-center gap-3 rounded-full border border-white/45 bg-white/40 px-4 py-2 text-xs font-semibold text-indigo-900 shadow-sm backdrop-blur-xl">
+              <span className="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_18px_rgba(34,211,238,0.7)]" />
+              Brainstudio OS
             </div>
+            <h2 className="max-w-md text-4xl font-bold leading-tight text-indigo-950">
+              Imagina. Crea. Conecta. Trasciende.
+            </h2>
+            <p className="mt-5 max-w-md text-sm leading-6 text-indigo-950/65">
+              La operacion creativa de Brainstudio reunida en un solo lugar para convertir ideas en movimiento.
+            </p>
           </div>
+        </section>
 
-          <div className="bg-white p-7 text-zinc-950 dark:bg-zinc-950 dark:text-white sm:p-10">
-            <div className="mb-8">
-              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/20">
+        <main className="flex min-h-screen items-center justify-center px-6 py-10">
+          <div className="w-full max-w-md">
+            <div className="mb-10">
+              <img src="/brainstudio-logo.png" alt="Brainstudio" className="mb-7 h-16 w-auto object-contain" />
+              <div className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/20">
                 <ShieldCheck className="h-6 w-6" />
               </div>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">Hola, {currentUser?.name || 'equipo Brain'}.</p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight">Actualiza tu contrasena</h1>
+              <h1 className="mt-3 text-4xl font-bold tracking-tight text-zinc-950 dark:text-white">
+                Actualiza tu contrasena
+              </h1>
               <p className="mt-3 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
                 Para proteger la plataforma, necesitas crear una nueva contrasena antes de continuar.
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
               {errorMsg && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-center text-sm text-red-600 animate-in fade-in zoom-in duration-300 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
                   {errorMsg}
                 </div>
               )}
 
               <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Contrasena actual</span>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100 dark:border-white/10 dark:bg-white/5 dark:focus:ring-indigo-500/20"
-                  required
-                />
+                <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Contrasena actual</span>
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    className="w-full rounded-2xl border border-zinc-200 bg-white py-3 pl-11 pr-4 text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:ring-indigo-500/20"
+                    required
+                  />
+                </div>
               </label>
 
               <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Tu nueva contrasena</span>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100 dark:border-white/10 dark:bg-white/5 dark:focus:ring-indigo-500/20"
-                  required
-                />
+                <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Tu nueva contrasena</span>
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    className="w-full rounded-2xl border border-zinc-200 bg-white py-3 pl-11 pr-4 text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:ring-indigo-500/20"
+                    required
+                  />
+                </div>
               </label>
 
               <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Confirmar nueva contrasena</span>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100 dark:border-white/10 dark:bg-white/5 dark:focus:ring-indigo-500/20"
-                  required
-                />
+                <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Confirmar nueva contrasena</span>
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    className="w-full rounded-2xl border border-zinc-200 bg-white py-3 pl-11 pr-4 text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:ring-indigo-500/20"
+                    required
+                  />
+                </div>
               </label>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 font-semibold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:opacity-60"
+                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 font-semibold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <LockKeyhole className="h-4 w-4" />
                 {loading ? 'Actualizando...' : 'Guardar nueva contrasena'}
               </button>
             </form>
           </div>
-        </div>
+        </main>
       </div>
     </div>
   );
