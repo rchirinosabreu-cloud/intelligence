@@ -151,6 +151,15 @@ const FinancialDashboard = () => {
     const kpis = useMemo(() => {
         if (!data) return { totalIncome: 0, totalExpense: 0, netFlow: 0, totalReceivable: 0 };
 
+        if (data.sourceSummary?.totals) {
+            return {
+                totalIncome: data.sourceSummary.totals.income || 0,
+                totalExpense: data.sourceSummary.totals.expense || 0,
+                netFlow: data.sourceSummary.totals.netFlow || 0,
+                totalReceivable: data.sourceSummary.totals.receivable || 0
+            };
+        }
+
         const totalIncome = data.cashFlow?.reduce((sum, item) => sum + item.income, 0) || 0;
         const totalExpense = data.cashFlow?.reduce((sum, item) => sum + item.expense, 0) || 0;
         const netFlow = totalIncome - totalExpense;
@@ -500,12 +509,33 @@ const FinancialDashboard = () => {
                     <div className="space-y-4 animate-in slide-in-from-left-4 duration-300">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Cartera de Deudores Vencida</h2>
+                                <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Detalle auditado de cartera</h2>
                                 <p className="text-[10px] text-zinc-500 mt-1">
-                                    Lista de cuentas por cobrar agrupadas por cliente con antigüedad desglosada.
+                                    El KPI principal usa el total oficial del Excel; este detalle muestra las celdas detectadas para conciliación.
                                 </p>
                             </div>
                         </div>
+
+                        {data?.sourceSummary?.totals && (
+                            <Card className="p-4 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Total oficial</p>
+                                        <p className="mt-1 font-black text-zinc-900 dark:text-white">{formatCurrency(data.sourceSummary.totals.receivable || 0)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Celdas detectadas</p>
+                                        <p className="mt-1 font-black text-amber-600">{formatCurrency(data.sourceSummary.totals.calculatedReceivable || 0)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Por conciliar</p>
+                                        <p className="mt-1 font-black text-violet-600">
+                                            {formatCurrency((data.sourceSummary.totals.calculatedReceivable || 0) - (data.sourceSummary.totals.receivable || 0))}
+                                        </p>
+                                    </div>
+                                </div>
+                            </Card>
+                        )}
 
                         {data?.accountsReceivable?.length > 0 ? (
                             <div className="space-y-3">

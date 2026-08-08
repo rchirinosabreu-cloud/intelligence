@@ -8,4 +8,7 @@ test('financial dashboard confirms audited files through the commit endpoint', (
     assert.match(source, /import\/commit/);
     assert.match(source, /Importar a base de datos/);
     assert.match(source, /invalidateQueries\(\{\s*queryKey:\s*\['financials-dashboard-data'\]/);
+    assert.match(source, /data\.sourceSummary\?\.totals/);
+    assert.match(source, /Total oficial/);
+    assert.match(source, /Celdas detectadas/);
 });
