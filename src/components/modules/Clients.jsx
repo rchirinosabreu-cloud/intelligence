@@ -54,19 +54,30 @@ const Clients = () => {
       const res = await fetch(`${baseUrl}/api/clients?${params.toString()}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("Error fetching active clients:", errorData);
+        throw new Error(errorData.error || "Error al cargar clientes activos");
+      }
       const activeData = await res.json();
 
       params.set('isArchived', 'true');
       const resArchived = await fetch(`${baseUrl}/api/clients?${params.toString()}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
+      if (!resArchived.ok) {
+        const errorData = await resArchived.json().catch(() => ({}));
+        console.error("Error fetching archived clients:", errorData);
+        throw new Error(errorData.error || "Error al cargar clientes archivados");
+      }
       const archivedData = await resArchived.json();
 
       // Combined and Sorted by Score ASC (Critical first)
       const combined = [...activeData, ...archivedData];
       setClients(combined);
     } catch (err) {
-      toast.error("Error al cargar clientes");
+      console.error("Error loading clients:", err);
+      toast.error(err.message || "Error al cargar clientes");
     } finally {
       setLoading(false);
     }
@@ -92,7 +103,6 @@ const Clients = () => {
     const handleClickOutside = (event) => {
       if (gridRef.current && !gridRef.current.contains(event.target)) {
         setExpandedClientId(null);
-        setShowArchived(false);
       }
     };
     document.addEventListener("click", handleClickOutside);
@@ -120,13 +130,18 @@ const Clients = () => {
         body: JSON.stringify({ isArchived: !client.isArchived }),
       });
 
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("Error toggling client archive:", errorData);
+        throw new Error(errorData.error || "Error al procesar solicitud");
+      }
 
       const updated = await res.json();
       setClients(prev => prev.map(c => c.id === updated.id ? { ...c, isArchived: updated.isArchived } : c));
       toast.success(updated.isArchived ? "Cliente archivado" : "Cliente reactivado");
     } catch (err) {
-      toast.error("Error al procesar solicitud");
+      console.error("Error processing archive request:", err);
+      toast.error(err.message || "Error al procesar solicitud");
     }
   };
 
@@ -199,7 +214,11 @@ const Clients = () => {
         body: JSON.stringify({ name: newClientName, slug: newClientSlug }),
       });
 
-      if (!res.ok) throw new Error('Error al crear el cliente en el servidor');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("Error creating client:", errorData);
+        throw new Error(errorData.error || 'Error al crear el cliente en el servidor');
+      }
 
       const newClient = await res.json();
       setClients(prev => [newClient, ...prev]);

@@ -164,7 +164,10 @@ export async function createClient(data) {
     throw new Error("Client name is required");
   }
 
-  let slug = slugify(name);
+  let slug = slugify(data.slug || name);
+  if (!slug) {
+    slug = slugify(name);
+  }
   let uniqueSlug = slug;
   let counter = 1;
   while (true) {
@@ -181,7 +184,7 @@ export async function createClient(data) {
       data: {
         name,
         slug: uniqueSlug,
-        status: 'active',
+        status: 'ACTIVO',
         logoUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff&size=128`
       }
     });

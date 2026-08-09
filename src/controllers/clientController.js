@@ -11,6 +11,7 @@ export const listClients = async (req, res) => {
         const clients = await getClients(filters);
         res.json(clients);
     } catch (error) {
+        console.error("[ClientController] Failed to list clients:", error?.message || error);
         res.status(500).json({ error: "Failed to list clients" });
     }
 };
@@ -27,8 +28,9 @@ export const getHealth = async (req, res) => {
 export const createNewClient = async (req, res) => {
     try {
         const client = await createClient(req.body);
-        res.json(client);
+        res.status(201).json(client);
     } catch (error) {
+        console.error("[ClientController] Failed to create client:", error?.message || error);
         res.status(500).json({ error: "Failed to create client" });
     }
 };
