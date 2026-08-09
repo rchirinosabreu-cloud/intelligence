@@ -28,6 +28,7 @@ import boardsRouter from './api/boards.js';
 import quotationsRouter from './api/quotations.js';
 import operativeIntelligenceRouter from './api/operativeIntelligence.js';
 import financialsRouter from './api/financials.js';
+import dashboardRouter from './api/dashboard.js';
 import { getUpcomingEvents } from '../services/calendarService.js';
 
 const router = express.Router();
@@ -179,6 +180,7 @@ router.use('/db', dbRouter);
 router.use('/clients/:clientId', clientFileRouter);
 router.use('/talent-radar', talentRadarRouter);
 router.use('/activity', activityRouter);
+router.use('/dashboard', dashboardRouter);
 router.use('/reports', reportsRouter);
 router.use('/brain-core', brainCoreRouter);
 router.use('/boards', boardsRouter);

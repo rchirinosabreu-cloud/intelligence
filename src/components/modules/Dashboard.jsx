@@ -1,302 +1,383 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card } from '@/components/ui/Card';
 import { motion } from 'framer-motion';
-import { ArrowUpRight, Zap, TrendingUp, Clock, CheckCircle2, Target, LayoutDashboard } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  CalendarClock,
+  CheckCircle2,
+  CircleDot,
+  Clock3,
+  Compass,
+  FileText,
+  LayoutDashboard,
+  Loader2,
+  MessageSquareText,
+  Shield,
+  Sparkles,
+  Target,
+  Trophy,
+  UserRound,
+  Zap
+} from 'lucide-react';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/button';
 import PageHeader from '@/components/ui/PageHeader';
-import MeetingWidget from './MeetingWidget';
-import HealthCheckWidget from './HealthCheckWidget';
-import AnnouncementWidget from './AnnouncementWidget';
-import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import ClientAvatar from '@/components/ui/ClientAvatar';
-import { Button } from '@/components/ui/button';
-import ChatWidget from './ChatWidget';
 import { useAuth } from '@/context/AuthContext';
+import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { cn } from '@/lib/utils';
 
 const container = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.1
-    }
+    transition: { staggerChildren: 0.06 }
   }
 };
 
 const item = {
-  hidden: { y: 20, opacity: 0 },
+  hidden: { y: 12, opacity: 0 },
   show: { y: 0, opacity: 1 }
 };
 
+const statConfig = [
+  { key: 'active', label: 'Activas', icon: CircleDot, tone: 'text-sky-600 dark:text-sky-400' },
+  { key: 'dueToday', label: 'Para hoy', icon: CalendarClock, tone: 'text-violet-600 dark:text-violet-400' },
+  { key: 'overdue', label: 'Vencidas', icon: AlertTriangle, tone: 'text-amber-600 dark:text-amber-400' },
+  { key: 'returned', label: 'Devueltas', icon: MessageSquareText, tone: 'text-rose-600 dark:text-rose-400' },
+  { key: 'completedToday', label: 'Logros hoy', icon: Trophy, tone: 'text-emerald-600 dark:text-emerald-400' }
+];
+
+const cardTone = {
+  critical: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200',
+  warning: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200',
+  info: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200',
+  success: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200'
+};
+
+const formatDate = (value) => {
+  if (!value) return 'Sin fecha';
+  return new Date(value).toLocaleDateString('es-CO', {
+    day: 'numeric',
+    month: 'short'
+  });
+};
+
+const formatTime = (value) => {
+  if (!value) return '';
+  return new Date(value).toLocaleTimeString('es-CO', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const fetchJson = async (url) => {
+  const token = localStorage.getItem('authToken');
+  const response = await fetch(url, {
+    cache: 'no-store',
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'No se pudo cargar la información.');
+  }
+  return response.json();
+};
+
+const EmptyState = ({ icon: Icon, title, description }) => (
+  <div className="min-h-[140px] rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-950/40 flex flex-col items-center justify-center text-center px-6 py-8">
+    <Icon className="w-8 h-8 text-zinc-300 dark:text-zinc-700 mb-3" />
+    <p className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{title}</p>
+    <p className="text-xs text-zinc-500 dark:text-zinc-500 max-w-xs mt-1">{description}</p>
+  </div>
+);
+
+const TaskRow = ({ task, showFeedback = false }) => (
+  <div className="flex items-start justify-between gap-4 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-950/40 px-4 py-3">
+    <div className="min-w-0">
+      <div className="flex items-center gap-2">
+        {task.client && <ClientAvatar client={task.client} size={18} />}
+        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">{task.title}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+        {task.client?.name && <span>{task.client.name}</span>}
+        {task.status && <span className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5">{task.status}</span>}
+        {showFeedback && task.lastFeedback && <span className="text-amber-600 dark:text-amber-400 line-clamp-1">Feedback: {task.lastFeedback}</span>}
+      </div>
+    </div>
+    <div className="shrink-0 text-right">
+      <p className="text-xs font-bold text-zinc-700 dark:text-zinc-200">{formatDate(task.dueDate || task.completedAt)}</p>
+      {task.completedAt && <p className="text-[11px] text-zinc-400">{formatTime(task.completedAt)}</p>}
+    </div>
+  </div>
+);
+
 const Dashboard = () => {
   const { currentUser } = useAuth();
-  const [isGeneralChatModalOpen, setIsGeneralChatModalOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState(currentUser?.id || '');
 
-  const getDailyMessage = () => {
-    const day = new Date().getDay();
-    const messages = {
-      1: "Empezamos una nueva semana. ¡Vamos a darle con toda!",
-      2: "Vamos a mantener el ritmo. ¡A seguir sumando victorias!",
-      3: "¡Ya es mitad de semana! Ya pasamos la cima, ahora a cerrar con fuerza",
-      4: "Jueves con sabor a viernes... Ya casi",
-      5: "¡Ya llegó el viernes! Hoy celebramos los logros de la semana",
-      6: "¿Trabajando un sábado? Gracias por tu compromiso",
-      0: "Domingo chill. Día de recargar baterías, tómalo con mucha calma"
-    };
-    return messages[day] || "¡Bienvenido!";
-  };
+  const isAdmin = currentUser?.role === 'ADMIN';
+  const baseUrl = getApiBaseUrl();
 
-  const getFirstName = () => {
-    if (!currentUser?.name) return 'Equipo Brain';
-    return currentUser.name.split(' ')[0];
-  };
-
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-
-  // --- REACT QUERY: METRICS ---
-  const {
-    data: metrics = { total: 0, completed: 0, pending: 0, percentage: 0 },
-    isLoading: loadingMetrics
-  } = useQuery({
-    queryKey: ['dashboardMetrics'],
-    queryFn: async () => {
-      const baseUrl = getApiBaseUrl();
-      const response = await fetch(`${baseUrl}/api/metrics/tasks`, { cache: 'no-store' });
-      if (!response.ok) throw new Error("Failed to fetch metrics");
-      return await response.json();
-    },
-    refetchInterval: localStorage.getItem("authToken") ? 30000 : false,
-    refetchOnWindowFocus: true,
+  const { data: teamMembers = [] } = useQuery({
+    queryKey: ['dashboard-team-members'],
+    queryFn: () => fetchJson(`${baseUrl}/api/team`),
+    enabled: isAdmin,
+    staleTime: 60000
   });
 
-  // --- REACT QUERY: COMPLETED TASKS (Feed) ---
+  const selectedMemberUserId = useMemo(() => {
+    if (selectedUserId) return selectedUserId;
+    return currentUser?.id || '';
+  }, [currentUser?.id, selectedUserId]);
+
   const {
-    data: completedNativeTasks = [],
-    isLoading: loadingNative
+    data: dashboard,
+    isLoading,
+    error
   } = useQuery({
-    queryKey: ['completedNativeTasks'],
-    queryFn: async () => {
-      const baseUrl = getApiBaseUrl();
-      const response = await fetch(`${baseUrl}/api/tasks/completed`, { cache: 'no-store' });
-      if (!response.ok) throw new Error("Failed to fetch completed tasks");
-      const data = await response.json();
-      return Array.isArray(data) ? data : [];
-    },
-    refetchInterval: localStorage.getItem("authToken") ? 30000 : false,
-    refetchOnWindowFocus: true,
+    queryKey: ['personal-dashboard', selectedMemberUserId],
+    queryFn: () => fetchJson(`${baseUrl}/api/dashboard/personal/${selectedMemberUserId}`),
+    enabled: isAdmin && !!selectedMemberUserId,
+    refetchInterval: 45000,
+    refetchOnWindowFocus: true
   });
 
-  // --- LOGIC: FEED DE LOGROS (Completed TODAY from Native Tasks) ---
-  const completedFeed = useMemo(() => {
-      // Robust "Today" in America/Bogota to match backend boundaries
-      const bogotaFormatter = new Intl.DateTimeFormat('en-CA', {
-          timeZone: 'America/Bogota',
-          year: 'numeric', month: '2-digit', day: '2-digit'
-      });
-      const todayStr = bogotaFormatter.format(new Date()); // Returns YYYY-MM-DD in Bogota
+  const selectedMember = dashboard?.member;
 
-      return completedNativeTasks.filter(t => {
-          if (!t.completedAt) return false;
-          try {
-              // Extract the date part using the same formatter to ensure we compare Bogota days
-              const d = new Date(t.completedAt);
-              const dStr = bogotaFormatter.format(d);
-              return dStr === todayStr;
-          } catch (e) {
-              return false;
-          }
-      }).slice(0, 15); // Limit to the 15 most recent achievements
-  }, [completedNativeTasks]);
-
+  if (currentUser?.role !== 'ADMIN') {
+    return (
+      <div className="max-w-3xl mx-auto">
+        <Card className="p-8 text-center">
+          <Shield className="w-10 h-10 mx-auto text-primary mb-4" />
+          <h1 className="text-2xl font-black text-zinc-900 dark:text-zinc-100">Dashboard en preparación</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">
+            Esta vista de foco personal está disponible solo para administradores mientras calibramos señales, hábitos y criterios de adopción.
+          </p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <motion.div
-      variants={container}
-      initial="hidden"
-      animate="show"
-      className="space-y-6"
-    >
+    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
       <PageHeader
-        title={`¡Hola, ${getFirstName()}! ${getDailyMessage()}`}
-        subtitle="Aquí está el resumen de progreso y logros del mes."
-
+        title="Dashboard de adopción"
+        subtitle="Radar de Foco para entender qué requiere atención, qué hábito fortalecer y cómo avanza cada persona."
       />
 
-      {/* Bento Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-        {/* Metrics Column (Left - 2/3 width) */}
-        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-
-            {/* WIDGET 1: PENDIENTES DEL MES (Counter + Progress) */}
-            <motion.div variants={item} className="w-full">
-              <Card className="h-fit flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
-                <div className="flex justify-between items-start mb-4">
-                  <span className="text-sm font-medium text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors">
-                      Pendientes del mes
-                  </span>
-                  <div className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20">
-                    <Target className="w-3 h-3" />
-                    En curso
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-end gap-2 mb-2">
-                      <span className="text-4xl font-bold text-zinc-900 dark:text-white tracking-tight">
-                          {loadingMetrics ? '...' : metrics.pending}
-                      </span>
-                      <span className="text-sm text-zinc-400 mb-1.5">
-                          / {metrics.total} total
-                      </span>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-2.5 overflow-hidden">
-                      <div
-                        className="bg-indigo-600 dark:bg-indigo-600 h-2.5 rounded-full transition-all duration-1000 ease-out"
-                        style={{ width: `${metrics.percentage}%` }}
-                      ></div>
-                  </div>
-                  <p className="text-xs text-zinc-400 mt-2 text-right">{metrics.percentage}% Completado</p>
-                </div>
-              </Card>
-            </motion.div>
-
-             {/* WIDGET 2: COMPLETED (Counter) */}
-             <motion.div variants={item} className="w-full">
-              <Card className="h-fit flex flex-col justify-between hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors group">
-                <div className="flex justify-between items-start mb-4">
-                  <span className="text-sm font-medium text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-400 transition-colors">
-                      Total realizados
-                  </span>
-                  <div className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
-                    <TrendingUp className="w-3 h-3" />
-                    +Impacto
-                  </div>
-                </div>
-                <div>
-                  <span className="text-4xl font-bold text-zinc-900 dark:text-white tracking-tight">
-                      {loadingMetrics ? '...' : metrics.completed}
-                  </span>
-                  <p className="text-xs text-zinc-400 mt-2">Pendientes finalizados este mes</p>
-                </div>
-              </Card>
-            </motion.div>
-
-           {/* WIDGET 3: BROADCAST WIDGET (Full Width) */}
-           <motion.div variants={item} className="md:col-span-2">
-                <AnnouncementWidget scope="general" />
-           </motion.div>
-
-           {/* ROW: MEETING + HEALTH CHECK */}
-           <motion.div variants={item} className="md:col-span-1">
-                <MeetingWidget />
-           </motion.div>
-
-           <motion.div variants={item} className="md:col-span-1">
-                <HealthCheckWidget />
-           </motion.div>
+      <motion.div variants={item} className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+            <LayoutDashboard className="w-6 h-6 text-primary" />
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-widest font-black text-zinc-400">Vista admin</p>
+            <h2 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Explora dashboards personales del equipo</h2>
+          </div>
         </div>
+        <label className="flex flex-col gap-1 min-w-full sm:min-w-[280px] lg:min-w-[340px]">
+          <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Colaborador</span>
+          <select
+            value={selectedMemberUserId}
+            onChange={(event) => setSelectedUserId(event.target.value)}
+            className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value={currentUser.id}>{currentUser.name || 'Mi dashboard'}</option>
+            {teamMembers
+              .filter((member) => member.userId && member.userId !== currentUser.id)
+              .map((member) => (
+                <option key={member.userId} value={member.userId}>
+                  {member.name} - {member.role}
+                </option>
+              ))}
+          </select>
+        </label>
+      </motion.div>
 
-        {/* News/Updates Column (Right - 1/3 width) -> FEED DE LOGROS */}
-        <motion.div variants={item} className="md:col-span-1 flex flex-col gap-6">
-          {/* Recent Achievements */}
-          <Card className="flex flex-col min-h-[450px] h-[450px] max-h-[450px] group/card">
-            <div className="flex items-center gap-2 mb-6 shrink-0">
-              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-              <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Logros recientes</h3>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-6 pr-2 scroll-smooth custom-scrollbar min-h-0 pb-2">
-              {loadingNative ? (
-                  <p className="text-sm text-zinc-400 animate-pulse">Cargando feed...</p>
-              ) : completedFeed.length === 0 ? (
-                  <div className="text-center py-8">
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400 italic">
-                          "Aún no hay victorias hoy. ¡Tú puedes!"
-                      </p>
+      {isLoading ? (
+        <div className="h-96 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : error ? (
+        <Card className="p-8 text-center">
+          <AlertTriangle className="w-10 h-10 mx-auto text-amber-500 mb-4" />
+          <h3 className="text-xl font-black text-zinc-900 dark:text-zinc-100">No se pudo cargar el dashboard</h3>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">{error.message}</p>
+        </Card>
+      ) : (
+        <>
+          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
+            <Card className="p-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-4">
+                  <TeamAvatar member={selectedMember || { name: 'Equipo Brain' }} className="w-14 h-14 text-xl" size={56} />
+                  <div>
+                    <p className="text-xs uppercase tracking-widest font-black text-primary">Tu foco de hoy</p>
+                    <h2 className="text-2xl font-black text-zinc-900 dark:text-zinc-100">
+                      {selectedMember?.name || 'Equipo Brain'}
+                    </h2>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">{selectedMember?.role || 'Sin rol asignado'}</p>
                   </div>
-              ) : (
-                  completedFeed.map((task, idx) => (
-                    <div key={idx} className="relative pl-6 pb-6 last:pb-0">
-                      {/* Vertical line connecting points */}
-                      {idx < completedFeed.length - 1 && (
-                        <div className="absolute left-[4.5px] top-2 w-px h-full bg-zinc-200 dark:bg-zinc-800" />
-                      )}
-                      <div className="absolute left-0 top-1.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-200 dark:border-emerald-900 shadow-[0_0_8px_rgba(52,211,153,0.5)] z-10" />
-                      <div className="group">
-                        <div className="flex items-center gap-2 mb-1">
-                          {task.assignee ? (
-                              <TeamAvatar member={task.assignee} className="w-4 h-4" />
-                          ) : (
-                              <div className="w-4 h-4 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              </div>
-                          )}
-                          <span className="text-xs text-emerald-600 dark:text-emerald-400 block font-medium">
-                              {task.assignee ? task.assignee.name : "Equipo"} completó:
-                          </span>
-                        </div>
-                        <h4 className="text-zinc-700 hover:text-zinc-900 dark:text-zinc-200 text-sm font-medium mb-1 dark:group-hover:text-white transition-colors line-clamp-2">
-                            {task.title}
-                        </h4>
-                        <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {new Date(task.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                          {task.client && (
-                            <>
-                                <span className="mx-0.5 opacity-40">•</span>
-                                <div className="flex items-center gap-1.5">
-                                    <ClientAvatar client={task.client} size={14} />
-                                    <span className="truncate max-w-[80px] font-bold text-zinc-500">{task.client.name}</span>
-                                </div>
-                            </>
-                          )}
+                </div>
+                <Button className="gap-2" onClick={() => { window.location.href = '/gestion'; }}>
+                  Ver gestión
+                  <ArrowUpRight className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {statConfig.map(({ key, label, icon: Icon, tone }) => (
+                  <div key={key} className="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/40 p-4">
+                    <Icon className={cn('w-4 h-4 mb-3', tone)} />
+                    <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{dashboard.stats?.[key] ?? 0}</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center">
+                  <Target className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                </div>
+                <div>
+                  <h3 className="font-black text-zinc-900 dark:text-zinc-100">Reto de la semana</h3>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">Primer hábito de adopción calibrable</p>
+                </div>
+              </div>
+              <h4 className="text-lg font-black text-zinc-900 dark:text-zinc-100">{dashboard.weeklyHabit?.title}</h4>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">{dashboard.weeklyHabit?.description}</p>
+              <div className="mt-5">
+                <div className="flex justify-between text-xs font-bold text-zinc-500 dark:text-zinc-400 mb-2">
+                  <span>{dashboard.weeklyHabit?.targetLabel}</span>
+                  <span>{dashboard.weeklyHabit?.progress ?? 0}%</span>
+                </div>
+                <div className="h-2.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-700"
+                    style={{ width: `${dashboard.weeklyHabit?.progress ?? 0}%` }}
+                  />
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-6">
+            <Card className="p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <Compass className="w-5 h-5 text-primary" />
+                <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Radar de Foco</h3>
+              </div>
+              <div className="space-y-3">
+                {dashboard.focusCards?.map((focusCard) => (
+                  <div
+                    key={focusCard.id}
+                    className={cn(
+                      'rounded-xl border px-4 py-4',
+                      cardTone[focusCard.severity] || cardTone.info
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-widest font-black opacity-70">{focusCard.type}</p>
+                        <h4 className="text-sm font-black mt-1">{focusCard.title}</h4>
+                        <p className="text-xs mt-2 opacity-80 leading-relaxed">{focusCard.content}</p>
+                      </div>
+                      <Zap className="w-4 h-4 shrink-0 mt-1" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <Clock3 className="w-5 h-5 text-primary" />
+                <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Mis tareas de hoy</h3>
+              </div>
+              <div className="space-y-3">
+                {dashboard.todayTasks?.length > 0
+                  ? dashboard.todayTasks.map((task) => <TaskRow key={task.id} task={task} />)
+                  : <EmptyState icon={CheckCircle2} title="Sin vencimientos para hoy" description="Buen momento para adelantar próximos pendientes o documentar avances." />}
+              </div>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <Card className="p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <AlertTriangle className="w-5 h-5 text-amber-500" />
+                <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Correcciones y vencidas</h3>
+              </div>
+              <div className="space-y-3">
+                {dashboard.returnedTasks?.length > 0
+                  ? dashboard.returnedTasks.slice(0, 4).map((task) => <TaskRow key={task.id} task={task} showFeedback />)
+                  : dashboard.overdueTasks?.length > 0
+                    ? dashboard.overdueTasks.slice(0, 4).map((task) => <TaskRow key={task.id} task={task} />)
+                    : <EmptyState icon={Shield} title="Sin bloqueos fuertes" description="No hay devoluciones ni vencidas asignadas a esta persona." />}
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <CalendarClock className="w-5 h-5 text-sky-500" />
+                <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Próximos pendientes</h3>
+              </div>
+              <div className="space-y-3">
+                {dashboard.upcomingTasks?.length > 0
+                  ? dashboard.upcomingTasks.slice(0, 5).map((task) => <TaskRow key={task.id} task={task} />)
+                  : <EmptyState icon={CalendarClock} title="Sin próximos vencimientos" description="No se encontraron tareas futuras con fecha asignada." />}
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <Sparkles className="w-5 h-5 text-emerald-500" />
+                <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Logros recientes</h3>
+              </div>
+              <div className="space-y-3">
+                {dashboard.achievements?.length > 0
+                  ? dashboard.achievements.slice(0, 5).map((task) => <TaskRow key={task.id} task={task} />)
+                  : <EmptyState icon={Trophy} title="Sin cierres hoy" description="Los cierres del día aparecerán aquí para reforzar progreso y visibilidad." />}
+              </div>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={item}>
+            <Card className="p-6">
+              <div className="flex items-center gap-3 mb-5">
+                <FileText className="w-5 h-5 text-primary" />
+                <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Clientes vinculados</h3>
+              </div>
+              {dashboard.clients?.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {dashboard.clients.map((client) => (
+                    <div key={client.id} className="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/40 p-4">
+                      <div className="flex items-center gap-3">
+                        <ClientAvatar client={client} size={32} />
+                        <div className="min-w-0">
+                          <p className="text-sm font-black text-zinc-900 dark:text-zinc-100 truncate">{client.name}</p>
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400">{client.activeTasks} tareas activas</p>
                         </div>
                       </div>
+                      <div className="grid grid-cols-3 gap-2 mt-4 text-center text-xs">
+                        <span className="rounded-lg bg-white dark:bg-zinc-900 py-2 text-zinc-500 dark:text-zinc-400">Salud {client.healthScore ?? '-'}</span>
+                        <span className="rounded-lg bg-white dark:bg-zinc-900 py-2 text-amber-600 dark:text-amber-400">{client.overdueTasks} venc.</span>
+                        <span className="rounded-lg bg-white dark:bg-zinc-900 py-2 text-rose-600 dark:text-rose-400">{client.returnedTasks} dev.</span>
+                      </div>
                     </div>
-                  ))
+                  ))}
+                </div>
+              ) : (
+                <EmptyState icon={UserRound} title="Sin clientes asociados" description="Cuando existan tareas activas, aparecerá el mapa de clientes vinculados." />
               )}
-            </div>
-
-            <div className="mt-4 shrink-0 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-center">
-               <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowHistoryModal(true)}
-                  className="w-full text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors flex items-center gap-2 py-2"
-               >
-                 Ver historial completo
-                 <ArrowUpRight className="w-3 h-3" />
-               </Button>
-            </div>
-          </Card>
-
-          {/* General Chat */}
-          <div className="flex flex-col min-h-[450px] h-[450px]">
-            <ChatWidget
-              title="Team Flow"
-              description="Chat operativo de toda la agencia"
-              apiEndpoint="/api/general-chat"
-              isGlobal={true}
-              fullInterface={false}
-              externalOpen={isGeneralChatModalOpen}
-              onExternalOpenChange={setIsGeneralChatModalOpen}
-            />
-          </div>
-        </motion.div>
-      </div>
-
-      {showHistoryModal && (
-        <CompletedTasksHistoryModal
-          isOpen={showHistoryModal}
-          onClose={() => setShowHistoryModal(false)}
-        />
+            </Card>
+          </motion.div>
+        </>
       )}
     </motion.div>
   );
