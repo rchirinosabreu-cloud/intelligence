@@ -20,7 +20,10 @@ test('Dashboard presents adoption-oriented sections', () => {
   }
   assert.doesNotMatch(source, /Mis tareas de hoy/, 'Dashboard should not duplicate the adopted Gestion task module.');
   assert.match(source, /Ver historial completo/, 'Recent achievements should expose the full history.');
-  assert.match(source, /showAchievementsHistory/, 'Recent achievements should keep a full-history state.');
+  assert.match(source, /CompletedTasksHistoryModal/, 'Recent achievements should use the original full-history modal.');
+  assert.match(source, /setShowHistoryModal/, 'Recent achievements should keep the original modal state.');
+  assert.doesNotMatch(source, /showAchievementsHistory/, 'Recent achievements should not use the rebuilt inline history.');
+  assert.match(source, /xl:grid-cols-2/, 'Radar and recent achievements should share an equal-width row.');
 });
 
 test('Dashboard includes community manager account leadership widgets', () => {

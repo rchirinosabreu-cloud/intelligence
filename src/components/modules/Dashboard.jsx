@@ -5,8 +5,10 @@ import {
   AlertTriangle,
   ArrowUpRight,
   CalendarClock,
+  CheckCircle2,
   ChevronDown,
   CircleDot,
+  Clock,
   Compass,
   FileText,
   LayoutDashboard,
@@ -14,7 +16,6 @@ import {
   Megaphone,
   MessageSquareText,
   Send,
-  Sparkles,
   Target,
   Trophy,
   UserRound,
@@ -29,6 +30,7 @@ import ClientAvatar from '@/components/ui/ClientAvatar';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
+import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
 
 const container = {
   hidden: { opacity: 0 },
@@ -160,7 +162,7 @@ const Dashboard = () => {
   const [assignClientId, setAssignClientId] = useState('');
   const [assignMemberId, setAssignMemberId] = useState('');
   const [expandedFocusCards, setExpandedFocusCards] = useState({});
-  const [showAchievementsHistory, setShowAchievementsHistory] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const queryClient = useQueryClient();
   const baseUrl = getApiBaseUrl();
@@ -200,6 +202,24 @@ const Dashboard = () => {
   );
 
   const selectedMember = dashboard?.member;
+  const completedFeed = useMemo(() => {
+    const bogotaFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Bogota',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const todayStr = bogotaFormatter.format(new Date());
+
+    return (dashboard?.achievements || []).filter((task) => {
+      if (!task.completedAt) return false;
+      try {
+        return bogotaFormatter.format(new Date(task.completedAt)) === todayStr;
+      } catch {
+        return false;
+      }
+    }).slice(0, 15);
+  }, [dashboard?.achievements]);
 
   const toggleFocusCard = (focusCardId) => {
     setExpandedFocusCards((current) => ({
@@ -348,7 +368,7 @@ const Dashboard = () => {
             </Card>
           </motion.div>
 
-          <motion.div variants={item}>
+          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <Card className="p-6">
               <div className="flex items-center gap-3 mb-5">
                 <Compass className="w-5 h-5 text-primary" />
@@ -393,9 +413,79 @@ const Dashboard = () => {
                 ))}
               </div>
             </Card>
+
+            <Card className="flex flex-col min-h-[450px] h-[450px] max-h-[450px] group/card p-6">
+              <div className="flex items-center gap-2 mb-6 shrink-0">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Logros recientes</h3>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-6 pr-2 scroll-smooth custom-scrollbar min-h-0 pb-2">
+                {completedFeed.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400 italic">
+                      "Aun no hay victorias hoy. Tu puedes!"
+                    </p>
+                  </div>
+                ) : (
+                  completedFeed.map((task, idx) => (
+                    <div key={task.id || idx} className="relative pl-6 pb-6 last:pb-0">
+                      {idx < completedFeed.length - 1 && (
+                        <div className="absolute left-[4.5px] top-2 w-px h-full bg-zinc-200 dark:bg-zinc-800" />
+                      )}
+                      <div className="absolute left-0 top-1.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-200 dark:border-emerald-900 shadow-[0_0_8px_rgba(52,211,153,0.5)] z-10" />
+                      <div className="group">
+                        <div className="flex items-center gap-2 mb-1">
+                          {task.assignee ? (
+                            <TeamAvatar member={task.assignee} className="w-4 h-4" />
+                          ) : (
+                            <div className="w-4 h-4 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            </div>
+                          )}
+                          <span className="text-xs text-emerald-600 dark:text-emerald-400 block font-medium">
+                            {task.assignee ? task.assignee.name : 'Equipo'} completó:
+                          </span>
+                        </div>
+                        <h4 className="text-zinc-700 hover:text-zinc-900 dark:text-zinc-200 text-sm font-medium mb-1 dark:group-hover:text-white transition-colors line-clamp-2">
+                          {task.title}
+                        </h4>
+                        <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {new Date(task.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                          {task.client && (
+                            <>
+                              <span className="mx-0.5 opacity-40">•</span>
+                              <div className="flex items-center gap-1.5">
+                                <ClientAvatar client={task.client} size={14} />
+                                <span className="truncate max-w-[80px] font-bold text-zinc-500">{task.client.name}</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="mt-4 shrink-0 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-center">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowHistoryModal(true)}
+                  className="w-full text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors flex items-center gap-2 py-2"
+                >
+                  Ver historial completo
+                  <ArrowUpRight className="w-3 h-3" />
+                </Button>
+              </div>
+            </Card>
           </motion.div>
 
-          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <motion.div variants={item}>
             <Card className="p-6">
               <div className="flex items-center gap-3 mb-5">
                 <CalendarClock className="w-5 h-5 text-sky-500" />
@@ -405,32 +495,6 @@ const Dashboard = () => {
                 {dashboard.upcomingTasks?.length > 0
                   ? dashboard.upcomingTasks.slice(0, 5).map((task) => <TaskRow key={task.id} task={task} />)
                   : <EmptyState icon={CalendarClock} title="Sin proximos vencimientos" description="No se encontraron tareas futuras con fecha asignada." />}
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-                <div className="flex items-center gap-3">
-                  <Sparkles className="w-5 h-5 text-emerald-500" />
-                  <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Logros recientes</h3>
-                </div>
-                {dashboard.achievements?.length > 5 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAchievementsHistory((current) => !current)}
-                    className="inline-flex items-center gap-1.5 text-xs font-black text-primary hover:text-primary/80 transition-colors"
-                  >
-                    {showAchievementsHistory ? 'Ver menos' : 'Ver historial completo'}
-                    <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', showAchievementsHistory && 'rotate-180')} />
-                  </button>
-                )}
-              </div>
-              <div className="space-y-3">
-                {dashboard.achievements?.length > 0
-                  ? dashboard.achievements
-                    .slice(0, showAchievementsHistory ? dashboard.achievements.length : 5)
-                    .map((task) => <TaskRow key={task.id} task={task} onClick={() => { window.location.href = `/gestion?taskId=${task.id}`; }} />)
-                  : <EmptyState icon={Trophy} title="Sin cierres hoy" description="Los cierres del dia apareceran aqui para reforzar progreso y visibilidad." />}
               </div>
             </Card>
           </motion.div>
@@ -583,6 +647,12 @@ const Dashboard = () => {
             </motion.div>
           )}
         </>
+      )}
+      {showHistoryModal && (
+        <CompletedTasksHistoryModal
+          isOpen={showHistoryModal}
+          onClose={() => setShowHistoryModal(false)}
+        />
       )}
     </motion.div>
   );
