@@ -4,6 +4,8 @@ import {
     parseFinancialImportWorkbook,
     persistFinancialImportPlan
 } from '../services/financialImportService.js';
+import { updateReceivable } from '../services/financialReceivableService.js';
+import { createPayrollContract, updatePayrollContract } from '../services/financialPayrollContractService.js';
 
 // Helper to convert Decimal fields safely
 const toNum = (val) => {
@@ -18,24 +20,6 @@ const roundFloat = (val) => {
     return Math.round((val + Number.EPSILON) * 100) / 100;
 };
 
-const buildCashFlowFromSummaries = (summaries) => summaries.map((summary) => {
-    const income = toNum(summary.explicitIncome) || toNum(summary.calculatedIncome);
-    const expense = roundFloat(
-        (toNum(summary.explicitAdminCost) || toNum(summary.calculatedAdminCost)) +
-        (toNum(summary.explicitOperatingExpense) || toNum(summary.calculatedOperatingExpense)) +
-        (toNum(summary.explicitFinancing) || toNum(summary.calculatedFinancing))
-    );
-    const explicitNet = toNum(summary.netResult);
-
-    return {
-        year: summary.year,
-        month: summary.month,
-        income,
-        expense,
-        netFlow: explicitNet || roundFloat(income - expense)
-    };
-});
-
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 const MONTHLY_LEDGER_FIELDS = [
@@ -46,38 +30,6 @@ const MONTHLY_LEDGER_FIELDS = [
     { key: 'explicitDebt', label: 'Cartera / morosos', tone: 'warning' },
     { key: 'netResult', label: 'Resultado del ejercicio', tone: 'net' }
 ];
-
-const EDITABLE_MONTHLY_FIELDS = new Set(MONTHLY_LEDGER_FIELDS.map((field) => field.key));
-
-const calculateNetResult = (summary) => roundFloat(
-    toNum(summary.explicitIncome) -
-    toNum(summary.explicitAdminCost) -
-    toNum(summary.explicitOperatingExpense) -
-    toNum(summary.explicitFinancing)
-);
-
-const buildImportSummaryTotals = (summaries) => summaries.reduce((totals, summary) => ({
-    income: roundFloat(totals.income + toNum(summary.explicitIncome)),
-    expense: roundFloat(totals.expense + toNum(summary.explicitAdminCost)),
-    operatingExpense: roundFloat(totals.operatingExpense + toNum(summary.explicitOperatingExpense)),
-    financing: roundFloat(totals.financing + toNum(summary.explicitFinancing)),
-    totalCostAndExpense: roundFloat(
-        totals.totalCostAndExpense +
-        toNum(summary.explicitAdminCost) +
-        toNum(summary.explicitOperatingExpense) +
-        toNum(summary.explicitFinancing)
-    ),
-    debt: roundFloat(totals.debt + toNum(summary.explicitDebt)),
-    netResult: roundFloat(totals.netResult + toNum(summary.netResult))
-}), {
-    income: 0,
-    expense: 0,
-    operatingExpense: 0,
-    financing: 0,
-    totalCostAndExpense: 0,
-    debt: 0,
-    netResult: 0
-});
 
 const buildMonthlyLedgerPayload = (activeImportBatch, summaries) => {
     const summaryByMonth = new Map(summaries.map((summary) => [summary.month, summary]));
@@ -153,131 +105,58 @@ export const getFinancialMonthlyLedger = async (req, res, dependencies = {}) => 
 };
 
 export const updateFinancialMonthlySummary = async (req, res, dependencies = {}) => {
-    const prismaClient = dependencies.prismaClient || prisma;
-
-    try {
-        const { id } = req.params;
-        const { field, amount } = req.body || {};
-        const numericAmount = Number(amount);
-
-        if (!EDITABLE_MONTHLY_FIELDS.has(field) || !Number.isFinite(numericAmount)) {
-            return res.status(400).json({
-                error: 'FINANCIAL_MONTHLY_UPDATE_INVALID',
-                message: 'El campo o valor mensual no es valido.'
-            });
-        }
-
-        const result = await prismaClient.$transaction(async (tx) => {
-            const existing = await tx.financialMonthlySummary.findUnique({
-                where: { id }
-            });
-
-            if (!existing) {
-                return null;
-            }
-
-            const nextSummary = {
-                ...existing,
-                [field]: numericAmount
-            };
-            const nextNetResult = field === 'netResult'
-                ? numericAmount
-                : calculateNetResult(nextSummary);
-            const metadata = {
-                ...(existing.metadata || {}),
-                editedBy: req.user?.id || null,
-                editedAt: new Date().toISOString(),
-                editedField: field
-            };
-
-            const updatedSummary = await tx.financialMonthlySummary.update({
-                where: { id },
-                data: {
-                    [field]: numericAmount,
-                    netResult: nextNetResult,
-                    metadata
-                }
-            });
-
-            const summaries = await tx.financialMonthlySummary.findMany({
-                where: {
-                    year: updatedSummary.year,
-                    importBatchId: updatedSummary.importBatchId
-                }
-            });
-            const explicitTotals = buildImportSummaryTotals(summaries);
-
-            await tx.financialImportBatch.update({
-                where: { id: updatedSummary.importBatchId },
-                data: {
-                    summary: {
-                        totals: {
-                            explicit: explicitTotals,
-                            calculated: explicitTotals
-                        },
-                        editedAt: metadata.editedAt,
-                        editedBy: metadata.editedBy
-                    }
-                }
-            });
-
-            return updatedSummary;
-        });
-
-        if (!result) {
-            return res.status(404).json({
-                error: 'FINANCIAL_MONTHLY_SUMMARY_NOT_FOUND',
-                message: 'No encontramos el mes financiero que intentas editar.'
-            });
-        }
-
-        return res.json({
-            message: 'Mes financiero actualizado correctamente.',
-            summary: {
-                ...result,
-                explicitIncome: toNum(result.explicitIncome),
-                explicitAdminCost: toNum(result.explicitAdminCost),
-                explicitOperatingExpense: toNum(result.explicitOperatingExpense),
-                explicitFinancing: toNum(result.explicitFinancing),
-                explicitDebt: toNum(result.explicitDebt),
-                netResult: toNum(result.netResult)
-            }
-        });
-    } catch (error) {
-        console.error('[Financials API] Monthly summary update failed:', error.response?.data || error);
-        return res.status(500).json({
-            error: 'FINANCIAL_MONTHLY_UPDATE_FAILED',
-            message: 'No fue posible guardar el cambio financiero.'
-        });
-    }
+    return res.status(409).json({
+        error: 'FINANCIAL_SUMMARY_READ_ONLY',
+        message: 'Los resúmenes son referencias de conciliación. Registra o corrige los movimientos financieros para actualizar los resultados.'
+    });
 };
 
-const RECEIVABLE_STATUSES = new Set(['DEBE', 'PAGADO', 'PROMESADO']);
+const serializeReceivable = (receivable) => {
+    const amount = toNum(receivable.amount);
+    const payments = (receivable.payments || []).map((payment) => ({
+        id: payment.id,
+        amount: toNum(payment.amount),
+        paidAt: payment.paidAt instanceof Date ? payment.paidAt.toISOString() : payment.paidAt,
+        reference: payment.reference,
+        notes: payment.notes,
+        account: payment.account || null
+    }));
+    const paidAmount = roundFloat(payments.reduce((sum, payment) => sum + payment.amount, 0));
 
-const serializeReceivable = (receivable) => ({
-    id: receivable.id,
-    clientName: receivable.client?.name || receivable.sourceLabel || 'Cliente sin nombre',
-    clientSlug: receivable.client?.slug || null,
-    amount: toNum(receivable.amount),
-    period: receivable.period instanceof Date ? receivable.period.toISOString() : receivable.period,
-    month: receivable.month,
-    year: receivable.year,
-    dueDate: receivable.dueDate instanceof Date ? receivable.dueDate.toISOString() : receivable.dueDate,
-    status: receivable.status,
-    notes: receivable.notes,
-    comments: receivable.comments,
-    sourceLabel: receivable.sourceLabel
-});
+    return {
+        id: receivable.id,
+        clientName: receivable.client?.name || receivable.sourceLabel || 'Cliente sin nombre',
+        clientSlug: receivable.client?.slug || null,
+        amount,
+        paidAmount,
+        outstanding: roundFloat(Math.max(amount - paidAmount, 0)),
+        period: receivable.period instanceof Date ? receivable.period.toISOString() : receivable.period,
+        month: receivable.month,
+        year: receivable.year,
+        dueDate: receivable.dueDate instanceof Date ? receivable.dueDate.toISOString() : receivable.dueDate,
+        status: receivable.status,
+        notes: receivable.notes,
+        comments: receivable.comments,
+        sourceLabel: receivable.sourceLabel,
+        payments
+    };
+};
 
 const buildReceivableTotals = (items) => items.reduce((totals, item) => {
     const status = item.status || 'DEBE';
-    totals[status] = roundFloat((totals[status] || 0) + toNum(item.amount));
-    totals.total = roundFloat((totals.total || 0) + toNum(item.amount));
+    totals[status] = roundFloat((totals[status] || 0) + toNum(item.outstanding));
+    totals.originalTotal = roundFloat(totals.originalTotal + toNum(item.amount));
+    totals.paidTotal = roundFloat(totals.paidTotal + toNum(item.paidAmount));
+    totals.outstandingTotal = roundFloat(totals.outstandingTotal + toNum(item.outstanding));
+    totals.total = totals.outstandingTotal;
     return totals;
 }, {
     DEBE: 0,
     PAGADO: 0,
     PROMESADO: 0,
+    originalTotal: 0,
+    paidTotal: 0,
+    outstandingTotal: 0,
     total: 0
 });
 
@@ -527,7 +406,7 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
         });
 
         const where = activeImportBatch?.id
-            ? { year, importBatchId: activeImportBatch.id }
+            ? { year, OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null, origin: 'MANUAL' }] }
             : { year };
         const receivables = await prismaClient.accountsReceivable.findMany({
             where,
@@ -537,6 +416,12 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
                         name: true,
                         slug: true
                     }
+                },
+                payments: {
+                    include: {
+                        account: { select: { id: true, name: true } }
+                    },
+                    orderBy: { paidAt: 'desc' }
                 }
             },
             orderBy: [
@@ -563,54 +448,11 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
 
 export const updateFinancialReceivable = async (req, res, dependencies = {}) => {
     const prismaClient = dependencies.prismaClient || prisma;
+    const updateReceivableService = dependencies.updateReceivableService || updateReceivable;
 
     try {
         const { id } = req.params;
-        const { amount, status, comments, notes, dueDate } = req.body || {};
-        const data = {
-            metadata: {
-                editedBy: req.user?.id || null,
-                editedAt: new Date().toISOString()
-            }
-        };
-
-        if (amount !== undefined) {
-            const numericAmount = Number(amount);
-            if (!Number.isFinite(numericAmount)) {
-                return res.status(400).json({
-                    error: 'FINANCIAL_RECEIVABLE_AMOUNT_INVALID',
-                    message: 'El monto de cartera no es valido.'
-                });
-            }
-            data.amount = numericAmount;
-        }
-
-        if (status !== undefined) {
-            if (!RECEIVABLE_STATUSES.has(status)) {
-                return res.status(400).json({
-                    error: 'FINANCIAL_RECEIVABLE_STATUS_INVALID',
-                    message: 'El estado de cartera no es valido.'
-                });
-            }
-            data.status = status;
-        }
-
-        if (comments !== undefined) data.comments = comments;
-        if (notes !== undefined) data.notes = notes;
-        if (dueDate !== undefined) data.dueDate = dueDate ? new Date(dueDate) : null;
-
-        const receivable = await prismaClient.accountsReceivable.update({
-            where: { id },
-            data,
-            include: {
-                client: {
-                    select: {
-                        name: true,
-                        slug: true
-                    }
-                }
-            }
-        });
+        const receivable = await updateReceivableService(prismaClient, id, req.body || {}, req.user);
 
         return res.json({
             message: 'Cartera actualizada correctamente.',
@@ -618,12 +460,28 @@ export const updateFinancialReceivable = async (req, res, dependencies = {}) => 
         });
     } catch (error) {
         console.error('[Financials API] Receivable update failed:', error.response?.data || error);
-        return res.status(500).json({
-            error: 'FINANCIAL_RECEIVABLE_UPDATE_FAILED',
-            message: 'No fue posible guardar el cambio de cartera.'
+        const statusCode = Number(error?.statusCode) || 500;
+        return res.status(statusCode).json({
+            error: error?.code || 'FINANCIAL_RECEIVABLE_UPDATE_FAILED',
+            message: statusCode >= 500 ? 'No fue posible guardar el cambio de cartera.' : error.message
         });
     }
 };
+
+const serializePayrollTransaction = (transaction) => ({
+    id: transaction.id,
+    month: transaction.month,
+    year: transaction.year,
+    status: transaction.status,
+    baseSalary: toNum(transaction.baseSalary),
+    socialSecurity: toNum(transaction.socialSecurity),
+    grossAmount: toNum(transaction.grossAmount),
+    deductions: toNum(transaction.deductions),
+    netAmount: toNum(transaction.netAmount),
+    approvedAt: transaction.approvedAt || null,
+    paidAt: transaction.paidAt || null,
+    financialRecordId: transaction.financialRecordId || null
+});
 
 const serializePayrollContract = (contract) => ({
     id: contract.id,
@@ -633,9 +491,12 @@ const serializePayrollContract = (contract) => ({
     position: contract.position?.title || '',
     baseSalary: toNum(contract.baseSalary),
     socialSecurity: toNum(contract.socialSecurity),
+    startDate: contract.startDate || null,
+    endDate: contract.endDate || null,
     monthlyTotal: Number.isFinite(Number(contract.metadata?.monthlyTotal))
         ? Number(contract.metadata.monthlyTotal)
-        : roundFloat(toNum(contract.baseSalary) + toNum(contract.socialSecurity))
+        : roundFloat(toNum(contract.baseSalary) + toNum(contract.socialSecurity)),
+    transactions: (contract.transactions || []).map(serializePayrollTransaction)
 });
 
 export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => {
@@ -657,18 +518,10 @@ export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => 
             }
         });
 
-        if (!activeImportBatch?.id) {
-            return res.json({
-                year,
-                importBatchId: null,
-                items: []
-            });
-        }
-
         const contracts = await prismaClient.payrollContract.findMany({
-            where: {
-                importBatchId: activeImportBatch.id
-            },
+            where: activeImportBatch?.id
+                ? { OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null }] }
+                : { importBatchId: null },
             include: {
                 collaborator: {
                     select: {
@@ -684,6 +537,10 @@ export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => 
                     select: {
                         title: true
                     }
+                },
+                transactions: {
+                    where: { year },
+                    orderBy: { month: 'desc' }
                 }
             },
             orderBy: {
@@ -693,7 +550,7 @@ export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => 
 
         return res.json({
             year,
-            importBatchId: activeImportBatch.id,
+            importBatchId: activeImportBatch?.id || null,
             items: contracts.map(serializePayrollContract)
         });
     } catch (error) {
@@ -707,83 +564,11 @@ export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => 
 
 export const updateFinancialPayrollContract = async (req, res, dependencies = {}) => {
     const prismaClient = dependencies.prismaClient || prisma;
+    const updatePayrollContractService = dependencies.updatePayrollContractService || updatePayrollContract;
 
     try {
         const { id } = req.params;
-        const { baseSalary, socialSecurity, monthlyTotal } = req.body || {};
-        const existing = await prismaClient.payrollContract.findUnique({
-            where: { id }
-        });
-
-        if (!existing) {
-            return res.status(404).json({
-                error: 'FINANCIAL_PAYROLL_CONTRACT_NOT_FOUND',
-                message: 'No encontramos el contrato de nomina.'
-            });
-        }
-
-        const data = {
-            metadata: {
-                ...(existing.metadata || {}),
-                editedBy: req.user?.id || null,
-                editedAt: new Date().toISOString()
-            }
-        };
-
-        if (baseSalary !== undefined) {
-            const numericBaseSalary = Number(baseSalary);
-            if (!Number.isFinite(numericBaseSalary)) {
-                return res.status(400).json({
-                    error: 'FINANCIAL_PAYROLL_BASE_INVALID',
-                    message: 'El salario base no es valido.'
-                });
-            }
-            data.baseSalary = numericBaseSalary;
-        }
-
-        if (socialSecurity !== undefined) {
-            const numericSocialSecurity = Number(socialSecurity);
-            if (!Number.isFinite(numericSocialSecurity)) {
-                return res.status(400).json({
-                    error: 'FINANCIAL_PAYROLL_SOCIAL_SECURITY_INVALID',
-                    message: 'La seguridad social no es valida.'
-                });
-            }
-            data.socialSecurity = numericSocialSecurity;
-        }
-
-        if (monthlyTotal !== undefined) {
-            const numericMonthlyTotal = Number(monthlyTotal);
-            if (!Number.isFinite(numericMonthlyTotal)) {
-                return res.status(400).json({
-                    error: 'FINANCIAL_PAYROLL_MONTHLY_TOTAL_INVALID',
-                    message: 'El total mensual no es valido.'
-                });
-            }
-            data.metadata.monthlyTotal = numericMonthlyTotal;
-        }
-
-        const contract = await prismaClient.payrollContract.update({
-            where: { id },
-            data,
-            include: {
-                collaborator: {
-                    select: {
-                        displayName: true
-                    }
-                },
-                user: {
-                    select: {
-                        name: true
-                    }
-                },
-                position: {
-                    select: {
-                        title: true
-                    }
-                }
-            }
-        });
+        const contract = await updatePayrollContractService(prismaClient, id, req.body || {}, req.user);
 
         return res.json({
             message: 'Nomina actualizada correctamente.',
@@ -791,9 +576,29 @@ export const updateFinancialPayrollContract = async (req, res, dependencies = {}
         });
     } catch (error) {
         console.error('[Financials API] Payroll contract update failed:', error.response?.data || error);
-        return res.status(500).json({
-            error: 'FINANCIAL_PAYROLL_UPDATE_FAILED',
-            message: 'No fue posible guardar el cambio de nomina.'
+        const statusCode = Number(error?.statusCode) || 500;
+        return res.status(statusCode).json({
+            error: error?.code || 'FINANCIAL_PAYROLL_UPDATE_FAILED',
+            message: statusCode >= 500 ? 'No fue posible guardar el cambio de nomina.' : error.message
+        });
+    }
+};
+
+export const createFinancialPayrollContract = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const createPayrollContractService = dependencies.createPayrollContractService || createPayrollContract;
+    try {
+        const contract = await createPayrollContractService(prismaClient, req.body || {}, req.user);
+        return res.status(201).json({
+            message: 'Contrato de nómina creado.',
+            contract
+        });
+    } catch (error) {
+        console.error('[Financials API] Payroll contract create failed:', error.response?.data || error);
+        const statusCode = Number(error?.statusCode) || 500;
+        return res.status(statusCode).json({
+            error: error?.code || 'FINANCIAL_PAYROLL_CREATE_FAILED',
+            message: statusCode >= 500 ? 'No fue posible crear el contrato de nómina.' : error.message
         });
     }
 };
@@ -804,6 +609,10 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
     try {
         const year = parseInt(req.query.year) || 2026;
         const quarter = parseInt(req.query.quarter);
+        const requestedScenario = String(req.query.scenario || 'ACTUAL').toUpperCase();
+        const scenario = ['ACTUAL', 'FORECAST', 'BUDGET'].includes(requestedScenario)
+            ? requestedScenario
+            : 'ACTUAL';
 
         // 1. Determine Date Boundaries
         let startMonth = 0; // 0-indexed (January)
@@ -834,24 +643,28 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                 summary: true
             }
         });
-        const importedBatchFilter = activeImportBatch?.id ? { importBatchId: activeImportBatch.id } : {};
+        const importedBatchFilter = activeImportBatch?.id
+            ? { OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null, origin: 'MANUAL' }] }
+            : {};
 
         // --- SECTION 1: CASH FLOW & CATEGORIES DISTRIBUTION ---
-        const financialRecordWhere = activeImportBatch?.id
-            ? {
-                year,
-                month: {
-                    gte: monthStart,
-                    lte: monthEnd
-                },
-                importBatchId: activeImportBatch.id
-            }
-            : {
-                date: {
-                    gte: dateStart,
-                    lt: dateEnd
-                }
-            };
+        const financialRecordWhere = {
+            year,
+            month: {
+                gte: monthStart,
+                lte: monthEnd
+            },
+            scenario,
+            status: 'POSTED',
+            ...(activeImportBatch?.id
+                ? { OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null }] }
+                : {
+                    date: {
+                        gte: dateStart,
+                        lt: dateEnd
+                    }
+                })
+        };
 
         const financialRecords = await prismaClient.financialRecord.findMany({
             where: financialRecordWhere,
@@ -859,22 +672,6 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                 client: { select: { name: true, slug: true } }
             }
         });
-
-        const monthlySummaries = activeImportBatch?.id
-            ? await prismaClient.financialMonthlySummary.findMany({
-                where: {
-                    year,
-                    month: {
-                        gte: monthStart,
-                        lte: monthEnd
-                    },
-                    importBatchId: activeImportBatch.id
-                },
-                orderBy: {
-                    month: 'asc'
-                }
-            })
-            : [];
 
         // Group cash flow by month
         const monthlyGroups = {};
@@ -895,8 +692,8 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
             const type = record.type; // INCOME or EXPENSE
             const category = record.category;
             const rDate = new Date(record.date);
-            const rMonth = rDate.getMonth() + 1; // 1-12
-            const rYear = rDate.getFullYear();
+            const rMonth = rDate.getUTCMonth() + 1; // 1-12
+            const rYear = rDate.getUTCFullYear();
 
             // Accumulate in global categories distribution
             if (categoriesDistribution[type][category] !== undefined) {
@@ -930,9 +727,7 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
             if (a.year !== b.year) return a.year - b.year;
             return a.month - b.month;
         });
-        const cashFlow = monthlySummaries.length > 0
-            ? buildCashFlowFromSummaries(monthlySummaries)
-            : cashFlowFromRecords;
+        const cashFlow = cashFlowFromRecords;
 
 
         // --- SECTION 2: ACCOUNTS RECEIVABLE (CARTERA MOROSA) ---
@@ -949,7 +744,8 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                         name: true,
                         slug: true
                     }
-                }
+                },
+                payments: { select: { amount: true } }
             },
             orderBy: {
                 period: 'desc'
@@ -963,7 +759,8 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
             const clientId = rec.clientId;
             const clientName = rec.client?.name || 'Cliente Desconocido';
             const clientSlug = rec.client?.slug || 'cliente-desconocido';
-            const amount = toNum(rec.amount);
+            const paidAmount = (rec.payments || []).reduce((sum, payment) => sum + toNum(payment.amount), 0);
+            const amount = roundFloat(Math.max(toNum(rec.amount) - paidAmount, 0));
 
             if (!clientReceivableMap[clientId]) {
                 clientReceivableMap[clientId] = {
@@ -992,20 +789,37 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
         const accountsReceivable = Object.values(clientReceivableMap).sort((a, b) => b.totalOutstanding - a.totalOutstanding);
         const explicitImportTotals = activeImportBatch?.summary?.totals?.explicit || {};
         const calculatedImportTotals = activeImportBatch?.summary?.totals?.calculated || {};
-        const sourceSummary = activeImportBatch?.id ? {
-            importBatchId: activeImportBatch.id,
+        const recordTotals = cashFlow.reduce((totals, month) => ({
+            income: roundFloat(totals.income + month.income),
+            expense: roundFloat(totals.expense + month.expense),
+            netFlow: roundFloat(totals.netFlow + month.netFlow)
+        }), { income: 0, expense: 0, netFlow: 0 });
+        const receivableTotal = accountsReceivable.reduce(
+            (sum, item) => roundFloat(sum + item.totalOutstanding),
+            0
+        );
+        const importedExpense = toNum(explicitImportTotals.totalCostAndExpense) || (
+            toNum(explicitImportTotals.expense) +
+            toNum(explicitImportTotals.operatingExpense) +
+            toNum(explicitImportTotals.financing)
+        );
+        const sourceSummary = {
+            importBatchId: activeImportBatch?.id || null,
+            scenario,
             totals: {
-                income: toNum(explicitImportTotals.income),
-                expense: toNum(explicitImportTotals.totalCostAndExpense) || (
-                    toNum(explicitImportTotals.expense) +
-                    toNum(explicitImportTotals.operatingExpense) +
-                    toNum(explicitImportTotals.financing)
-                ),
-                netFlow: toNum(explicitImportTotals.netResult),
-                receivable: toNum(explicitImportTotals.debt),
+                income: recordTotals.income,
+                expense: recordTotals.expense,
+                netFlow: recordTotals.netFlow,
+                receivable: receivableTotal,
                 calculatedReceivable: toNum(calculatedImportTotals.debt)
+            },
+            importedTotals: {
+                income: toNum(explicitImportTotals.income),
+                expense: importedExpense,
+                netFlow: toNum(explicitImportTotals.netResult),
+                receivable: toNum(explicitImportTotals.debt)
             }
-        } : null;
+        };
 
 
         // --- SECTION 3: DYNAMIC PAYROLL CONSOLIDATION ---
@@ -1025,7 +839,20 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                         email: true
                     }
                 },
-                contract: true,
+                contract: {
+                    include: {
+                        collaborator: {
+                            select: {
+                                displayName: true
+                            }
+                        },
+                        position: {
+                            select: {
+                                title: true
+                            }
+                        }
+                    }
+                },
                 adjustments: true
             }
         });
@@ -1034,12 +861,13 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
         let totalPayrollCost = 0;
 
         for (const tx of payrollTransactions) {
-            const userId = tx.userId;
-            const userName = tx.user?.name || 'Colaborador';
+            const collaboratorKey = tx.contract?.collaboratorId || tx.userId || tx.contractId;
+            const userId = tx.userId || null;
+            const userName = tx.contract?.collaborator?.displayName || tx.user?.name || tx.contract?.sourceLabel || 'Colaborador';
             const userEmail = tx.user?.email || '';
 
-            const baseSalary = toNum(tx.contract?.baseSalary);
-            const socialSecurity = toNum(tx.contract?.socialSecurity);
+            const baseSalary = toNum(tx.baseSalary) || toNum(tx.contract?.baseSalary);
+            const socialSecurity = toNum(tx.socialSecurity) || toNum(tx.contract?.socialSecurity);
 
             // Compute algebraic adjustments total
             let adjustmentsTotal = 0;
@@ -1068,13 +896,16 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                 });
             }
 
-            const totalPaid = roundFloat(baseSalary + socialSecurity + adjustmentsTotal);
+            const totalPaid = toNum(tx.netAmount) || roundFloat(baseSalary + socialSecurity + adjustmentsTotal);
 
-            if (!collaboratorPayrollMap[userId]) {
-                collaboratorPayrollMap[userId] = {
+            if (!collaboratorPayrollMap[collaboratorKey]) {
+                collaboratorPayrollMap[collaboratorKey] = {
                     userId,
+                    collaboratorId: tx.contract?.collaboratorId || null,
+                    contractId: tx.contractId,
                     name: userName,
                     email: userEmail,
+                    position: tx.contract?.position?.title || '',
                     baseSalary: 0,
                     socialSecurity: 0,
                     adjustmentsTotal: 0,
@@ -1083,11 +914,11 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                 };
             }
 
-            collaboratorPayrollMap[userId].baseSalary = roundFloat(collaboratorPayrollMap[userId].baseSalary + baseSalary);
-            collaboratorPayrollMap[userId].socialSecurity = roundFloat(collaboratorPayrollMap[userId].socialSecurity + socialSecurity);
-            collaboratorPayrollMap[userId].adjustmentsTotal = roundFloat(collaboratorPayrollMap[userId].adjustmentsTotal + adjustmentsTotal);
-            collaboratorPayrollMap[userId].totalPaid = roundFloat(collaboratorPayrollMap[userId].totalPaid + totalPaid);
-            collaboratorPayrollMap[userId].adjustments.push(...adjustmentsList);
+            collaboratorPayrollMap[collaboratorKey].baseSalary = roundFloat(collaboratorPayrollMap[collaboratorKey].baseSalary + baseSalary);
+            collaboratorPayrollMap[collaboratorKey].socialSecurity = roundFloat(collaboratorPayrollMap[collaboratorKey].socialSecurity + socialSecurity);
+            collaboratorPayrollMap[collaboratorKey].adjustmentsTotal = roundFloat(collaboratorPayrollMap[collaboratorKey].adjustmentsTotal + adjustmentsTotal);
+            collaboratorPayrollMap[collaboratorKey].totalPaid = roundFloat(collaboratorPayrollMap[collaboratorKey].totalPaid + totalPaid);
+            collaboratorPayrollMap[collaboratorKey].adjustments.push(...adjustmentsList);
 
             totalPayrollCost = roundFloat(totalPayrollCost + totalPaid);
         }
@@ -1177,10 +1008,13 @@ export const previewFinancialImport = async (req, res) => {
         }
 
         const year = parseInt(req.body?.year, 10) || 2026;
-        const preview = parseFinancialImportWorkbook(req.file.buffer, {
+        const actualThroughMonth = parseInt(req.body?.actualThroughMonth, 10);
+        const importOptions = {
             filename: req.file.originalname,
             year
-        });
+        };
+        if (Number.isInteger(actualThroughMonth)) importOptions.actualThroughMonth = actualThroughMonth;
+        const preview = parseFinancialImportWorkbook(req.file.buffer, importOptions);
 
         return res.json(preview);
     } catch (error) {
@@ -1206,11 +1040,14 @@ export const commitFinancialImport = async (req, res, dependencies = {}) => {
         }
 
         const year = parseInt(req.body?.year, 10) || 2026;
-        const plan = buildPlan(req.file.buffer, {
+        const actualThroughMonth = parseInt(req.body?.actualThroughMonth, 10);
+        const importOptions = {
             filename: req.file.originalname,
             year,
             importedById: req.user?.id || null
-        });
+        };
+        if (Number.isInteger(actualThroughMonth)) importOptions.actualThroughMonth = actualThroughMonth;
+        const plan = buildPlan(req.file.buffer, importOptions);
         const result = await persistPlan(prismaClient, plan);
 
         return res.status(201).json({

@@ -25,6 +25,7 @@ export default function Team() {
   const [avatarUrl, setAvatarUrl] = useState('');
 
   const [systemRole, setSystemRole] = useState('VIEWER');
+  const [financialRole, setFinancialRole] = useState('NONE');
   const [modulePermissions, setModulePermissions] = useState({
     manager: false,
     gestion: false,
@@ -42,6 +43,7 @@ export default function Team() {
 
   const handleRolePresetChange = (selectedRole) => {
     setSystemRole(selectedRole);
+    setFinancialRole(selectedRole === 'ADMIN' ? 'ADMIN' : 'NONE');
     let presets = {
       manager: false,
       gestion: false,
@@ -152,6 +154,7 @@ export default function Team() {
         equipo: !!(rawPerms.equipo || rawPerms.Equipo)
       };
       setSystemRole(userRole);
+      setFinancialRole(member.user?.financialRole || (member.user?.hasFinancialAccess ? 'EDITOR' : 'NONE'));
       setModulePermissions(userPerms);
     } else {
       setEditingMember(null);
@@ -160,6 +163,7 @@ export default function Team() {
       setEmail('');
       setAvatarUrl('');
       setSystemRole('VIEWER');
+      setFinancialRole('NONE');
       setModulePermissions({
         manager: false,
         gestion: false,
@@ -188,6 +192,7 @@ export default function Team() {
       email,
       avatarUrl,
       systemRole,
+      financialRole,
       modulePermissions
     };
     const method = editingMember ? 'PUT' : 'POST';
@@ -432,6 +437,9 @@ export default function Team() {
                                 ...prev,
                                 [module]: e.target.checked
                               }));
+                              if (module === 'financiero') {
+                                setFinancialRole(e.target.checked ? 'EDITOR' : 'NONE');
+                              }
                             }}
                             className="rounded text-primary focus:ring-primary h-4 w-4 cursor-pointer"
                           />
@@ -443,6 +451,25 @@ export default function Team() {
                     })}
                   </div>
                 </div>
+                {(systemRole === 'ADMIN' || modulePermissions.financiero) && (
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-300 mb-1.5">Nivel financiero</label>
+                    <select
+                      value={systemRole === 'ADMIN' ? 'ADMIN' : financialRole}
+                      disabled={systemRole === 'ADMIN'}
+                      onChange={(e) => setFinancialRole(e.target.value)}
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:ring-2 ring-primary/50 text-zinc-900 dark:text-white"
+                    >
+                      {systemRole === 'ADMIN' && <option value="ADMIN">Administrador</option>}
+                      <option value="VIEWER">Solo lectura</option>
+                      <option value="EDITOR">Registrar y editar</option>
+                      <option value="APPROVER">Aprobar importaciones y cierres</option>
+                    </select>
+                    <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                      Los cierres mensuales y las importaciones requieren nivel aprobador.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 

@@ -37,13 +37,18 @@ const parseMoney = (value) => {
     if (value === null || value === undefined || value === '') return 0;
     if (typeof value === 'number') {
         if (!Number.isFinite(value)) return 0;
-        return value > 0 && value < 1000 ? value * 1000 : value;
+        return value;
     }
 
     const raw = String(value).trim();
     if (!raw) return 0;
 
     const isNegative = raw.includes('-') || raw.includes('(');
+    const decimalMatch = /^\(?-?\$?\s*(\d+)[.,](\d{1,2})\)?$/.exec(raw);
+    if (decimalMatch) {
+        const decimalValue = Number(`${decimalMatch[1]}.${decimalMatch[2]}`);
+        return isNegative ? -decimalValue : decimalValue;
+    }
     const cleaned = raw
         .replace(/\$/g, '')
         .replace(/\s/g, '')
@@ -121,6 +126,30 @@ const normalizeReceivableStatus = (status) => {
 
 const dateFromYearMonth = (year, month) => new Date(Date.UTC(year, month - 1, 1));
 
+const parsePayrollStartDate = (value, fallbackYear) => {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+    }
+    const raw = String(value || '').trim();
+    if (!raw) return dateFromYearMonth(fallbackYear, 1);
+
+    const dayFirst = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2}|\d{4})$/.exec(raw);
+    if (dayFirst) {
+        const year = Number(dayFirst[3]) < 100 ? 2000 + Number(dayFirst[3]) : Number(dayFirst[3]);
+        return new Date(Date.UTC(year, Number(dayFirst[2]) - 1, Number(dayFirst[1])));
+    }
+
+    const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(raw);
+    if (iso) return new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
+
+    const serial = Number(raw);
+    if (Number.isFinite(serial) && serial > 1) {
+        const parsed = XLSX.SSF.parse_date_code(serial);
+        if (parsed?.y && parsed?.m && parsed?.d) return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
+    }
+    return dateFromYearMonth(fallbackYear, 1);
+};
+
 const slugify = (value) => normalizeText(value)
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
@@ -179,6 +208,7 @@ const buildMonthlySummaries = (preview) => {
         return {
             year: preview.year,
             month: monthIndex + 1,
+            scenario: preview.actualThroughMonth >= monthIndex + 1 ? 'ACTUAL' : 'FORECAST',
             explicitIncome,
             calculatedIncome,
             explicitAdminCost,
@@ -197,14 +227,16 @@ const buildMonthlySummaries = (preview) => {
     });
 };
 
-const rowsFromSheet = (sheet) => XLSX.utils.sheet_to_json(sheet, {
+const rowsFromSheet = (sheet, rawValues = true) => XLSX.utils.sheet_to_json(sheet, {
     header: 1,
+    raw: rawValues,
     blankrows: false,
     defval: ''
 });
 
 const readWorkbookContext = (buffer, options = {}) => {
     const workbook = XLSX.read(buffer, { type: 'buffer', raw: false });
+    const rawValues = !String(options.filename || '').toLowerCase().endsWith('.csv');
     const sheetNames = workbook.SheetNames;
     const normalizedSheetNames = new Map(sheetNames.map((name) => [normalizeText(name), name]));
     const sourceSheet = options.sheetName
@@ -214,12 +246,12 @@ const readWorkbookContext = (buffer, options = {}) => {
     return {
         sheetNames,
         sourceSheet,
-        rows: sourceSheet ? rowsFromSheet(workbook.Sheets[sourceSheet]) : [],
+        rows: sourceSheet ? rowsFromSheet(workbook.Sheets[sourceSheet], rawValues) : [],
         payrollRows: normalizedSheetNames.get('nomina 2026')
-            ? rowsFromSheet(workbook.Sheets[normalizedSheetNames.get('nomina 2026')])
+            ? rowsFromSheet(workbook.Sheets[normalizedSheetNames.get('nomina 2026')], rawValues)
             : [],
         debtRows: normalizedSheetNames.get('morosos')
-            ? rowsFromSheet(workbook.Sheets[normalizedSheetNames.get('morosos')])
+            ? rowsFromSheet(workbook.Sheets[normalizedSheetNames.get('morosos')], rawValues)
             : []
     };
 };
@@ -366,6 +398,16 @@ collectMonthEntries.monthStartIndex = 1;
 
 export const parseFinancialImportWorkbook = (buffer, options = {}) => {
     const year = Number.parseInt(options.year, 10) || 2026;
+    const requestedCutoff = Number.parseInt(options.actualThroughMonth, 10);
+    const now = new Date();
+    const inferredCutoff = year < now.getUTCFullYear()
+        ? 12
+        : year > now.getUTCFullYear()
+            ? 0
+            : now.getUTCMonth() + 1;
+    const actualThroughMonth = Number.isInteger(requestedCutoff)
+        ? Math.min(Math.max(requestedCutoff, 0), 12)
+        : inferredCutoff;
     const context = readWorkbookContext(buffer, options);
     const rows = context.rows;
     const layout = detectLayout(rows);
@@ -539,6 +581,7 @@ export const parseFinancialImportWorkbook = (buffer, options = {}) => {
     return {
         filename: options.filename || null,
         year,
+        actualThroughMonth,
         workbook: {
             sheetNames: context.sheetNames
         },
@@ -573,6 +616,11 @@ export const buildFinancialImportPersistencePlan = (buffer, options = {}) => {
         sourceSheet: preview.sourceSheet,
         sourceRow: entry.rowNumber,
         sourceLabel: entry.sourceLabel,
+        scenario: entry.month <= preview.actualThroughMonth ? 'ACTUAL' : 'FORECAST',
+        status: 'POSTED',
+        origin: 'IMPORT',
+        isProjection: entry.month > preview.actualThroughMonth,
+        postedAt: dateFromYearMonth(entry.year, entry.month),
         metadata: {
             monthName: entry.monthName,
             sourceSection: entry.sourceSection
@@ -585,6 +633,7 @@ export const buildFinancialImportPersistencePlan = (buffer, options = {}) => {
         year: debt.year || preview.year,
         month: debt.month || null,
         status: normalizeReceivableStatus(debt.status),
+        origin: 'IMPORT',
         notes: debt.sourceLabel,
         comments: debt.comments || null,
         sourceSheet: 'MOROSOS',
@@ -608,7 +657,7 @@ export const buildFinancialImportPersistencePlan = (buffer, options = {}) => {
         baseSalary: person.baseSalary,
         socialSecurity: person.socialSecurity,
         startDateRaw: person.startDate,
-        startDate: dateFromYearMonth(preview.year, 1),
+        startDate: parsePayrollStartDate(person.startDate, preview.year),
         endDate: null,
         sourceSheet: 'NOMINA 2026',
         sourceRow: person.rowNumber,
@@ -634,6 +683,7 @@ export const buildFinancialImportPersistencePlan = (buffer, options = {}) => {
             summary: {
                 layout: preview.layout,
                 sourceSheet: preview.sourceSheet,
+                actualThroughMonth: preview.actualThroughMonth,
                 totals: preview.totals,
                 warnings: preview.warnings,
                 entries: preview.entries.length,

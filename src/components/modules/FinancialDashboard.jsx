@@ -1,8 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
+import DatePicker from 'react-datepicker';
+import { format } from 'date-fns';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { brainDatePickerProps } from '@/lib/brainDatePicker';
 import { Card } from '@/components/ui/Card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle
+} from '@/components/ui/dialog';
 import PageHeader from '@/components/ui/PageHeader';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -16,6 +27,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { Navigate } from 'react-router-dom';
+import FinancialLedger from './financial/FinancialLedger';
 
 const CATEGORY_COLORS = {
     'MEMBRESIA': '#8b5cf6',      // Violet
@@ -46,6 +58,7 @@ const FinancialDashboard = () => {
     // 1. React Hook Declarations (Inconditional - at the absolute top)
     const [selectedYear, setSelectedYear] = useState(2026);
     const [selectedQuarter, setSelectedQuarter] = useState('ALL');
+    const [selectedScenario, setSelectedScenario] = useState('ACTUAL');
     const [activeTab, setActiveTab] = useState('flow');
     const [expandedClients, setExpandedClients] = useState({});
     const [importPreview, setImportPreview] = useState(null);
@@ -54,20 +67,38 @@ const FinancialDashboard = () => {
     const [importSuccess, setImportSuccess] = useState('');
     const [isImporting, setIsImporting] = useState(false);
     const [isCommittingImport, setIsCommittingImport] = useState(false);
-    const [savingMonthlyCell, setSavingMonthlyCell] = useState('');
+    const [actualThroughMonth, setActualThroughMonth] = useState(new Date().getMonth() + 1);
     const [savingReceivableId, setSavingReceivableId] = useState('');
     const [savingPayrollContractId, setSavingPayrollContractId] = useState('');
     const [savingClientLinkId, setSavingClientLinkId] = useState('');
     const [clientLinkTargets, setClientLinkTargets] = useState({});
-    const canAccessFinancials = currentUser?.role === 'ADMIN' || currentUser?.hasFinancialAccess === true;
+    const [paymentDebt, setPaymentDebt] = useState(null);
+    const [paymentForm, setPaymentForm] = useState({ amount: '', paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }), accountId: '', reference: '', notes: '' });
+    const [isSavingPayment, setIsSavingPayment] = useState(false);
+    const [isReceivableEditorOpen, setIsReceivableEditorOpen] = useState(false);
+    const [receivableForm, setReceivableForm] = useState({ clientId: '', amount: '', period: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }).slice(0, 7) + '-01', dueDate: '', comments: '' });
+    const [isSavingReceivable, setIsSavingReceivable] = useState(false);
+    const [payrollMonth, setPayrollMonth] = useState(new Date().getMonth() + 1);
+    const [isGeneratingPayroll, setIsGeneratingPayroll] = useState(false);
+    const [savingPayrollTransactionId, setSavingPayrollTransactionId] = useState('');
+    const [payrollPayment, setPayrollPayment] = useState(null);
+    const [payrollPaymentForm, setPayrollPaymentForm] = useState({ paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }), accountId: '', reference: '' });
+    const [isSavingPayrollPayment, setIsSavingPayrollPayment] = useState(false);
+    const [isPayrollContractEditorOpen, setIsPayrollContractEditorOpen] = useState(false);
+    const [editingPayrollContract, setEditingPayrollContract] = useState(null);
+    const [payrollContractForm, setPayrollContractForm] = useState(() => emptyPayrollContractForm(2026));
+    const [isSavingPayrollContract, setIsSavingPayrollContract] = useState(false);
+    const canAccessFinancials = currentUser?.role === 'ADMIN' || currentUser?.hasFinancialAccess === true || (currentUser?.financialRole && currentUser.financialRole !== 'NONE');
+    const canWriteFinancials = currentUser?.role === 'ADMIN' || currentUser?.hasFinancialAccess === true || ['EDITOR', 'APPROVER', 'ADMIN'].includes(currentUser?.financialRole);
+    const canApproveFinancials = currentUser?.role === 'ADMIN' || ['APPROVER', 'ADMIN'].includes(currentUser?.financialRole);
 
     // Fetch analytical aggregation from protected backend endpoint
     const { data, isLoading, error } = useQuery({
-        queryKey: ['financials-dashboard-data', selectedYear, selectedQuarter],
+        queryKey: ['financials-dashboard-data', selectedYear, selectedQuarter, selectedScenario],
         queryFn: async () => {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
-            const url = `${baseUrl}/api/financials/dashboard?year=${selectedYear}${selectedQuarter !== 'ALL' ? `&quarter=${selectedQuarter}` : ''}`;
+            const url = `${baseUrl}/api/financials/dashboard?year=${selectedYear}&scenario=${selectedScenario}${selectedQuarter !== 'ALL' ? `&quarter=${selectedQuarter}` : ''}`;
             const res = await axios.get(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -102,6 +133,19 @@ const FinancialDashboard = () => {
         enabled: !!(currentUser && canAccessFinancials && activeTab === 'receivables')
     });
 
+    const { data: financialAccounts } = useQuery({
+        queryKey: ['financial-accounts'],
+        queryFn: async () => {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const res = await axios.get(`${baseUrl}/api/financials/accounts`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            return res.data;
+        },
+        enabled: !!(currentUser && canAccessFinancials && ['receivables', 'payroll'].includes(activeTab))
+    });
+
     const { data: payrollLedger, isLoading: isPayrollLedgerLoading } = useQuery({
         queryKey: ['financials-payroll-ledger', selectedYear],
         queryFn: async () => {
@@ -125,7 +169,20 @@ const FinancialDashboard = () => {
             });
             return res.data;
         },
-        enabled: !!(currentUser && canAccessFinancials && activeTab === 'clients')
+        enabled: !!(currentUser && canAccessFinancials && ['clients', 'receivables'].includes(activeTab))
+    });
+
+    const { data: integrityAudit, isLoading: isIntegrityAuditLoading } = useQuery({
+        queryKey: ['financial-integrity', selectedYear],
+        queryFn: async () => {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const res = await axios.get(`${baseUrl}/api/financials/integrity?year=${selectedYear}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            return res.data;
+        },
+        enabled: !!(currentUser && canAccessFinancials && activeTab === 'import')
     });
 
     const toggleClientExpand = (clientId) => {
@@ -149,6 +206,7 @@ const FinancialDashboard = () => {
             const formData = new FormData();
             formData.append('file', file);
             formData.append('year', String(selectedYear));
+            formData.append('actualThroughMonth', String(actualThroughMonth));
 
             const res = await axios.post(`${baseUrl}/api/financials/import/preview`, formData, {
                 headers: {
@@ -186,6 +244,7 @@ const FinancialDashboard = () => {
             const formData = new FormData();
             formData.append('file', importFile);
             formData.append('year', String(selectedYear));
+            formData.append('actualThroughMonth', String(actualThroughMonth));
 
             const res = await axios.post(`${baseUrl}/api/financials/import/commit`, formData, {
                 headers: {
@@ -201,38 +260,6 @@ const FinancialDashboard = () => {
             setImportError(error.response?.data?.message || 'No fue posible guardar la importación financiera.');
         } finally {
             setIsCommittingImport(false);
-        }
-    };
-
-    const handleMonthlyCellSave = async (cell, field, rawValue) => {
-        if (!cell?.summaryId) return;
-        const normalizedValue = Number(String(rawValue || '0').replace(/[^\d.-]/g, ''));
-        if (!Number.isFinite(normalizedValue) || normalizedValue === cell.amount) return;
-
-        const cellKey = `${field}-${cell.month}`;
-        setSavingMonthlyCell(cellKey);
-        setImportError('');
-        setImportSuccess('');
-
-        try {
-            const baseUrl = getApiBaseUrl();
-            const token = localStorage.getItem('authToken');
-            await axios.patch(`${baseUrl}/api/financials/monthly-summaries/${cell.summaryId}`, {
-                field,
-                amount: normalizedValue
-            }, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            await Promise.all([
-                queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] }),
-                queryClient.invalidateQueries({ queryKey: ['financials-monthly-ledger'] })
-            ]);
-            setImportSuccess('Cambio financiero guardado.');
-        } catch (error) {
-            console.error('Error updating monthly financial cell:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible guardar el cambio financiero.');
-        } finally {
-            setSavingMonthlyCell('');
         }
     };
 
@@ -261,6 +288,74 @@ const FinancialDashboard = () => {
         }
     };
 
+    const openReceivablePayment = (debt) => {
+        setPaymentDebt(debt);
+        setPaymentForm({
+            amount: String(debt.outstanding || ''),
+            paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }),
+            accountId: '',
+            reference: '',
+            notes: ''
+        });
+    };
+
+    const handleReceivablePayment = async (event) => {
+        event.preventDefault();
+        if (!paymentDebt?.id) return;
+
+        setIsSavingPayment(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            await axios.post(`${baseUrl}/api/financials/receivables/${paymentDebt.id}/payments`, {
+                ...paymentForm,
+                amount: Number(paymentForm.amount)
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] }),
+                queryClient.invalidateQueries({ queryKey: ['financials-receivables-ledger'] }),
+                queryClient.invalidateQueries({ queryKey: ['financial-accounts'] })
+            ]);
+            setPaymentDebt(null);
+            setImportSuccess('Pago de cartera registrado.');
+        } catch (error) {
+            console.error('Error registering receivable payment:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible registrar el pago de cartera.');
+        } finally {
+            setIsSavingPayment(false);
+        }
+    };
+
+    const handleCreateReceivable = async (event) => {
+        event.preventDefault();
+        setIsSavingReceivable(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            await axios.post(`${baseUrl}/api/financials/receivables`, {
+                ...receivableForm,
+                amount: Number(receivableForm.amount),
+                dueDate: receivableForm.dueDate || null
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] }),
+                queryClient.invalidateQueries({ queryKey: ['financials-receivables-ledger'] }),
+                queryClient.invalidateQueries({ queryKey: ['financials-client-reconciliation'] })
+            ]);
+            setIsReceivableEditorOpen(false);
+            setImportSuccess('Cuenta por cobrar registrada.');
+        } catch (error) {
+            console.error('Error creating receivable:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible registrar la cuenta por cobrar.');
+        } finally {
+            setIsSavingReceivable(false);
+        }
+    };
+
     const handlePayrollContractUpdate = async (contract, patch) => {
         const contractId = contract?.id || contract?.contractId;
         if (!contractId) return;
@@ -285,6 +380,123 @@ const FinancialDashboard = () => {
             setImportError(error.response?.data?.message || 'No fue posible guardar el cambio de nómina.');
         } finally {
             setSavingPayrollContractId('');
+        }
+    };
+
+    const openPayrollContractEditor = (contract = null) => {
+        setEditingPayrollContract(contract);
+        setPayrollContractForm(contract ? {
+            name: contract.name || '',
+            position: contract.position || '',
+            baseSalary: String(contract.baseSalary || 0),
+            socialSecurity: String(contract.socialSecurity || 0),
+            monthlyTotal: String(contract.monthlyTotal || 0),
+            startDate: contract.startDate ? String(contract.startDate).slice(0, 10) : `${selectedYear}-01-01`,
+            endDate: contract.endDate ? String(contract.endDate).slice(0, 10) : ''
+        } : emptyPayrollContractForm(selectedYear));
+        setIsPayrollContractEditorOpen(true);
+    };
+
+    const handleSavePayrollContract = async (event) => {
+        event.preventDefault();
+        setIsSavingPayrollContract(true);
+        setImportError('');
+        setImportSuccess('');
+        const payload = {
+            ...payrollContractForm,
+            baseSalary: Number(payrollContractForm.baseSalary),
+            socialSecurity: Number(payrollContractForm.socialSecurity),
+            monthlyTotal: Number(payrollContractForm.monthlyTotal),
+            endDate: payrollContractForm.endDate || null
+        };
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            if (editingPayrollContract) {
+                await axios.patch(`${baseUrl}/api/financials/payroll-contracts/${editingPayrollContract.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
+            } else {
+                await axios.post(`${baseUrl}/api/financials/payroll-contracts`, payload, { headers: { Authorization: `Bearer ${token}` } });
+            }
+            await invalidatePayroll();
+            setIsPayrollContractEditorOpen(false);
+            setImportSuccess(editingPayrollContract ? 'Contrato actualizado.' : 'Contrato creado.');
+        } catch (error) {
+            console.error('Error saving payroll contract:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible guardar el contrato.');
+        } finally {
+            setIsSavingPayrollContract(false);
+        }
+    };
+
+    const invalidatePayroll = async () => {
+        await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] }),
+            queryClient.invalidateQueries({ queryKey: ['financials-payroll-ledger'] }),
+            queryClient.invalidateQueries({ queryKey: ['financial-accounts'] })
+        ]);
+    };
+
+    const handleGeneratePayroll = async () => {
+        setIsGeneratingPayroll(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            await axios.post(`${baseUrl}/api/financials/payroll/periods`, {
+                year: selectedYear,
+                month: payrollMonth
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            await invalidatePayroll();
+            setImportSuccess('Nómina mensual generada en borrador.');
+        } catch (error) {
+            console.error('Error generating payroll period:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible generar la nómina mensual.');
+        } finally {
+            setIsGeneratingPayroll(false);
+        }
+    };
+
+    const handleApprovePayroll = async (transaction) => {
+        setSavingPayrollTransactionId(transaction.id);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            await axios.post(`${baseUrl}/api/financials/payroll-transactions/${transaction.id}/approve`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            await invalidatePayroll();
+            setImportSuccess('Liquidación aprobada.');
+        } catch (error) {
+            console.error('Error approving payroll transaction:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible aprobar la liquidación.');
+        } finally {
+            setSavingPayrollTransactionId('');
+        }
+    };
+
+    const handlePayPayroll = async (event) => {
+        event.preventDefault();
+        if (!payrollPayment?.id) return;
+        setIsSavingPayrollPayment(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            await axios.post(`${baseUrl}/api/financials/payroll-transactions/${payrollPayment.id}/pay`, payrollPaymentForm, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            await invalidatePayroll();
+            setPayrollPayment(null);
+            setImportSuccess('Pago de nómina registrado en el libro financiero.');
+        } catch (error) {
+            console.error('Error paying payroll transaction:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible registrar el pago de nómina.');
+        } finally {
+            setIsSavingPayrollPayment(false);
         }
     };
 
@@ -396,9 +608,14 @@ const FinancialDashboard = () => {
     }, [receivablesLedger?.items]);
 
     const payrollRows = useMemo(() => {
-        if (payrollLedger?.items?.length > 0) return payrollLedger.items;
+        if (payrollLedger?.items) {
+            return payrollLedger.items.map((item) => ({
+                ...item,
+                transaction: (item.transactions || []).find((transaction) => transaction.year === selectedYear && transaction.month === payrollMonth) || null
+            }));
+        }
         return data?.payroll?.collaborators || [];
-    }, [data?.payroll?.collaborators, payrollLedger?.items]);
+    }, [data?.payroll?.collaborators, payrollLedger?.items, payrollMonth, selectedYear]);
 
     const editablePayrollTotal = useMemo(() => (
         payrollRows.reduce((sum, item) => sum + (Number(item.monthlyTotal ?? item.totalPaid) || 0), 0)
@@ -435,6 +652,17 @@ const FinancialDashboard = () => {
             >
                 <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-white/5 shadow-sm">
                     <select
+                        value={selectedScenario}
+                        onChange={(e) => setSelectedScenario(e.target.value)}
+                        aria-label="Escenario financiero"
+                        className="bg-transparent border-none text-xs font-medium px-3 py-1.5 focus:ring-0 cursor-pointer"
+                    >
+                        <option value="ACTUAL">Ejecutado</option>
+                        <option value="FORECAST">Proyección</option>
+                        <option value="BUDGET">Presupuesto</option>
+                    </select>
+                    <div className="w-px h-4 bg-zinc-200 dark:bg-white/10 mx-1" />
+                    <select
                         value={selectedYear}
                         onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                         className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest px-3 py-1.5 focus:ring-0 cursor-pointer"
@@ -456,17 +684,25 @@ const FinancialDashboard = () => {
                         <option value="4">Trimestre 4 (Oct-Dic)</option>
                     </select>
                 </div>
-                <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-black uppercase tracking-widest shadow-sm cursor-pointer transition-colors">
-                    {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                    Auditar archivo
-                    <input
-                        type="file"
-                        className="hidden"
-                        accept=".csv,.xlsx,.xls"
-                        onChange={handleFinancialImportPreview}
-                        disabled={isImporting}
-                    />
-                </label>
+                {canApproveFinancials && <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-300">
+                        Mes ejecutado hasta
+                        <select value={actualThroughMonth} onChange={(event) => setActualThroughMonth(Number(event.target.value))} className="bg-transparent font-medium text-zinc-900 outline-none dark:text-white">
+                            {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((month, index) => <option key={month} value={index + 1}>{month}</option>)}
+                        </select>
+                    </label>
+                    <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-black uppercase tracking-widest shadow-sm cursor-pointer transition-colors">
+                        {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                        Auditar archivo
+                        <input
+                            type="file"
+                            className="hidden"
+                            accept=".csv,.xlsx,.xls"
+                            onChange={handleFinancialImportPreview}
+                            disabled={isImporting}
+                        />
+                    </label>
+                </div>}
             </PageHeader>
 
             {importError && (
@@ -488,7 +724,7 @@ const FinancialDashboard = () => {
                 {/* KPI Card 1: Ingresos del Mes */}
                 <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm relative overflow-hidden group">
                     <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Ingresos Totales</span>
+                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Ingresos registrados</span>
                         <div className="p-2 bg-emerald-500/10 rounded-xl">
                             <TrendingUp className="w-4 h-4 text-emerald-500" />
                         </div>
@@ -496,18 +732,13 @@ const FinancialDashboard = () => {
                     <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
                         {formatCurrency(kpis.totalIncome)}
                     </p>
-                    <div className="flex items-center gap-1.5 mt-2">
-                        <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                            +12.4%
-                        </span>
-                        <span className="text-[10px] text-zinc-400">vs trimestre anterior</span>
-                    </div>
+                    <p className="mt-2 text-[10px] text-zinc-400">Según el escenario y periodo seleccionados</p>
                 </Card>
 
                 {/* KPI Card 2: Egresos del Mes */}
                 <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm relative overflow-hidden group">
                     <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Egresos Totales</span>
+                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Egresos registrados</span>
                         <div className="p-2 bg-red-500/10 rounded-xl">
                             <TrendingDown className="w-4 h-4 text-red-500" />
                         </div>
@@ -515,18 +746,13 @@ const FinancialDashboard = () => {
                     <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
                         {formatCurrency(kpis.totalExpense)}
                     </p>
-                    <div className="flex items-center gap-1.5 mt-2">
-                        <span className="text-[10px] font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded">
-                            +4.8%
-                        </span>
-                        <span className="text-[10px] text-zinc-400">incremento operativo</span>
-                    </div>
+                    <p className="mt-2 text-[10px] text-zinc-400">Según el escenario y periodo seleccionados</p>
                 </Card>
 
                 {/* KPI Card 3: Flujo Neto (Highest Visual Prominence) */}
                 <Card className="p-6 bg-gradient-to-br from-violet-600/10 to-indigo-600/5 dark:from-violet-950/30 dark:to-indigo-950/20 border-violet-500/20 dark:border-violet-500/10 rounded-2xl shadow-md relative overflow-hidden group ring-1 ring-violet-500/10">
                     <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-black text-violet-500 dark:text-violet-400 uppercase tracking-widest">Balance de Caja Neto</span>
+                        <span className="text-[10px] font-black text-violet-500 dark:text-violet-400 uppercase tracking-widest">Resultado neto registrado</span>
                         <div className="p-2 bg-violet-500/20 rounded-xl">
                             <Wallet className="w-4 h-4 text-violet-600 dark:text-violet-400" />
                         </div>
@@ -541,7 +767,7 @@ const FinancialDashboard = () => {
                         )}>
                             {kpis.netFlow >= 0 ? "EXCEDENTE" : "DÉFICIT"}
                         </span>
-                        <span className="text-[10px] text-violet-600/80 dark:text-violet-400/80">margen real calculated</span>
+                        <span className="text-[10px] text-violet-600/80 dark:text-violet-400/80">Ingresos menos egresos del periodo</span>
                     </div>
                 </Card>
 
@@ -566,12 +792,21 @@ const FinancialDashboard = () => {
             </div>
 
             {/* --- SECTION 2: TABS / SCENARIO NAVIGATION --- */}
-            <div className="flex items-center border-b border-zinc-200 dark:border-white/5 pb-px">
+            <div className="flex items-center overflow-x-auto border-b border-zinc-200 pb-px dark:border-white/5">
+                <button
+                    onClick={() => setActiveTab('records')}
+                    className={cn(
+                        "py-3 px-6 text-sm font-medium border-b-2 transition-all mr-2",
+                        activeTab === 'records' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
+                    )}
+                >
+                    Movimientos
+                </button>
                 <button
                     onClick={() => setActiveTab('flow')}
                     className={cn(
-                        "py-3 px-6 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all mr-2",
-                        activeTab === 'flow' ? "text-violet-600 border-violet-600 dark:text-white dark:border-white" : "text-zinc-400 border-transparent hover:text-zinc-600"
+                        "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
+                        activeTab === 'flow' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
                     Análisis de Flujo
@@ -579,8 +814,8 @@ const FinancialDashboard = () => {
                 <button
                     onClick={() => setActiveTab('receivables')}
                     className={cn(
-                        "py-3 px-6 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all mr-2",
-                        activeTab === 'receivables' ? "text-violet-600 border-violet-600 dark:text-white dark:border-white" : "text-zinc-400 border-transparent hover:text-zinc-600"
+                        "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
+                        activeTab === 'receivables' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
                     Cartera Morosa
@@ -588,8 +823,8 @@ const FinancialDashboard = () => {
                 <button
                     onClick={() => setActiveTab('payroll')}
                     className={cn(
-                        "py-3 px-6 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all mr-2",
-                        activeTab === 'payroll' ? "text-violet-600 border-violet-600 dark:text-white dark:border-white" : "text-zinc-400 border-transparent hover:text-zinc-600"
+                        "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
+                        activeTab === 'payroll' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
                     Nómina Operativa
@@ -597,17 +832,17 @@ const FinancialDashboard = () => {
                 <button
                     onClick={() => setActiveTab('editor')}
                     className={cn(
-                        "py-3 px-6 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all mr-2",
-                        activeTab === 'editor' ? "text-violet-600 border-violet-600 dark:text-white dark:border-white" : "text-zinc-400 border-transparent hover:text-zinc-600"
+                        "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
+                        activeTab === 'editor' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
-                    Editor Mensual
+                    Conciliación
                 </button>
                 <button
                     onClick={() => setActiveTab('clients')}
                     className={cn(
-                        "py-3 px-6 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all mr-2",
-                        activeTab === 'clients' ? "text-violet-600 border-violet-600 dark:text-white dark:border-white" : "text-zinc-400 border-transparent hover:text-zinc-600"
+                        "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
+                        activeTab === 'clients' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
                     Clientes
@@ -615,8 +850,8 @@ const FinancialDashboard = () => {
                 <button
                     onClick={() => setActiveTab('import')}
                     className={cn(
-                        "py-3 px-6 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all",
-                        activeTab === 'import' ? "text-violet-600 border-violet-600 dark:text-white dark:border-white" : "text-zinc-400 border-transparent hover:text-zinc-600"
+                        "whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
+                        activeTab === 'import' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
                     Auditoría 2026
@@ -625,6 +860,9 @@ const FinancialDashboard = () => {
 
             {/* --- SECTION 3: TAB SCENARIO VIEWS --- */}
             <div className="space-y-6">
+                {activeTab === 'records' && (
+                    <FinancialLedger selectedYear={selectedYear} formatCurrency={formatCurrency} />
+                )}
                 {/* PESTAÑA 1: ANALISIS DE FLUJO */}
                 {activeTab === 'flow' && (
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in slide-in-from-right-4 duration-300">
@@ -737,28 +975,29 @@ const FinancialDashboard = () => {
                 {/* PESTAÑA 2: CARTERA MOROSA */}
                 {activeTab === 'receivables' && (
                     <div className="space-y-4 animate-in slide-in-from-left-4 duration-300">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                             <div>
-                                <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Detalle auditado de cartera</h2>
-                                <p className="text-[10px] text-zinc-500 mt-1">
-                                    El KPI principal usa el total oficial del Excel; este detalle muestra las celdas detectadas para conciliación.
+                                <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Cuentas por cobrar</h2>
+                                <p className="mt-1 text-xs text-zinc-500">
+                                    Controla vencimientos, promesas y pagos sin alterar el saldo histórico.
                                 </p>
                             </div>
+                            {canWriteFinancials && <button type="button" onClick={() => { setReceivableForm({ clientId: '', amount: '', period: `${selectedYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`, dueDate: '', comments: '' }); setIsReceivableEditorOpen(true); }} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700">Nueva cuenta por cobrar</button>}
                         </div>
 
                         {data?.sourceSummary?.totals && (
                             <Card className="p-4 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Total oficial</p>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Saldo vigente</p>
                                         <p className="mt-1 font-black text-zinc-900 dark:text-white">{formatCurrency(data.sourceSummary.totals.receivable || 0)}</p>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Celdas detectadas</p>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Referencia importada</p>
                                         <p className="mt-1 font-black text-amber-600">{formatCurrency(data.sourceSummary.totals.calculatedReceivable || 0)}</p>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Por conciliar</p>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Diferencia histórica</p>
                                         <p className="mt-1 font-black text-violet-600">
                                             {formatCurrency((data.sourceSummary.totals.calculatedReceivable || 0) - (data.sourceSummary.totals.receivable || 0))}
                                         </p>
@@ -821,27 +1060,14 @@ const FinancialDashboard = () => {
                                                                     </span>
                                                                     {savingReceivableId === debt.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600" />}
                                                                 </div>
-                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                <div className="grid grid-cols-3 gap-2 border-y border-zinc-200 py-3 dark:border-white/10">
+                                                                    <div><span className="text-[9px] font-medium text-zinc-400">Valor original</span><p className="mt-1 text-xs font-semibold text-zinc-900 dark:text-white">{formatCurrency(debt.amount || 0)}</p></div>
+                                                                    <div><span className="text-[9px] font-medium text-zinc-400">Pagado</span><p className="mt-1 text-xs font-semibold text-emerald-600">{formatCurrency(debt.paidAmount || 0)}</p></div>
+                                                                    <div><span className="text-[9px] font-medium text-zinc-400">Saldo pendiente</span><p className="mt-1 text-xs font-semibold text-amber-600">{formatCurrency(debt.outstanding || 0)}</p></div>
+                                                                </div>
+                                                                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
                                                                     <label className="space-y-1">
-                                                                        <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Monto</span>
-                                                                        <input
-                                                                            type="number"
-                                                                            defaultValue={debt.amount || 0}
-                                                                            disabled={savingReceivableId === debt.id}
-                                                                            onBlur={(event) => {
-                                                                                const nextAmount = Number(event.target.value || 0);
-                                                                                if (Number.isFinite(nextAmount) && nextAmount !== debt.amount) {
-                                                                                    handleReceivableUpdate(debt, { amount: nextAmount });
-                                                                                }
-                                                                            }}
-                                                                            onKeyDown={(event) => {
-                                                                                if (event.key === 'Enter') event.currentTarget.blur();
-                                                                            }}
-                                                                            className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs font-bold text-zinc-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
-                                                                        />
-                                                                    </label>
-                                                                    <label className="space-y-1">
-                                                                        <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Estado</span>
+                                                                        <span className="text-[9px] font-medium text-zinc-400">Estado de seguimiento</span>
                                                                         <select
                                                                             value={debt.status}
                                                                             disabled={savingReceivableId === debt.id}
@@ -850,9 +1076,10 @@ const FinancialDashboard = () => {
                                                                         >
                                                                             <option value="DEBE">Debe</option>
                                                                             <option value="PROMESADO">Promesado</option>
-                                                                            <option value="PAGADO">Pagado</option>
+                                                                            {debt.outstanding <= 0.005 && <option value="PAGADO">Pagado</option>}
                                                                         </select>
                                                                     </label>
+                                                                    {debt.outstanding > 0.005 && <button type="button" onClick={() => openReceivablePayment(debt)} className="self-end rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700">Registrar pago</button>}
                                                                 </div>
                                                                 {debt.dueDate && (
                                                                     <p className="text-[9px] text-zinc-500 mt-1">
@@ -893,15 +1120,25 @@ const FinancialDashboard = () => {
                 {/* PESTAÑA 3: NOMINA OPERATIVA */}
                 {activeTab === 'payroll' && (
                     <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                             <div>
-                                <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Nómina Consolidada con Novedades</h2>
-                                <p className="text-[10px] text-zinc-500 mt-1">
-                                    Resumen de costo de personal real para el periodo, aplicando salarios base, seguridad social y ajustes extraordinarios.
+                                <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Nómina mensual</h2>
+                                <p className="mt-1 text-xs text-zinc-500">
+                                    Genera las liquidaciones, apruébalas y registra el pago desde la cuenta bancaria correspondiente.
                                 </p>
                             </div>
-                            <div className="px-3 py-1.5 bg-violet-600/10 text-violet-600 rounded-xl text-[10px] font-bold" title={`Total editable: ${formatCurrency(editablePayrollTotal || 0)}`}>
-                                Costo Total Nómina: {formatCurrency(data?.payroll?.totalPayrollCost || 0)}
+                            <div className="flex flex-wrap items-center gap-2">
+                                <select value={payrollMonth} onChange={(event) => setPayrollMonth(Number(event.target.value))} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100">
+                                    {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((month, index) => <option key={month} value={index + 1}>{month}</option>)}
+                                </select>
+                                <span className="rounded-lg bg-violet-600/10 px-3 py-2 text-xs font-semibold text-violet-700 dark:text-violet-300" title={`Total contractual: ${formatCurrency(editablePayrollTotal || 0)}`}>
+                                    {formatCurrency(editablePayrollTotal || 0)}
+                                </span>
+                                {canWriteFinancials && <button type="button" onClick={() => openPayrollContractEditor()} className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Nuevo contrato</button>}
+                                {canWriteFinancials && <button type="button" onClick={handleGeneratePayroll} disabled={isGeneratingPayroll} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50">
+                                    {isGeneratingPayroll && <Loader2 className="h-4 w-4 animate-spin" />}
+                                    Generar nómina
+                                </button>}
                             </div>
                         </div>
 
@@ -919,12 +1156,16 @@ const FinancialDashboard = () => {
                                                 <th className="p-4">Colaborador</th>
                                                 <th className="p-4">Contrato (Base)</th>
                                                 <th className="p-4">Seguridad Social</th>
-                                                <th className="p-4">Modificadores/Ajustes</th>
-                                                <th className="p-4 text-right">Total Neto Pagado</th>
+                                                <th className="p-4">Estado del mes</th>
+                                                <th className="p-4 text-right">Total neto</th>
+                                                <th className="p-4 text-right">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                            {payrollRows.map((collab) => (
+                                            {payrollRows.map((collab) => {
+                                                const transaction = collab.transaction;
+                                                const netAmount = transaction?.netAmount ?? collab.monthlyTotal ?? collab.totalPaid ?? 0;
+                                                return (
                                                 <tr key={collab.id || collab.collaboratorId || collab.userId || collab.contractId || collab.name} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 text-xs">
                                                     <td className="p-4">
                                                         <div className="flex items-center gap-3">
@@ -933,7 +1174,8 @@ const FinancialDashboard = () => {
                                                             </div>
                                                             <div>
                                                                 <p className="font-bold text-zinc-900 dark:text-white">{collab.name}</p>
-                                                                <p className="text-[10px] text-zinc-500">{collab.email}</p>
+                                                                <p className="text-[10px] text-zinc-500">{collab.position || collab.email || 'Sin cargo'}</p>
+                                                                {canWriteFinancials && <button type="button" onClick={() => openPayrollContractEditor(collab)} className="mt-1 text-[10px] font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-300">Editar contrato</button>}
                                                             </div>
                                                         </div>
                                                     </td>
@@ -972,40 +1214,26 @@ const FinancialDashboard = () => {
                                                         />
                                                     </td>
                                                     <td className="p-4">
-                                                        <div className="space-y-1">
-                                                            <span className={cn(
-                                                                "text-[10px] font-bold px-1.5 py-0.5 rounded",
-                                                                (collab.adjustmentsTotal || 0) >= 0 ? "text-emerald-600 bg-emerald-500/10" : "text-red-500 bg-red-500/10"
-                                                            )}>
-                                                                {(collab.adjustmentsTotal || 0) >= 0 ? '+' : ''}{formatCurrency(collab.adjustmentsTotal || 0)}
-                                                            </span>
-                                                            {collab.adjustments?.length > 0 && (
-                                                                <div className="text-[9px] text-zinc-400 line-clamp-1 italic max-w-xs">
-                                                                    ({collab.adjustments.map(a => `${a.type}: ${a.description || ''}`).join(', ')})
-                                                                </div>
-                                                            )}
-                                                        </div>
+                                                        <span className={cn(
+                                                            "inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold",
+                                                            !transaction && "bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-300",
+                                                            transaction?.status === 'DRAFT' && "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+                                                            transaction?.status === 'APPROVED' && "bg-blue-500/10 text-blue-700 dark:text-blue-300",
+                                                            transaction?.status === 'PAID' && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                                        )}>{!transaction ? 'Sin generar' : transaction.status === 'DRAFT' ? 'Borrador' : transaction.status === 'APPROVED' ? 'Aprobada' : 'Pagada'}</span>
                                                     </td>
                                                     <td className="p-4 text-right font-black text-zinc-900 dark:text-white">
-                                                        <input
-                                                            type="number"
-                                                            defaultValue={collab.monthlyTotal ?? collab.totalPaid ?? 0}
-                                                            disabled={savingPayrollContractId === (collab.id || collab.contractId)}
-                                                            onBlur={(event) => {
-                                                                const nextValue = Number(event.target.value || 0);
-                                                                const currentValue = Number(collab.monthlyTotal ?? collab.totalPaid ?? 0);
-                                                                if (Number.isFinite(nextValue) && nextValue !== currentValue) {
-                                                                    handlePayrollContractUpdate(collab, { monthlyTotal: nextValue });
-                                                                }
-                                                            }}
-                                                            onKeyDown={(event) => {
-                                                                if (event.key === 'Enter') event.currentTarget.blur();
-                                                            }}
-                                                            className="ml-auto w-36 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-right text-xs font-black text-zinc-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
-                                                        />
+                                                        {formatCurrency(netAmount)}
+                                                    </td>
+                                                    <td className="p-4 text-right">
+                                                        {transaction?.status === 'DRAFT' && canApproveFinancials && <button type="button" disabled={savingPayrollTransactionId === transaction.id} onClick={() => handleApprovePayroll(transaction)} className="rounded-lg border border-violet-200 px-3 py-1.5 text-[11px] font-semibold text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:border-violet-500/30 dark:text-violet-300 dark:hover:bg-violet-500/10">Aprobar</button>}
+                                                        {transaction?.status === 'APPROVED' && canApproveFinancials && <button type="button" onClick={() => { setPayrollPayment(transaction); setPayrollPaymentForm({ paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }), accountId: '', reference: '' }); }} className="rounded-lg bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-violet-700">Registrar pago</button>}
+                                                        {transaction?.status === 'PAID' && <span className="text-[11px] font-medium text-zinc-500">{transaction.paidAt ? new Date(transaction.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Registrado'}</span>}
+                                                        {!transaction && <span className="text-[11px] text-zinc-400">Pendiente</span>}
                                                     </td>
                                                 </tr>
-                                            ))}
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
@@ -1024,9 +1252,9 @@ const FinancialDashboard = () => {
                     <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
                         <div className="flex items-center justify-between gap-4">
                             <div>
-                                <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Editor financiero mensual</h2>
+                                <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Conciliación mensual</h2>
                                 <p className="text-[11px] text-zinc-500 mt-1">
-                                    Ajusta los totales oficiales de cada mes. Al guardar, el dashboard se recalcula desde la base de datos.
+                                    Referencia original importada. Las correcciones se realizan desde Movimientos para conservar la trazabilidad.
                                 </p>
                             </div>
                             {monthlyLedger?.importBatchId && (
@@ -1040,7 +1268,7 @@ const FinancialDashboard = () => {
                             {isMonthlyLedgerLoading ? (
                                 <div className="flex items-center justify-center py-16 text-sm text-zinc-500">
                                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Cargando editor financiero...
+                                    Cargando conciliación...
                                 </div>
                             ) : monthlyLedger?.rows?.length > 0 ? (
                                 <div className="overflow-x-auto">
@@ -1072,30 +1300,11 @@ const FinancialDashboard = () => {
                                                                 {row.tone}
                                                             </div>
                                                         </td>
-                                                        {row.values.map((cell) => {
-                                                            const cellKey = `${row.key}-${cell.month}`;
-                                                            return (
-                                                                <td key={cellKey} className="p-2 align-middle">
-                                                                    <div className="relative">
-                                                                        <input
-                                                                            type="number"
-                                                                            defaultValue={cell.amount || 0}
-                                                                            disabled={!cell.summaryId || savingMonthlyCell === cellKey}
-                                                                            onBlur={(event) => handleMonthlyCellSave(cell, row.key, event.target.value)}
-                                                                            onKeyDown={(event) => {
-                                                                                if (event.key === 'Enter') {
-                                                                                    event.currentTarget.blur();
-                                                                                }
-                                                                            }}
-                                                                            className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-right text-[11px] font-bold text-zinc-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
-                                                                        />
-                                                                        {savingMonthlyCell === cellKey && (
-                                                                            <Loader2 className="absolute left-2 top-2.5 h-3.5 w-3.5 animate-spin text-violet-600" />
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-                                                            );
-                                                        })}
+                                                        {row.values.map((cell) => (
+                                                            <td key={`${row.key}-${cell.month}`} className="p-3 text-right text-[11px] font-medium text-zinc-700 dark:text-zinc-200">
+                                                                {formatCurrency(Number(cell.amount) || 0)}
+                                                            </td>
+                                                        ))}
                                                         <td className={cn(
                                                             "p-3 text-right text-xs font-black",
                                                             rowTotal < 0 ? "text-red-500" : row.tone === 'income' ? "text-emerald-600" : "text-zinc-900 dark:text-white"
@@ -1111,7 +1320,7 @@ const FinancialDashboard = () => {
                             ) : (
                                 <div className="py-16 text-center">
                                     <FileSpreadsheet className="w-10 h-10 mx-auto text-zinc-300 mb-3" />
-                                    <p className="text-sm font-bold text-zinc-900 dark:text-white">No hay datos mensuales editables</p>
+                                    <p className="text-sm font-bold text-zinc-900 dark:text-white">No hay datos mensuales para conciliar</p>
                                     <p className="text-xs text-zinc-500 mt-1">Importa primero el financiero del año seleccionado.</p>
                                 </div>
                             )}
@@ -1225,6 +1434,17 @@ const FinancialDashboard = () => {
 
                 {activeTab === 'import' && (
                     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
+                        <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                    <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Preparación para operar sin Excel</h2>
+                                    <p className="mt-1 text-xs text-zinc-500">Control automático sobre cuentas, movimientos, cartera, nómina y cierres de {selectedYear}.</p>
+                                </div>
+                                {isIntegrityAuditLoading ? <Loader2 className="h-5 w-5 animate-spin text-violet-600" /> : <span className={cn('rounded-full px-3 py-1.5 text-xs font-semibold', integrityAudit?.ready ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300')}>{integrityAudit?.ready ? 'Lista para operar' : `${integrityAudit?.issues?.length || 0} puntos por resolver`}</span>}
+                            </div>
+                            {!isIntegrityAuditLoading && integrityAudit?.issues?.length > 0 && <div className="mt-5 divide-y divide-zinc-100 border-y border-zinc-100 dark:divide-white/5 dark:border-white/5">{integrityAudit.issues.map((item) => <div key={item.code} className="flex items-start gap-3 py-3"><span className={cn('mt-0.5 h-2 w-2 shrink-0 rounded-full', item.severity === 'ERROR' ? 'bg-red-500' : 'bg-amber-500')} /><div><p className="text-sm font-medium text-zinc-900 dark:text-white">{item.message}</p><p className="mt-0.5 text-xs text-zinc-500">{item.count} {item.count === 1 ? 'registro' : 'registros'} · {item.severity === 'ERROR' ? 'Bloquea una conciliación confiable' : 'Requiere revisión'}</p></div></div>)}</div>}
+                            {!isIntegrityAuditLoading && integrityAudit?.ready && <div className="mt-5 flex items-center gap-3 border-y border-emerald-100 py-4 text-sm text-emerald-700 dark:border-emerald-500/20 dark:text-emerald-300"><CheckCircle2 className="h-5 w-5" /> No se detectaron bloqueos de integridad.</div>}
+                        </Card>
                         {!importPreview ? (
                             <Card className="p-10 bg-white dark:bg-zinc-900 border border-dashed border-zinc-300 dark:border-white/10 rounded-2xl text-center">
                                 <FileSpreadsheet className="w-12 h-12 text-violet-500 mx-auto mb-4" />
@@ -1426,9 +1646,103 @@ const FinancialDashboard = () => {
                     </div>
                 )}
             </div>
+
+            <Dialog open={isReceivableEditorOpen} onOpenChange={setIsReceivableEditorOpen}>
+                <DialogContent className="sm:max-w-lg dark:bg-zinc-900">
+                    <DialogHeader>
+                        <DialogTitle>Nueva cuenta por cobrar</DialogTitle>
+                        <DialogDescription>Registra el valor causado; los abonos posteriores actualizarán automáticamente el saldo.</DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleCreateReceivable} className="space-y-4">
+                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<select required value={receivableForm.clientId} onChange={(event) => setReceivableForm((current) => ({ ...current, clientId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{(clientReconciliation?.targets || []).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Valor<input required min="0.01" step="0.01" type="number" value={receivableForm.amount} onChange={(event) => setReceivableForm((current) => ({ ...current, amount: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Periodo<DatePicker {...brainDatePickerProps} selected={receivableForm.period ? new Date(`${receivableForm.period}T12:00:00`) : null} onChange={(date) => setReceivableForm((current) => ({ ...current, period: date ? format(date, 'yyyy-MM-01') : '' }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" dateFormat="MMMM yyyy" showMonthYearPicker /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2">Fecha de vencimiento<DatePicker {...brainDatePickerProps} isClearable selected={receivableForm.dueDate ? new Date(`${receivableForm.dueDate}T12:00:00`) : null} onChange={(date) => setReceivableForm((current) => ({ ...current, dueDate: date ? format(date, 'yyyy-MM-dd') : '' }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" dateFormat="dd/MM/yyyy" placeholderText="Opcional" /></label>
+                        </div>
+                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Nota<textarea rows={3} value={receivableForm.comments} onChange={(event) => setReceivableForm((current) => ({ ...current, comments: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" placeholder="Factura, compromiso o detalle de seguimiento" /></label>
+                        <DialogFooter><button type="button" onClick={() => setIsReceivableEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingReceivable} className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50">{isSavingReceivable && <Loader2 className="h-4 w-4 animate-spin" />}Guardar</button></DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!paymentDebt} onOpenChange={(open) => !open && setPaymentDebt(null)}>
+                <DialogContent className="sm:max-w-md dark:bg-zinc-900">
+                    <DialogHeader>
+                        <DialogTitle>Registrar pago</DialogTitle>
+                        <DialogDescription>
+                            {paymentDebt ? `${paymentDebt.clientName}: saldo ${formatCurrency(paymentDebt.outstanding || 0)}` : 'Registra un abono de cartera.'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleReceivablePayment} className="space-y-4">
+                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Valor<input required min="0.01" max={paymentDebt?.outstanding || undefined} step="0.01" type="number" value={paymentForm.amount} onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Fecha<DatePicker {...brainDatePickerProps} required selected={paymentForm.paidAt ? new Date(`${paymentForm.paidAt}T12:00:00`) : null} onChange={(date) => setPaymentForm((current) => ({ ...current, paidAt: date ? format(date, 'yyyy-MM-dd') : '' }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" dateFormat="dd/MM/yyyy" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cuenta<select required value={paymentForm.accountId} onChange={(event) => setPaymentForm((current) => ({ ...current, accountId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{(financialAccounts?.accounts || []).map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+                        </div>
+                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Referencia<input value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} placeholder="Transferencia, recibo..." className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Notas<textarea rows={3} value={paymentForm.notes} onChange={(event) => setPaymentForm((current) => ({ ...current, notes: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                        <DialogFooter><button type="button" onClick={() => setPaymentDebt(null)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingPayment} className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50">{isSavingPayment && <Loader2 className="h-4 w-4 animate-spin" />}Guardar pago</button></DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!payrollPayment} onOpenChange={(open) => !open && setPayrollPayment(null)}>
+                <DialogContent className="sm:max-w-md dark:bg-zinc-900">
+                    <DialogHeader>
+                        <DialogTitle>Registrar pago de nómina</DialogTitle>
+                        <DialogDescription>
+                            El pago generará un egreso real y quedará vinculado con esta liquidación.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handlePayPayroll} className="space-y-4">
+                        <div className="rounded-lg bg-zinc-50 px-3 py-2.5 text-sm dark:bg-white/5">
+                            <span className="text-zinc-500">Valor neto</span>
+                            <strong className="float-right text-zinc-900 dark:text-white">{formatCurrency(payrollPayment?.netAmount || 0)}</strong>
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Fecha<DatePicker {...brainDatePickerProps} required selected={payrollPaymentForm.paidAt ? new Date(`${payrollPaymentForm.paidAt}T12:00:00`) : null} onChange={(date) => setPayrollPaymentForm((current) => ({ ...current, paidAt: date ? format(date, 'yyyy-MM-dd') : '' }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" dateFormat="dd/MM/yyyy" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cuenta<select required value={payrollPaymentForm.accountId} onChange={(event) => setPayrollPaymentForm((current) => ({ ...current, accountId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{(financialAccounts?.accounts || []).map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+                        </div>
+                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Referencia<input value={payrollPaymentForm.reference} onChange={(event) => setPayrollPaymentForm((current) => ({ ...current, reference: event.target.value }))} placeholder="Transferencia, comprobante..." className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                        <DialogFooter><button type="button" onClick={() => setPayrollPayment(null)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingPayrollPayment} className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50">{isSavingPayrollPayment && <Loader2 className="h-4 w-4 animate-spin" />}Guardar pago</button></DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isPayrollContractEditorOpen} onOpenChange={setIsPayrollContractEditorOpen}>
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg dark:bg-zinc-900">
+                    <DialogHeader>
+                        <DialogTitle>{editingPayrollContract ? 'Editar contrato' : 'Nuevo contrato'}</DialogTitle>
+                        <DialogDescription>La vigencia determina en cuáles meses se incluye al colaborador al generar la nómina.</DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleSavePayrollContract} className="space-y-4">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Colaborador<input required value={payrollContractForm.name} onChange={(event) => setPayrollContractForm((current) => ({ ...current, name: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cargo<input value={payrollContractForm.position} onChange={(event) => setPayrollContractForm((current) => ({ ...current, position: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Inicio<DatePicker {...brainDatePickerProps} selected={payrollContractForm.startDate ? new Date(`${payrollContractForm.startDate}T12:00:00`) : null} onChange={(date) => setPayrollContractForm((current) => ({ ...current, startDate: date ? format(date, 'yyyy-MM-dd') : '' }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" dateFormat="dd/MM/yyyy" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Terminación<DatePicker {...brainDatePickerProps} isClearable selected={payrollContractForm.endDate ? new Date(`${payrollContractForm.endDate}T12:00:00`) : null} onChange={(date) => setPayrollContractForm((current) => ({ ...current, endDate: date ? format(date, 'yyyy-MM-dd') : '' }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" dateFormat="dd/MM/yyyy" placeholderText="Contrato activo" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Salario base<input required min="0" step="0.01" type="number" value={payrollContractForm.baseSalary} onChange={(event) => setPayrollContractForm((current) => ({ ...current, baseSalary: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Seguridad social<input required min="0" step="0.01" type="number" value={payrollContractForm.socialSecurity} onChange={(event) => setPayrollContractForm((current) => ({ ...current, socialSecurity: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2">Total mensual<input required min="0" step="0.01" type="number" value={payrollContractForm.monthlyTotal} onChange={(event) => setPayrollContractForm((current) => ({ ...current, monthlyTotal: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                        </div>
+                        <DialogFooter><button type="button" onClick={() => setIsPayrollContractEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingPayrollContract} className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50">{isSavingPayrollContract && <Loader2 className="h-4 w-4 animate-spin" />}Guardar contrato</button></DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };
+
+const emptyPayrollContractForm = (year) => ({
+    name: '',
+    position: '',
+    baseSalary: '',
+    socialSecurity: '0',
+    monthlyTotal: '',
+    startDate: `${year}-01-01`,
+    endDate: ''
+});
 
 // Premium pulsing Skeleton Screen component
 const SkeletonLoader = () => {

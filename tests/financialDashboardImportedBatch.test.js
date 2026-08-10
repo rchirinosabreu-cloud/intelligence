@@ -15,7 +15,7 @@ const makeResponse = () => ({
     }
 });
 
-test('getFinancialDashboard uses the latest imported batch as the financial source of truth', async () => {
+test('getFinancialDashboard uses posted actual records as the source of truth while preserving import reconciliation', async () => {
     const calls = [];
     const prismaClient = {
         financialImportBatch: {
@@ -88,29 +88,37 @@ test('getFinancialDashboard uses the latest imported batch as the financial sour
     assert.equal(res.statusCode, 200);
     assert.deepEqual(res.payload.sourceSummary, {
         importBatchId: 'batch-1',
+        scenario: 'ACTUAL',
         totals: {
+            income: 100,
+            expense: 40,
+            netFlow: 60,
+            receivable: 0,
+            calculatedReceivable: 33
+        },
+        importedTotals: {
             income: 100,
             expense: 55,
             netFlow: 45,
-            receivable: 26,
-            calculatedReceivable: 33
+            receivable: 26
         }
     });
     assert.deepEqual(res.payload.cashFlow, [{
         year: 2026,
         month: 1,
         income: 100,
-        expense: 55,
-        netFlow: 45
+        expense: 40,
+        netFlow: 60
     }]);
-    assert.equal(
-        calls.find(([name]) => name === 'financialRecord.findMany')[1].where.importBatchId,
-        'batch-1'
-    );
-    assert.equal(
-        calls.find(([name]) => name === 'accountsReceivable.findMany')[1].where.importBatchId,
-        'batch-1'
-    );
+    const recordWhere = calls.find(([name]) => name === 'financialRecord.findMany')[1].where;
+    assert.equal(recordWhere.scenario, 'ACTUAL');
+    assert.equal(recordWhere.status, 'POSTED');
+    assert.deepEqual(recordWhere.OR, [{ importBatchId: 'batch-1' }, { importBatchId: null }]);
+    const receivableWhere = calls.find(([name]) => name === 'accountsReceivable.findMany')[1].where;
+    assert.deepEqual(receivableWhere.OR, [
+        { importBatchId: 'batch-1' },
+        { importBatchId: null, origin: 'MANUAL' }
+    ]);
 });
 
 test('getFinancialDashboard uses UTC month boundaries when no imported batch exists', async () => {
@@ -192,4 +200,44 @@ test('getFinancialDashboard surfaces imported payroll collaborators without plat
         totalPaid: 3000000,
         adjustments: []
     }]);
+});
+
+test('getFinancialDashboard keeps payroll transactions without platform users separated by collaborator', async () => {
+    const prismaClient = {
+        financialImportBatch: { findFirst: async () => null },
+        financialMonthlySummary: { findMany: async () => [] },
+        financialRecord: { findMany: async () => [] },
+        accountsReceivable: { findMany: async () => [] },
+        payrollContract: { findMany: async () => [] },
+        payrollTransaction: {
+            findMany: async () => ([
+                {
+                    id: 'tx-1', contractId: 'contract-1', userId: null,
+                    baseSalary: 3000000, socialSecurity: 0, netAmount: 3000000,
+                    user: null, adjustments: [],
+                    contract: {
+                        collaboratorId: 'collaborator-1', sourceLabel: 'Camila',
+                        collaborator: { displayName: 'Camila' }, position: { title: 'Project Manager' }
+                    }
+                },
+                {
+                    id: 'tx-2', contractId: 'contract-2', userId: null,
+                    baseSalary: 1300000, socialSecurity: 0, netAmount: 1300000,
+                    user: null, adjustments: [],
+                    contract: {
+                        collaboratorId: 'collaborator-2', sourceLabel: 'Helen',
+                        collaborator: { displayName: 'Helen' }, position: { title: 'Community Manager' }
+                    }
+                }
+            ])
+        }
+    };
+
+    const res = makeResponse();
+    await getFinancialDashboard({ query: { year: 2026 } }, res, { prismaClient });
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.payload.payroll.collaborators.length, 2);
+    assert.deepEqual(res.payload.payroll.collaborators.map((item) => item.name).sort(), ['Camila', 'Helen']);
+    assert.equal(res.payload.payroll.totalPayrollCost, 4300000);
 });

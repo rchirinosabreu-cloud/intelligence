@@ -32,6 +32,7 @@ export const login = async (req, res) => {
                   password: hashedAdminPassword,
                   role: 'ADMIN',
                   hasFinancialAccess: true,
+                  financialRole: 'ADMIN',
                   passwordChangedAt: new Date(),
                   modulePermissions: {
                       Inicio: true,
@@ -68,6 +69,7 @@ export const login = async (req, res) => {
               email: user.email,
               role: user.role,
               hasFinancialAccess: user.hasFinancialAccess,
+              financialRole: user.financialRole,
               modulePermissions: user.modulePermissions,
               sessionVersion: user.sessionVersion
           },
@@ -83,6 +85,7 @@ export const login = async (req, res) => {
               email: user.email,
               role: user.role,
               hasFinancialAccess: user.hasFinancialAccess,
+              financialRole: user.financialRole,
               modulePermissions: user.modulePermissions,
               mustChangePassword: user.mustChangePassword,
               sessionVersion: user.sessionVersion
@@ -217,9 +220,10 @@ export const createUser = async (req, res) => {
                 password: hashedPassword,
                 role: role || 'EDITOR',
                 hasFinancialAccess: req.body.hasFinancialAccess || false,
+                financialRole: req.body.financialRole || (req.body.hasFinancialAccess ? 'EDITOR' : 'NONE'),
                 mustChangePassword: true
             },
-            select: { id: true, name: true, email: true, role: true, hasFinancialAccess: true, mustChangePassword: true }
+            select: { id: true, name: true, email: true, role: true, hasFinancialAccess: true, financialRole: true, mustChangePassword: true }
         });
 
         return res.status(201).json(newUser);

@@ -14,6 +14,14 @@ enum SystemRole {
   VIEWER
 }
 
+enum FinancialAccessRole {
+  NONE
+  VIEWER
+  EDITOR
+  APPROVER
+  ADMIN
+}
+
 enum TaskPriority {
   URGENTE
   ALTA
@@ -21,39 +29,44 @@ enum TaskPriority {
 }
 
 model User {
-  id                  String               @id @default(uuid())
-  name                String
-  email               String               @unique
-  password            String
-  role                SystemRole           @default(VIEWER)
-  modulePermissions   Json?                @default("{\"dashboard\": true, \"manager\": false, \"gestion\": false, \"actividad\": false, \"reportes\": false, \"inspiracion\": false, \"parrillas\": false, \"minutas\": false, \"cotizaciones\": false, \"financiero\": false, \"radar\": false, \"clientes\": false, \"equipo\": false}")
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  avatarUrl           String?
-  isActive            Boolean              @default(true)
-  bio                 String?
-  hasFinancialAccess  Boolean              @default(false)
-  mustChangePassword  Boolean              @default(false)
-  passwordChangedAt   DateTime?
-  sessionVersion      Int                  @default(0)
-  authoredFeedback    FeedbackRecord[]     @relation("AuthoredFeedback")
-  receivedFeedback    FeedbackRecord[]     @relation("ReceivedFeedback")
-  generalChatMessages GeneralChatMessage[]
+  id                          String                  @id @default(uuid())
+  name                        String
+  email                       String                  @unique
+  password                    String
+  role                        SystemRole              @default(VIEWER)
+  modulePermissions           Json?                   @default("{\"dashboard\": true, \"manager\": false, \"gestion\": false, \"actividad\": false, \"reportes\": false, \"inspiracion\": false, \"parrillas\": false, \"minutas\": false, \"cotizaciones\": false, \"financiero\": false, \"radar\": false, \"clientes\": false, \"equipo\": false}")
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
+  avatarUrl                   String?
+  isActive                    Boolean                 @default(true)
+  bio                         String?
+  hasFinancialAccess          Boolean                 @default(false)
+  financialRole               FinancialAccessRole     @default(NONE)
+  mustChangePassword          Boolean                 @default(false)
+  passwordChangedAt           DateTime?
+  sessionVersion              Int                     @default(0)
+  authoredFeedback            FeedbackRecord[]        @relation("AuthoredFeedback")
+  receivedFeedback            FeedbackRecord[]        @relation("ReceivedFeedback")
+  generalChatMessages         GeneralChatMessage[]
   authoredGlobalAnnouncements GlobalAnnouncement[]
-  createdOperationalEvents OperationalEvent[] @relation("OperationalEventCreator")
-  notifications       Notification[]
-  createdTasks        Task[]               @relation("CreatedTasks")
-  notes               UserNote[]
-  taskComments        TaskComment[]
-  taskCommentReactions TaskCommentReaction[]
-  taskFollowing       TaskFollower[]
-  payrollContracts    PayrollContract[]
-  payrollTransactions PayrollTransaction[]
-  financialRecords    FinancialRecord[]
-  financialImportBatches FinancialImportBatch[] @relation("FinancialImportUser")
-  financialCollaborators FinancialCollaborator[]
-  passwordResetCodes PasswordResetCode[]
-  teamMember          TeamMember?
+  createdOperationalEvents    OperationalEvent[]      @relation("OperationalEventCreator")
+  notifications               Notification[]
+  createdTasks                Task[]                  @relation("CreatedTasks")
+  notes                       UserNote[]
+  taskComments                TaskComment[]
+  taskCommentReactions        TaskCommentReaction[]
+  taskFollowing               TaskFollower[]
+  payrollContracts            PayrollContract[]
+  payrollTransactions         PayrollTransaction[]
+  financialRecords            FinancialRecord[]
+  createdFinancialRecords     FinancialRecord[]       @relation("FinancialRecordCreator")
+  closedFinancialPeriods      FinancialPeriod[]       @relation("FinancialPeriodClosedBy")
+  financialAuditEvents        FinancialAuditEvent[]   @relation("FinancialAuditActor")
+  createdReceivablePayments   ReceivablePayment[]     @relation("ReceivablePaymentCreator")
+  financialImportBatches      FinancialImportBatch[]  @relation("FinancialImportUser")
+  financialCollaborators      FinancialCollaborator[]
+  passwordResetCodes          PasswordResetCode[]
+  teamMember                  TeamMember?
 }
 
 model PasswordResetCode {
@@ -150,11 +163,11 @@ model ClientHealth {
   id            String   @id @default(uuid())
   clientId      String
   client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  month         Int      // 1 - 12
-  year          Int      // Ej: 2026
-  score         Int      // Puntaje final calculado (0 - 100)
-  contentStatus String   // APROBADA, EN_PROCESO, SIN_PARRILLA (Manual o Auto)
-  reportStatus  String   // COMPLETA, EN_PROCESO, CRITICO
+  month         Int // 1 - 12
+  year          Int // Ej: 2026
+  score         Int // Puntaje final calculado (0 - 100)
+  contentStatus String // APROBADA, EN_PROCESO, SIN_PARRILLA (Manual o Auto)
+  reportStatus  String // COMPLETA, EN_PROCESO, CRITICO
   isExternal    Boolean  @default(false) // Flag si se gestiona fuera de la app (Excel)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -173,18 +186,18 @@ model Board {
 }
 
 model BoardItem {
-  id          String        @id @default(uuid())
-  boardId     String
-  type        BoardItemType
-  contentUrl  String?
-  assetUrl    String?
-  metadata    Json?
-  positionX   Int           @default(0)
-  positionY   Int           @default(0)
-  comment     String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  board       Board         @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  id         String        @id @default(uuid())
+  boardId    String
+  type       BoardItemType
+  contentUrl String?
+  assetUrl   String?
+  metadata   Json?
+  positionX  Int           @default(0)
+  positionY  Int           @default(0)
+  comment    String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  board      Board         @relation(fields: [boardId], references: [id], onDelete: Cascade)
 }
 
 enum BoardItemType {
@@ -194,45 +207,45 @@ enum BoardItemType {
 }
 
 model ContentPlan {
-  id            String            @id @default(uuid())
-  clientId      String
-  month         Int
-  year          Int
-  status        ContentPlanStatus @default(PLANIFICACION)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  deletedAt     DateTime?
-  ownerId       String?
-  internalNotes String?
+  id                  String            @id @default(uuid())
+  clientId            String
+  month               Int
+  year                Int
+  status              ContentPlanStatus @default(PLANIFICACION)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  deletedAt           DateTime?
+  ownerId             String?
+  internalNotes       String?
   strategicObjectives String?
-  shareToken    String?           @unique
-  contentItems  ContentItem[]
-  client        Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  owner         TeamMember?       @relation(fields: [ownerId], references: [id])
+  shareToken          String?           @unique
+  contentItems        ContentItem[]
+  client              Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  owner               TeamMember?       @relation(fields: [ownerId], references: [id])
 }
 
 model ContentItem {
-  id          String            @id @default(uuid())
-  planId      String
-  objective   String
-  format      String
-  copyText    String
-  captionText String
-  publishDate DateTime
-  mediaUrl    String[]          @default([])
-  status      ContentItemStatus @default(BORRADOR)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  assetsLinks   String[]          @default([])
-  internalNotes String?
-  comments      String?
-  finalAssetKey String?
-  finalAssetName String?
+  id                 String            @id @default(uuid())
+  planId             String
+  objective          String
+  format             String
+  copyText           String
+  captionText        String
+  publishDate        DateTime
+  mediaUrl           String[]          @default([])
+  status             ContentItemStatus @default(BORRADOR)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  assetsLinks        String[]          @default([])
+  internalNotes      String?
+  comments           String?
+  finalAssetKey      String?
+  finalAssetName     String?
   finalAssetMimeType String?
-  finalAssetSize Int?
-  deletedAt     DateTime?
-  plan        ContentPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
-  tasks       Task[]
+  finalAssetSize     Int?
+  deletedAt          DateTime?
+  plan               ContentPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
+  tasks              Task[]
 }
 
 model Integration {
@@ -249,53 +262,53 @@ model Integration {
 }
 
 model TeamMember {
-  id           String        @id @default(uuid())
-  name         String
-  role         String
-  email        String?
-  avatarUrl    String?
-  isActive     Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  userId       String?       @unique
-  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  desktopX     Int?
-  desktopY     Int?
-  statusMessage String?
-  clientTasks  ClientTask[]
-  contentPlans ContentPlan[]
-  flowMessages FlowMessage[]
-  nativeTasks  Task[]
-  responsibleClients Client[]    @relation("ClientResponsible")
+  id                 String        @id @default(uuid())
+  name               String
+  role               String
+  email              String?
+  avatarUrl          String?
+  isActive           Boolean       @default(true)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  userId             String?       @unique
+  user               User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  desktopX           Int?
+  desktopY           Int?
+  statusMessage      String?
+  clientTasks        ClientTask[]
+  contentPlans       ContentPlan[]
+  flowMessages       FlowMessage[]
+  nativeTasks        Task[]
+  responsibleClients Client[]      @relation("ClientResponsible")
 }
 
 model OperationalEvent {
-  id          String   @id @default(uuid())
-  title       String
-  type        String   // PRODUCTION, ABSENCE, PROJECT, MEETING
-  description String?
-  startAt     DateTime
-  endAt     DateTime
-  memberIds   String[] @default([]) // IDs of TeamMembers involved
-  recurrence  String?  // NONE, WEEKLY
-  recurrenceEnd DateTime?
-  meetingLink String?
-  source      String   @default("BRAIN")
-  organizerEmail String?
-  googleCalendarId String?
-  googleEventId String?
-  googleICalUID String?
-  googleEtag String?
-  googleHtmlLink String?
-  googleMeetSpaceName String?
+  id                   String    @id @default(uuid())
+  title                String
+  type                 String // PRODUCTION, ABSENCE, PROJECT, MEETING
+  description          String?
+  startAt              DateTime
+  endAt                DateTime
+  memberIds            String[]  @default([]) // IDs of TeamMembers involved
+  recurrence           String? // NONE, WEEKLY
+  recurrenceEnd        DateTime?
+  meetingLink          String?
+  source               String    @default("BRAIN")
+  organizerEmail       String?
+  googleCalendarId     String?
+  googleEventId        String?
+  googleICalUID        String?
+  googleEtag           String?
+  googleHtmlLink       String?
+  googleMeetSpaceName  String?
   googleMeetAccessType String?
-  googleSyncStatus String?
-  googleLastSyncedAt DateTime?
-  googleUpdatedAt DateTime?
-  createdById String?
-  createdBy User? @relation("OperationalEventCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  googleSyncStatus     String?
+  googleLastSyncedAt   DateTime?
+  googleUpdatedAt      DateTime?
+  createdById          String?
+  createdBy            User?     @relation("OperationalEventCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@index([startAt])
   @@index([googleCalendarId, googleEventId])
@@ -303,33 +316,33 @@ model OperationalEvent {
 }
 
 model GoogleCalendarConnection {
-  id              String   @id @default(uuid())
-  email           String   @unique
-  calendarId      String   @default("primary")
+  id              String                      @id @default(uuid())
+  email           String                      @unique
+  calendarId      String                      @default("primary")
   encryptedTokens String
-  scopes          String[] @default([])
-  isActive        Boolean  @default(true)
+  scopes          String[]                    @default([])
+  isActive        Boolean                     @default(true)
   connectedById   String?
-  connectedAt     DateTime @default(now())
+  connectedAt     DateTime                    @default(now())
   lastSyncedAt    DateTime?
-  syncToken        String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  syncToken       String?
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
   channels        GoogleCalendarSyncChannel[]
 
   @@index([isActive])
 }
 
 model GoogleCalendarSyncChannel {
-  id           String   @id @default(uuid())
+  id           String                   @id @default(uuid())
   connectionId String
-  channelId    String   @unique
+  channelId    String                   @unique
   resourceId   String
   resourceUri  String?
   token        String?
   expiresAt    DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
   connection   GoogleCalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@index([connectionId])
@@ -408,8 +421,8 @@ model TaskFollower {
   userId    String
   createdAt DateTime @default(now())
 
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, userId])
 }
@@ -439,8 +452,8 @@ model TaskCommentReaction {
   emoji     String
   createdAt DateTime @default(now())
 
-  comment   TaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment TaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([commentId, userId, emoji])
   @@index([commentId])
@@ -517,16 +530,16 @@ model FeedbackRecord {
 }
 
 model AgencyContext {
-  id               String                     @id @default(uuid())
+  id               String                       @id @default(uuid())
   content          String
   vectorEmbeddings Unsupported("vector(3072)")?
-  type             String                     @default("TEXT") // TEXT or IMAGE
-  status           String                    @default("APPROVED") // PENDING, APPROVED, DISCARDED
+  type             String                       @default("TEXT") // TEXT or IMAGE
+  status           String                       @default("APPROVED") // PENDING, APPROVED, DISCARDED
   clientId         String?
   metadata         Json?
-  maxStreak        Int?                       @default(0)
-  createdAt        DateTime                  @default(now())
-  client           Client?                   @relation(fields: [clientId], references: [id])
+  maxStreak        Int?                         @default(0)
+  createdAt        DateTime                     @default(now())
+  client           Client?                      @relation(fields: [clientId], references: [id])
 }
 
 model SystemStreak {
@@ -539,11 +552,11 @@ model SystemStreak {
 }
 
 model AutomationConfig {
-  id             String   @id @default("global")
+  id             String    @id @default("global")
   storageState   Json?
   monitoredChats Json?
   lastRun        DateTime?
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime  @updatedAt
 }
 
 model FlowMessage {
@@ -569,13 +582,13 @@ model GlobalAnnouncement {
 
 model AgencyIntegration {
   id          String   @id @default(uuid())
-  type        String   // SHEETS, GMAIL, SLIDES
-  externalId  String?  // Google ID (Spreadsheet ID, etc.)
+  type        String // SHEETS, GMAIL, SLIDES
+  externalId  String? // Google ID (Spreadsheet ID, etc.)
   alias       String
   isActive    Boolean  @default(true)
   clientId    String?
-  credentials Json?    // OAuth2 tokens (refresh_token, etc.)
-  metadata    Json?    // Optional config
+  credentials Json? // OAuth2 tokens (refresh_token, etc.)
+  metadata    Json? // Optional config
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   client      Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
@@ -652,6 +665,46 @@ enum FinancialType {
   EXPENSE
 }
 
+enum FinancialScenario {
+  ACTUAL
+  FORECAST
+  BUDGET
+}
+
+enum FinancialRecordStatus {
+  DRAFT
+  POSTED
+  VOIDED
+}
+
+enum FinancialRecordOrigin {
+  MANUAL
+  IMPORT
+  SYSTEM
+}
+
+enum FinancialAccountType {
+  BANK
+  CASH
+  OTHER
+}
+
+enum FinancialPeriodStatus {
+  OPEN
+  CLOSED
+}
+
+enum FinancialAuditAction {
+  CREATE
+  UPDATE
+  POST
+  VOID
+  CLOSE
+  REOPEN
+  IMPORT
+  PAYMENT
+}
+
 enum FinancialSection {
   REVENUE
   ADMIN_COST
@@ -694,42 +747,116 @@ model FinancialImportBatch {
 }
 
 model FinancialRecord {
-  id            String                @id @default(uuid())
-  amount        Decimal
-  category      FinancialCategory
-  type          FinancialType
-  section       FinancialSection?
-  date          DateTime              // Accounting date (usually 1st day of month or exact transaction date)
-  year          Int?
-  month         Int?
-  clientId      String?
-  client        Client?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  userId        String?
-  user          User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
-  importBatchId String?
-  importBatch   FinancialImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
-  description   String?
-  sourceSheet   String?
-  sourceRow     Int?
-  sourceLabel   String?
-  isProjection  Boolean               @default(false)
-  metadata      Json?
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
+  id                 String                @id @default(uuid())
+  amount             Decimal
+  category           FinancialCategory
+  type               FinancialType
+  section            FinancialSection?
+  date               DateTime // Accounting date (usually 1st day of month or exact transaction date)
+  year               Int?
+  month              Int?
+  clientId           String?
+  client             Client?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  userId             String?
+  user               User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdById        String?
+  createdBy          User?                 @relation("FinancialRecordCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  accountId          String?
+  account            FinancialAccount?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  importBatchId      String?
+  importBatch        FinancialImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  description        String?
+  sourceSheet        String?
+  sourceRow          Int?
+  sourceLabel        String?
+  scenario           FinancialScenario     @default(ACTUAL)
+  status             FinancialRecordStatus @default(POSTED)
+  origin             FinancialRecordOrigin @default(MANUAL)
+  isProjection       Boolean               @default(false)
+  counterparty       String?
+  subcategory        String?
+  reference          String?
+  notes              String?
+  attachmentUrl      String?
+  attachmentName     String?
+  attachmentMimeType String?
+  postedAt           DateTime?
+  voidedAt           DateTime?
+  voidReason         String?
+  metadata           Json?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  receivablePayment  ReceivablePayment?
+  payrollTransaction PayrollTransaction?
 
   @@index([date])
   @@index([year, month])
   @@index([category])
   @@index([type])
+  @@index([scenario, status, year, month])
+  @@index([accountId, date])
+  @@index([createdById, createdAt])
+  @@index([userId, year, month])
   @@index([section])
   @@index([clientId, year, month])
   @@index([importBatchId])
+}
+
+model FinancialAccount {
+  id                 String               @id @default(uuid())
+  name               String
+  type               FinancialAccountType
+  currency           String               @default("COP")
+  openingBalance     Decimal              @default(0)
+  openingBalanceDate DateTime
+  isActive           Boolean              @default(true)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  records            FinancialRecord[]
+  payments           ReceivablePayment[]
+
+  @@unique([name, currency])
+  @@index([type, isActive])
+}
+
+model FinancialPeriod {
+  id         String                @id @default(uuid())
+  year       Int
+  month      Int
+  status     FinancialPeriodStatus @default(OPEN)
+  closedAt   DateTime?
+  closedById String?
+  closedBy   User?                 @relation("FinancialPeriodClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  notes      String?
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+
+  @@unique([year, month])
+  @@index([status, year, month])
+  @@index([closedById])
+}
+
+model FinancialAuditEvent {
+  id         String               @id @default(uuid())
+  entityType String
+  entityId   String
+  action     FinancialAuditAction
+  before     Json?
+  after      Json?
+  actorId    String?
+  actor      User?                @relation("FinancialAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime             @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
 }
 
 model FinancialMonthlySummary {
   id                         String               @id @default(uuid())
   year                       Int
   month                      Int
+  scenario                   FinancialScenario    @default(ACTUAL)
   importBatchId              String
   importBatch                FinancialImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
   explicitIncome             Decimal              @default(0)
@@ -778,39 +905,39 @@ model FinancialCollaborator {
 }
 
 model FinancialImportAlias {
-  id             String                @id @default(uuid())
-  sourceType     String                @default("PAYROLL")
-  sourceLabel    String
+  id              String                @id @default(uuid())
+  sourceType      String                @default("PAYROLL")
+  sourceLabel     String
   normalizedLabel String
-  collaboratorId String
-  collaborator   FinancialCollaborator @relation(fields: [collaboratorId], references: [id], onDelete: Cascade)
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  collaboratorId  String
+  collaborator    FinancialCollaborator @relation(fields: [collaboratorId], references: [id], onDelete: Cascade)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 
   @@unique([sourceType, normalizedLabel])
   @@index([collaboratorId])
 }
 
 model PayrollContract {
-  id             String                @id @default(uuid())
+  id             String                 @id @default(uuid())
   userId         String?
-  user           User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user           User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
   collaboratorId String?
   collaborator   FinancialCollaborator? @relation(fields: [collaboratorId], references: [id], onDelete: SetNull)
   positionId     String?
-  position       PayrollPosition?      @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  position       PayrollPosition?       @relation(fields: [positionId], references: [id], onDelete: SetNull)
   importBatchId  String?
-  importBatch    FinancialImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  importBatch    FinancialImportBatch?  @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
   baseSalary     Decimal
-  socialSecurity Decimal               // Fixed absolute value
+  socialSecurity Decimal // Fixed absolute value
   startDate      DateTime
   endDate        DateTime?
   sourceSheet    String?
   sourceRow      Int?
   sourceLabel    String?
   metadata       Json?
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
   transactions   PayrollTransaction[]
 
   @@index([userId])
@@ -820,20 +947,35 @@ model PayrollContract {
   @@index([startDate, endDate])
 }
 
-model PayrollTransaction {
-  id          String              @id @default(uuid())
-  userId      String
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contractId  String
-  contract    PayrollContract     @relation(fields: [contractId], references: [id], onDelete: Restrict)
-  month       Int                 // 1 - 12
-  year        Int                 // e.g. 2026
-  paidAt      DateTime?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  adjustments PayrollAdjustment[]
+enum PayrollTransactionStatus {
+  DRAFT
+  APPROVED
+  PAID
+}
 
-  @@unique([userId, month, year])
+model PayrollTransaction {
+  id                String                   @id @default(uuid())
+  userId            String?
+  user              User?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  contractId        String
+  contract          PayrollContract          @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  month             Int // 1 - 12
+  year              Int // e.g. 2026
+  baseSalary        Decimal                  @default(0)
+  socialSecurity    Decimal                  @default(0)
+  grossAmount       Decimal                  @default(0)
+  deductions        Decimal                  @default(0)
+  netAmount         Decimal                  @default(0)
+  status            PayrollTransactionStatus @default(DRAFT)
+  approvedAt        DateTime?
+  paidAt            DateTime?
+  financialRecordId String?                  @unique
+  financialRecord   FinancialRecord?         @relation(fields: [financialRecordId], references: [id], onDelete: SetNull)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  adjustments       PayrollAdjustment[]
+
+  @@unique([contractId, month, year])
   @@index([contractId])
   @@index([year, month])
 }
@@ -871,11 +1013,12 @@ model AccountsReceivable {
   importBatchId String?
   importBatch   FinancialImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
   amount        Decimal
-  period        DateTime              // First day of month (e.g. 2026-04-01)
+  period        DateTime // First day of month (e.g. 2026-04-01)
   year          Int?
   month         Int?
   dueDate       DateTime?
   status        ReceivableStatus      @default(DEBE)
+  origin        FinancialRecordOrigin @default(MANUAL)
   notes         String?
   comments      String?
   sourceSheet   String?
@@ -884,19 +1027,44 @@ model AccountsReceivable {
   metadata      Json?
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
+  payments      ReceivablePayment[]
 
   @@index([clientId])
   @@index([period])
   @@index([year, month])
   @@index([status])
+  @@index([status, dueDate])
+  @@index([origin, year, month])
   @@index([clientId, year, month])
   @@index([importBatchId])
+}
+
+model ReceivablePayment {
+  id                String             @id @default(uuid())
+  receivableId      String
+  receivable        AccountsReceivable @relation(fields: [receivableId], references: [id], onDelete: Restrict)
+  accountId         String?
+  account           FinancialAccount?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  financialRecordId String?            @unique
+  financialRecord   FinancialRecord?   @relation(fields: [financialRecordId], references: [id], onDelete: SetNull)
+  amount            Decimal
+  paidAt            DateTime
+  reference         String?
+  notes             String?
+  createdById       String?
+  createdBy         User?              @relation("ReceivablePaymentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([receivableId, paidAt])
+  @@index([accountId, paidAt])
+  @@index([createdById, createdAt])
 }
 
 model ServiceCatalog {
   id                String          @id @default(uuid())
   category          ServiceCategory
-  name              String  @unique
+  name              String          @unique
   description       String
   valor_neto        Decimal
   valor_neto_actual Decimal
@@ -942,18 +1110,18 @@ enum MetricSourcePlatform {
 }
 
 model MetricReport {
-  id                String             @id @default(uuid())
+  id                String               @id @default(uuid())
   clientId          String
-  client            Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client            Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
   periodKind        MetricPeriodKind
   startDate         DateTime
   endDate           DateTime
-  status            MetricReportStatus @default(DRAFT)
+  status            MetricReportStatus   @default(DRAFT)
   normalizedMetrics Json
   narrative         Json
   sections          Json?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
   sources           MetricReportSource[]
 }
 

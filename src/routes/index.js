@@ -68,6 +68,7 @@ router.get('/auth/me', async (req, res) => {
                 avatarUrl: true,
                 role: true,
                 hasFinancialAccess: true,
+                financialRole: true,
                 mustChangePassword: true,
                 sessionVersion: true,
                 createdAt: true,

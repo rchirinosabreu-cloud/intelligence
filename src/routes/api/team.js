@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
       where: whereClause,
       include: {
         user: {
-          select: { role: true, modulePermissions: true, hasFinancialAccess: true }
+          select: { role: true, modulePermissions: true, hasFinancialAccess: true, financialRole: true }
         }
       },
       orderBy: { name: 'asc' },
@@ -66,13 +66,25 @@ export const resolveFinancialAccessFlag = (systemRole, modulePermissions = {}) =
     return modulePermissions.financiero === true;
 };
 
+const FINANCIAL_ROLES = new Set(['NONE', 'VIEWER', 'EDITOR', 'APPROVER', 'ADMIN']);
+
+export const resolveFinancialRole = (systemRole, requestedRole, modulePermissions = {}) => {
+    if (systemRole === 'ADMIN') return 'ADMIN';
+    if (modulePermissions.financiero !== true) return 'NONE';
+
+    const normalizedRole = String(requestedRole || '').toUpperCase();
+    return FINANCIAL_ROLES.has(normalizedRole) && normalizedRole !== 'ADMIN'
+        ? normalizedRole
+        : 'EDITOR';
+};
+
 // Crear un nuevo miembro del equipo (y auto-crear cuenta de User)
 router.post('/', async (req, res) => {
   if (req.user?.role !== 'ADMIN') {
     return res.status(403).json({ error: 'Solo los administradores pueden gestionar miembros del equipo' });
   }
   try {
-    const { name, role, email, avatarUrl, systemRole, modulePermissions } = req.body;
+    const { name, role, email, avatarUrl, systemRole, modulePermissions, financialRole } = req.body;
 
     if (!name || !role) {
       return res.status(400).json({ error: 'Name and role are required' });
@@ -80,6 +92,7 @@ router.post('/', async (req, res) => {
 
     const sanitizedPerms = sanitizePermissions(modulePermissions);
     const hasFinancialAccess = resolveFinancialAccessFlag(systemRole || 'VIEWER', sanitizedPerms);
+    const resolvedFinancialRole = resolveFinancialRole(systemRole || 'VIEWER', financialRole, sanitizedPerms);
 
     // Usamos una transacción para asegurar que ambas tablas se actualizan o ninguna
     const newMember = await prisma.$transaction(async (tx) => {
@@ -102,7 +115,8 @@ router.post('/', async (req, res) => {
                         password: hashedPassword,
                         role: systemRole || 'VIEWER',
                         modulePermissions: sanitizedPerms,
-                        hasFinancialAccess
+                        hasFinancialAccess,
+                        financialRole: resolvedFinancialRole
                     }
                 });
             } else {
@@ -111,7 +125,8 @@ router.post('/', async (req, res) => {
                     data: {
                         role: systemRole || undefined,
                         modulePermissions: sanitizedPerms,
-                        hasFinancialAccess
+                        hasFinancialAccess,
+                        financialRole: resolvedFinancialRole
                     }
                 });
             }
@@ -147,11 +162,18 @@ router.put('/:id', async (req, res) => {
   }
   try {
     const { id } = req.params;
-    const { name, role, email, avatarUrl, isActive, systemRole, modulePermissions } = req.body;
-
-    const sanitizedPerms = sanitizePermissions(modulePermissions);
+    const { name, role, email, avatarUrl, isActive, systemRole, modulePermissions, financialRole } = req.body;
 
     const updatedMember = await prisma.$transaction(async (tx) => {
+        const currentMember = await tx.teamMember.findUnique({
+            where: { id },
+            include: { user: true }
+        });
+
+        if (!currentMember) {
+            throw new Error('Team member not found');
+        }
+
         const member = await tx.teamMember.update({
             where: { id },
             data: {
@@ -164,12 +186,24 @@ router.put('/:id', async (req, res) => {
         });
 
         if (member.userId) {
+            const nextSystemRole = systemRole || currentMember.user?.role || 'VIEWER';
+            const nextPermissions = modulePermissions === undefined
+                ? (currentMember.user?.modulePermissions || defaultPermissions)
+                : sanitizePermissions(modulePermissions);
+            const hasFinancialAccess = resolveFinancialAccessFlag(nextSystemRole, nextPermissions);
+            const resolvedFinancialRole = resolveFinancialRole(
+                nextSystemRole,
+                financialRole ?? currentMember.user?.financialRole,
+                nextPermissions
+            );
+
             await tx.user.update({
                 where: { id: member.userId },
                 data: {
-                    role: systemRole,
-                    modulePermissions: sanitizedPerms,
-                    hasFinancialAccess
+                    role: nextSystemRole,
+                    modulePermissions: nextPermissions,
+                    hasFinancialAccess,
+                    financialRole: resolvedFinancialRole
                 }
             });
         }

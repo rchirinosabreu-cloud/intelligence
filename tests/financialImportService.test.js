@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import XLSX from 'xlsx';
-import { parseFinancialImportWorkbook } from '../src/services/financialImportService.js';
+import {
+    buildFinancialImportPersistencePlan,
+    parseFinancialImportWorkbook
+} from '../src/services/financialImportService.js';
 
 const fixtureCsv = `Clientes,Enero,Febrero,Marzo,Abril,Mayo,Junio,Julio,Agosto,Septiembre,Octubre,Noviembre,Diciembre,Total
 Gobernacion de Bolivar,$10.000.000,$10.000.000,,,,,,,,,,,$20.000.000
@@ -178,4 +181,52 @@ test('parseFinancialImportWorkbook reads the complete finance workbook using the
     assert.equal(result.totals.calculated.debt, 5510000);
     assert.equal(result.totals.explicit.debt, 5510000);
     assert.equal(result.totals.explicit.debtComments, 800000);
+});
+
+test('buildFinancialImportPersistencePlan separates actual months from forecast months', () => {
+    const plan = buildFinancialImportPersistencePlan(Buffer.from(fixtureCsv, 'utf8'), {
+        filename: 'FINANZAS BRAIN STUDIO 2026.csv',
+        year: 2026,
+        actualThroughMonth: 8
+    });
+
+    const august = plan.records.find((record) => record.month === 8);
+    const september = plan.records.find((record) => record.month === 9);
+    assert.equal(august.scenario, 'ACTUAL');
+    assert.equal(august.isProjection, false);
+    assert.equal(august.origin, 'IMPORT');
+    assert.equal(september.scenario, 'FORECAST');
+    assert.equal(september.isProjection, true);
+    assert.equal(september.origin, 'IMPORT');
+    assert.ok(plan.receivables.every((receivable) => receivable.origin === 'IMPORT'));
+});
+
+test('buildFinancialImportPersistencePlan preserves payroll contract start dates from the roster', () => {
+    const plan = buildFinancialImportPersistencePlan(createWorkbookFixture(), {
+        filename: 'FINANZAS BRAIN STUDIO 2026.xlsx',
+        year: 2026,
+        actualThroughMonth: 8
+    });
+    const francisco = plan.payrollContracts.find((contract) => contract.employeeName === 'Francisco Villa');
+    assert.equal(francisco.startDate.toISOString(), '2026-02-01T00:00:00.000Z');
+});
+
+test('parseFinancialImportWorkbook preserves exact numeric formula results below one thousand', () => {
+    const workbook = XLSX.utils.book_new();
+    const sheet = XLSX.utils.aoa_to_sheet([
+        ['Categoria', 'Detalle', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
+        ['Ingresos mensuales', 'Clientes Fee mensual'],
+        ['', 'Cliente prueba', 1000000],
+        ['Total Ingresos', '', 1000000],
+        ['Costos Administrativos', 'Nomina'],
+        ['', 'Cuatro por mil', { f: '80+59.6', v: 139.6 }],
+        ['Total costos administrativos', '', 139.6]
+    ]);
+    XLSX.utils.book_append_sheet(workbook, sheet, 'FLUJO MENSUAL MEMBRESIAS');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    const result = parseFinancialImportWorkbook(buffer, { year: 2026 });
+    const expense = result.entries.find((entry) => entry.sourceLabel === 'Cuatro por mil');
+    assert.equal(expense.amount, 139.6);
+    assert.equal(result.totals.calculated.expense, 139.6);
 });

@@ -63,7 +63,8 @@ export const authenticateToken = async (req, res, next) => {
         sessionVersion: true,
         mustChangePassword: true,
         modulePermissions: true,
-        hasFinancialAccess: true
+        hasFinancialAccess: true,
+        financialRole: true
       }
     });
 
@@ -97,6 +98,7 @@ export const authenticateToken = async (req, res, next) => {
       role: dbUser.role,
       modulePermissions: dbUser.modulePermissions,
       hasFinancialAccess: dbUser.hasFinancialAccess,
+      financialRole: dbUser.financialRole,
       mustChangePassword: dbUser.mustChangePassword,
       sessionVersion: dbUser.sessionVersion
     };
@@ -125,31 +127,70 @@ export const requireRole = (role) => {
     next();
   };
 };
-export const requireFinancialAccess = async (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: "Unauthorized", message: "Usuario no autenticado" });
-  }
+const FINANCIAL_PERMISSION_LEVELS = {
+  NONE: 0,
+  VIEWER: 1,
+  EDITOR: 2,
+  APPROVER: 3,
+  ADMIN: 4
+};
 
-  try {
-    const userId = req.user.userId || req.user.id;
-    const dbUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true, hasFinancialAccess: true }
-    });
+const REQUIRED_FINANCIAL_LEVELS = {
+  read: FINANCIAL_PERMISSION_LEVELS.VIEWER,
+  write: FINANCIAL_PERMISSION_LEVELS.EDITOR,
+  approve: FINANCIAL_PERMISSION_LEVELS.APPROVER,
+  admin: FINANCIAL_PERMISSION_LEVELS.ADMIN
+};
 
-    if (!dbUser || (dbUser.role !== 'ADMIN' && dbUser.hasFinancialAccess !== true)) {
-      console.warn(`[Auth] Access denied for user ${req.user.email || req.user.id || userId}: hasFinancialAccess is false`);
-      return res.status(403).json({
-        error: "Acceso denegado. Se requiere permiso financiero explícito"
-      });
+export const hasFinancialPermission = (user, permission = 'read') => {
+  if (!user) return false;
+  if (String(user.role || '').toUpperCase() === 'ADMIN') return true;
+
+  const requiredLevel = REQUIRED_FINANCIAL_LEVELS[permission];
+  if (!requiredLevel) return false;
+
+  const financialRole = String(user.financialRole || 'NONE').toUpperCase();
+  const roleLevel = FINANCIAL_PERMISSION_LEVELS[financialRole] || 0;
+  if (roleLevel >= requiredLevel) return true;
+
+  // Existing users keep operational access while explicit roles are assigned.
+  return user.hasFinancialAccess === true && ['read', 'write'].includes(permission);
+};
+
+export const requireFinancialPermission = (permission = 'read') => {
+  return async (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized", message: "Usuario no autenticado" });
     }
 
-    next();
-  } catch (error) {
-    console.error("[Auth] Error validating financial access:", error);
-    return res.status(500).json({ error: "Failed to validate financial access permissions" });
-  }
+    try {
+      const userId = req.user.userId || req.user.id;
+      const dbUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true, hasFinancialAccess: true, financialRole: true }
+      });
+
+      if (!dbUser || !hasFinancialPermission(dbUser, permission)) {
+        console.warn(`[Auth] Financial ${permission} access denied for user ${req.user.email || req.user.id || userId}`);
+        return res.status(403).json({
+          error: "Acceso denegado. No tienes el nivel de permiso financiero requerido"
+        });
+      }
+
+      req.user.financialRole = dbUser.financialRole;
+      req.user.hasFinancialAccess = dbUser.hasFinancialAccess;
+      return next();
+    } catch (error) {
+      console.error("[Auth] Error validating financial access:", error);
+      return res.status(500).json({ error: "Failed to validate financial access permissions" });
+    }
+  };
 };
+
+export const requireFinancialAccess = requireFinancialPermission('read');
+export const requireFinancialWrite = requireFinancialPermission('write');
+export const requireFinancialApproval = requireFinancialPermission('approve');
+export const requireFinancialAdmin = requireFinancialPermission('admin');
 
 export const requireModulePermission = (moduleName) => {
   return async (req, res, next) => {
