@@ -54,6 +54,12 @@ const formatTask = (task) => ({
   isPriority: task.isPriority,
   priority: task.priority,
   isSpecial: task.isSpecial,
+  assignee: task.assignee ? {
+    id: task.assignee.id,
+    name: task.assignee.name,
+    role: task.assignee.role,
+    avatarUrl: task.assignee.avatarUrl || null
+  } : null,
   client: task.client ? {
     id: task.client.id,
     name: task.client.name,
@@ -123,7 +129,7 @@ const buildClientSummaries = (tasks, now) => {
   return Array.from(byClient.values()).sort((a, b) => b.activeTasks - a.activeTasks).slice(0, 6);
 };
 
-export const buildPersonalDashboard = ({ member, now = new Date() }) => {
+export const buildPersonalDashboard = ({ member, now = new Date(), globalAchievements = null }) => {
   const tasks = Array.isArray(member?.nativeTasks) ? member.nativeTasks : [];
   const isCommunityManager = isCommunityManagerRole(member?.role);
   const assignedClients = buildAssignedClientSummaries(member?.responsibleClients || [], now);
@@ -141,10 +147,14 @@ export const buildPersonalDashboard = ({ member, now = new Date() }) => {
     })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
     .slice(0, 8);
-  const achievements = tasks
+  const memberAchievements = tasks
     .filter((task) => task.status === 'REALIZADA' && isSameBogotaDay(toDate(task.completedAt), now))
     .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0))
     .slice(0, 8);
+  const achievements = (Array.isArray(globalAchievements) ? globalAchievements : memberAchievements)
+    .filter((task) => task.status === 'REALIZADA')
+    .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0));
+  const achievementsToday = achievements.filter((task) => isSameBogotaDay(toDate(task.completedAt), now));
 
   const focusCards = [];
   if (overdueTasks.length > 0) {
@@ -286,7 +296,7 @@ export const buildPersonalDashboard = ({ member, now = new Date() }) => {
       returned: returnedTasks.length,
       priority: activeTasks.filter((task) => task.isPriority || task.priority === 'URGENTE' || task.priority === 'ALTA').length,
       dueToday: todayTasks.length,
-      completedToday: achievements.length
+      completedToday: achievementsToday.length
     },
     focusCards: focusCards.slice(0, 5),
     todayTasks: todayTasks.map(formatTask),
@@ -386,9 +396,42 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
     throw error;
   }
 
-  const announcements = await getDashboardAnnouncements(userId);
+  const [announcements, globalAchievements] = await Promise.all([
+    getDashboardAnnouncements(userId),
+    prisma.task.findMany({
+      where: {
+        status: 'REALIZADA',
+        completedAt: { not: null }
+      },
+      orderBy: { completedAt: 'desc' },
+      take: 50,
+      include: {
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            role: true,
+            avatarUrl: true
+          }
+        },
+        client: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            logoUrl: true,
+            healthRecords: {
+              orderBy: { updatedAt: 'desc' },
+              take: 1,
+              select: { score: true }
+            }
+          }
+        }
+      }
+    })
+  ]);
 
-  return buildPersonalDashboard({ member: { ...member, announcements } });
+  return buildPersonalDashboard({ member: { ...member, announcements }, globalAchievements });
 };
 
 export const getDashboardAnnouncements = async (userId) => {

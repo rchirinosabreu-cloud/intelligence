@@ -5,10 +5,8 @@ import {
   AlertTriangle,
   ArrowUpRight,
   CalendarClock,
-  CheckCircle2,
   ChevronDown,
   CircleDot,
-  Clock3,
   Compass,
   FileText,
   LayoutDashboard,
@@ -141,6 +139,7 @@ const TaskRow = ({ task, showFeedback = false, onClick }) => (
       </div>
       <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-zinc-500 dark:text-zinc-400">
         {task.client?.name && <span>{task.client.name}</span>}
+        {task.assignee?.name && <span>{task.assignee.name}</span>}
         {task.status && <span className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5">{task.status}</span>}
         {showFeedback && task.lastFeedback && <span className="text-amber-600 dark:text-amber-400 line-clamp-1">Feedback: {task.lastFeedback}</span>}
       </div>
@@ -161,6 +160,7 @@ const Dashboard = () => {
   const [assignClientId, setAssignClientId] = useState('');
   const [assignMemberId, setAssignMemberId] = useState('');
   const [expandedFocusCards, setExpandedFocusCards] = useState({});
+  const [showAchievementsHistory, setShowAchievementsHistory] = useState(false);
 
   const queryClient = useQueryClient();
   const baseUrl = getApiBaseUrl();
@@ -348,7 +348,7 @@ const Dashboard = () => {
             </Card>
           </motion.div>
 
-          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-6">
+          <motion.div variants={item}>
             <Card className="p-6">
               <div className="flex items-center gap-3 mb-5">
                 <Compass className="w-5 h-5 text-primary" />
@@ -393,18 +393,6 @@ const Dashboard = () => {
                 ))}
               </div>
             </Card>
-
-            <Card className="p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <Clock3 className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Mis tareas de hoy</h3>
-              </div>
-              <div className="space-y-3">
-                {dashboard.todayTasks?.length > 0
-                  ? dashboard.todayTasks.map((task) => <TaskRow key={task.id} task={task} />)
-                  : <EmptyState icon={CheckCircle2} title="Sin vencimientos para hoy" description="Buen momento para anticipar pendientes o preparar propuestas." />}
-              </div>
-            </Card>
           </motion.div>
 
           <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -421,13 +409,27 @@ const Dashboard = () => {
             </Card>
 
             <Card className="p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <Sparkles className="w-5 h-5 text-emerald-500" />
-                <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Logros recientes</h3>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                <div className="flex items-center gap-3">
+                  <Sparkles className="w-5 h-5 text-emerald-500" />
+                  <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Logros recientes</h3>
+                </div>
+                {dashboard.achievements?.length > 5 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAchievementsHistory((current) => !current)}
+                    className="inline-flex items-center gap-1.5 text-xs font-black text-primary hover:text-primary/80 transition-colors"
+                  >
+                    {showAchievementsHistory ? 'Ver menos' : 'Ver historial completo'}
+                    <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', showAchievementsHistory && 'rotate-180')} />
+                  </button>
+                )}
               </div>
               <div className="space-y-3">
                 {dashboard.achievements?.length > 0
-                  ? dashboard.achievements.slice(0, 5).map((task) => <TaskRow key={task.id} task={task} />)
+                  ? dashboard.achievements
+                    .slice(0, showAchievementsHistory ? dashboard.achievements.length : 5)
+                    .map((task) => <TaskRow key={task.id} task={task} onClick={() => { window.location.href = `/gestion?taskId=${task.id}`; }} />)
                   : <EmptyState icon={Trophy} title="Sin cierres hoy" description="Los cierres del dia apareceran aqui para reforzar progreso y visibilidad." />}
               </div>
             </Card>

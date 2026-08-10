@@ -19,6 +19,7 @@ const makeTask = (overrides = {}) => ({
   isSpecial: overrides.isSpecial || false,
   creatorId: overrides.creatorId || null,
   assigneeId: overrides.assigneeId || null,
+  assignee: overrides.assignee || null,
   updatedAt: overrides.updatedAt || fixedNow,
   client: overrides.client || { id: 'client-1', name: 'Cliente Uno', slug: 'cliente-uno', logoUrl: null, healthRecords: [{ score: 72 }] },
   taskComments: overrides.taskComments || []
@@ -98,6 +99,41 @@ test('buildPersonalDashboard returns actionable focus cards for overdue and retu
   assert.match(dashboard.focusCards[1].title, /correcci/);
   assert.equal(dashboard.todayTasks.length, 1);
   assert.equal(dashboard.returnedTasks[0].lastFeedback, 'Hace falta aterrizar el CTA.');
+});
+
+test('buildPersonalDashboard accepts global achievements history apart from selected member tasks', () => {
+  const dashboard = buildPersonalDashboard({
+    now: fixedNow,
+    globalAchievements: [
+      makeTask({
+        id: 'global-done-1',
+        title: 'Campana lanzada',
+        status: 'REALIZADA',
+        completedAt: new Date('2026-08-08T13:00:00.000Z'),
+        assignee: { id: 'member-other', name: 'Helen Hernandez', role: 'Community Manager', avatarUrl: null }
+      }),
+      makeTask({
+        id: 'global-done-2',
+        title: 'Reporte cerrado',
+        status: 'REALIZADA',
+        completedAt: new Date('2026-08-07T13:00:00.000Z'),
+        assignee: { id: 'member-pm', name: 'Rodny', role: 'Project Manager', avatarUrl: null }
+      })
+    ],
+    member: {
+      id: 'member-1',
+      userId: 'user-1',
+      name: 'Sara Brain',
+      role: 'Project Manager',
+      avatarUrl: null,
+      nativeTasks: []
+    }
+  });
+
+  assert.equal(dashboard.achievements.length, 2);
+  assert.equal(dashboard.achievements[0].id, 'global-done-1');
+  assert.equal(dashboard.achievements[0].assignee.name, 'Helen Hernandez');
+  assert.equal(dashboard.stats.completedToday, 1);
 });
 
 test('buildPersonalDashboard recommends a documentation habit when assigned work lacks comments', () => {

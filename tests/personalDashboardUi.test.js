@@ -18,6 +18,9 @@ test('Dashboard presents adoption-oriented sections', () => {
   for (const label of ['Tu foco de hoy', 'Reto de la semana', 'Proximos pendientes', 'Logros recientes']) {
     assert.match(source.normalize('NFD').replace(/\p{Diacritic}/gu, ''), new RegExp(label), `Dashboard should render ${label}.`);
   }
+  assert.doesNotMatch(source, /Mis tareas de hoy/, 'Dashboard should not duplicate the adopted Gestion task module.');
+  assert.match(source, /Ver historial completo/, 'Recent achievements should expose the full history.');
+  assert.match(source, /showAchievementsHistory/, 'Recent achievements should keep a full-history state.');
 });
 
 test('Dashboard includes community manager account leadership widgets', () => {
