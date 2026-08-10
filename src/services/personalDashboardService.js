@@ -1,6 +1,24 @@
 import prisma from '../lib/prisma.js';
 
 const ACTIVE_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
+const MANAGER_ROLES = ['ADMIN', 'PROJECT_MANAGER'];
+
+export const assertPersonalDashboardAccess = ({ requester, targetUserId }) => {
+  if (requester?.role === 'ADMIN') return;
+  if (requester?.userId && requester.userId === targetUserId) return;
+
+  const error = new Error('Solo administradores pueden consultar dashboards personales de otras personas.');
+  error.statusCode = 403;
+  throw error;
+};
+
+export const assertDashboardManagerAccess = (user) => {
+  if (!MANAGER_ROLES.includes(user?.role)) {
+    const error = new Error('Solo administradores o project managers pueden gestionar este dashboard.');
+    error.statusCode = 403;
+    throw error;
+  }
+};
 
 export const assertAdminDashboardAccess = (user) => {
   if (user?.role !== 'ADMIN') {
@@ -9,6 +27,8 @@ export const assertAdminDashboardAccess = (user) => {
     throw error;
   }
 };
+
+const isCommunityManagerRole = (role = '') => role.toLowerCase().includes('community manager');
 
 const toDate = (value) => (value ? new Date(value) : null);
 
@@ -46,6 +66,38 @@ const newestExternalFeedback = (task, memberUserId) => {
   return comment?.content || null;
 };
 
+const summarizeTaskCounts = (tasks, now) => {
+  const activeTasks = tasks.filter((task) => ACTIVE_STATUSES.includes(task.status));
+  return {
+    activeTasks: activeTasks.length,
+    returnedTasks: activeTasks.filter((task) => task.status === 'DEVUELTA').length,
+    overdueTasks: activeTasks.filter((task) => task.dueDate && new Date(task.dueDate) < now).length
+  };
+};
+
+const buildAssignedClientSummaries = (clients, now) => {
+  return (clients || []).map((client) => {
+    const latestHealth = client.healthRecords?.[0] || null;
+    const taskCounts = summarizeTaskCounts(client.nativeTasks || [], now);
+    return {
+      id: client.id,
+      name: client.name,
+      slug: client.slug,
+      logoUrl: client.logoUrl,
+      healthScore: latestHealth?.score ?? null,
+      contentStatus: latestHealth?.contentStatus || null,
+      reportStatus: latestHealth?.reportStatus || null,
+      contentPlanStatus: client.contentPlans?.[0]?.status || null,
+      ...taskCounts
+    };
+  }).sort((a, b) => {
+    const healthA = a.healthScore ?? 101;
+    const healthB = b.healthScore ?? 101;
+    if (healthA !== healthB) return healthA - healthB;
+    return b.activeTasks - a.activeTasks;
+  }).slice(0, 8);
+};
+
 const buildClientSummaries = (tasks, now) => {
   const byClient = new Map();
   for (const task of tasks) {
@@ -71,6 +123,8 @@ const buildClientSummaries = (tasks, now) => {
 
 export const buildPersonalDashboard = ({ member, now = new Date() }) => {
   const tasks = Array.isArray(member?.nativeTasks) ? member.nativeTasks : [];
+  const isCommunityManager = isCommunityManagerRole(member?.role);
+  const assignedClients = buildAssignedClientSummaries(member?.responsibleClients || [], now);
   const activeTasks = tasks.filter((task) => ACTIVE_STATUSES.includes(task.status));
   const overdueTasks = activeTasks.filter((task) => {
     const dueDate = toDate(task.dueDate);
@@ -115,7 +169,18 @@ export const buildPersonalDashboard = ({ member, now = new Date() }) => {
   }
 
   const undocumentedTasks = activeTasks.filter((task) => (task.taskComments || []).length === 0);
-  const weeklyHabit = undocumentedTasks.length > 0
+  const clientsNeedingAttention = assignedClients.filter((client) => (client.healthScore ?? 100) < 70 || client.returnedTasks > 0 || client.overdueTasks > 0);
+  const clientsWithoutPlan = assignedClients.filter((client) => !client.contentPlanStatus || client.contentStatus === 'SIN_PARRILLA');
+
+  const weeklyHabit = isCommunityManager && assignedClients.length > 0
+    ? {
+        id: 'lead-account-growth',
+        title: 'Llegar con propuestas',
+        description: 'Prepara una recomendacion accionable para tus clientes asignados: campana, ajuste de parrilla, oportunidad de comunicacion o mejora basada en resultados.',
+        progress: Math.max(0, Math.round(((assignedClients.length - clientsNeedingAttention.length) / Math.max(assignedClients.length, 1)) * 100)),
+        targetLabel: 'Clientes con liderazgo preventivo'
+      }
+    : undocumentedTasks.length > 0
     ? {
         id: 'document-progress',
         title: 'Documentar avances',
@@ -130,6 +195,30 @@ export const buildPersonalDashboard = ({ member, now = new Date() }) => {
         progress: 100,
         targetLabel: 'Contexto actualizado'
       };
+
+  if (isCommunityManager && clientsNeedingAttention.length > 0) {
+    focusCards.push({
+      id: 'cm-client-health',
+      type: 'OPORTUNIDAD',
+      severity: clientsNeedingAttention.some((client) => (client.healthScore ?? 100) < 60 || client.overdueTasks > 0) ? 'warning' : 'info',
+      title: `${clientsNeedingAttention.length} ${clientsNeedingAttention.length === 1 ? 'cliente pide liderazgo' : 'clientes piden liderazgo'}`,
+      content: 'Lleva a la proxima revision una propuesta, no solo una lista de pendientes: objetivo, insight y siguiente accion.',
+      actionLabel: 'Ver mis clientes',
+      actionUrl: '/clientes'
+    });
+  }
+
+  if (isCommunityManager && clientsWithoutPlan.length > 0) {
+    focusCards.push({
+      id: 'cm-content-plan',
+      type: 'ESTRATEGIA',
+      severity: 'info',
+      title: `${clientsWithoutPlan.length} ${clientsWithoutPlan.length === 1 ? 'parrilla por fortalecer' : 'parrillas por fortalecer'}`,
+      content: 'Revisa objetivos, mercado y calendario para anticipar necesidades de contenido antes de que se vuelvan urgencias.',
+      actionLabel: 'Abrir parrillas',
+      actionUrl: '/parrillas'
+    });
+  }
 
   if (undocumentedTasks.length > 0) {
     focusCards.push({
@@ -161,7 +250,8 @@ export const buildPersonalDashboard = ({ member, now = new Date() }) => {
       userId: member.userId,
       name: member.name,
       role: member.role,
-      avatarUrl: member.avatarUrl || null
+      avatarUrl: member.avatarUrl || null,
+      isCommunityManager
     },
     stats: {
       active: activeTasks.length,
@@ -180,18 +270,57 @@ export const buildPersonalDashboard = ({ member, now = new Date() }) => {
     })),
     upcomingTasks: upcomingTasks.map(formatTask),
     achievements: achievements.map(formatTask),
-    clients: buildClientSummaries(activeTasks, now),
-    weeklyHabit
+    clients: assignedClients.length > 0 ? assignedClients : buildClientSummaries(activeTasks, now),
+    weeklyHabit,
+    announcements: member.announcements || []
   };
 };
 
 export const getPersonalDashboard = async ({ requester, targetUserId }) => {
-  assertAdminDashboardAccess(requester);
-
   const userId = targetUserId || requester?.userId;
+  assertPersonalDashboardAccess({ requester, targetUserId: userId });
+
   const member = await prisma.teamMember.findUnique({
     where: { userId },
     include: {
+      responsibleClients: {
+        where: { isArchived: false },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          logoUrl: true,
+          healthRecords: {
+            orderBy: { updatedAt: 'desc' },
+            take: 1,
+            select: {
+              score: true,
+              contentStatus: true,
+              reportStatus: true
+            }
+          },
+          contentPlans: {
+            where: { deletedAt: null },
+            orderBy: { updatedAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              status: true,
+              month: true,
+              year: true,
+              updatedAt: true
+            }
+          },
+          nativeTasks: {
+            where: { status: { in: ACTIVE_STATUSES } },
+            select: {
+              id: true,
+              status: true,
+              dueDate: true
+            }
+          }
+        }
+      },
       nativeTasks: {
         include: {
           client: {
@@ -230,5 +359,122 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
     throw error;
   }
 
-  return buildPersonalDashboard({ member });
+  const announcements = await getDashboardAnnouncements(userId);
+
+  return buildPersonalDashboard({ member: { ...member, announcements } });
+};
+
+export const getDashboardAnnouncements = async (userId) => {
+  const [globalAnnouncements, targetedAnnouncements] = await Promise.all([
+    prisma.globalAnnouncement.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 5
+    }),
+    prisma.notification.findMany({
+      where: {
+        userId,
+        type: 'TEAM_ANNOUNCEMENT'
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5
+    })
+  ]);
+
+  return [
+    ...globalAnnouncements.map((announcement) => ({
+      id: announcement.id,
+      scope: 'GLOBAL',
+      content: announcement.content,
+      type: announcement.type,
+      createdAt: announcement.createdAt,
+      isRead: true
+    })),
+    ...targetedAnnouncements.map((announcement) => ({
+      id: announcement.id,
+      scope: 'MEMBER',
+      content: announcement.message,
+      type: announcement.type,
+      createdAt: announcement.createdAt,
+      isRead: announcement.isRead
+    }))
+  ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 6);
+};
+
+export const createDashboardAnnouncement = async ({ requester, scope, content, targetUserId }) => {
+  assertDashboardManagerAccess(requester);
+
+  const cleanContent = content?.trim();
+  if (!cleanContent) {
+    const error = new Error('El anuncio no puede estar vacio.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (scope === 'GLOBAL') {
+    return prisma.globalAnnouncement.create({
+      data: {
+        content: cleanContent,
+        type: 'DASHBOARD'
+      }
+    });
+  }
+
+  if (scope === 'MEMBER') {
+    if (!targetUserId) {
+      const error = new Error('Selecciona una persona para el anuncio.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    return prisma.notification.create({
+      data: {
+        userId: targetUserId,
+        message: cleanContent,
+        type: 'TEAM_ANNOUNCEMENT',
+        resourceId: 'dashboard',
+        url: '/'
+      }
+    });
+  }
+
+  const error = new Error('Alcance de anuncio no soportado.');
+  error.statusCode = 400;
+  throw error;
+};
+
+export const assignClientOwner = async ({ requester, clientId, memberId }) => {
+  assertDashboardManagerAccess(requester);
+
+  if (!clientId || !memberId) {
+    const error = new Error('Cliente y Community Manager son requeridos.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const member = await prisma.teamMember.findUnique({
+    where: { id: memberId },
+    select: { id: true, name: true, role: true, userId: true }
+  });
+
+  if (!member) {
+    const error = new Error('Community Manager no encontrado.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (!isCommunityManagerRole(member.role)) {
+    const error = new Error('Solo puedes asignar clientes a personas con rol Community Manager.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return prisma.client.update({
+    where: { id: clientId },
+    data: { responsibleId: member.id },
+    include: {
+      responsible: {
+        select: { id: true, name: true, role: true, userId: true, avatarUrl: true }
+      }
+    }
+  });
 };
