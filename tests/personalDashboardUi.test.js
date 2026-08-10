@@ -119,3 +119,15 @@ test('Dashboard focus cards can reveal the tasks behind each signal', () => {
   assert.doesNotMatch(source, /Correcciones y vencidas/, 'Dashboard should not duplicate returned and overdue work outside Radar de Foco.');
   assert.doesNotMatch(source, /Ver tareas/, 'Focus cards should not call every detail a task.');
 });
+
+test('Profile no longer carries the legacy Mi Foco cockpit', () => {
+  const profileSource = readFileSync('src/components/modules/Profile.jsx', 'utf8');
+  const dashboardSource = readFileSync('src/components/modules/Dashboard.jsx', 'utf8');
+  const personalDashboardService = readFileSync('src/services/personalDashboardService.js', 'utf8');
+
+  assert.doesNotMatch(profileSource, /Mi Foco|TAB: MI FOCO|Simulador de Foco Operativo|personal-threats|Motor de Amenazas Individuales/);
+  assert.doesNotMatch(profileSource, /isCockpitAllowed|activeSimulationUserId|simulationData|teamMembers|fetchSimulationData|fetchTeam|handleNotify/);
+
+  assert.match(dashboardSource, /Radar de Foco/, 'The new dashboard focus radar must remain in place.');
+  assert.match(personalDashboardService, /focusCards/, 'The new dashboard focus-card service must remain in place.');
+});

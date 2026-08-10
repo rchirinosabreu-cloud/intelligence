@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/use-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import AvatarUploader from './Radar/AvatarUploader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
-import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, Trash2, Edit2, X, Check, Calendar, Target, Award, Info, Camera, Zap, AlertTriangle, Clock, MessageSquare, ChevronDown, Users } from '@/components/ui/icons';
+import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, Trash2, Edit2, X, Check, Calendar, Target, Award, Info, Camera } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -69,15 +69,8 @@ const Profile = () => {
         privateNote: ''
     });
 
-    // Cockpit / Simulation State
-    const [activeSimulationUserId, setActiveSimulationUserId] = useState(currentUser?.id);
-    const [simulationData, setSimulationData] = useState(null);
-    const [isSimulationLoading, setIsSimulationLoading] = useState(false);
-    const [teamMembers, setTeamMembers] = useState([]);
-
     const isOwnProfile = !userId || userId === currentUser?.id;
     const isAdmin = currentUser?.role === 'ADMIN';
-    const isCockpitAllowed = currentUser?.role === 'ADMIN' || currentUser?.role === 'PM' || currentUser?.role === 'PROJECT_MANAGER';
 
     // Fetch initial data
     useEffect(() => {
@@ -86,52 +79,7 @@ const Profile = () => {
             fetchNotes();
         }
         fetchFeedback();
-        if (isCockpitAllowed) {
-            fetchTeam();
-        }
     }, [userId]);
-
-    useEffect(() => {
-        if (isCockpitAllowed && activeSimulationUserId) {
-            fetchSimulationData(activeSimulationUserId);
-        }
-    }, [activeSimulationUserId]);
-
-    const fetchTeam = async () => {
-        try {
-            const res = await fetch(`${getApiBaseUrl()}/api/team`);
-            if (res.ok) {
-                const data = await res.json();
-                setTeamMembers(data.filter(m => m.userId));
-            }
-        } catch (err) {
-            console.error("Error fetching team:", err);
-        }
-    };
-
-    const fetchSimulationData = async (targetUserId) => {
-        setIsSimulationLoading(true);
-        try {
-            const res = await fetch(`${getApiBaseUrl()}/api/operative-intelligence/personal-threats/${targetUserId}`);
-            if (res.ok) {
-                const data = await res.json();
-                setSimulationData(data);
-            }
-        } catch (err) {
-            console.error("Error fetching simulation data:", err);
-        } finally {
-            setIsSimulationLoading(false);
-        }
-    };
-
-    const handleNotify = (pm, threat) => {
-        const payload = `[BRAINSTUDIO-COCKPIT-SIM] Alerta de auxilio operativo enviada. Colaborador Simulado: ${simulationData?.member?.name} ➔ Destinatario PM: ${pm.name}. Motivo: ${threat.title}`;
-        console.log(payload);
-        toast({
-            title: "Notificación Enviada (Simulada)",
-            description: `Se ha alertado a ${pm.name} sobre ${threat.title}`,
-        });
-    };
 
     const fetchProfile = async () => {
         try {
@@ -382,16 +330,11 @@ const Profile = () => {
                 </div>
             </div>
 
-            <Tabs defaultValue={isCockpitAllowed ? "cockpit" : (isOwnProfile ? "general" : "performance")} className="w-full">
+            <Tabs defaultValue={isOwnProfile ? "general" : "performance"} className="w-full">
                 <TabsList className={cn(
                     "grid w-full h-auto p-1 bg-zinc-100 dark:bg-zinc-800/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 mb-8",
-                    isCockpitAllowed ? "grid-cols-2 md:grid-cols-5" : (isOwnProfile ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2")
+                    isOwnProfile ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2"
                 )}>
-                    {isCockpitAllowed && (
-                        <TabsTrigger value="cockpit" className="rounded-xl py-3 flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-md transition-all">
-                            <Zap className="w-4 h-4 text-amber-500" /> Mi Foco
-                        </TabsTrigger>
-                    )}
                     <TabsTrigger value="general" className="rounded-xl py-3 flex items-center gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:shadow-md transition-all">
                         <User className="w-4 h-4" /> {isOwnProfile ? 'General' : 'Info Pública'}
                     </TabsTrigger>
@@ -409,176 +352,6 @@ const Profile = () => {
                         <TrendingUp className="w-4 h-4" /> {isOwnProfile ? 'Mi Desempeño' : 'Desempeño'}
                     </TabsTrigger>
                 </TabsList>
-
-                {/* --- TAB: MI FOCO (COCKPIT) --- */}
-                {isCockpitAllowed && (
-                    <TabsContent value="cockpit" className="space-y-8 outline-none animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        {/* Simulation Selector */}
-                        <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-xl">
-                                    <Zap className="w-5 h-5 text-amber-600" />
-                                </div>
-                                <div>
-                                    <h3 className="font-bold text-sm">Simulador de Foco Operativo</h3>
-                                    <p className="text-xs text-zinc-500">Visualiza el cockpit de cualquier miembro del equipo.</p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                                <div className="flex -space-x-2 overflow-hidden hover:space-x-1 transition-all p-1">
-                                    {teamMembers.map(member => (
-                                        <button
-                                            key={member.userId}
-                                            onClick={() => setActiveSimulationUserId(member.userId)}
-                                            className={cn(
-                                                "relative transition-all duration-300 transform hover:scale-110 hover:z-10",
-                                                activeSimulationUserId === member.userId ? "ring-2 ring-primary ring-offset-2 scale-110 z-10" : "grayscale opacity-70"
-                                            )}
-                                            title={member.name}
-                                        >
-                                            <TeamAvatar
-                                                member={member}
-                                                className="w-10 h-10 border-2 border-white dark:border-zinc-900"
-                                            />
-                                        </button>
-                                    ))}
-                                </div>
-
-                                <div className="ml-4 h-10 w-px bg-zinc-200 dark:bg-zinc-800 mx-4 hidden md:block" />
-
-                                <div className="relative">
-                                    <select
-                                        value={activeSimulationUserId}
-                                        onChange={(e) => setActiveSimulationUserId(e.target.value)}
-                                        className="appearance-none bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 pr-10 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
-                                    >
-                                        {teamMembers.map(member => (
-                                            <option key={member.userId} value={member.userId}>
-                                                {member.name} {member.userId === currentUser.id ? '(Tú)' : ''}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400" />
-                                </div>
-                            </div>
-                        </div>
-
-                        {isSimulationLoading ? (
-                            <div className="h-96 flex flex-col items-center justify-center gap-4">
-                                <Loader2 className="w-10 h-10 text-primary animate-spin" />
-                                <p className="text-zinc-500 animate-pulse font-medium">Sincronizando amenazas y métricas...</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-8">
-                                {/* Stats Grid */}
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                    <Card className="p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                                                <Clock className="w-5 h-5 text-blue-500" />
-                                            </div>
-                                            {simulationData?.stats?.priority > 0 && (
-                                                <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Alta</span>
-                                            )}
-                                        </div>
-                                        <div className="text-3xl font-black mb-1">{simulationData?.stats?.pending || 0}</div>
-                                        <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Tareas Pendientes</div>
-                                    </Card>
-
-                                    <Card className="p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                                                <AlertTriangle className="w-5 h-5 text-red-500" />
-                                            </div>
-                                            {simulationData?.stats?.overdue > 3 && (
-                                                <span className="bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Crítico</span>
-                                            )}
-                                        </div>
-                                        <div className="text-3xl font-black mb-1">{simulationData?.stats?.overdue || 0}</div>
-                                        <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Vencidas</div>
-                                    </Card>
-
-                                    <Card className="p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                                                <MessageSquare className="w-5 h-5 text-amber-500" />
-                                            </div>
-                                        </div>
-                                        <div className="text-3xl font-black mb-1">{simulationData?.stats?.returned || 0}</div>
-                                        <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Atención Requerida</div>
-                                    </Card>
-
-                                    <Card className="p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm flex flex-col justify-center items-center text-center">
-                                        <div className={cn(
-                                            "w-12 h-12 rounded-full flex items-center justify-center mb-2",
-                                            simulationData?.member?.isCommunityManager ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
-                                        )}>
-                                            <Users className="w-6 h-6" />
-                                        </div>
-                                        <div className="text-xs font-black uppercase tracking-tighter">
-                                            {simulationData?.member?.isCommunityManager ? 'Community Manager' : 'Creativo / Editor'}
-                                        </div>
-                                    </Card>
-                                </div>
-
-                                {/* Threats Section */}
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
-                                        <h2 className="text-xl font-black tracking-tight">Motor de Amenazas Individuales</h2>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                        {simulationData?.threats?.length > 0 ? (
-                                            simulationData.threats.map(threat => (
-                                                <Card key={threat.id} className={cn(
-                                                    "overflow-hidden border-l-4 shadow-md",
-                                                    threat.severity === 'critical' ? "border-l-red-500" : "border-l-amber-500"
-                                                )}>
-                                                    <div className="p-6">
-                                                        <div className="flex justify-between items-start mb-3">
-                                                            <div className={cn(
-                                                                "px-2 py-0.5 rounded text-[10px] font-black uppercase",
-                                                                threat.severity === 'critical' ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-600"
-                                                            )}>
-                                                                {threat.severity === 'critical' ? 'Riesgo Crítico' : 'Atención'}
-                                                            </div>
-                                                            <span className="text-[10px] text-zinc-400 font-medium">
-                                                                {new Date(threat.timestamp).toLocaleDateString()}
-                                                            </span>
-                                                        </div>
-                                                        <h4 className="font-bold text-zinc-900 dark:text-white mb-2">{threat.title}</h4>
-                                                        <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6 leading-relaxed">
-                                                            {threat.content}
-                                                        </p>
-
-                                                        <div className="flex flex-wrap gap-2 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                                                            {simulationData?.pmRecipients?.map(pm => (
-                                                                <button
-                                                                    key={pm.id}
-                                                                    onClick={() => handleNotify(pm, threat)}
-                                                                    className="flex-1 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[11px] font-bold py-2 px-3 rounded-lg hover:opacity-90 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
-                                                                >
-                                                                    Notificar a {pm.name.split(' ')[0]}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                </Card>
-                                            ))
-                                        ) : (
-                                            <div className="col-span-full h-48 flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-900/20 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl">
-                                                <Zap className="w-10 h-10 text-zinc-300 mb-2" />
-                                                <p className="text-zinc-500 font-medium">No se detectan amenazas operativas para este colaborador.</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </TabsContent>
-                )}
 
                 {/* --- TAB: GENERAL --- */}
                 <TabsContent value="general" className="space-y-6 outline-none">
