@@ -1,7 +1,22 @@
 import prisma from '../lib/prisma.js';
+import DOMPurify from 'isomorphic-dompurify';
 
 const ACTIVE_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 const MANAGER_ROLES = ['ADMIN', 'PROJECT_MANAGER'];
+const ANNOUNCEMENT_ALLOWED_TAGS = ['p', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'br', 'span', 'mark', 'a'];
+const ANNOUNCEMENT_ALLOWED_ATTR = ['href', 'target', 'rel', 'class', 'data-type', 'data-id', 'data-label', 'data-mention-id'];
+
+export const sanitizeDashboardAnnouncementContent = (content = '') => DOMPurify.sanitize(content.trim(), {
+  ALLOWED_TAGS: ANNOUNCEMENT_ALLOWED_TAGS,
+  ALLOWED_ATTR: ANNOUNCEMENT_ALLOWED_ATTR,
+  ADD_ATTR: ['target', 'rel'],
+  FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed']
+}).trim();
+
+const hasAnnouncementText = (content) => DOMPurify.sanitize(content, {
+  ALLOWED_TAGS: [],
+  ALLOWED_ATTR: []
+}).replace(/&nbsp;/gi, ' ').trim().length > 0;
 
 export const assertPersonalDashboardAccess = ({ requester, targetUserId }) => {
   if (requester?.role === 'ADMIN') return;
@@ -433,19 +448,19 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
   return buildPersonalDashboard({ member: { ...member, announcements }, globalAchievements });
 };
 
-export const getDashboardAnnouncements = async (userId) => {
+export const getDashboardAnnouncements = async (userId, { db = prisma } = {}) => {
   const [globalAnnouncements, targetedAnnouncements] = await Promise.all([
-    prisma.globalAnnouncement.findMany({
+    db.globalAnnouncement.findMany({
       orderBy: { createdAt: 'desc' },
-      take: 5
+      take: 50
     }),
-    prisma.notification.findMany({
+    db.notification.findMany({
       where: {
         userId,
         type: 'TEAM_ANNOUNCEMENT'
       },
       orderBy: { createdAt: 'desc' },
-      take: 5
+      take: 50
     })
   ]);
 
@@ -466,21 +481,21 @@ export const getDashboardAnnouncements = async (userId) => {
       createdAt: announcement.createdAt,
       isRead: announcement.isRead
     }))
-  ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 6);
+  ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 };
 
-export const createDashboardAnnouncement = async ({ requester, scope, content, targetUserId }) => {
+export const createDashboardAnnouncement = async ({ requester, scope, content, targetUserId }, { db = prisma } = {}) => {
   assertDashboardManagerAccess(requester);
 
-  const cleanContent = content?.trim();
-  if (!cleanContent) {
+  const cleanContent = sanitizeDashboardAnnouncementContent(content);
+  if (!hasAnnouncementText(cleanContent)) {
     const error = new Error('El anuncio no puede estar vacio.');
     error.statusCode = 400;
     throw error;
   }
 
   if (scope === 'GLOBAL') {
-    return prisma.globalAnnouncement.create({
+    return db.globalAnnouncement.create({
       data: {
         content: cleanContent,
         type: 'DASHBOARD'
@@ -495,7 +510,7 @@ export const createDashboardAnnouncement = async ({ requester, scope, content, t
       throw error;
     }
 
-    return prisma.notification.create({
+    return db.notification.create({
       data: {
         userId: targetUserId,
         message: cleanContent,
@@ -509,6 +524,68 @@ export const createDashboardAnnouncement = async ({ requester, scope, content, t
   const error = new Error('Alcance de anuncio no soportado.');
   error.statusCode = 400;
   throw error;
+};
+
+const assertSupportedAnnouncementScope = (scope) => {
+  if (!['GLOBAL', 'MEMBER'].includes(scope)) {
+    const error = new Error('Alcance de anuncio no soportado.');
+    error.statusCode = 400;
+    throw error;
+  }
+};
+
+const findMemberAnnouncement = async (db, id) => {
+  const announcement = await db.notification.findFirst({
+    where: {
+      id,
+      type: 'TEAM_ANNOUNCEMENT'
+    }
+  });
+
+  if (!announcement) {
+    const error = new Error('El anuncio personal no existe.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return announcement;
+};
+
+export const updateDashboardAnnouncement = async ({ requester, scope, id, content }, { db = prisma } = {}) => {
+  assertDashboardManagerAccess(requester);
+  assertSupportedAnnouncementScope(scope);
+
+  const cleanContent = sanitizeDashboardAnnouncementContent(content);
+  if (!hasAnnouncementText(cleanContent)) {
+    const error = new Error('El anuncio no puede estar vacio.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (scope === 'GLOBAL') {
+    return db.globalAnnouncement.update({
+      where: { id },
+      data: { content: cleanContent }
+    });
+  }
+
+  await findMemberAnnouncement(db, id);
+  return db.notification.update({
+    where: { id },
+    data: { message: cleanContent }
+  });
+};
+
+export const deleteDashboardAnnouncement = async ({ requester, scope, id }, { db = prisma } = {}) => {
+  assertDashboardManagerAccess(requester);
+  assertSupportedAnnouncementScope(scope);
+
+  if (scope === 'GLOBAL') {
+    return db.globalAnnouncement.delete({ where: { id } });
+  }
+
+  await findMemberAnnouncement(db, id);
+  return db.notification.delete({ where: { id } });
 };
 
 export const assignClientOwner = async ({ requester, clientId, memberId }) => {

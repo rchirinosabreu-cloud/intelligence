@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import {
   buildPersonalDashboard,
   assertPersonalDashboardAccess,
-  assertDashboardManagerAccess
+  assertDashboardManagerAccess,
+  createDashboardAnnouncement,
+  deleteDashboardAnnouncement,
+  getDashboardAnnouncements,
+  updateDashboardAnnouncement
 } from '../src/services/personalDashboardService.js';
 
 const fixedNow = new Date('2026-08-08T15:00:00.000Z');
@@ -54,6 +58,137 @@ test('dashboard management access is limited to admins and project managers', ()
     () => assertDashboardManagerAccess({ role: 'MEMBER' }),
     /Solo administradores o project managers/
   );
+});
+
+test('dashboard announcement history only queries personal announcements for the requested user', async () => {
+  const queries = [];
+  const db = {
+    globalAnnouncement: {
+      findMany: async (query) => {
+        queries.push({ model: 'global', query });
+        return [
+          { id: 'global-1', content: '<p>Mensaje general</p>', type: 'DASHBOARD', createdAt: new Date('2026-08-08T13:00:00.000Z') }
+        ];
+      }
+    },
+    notification: {
+      findMany: async (query) => {
+        queries.push({ model: 'notification', query });
+        return [
+          { id: 'member-1', message: '<p>Mensaje personal</p>', type: 'TEAM_ANNOUNCEMENT', createdAt: new Date('2026-08-08T14:00:00.000Z'), isRead: false }
+        ];
+      }
+    }
+  };
+
+  const announcements = await getDashboardAnnouncements('user-helen', { db });
+
+  assert.deepEqual(queries[1].query.where, {
+    userId: 'user-helen',
+    type: 'TEAM_ANNOUNCEMENT'
+  });
+  assert.equal(queries[0].query.take, 50);
+  assert.equal(queries[1].query.take, 50);
+  assert.equal(announcements.length, 2);
+  assert.equal(announcements[0].scope, 'MEMBER');
+  assert.equal(announcements[1].scope, 'GLOBAL');
+});
+
+test('dashboard announcements preserve safe rich text and target only the selected person', async () => {
+  const writes = [];
+  const db = {
+    globalAnnouncement: {
+      create: async (payload) => {
+        writes.push({ model: 'global', payload });
+        return { id: 'global-created', ...payload.data };
+      }
+    },
+    notification: {
+      create: async (payload) => {
+        writes.push({ model: 'notification', payload });
+        return { id: 'member-created', ...payload.data };
+      }
+    }
+  };
+
+  await createDashboardAnnouncement({
+    requester: { role: 'ADMIN' },
+    scope: 'GLOBAL',
+    content: '<p>Hola <strong>equipo</strong> 🚀<script>alert(1)</script></p>'
+  }, { db });
+  await createDashboardAnnouncement({
+    requester: { role: 'PROJECT_MANAGER' },
+    scope: 'MEMBER',
+    targetUserId: 'user-helen',
+    content: '<p>Mensaje <em>personal</em></p>'
+  }, { db });
+
+  assert.match(writes[0].payload.data.content, /<strong>equipo<\/strong>/);
+  assert.match(writes[0].payload.data.content, /🚀/);
+  assert.doesNotMatch(writes[0].payload.data.content, /script|alert\(1\)/i);
+  assert.equal(writes[1].payload.data.userId, 'user-helen');
+  assert.equal(writes[1].payload.data.type, 'TEAM_ANNOUNCEMENT');
+  assert.match(writes[1].payload.data.message, /<em>personal<\/em>/);
+});
+
+test('only admins and project managers can edit and delete dashboard announcements', async () => {
+  const writes = [];
+  const db = {
+    globalAnnouncement: {
+      update: async (payload) => {
+        writes.push({ action: 'update-global', payload });
+        return { id: payload.where.id, ...payload.data };
+      },
+      delete: async (payload) => {
+        writes.push({ action: 'delete-global', payload });
+        return { id: payload.where.id };
+      }
+    },
+    notification: {
+      findFirst: async (payload) => {
+        writes.push({ action: 'find-member', payload });
+        return { id: payload.where.id, type: 'TEAM_ANNOUNCEMENT' };
+      },
+      update: async (payload) => {
+        writes.push({ action: 'update-member', payload });
+        return { id: payload.where.id, ...payload.data };
+      },
+      delete: async (payload) => {
+        writes.push({ action: 'delete-member', payload });
+        return { id: payload.where.id };
+      }
+    }
+  };
+
+  await assert.rejects(
+    updateDashboardAnnouncement({
+      requester: { role: 'MEMBER' },
+      scope: 'GLOBAL',
+      id: 'global-1',
+      content: '<p>No autorizado</p>'
+    }, { db }),
+    /Solo administradores o project managers/
+  );
+
+  await updateDashboardAnnouncement({
+    requester: { role: 'PROJECT_MANAGER' },
+    scope: 'MEMBER',
+    id: 'member-1',
+    content: '<p>Mensaje <strong>actualizado</strong><script>bad()</script></p>'
+  }, { db });
+  await deleteDashboardAnnouncement({
+    requester: { role: 'ADMIN' },
+    scope: 'GLOBAL',
+    id: 'global-1'
+  }, { db });
+
+  assert.deepEqual(writes[0].payload.where, { id: 'member-1', type: 'TEAM_ANNOUNCEMENT' });
+  assert.match(writes[1].payload.data.message, /<strong>actualizado<\/strong>/);
+  assert.doesNotMatch(writes[1].payload.data.message, /script|bad\(\)/i);
+  assert.deepEqual(writes[2], {
+    action: 'delete-global',
+    payload: { where: { id: 'global-1' } }
+  });
 });
 
 test('buildPersonalDashboard returns actionable focus cards for overdue and returned work', () => {

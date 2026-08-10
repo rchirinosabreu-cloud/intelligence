@@ -1,7 +1,9 @@
 import {
   assignClientOwner,
   createDashboardAnnouncement,
-  getPersonalDashboard
+  deleteDashboardAnnouncement,
+  getPersonalDashboard,
+  updateDashboardAnnouncement
 } from '../services/personalDashboardService.js';
 
 export const getPersonalDashboardHandler = async (req, res) => {
@@ -38,6 +40,45 @@ export const createDashboardAnnouncementHandler = async (req, res) => {
     }
     return res.status(status).json({
       error: error.message || 'Error al crear el anuncio.'
+    });
+  }
+};
+
+export const updateDashboardAnnouncementHandler = async (req, res) => {
+  try {
+    const announcement = await updateDashboardAnnouncement({
+      requester: req.user,
+      scope: req.params.scope,
+      id: req.params.id,
+      content: req.body.content
+    });
+    return res.json(announcement);
+  } catch (error) {
+    const status = error.statusCode || 500;
+    if (status >= 500) {
+      console.error('[PersonalDashboardController] Announcement update error:', error);
+    }
+    return res.status(status).json({
+      error: error.message || 'Error al actualizar el anuncio.'
+    });
+  }
+};
+
+export const deleteDashboardAnnouncementHandler = async (req, res) => {
+  try {
+    await deleteDashboardAnnouncement({
+      requester: req.user,
+      scope: req.params.scope,
+      id: req.params.id
+    });
+    return res.status(204).send();
+  } catch (error) {
+    const status = error.statusCode || 500;
+    if (status >= 500) {
+      console.error('[PersonalDashboardController] Announcement delete error:', error);
+    }
+    return res.status(status).json({
+      error: error.message || 'Error al eliminar el anuncio.'
     });
   }
 };

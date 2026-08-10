@@ -13,9 +13,7 @@ import {
   FileText,
   LayoutDashboard,
   Loader2,
-  Megaphone,
   MessageSquareText,
-  Send,
   Target,
   Trophy,
   UserRound,
@@ -30,6 +28,7 @@ import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
 import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
+import DashboardAnnouncements from './DashboardAnnouncements';
 
 const container = {
   hidden: { opacity: 0 },
@@ -67,6 +66,7 @@ const focusIconTone = {
 };
 
 const dashboardPanelClass = 'rounded-lg border-zinc-200/80 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/90 shadow-sm hover:shadow-sm hover:bg-white dark:hover:bg-zinc-900/90 dark:hover:border-zinc-800 dark:hover:ring-white/5';
+const balancedDashboardGridClass = 'grid grid-cols-1 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)] gap-5';
 
 const formatDate = (value) => {
   if (!value) return 'Sin fecha';
@@ -115,6 +115,7 @@ const sendJson = async (url, options = {}) => {
     console.error('[Dashboard] API error:', errorData);
     throw new Error(errorData.error || 'No se pudo guardar el cambio.');
   }
+  if (response.status === 204) return null;
   return response.json();
 };
 
@@ -164,9 +165,6 @@ const TaskRow = ({ task, showFeedback = false, onClick }) => (
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const [selectedUserId, setSelectedUserId] = useState(currentUser?.id || '');
-  const [announcementScope, setAnnouncementScope] = useState('GLOBAL');
-  const [announcementTargetUserId, setAnnouncementTargetUserId] = useState('');
-  const [announcementContent, setAnnouncementContent] = useState('');
   const [assignClientId, setAssignClientId] = useState('');
   const [assignMemberId, setAssignMemberId] = useState('');
   const [expandedFocusCards, setExpandedFocusCards] = useState({});
@@ -245,16 +243,30 @@ const Dashboard = () => {
   };
 
   const createAnnouncementMutation = useMutation({
-    mutationFn: () => sendJson(`${baseUrl}/api/dashboard/announcements`, {
+    mutationFn: (announcement) => sendJson(`${baseUrl}/api/dashboard/announcements`, {
       method: 'POST',
-      body: JSON.stringify({
-        scope: announcementScope,
-        targetUserId: announcementScope === 'MEMBER' ? announcementTargetUserId : undefined,
-        content: announcementContent
-      })
+      body: JSON.stringify(announcement)
     }),
     onSuccess: async () => {
-      setAnnouncementContent('');
+      await queryClient.invalidateQueries({ queryKey: ['personal-dashboard'] });
+    }
+  });
+
+  const updateAnnouncementMutation = useMutation({
+    mutationFn: (announcement) => sendJson(`${baseUrl}/api/dashboard/announcements/${announcement.scope}/${announcement.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ content: announcement.content })
+    }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['personal-dashboard'] });
+    }
+  });
+
+  const deleteAnnouncementMutation = useMutation({
+    mutationFn: (announcement) => sendJson(`${baseUrl}/api/dashboard/announcements/${announcement.scope}/${announcement.id}`, {
+      method: 'DELETE'
+    }),
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['personal-dashboard'] });
     }
   });
@@ -325,7 +337,7 @@ const Dashboard = () => {
         </Card>
       ) : (
         <>
-          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)] gap-5">
+          <motion.div variants={item} className={balancedDashboardGridClass}>
             <Card className={cn(dashboardPanelClass, 'p-0')}>
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 p-6">
                 <div className="flex items-center gap-4">
@@ -334,7 +346,6 @@ const Dashboard = () => {
                     <span className="absolute right-0 bottom-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white dark:border-zinc-900" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs uppercase font-semibold text-primary">Tu foco de hoy</p>
                     <h2 className="text-2xl font-semibold text-zinc-950 dark:text-white truncate">{selectedMember?.name || 'Equipo Brain'}</h2>
                     <p className="text-sm text-zinc-500 dark:text-zinc-400 truncate">{selectedMember?.role || 'Sin rol asignado'}</p>
                   </div>
@@ -394,7 +405,7 @@ const Dashboard = () => {
             </Card>
           </motion.div>
 
-          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)] gap-5 items-stretch">
+          <motion.div variants={item} className={cn(balancedDashboardGridClass, 'items-stretch')}>
             <Card className={cn(dashboardPanelClass, 'p-0 min-h-[470px]')}>
               <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-zinc-100 dark:border-zinc-800">
                 <div className="flex items-center gap-3">
@@ -526,8 +537,20 @@ const Dashboard = () => {
             </Card>
           </motion.div>
 
-          <motion.div variants={item}>
-            <Card className={cn(dashboardPanelClass, 'p-0')}>
+          <motion.div variants={item} className={balancedDashboardGridClass}>
+            <DashboardAnnouncements
+              announcements={dashboard.announcements}
+              teamMembers={teamMembers}
+              canManage={canManageDashboard}
+              onCreate={(announcement) => createAnnouncementMutation.mutateAsync(announcement)}
+              onUpdate={(announcement) => updateAnnouncementMutation.mutateAsync(announcement)}
+              onDelete={(announcement) => deleteAnnouncementMutation.mutateAsync(announcement)}
+              isSubmitting={createAnnouncementMutation.isPending || updateAnnouncementMutation.isPending || deleteAnnouncementMutation.isPending}
+              error={createAnnouncementMutation.error || updateAnnouncementMutation.error || deleteAnnouncementMutation.error}
+              className={dashboardPanelClass}
+            />
+
+            <Card className={cn(dashboardPanelClass, 'p-0 min-h-[360px]')}>
               <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-zinc-100 dark:border-zinc-800">
                 <div className="flex items-center gap-3">
                   <span className="w-9 h-9 rounded-lg bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center">
@@ -538,9 +561,15 @@ const Dashboard = () => {
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">Lo que viene después del foco inmediato</p>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" className="rounded-lg" onClick={() => { window.location.href = '/gestion'; }}>
-                  Abrir gestión
-                  <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-lg shrink-0"
+                  title="Abrir gestión"
+                  aria-label="Abrir gestión"
+                  onClick={() => { window.location.href = '/gestion'; }}
+                >
+                  <ArrowUpRight className="w-4 h-4" />
                 </Button>
               </div>
               <div className="p-5 space-y-2">
@@ -551,14 +580,8 @@ const Dashboard = () => {
             </Card>
           </motion.div>
 
-          <motion.div
-            variants={item}
-            className={cn(
-              'grid grid-cols-1 gap-5',
-              selectedMember?.isCommunityManager && 'xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]'
-            )}
-          >
-            {selectedMember?.isCommunityManager && (
+          {selectedMember?.isCommunityManager && (
+            <motion.div variants={item}>
               <Card className={cn(dashboardPanelClass, 'p-6')}>
                 <div className="flex items-center gap-3 mb-5">
                   <FileText className="w-5 h-5 text-primary" />
@@ -587,84 +610,11 @@ const Dashboard = () => {
                   <EmptyState icon={UserRound} title="Sin clientes asignados" description="Cuando admin o project manager asignen cuentas, aparecerá aquí tu mapa de liderazgo." />
                 )}
               </Card>
-            )}
-
-            <Card className={cn(dashboardPanelClass, 'p-6')}>
-              <div className="flex items-center gap-3 mb-5">
-                <Megaphone className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">Anuncios</h3>
-              </div>
-              <div className="space-y-3">
-                {dashboard.announcements?.length > 0 ? (
-                  dashboard.announcements.map((announcement) => (
-                    <div key={`${announcement.scope}-${announcement.id}`} className="rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/40 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-[10px] uppercase tracking-widest font-black text-primary">
-                          {announcement.scope === 'GLOBAL' ? 'Global' : 'Directo'}
-                        </span>
-                        <span className="text-[11px] text-zinc-400">{formatDate(announcement.createdAt)}</span>
-                      </div>
-                      <p className="text-sm text-zinc-700 dark:text-zinc-200 mt-2 leading-relaxed">{announcement.content}</p>
-                    </div>
-                  ))
-                ) : (
-                  <EmptyState icon={Megaphone} title="Sin anuncios" description="Los avisos del equipo aparecerán aquí." />
-                )}
-              </div>
-            </Card>
-          </motion.div>
+            </motion.div>
+          )}
 
           {canManageDashboard && (
-            <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              <Card className={cn(dashboardPanelClass, 'p-6')}>
-                <div className="flex items-center gap-3 mb-5">
-                  <Send className="w-5 h-5 text-primary" />
-                  <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">Crear anuncio</h3>
-                </div>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <select
-                      value={announcementScope}
-                      onChange={(event) => setAnnouncementScope(event.target.value)}
-                      className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    >
-                      <option value="GLOBAL">Todo el equipo</option>
-                      <option value="MEMBER">Una persona</option>
-                    </select>
-                    {announcementScope === 'MEMBER' && (
-                      <select
-                        value={announcementTargetUserId}
-                        onChange={(event) => setAnnouncementTargetUserId(event.target.value)}
-                        className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      >
-                        <option value="">Seleccionar persona</option>
-                        {teamMembers.filter((member) => member.userId).map((member) => (
-                          <option key={member.id} value={member.userId}>{member.name} - {member.role}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                  <textarea
-                    value={announcementContent}
-                    onChange={(event) => setAnnouncementContent(event.target.value)}
-                    rows={3}
-                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    placeholder="Mensaje para el equipo"
-                  />
-                  {createAnnouncementMutation.error && (
-                    <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">{createAnnouncementMutation.error.message}</p>
-                  )}
-                  <Button
-                    className="gap-2 rounded-lg"
-                    disabled={createAnnouncementMutation.isPending || !announcementContent.trim() || (announcementScope === 'MEMBER' && !announcementTargetUserId)}
-                    onClick={() => createAnnouncementMutation.mutate()}
-                  >
-                    {createAnnouncementMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    Publicar
-                  </Button>
-                </div>
-              </Card>
-
+            <motion.div variants={item}>
               <Card className={cn(dashboardPanelClass, 'p-6')}>
                 <div className="flex items-center gap-3 mb-5">
                   <UsersRound className="w-5 h-5 text-primary" />

@@ -22,6 +22,8 @@ import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 import LinkDropdown from '@/components/ui/LinkDropdown';
 import { linkify, cleanSystemMessage } from '@/utils/chatUtils.jsx';
 import RichTextEditor from '@/components/ui/RichTextEditor';
+import DateDivider from '@/components/ui/DateDivider';
+import { APPROVED_EMOJIS } from '@/constants/approvedEmojis';
 import RichCommentContent from '@/components/ui/RichCommentContent';
 import {
     Dialog,
@@ -40,21 +42,6 @@ import {
 
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
-
-const formatDateInSpanish = (dateStr) => {
-    try {
-        const date = new Date(dateStr);
-        const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
-        let formatted = new Intl.DateTimeFormat('es-ES', options).format(date);
-        return `— ${formatted.toUpperCase()} —`;
-    } catch (e) {
-        return '';
-    }
-};
-
-const APPROVED_EMOJIS = [
-    '🧠', '🚀', '👍', '😄', '💯', '🤩', '❤️', '🥲', '😂', '✌️', '🤯', '🤔', '😶', '👀', '🧨', '🗿', '💰', '🎂', '🥳', '🎉', '⏰', '🥇', '🥈', '🥉', '🔨', '👌', '📈', '📉', '⌛', '📍', '📌', '💡', '💣'
-];
 
 const EMPTY_TASK_FORM = {
     title: '',
@@ -1333,16 +1320,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             const dateStr = dateObj.toISOString().split('T')[0];
 
             if (dateStr !== lastDateStr) {
-                const headerText = formatDateInSpanish(comment.createdAt);
-                if (headerText) {
-                    rendered.push(
-                        <div key={`divider-${dateStr}`} className="py-4 flex items-center justify-center">
-                            <span className="text-[10px] font-black tracking-widest text-zinc-400 dark:text-zinc-500 uppercase select-none">
-                                {headerText}
-                            </span>
-                        </div>
-                    );
-                }
+                rendered.push(<DateDivider key={`divider-${dateStr}`} date={comment.createdAt} />);
                 lastDateStr = dateStr;
             }
 
