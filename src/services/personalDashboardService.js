@@ -49,6 +49,8 @@ const formatTask = (task) => ({
   status: task.status,
   dueDate: task.dueDate,
   completedAt: task.completedAt,
+  creatorId: task.creatorId || null,
+  assigneeId: task.assigneeId || null,
   isPriority: task.isPriority,
   priority: task.priority,
   isSpecial: task.isSpecial,
@@ -153,7 +155,8 @@ export const buildPersonalDashboard = ({ member, now = new Date() }) => {
       title: `${overdueTasks.length} ${overdueTasks.length === 1 ? 'tarea vencida' : 'tareas vencidas'}`,
       content: 'Revisa fechas, cierra lo que ya esté listo o pide apoyo para desbloquear lo pendiente.',
       actionLabel: 'Ver tareas vencidas',
-      actionUrl: '/gestion'
+      actionUrl: '/gestion',
+      items: overdueTasks.slice(0, 5).map(formatTask)
     });
   }
   if (returnedTasks.length > 0) {
@@ -164,11 +167,17 @@ export const buildPersonalDashboard = ({ member, now = new Date() }) => {
       title: `${returnedTasks.length} ${returnedTasks.length === 1 ? 'corrección pendiente' : 'correcciones pendientes'}`,
       content: 'Prioriza las devoluciones para recuperar la racha de calidad y cerrar el ciclo con contexto.',
       actionLabel: 'Revisar devoluciones',
-      actionUrl: '/gestion'
+      actionUrl: '/gestion',
+      items: returnedTasks.slice(0, 5).map((task) => ({
+        ...formatTask(task),
+        lastFeedback: newestExternalFeedback(task, member.userId)
+      }))
     });
   }
 
-  const undocumentedTasks = activeTasks.filter((task) => (task.taskComments || []).length === 0);
+  const undocumentedTasks = isCommunityManager
+    ? activeTasks.filter((task) => task.creatorId === member.userId && (task.taskComments || []).length === 0)
+    : [];
   const clientsNeedingAttention = assignedClients.filter((client) => (client.healthScore ?? 100) < 70 || client.returnedTasks > 0 || client.overdueTasks > 0);
   const clientsWithoutPlan = assignedClients.filter((client) => !client.contentPlanStatus || client.contentStatus === 'SIN_PARRILLA');
 
@@ -204,7 +213,14 @@ export const buildPersonalDashboard = ({ member, now = new Date() }) => {
       title: `${clientsNeedingAttention.length} ${clientsNeedingAttention.length === 1 ? 'cliente pide liderazgo' : 'clientes piden liderazgo'}`,
       content: 'Lleva a la proxima revision una propuesta, no solo una lista de pendientes: objetivo, insight y siguiente accion.',
       actionLabel: 'Ver mis clientes',
-      actionUrl: '/clientes'
+      actionUrl: '/clientes',
+      items: clientsNeedingAttention.slice(0, 5).map((client) => ({
+        id: client.id,
+        title: client.name,
+        status: `Salud ${client.healthScore ?? '-'}`,
+        dueDate: null,
+        client
+      }))
     });
   }
 
@@ -216,19 +232,30 @@ export const buildPersonalDashboard = ({ member, now = new Date() }) => {
       title: `${clientsWithoutPlan.length} ${clientsWithoutPlan.length === 1 ? 'parrilla por fortalecer' : 'parrillas por fortalecer'}`,
       content: 'Revisa objetivos, mercado y calendario para anticipar necesidades de contenido antes de que se vuelvan urgencias.',
       actionLabel: 'Abrir parrillas',
-      actionUrl: '/parrillas'
+      actionUrl: '/parrillas',
+      items: clientsWithoutPlan.slice(0, 5).map((client) => ({
+        id: client.id,
+        title: client.name,
+        status: client.contentPlanStatus || 'SIN_PARRILLA',
+        dueDate: null,
+        client
+      }))
     });
   }
 
   if (undocumentedTasks.length > 0) {
+    const taskLabel = undocumentedTasks.length === 1
+      ? '1 tarea creada por ti no tiene comentarios'
+      : `${undocumentedTasks.length} tareas creadas por ti no tienen comentarios`;
     focusCards.push({
       id: 'habit-document-progress',
       type: 'HABITO',
       severity: 'info',
       title: 'Hay tareas sin contexto',
-      content: `${undocumentedTasks.length} tareas activas no tienen comentarios. Un update breve evita fricción operativa.`,
+      content: `${taskLabel}. Un update breve evita fricción operativa.`,
       actionLabel: 'Actualizar contexto',
-      actionUrl: '/gestion'
+      actionUrl: '/gestion',
+      items: undocumentedTasks.slice(0, 5).map(formatTask)
     });
   }
 

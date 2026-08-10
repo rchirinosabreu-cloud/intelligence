@@ -17,6 +17,8 @@ const makeTask = (overrides = {}) => ({
   isPriority: overrides.isPriority || false,
   priority: overrides.priority || null,
   isSpecial: overrides.isSpecial || false,
+  creatorId: overrides.creatorId || null,
+  assigneeId: overrides.assigneeId || null,
   updatedAt: overrides.updatedAt || fixedNow,
   client: overrides.client || { id: 'client-1', name: 'Cliente Uno', slug: 'cliente-uno', logoUrl: null, healthRecords: [{ score: 72 }] },
   taskComments: overrides.taskComments || []
@@ -114,8 +116,56 @@ test('buildPersonalDashboard recommends a documentation habit when assigned work
     }
   });
 
-  assert.equal(dashboard.weeklyHabit.id, 'document-progress');
-  assert.equal(dashboard.focusCards.some((card) => card.type === 'HABITO'), true);
+  assert.notEqual(dashboard.weeklyHabit.id, 'document-progress');
+  assert.equal(dashboard.focusCards.some((card) => card.id === 'habit-document-progress'), false);
+});
+
+test('buildPersonalDashboard only asks community managers to document tasks they created', () => {
+  const dashboard = buildPersonalDashboard({
+    now: fixedNow,
+    member: {
+      id: 'member-cm',
+      userId: 'user-cm',
+      name: 'Camila CM',
+      role: 'Community Manager',
+      avatarUrl: null,
+      responsibleClients: [
+        {
+          id: 'client-1',
+          name: 'Marca Norte',
+          slug: 'marca-norte',
+          logoUrl: null,
+          healthRecords: [{ score: 86, contentStatus: 'APROBADA', reportStatus: 'COMPLETA' }],
+          contentPlans: [{ id: 'plan-1', status: 'ACTIVO', month: 8, year: 2026, updatedAt: fixedNow }],
+          nativeTasks: []
+        }
+      ],
+      nativeTasks: [
+        makeTask({
+          id: 'created-without-context',
+          title: 'Brief campana Q3',
+          creatorId: 'user-cm',
+          assigneeId: 'member-other',
+          dueDate: new Date('2026-08-09T12:00:00.000Z'),
+          taskComments: []
+        }),
+        makeTask({
+          id: 'assigned-without-context',
+          title: 'Diseno carrusel',
+          creatorId: 'pm-user',
+          assigneeId: 'member-cm',
+          dueDate: new Date('2026-08-09T12:00:00.000Z'),
+          taskComments: []
+        })
+      ]
+    }
+  });
+
+  const habitCard = dashboard.focusCards.find((card) => card.id === 'habit-document-progress');
+  assert.equal(habitCard.type, 'HABITO');
+  assert.match(habitCard.content, /1 tarea/);
+  assert.equal(habitCard.items.length, 1);
+  assert.equal(habitCard.items[0].id, 'created-without-context');
 });
 
 test('buildPersonalDashboard frames community manager work around assigned clients', () => {
@@ -162,4 +212,5 @@ test('buildPersonalDashboard frames community manager work around assigned clien
   assert.match(dashboard.weeklyHabit.title, /propuestas/i);
   assert.equal(dashboard.focusCards.some((card) => card.id === 'cm-client-health'), true);
   assert.equal(dashboard.focusCards.some((card) => card.id === 'cm-content-plan'), true);
+  assert.ok(dashboard.focusCards.find((card) => card.id === 'cm-client-health').items.length > 0);
 });

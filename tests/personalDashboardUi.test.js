@@ -30,3 +30,11 @@ test('Dashboard includes community manager account leadership widgets', () => {
   assert.match(source, /\/api\/dashboard\/clients\/.*responsible/, 'Dashboard should assign client owners through the dashboard API.');
   assert.match(source, /Community Manager/i, 'Dashboard should filter assignment targets by Community Manager role.');
 });
+
+test('Dashboard focus cards can reveal the tasks behind each signal', () => {
+  const source = readFileSync('src/components/modules/Dashboard.jsx', 'utf8');
+
+  assert.match(source, /expandedFocusCards/, 'Dashboard should track expanded focus cards.');
+  assert.match(source, /focusCard\.items/, 'Dashboard should render related focus-card tasks.');
+  assert.match(source, /Ver tareas/, 'Focus cards should expose a task toggle.');
+});

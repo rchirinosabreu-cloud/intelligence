@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
   CircleDot,
   Clock3,
   Compass,
@@ -146,6 +147,7 @@ const Dashboard = () => {
   const [announcementContent, setAnnouncementContent] = useState('');
   const [assignClientId, setAssignClientId] = useState('');
   const [assignMemberId, setAssignMemberId] = useState('');
+  const [expandedFocusCards, setExpandedFocusCards] = useState({});
 
   const queryClient = useQueryClient();
   const baseUrl = getApiBaseUrl();
@@ -185,6 +187,13 @@ const Dashboard = () => {
   );
 
   const selectedMember = dashboard?.member;
+
+  const toggleFocusCard = (focusCardId) => {
+    setExpandedFocusCards((current) => ({
+      ...current,
+      [focusCardId]: !current[focusCardId]
+    }));
+  };
 
   const createAnnouncementMutation = useMutation({
     mutationFn: () => sendJson(`${baseUrl}/api/dashboard/announcements`, {
@@ -335,6 +344,25 @@ const Dashboard = () => {
                       </div>
                       <Zap className="w-4 h-4 shrink-0 mt-1" />
                     </div>
+                    {focusCard.items?.length > 0 && (
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleFocusCard(focusCard.id)}
+                          className="inline-flex items-center gap-1.5 text-xs font-black opacity-80 hover:opacity-100 transition-opacity"
+                        >
+                          Ver tareas
+                          <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', expandedFocusCards[focusCard.id] && 'rotate-180')} />
+                        </button>
+                        {expandedFocusCards[focusCard.id] && (
+                          <div className="mt-3 space-y-2">
+                            {focusCard.items.map((task) => (
+                              <TaskRow key={task.id} task={task} showFeedback={Boolean(task.lastFeedback)} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
