@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { PlayCircle } from 'lucide-react';
+import { PlayCircle } from '@/components/ui/icons';
 import FirefliesPanel from './FirefliesPanel';
 import MultiFileUpload from './MultiFileUpload';
 import FileList from './FileList';

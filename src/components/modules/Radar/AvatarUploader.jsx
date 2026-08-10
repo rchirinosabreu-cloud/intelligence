@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { Camera, Upload, Loader2 } from 'lucide-react';
+import { Camera, Upload, Loader2 } from '@/components/ui/icons';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 import { useDropzone } from 'react-dropzone';

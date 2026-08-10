@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Plus, Link as LinkIcon, Trash2, Loader2, ExternalLink } from 'lucide-react';
+import { Plus, Link as LinkIcon, Trash2, Loader2, ExternalLink } from '@/components/ui/icons';
 import * as Dialog from '@radix-ui/react-dialog';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 

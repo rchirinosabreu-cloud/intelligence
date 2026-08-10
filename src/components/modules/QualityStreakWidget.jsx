@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Flame, Trophy, Loader2 } from 'lucide-react';
+import { Flame, Trophy, Loader2 } from '@/components/ui/icons';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
 

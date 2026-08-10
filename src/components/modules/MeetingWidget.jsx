@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Video, Calendar, ExternalLink, Loader2, Clock } from 'lucide-react';
+import { Video, Calendar, ExternalLink, Loader2, Clock } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 

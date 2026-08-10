@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Filter, Loader2, CalendarDays } from 'lucide-react';
+import { X, Search, Filter, Loader2, CalendarDays } from '@/components/ui/icons';
 import { Card } from '@/components/ui/Card';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';

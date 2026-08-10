@@ -17,7 +17,7 @@ import {
   List,
   ListOrdered,
   Underline as UnderlineIcon,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { runEditorFormat, runEditorHeadingFormat } from './editorFormatting';
 import { cn } from '@/lib/utils';
 import ComposerActionLayout from '@/components/ui/ComposerActionLayout';

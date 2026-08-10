@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Lock, LockKeyhole } from 'lucide-react';
+import { ArrowLeft, Lock, LockKeyhole } from '@/components/ui/icons';
 import { useNavigate } from 'react-router-dom';
 import { getApiBaseUrl } from '../lib/apiBaseUrl';
 import { useAuth } from '../context/AuthContext';

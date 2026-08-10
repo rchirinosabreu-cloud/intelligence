@@ -5,7 +5,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from '@/components/ui/dialog';
-import { Loader2 } from 'lucide-react';
+import { Loader2 } from '@/components/ui/icons';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 

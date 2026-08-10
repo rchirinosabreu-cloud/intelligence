@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Card } from '@/components/ui/Card';
-import { Users, Activity, Target, Zap, TrendingUp, AlertCircle, ChevronRight, X, Loader2, Sparkles, Filter, Calendar, BarChart3, LayoutGrid, FileText, Camera, Upload, Radar } from 'lucide-react';
+import { Users, Activity, Target, Zap, TrendingUp, AlertCircle, ChevronRight, X, Loader2, Sparkles, Filter, Calendar, BarChart3, LayoutGrid, FileText, Camera, Upload, Radar } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ScatterChart, Scatter, ZAxis, LabelList } from 'recharts';
 import TeamAvatar from '@/components/ui/TeamAvatar';

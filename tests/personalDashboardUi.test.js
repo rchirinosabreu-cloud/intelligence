@@ -23,7 +23,11 @@ test('Dashboard presents adoption-oriented sections', () => {
   assert.match(source, /CompletedTasksHistoryModal/, 'Recent achievements should use the original full-history modal.');
   assert.match(source, /setShowHistoryModal/, 'Recent achievements should keep the original modal state.');
   assert.doesNotMatch(source, /showAchievementsHistory/, 'Recent achievements should not use the rebuilt inline history.');
-  assert.match(source, /xl:grid-cols-2/, 'Radar and recent achievements should share an equal-width row.');
+  assert.match(
+    source,
+    /xl:grid-cols-\[minmax\(0,3fr\)_minmax\(0,1fr\)\]/,
+    'Radar should use 75% of the row and recent achievements 25%.'
+  );
 });
 
 test('Dashboard includes community manager account leadership widgets', () => {
@@ -35,6 +39,11 @@ test('Dashboard includes community manager account leadership widgets', () => {
   assert.match(source, /\/api\/dashboard\/announcements/, 'Dashboard should create dashboard announcements through the dashboard API.');
   assert.match(source, /\/api\/dashboard\/clients\/.*responsible/, 'Dashboard should assign client owners through the dashboard API.');
   assert.match(source, /Community Manager/i, 'Dashboard should filter assignment targets by Community Manager role.');
+  assert.match(
+    source,
+    /selectedMember\?\.isCommunityManager\s*&&/,
+    'Mis clientes should render only for the selected Community Manager.'
+  );
 });
 
 test('Dashboard focus cards can reveal the tasks behind each signal', () => {

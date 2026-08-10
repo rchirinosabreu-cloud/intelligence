@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Clock, Trash2 } from 'lucide-react';
+import { Clock, Trash2 } from '@/components/ui/icons';
 import { format } from 'date-fns';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';

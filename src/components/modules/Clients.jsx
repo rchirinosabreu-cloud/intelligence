@@ -5,7 +5,7 @@ import {
   Thermometer, User as UserIcon, MessageSquare, Activity,
   ExternalLink, CheckCircle2, Settings2, Layout, ShieldCheck,
   AlertTriangle, Clock, X
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';

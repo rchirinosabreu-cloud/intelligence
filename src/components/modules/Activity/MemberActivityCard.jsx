@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Clock, User, Trash2 } from 'lucide-react';
+import { Clock, User, Trash2 } from '@/components/ui/icons';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 

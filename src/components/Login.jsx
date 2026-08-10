@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ArrowLeft, KeyRound, Lock, Mail } from 'lucide-react';
+import { ArrowLeft, KeyRound, Lock, Mail } from '@/components/ui/icons';
 import { getApiBaseUrl } from '../lib/apiBaseUrl';
 
 const Login = ({ onLogin }) => {

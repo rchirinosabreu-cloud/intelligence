@@ -8,7 +8,7 @@ import {
   X,
   Palette,
   Globe
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { motion } from 'framer-motion';
 
 const ReferenceCard = ({ item, isMobile, zoom = 1, onDelete, onUpdate, onDragStop }) => {

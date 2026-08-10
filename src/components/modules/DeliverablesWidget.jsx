@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Download, CloudUpload, FileText, FileVideo, FileAudio, File, Loader2, Trash2, Search, Eye, X, ChevronDown, ChevronRight, Maximize2, ArrowRight, Image } from 'lucide-react';
+import { Download, CloudUpload, FileText, FileVideo, FileAudio, File, Loader2, Trash2, Search, Eye, X, ChevronDown, ChevronRight, Maximize2, ArrowRight, Image } from '@/components/ui/icons';
 import { useDropzone } from 'react-dropzone';
 import { cn } from '@/lib/utils';
 import axios from 'axios';

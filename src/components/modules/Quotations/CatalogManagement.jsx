@@ -12,7 +12,7 @@ import {
     Loader2,
     LayoutGrid,
     Tag
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import {
     Dialog,
     DialogContent,

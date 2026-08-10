@@ -26,7 +26,7 @@ import {
     Zap,
     ClipboardList,
     Plus
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';

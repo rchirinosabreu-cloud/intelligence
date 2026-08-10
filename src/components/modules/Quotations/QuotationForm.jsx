@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { Search, Plus, Trash2, Copy, Check, DollarSign, FileText, Globe, Building2, User as UserIcon, ArrowLeft, Loader2 } from 'lucide-react';
+import { Search, Plus, Trash2, Copy, Check, DollarSign, FileText, Globe, Building2, User as UserIcon, ArrowLeft, Loader2 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/Card';
 import { toast } from 'react-hot-toast';

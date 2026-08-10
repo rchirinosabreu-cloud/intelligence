@@ -1,7 +1,7 @@
 import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Coffee, Video, Zap, Lock, Monitor, User, Trash2 } from 'lucide-react';
+import { Coffee, Video, Zap, Lock, Monitor, User, Trash2 } from '@/components/ui/icons';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';

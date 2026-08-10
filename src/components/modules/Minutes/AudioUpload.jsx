@@ -2,7 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
-import { Mic, FileAudio, Loader2, CheckCircle2 } from 'lucide-react';
+import { Mic, FileAudio, Loader2, CheckCircle2 } from '@/components/ui/icons';
 import { processAudio } from '../../../utils/audioProcessor';
 import toast from 'react-hot-toast';
 

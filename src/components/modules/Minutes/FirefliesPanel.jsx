@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Video, Calendar, Clock, Loader2, AlertCircle, RefreshCcw } from 'lucide-react';
+import { Video, Calendar, Clock, Loader2, AlertCircle, RefreshCcw } from '@/components/ui/icons';
 import frontendApiService from '../../../services/frontendApiService';
 import { Button } from './ui/button';
 

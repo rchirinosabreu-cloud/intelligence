@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/use-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import AvatarUploader from './Radar/AvatarUploader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
-import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, Trash2, Edit2, X, Check, Calendar, Target, Award, Info, Camera, Zap, AlertTriangle, Clock, MessageSquare, ChevronDown, Users } from 'lucide-react';
+import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, Trash2, Edit2, X, Check, Calendar, Target, Award, Info, Camera, Zap, AlertTriangle, Clock, MessageSquare, ChevronDown, Users } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 

@@ -3,7 +3,7 @@ import {
   Loader2, Save, Activity, Settings2, Clock,
   MessageSquare, CheckCircle2, AlertCircle, Layout,
   ShieldCheck, AlertTriangle
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';

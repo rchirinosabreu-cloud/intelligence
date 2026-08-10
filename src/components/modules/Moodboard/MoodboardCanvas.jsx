@@ -18,7 +18,7 @@ import {
   ZoomIn,
   ZoomOut,
   Target
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';

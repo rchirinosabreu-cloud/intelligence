@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Database, Settings } from 'lucide-react';
+import { FileText, Database, Settings } from '@/components/ui/icons';
 import QuotationList from './QuotationList';
 import CatalogManagement from './CatalogManagement';
 

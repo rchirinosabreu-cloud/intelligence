@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Mic, Sparkles, Paperclip, MoreVertical, StopCircle, MessageSquare } from 'lucide-react';
+import { Send, Bot, User, Mic, Sparkles, Paperclip, MoreVertical, StopCircle, MessageSquare } from '@/components/ui/icons';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import { cn } from '@/lib/utils';

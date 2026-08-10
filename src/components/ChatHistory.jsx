@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, Plus, Trash2, Search, Menu, History } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, Search, Menu, History } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

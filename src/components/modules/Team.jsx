@@ -1,6 +1,6 @@
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useEffect } from 'react';
-import { Plus, MoreVertical, Edit2, UserX, UserCheck, Eye, Users } from 'lucide-react';
+import { Plus, MoreVertical, Edit2, UserX, UserCheck, Eye, Users } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { getApiBaseUrl } from '../../lib/apiBaseUrl';

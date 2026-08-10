@@ -11,7 +11,7 @@ import {
   ExternalLink,
   Loader2,
   Filter
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';

@@ -12,7 +12,7 @@ import {
     TrendingUp, TrendingDown, DollarSign, Wallet, ShieldCheck, AlertCircle,
     Users, ChevronDown, ChevronUp, Loader2, Sparkles, Calendar, PieChart as PieIcon, ListCollapse, ListCollapse as ExpandIcon,
     UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2, Link2
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { Navigate } from 'react-router-dom';

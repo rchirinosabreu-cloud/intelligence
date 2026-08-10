@@ -99,9 +99,10 @@ test('buildPersonalDashboard returns actionable focus cards for overdue and retu
   assert.match(dashboard.focusCards[1].title, /correcci/);
   assert.equal(dashboard.todayTasks.length, 1);
   assert.equal(dashboard.returnedTasks[0].lastFeedback, 'Hace falta aterrizar el CTA.');
+  assert.deepEqual(dashboard.clients, [], 'Non-community-manager dashboards should not expose a client widget payload.');
 });
 
-test('buildPersonalDashboard accepts global achievements history apart from selected member tasks', () => {
+test('buildPersonalDashboard keeps the achievement feed global and the daily stat personal', () => {
   const dashboard = buildPersonalDashboard({
     now: fixedNow,
     globalAchievements: [
@@ -126,14 +127,22 @@ test('buildPersonalDashboard accepts global achievements history apart from sele
       name: 'Sara Brain',
       role: 'Project Manager',
       avatarUrl: null,
-      nativeTasks: []
+      nativeTasks: [
+        makeTask({
+          id: 'personal-done-yesterday',
+          title: 'Entrega personal anterior',
+          status: 'REALIZADA',
+          completedAt: new Date('2026-08-07T15:00:00.000Z'),
+          assignee: { id: 'member-1', name: 'Sara Brain', role: 'Project Manager', avatarUrl: null }
+        })
+      ]
     }
   });
 
   assert.equal(dashboard.achievements.length, 2);
   assert.equal(dashboard.achievements[0].id, 'global-done-1');
   assert.equal(dashboard.achievements[0].assignee.name, 'Helen Hernandez');
-  assert.equal(dashboard.stats.completedToday, 1);
+  assert.equal(dashboard.stats.completedToday, 0);
 });
 
 test('buildPersonalDashboard recommends a documentation habit when assigned work lacks comments', () => {

@@ -7,7 +7,7 @@ import {
   Plus, Calendar, Filter, Search, MoreHorizontal,
   ChevronRight, ChevronDown, Loader2, Trash2, Eye,
   Folder, Grid, List, Clock
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
 import ClientAvatar from '@/components/ui/ClientAvatar';

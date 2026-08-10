@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
-import { Loader2, Activity, AlertTriangle, CheckCircle2, Wrench, FolderOpen, HelpCircle } from 'lucide-react';
+import { Loader2, Activity, AlertTriangle, CheckCircle2, Wrench, FolderOpen, HelpCircle } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 

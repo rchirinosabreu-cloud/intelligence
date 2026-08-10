@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles, AlertCircle, Layers, Info } from 'lucide-react';
+import { Sparkles, AlertCircle, Layers, Info } from '@/components/ui/icons';
 import GeneralSummary from './GeneralSummary';
 import CompleteAnalysis from './CompleteAnalysis';
 

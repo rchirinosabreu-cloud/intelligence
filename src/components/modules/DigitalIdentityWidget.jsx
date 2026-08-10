@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card } from '@/components/ui/Card';
-import { Palette, Image, Type, BookOpen } from 'lucide-react';
+import { Palette, Image, Type, BookOpen } from '@/components/ui/icons';
 
 const DigitalIdentityWidget = () => {
     const items = [

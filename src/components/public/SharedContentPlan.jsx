@@ -6,7 +6,7 @@ import {
   CheckCircle2, Clock, AlertCircle, Loader2, Calendar,
   Video, Image as ImageIcon, MessageSquare, Check, X, Send,
   ExternalLink
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { toast } from 'react-hot-toast';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 

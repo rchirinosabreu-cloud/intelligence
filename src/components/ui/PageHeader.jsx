@@ -1,6 +1,6 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight } from '@/components/ui/icons';
 import { Link } from 'react-router-dom';
 
 const PageHeader = ({

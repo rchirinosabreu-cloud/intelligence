@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Zap, Star, Link as LinkIcon } from 'lucide-react';
+import { Loader2, Zap, Star, Link as LinkIcon } from '@/components/ui/icons';
 import { motion } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';

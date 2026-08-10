@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ExternalLink, Link as LinkIcon } from 'lucide-react';
+import { ChevronDown, ExternalLink, Link as LinkIcon } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { sanitizeUrl } from '@/utils/urlHelper';
 

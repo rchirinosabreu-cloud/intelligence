@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { FileText, Mic, File, Trash2, Music, FileSpreadsheet } from 'lucide-react';
+import { FileText, Mic, File, Trash2, Music, FileSpreadsheet } from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/button';
 

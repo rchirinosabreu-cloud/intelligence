@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
-import { Menu, User, LogOut, Settings, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye } from 'lucide-react';
+import { Menu, User, LogOut, Settings, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye } from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Link, useNavigate } from 'react-router-dom';

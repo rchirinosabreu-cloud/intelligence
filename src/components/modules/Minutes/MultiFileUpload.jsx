@@ -1,7 +1,7 @@
 
 import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { UploadCloud, Loader2 } from 'lucide-react';
+import { UploadCloud, Loader2 } from '@/components/ui/icons';
 import toast from 'react-hot-toast';
 import { processAudio } from '../../../utils/audioProcessor';
 import { processDocument } from '../../../utils/documentProcessor';

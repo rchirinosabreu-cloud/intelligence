@@ -19,7 +19,7 @@ import {
     Filter,
     Loader2,
     Pencil
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';

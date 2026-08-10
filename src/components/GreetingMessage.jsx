@@ -5,7 +5,7 @@ import {
   AlertTriangle, ArrowUpCircle, Video, Palette, CheckCircle,
   Image, Minimize2, BarChart2, TrendingUp, Lightbulb, File,
   Users, CheckSquare, Clock
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 

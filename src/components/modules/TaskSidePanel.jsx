@@ -7,7 +7,7 @@ import {
     LayoutGrid, Calendar, User, Trash2, Plus, ClipboardList,
     FileText, Database, Paperclip, ImageIcon, Eye, Download, Check,
     MoreHorizontal
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';

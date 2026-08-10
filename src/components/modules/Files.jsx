@@ -1,7 +1,7 @@
 import React from 'react';
 import { MOCK_DATA } from '@/data';
 import { Card } from '@/components/ui/Card';
-import { FileText, FileSpreadsheet, FileArchive, Folder, Image, MoreVertical, Presentation, File as FileIcon } from 'lucide-react';
+import { FileText, FileSpreadsheet, FileArchive, Folder, Image, MoreVertical, Presentation, File as FileIcon } from '@/components/ui/icons';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 

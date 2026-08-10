@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X } from 'lucide-react';
+import { X } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 
 /**

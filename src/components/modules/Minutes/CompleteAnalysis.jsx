@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Brain, Loader2, AlertTriangle, CheckCircle, ExternalLink } from 'lucide-react';
+import { Brain, Loader2, AlertTriangle, CheckCircle, ExternalLink } from '@/components/ui/icons';
 import { Button } from './ui/button';
 import frontendApiService from '../../../services/frontendApiService';
 import { buildAnalysisReportContent } from '../../../utils/reportContent';

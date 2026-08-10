@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Layout } from 'lucide-react';
+import { ArrowLeft, Layout } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import FlowWidget from './FlowWidget';

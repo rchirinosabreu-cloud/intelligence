@@ -12,7 +12,7 @@ import {
     Trash2,
     MessageSquare,
     Send
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import {
     Dialog,
     DialogContent,

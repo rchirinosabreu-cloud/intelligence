@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flame, Loader2 } from 'lucide-react';
+import { Flame, Loader2 } from '@/components/ui/icons';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useQuery } from '@tanstack/react-query';
 

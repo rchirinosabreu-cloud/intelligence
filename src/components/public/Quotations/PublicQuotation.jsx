@@ -2,7 +2,7 @@ import React from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { Calendar, Clock, Download, MessageCircle, AlertCircle, CheckCircle2, ChevronRight, FileText } from 'lucide-react';
+import { Calendar, Clock, Download, MessageCircle, AlertCircle, CheckCircle2, ChevronRight, FileText } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';

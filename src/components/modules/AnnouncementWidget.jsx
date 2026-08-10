@@ -2,7 +2,7 @@
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Trash2, Megaphone, AlertCircle, Trophy, Info, X, Loader2, ArrowRight } from 'lucide-react';
+import { Send, Trash2, Megaphone, AlertCircle, Trophy, Info, X, Loader2, ArrowRight } from '@/components/ui/icons';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';

@@ -1,6 +1,6 @@
 
 import React, { useMemo } from 'react';
-import { User } from 'lucide-react';
+import { User } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { getDeterministicColor, getClientInitials } from '@/utils/avatarUtils';
 

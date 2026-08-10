@@ -27,7 +27,7 @@ import {
   ExternalLink,
   Monitor,
   Eye
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { toast } from 'react-hot-toast';

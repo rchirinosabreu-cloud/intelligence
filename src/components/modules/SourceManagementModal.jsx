@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Globe, Database, Mail, Layout, Loader2, Link as LinkIcon, ShieldCheck, AlertCircle, Info } from 'lucide-react';
+import { X, Plus, Trash2, Globe, Database, Mail, Layout, Loader2, Link as LinkIcon, ShieldCheck, AlertCircle, Info } from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { toast } from 'react-hot-toast';

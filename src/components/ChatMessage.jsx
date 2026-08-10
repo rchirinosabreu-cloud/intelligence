@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Copy, Check, Brain, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
+import { Copy, Check, Brain, ChevronDown, ChevronRight, Sparkles } from '@/components/ui/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';

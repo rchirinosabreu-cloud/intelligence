@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ArrowDownRight, ArrowUpRight, Lightbulb, Sparkles } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Lightbulb, Sparkles } from '@/components/ui/icons';
 import { formatReportMetric, getRenderableTimeSeries } from '@/utils/reportMetrics';
 
 const CHART_COLORS = ['#8b3dff', '#2563eb', '#10b981', '#ec4899'];

@@ -2,7 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
-import { Upload, FileText, File, Loader2, CheckCircle2 } from 'lucide-react';
+import { Upload, FileText, File, Loader2, CheckCircle2 } from '@/components/ui/icons';
 import { processDocument } from '../../../utils/documentProcessor';
 import toast from 'react-hot-toast';
 

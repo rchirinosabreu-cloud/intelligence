@@ -147,14 +147,13 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
     })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
     .slice(0, 8);
-  const memberAchievements = tasks
+  const memberAchievementsToday = tasks
     .filter((task) => task.status === 'REALIZADA' && isSameBogotaDay(toDate(task.completedAt), now))
-    .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0))
-    .slice(0, 8);
+    .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0));
+  const memberAchievements = memberAchievementsToday.slice(0, 8);
   const achievements = (Array.isArray(globalAchievements) ? globalAchievements : memberAchievements)
     .filter((task) => task.status === 'REALIZADA')
     .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0));
-  const achievementsToday = achievements.filter((task) => isSameBogotaDay(toDate(task.completedAt), now));
 
   const focusCards = [];
   if (overdueTasks.length > 0) {
@@ -296,7 +295,7 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
       returned: returnedTasks.length,
       priority: activeTasks.filter((task) => task.isPriority || task.priority === 'URGENTE' || task.priority === 'ALTA').length,
       dueToday: todayTasks.length,
-      completedToday: achievementsToday.length
+      completedToday: memberAchievementsToday.length
     },
     focusCards: focusCards.slice(0, 5),
     todayTasks: todayTasks.map(formatTask),
@@ -307,7 +306,7 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
     })),
     upcomingTasks: upcomingTasks.map(formatTask),
     achievements: achievements.map(formatTask),
-    clients: assignedClients.length > 0 ? assignedClients : buildClientSummaries(activeTasks, now),
+    clients: isCommunityManager ? assignedClients : [],
     weeklyHabit,
     announcements: member.announcements || []
   };

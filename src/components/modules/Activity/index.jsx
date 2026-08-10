@@ -3,7 +3,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import ActivityMap from './ActivityMap';
 import OperationalCalendar from './OperationalCalendar';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Map, Calendar } from 'lucide-react';
+import { Map, Calendar } from '@/components/ui/icons';
 
 const Activity = () => {
   return (

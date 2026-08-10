@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Image as ImageIcon, PlusCircle, Globe, ArrowRight } from 'lucide-react';
+import { Send, Image as ImageIcon, PlusCircle, Globe, ArrowRight } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/use-toast';

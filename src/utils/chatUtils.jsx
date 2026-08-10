@@ -1,6 +1,6 @@
 import React from 'react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { FileText, Music, FileSpreadsheet, File, Download, Image as ImageIcon, Eye } from 'lucide-react';
+import { FileText, Music, FileSpreadsheet, File, Download, Image as ImageIcon, Eye } from '@/components/ui/icons';
 
 /**
  * Helper to determine file type based on extension

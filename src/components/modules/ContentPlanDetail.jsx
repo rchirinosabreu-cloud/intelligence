@@ -9,7 +9,7 @@ import {
   Calendar, User, LayoutGrid, FileText, Instagram, Facebook, Video, Image as ImageIcon,
   Edit2, Check, AlertCircle, Sparkles, Users, UserCheck, StickyNote, ChevronUp, Share2,
   MessageSquare, Table2, UploadCloud
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { toast } from 'react-hot-toast';

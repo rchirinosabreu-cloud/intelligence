@@ -21,10 +21,9 @@ import {
   UserRound,
   UsersRound,
   Zap
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/button';
-import PageHeader from '@/components/ui/PageHeader';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { useAuth } from '@/context/AuthContext';
@@ -46,19 +45,28 @@ const item = {
 };
 
 const statConfig = [
-  { key: 'active', label: 'Activas', icon: CircleDot, tone: 'text-sky-600 dark:text-sky-400' },
-  { key: 'dueToday', label: 'Para hoy', icon: CalendarClock, tone: 'text-violet-600 dark:text-violet-400' },
-  { key: 'overdue', label: 'Vencidas', icon: AlertTriangle, tone: 'text-amber-600 dark:text-amber-400' },
-  { key: 'returned', label: 'Devueltas', icon: MessageSquareText, tone: 'text-rose-600 dark:text-rose-400' },
-  { key: 'completedToday', label: 'Logros hoy', icon: Trophy, tone: 'text-emerald-600 dark:text-emerald-400' }
+  { key: 'active', label: 'Activas', icon: CircleDot, tone: 'text-sky-600 dark:text-sky-400', surface: 'bg-sky-50 dark:bg-sky-500/10' },
+  { key: 'dueToday', label: 'Para hoy', icon: CalendarClock, tone: 'text-violet-600 dark:text-violet-400', surface: 'bg-violet-50 dark:bg-violet-500/10' },
+  { key: 'overdue', label: 'Vencidas', icon: AlertTriangle, tone: 'text-amber-600 dark:text-amber-400', surface: 'bg-amber-50 dark:bg-amber-500/10' },
+  { key: 'returned', label: 'Devueltas', icon: MessageSquareText, tone: 'text-rose-600 dark:text-rose-400', surface: 'bg-rose-50 dark:bg-rose-500/10' },
+  { key: 'completedToday', label: 'Logros hoy', icon: Trophy, tone: 'text-emerald-600 dark:text-emerald-400', surface: 'bg-emerald-50 dark:bg-emerald-500/10' }
 ];
 
 const cardTone = {
-  critical: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200',
-  warning: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200',
-  info: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-200',
-  success: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-200'
+  critical: 'border-l-rose-500',
+  warning: 'border-l-amber-500',
+  info: 'border-l-sky-500',
+  success: 'border-l-emerald-500'
 };
+
+const focusIconTone = {
+  critical: 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300',
+  warning: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300',
+  info: 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300',
+  success: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300'
+};
+
+const dashboardPanelClass = 'rounded-lg border-zinc-200/80 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/90 shadow-sm hover:shadow-sm hover:bg-white dark:hover:bg-zinc-900/90 dark:hover:border-zinc-800 dark:hover:ring-white/5';
 
 const formatDate = (value) => {
   if (!value) return 'Sin fecha';
@@ -267,29 +275,30 @@ const Dashboard = () => {
   });
 
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
-      <PageHeader
-        title="Dashboard de adopcion"
-        subtitle="Radar de Foco para convertir tareas, cuentas y comunicacion interna en acciones concretas."
-      />
-
-      {canViewTeamDashboards && (
-        <motion.div variants={item} className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-5 py-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
-              <LayoutDashboard className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-widest font-black text-zinc-400">Vista admin</p>
-              <h2 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Explora dashboards personales del equipo</h2>
-            </div>
+    <motion.div variants={container} initial="hidden" animate="show" className="space-y-5 pb-4">
+      <motion.header variants={item} className="pt-4 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-sm font-semibold text-primary mb-2">
+            <span className="w-2 h-2 rounded-full bg-primary" />
+            Centro de adopción
           </div>
-          <label className="flex flex-col gap-1 min-w-full sm:min-w-[280px] lg:min-w-[340px]">
-            <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Colaborador</span>
+          <h1 className="text-3xl font-semibold text-zinc-950 dark:text-white">Foco del equipo</h1>
+          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
+            Señales accionables, liderazgo de cuentas y avances reales en una sola lectura.
+          </p>
+        </div>
+
+        {canViewTeamDashboards && (
+          <label className="flex items-center gap-3 min-w-full sm:min-w-[320px] lg:min-w-[380px] rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 shadow-sm">
+            <span className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/15 flex items-center justify-center shrink-0">
+              <LayoutDashboard className="w-4.5 h-4.5 text-primary" />
+            </span>
+            <span className="sr-only">Colaborador</span>
             <select
               value={selectedMemberUserId}
               onChange={(event) => setSelectedUserId(event.target.value)}
-              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              aria-label="Colaborador"
+              className="w-full bg-transparent py-1 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none"
             >
               <option value={currentUser.id}>{currentUser.name || 'Mi dashboard'}</option>
               {teamMembers
@@ -301,8 +310,8 @@ const Dashboard = () => {
                 ))}
             </select>
           </label>
-        </motion.div>
-      )}
+        )}
+      </motion.header>
 
       {isLoading ? (
         <div className="h-96 flex items-center justify-center">
@@ -316,81 +325,110 @@ const Dashboard = () => {
         </Card>
       ) : (
         <>
-          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
-            <Card className="p-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)] gap-5">
+            <Card className={cn(dashboardPanelClass, 'p-0')}>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 p-6">
                 <div className="flex items-center gap-4">
-                  <TeamAvatar member={selectedMember || { name: 'Equipo Brain' }} className="w-14 h-14 text-xl" size={56} />
-                  <div>
-                    <p className="text-xs uppercase tracking-widest font-black text-primary">Tu foco de hoy</p>
-                    <h2 className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{selectedMember?.name || 'Equipo Brain'}</h2>
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400">{selectedMember?.role || 'Sin rol asignado'}</p>
+                  <div className="relative">
+                    <TeamAvatar member={selectedMember || { name: 'Equipo Brain' }} className="w-14 h-14 text-xl ring-4 ring-zinc-50 dark:ring-zinc-800" size={56} />
+                    <span className="absolute right-0 bottom-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white dark:border-zinc-900" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase font-semibold text-primary">Tu foco de hoy</p>
+                    <h2 className="text-2xl font-semibold text-zinc-950 dark:text-white truncate">{selectedMember?.name || 'Equipo Brain'}</h2>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400 truncate">{selectedMember?.role || 'Sin rol asignado'}</p>
                   </div>
                 </div>
-                <Button className="gap-2" onClick={() => { window.location.href = '/gestion'; }}>
-                  Ver gestion
+                <Button className="gap-2 rounded-lg px-5 shadow-sm shadow-primary/15" onClick={() => { window.location.href = '/gestion'; }}>
+                  Ver gestión
                   <ArrowUpRight className="w-4 h-4" />
                 </Button>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {statConfig.map(({ key, label, icon: Icon, tone }) => (
-                  <div key={key} className="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/40 p-4">
-                    <Icon className={cn('w-4 h-4 mb-3', tone)} />
-                    <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{dashboard.stats?.[key] ?? 0}</p>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
+              <div className="grid grid-cols-2 md:grid-cols-5 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/55 dark:bg-zinc-950/25">
+                {statConfig.map(({ key, label, icon: Icon, tone, surface }, index) => (
+                  <div
+                    key={key}
+                    className={cn(
+                      'min-h-[112px] p-4 flex flex-col justify-between border-zinc-100 dark:border-zinc-800',
+                      index > 0 && 'md:border-l',
+                      index % 2 === 1 && 'border-l md:border-l',
+                      index >= 2 && 'border-t md:border-t-0'
+                    )}
+                  >
+                    <span className={cn('w-8 h-8 rounded-lg flex items-center justify-center', surface)}>
+                      <Icon className={cn('w-4 h-4', tone)} />
+                    </span>
+                    <div>
+                      <p className="text-2xl font-semibold text-zinc-950 dark:text-white">{dashboard.stats?.[key] ?? 0}</p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
+                    </div>
                   </div>
                 ))}
               </div>
             </Card>
 
-            <Card className="p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center">
-                  <Target className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+            <Card className={cn(dashboardPanelClass, 'p-6 flex flex-col justify-between')}>
+              <div>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-lg bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center">
+                    <Target className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-zinc-950 dark:text-white">Reto de la semana</h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Hábito operativo calibrable</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-black text-zinc-900 dark:text-zinc-100">Reto de la semana</h3>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">Habito operativo calibrable</p>
-                </div>
+                <h4 className="text-xl font-semibold text-zinc-950 dark:text-white">{dashboard.weeklyHabit?.title}</h4>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 leading-6">{dashboard.weeklyHabit?.description}</p>
               </div>
-              <h4 className="text-lg font-black text-zinc-900 dark:text-zinc-100">{dashboard.weeklyHabit?.title}</h4>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">{dashboard.weeklyHabit?.description}</p>
-              <div className="mt-5">
-                <div className="flex justify-between text-xs font-bold text-zinc-500 dark:text-zinc-400 mb-2">
+              <div className="mt-7">
+                <div className="flex justify-between text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-2.5">
                   <span>{dashboard.weeklyHabit?.targetLabel}</span>
                   <span>{dashboard.weeklyHabit?.progress ?? 0}%</span>
                 </div>
-                <div className="h-2.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                <div className="h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
                   <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${dashboard.weeklyHabit?.progress ?? 0}%` }} />
                 </div>
               </div>
             </Card>
           </motion.div>
 
-          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <Card className="p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <Compass className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Radar de Foco</h3>
+          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)] gap-5 items-stretch">
+            <Card className={cn(dashboardPanelClass, 'p-0 min-h-[470px]')}>
+              <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/15 flex items-center justify-center">
+                    <Compass className="w-[18px] h-[18px] text-primary" />
+                  </span>
+                  <div>
+                    <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">Radar de Foco</h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Lo que merece atención ahora</p>
+                  </div>
+                </div>
+                <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 rounded-full bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1">
+                  {dashboard.focusCards?.length || 0} {dashboard.focusCards?.length === 1 ? 'señal' : 'señales'}
+                </span>
               </div>
-              <div className="space-y-3">
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {dashboard.focusCards?.map((focusCard) => (
-                  <div key={focusCard.id} className={cn('rounded-xl border px-4 py-4', cardTone[focusCard.severity] || cardTone.info)}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[10px] uppercase tracking-widest font-black opacity-70">{focusCard.type}</p>
-                        <h4 className="text-sm font-black mt-1">{focusCard.title}</h4>
-                        <p className="text-xs mt-2 opacity-80 leading-relaxed">{focusCard.content}</p>
+                  <div key={focusCard.id} className={cn('border-l-2 px-6 py-5', cardTone[focusCard.severity] || cardTone.info)}>
+                    <div className="flex items-start gap-4">
+                      <span className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', focusIconTone[focusCard.severity] || focusIconTone.info)}>
+                        <Zap className="w-[18px] h-[18px]" />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] uppercase font-semibold text-zinc-400 dark:text-zinc-500">{focusCard.type}</p>
+                        <h4 className="text-sm font-semibold text-zinc-950 dark:text-white mt-0.5">{focusCard.title}</h4>
+                        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1.5 leading-6">{focusCard.content}</p>
                       </div>
-                      <Zap className="w-4 h-4 shrink-0 mt-1" />
                     </div>
                     {focusCard.items?.length > 0 && (
-                      <div className="mt-3">
+                      <div className="mt-3 pl-[52px]">
                         <button
                           type="button"
                           onClick={() => toggleFocusCard(focusCard.id)}
-                          className="inline-flex items-center gap-1.5 text-xs font-black opacity-80 hover:opacity-100 transition-opacity"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-600 hover:text-primary dark:text-zinc-300 dark:hover:text-primary transition-colors"
                         >
                           Ver mas
                           <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', expandedFocusCards[focusCard.id] && 'rotate-180')} />
@@ -414,26 +452,29 @@ const Dashboard = () => {
               </div>
             </Card>
 
-            <Card className="flex flex-col min-h-[450px] h-[450px] max-h-[450px] group/card p-6">
-              <div className="flex items-center gap-2 mb-6 shrink-0">
-                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Logros recientes</h3>
+            <Card className={cn(dashboardPanelClass, 'flex flex-col min-h-[470px] h-[470px] max-h-[470px] p-0')}>
+              <div className="px-5 py-5 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
+                <div className="flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
+                    <CheckCircle2 className="w-[18px] h-[18px] text-emerald-600 dark:text-emerald-400" />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-semibold text-zinc-950 dark:text-white">Logros recientes</h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Victorias del equipo</p>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto space-y-6 pr-2 scroll-smooth custom-scrollbar min-h-0 pb-2">
+              <div className="flex-1 overflow-y-auto px-5 py-5 scroll-smooth custom-scrollbar min-h-0">
                 {completedFeed.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400 italic">
-                      "Aun no hay victorias hoy. Tu puedes!"
-                    </p>
-                  </div>
+                  <EmptyState icon={Trophy} title="Aún no hay logros hoy" description="Las tareas completadas por el equipo aparecerán aquí." />
                 ) : (
                   completedFeed.map((task, idx) => (
-                    <div key={task.id || idx} className="relative pl-6 pb-6 last:pb-0">
+                    <div key={task.id || idx} className="relative pl-5 pb-6 last:pb-0">
                       {idx < completedFeed.length - 1 && (
-                        <div className="absolute left-[4.5px] top-2 w-px h-full bg-zinc-200 dark:bg-zinc-800" />
+                        <div className="absolute left-[3.5px] top-2 w-px h-full bg-zinc-200 dark:bg-zinc-800" />
                       )}
-                      <div className="absolute left-0 top-1.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-200 dark:border-emerald-900 shadow-[0_0_8px_rgba(52,211,153,0.5)] z-10" />
+                      <div className="absolute left-0 top-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-4 ring-emerald-50 dark:ring-emerald-500/10 z-10" />
                       <div className="group">
                         <div className="flex items-center gap-2 mb-1">
                           {task.assignee ? (
@@ -443,11 +484,11 @@ const Dashboard = () => {
                               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                             </div>
                           )}
-                          <span className="text-xs text-emerald-600 dark:text-emerald-400 block font-medium">
+                          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 block font-semibold truncate">
                             {task.assignee ? task.assignee.name : 'Equipo'} completó:
                           </span>
                         </div>
-                        <h4 className="text-zinc-700 hover:text-zinc-900 dark:text-zinc-200 text-sm font-medium mb-1 dark:group-hover:text-white transition-colors line-clamp-2">
+                        <h4 className="text-zinc-800 dark:text-zinc-200 text-sm font-semibold mb-1.5 line-clamp-2">
                           {task.title}
                         </h4>
                         <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
@@ -460,7 +501,7 @@ const Dashboard = () => {
                               <span className="mx-0.5 opacity-40">•</span>
                               <div className="flex items-center gap-1.5">
                                 <ClientAvatar client={task.client} size={14} />
-                                <span className="truncate max-w-[80px] font-bold text-zinc-500">{task.client.name}</span>
+                                <span className="truncate max-w-[72px] font-semibold text-zinc-500">{task.client.name}</span>
                               </div>
                             </>
                           )}
@@ -471,12 +512,12 @@ const Dashboard = () => {
                 )}
               </div>
 
-              <div className="mt-4 shrink-0 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-center">
+              <div className="shrink-0 px-4 py-3 border-t border-zinc-100 dark:border-zinc-800 flex justify-center">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowHistoryModal(true)}
-                  className="w-full text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors flex items-center gap-2 py-2"
+                  className="w-full rounded-lg text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors flex items-center gap-2 py-2"
                 >
                   Ver historial completo
                   <ArrowUpRight className="w-3 h-3" />
@@ -486,58 +527,77 @@ const Dashboard = () => {
           </motion.div>
 
           <motion.div variants={item}>
-            <Card className="p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <CalendarClock className="w-5 h-5 text-sky-500" />
-                <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Proximos pendientes</h3>
+            <Card className={cn(dashboardPanelClass, 'p-0')}>
+              <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-lg bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center">
+                    <CalendarClock className="w-[18px] h-[18px] text-sky-600 dark:text-sky-400" />
+                  </span>
+                  <div>
+                    <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">Próximos pendientes</h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Lo que viene después del foco inmediato</p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" className="rounded-lg" onClick={() => { window.location.href = '/gestion'; }}>
+                  Abrir gestión
+                  <ArrowUpRight className="w-3.5 h-3.5 ml-1.5" />
+                </Button>
               </div>
-              <div className="space-y-3">
+              <div className="p-5 space-y-2">
                 {dashboard.upcomingTasks?.length > 0
                   ? dashboard.upcomingTasks.slice(0, 5).map((task) => <TaskRow key={task.id} task={task} />)
-                  : <EmptyState icon={CalendarClock} title="Sin proximos vencimientos" description="No se encontraron tareas futuras con fecha asignada." />}
+                  : <EmptyState icon={CalendarClock} title="Sin próximos vencimientos" description="No se encontraron tareas futuras con fecha asignada." />}
               </div>
             </Card>
           </motion.div>
 
-          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-6">
-            <Card className="p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <FileText className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Mis clientes</h3>
-              </div>
-              {dashboard.clients?.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {dashboard.clients.map((client) => (
-                    <div key={client.id} className="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/40 p-4">
-                      <div className="flex items-center gap-3">
-                        <ClientAvatar client={client} size={32} />
-                        <div className="min-w-0">
-                          <p className="text-sm font-black text-zinc-900 dark:text-zinc-100 truncate">{client.name}</p>
-                          <p className="text-xs text-zinc-500 dark:text-zinc-400">{client.activeTasks} tareas activas</p>
+          <motion.div
+            variants={item}
+            className={cn(
+              'grid grid-cols-1 gap-5',
+              selectedMember?.isCommunityManager && 'xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]'
+            )}
+          >
+            {selectedMember?.isCommunityManager && (
+              <Card className={cn(dashboardPanelClass, 'p-6')}>
+                <div className="flex items-center gap-3 mb-5">
+                  <FileText className="w-5 h-5 text-primary" />
+                  <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">Mis clientes</h3>
+                </div>
+                {dashboard.clients?.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {dashboard.clients.map((client) => (
+                      <div key={client.id} className="rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/40 p-4">
+                        <div className="flex items-center gap-3">
+                          <ClientAvatar client={client} size={32} />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-zinc-950 dark:text-white truncate">{client.name}</p>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400">{client.activeTasks} tareas activas</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 mt-4 text-center text-xs">
+                          <span className="rounded-lg bg-white dark:bg-zinc-900 py-2 text-zinc-500 dark:text-zinc-400">Salud {client.healthScore ?? '-'}</span>
+                          <span className="rounded-lg bg-white dark:bg-zinc-900 py-2 text-amber-600 dark:text-amber-400">{client.overdueTasks} venc.</span>
+                          <span className="rounded-lg bg-white dark:bg-zinc-900 py-2 text-rose-600 dark:text-rose-400">{client.returnedTasks} dev.</span>
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 mt-4 text-center text-xs">
-                        <span className="rounded-lg bg-white dark:bg-zinc-900 py-2 text-zinc-500 dark:text-zinc-400">Salud {client.healthScore ?? '-'}</span>
-                        <span className="rounded-lg bg-white dark:bg-zinc-900 py-2 text-amber-600 dark:text-amber-400">{client.overdueTasks} venc.</span>
-                        <span className="rounded-lg bg-white dark:bg-zinc-900 py-2 text-rose-600 dark:text-rose-400">{client.returnedTasks} dev.</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState icon={UserRound} title="Sin clientes asignados" description="Cuando admin o project manager asignen cuentas, aparecera aqui tu mapa de liderazgo." />
-              )}
-            </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState icon={UserRound} title="Sin clientes asignados" description="Cuando admin o project manager asignen cuentas, aparecerá aquí tu mapa de liderazgo." />
+                )}
+              </Card>
+            )}
 
-            <Card className="p-6">
+            <Card className={cn(dashboardPanelClass, 'p-6')}>
               <div className="flex items-center gap-3 mb-5">
                 <Megaphone className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Anuncios</h3>
+                <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">Anuncios</h3>
               </div>
               <div className="space-y-3">
                 {dashboard.announcements?.length > 0 ? (
                   dashboard.announcements.map((announcement) => (
-                    <div key={`${announcement.scope}-${announcement.id}`} className="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/40 p-4">
+                    <div key={`${announcement.scope}-${announcement.id}`} className="rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/40 p-4">
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-[10px] uppercase tracking-widest font-black text-primary">
                           {announcement.scope === 'GLOBAL' ? 'Global' : 'Directo'}
@@ -548,25 +608,25 @@ const Dashboard = () => {
                     </div>
                   ))
                 ) : (
-                  <EmptyState icon={Megaphone} title="Sin anuncios" description="Los avisos del equipo apareceran aqui." />
+                  <EmptyState icon={Megaphone} title="Sin anuncios" description="Los avisos del equipo aparecerán aquí." />
                 )}
               </div>
             </Card>
           </motion.div>
 
           {canManageDashboard && (
-            <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <Card className="p-6">
+            <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+              <Card className={cn(dashboardPanelClass, 'p-6')}>
                 <div className="flex items-center gap-3 mb-5">
                   <Send className="w-5 h-5 text-primary" />
-                  <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Crear anuncio</h3>
+                  <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">Crear anuncio</h3>
                 </div>
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <select
                       value={announcementScope}
                       onChange={(event) => setAnnouncementScope(event.target.value)}
-                      className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
                     >
                       <option value="GLOBAL">Todo el equipo</option>
                       <option value="MEMBER">Una persona</option>
@@ -575,7 +635,7 @@ const Dashboard = () => {
                       <select
                         value={announcementTargetUserId}
                         onChange={(event) => setAnnouncementTargetUserId(event.target.value)}
-                        className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
                       >
                         <option value="">Seleccionar persona</option>
                         {teamMembers.filter((member) => member.userId).map((member) => (
@@ -588,14 +648,14 @@ const Dashboard = () => {
                     value={announcementContent}
                     onChange={(event) => setAnnouncementContent(event.target.value)}
                     rows={3}
-                    className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
                     placeholder="Mensaje para el equipo"
                   />
                   {createAnnouncementMutation.error && (
                     <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">{createAnnouncementMutation.error.message}</p>
                   )}
                   <Button
-                    className="gap-2"
+                    className="gap-2 rounded-lg"
                     disabled={createAnnouncementMutation.isPending || !announcementContent.trim() || (announcementScope === 'MEMBER' && !announcementTargetUserId)}
                     onClick={() => createAnnouncementMutation.mutate()}
                   >
@@ -605,16 +665,16 @@ const Dashboard = () => {
                 </div>
               </Card>
 
-              <Card className="p-6">
+              <Card className={cn(dashboardPanelClass, 'p-6')}>
                 <div className="flex items-center gap-3 mb-5">
                   <UsersRound className="w-5 h-5 text-primary" />
-                  <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Asignar cliente</h3>
+                  <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">Asignar cliente</h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <select
                     value={assignClientId}
                     onChange={(event) => setAssignClientId(event.target.value)}
-                    className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
                   >
                     <option value="">Cliente</option>
                     {clients.map((client) => (
@@ -624,7 +684,7 @@ const Dashboard = () => {
                   <select
                     value={assignMemberId}
                     onChange={(event) => setAssignMemberId(event.target.value)}
-                    className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
                   >
                     <option value="">Community Manager</option>
                     {communityManagers.map((member) => (
@@ -636,7 +696,7 @@ const Dashboard = () => {
                   <p className="text-xs font-semibold text-rose-600 dark:text-rose-400 mt-3">{assignClientMutation.error.message}</p>
                 )}
                 <Button
-                  className="gap-2 mt-4"
+                  className="gap-2 mt-4 rounded-lg"
                   disabled={assignClientMutation.isPending || !assignClientId || !assignMemberId}
                   onClick={() => assignClientMutation.mutate()}
                 >
