@@ -464,6 +464,15 @@ export const getDashboardAnnouncements = async (userId, { db = prisma } = {}) =>
     })
   ]);
 
+  const authorIds = [...new Set(targetedAnnouncements.map((announcement) => announcement.relatedId).filter(Boolean))];
+  const authors = authorIds.length > 0
+    ? await db.user.findMany({
+      where: { id: { in: authorIds } },
+      select: { id: true, name: true, avatarUrl: true }
+    })
+    : [];
+  const authorsById = new Map(authors.map((author) => [author.id, author]));
+
   return [
     ...globalAnnouncements.map((announcement) => ({
       id: announcement.id,
@@ -479,7 +488,8 @@ export const getDashboardAnnouncements = async (userId, { db = prisma } = {}) =>
       content: announcement.message,
       type: announcement.type,
       createdAt: announcement.createdAt,
-      isRead: announcement.isRead
+      isRead: announcement.isRead,
+      author: authorsById.get(announcement.relatedId) || null
     }))
   ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 };
@@ -515,6 +525,7 @@ export const createDashboardAnnouncement = async ({ requester, scope, content, t
         userId: targetUserId,
         message: cleanContent,
         type: 'TEAM_ANNOUNCEMENT',
+        relatedId: requester?.userId || null,
         resourceId: 'dashboard',
         url: '/'
       }

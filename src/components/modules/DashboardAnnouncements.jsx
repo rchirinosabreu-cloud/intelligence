@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import RichCommentContent from '@/components/ui/RichCommentContent';
 import RichTextEditor from '@/components/ui/RichTextEditor';
 import SlideOver from '@/components/ui/SlideOver';
+import TeamAvatar from '@/components/ui/TeamAvatar';
 import { APPROVED_EMOJIS } from '@/constants/approvedEmojis';
 import { cn } from '@/lib/utils';
 
@@ -40,20 +41,31 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
       className={cn(
         'rounded-lg p-4',
         isPersonal
-          ? 'bg-zinc-900 dark:bg-zinc-800 text-white shadow-sm'
+          ? 'border border-violet-200/80 bg-violet-50/80 dark:border-violet-500/20 dark:bg-violet-500/10 shadow-sm'
           : 'border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/45',
         compact && 'p-3.5'
       )}
     >
-      <div className={cn('flex items-center gap-3 mb-2', isPersonal ? 'justify-end' : 'justify-between')}>
-        {!isPersonal && (
+      <div className="flex items-center justify-between gap-3 mb-2.5">
+        {isPersonal ? (
+          <div className="flex items-center gap-2 min-w-0">
+            <TeamAvatar
+              member={announcement.author || { name: 'Equipo Brainstudio' }}
+              size={28}
+              className="w-7 h-7 ring-2 ring-white dark:ring-zinc-900"
+            />
+            <span className="text-xs font-semibold text-violet-950 dark:text-violet-100 truncate">
+              {announcement.author?.name || 'Equipo Brainstudio'}
+            </span>
+          </div>
+        ) : (
           <span className="text-[10px] uppercase font-bold text-primary">
             Anuncio general
           </span>
         )}
         <div className="flex items-center gap-1.5">
           {showDate && (
-            <time className={cn('text-[11px]', isPersonal ? 'text-zinc-300' : 'text-zinc-400')}>
+            <time className="text-[11px] text-zinc-400 dark:text-zinc-500">
               {formatAnnouncementDate(announcement.createdAt)}
             </time>
           )}
@@ -65,7 +77,7 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
                 disabled={isSubmitting}
                 className={cn(
                   'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-                  isPersonal ? 'text-zinc-300 hover:bg-white/10 hover:text-white' : 'text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary'
+                  isPersonal ? 'text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-500/15 hover:text-violet-700 dark:hover:text-violet-300' : 'text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary'
                 )}
                 title="Editar anuncio"
                 aria-label="Editar anuncio"
@@ -78,7 +90,7 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
                 disabled={isSubmitting}
                 className={cn(
                   'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-                  isPersonal ? 'text-zinc-300 hover:bg-rose-500/25 hover:text-white' : 'text-zinc-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-600'
+                  isPersonal ? 'text-violet-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-destructive' : 'text-zinc-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-destructive'
                 )}
                 title="Eliminar anuncio"
                 aria-label="Eliminar anuncio"
@@ -91,7 +103,7 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
       </div>
       <div className={cn(
         '[&>div]:!text-sm [&>div]:!leading-6',
-        isPersonal && '[&_*]:!text-white [&_mark]:!bg-white/20',
+        isPersonal && '[&_*]:!text-zinc-800 dark:[&_*]:!text-zinc-100 [&_mark]:!bg-violet-200/70 dark:[&_mark]:!bg-violet-500/25',
         compact && 'max-h-[96px] overflow-hidden'
       )}>
         <RichCommentContent content={announcement.content} />
@@ -445,7 +457,7 @@ const DashboardAnnouncements = ({
             <Button variant="outline" className="rounded-lg" disabled={isSubmitting} onClick={() => setDeleteCandidate(null)}>
               Cancelar
             </Button>
-            <Button className="rounded-lg bg-rose-600 text-white hover:bg-rose-700 gap-2" disabled={isSubmitting} onClick={confirmDelete}>
+            <Button variant="destructive" className="rounded-lg gap-2" disabled={isSubmitting} onClick={confirmDelete}>
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
               Eliminar anuncio
             </Button>

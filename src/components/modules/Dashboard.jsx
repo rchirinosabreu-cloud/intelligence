@@ -290,10 +290,6 @@ const Dashboard = () => {
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-5 pb-4">
       <motion.header variants={item} className="pt-4 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm font-semibold text-primary mb-2">
-            <span className="w-2 h-2 rounded-full bg-primary" />
-            Centro de adopción
-          </div>
           <h1 className="text-3xl font-semibold text-zinc-950 dark:text-white">Foco del equipo</h1>
           <p className="mt-1.5 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
             Señales accionables, liderazgo de cuentas y avances reales en una sola lectura.

@@ -51,3 +51,16 @@ test('getNotificationDisplayParts keeps assignment title bold and task name as s
     assert.equal(parts.title, 'Se te ha asignado una tarea PRIORITARIA');
     assert.equal(parts.body, 'Revisar propuesta comercial');
 });
+
+test('personal announcements use a clear notification title and keep the message as body', () => {
+    const notification = {
+        type: 'TEAM_ANNOUNCEMENT',
+        message: '<p>Recuerda preparar la propuesta antes de la reuniÃ³n.</p>'
+    };
+
+    const parts = getNotificationDisplayParts(notification);
+
+    assert.equal(parts.title, 'Tienes un nuevo anuncio');
+    assert.equal(parts.context, '');
+    assert.equal(parts.body, 'Recuerda preparar la propuesta antes de la reuniÃ³n.');
+});

@@ -75,8 +75,21 @@ test('dashboard announcement history only queries personal announcements for the
       findMany: async (query) => {
         queries.push({ model: 'notification', query });
         return [
-          { id: 'member-1', message: '<p>Mensaje personal</p>', type: 'TEAM_ANNOUNCEMENT', createdAt: new Date('2026-08-08T14:00:00.000Z'), isRead: false }
+          {
+            id: 'member-1',
+            message: '<p>Mensaje personal</p>',
+            type: 'TEAM_ANNOUNCEMENT',
+            createdAt: new Date('2026-08-08T14:00:00.000Z'),
+            isRead: false,
+            relatedId: 'user-rodny'
+          }
         ];
+      }
+    },
+    user: {
+      findMany: async (query) => {
+        queries.push({ model: 'user', query });
+        return [{ id: 'user-rodny', name: 'Rodny Chirinos', avatarUrl: '/rodny.jpg' }];
       }
     }
   };
@@ -91,6 +104,11 @@ test('dashboard announcement history only queries personal announcements for the
   assert.equal(queries[1].query.take, 50);
   assert.equal(announcements.length, 2);
   assert.equal(announcements[0].scope, 'MEMBER');
+  assert.deepEqual(announcements[0].author, {
+    id: 'user-rodny',
+    name: 'Rodny Chirinos',
+    avatarUrl: '/rodny.jpg'
+  });
   assert.equal(announcements[1].scope, 'GLOBAL');
 });
 
@@ -117,7 +135,7 @@ test('dashboard announcements preserve safe rich text and target only the select
     content: '<p>Hola <strong>equipo</strong> 🚀<script>alert(1)</script></p>'
   }, { db });
   await createDashboardAnnouncement({
-    requester: { role: 'PROJECT_MANAGER' },
+    requester: { role: 'PROJECT_MANAGER', userId: 'user-rodny' },
     scope: 'MEMBER',
     targetUserId: 'user-helen',
     content: '<p>Mensaje <em>personal</em></p>'
@@ -128,6 +146,7 @@ test('dashboard announcements preserve safe rich text and target only the select
   assert.doesNotMatch(writes[0].payload.data.content, /script|alert\(1\)/i);
   assert.equal(writes[1].payload.data.userId, 'user-helen');
   assert.equal(writes[1].payload.data.type, 'TEAM_ANNOUNCEMENT');
+  assert.equal(writes[1].payload.data.relatedId, 'user-rodny');
   assert.match(writes[1].payload.data.message, /<em>personal<\/em>/);
 });
 

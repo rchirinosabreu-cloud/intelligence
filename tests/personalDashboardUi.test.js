@@ -19,6 +19,7 @@ test('Dashboard presents adoption-oriented sections', () => {
     assert.match(source.normalize('NFD').replace(/\p{Diacritic}/gu, ''), new RegExp(label), `Dashboard should render ${label}.`);
   }
   assert.doesNotMatch(source, /Tu foco de hoy/i, 'The redundant focus eyebrow should not appear above the member name.');
+  assert.doesNotMatch(source, /Centro de adopci/i, 'The dashboard should not display the Centro de adopcion eyebrow.');
   assert.doesNotMatch(source, /Mis tareas de hoy/, 'Dashboard should not duplicate the adopted Gestion task module.');
   assert.match(source, /Ver historial completo/, 'Recent achievements should expose the full history.');
   assert.match(source, /CompletedTasksHistoryModal/, 'Recent achievements should use the original full-history modal.');
@@ -59,8 +60,10 @@ test('Dashboard announcement panel supports rich, private and historical announc
   assert.match(source, /announcements\.slice\(0, 3\)/, 'The dashboard widget should show at most three announcements.');
   assert.match(source, /Anuncio general/, 'Global announcements should use the requested label.');
   assert.doesNotMatch(source, />Directo</, 'Personal announcements should not expose a label.');
-  assert.match(source, /bg-zinc-900/, 'Personal announcements should use a solid dark surface.');
-  assert.match(source, /text-white/, 'Personal announcement content should be white.');
+  assert.doesNotMatch(source, /isPersonal\s*\?\s*'bg-zinc-900/, 'Personal announcements should not use a black surface.');
+  assert.match(source, /bg-violet-50/, 'Personal announcements should use a softer branded surface.');
+  assert.match(source, /TeamAvatar/, 'Personal announcements should identify their author with the shared avatar.');
+  assert.match(source, /announcement\.author/, 'The announcement author should drive the displayed avatar and identity.');
   assert.match(source, /Ver historial de anuncios/, 'The widget should open the complete announcement history.');
   assert.match(source, /RichTextEditor/, 'Managers should compose formatted announcements with the shared editor.');
   assert.match(source, /RichCommentContent/, 'Announcements should render sanitized rich text.');
@@ -75,6 +78,19 @@ test('Dashboard announcement panel supports rich, private and historical announc
   assert.match(source, /DialogContent/, 'Announcement deletion should use a Brainstudio dialog.');
   assert.match(source, /groupAnnouncementsByDate/, 'Announcement history should group entries by date.');
   assert.match(source, /DateDivider/, 'Announcement history should reuse the chat date divider.');
+});
+
+test('destructive actions use the Brainstudio rose token consistently', () => {
+  const cssSource = readFileSync('src/index.css', 'utf8');
+  const announcementSource = readFileSync('src/components/modules/DashboardAnnouncements.jsx', 'utf8');
+  const taskSource = readFileSync('src/components/modules/NativeTasks.jsx', 'utf8');
+
+  assert.ok(
+    (cssSource.match(/--destructive:\s*346\.84 77\.17% 49\.8%;\s*\/\* #E11D48 \*\//g) || []).length >= 2,
+    'Light and dark mode should share the exact #E11D48 destructive token.'
+  );
+  assert.match(announcementSource, /variant="destructive"/, 'Announcement deletion should consume the shared destructive button style.');
+  assert.match(taskSource, /Eliminar Tarea[\s\S]{0,500}variant="destructive"|variant="destructive"[\s\S]{0,500}Eliminar Tarea/, 'Task deletion should consume the same destructive button style.');
 });
 
 test('Dashboard announcements and task conversation share the same date divider', () => {

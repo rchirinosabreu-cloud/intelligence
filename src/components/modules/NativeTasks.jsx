@@ -767,14 +767,15 @@ const NativeTasks = () => {
                         >
                             Cancelar
                         </button>
-                        <button
+                        <Button
+                            variant="destructive"
                             onClick={() => handleDeleteTask()}
                             disabled={!deleteReason.trim() || isSubmittingDelete}
-                            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                            className="gap-2"
                         >
                             {isSubmittingDelete ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                             Eliminar Tarea
-                        </button>
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

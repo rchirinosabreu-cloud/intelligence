@@ -51,6 +51,14 @@ export const getNotificationDisplayParts = (notification = {}) => {
     const message = String(notification.message || '');
     const type = notification.type || '';
 
+    if (type === 'TEAM_ANNOUNCEMENT') {
+        return {
+            title: 'Tienes un nuevo anuncio',
+            context: '',
+            body: cleanNotificationPreview(message, 120)
+        };
+    }
+
     if (type === 'TASK_COMMENT_REPLY') {
         const parsed = parseQuotedTaskMessage(message, 'Nuevo mensaje en el hilo de la tarea');
         if (parsed) return parsed;
