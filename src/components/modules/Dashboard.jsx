@@ -16,7 +16,6 @@ import {
   Megaphone,
   MessageSquareText,
   Send,
-  Shield,
   Sparkles,
   Target,
   Trophy,
@@ -119,8 +118,22 @@ const EmptyState = ({ icon: Icon, title, description }) => (
   </div>
 );
 
-const TaskRow = ({ task, showFeedback = false }) => (
-  <div className="flex items-start justify-between gap-4 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-950/40 px-4 py-3">
+const TaskRow = ({ task, showFeedback = false, onClick }) => (
+  <div
+    role={onClick ? 'button' : undefined}
+    tabIndex={onClick ? 0 : undefined}
+    onClick={onClick}
+    onKeyDown={(event) => {
+      if (onClick && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault();
+        onClick();
+      }
+    }}
+    className={cn(
+      'flex items-start justify-between gap-4 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-950/40 px-4 py-3',
+      onClick && 'cursor-pointer transition-colors hover:border-primary/30 hover:bg-primary/5 dark:hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary/30'
+    )}
+  >
     <div className="min-w-0">
       <div className="flex items-center gap-2">
         {task.client && <ClientAvatar client={task.client} size={18} />}
@@ -193,6 +206,14 @@ const Dashboard = () => {
       ...current,
       [focusCardId]: !current[focusCardId]
     }));
+  };
+
+  const getFocusItemUrl = (focusCard, focusItem) => {
+    if (focusItem?.creatorId !== undefined || focusItem?.assigneeId !== undefined) {
+      return `/gestion?taskId=${focusItem.id}`;
+    }
+    if (focusCard?.actionUrl) return focusCard.actionUrl;
+    return '/gestion';
   };
 
   const createAnnouncementMutation = useMutation({
@@ -351,13 +372,18 @@ const Dashboard = () => {
                           onClick={() => toggleFocusCard(focusCard.id)}
                           className="inline-flex items-center gap-1.5 text-xs font-black opacity-80 hover:opacity-100 transition-opacity"
                         >
-                          Ver tareas
+                          Ver mas
                           <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', expandedFocusCards[focusCard.id] && 'rotate-180')} />
                         </button>
                         {expandedFocusCards[focusCard.id] && (
                           <div className="mt-3 space-y-2">
                             {focusCard.items.map((task) => (
-                              <TaskRow key={task.id} task={task} showFeedback={Boolean(task.lastFeedback)} />
+                              <TaskRow
+                                key={task.id}
+                                task={task}
+                                showFeedback={Boolean(task.lastFeedback)}
+                                onClick={() => { window.location.href = getFocusItemUrl(focusCard, task); }}
+                              />
                             ))}
                           </div>
                         )}
@@ -381,21 +407,7 @@ const Dashboard = () => {
             </Card>
           </motion.div>
 
-          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            <Card className="p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <AlertTriangle className="w-5 h-5 text-amber-500" />
-                <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Correcciones y vencidas</h3>
-              </div>
-              <div className="space-y-3">
-                {dashboard.returnedTasks?.length > 0
-                  ? dashboard.returnedTasks.slice(0, 4).map((task) => <TaskRow key={task.id} task={task} showFeedback />)
-                  : dashboard.overdueTasks?.length > 0
-                    ? dashboard.overdueTasks.slice(0, 4).map((task) => <TaskRow key={task.id} task={task} />)
-                    : <EmptyState icon={Shield} title="Sin bloqueos fuertes" description="No hay devoluciones ni vencidas asignadas a esta persona." />}
-              </div>
-            </Card>
-
+          <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <Card className="p-6">
               <div className="flex items-center gap-3 mb-5">
                 <CalendarClock className="w-5 h-5 text-sky-500" />

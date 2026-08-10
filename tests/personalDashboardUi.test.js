@@ -36,5 +36,9 @@ test('Dashboard focus cards can reveal the tasks behind each signal', () => {
 
   assert.match(source, /expandedFocusCards/, 'Dashboard should track expanded focus cards.');
   assert.match(source, /focusCard\.items/, 'Dashboard should render related focus-card tasks.');
-  assert.match(source, /Ver tareas/, 'Focus cards should expose a task toggle.');
+  assert.match(source, /Ver mas/, 'Focus cards should expose a generic detail toggle.');
+  assert.match(source, /getFocusItemUrl/, 'Focus-card items should know where to navigate.');
+  assert.match(source, /window\.location\.href = getFocusItemUrl/, 'Focus-card items should navigate to their source.');
+  assert.doesNotMatch(source, /Correcciones y vencidas/, 'Dashboard should not duplicate returned and overdue work outside Radar de Foco.');
+  assert.doesNotMatch(source, /Ver tareas/, 'Focus cards should not call every detail a task.');
 });
