@@ -39,6 +39,7 @@ model User {
   authoredFeedback    FeedbackRecord[]     @relation("AuthoredFeedback")
   receivedFeedback    FeedbackRecord[]     @relation("ReceivedFeedback")
   generalChatMessages GeneralChatMessage[]
+  authoredGlobalAnnouncements GlobalAnnouncement[]
   notifications       Notification[]
   createdTasks        Task[]               @relation("CreatedTasks")
   notes               UserNote[]
@@ -556,6 +557,10 @@ model GlobalAnnouncement {
   content   String
   type      String
   createdAt DateTime @default(now())
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([authorId, createdAt])
 }
 
 model AgencyIntegration {

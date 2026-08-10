@@ -30,6 +30,12 @@ test('Dashboard presents adoption-oriented sections', () => {
     (source.match(/balancedDashboardGridClass/g) || []).length >= 4,
     'Profile/Radar/Upcoming should align with Challenge/Achievements/Announcements using the same 65/35 grid.'
   );
+  assert.match(source, /weeklyHabit\?\.isEmpty/, 'The weekly challenge should render a dedicated empty state for roles without a challenge.');
+  assert.match(
+    source.normalize('NFD').replace(/\p{Diacritic}/gu, ''),
+    /Aun no tienes retos para esta semana/i,
+    'The empty weekly challenge should explain that no challenge is assigned.'
+  );
 });
 
 test('Dashboard includes community manager account leadership widgets', () => {

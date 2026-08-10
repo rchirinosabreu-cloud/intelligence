@@ -44,6 +44,42 @@ export const assertAdminDashboardAccess = (user) => {
 };
 
 const isCommunityManagerRole = (role = '') => role.toLowerCase().includes('community manager');
+const isProjectManagerRole = (role = '') => role.toLowerCase().includes('project manager');
+
+const getBogotaWeekContext = (value) => {
+  const date = toDate(value);
+  if (!date || Number.isNaN(date.getTime())) return null;
+
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const calendarDate = new Date(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day)));
+  const weekday = calendarDate.getUTCDay();
+  const mondayOffset = weekday === 0 ? 6 : weekday - 1;
+  const monday = new Date(calendarDate);
+  monday.setUTCDate(calendarDate.getUTCDate() - mondayOffset);
+
+  return {
+    dateKey: calendarDate.toISOString().slice(0, 10),
+    weekKey: monday.toISOString().slice(0, 10),
+    weekday
+  };
+};
+
+const getBogotaMonthWindow = (value) => {
+  const context = getBogotaWeekContext(value);
+  if (!context) return null;
+  const [year, month] = context.dateKey.split('-').map(Number);
+
+  return {
+    start: new Date(Date.UTC(year, month - 1, 1, 5)),
+    end: new Date(Date.UTC(year, month, 1, 5))
+  };
+};
 
 const toDate = (value) => (value ? new Date(value) : null);
 
@@ -147,6 +183,19 @@ const buildClientSummaries = (tasks, now) => {
 export const buildPersonalDashboard = ({ member, now = new Date(), globalAchievements = null }) => {
   const tasks = Array.isArray(member?.nativeTasks) ? member.nativeTasks : [];
   const isCommunityManager = isCommunityManagerRole(member?.role);
+  const isProjectManager = isProjectManagerRole(member?.role);
+  const currentMonthKey = getBogotaWeekContext(now)?.dateKey.slice(0, 7);
+  const currentMonthLabel = new Intl.DateTimeFormat('es-CO', {
+    timeZone: 'America/Bogota',
+    month: 'long'
+  }).format(now);
+  const createdTasks = isCommunityManager
+    ? (Array.isArray(member?.createdTasks) ? member.createdTasks : tasks.filter((task) => task.creatorId === member.userId))
+      .filter((task) => (
+        task.status === 'PENDIENTE'
+        && getBogotaWeekContext(task.createdAt)?.dateKey.slice(0, 7) === currentMonthKey
+      ))
+    : [];
   const assignedClients = buildAssignedClientSummaries(member?.responsibleClients || [], now);
   const activeTasks = tasks.filter((task) => ACTIVE_STATUSES.includes(task.status));
   const overdueTasks = activeTasks.filter((task) => {
@@ -199,34 +248,43 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
     });
   }
 
-  const undocumentedTasks = isCommunityManager
-    ? activeTasks.filter((task) => task.creatorId === member.userId && (task.taskComments || []).length === 0)
-    : [];
+  const undocumentedTasks = createdTasks.filter((task) => (task.taskComments || []).length === 0);
+  const documentedTaskCount = createdTasks.length - undocumentedTasks.length;
+  const currentWeek = getBogotaWeekContext(now)?.weekKey;
+  const announcementDaysThisWeek = new Set(
+    (member?.authoredAnnouncements || [])
+      .map((announcement) => getBogotaWeekContext(announcement.createdAt))
+      .filter((context) => context?.weekKey === currentWeek && context.weekday >= 1 && context.weekday <= 5)
+      .map((context) => context.dateKey)
+  ).size;
   const clientsNeedingAttention = assignedClients.filter((client) => (client.healthScore ?? 100) < 70 || client.returnedTasks > 0 || client.overdueTasks > 0);
   const clientsWithoutPlan = assignedClients.filter((client) => !client.contentPlanStatus || client.contentStatus === 'SIN_PARRILLA');
 
-  const weeklyHabit = isCommunityManager && assignedClients.length > 0
+  const weeklyHabit = isCommunityManager
     ? {
-        id: 'lead-account-growth',
-        title: 'Llegar con propuestas',
-        description: 'Prepara una recomendacion accionable para tus clientes asignados: campana, ajuste de parrilla, oportunidad de comunicacion o mejora basada en resultados.',
-        progress: Math.max(0, Math.round(((assignedClients.length - clientsNeedingAttention.length) / Math.max(assignedClients.length, 1)) * 100)),
-        targetLabel: 'Clientes con liderazgo preventivo'
-      }
-    : undocumentedTasks.length > 0
-    ? {
-        id: 'document-progress',
-        title: 'Documentar avances',
-        description: 'Agrega contexto a tus tareas activas para que el equipo pueda entender el estado sin perseguirte.',
-        progress: Math.max(0, Math.round(((activeTasks.length - undocumentedTasks.length) / Math.max(activeTasks.length, 1)) * 100)),
-        targetLabel: 'Tareas activas con contexto'
-      }
-    : {
         id: 'keep-context-fresh',
         title: 'Mantener contexto fresco',
-        description: 'Sostén el hábito de actualizar tareas cuando cambie el estado, el insumo o la fecha.',
-        progress: 100,
-        targetLabel: 'Contexto actualizado'
+        description: `Esta semana, cada tarea pendiente que hayas creado en ${currentMonthLabel} debe incluir al menos un comentario con contexto.`,
+        progress: createdTasks.length > 0 ? Math.round((documentedTaskCount / createdTasks.length) * 100) : 0,
+        targetLabel: createdTasks.length > 0
+          ? `${documentedTaskCount} de ${createdTasks.length} pendientes de ${currentMonthLabel} con contexto`
+          : `Sin tareas pendientes creadas en ${currentMonthLabel}`
+      }
+    : isProjectManager
+    ? {
+        id: 'daily-team-announcement',
+        title: 'Publicar un anuncio cada día',
+        description: 'Comparte cada día hábil un anuncio general o personal para mantener al equipo alineado y con contexto.',
+        progress: Math.round((announcementDaysThisWeek / 5) * 100),
+        targetLabel: `${announcementDaysThisWeek} de 5 días con anuncio`
+      }
+    : {
+        id: 'no-weekly-challenge',
+        title: 'Aún no tienes retos para esta semana',
+        description: '',
+        progress: null,
+        targetLabel: '',
+        isEmpty: true
       };
 
   if (isCommunityManager && clientsNeedingAttention.length > 0) {
@@ -269,8 +327,8 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
 
   if (undocumentedTasks.length > 0) {
     const taskLabel = undocumentedTasks.length === 1
-      ? '1 tarea creada por ti no tiene comentarios'
-      : `${undocumentedTasks.length} tareas creadas por ti no tienen comentarios`;
+      ? `1 tarea pendiente creada por ti en ${currentMonthLabel} no tiene comentarios`
+      : `${undocumentedTasks.length} tareas pendientes creadas por ti en ${currentMonthLabel} no tienen comentarios`;
     focusCards.push({
       id: 'habit-document-progress',
       type: 'HABITO',
@@ -410,7 +468,9 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
     throw error;
   }
 
-  const [announcements, globalAchievements] = await Promise.all([
+  const announcementLookback = new Date(Date.now() - (8 * 24 * 60 * 60 * 1000));
+  const contextMonthWindow = getBogotaMonthWindow(new Date());
+  const [announcements, globalAchievements, createdTasks, authoredAnnouncements] = await Promise.all([
     getDashboardAnnouncements(userId),
     prisma.task.findMany({
       where: {
@@ -442,10 +502,78 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
           }
         }
       }
-    })
+    }),
+    isCommunityManagerRole(member.role)
+      ? prisma.task.findMany({
+        where: {
+          creatorId: userId,
+          status: 'PENDIENTE',
+          createdAt: {
+            gte: contextMonthWindow.start,
+            lt: contextMonthWindow.end
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          createdAt: true,
+          dueDate: true,
+          completedAt: true,
+          creatorId: true,
+          assigneeId: true,
+          isPriority: true,
+          priority: true,
+          isSpecial: true,
+          assignee: {
+            select: { id: true, name: true, role: true, avatarUrl: true }
+          },
+          client: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              logoUrl: true,
+              healthRecords: {
+                orderBy: { updatedAt: 'desc' },
+                take: 1,
+                select: { score: true }
+              }
+            }
+          },
+          taskComments: {
+            take: 1,
+            select: { id: true }
+          }
+        }
+      })
+      : Promise.resolve([]),
+    isProjectManagerRole(member.role)
+      ? Promise.all([
+        prisma.globalAnnouncement.findMany({
+          where: {
+            authorId: userId,
+            createdAt: { gte: announcementLookback }
+          },
+          select: { id: true, createdAt: true }
+        }),
+        prisma.notification.findMany({
+          where: {
+            relatedId: userId,
+            type: 'TEAM_ANNOUNCEMENT',
+            createdAt: { gte: announcementLookback }
+          },
+          select: { id: true, createdAt: true }
+        })
+      ]).then(([globalAnnouncements, personalAnnouncements]) => [
+        ...globalAnnouncements.map((announcement) => ({ ...announcement, scope: 'GLOBAL' })),
+        ...personalAnnouncements.map((announcement) => ({ ...announcement, scope: 'MEMBER' }))
+      ])
+      : Promise.resolve([])
   ]);
 
-  return buildPersonalDashboard({ member: { ...member, announcements }, globalAchievements });
+  return buildPersonalDashboard({ member: { ...member, announcements, createdTasks, authoredAnnouncements }, globalAchievements });
 };
 
 export const getDashboardAnnouncements = async (userId, { db = prisma } = {}) => {
@@ -508,7 +636,8 @@ export const createDashboardAnnouncement = async ({ requester, scope, content, t
     return db.globalAnnouncement.create({
       data: {
         content: cleanContent,
-        type: 'DASHBOARD'
+        type: 'DASHBOARD',
+        authorId: requester?.userId || null
       }
     });
   }

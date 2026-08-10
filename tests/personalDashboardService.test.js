@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   buildPersonalDashboard,
   assertPersonalDashboardAccess,
@@ -18,6 +19,7 @@ const makeTask = (overrides = {}) => ({
   status: overrides.status || 'PENDIENTE',
   dueDate: overrides.dueDate === undefined ? fixedNow : overrides.dueDate,
   completedAt: overrides.completedAt || null,
+  createdAt: overrides.createdAt || fixedNow,
   isPriority: overrides.isPriority || false,
   priority: overrides.priority || null,
   isSpecial: overrides.isSpecial || false,
@@ -130,7 +132,7 @@ test('dashboard announcements preserve safe rich text and target only the select
   };
 
   await createDashboardAnnouncement({
-    requester: { role: 'ADMIN' },
+    requester: { role: 'ADMIN', userId: 'user-admin' },
     scope: 'GLOBAL',
     content: '<p>Hola <strong>equipo</strong> 🚀<script>alert(1)</script></p>'
   }, { db });
@@ -142,12 +144,21 @@ test('dashboard announcements preserve safe rich text and target only the select
   }, { db });
 
   assert.match(writes[0].payload.data.content, /<strong>equipo<\/strong>/);
+  assert.equal(writes[0].payload.data.authorId, 'user-admin');
   assert.match(writes[0].payload.data.content, /🚀/);
   assert.doesNotMatch(writes[0].payload.data.content, /script|alert\(1\)/i);
   assert.equal(writes[1].payload.data.userId, 'user-helen');
   assert.equal(writes[1].payload.data.type, 'TEAM_ANNOUNCEMENT');
   assert.equal(writes[1].payload.data.relatedId, 'user-rodny');
   assert.match(writes[1].payload.data.message, /<em>personal<\/em>/);
+});
+
+test('global announcements keep an optional author relation for role-based challenges', () => {
+  const schema = readFileSync('prisma/schema.prisma', 'utf8');
+  const model = schema.match(/model GlobalAnnouncement \{[\s\S]*?\n\}/)?.[0] || '';
+
+  assert.match(model, /authorId\s+String\?/);
+  assert.match(model, /author\s+User\?/);
 });
 
 test('only admins and project managers can edit and delete dashboard announcements', async () => {
@@ -299,14 +310,14 @@ test('buildPersonalDashboard keeps the achievement feed global and the daily sta
   assert.equal(dashboard.stats.completedToday, 0);
 });
 
-test('buildPersonalDashboard recommends a documentation habit when assigned work lacks comments', () => {
+test('buildPersonalDashboard leaves the weekly challenge empty for non-community-manager roles', () => {
   const dashboard = buildPersonalDashboard({
     now: fixedNow,
     member: {
       id: 'member-1',
       userId: 'user-1',
       name: 'Sara Brain',
-      role: 'Project Manager',
+      role: 'Diseñador gráfico',
       avatarUrl: null,
       nativeTasks: [
         makeTask({ id: 'open-1', title: 'Coordinar pauta', dueDate: new Date('2026-08-09T12:00:00.000Z'), taskComments: [] }),
@@ -315,8 +326,36 @@ test('buildPersonalDashboard recommends a documentation habit when assigned work
     }
   });
 
-  assert.notEqual(dashboard.weeklyHabit.id, 'document-progress');
+  assert.equal(dashboard.weeklyHabit.id, 'no-weekly-challenge');
+  assert.equal(dashboard.weeklyHabit.isEmpty, true);
+  assert.match(dashboard.weeklyHabit.title.normalize('NFD').replace(/\p{Diacritic}/gu, ''), /aun no tienes retos/i);
+  assert.equal(dashboard.weeklyHabit.progress, null);
   assert.equal(dashboard.focusCards.some((card) => card.id === 'habit-document-progress'), false);
+});
+
+test('buildPersonalDashboard gives project managers a daily announcement challenge', () => {
+  const dashboard = buildPersonalDashboard({
+    now: new Date('2026-08-12T15:00:00.000Z'),
+    member: {
+      id: 'member-pm',
+      userId: 'user-pm',
+      name: 'Paula PM',
+      role: 'Project Manager',
+      avatarUrl: null,
+      nativeTasks: [],
+      authoredAnnouncements: [
+        { id: 'global-mon', scope: 'GLOBAL', createdAt: new Date('2026-08-10T14:00:00.000Z') },
+        { id: 'member-tue', scope: 'MEMBER', createdAt: new Date('2026-08-11T15:00:00.000Z') },
+        { id: 'member-tue-2', scope: 'MEMBER', createdAt: new Date('2026-08-11T18:00:00.000Z') },
+        { id: 'previous-week', scope: 'GLOBAL', createdAt: new Date('2026-08-07T14:00:00.000Z') }
+      ]
+    }
+  });
+
+  assert.equal(dashboard.weeklyHabit.id, 'daily-team-announcement');
+  assert.equal(dashboard.weeklyHabit.progress, 40);
+  assert.equal(dashboard.weeklyHabit.targetLabel, '2 de 5 días con anuncio');
+  assert.match(dashboard.weeklyHabit.description, /general o personal/i);
 });
 
 test('buildPersonalDashboard only asks community managers to document tasks they created', () => {
@@ -339,15 +378,45 @@ test('buildPersonalDashboard only asks community managers to document tasks they
           nativeTasks: []
         }
       ],
-      nativeTasks: [
+      createdTasks: [
         makeTask({
           id: 'created-without-context',
           title: 'Brief campana Q3',
           creatorId: 'user-cm',
           assigneeId: 'member-other',
+          status: 'PENDIENTE',
+          createdAt: new Date('2026-08-07T12:00:00.000Z'),
           dueDate: new Date('2026-08-09T12:00:00.000Z'),
           taskComments: []
         }),
+        makeTask({
+          id: 'created-with-context',
+          title: 'Propuesta de campana',
+          creatorId: 'user-cm',
+          assigneeId: 'member-other',
+          status: 'PENDIENTE',
+          createdAt: new Date('2026-08-06T12:00:00.000Z'),
+          dueDate: new Date('2026-08-09T12:00:00.000Z'),
+          taskComments: [{ content: 'Objetivo, audiencia y siguiente paso.', authorId: 'user-cm', createdAt: fixedNow }]
+        }),
+        makeTask({
+          id: 'july-without-context',
+          title: 'Tarea anterior',
+          creatorId: 'user-cm',
+          status: 'PENDIENTE',
+          createdAt: new Date('2026-07-31T12:00:00.000Z'),
+          taskComments: []
+        }),
+        makeTask({
+          id: 'in-progress-without-context',
+          title: 'Tarea ya iniciada',
+          creatorId: 'user-cm',
+          status: 'EN_CURSO',
+          createdAt: new Date('2026-08-05T12:00:00.000Z'),
+          taskComments: []
+        })
+      ],
+      nativeTasks: [
         makeTask({
           id: 'assigned-without-context',
           title: 'Diseno carrusel',
@@ -361,6 +430,10 @@ test('buildPersonalDashboard only asks community managers to document tasks they
   });
 
   const habitCard = dashboard.focusCards.find((card) => card.id === 'habit-document-progress');
+  assert.equal(dashboard.weeklyHabit.id, 'keep-context-fresh');
+  assert.equal(dashboard.weeklyHabit.progress, 50);
+  assert.equal(dashboard.weeklyHabit.targetLabel, '1 de 2 pendientes de agosto con contexto');
+  assert.match(dashboard.weeklyHabit.description, /esta semana/i);
   assert.equal(habitCard.type, 'HABITO');
   assert.match(habitCard.content, /1 tarea/);
   assert.equal(habitCard.items.length, 1);
@@ -376,6 +449,7 @@ test('buildPersonalDashboard frames community manager work around assigned clien
       name: 'Camila CM',
       role: 'Community Manager',
       avatarUrl: null,
+      createdTasks: [],
       responsibleClients: [
         {
           id: 'client-1',
@@ -407,8 +481,10 @@ test('buildPersonalDashboard frames community manager work around assigned clien
   assert.equal(dashboard.clients.length, 2);
   assert.equal(dashboard.clients[0].name, 'Marca Norte');
   assert.equal(dashboard.clients[0].activeTasks, 2);
-  assert.equal(dashboard.weeklyHabit.id, 'lead-account-growth');
-  assert.match(dashboard.weeklyHabit.title, /propuestas/i);
+  assert.equal(dashboard.weeklyHabit.id, 'keep-context-fresh');
+  assert.match(dashboard.weeklyHabit.title, /contexto/i);
+  assert.equal(dashboard.weeklyHabit.progress, 0);
+  assert.equal(dashboard.weeklyHabit.targetLabel, 'Sin tareas pendientes creadas en agosto');
   assert.equal(dashboard.focusCards.some((card) => card.id === 'cm-client-health'), true);
   assert.equal(dashboard.focusCards.some((card) => card.id === 'cm-content-plan'), true);
   assert.ok(dashboard.focusCards.find((card) => card.id === 'cm-client-health').items.length > 0);

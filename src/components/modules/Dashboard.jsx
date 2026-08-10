@@ -383,21 +383,35 @@ const Dashboard = () => {
                   </div>
                   <div>
                     <h3 className="font-semibold text-zinc-950 dark:text-white">Reto de la semana</h3>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Hábito operativo calibrable</p>
+                    {!dashboard.weeklyHabit?.isEmpty && (
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">Hábito operativo calibrable</p>
+                    )}
                   </div>
                 </div>
-                <h4 className="text-xl font-semibold text-zinc-950 dark:text-white">{dashboard.weeklyHabit?.title}</h4>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 leading-6">{dashboard.weeklyHabit?.description}</p>
+                {dashboard.weeklyHabit?.isEmpty ? (
+                  <div className="min-h-[120px] flex items-center justify-center text-center px-4">
+                    <h4 className="text-lg font-semibold text-zinc-500 dark:text-zinc-400">
+                      Aún no tienes retos para esta semana
+                    </h4>
+                  </div>
+                ) : (
+                  <>
+                    <h4 className="text-xl font-semibold text-zinc-950 dark:text-white">{dashboard.weeklyHabit?.title}</h4>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 leading-6">{dashboard.weeklyHabit?.description}</p>
+                  </>
+                )}
               </div>
-              <div className="mt-7">
-                <div className="flex justify-between text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-2.5">
-                  <span>{dashboard.weeklyHabit?.targetLabel}</span>
-                  <span>{dashboard.weeklyHabit?.progress ?? 0}%</span>
+              {!dashboard.weeklyHabit?.isEmpty && (
+                <div className="mt-7">
+                  <div className="flex justify-between text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-2.5">
+                    <span>{dashboard.weeklyHabit?.targetLabel}</span>
+                    <span>{dashboard.weeklyHabit?.progress ?? 0}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                    <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${dashboard.weeklyHabit?.progress ?? 0}%` }} />
+                  </div>
                 </div>
-                <div className="h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                  <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${dashboard.weeklyHabit?.progress ?? 0}%` }} />
-                </div>
-              </div>
+              )}
             </Card>
           </motion.div>
 
