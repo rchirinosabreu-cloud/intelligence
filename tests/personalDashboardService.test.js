@@ -358,6 +358,35 @@ test('buildPersonalDashboard gives project managers a daily announcement challen
   assert.match(dashboard.weeklyHabit.description, /general o personal/i);
 });
 
+test('buildPersonalDashboard gives accountants a weekly operational calendar challenge', () => {
+  const dashboard = buildPersonalDashboard({
+    now: fixedNow,
+    member: {
+      id: 'member-accountant',
+      userId: 'user-accountant',
+      name: 'Elisa Contadora',
+      role: 'Contadora',
+      avatarUrl: null,
+      nativeTasks: [],
+      authoredOperationalEvents: [
+        { id: 'event-mon-1', createdAt: new Date('2026-08-03T14:00:00.000Z') },
+        { id: 'event-mon-2', createdAt: new Date('2026-08-03T18:00:00.000Z') },
+        { id: 'event-mon-extra', createdAt: new Date('2026-08-03T20:00:00.000Z') },
+        { id: 'event-tue-1', createdAt: new Date('2026-08-04T15:00:00.000Z') },
+        { id: 'event-saturday', createdAt: new Date('2026-08-08T15:00:00.000Z') },
+        { id: 'previous-week', createdAt: new Date('2026-07-31T15:00:00.000Z') },
+        { id: 'next-week', createdAt: new Date('2026-08-10T15:00:00.000Z') }
+      ]
+    }
+  });
+
+  assert.equal(dashboard.weeklyHabit.id, 'weekly-operational-calendar');
+  assert.equal(dashboard.weeklyHabit.title, 'Registrar 10 eventos en el calendario');
+  assert.equal(dashboard.weeklyHabit.progress, 30);
+  assert.equal(dashboard.weeklyHabit.targetLabel, '3 de 10 eventos registrados esta semana');
+  assert.match(dashboard.weeklyHabit.description, /dos eventos por d[ií]a h[aá]bil/i);
+});
+
 test('buildPersonalDashboard only asks community managers to document tasks they created', () => {
   const dashboard = buildPersonalDashboard({
     now: fixedNow,

@@ -42,7 +42,7 @@ router.get('/events', async (req, res) => {
 
 router.post('/events', async (req, res) => {
   try {
-    const event = await createOperationalEvent(req.body);
+    const event = await createOperationalEvent(req.body, req.user?.userId || null);
     res.json(event);
   } catch (error) {
     console.error('[Activity API] Error creating event:', error.response?.data || error);

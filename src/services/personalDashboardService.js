@@ -45,6 +45,7 @@ export const assertAdminDashboardAccess = (user) => {
 
 const isCommunityManagerRole = (role = '') => role.toLowerCase().includes('community manager');
 const isProjectManagerRole = (role = '') => role.toLowerCase().includes('project manager');
+const isAccountantRole = (role = '') => role.toLowerCase().includes('contador');
 
 const getBogotaWeekContext = (value) => {
   const date = toDate(value);
@@ -79,6 +80,17 @@ const getBogotaMonthWindow = (value) => {
     start: new Date(Date.UTC(year, month - 1, 1, 5)),
     end: new Date(Date.UTC(year, month, 1, 5))
   };
+};
+
+const getBogotaWeekWindow = (value) => {
+  const context = getBogotaWeekContext(value);
+  if (!context) return null;
+  const [year, month, day] = context.weekKey.split('-').map(Number);
+  const start = new Date(Date.UTC(year, month - 1, day, 5));
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 7);
+
+  return { start, end };
 };
 
 const toDate = (value) => (value ? new Date(value) : null);
@@ -184,6 +196,7 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
   const tasks = Array.isArray(member?.nativeTasks) ? member.nativeTasks : [];
   const isCommunityManager = isCommunityManagerRole(member?.role);
   const isProjectManager = isProjectManagerRole(member?.role);
+  const isAccountant = isAccountantRole(member?.role);
   const currentMonthKey = getBogotaWeekContext(now)?.dateKey.slice(0, 7);
   const currentMonthLabel = new Intl.DateTimeFormat('es-CO', {
     timeZone: 'America/Bogota',
@@ -257,6 +270,14 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
       .filter((context) => context?.weekKey === currentWeek && context.weekday >= 1 && context.weekday <= 5)
       .map((context) => context.dateKey)
   ).size;
+  const operationalEventsByWorkday = (member?.authoredOperationalEvents || []).reduce((eventsByDay, event) => {
+    const context = getBogotaWeekContext(event.createdAt);
+    if (context?.weekKey !== currentWeek || context.weekday < 1 || context.weekday > 5) return eventsByDay;
+    eventsByDay.set(context.dateKey, (eventsByDay.get(context.dateKey) || 0) + 1);
+    return eventsByDay;
+  }, new Map());
+  const operationalEventsThisWeek = [...operationalEventsByWorkday.values()]
+    .reduce((total, eventCount) => total + Math.min(eventCount, 2), 0);
   const clientsNeedingAttention = assignedClients.filter((client) => (client.healthScore ?? 100) < 70 || client.returnedTasks > 0 || client.overdueTasks > 0);
   const clientsWithoutPlan = assignedClients.filter((client) => !client.contentPlanStatus || client.contentStatus === 'SIN_PARRILLA');
 
@@ -277,6 +298,14 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
         description: 'Comparte cada día hábil un anuncio general o personal para mantener al equipo alineado y con contexto.',
         progress: Math.round((announcementDaysThisWeek / 5) * 100),
         targetLabel: `${announcementDaysThisWeek} de 5 días con anuncio`
+      }
+    : isAccountant
+    ? {
+        id: 'weekly-operational-calendar',
+        title: 'Registrar 10 eventos en el calendario',
+        description: 'Registra dos eventos por día hábil: jornadas de producción, reuniones o actividades relacionadas con la gestión de la agencia.',
+        progress: Math.min(100, Math.round((operationalEventsThisWeek / 10) * 100)),
+        targetLabel: `${operationalEventsThisWeek} de 10 eventos registrados esta semana`
       }
     : {
         id: 'no-weekly-challenge',
@@ -470,7 +499,8 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
 
   const announcementLookback = new Date(Date.now() - (8 * 24 * 60 * 60 * 1000));
   const contextMonthWindow = getBogotaMonthWindow(new Date());
-  const [announcements, globalAchievements, createdTasks, authoredAnnouncements] = await Promise.all([
+  const challengeWeekWindow = getBogotaWeekWindow(new Date());
+  const [announcements, globalAchievements, createdTasks, authoredAnnouncements, authoredOperationalEvents] = await Promise.all([
     getDashboardAnnouncements(userId),
     prisma.task.findMany({
       where: {
@@ -570,10 +600,25 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
         ...globalAnnouncements.map((announcement) => ({ ...announcement, scope: 'GLOBAL' })),
         ...personalAnnouncements.map((announcement) => ({ ...announcement, scope: 'MEMBER' }))
       ])
+      : Promise.resolve([]),
+    isAccountantRole(member.role)
+      ? prisma.operationalEvent.findMany({
+        where: {
+          createdById: userId,
+          createdAt: {
+            gte: challengeWeekWindow.start,
+            lt: challengeWeekWindow.end
+          }
+        },
+        select: { id: true, createdAt: true }
+      })
       : Promise.resolve([])
   ]);
 
-  return buildPersonalDashboard({ member: { ...member, announcements, createdTasks, authoredAnnouncements }, globalAchievements });
+  return buildPersonalDashboard({
+    member: { ...member, announcements, createdTasks, authoredAnnouncements, authoredOperationalEvents },
+    globalAchievements
+  });
 };
 
 export const getDashboardAnnouncements = async (userId, { db = prisma } = {}) => {

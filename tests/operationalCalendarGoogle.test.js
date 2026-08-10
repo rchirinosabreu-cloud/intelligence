@@ -45,6 +45,20 @@ test('operational calendar is ready for central Google Calendar OAuth sync', asy
   assert.doesNotMatch(eventService, /start:\s*\{\s*dateTime:\s*new Date\(event\.startAt\)\.toISOString\(\)/);
 });
 
+test('operational calendar records the authenticated creator for dashboard challenges', async () => {
+  const schema = await read('prisma/schema.prisma');
+  const activityRoutes = await read('src/routes/api/activity.js');
+  const eventService = await read('src/services/operationalEventService.js');
+  const eventModel = schema.match(/model OperationalEvent \{[\s\S]*?\n\}/)?.[0] || '';
+
+  assert.match(eventModel, /createdById\s+String\?/);
+  assert.match(eventModel, /createdBy\s+User\?/);
+  assert.match(eventModel, /@@index\(\[createdById, createdAt\]\)/);
+  assert.match(activityRoutes, /createOperationalEvent\(req\.body, req\.user\?\.userId \|\| null\)/);
+  assert.match(eventService, /createOperationalEvent\(data, createdById = null\)/);
+  assert.match(eventService, /createdById/);
+});
+
 test('operational calendar fixes current render and role issues', async () => {
   const calendar = await read('src/components/modules/Activity/OperationalCalendar.jsx');
   const activityMap = await read('src/components/modules/Activity/ActivityMap.jsx');

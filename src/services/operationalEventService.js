@@ -255,7 +255,7 @@ async function deleteGoogleEventIfLinked(event) {
   }
 }
 
-export async function createOperationalEvent(data) {
+export async function createOperationalEvent(data, createdById = null) {
   const event = await prisma.operationalEvent.create({
     data: {
       title: data.title,
@@ -268,6 +268,7 @@ export async function createOperationalEvent(data) {
       recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
       meetingLink: data.meetingLink || null,
       source: data.source || 'BRAIN',
+      createdById,
       googleMeetAccessType: data.googleMeetAccessType || (data.type === 'MEETING' ? 'OPEN' : null)
     }
   });
