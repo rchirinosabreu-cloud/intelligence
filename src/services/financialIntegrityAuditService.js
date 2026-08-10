@@ -9,17 +9,33 @@ export const auditFinancialIntegrity = async (prismaClient, { year: rawYear } = 
     const year = Number.parseInt(rawYear, 10) || new Date().getUTCFullYear();
     const dateStart = new Date(Date.UTC(year, 0, 1));
     const dateEnd = new Date(Date.UTC(year + 1, 0, 1));
+    const activeImportBatch = await prismaClient.financialImportBatch.findFirst({
+        where: { year, status: 'IMPORTED' },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true }
+    });
+    const activeRecordScope = activeImportBatch?.id
+        ? { OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null, origin: 'MANUAL' }] }
+        : {};
+    const activeContractScope = activeImportBatch?.id
+        ? { OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null }] }
+        : {};
     const [missingPeriod, actualWithoutAccount, draftRecords, unlinkedIncome, receivables, contracts, pendingPayroll, accountCount, closedPeriodCount] = await Promise.all([
-        prismaClient.financialRecord.count({ where: { date: { gte: dateStart, lt: dateEnd }, OR: [{ year: null }, { month: null }] } }),
-        prismaClient.financialRecord.count({ where: { year, scenario: 'ACTUAL', status: 'POSTED', accountId: null } }),
-        prismaClient.financialRecord.count({ where: { year, status: 'DRAFT' } }),
-        prismaClient.financialRecord.count({ where: { year, type: 'INCOME', clientId: null } }),
-        prismaClient.accountsReceivable.findMany({ where: { year }, select: { id: true, amount: true, status: true, payments: { select: { amount: true } } } }),
+        prismaClient.financialRecord.count({ where: { date: { gte: dateStart, lt: dateEnd }, status: { not: 'VOIDED' }, AND: [activeRecordScope, { OR: [{ year: null }, { month: null }] }] } }),
+        prismaClient.financialRecord.count({ where: { year, scenario: 'ACTUAL', status: 'POSTED', accountId: null, AND: [activeRecordScope] } }),
+        prismaClient.financialRecord.count({ where: { year, status: 'DRAFT', AND: [activeRecordScope] } }),
+        prismaClient.financialRecord.count({ where: { year, type: 'INCOME', status: 'POSTED', clientId: null, AND: [activeRecordScope] } }),
+        prismaClient.accountsReceivable.findMany({ where: { year, ...activeRecordScope }, select: { id: true, amount: true, status: true, payments: { select: { amount: true } } } }),
         prismaClient.payrollContract.findMany({
-            where: { startDate: { lt: dateEnd }, OR: [{ endDate: null }, { endDate: { gte: dateStart } }] },
+            where: {
+                AND: [
+                    { startDate: { lt: dateEnd }, OR: [{ endDate: null }, { endDate: { gte: dateStart } }] },
+                    activeContractScope
+                ]
+            },
             select: { id: true, collaboratorId: true, sourceLabel: true, startDate: true, endDate: true }
         }),
-        prismaClient.payrollTransaction.count({ where: { year, status: { in: ['DRAFT', 'APPROVED'] } } }),
+        prismaClient.payrollTransaction.count({ where: { year, status: { in: ['DRAFT', 'APPROVED'] }, contract: activeContractScope } }),
         prismaClient.financialAccount.count({ where: { isActive: true } }),
         prismaClient.financialPeriod.count({ where: { year, status: 'CLOSED' } })
     ]);

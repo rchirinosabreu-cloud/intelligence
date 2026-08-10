@@ -53,3 +53,13 @@ test('financial operational payment dates use the shared calendar', () => {
     assert.match(dashboardSource, /selected=\{paymentForm\.paidAt/);
     assert.match(dashboardSource, /selected=\{payrollPaymentForm\.paidAt/);
 });
+
+test('page headers preserve title width until wide desktop layouts', () => {
+    const pageHeaderSource = fs.readFileSync(
+        new URL('../src/components/ui/PageHeader.jsx', import.meta.url),
+        'utf8'
+    );
+
+    assert.match(pageHeaderSource, /2xl:flex-row 2xl:items-end/);
+    assert.doesNotMatch(pageHeaderSource, /md:flex-row md:items-end/);
+});

@@ -36,7 +36,7 @@ const PageHeader = ({
         </nav>
       )}
 
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div className="flex flex-col 2xl:flex-row 2xl:items-end justify-between gap-6">
         <div className="flex-1 min-w-0">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white truncate tracking-tight">
             {title}

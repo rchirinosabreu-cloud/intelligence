@@ -4,6 +4,7 @@ import { auditFinancialIntegrity } from '../src/services/financialIntegrityAudit
 
 test('auditFinancialIntegrity reports blockers that prevent a reliable monthly close', async () => {
     const prismaClient = {
+        financialImportBatch: { findFirst: async () => ({ id: 'batch-active' }) },
         financialRecord: {
             count: async ({ where }) => {
                 if (where?.status === 'DRAFT') return 2;
@@ -30,4 +31,50 @@ test('auditFinancialIntegrity reports blockers that prevent a reliable monthly c
     assert.ok(audit.issues.some((issue) => issue.code === 'RECEIVABLE_STATUS_MISMATCH'));
     assert.ok(audit.issues.some((issue) => issue.code === 'SHARED_PAYROLL_CONTRACT'));
     assert.ok(audit.issues.some((issue) => issue.code === 'NO_FINANCIAL_ACCOUNTS'));
+});
+
+test('auditFinancialIntegrity ignores voided history and stale import batches', async () => {
+    const recordQueries = [];
+    let receivableWhere;
+    let contractWhere;
+    const prismaClient = {
+        financialImportBatch: { findFirst: async () => ({ id: 'batch-current' }) },
+        financialRecord: {
+            count: async ({ where }) => {
+                recordQueries.push(where);
+                return 0;
+            }
+        },
+        accountsReceivable: {
+            findMany: async ({ where }) => {
+                receivableWhere = where;
+                return [];
+            }
+        },
+        payrollContract: {
+            findMany: async ({ where }) => {
+                contractWhere = where;
+                return [];
+            }
+        },
+        payrollTransaction: { count: async () => 0 },
+        financialAccount: { count: async () => 1 },
+        financialPeriod: { count: async () => 1 }
+    };
+
+    await auditFinancialIntegrity(prismaClient, { year: 2026 });
+
+    assert.equal(recordQueries[0].status.not, 'VOIDED');
+    assert.deepEqual(recordQueries[0].AND[0].OR, [
+        { importBatchId: 'batch-current' },
+        { importBatchId: null, origin: 'MANUAL' }
+    ]);
+    assert.deepEqual(receivableWhere.OR, [
+        { importBatchId: 'batch-current' },
+        { importBatchId: null, origin: 'MANUAL' }
+    ]);
+    assert.deepEqual(contractWhere.AND[1].OR, [
+        { importBatchId: 'batch-current' },
+        { importBatchId: null }
+    ]);
 });
