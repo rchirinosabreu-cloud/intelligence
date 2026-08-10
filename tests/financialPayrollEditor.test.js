@@ -17,6 +17,13 @@ test('payroll UI can generate, approve and pay a monthly payroll period', () => 
     assert.match(dashboardSource, /Generar nómina/);
 });
 
+test('payroll generation requires an explanatory platform confirmation', () => {
+    assert.match(dashboardSource, /isPayrollGenerationConfirmOpen/);
+    assert.match(dashboardSource, /setIsPayrollGenerationConfirmOpen\(true\)/);
+    assert.match(dashboardSource, /No registra pagos ni crea egresos/);
+    assert.match(dashboardSource, /Generar borradores/);
+});
+
 const makeResponse = () => ({
     statusCode: 200,
     payload: null,

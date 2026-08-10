@@ -80,6 +80,7 @@ const FinancialDashboard = () => {
     const [isSavingReceivable, setIsSavingReceivable] = useState(false);
     const [payrollMonth, setPayrollMonth] = useState(new Date().getMonth() + 1);
     const [isGeneratingPayroll, setIsGeneratingPayroll] = useState(false);
+    const [isPayrollGenerationConfirmOpen, setIsPayrollGenerationConfirmOpen] = useState(false);
     const [savingPayrollTransactionId, setSavingPayrollTransactionId] = useState('');
     const [payrollPayment, setPayrollPayment] = useState(null);
     const [payrollPaymentForm, setPayrollPaymentForm] = useState({ paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }), accountId: '', reference: '' });
@@ -448,6 +449,7 @@ const FinancialDashboard = () => {
                 month: payrollMonth
             }, { headers: { Authorization: `Bearer ${token}` } });
             await invalidatePayroll();
+            setIsPayrollGenerationConfirmOpen(false);
             setImportSuccess('Nómina mensual generada en borrador.');
         } catch (error) {
             console.error('Error generating payroll period:', error.response?.data || error);
@@ -1135,7 +1137,7 @@ const FinancialDashboard = () => {
                                     {formatCurrency(editablePayrollTotal || 0)}
                                 </span>
                                 {canWriteFinancials && <button type="button" onClick={() => openPayrollContractEditor()} className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Nuevo contrato</button>}
-                                {canWriteFinancials && <button type="button" onClick={handleGeneratePayroll} disabled={isGeneratingPayroll} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50">
+                                {canWriteFinancials && <button type="button" onClick={() => setIsPayrollGenerationConfirmOpen(true)} disabled={isGeneratingPayroll} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50">
                                     {isGeneratingPayroll && <Loader2 className="h-4 w-4 animate-spin" />}
                                     Generar nómina
                                 </button>}
@@ -1646,6 +1648,25 @@ const FinancialDashboard = () => {
                     </div>
                 )}
             </div>
+
+            <Dialog open={isPayrollGenerationConfirmOpen} onOpenChange={(open) => !isGeneratingPayroll && setIsPayrollGenerationConfirmOpen(open)}>
+                <DialogContent className="sm:max-w-md dark:bg-zinc-900">
+                    <DialogHeader>
+                        <DialogTitle>Generar nómina mensual</DialogTitle>
+                        <DialogDescription>
+                            Se crearán las liquidaciones de {['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][payrollMonth - 1]} de {selectedYear} a partir de los contratos activos.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
+                        <p>Cada liquidación quedará en estado Borrador para que puedas revisar sus valores antes de aprobarla.</p>
+                        <p className="font-medium text-zinc-900 dark:text-zinc-100">No registra pagos ni crea egresos en el libro financiero.</p>
+                    </div>
+                    <DialogFooter>
+                        <button type="button" onClick={() => setIsPayrollGenerationConfirmOpen(false)} disabled={isGeneratingPayroll} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Cancelar</button>
+                        <button type="button" onClick={handleGeneratePayroll} disabled={isGeneratingPayroll} className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50">{isGeneratingPayroll && <Loader2 className="h-4 w-4 animate-spin" />}Generar borradores</button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={isReceivableEditorOpen} onOpenChange={setIsReceivableEditorOpen}>
                 <DialogContent className="sm:max-w-lg dark:bg-zinc-900">

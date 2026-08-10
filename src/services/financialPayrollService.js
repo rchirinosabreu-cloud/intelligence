@@ -28,10 +28,22 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
 
   return prismaClient.$transaction(async (tx) => {
     await assertOpenFinancialPeriod(tx, year, month);
+    const activeImportBatch = await tx.financialImportBatch.findFirst({
+      where: { year, status: 'IMPORTED' },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true }
+    });
     const contracts = await tx.payrollContract.findMany({
       where: {
-        startDate: { lte: periodEnd },
-        OR: [{ endDate: null }, { endDate: { gte: periodStart } }]
+        AND: [
+          {
+            startDate: { lte: periodEnd },
+            OR: [{ endDate: null }, { endDate: { gte: periodStart } }]
+          },
+          activeImportBatch
+            ? { OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null }] }
+            : { importBatchId: null }
+        ]
       },
       include: { collaborator: { select: { displayName: true } } }
     });
