@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Sparkles, CheckSquare, LayoutGrid, FileText, BarChart3, Users, UserCheck, User, Moon, Sun, Bell, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign } from '@/components/ui/icons';
+import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
@@ -29,6 +29,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { id: 'radar', label: 'Radar de Mérito', icon: Zap, path: '/radar', moduleKey: 'radar' },
     { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes', moduleKey: 'clientes' },
     { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo', moduleKey: 'equipo' },
+    { id: 'operational-health', label: 'Salud Operativa', icon: Activity, path: '/salud-operativa', roles: ['ADMIN'] },
   ];
 
   const filteredMenuItems = menuItems.filter(item => {

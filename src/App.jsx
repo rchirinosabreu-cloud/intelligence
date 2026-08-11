@@ -32,6 +32,7 @@ const QuotationForm = lazy(() => import('./components/modules/Quotations/Quotati
 const QuotationsLayout = lazy(() => import('./components/modules/Quotations/QuotationsLayout'));
 const PublicQuotation = lazy(() => import('./components/public/Quotations/PublicQuotation'));
 const MinutesLayout = lazy(() => import('./components/modules/Minutes/MinutesLayout'));
+const OperationalHealth = lazy(() => import('./components/modules/OperationalHealth'));
 
 const AppLoader = () => (
   <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-300 flex items-center justify-center text-sm font-medium">
@@ -63,6 +64,11 @@ function ModuleGuard({ module, children }) {
   }
 
   return children;
+}
+
+function AdminGuard({ children }) {
+  const { currentUser } = useAuth();
+  return currentUser?.role === 'ADMIN' ? children : <Navigate to="/" replace />;
 }
 
 function AppContent() {
@@ -139,6 +145,14 @@ function AppContent() {
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/inicio" element={<Navigate to="/" replace />} />
                     <Route path="/dashboard" element={<Navigate to="/" replace />} />
+                    <Route
+                      path="/salud-operativa"
+                      element={
+                        <AdminGuard>
+                          <OperationalHealth />
+                        </AdminGuard>
+                      }
+                    />
                     <Route
                       path="/manager"
                       element={

@@ -6,11 +6,14 @@ import {
   getPersonalDashboardHandler,
   updateDashboardAnnouncementHandler
 } from '../../controllers/personalDashboardController.js';
+import { getOperationalHealthHandler } from '../../controllers/operationalHealthController.js';
+import { requireRole } from '../../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
 router.get('/personal', getPersonalDashboardHandler);
 router.get('/personal/:userId', getPersonalDashboardHandler);
+router.get('/operational-health', requireRole('ADMIN'), getOperationalHealthHandler);
 router.post('/announcements', createDashboardAnnouncementHandler);
 router.patch('/announcements/:scope/:id', updateDashboardAnnouncementHandler);
 router.delete('/announcements/:scope/:id', deleteDashboardAnnouncementHandler);
