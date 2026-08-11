@@ -1,14 +1,20 @@
 import prisma from '../lib/prisma.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { randomBytes } from 'node:crypto';
+import { getJwtSecret } from '../config/security.js';
 import {
   completePasswordReset,
+  normalizeEmail,
   PasswordResetError,
   requestPasswordReset
 } from '../services/passwordResetService.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'brainstudio-secret-key-2025';
+const JWT_SECRET = getJwtSecret();
 const AUTH_TOKEN_EXPIRES_IN = process.env.AUTH_TOKEN_EXPIRES_IN || '12h';
+const MIN_PASSWORD_LENGTH = 8;
+const ALLOWED_SYSTEM_ROLES = new Set(['ADMIN', 'PROJECT_MANAGER', 'EDITOR', 'VIEWER']);
+const ALLOWED_FINANCIAL_ROLES = new Set(['NONE', 'VIEWER', 'EDITOR', 'APPROVER', 'ADMIN']);
 
 export const login = async (req, res) => {
   try {
@@ -18,38 +24,8 @@ export const login = async (req, res) => {
           return res.status(400).json({ message: 'Email y contraseña son requeridos' });
       }
 
-      const userCount = await prisma.user.count();
-      if (userCount === 0) {
-          console.log("[Bootstrapping] No users found in database. Creating default admin user.");
-          const defaultAdminEmail = process.env.ADMIN_USER || 'admin@brainstudio.com';
-          const defaultAdminPassword = process.env.ADMIN_PASSWORD || 'password123';
-          const hashedAdminPassword = await bcrypt.hash(defaultAdminPassword, 10);
-
-          await prisma.user.create({
-              data: {
-                  name: 'System Admin',
-                  email: defaultAdminEmail,
-                  password: hashedAdminPassword,
-                  role: 'ADMIN',
-                  hasFinancialAccess: true,
-                  financialRole: 'ADMIN',
-                  passwordChangedAt: new Date(),
-                  modulePermissions: {
-                      Inicio: true,
-                      Manager: true,
-                      Tareas: true,
-                      Actividad: true,
-                      Clientes: true,
-                      Equipo: true,
-                      Radar: true,
-                      Parrillas: true
-                  }
-              }
-          });
-      }
-
       const user = await prisma.user.findUnique({
-          where: { email }
+          where: { email: normalizeEmail(email) }
       });
 
       if (!user) {
@@ -94,7 +70,7 @@ export const login = async (req, res) => {
 
   } catch (error) {
       console.error('Error during login:', error);
-      return res.status(500).json({ message: 'Error interno del servidor', details: error.message });
+      return res.status(500).json({ message: 'Error interno del servidor' });
   }
 };
 
@@ -147,9 +123,6 @@ export const syncUsers = async (req, res) => {
       return res.json({ success: true, message: "No se encontraron TeamMembers con email para sincronizar." });
     }
 
-    const defaultPassword = 'Brainstudio2026';
-    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
-
     let createdCount = 0;
     let skippedCount = 0;
 
@@ -160,7 +133,9 @@ export const syncUsers = async (req, res) => {
         where: { email: normalizedEmail }
       });
 
-      if (!user) {
+      if (!user || user.isActive === false) {
+        const unusablePassword = randomBytes(32).toString('hex');
+        const hashedPassword = await bcrypt.hash(unusablePassword, 10);
         user = await prisma.user.create({
           data: {
             name: member.name,
@@ -183,14 +158,14 @@ export const syncUsers = async (req, res) => {
 
     return res.json({
         success: true,
-        message: "Sincronización completada",
+        message: "Sincronización completada. Los usuarios nuevos deben usar recuperación de contraseña.",
         sincronizados: createdCount,
         omitidos_ya_existian: skippedCount
     });
 
   } catch (error) {
     console.error("[Sync] Error durante la sincronización:", error);
-    return res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: 'No se pudo sincronizar a los usuarios' });
   }
 };
 
@@ -206,7 +181,25 @@ export const createUser = async (req, res) => {
             return res.status(400).json({ message: 'Nombre, email y contraseña son obligatorios' });
         }
 
-        const existingUser = await prisma.user.findUnique({ where: { email } });
+        if (password.length < MIN_PASSWORD_LENGTH) {
+            return res.status(400).json({ message: `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres` });
+        }
+
+        const normalizedEmail = normalizeEmail(email);
+        const normalizedRole = String(role || 'EDITOR').toUpperCase();
+        const hasFinancialAccess = req.body.hasFinancialAccess === true;
+        const normalizedFinancialRole = hasFinancialAccess
+            ? String(req.body.financialRole || 'EDITOR').toUpperCase()
+            : 'NONE';
+
+        if (!ALLOWED_SYSTEM_ROLES.has(normalizedRole)) {
+            return res.status(400).json({ message: 'Rol de sistema inválido' });
+        }
+        if (!ALLOWED_FINANCIAL_ROLES.has(normalizedFinancialRole)) {
+            return res.status(400).json({ message: 'Rol financiero inválido' });
+        }
+
+        const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
         if (existingUser) {
             return res.status(400).json({ message: 'El correo ya está registrado' });
         }
@@ -215,12 +208,12 @@ export const createUser = async (req, res) => {
 
         const newUser = await prisma.user.create({
             data: {
-                name,
-                email,
+                name: String(name).trim(),
+                email: normalizedEmail,
                 password: hashedPassword,
-                role: role || 'EDITOR',
-                hasFinancialAccess: req.body.hasFinancialAccess || false,
-                financialRole: req.body.financialRole || (req.body.hasFinancialAccess ? 'EDITOR' : 'NONE'),
+                role: normalizedRole,
+                hasFinancialAccess,
+                financialRole: normalizedFinancialRole,
                 mustChangePassword: true
             },
             select: { id: true, name: true, email: true, role: true, hasFinancialAccess: true, financialRole: true, mustChangePassword: true }
@@ -229,6 +222,6 @@ export const createUser = async (req, res) => {
         return res.status(201).json(newUser);
     } catch (error) {
         console.error('Error creating user:', error);
-        return res.status(500).json({ message: 'Error interno al crear usuario', details: error.message });
+        return res.status(500).json({ message: 'Error interno al crear usuario' });
     }
 };

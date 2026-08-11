@@ -57,27 +57,12 @@ const AppLayout = ({ children }) => {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!currentUser?.id,
-    refetchInterval: currentUser?.id ? 30000 : false,
+    refetchInterval: currentUser?.id ? () => (document.hidden ? false : 60000) : false,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
 
-  // --- REACT QUERY: UNREAD COUNT ---
-  const {
-    data: unreadData = { count: 0 },
-    refetch: refetchUnreadCount
-  } = useQuery({
-    queryKey: ['unreadNotificationsCount'],
-    queryFn: async () => {
-      const res = await fetch(`${getApiBaseUrl()}/api/notifications/unread-count`, { cache: 'no-store' });
-      if (!res.ok) throw new Error("Failed to fetch unread count");
-      return await res.json();
-    },
-    enabled: !!currentUser?.id,
-    refetchInterval: currentUser?.id ? 15000 : false,
-    refetchOnWindowFocus: true,
-  });
-
-  const unreadCount = unreadData?.count || 0;
+  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
 
   useEffect(() => {
     const handleNotificationsRead = () => {
@@ -143,24 +128,6 @@ const AppLayout = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-primary/20 relative transition-colors duration-300 font-sans">
-      {/* Ambient Glow Background - Fixed, z-0 */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-          {/* Top Left Orb - Primary */}
-          <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] rounded-full blur-[140px] opacity-40 animate-pulse-slow
-            bg-primary/30 mix-blend-multiply dark:bg-primary/10 dark:mix-blend-screen"
-          />
-
-          {/* Bottom Right Orb - Primary */}
-          <div className="absolute bottom-[-20%] right-[-10%] w-[800px] h-[800px] rounded-full blur-[140px] opacity-40 animate-pulse-slow delay-1000
-            bg-primary/20 mix-blend-multiply dark:bg-primary/10 dark:mix-blend-screen"
-          />
-
-          {/* Center Orb (Optional, smaller) - Fuchsia */}
-           <div className="absolute top-[30%] left-[30%] w-[500px] h-[500px] rounded-full blur-[120px] opacity-20
-             bg-zinc-200/30 mix-blend-multiply dark:bg-zinc-500/5 dark:mix-blend-screen"
-           />
-      </div>
-
       {/* Sidebar - z-[60] (Internal) */}
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
@@ -183,6 +150,7 @@ const AppLayout = ({ children }) => {
               <input
                 type="text"
                 placeholder="Buscar algo..."
+                aria-label="Buscar en Brainstudio"
                 onChange={(e) => {
                     window.dispatchEvent(new CustomEvent('global-search-changed', { detail: { query: e.target.value } }));
                 }}
@@ -196,7 +164,8 @@ const AppLayout = ({ children }) => {
                 variant="ghost"
                 size="icon"
                 onClick={toggleTheme}
-                className="rounded-full"
+                className="rounded-full h-11 w-11"
+                aria-label="Cambiar tema"
             >
                 {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </Button>
@@ -211,7 +180,8 @@ const AppLayout = ({ children }) => {
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="rounded-full relative"
+                    className="rounded-full relative h-11 w-11"
+                    aria-label="Abrir notificaciones"
                 >
                     <Bell className="w-4 h-4" />
                     {unreadCount > 0 && (
@@ -319,12 +289,13 @@ const AppLayout = ({ children }) => {
                                     </div>
 
                                     {/* Inline Actions */}
-                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 sm:group-focus-within/item:opacity-100 transition-opacity">
                                         {notif.taskId && (
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="w-7 h-7 rounded-full bg-white dark:bg-zinc-800 shadow-sm border border-zinc-100 dark:border-zinc-700"
+                                                className="min-w-11 min-h-11 rounded-full bg-white dark:bg-zinc-800 shadow-sm border border-zinc-100 dark:border-zinc-700"
+                                                aria-label="Ver tarea"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     e.preventDefault();
@@ -340,7 +311,8 @@ const AppLayout = ({ children }) => {
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="w-7 h-7 rounded-full bg-white dark:bg-zinc-800 shadow-sm border border-zinc-100 dark:border-zinc-700"
+                                                className="min-w-11 min-h-11 rounded-full bg-white dark:bg-zinc-800 shadow-sm border border-zinc-100 dark:border-zinc-700"
+                                                aria-label="Marcar notificación como leída"
                                                 onClick={async (e) => {
                                                     e.stopPropagation();
                                                     e.preventDefault();
@@ -370,7 +342,10 @@ const AppLayout = ({ children }) => {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-white/5 transition-all outline-none">
+                <button
+                  className="flex min-h-11 items-center gap-3 p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-white/5 transition-all outline-none"
+                  aria-label="Abrir menú de cuenta"
+                >
                   <TeamAvatar
                     member={{ name: displayUser?.name, avatarUrl: displayUser?.avatarUrl }}
                     className="w-8 h-8"

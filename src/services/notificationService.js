@@ -154,12 +154,13 @@ export const getNotifications = async (userId) => {
     }
 };
 
-export const markAsRead = async (notificationId) => {
+export const markAsRead = async (notificationId, userId) => {
     try {
-        await prisma.notification.update({
-            where: { id: notificationId },
+        const result = await prisma.notification.updateMany({
+            where: { id: notificationId, userId },
             data: { isRead: true }
         });
+        return result.count > 0;
     } catch (error) {
         console.error(`[${new Date().toISOString()}] [NotificationService] Error marking as read:`, error?.message || error);
         throw error;

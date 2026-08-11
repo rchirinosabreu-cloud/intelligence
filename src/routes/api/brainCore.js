@@ -8,7 +8,10 @@ import { triageEmailsWithAI, onlyBasecampEmails } from '../../services/emailTria
 import prisma from '../../lib/prisma.js';
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024, files: 1 }
+});
 
 import { requireModulePermission } from '../../middlewares/authMiddleware.js';
 

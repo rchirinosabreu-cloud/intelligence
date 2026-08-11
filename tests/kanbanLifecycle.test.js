@@ -1,9 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import prisma from '../src/lib/prisma.js';
-import { createTask, updateTask } from '../src/services/nativeTaskService.js';
+import { getSafeTestDatabaseUrl } from './helpers/testDatabase.js';
 
-test('Kanban Critical Flow Integration', async (t) => {
+const testDatabaseUrl = getSafeTestDatabaseUrl();
+if (testDatabaseUrl) process.env.DATABASE_URL = testDatabaseUrl;
+const prisma = testDatabaseUrl ? (await import('../src/lib/prisma.js')).default : null;
+const taskService = testDatabaseUrl ? await import('../src/services/nativeTaskService.js') : {};
+const { createTask, updateTask } = taskService;
+
+test('Kanban Critical Flow Integration', { skip: !testDatabaseUrl }, async (t) => {
     let testClient;
     let testUser;
     let testTask;
@@ -14,7 +19,7 @@ test('Kanban Critical Flow Integration', async (t) => {
 
     t.before(async () => {
         // Only run if we have a DB
-        if (!process.env.DATABASE_URL) {
+        if (!testDatabaseUrl) {
             console.warn('Skipping actual DB integration tests as DATABASE_URL is missing.');
             return;
         }
@@ -37,7 +42,7 @@ test('Kanban Critical Flow Integration', async (t) => {
     });
 
     t.after(async () => {
-        if (!process.env.DATABASE_URL) return;
+        if (!testDatabaseUrl) return;
 
         // Cleanup
         if (testTask) {
@@ -52,7 +57,7 @@ test('Kanban Critical Flow Integration', async (t) => {
     });
 
     await t.test('Prueba 1: Creación Exitosa', async () => {
-        if (!process.env.DATABASE_URL) return;
+        if (!testDatabaseUrl) return;
 
         const taskData = {
             title: 'Integration Test Task',
@@ -70,7 +75,7 @@ test('Kanban Critical Flow Integration', async (t) => {
     });
 
     await t.test('Prueba 2: Persistencia en DB', async () => {
-        if (!process.env.DATABASE_URL) return;
+        if (!testDatabaseUrl) return;
 
         const dbTask = await prisma.task.findUnique({
             where: { id: testTask.id }
@@ -82,7 +87,7 @@ test('Kanban Critical Flow Integration', async (t) => {
     });
 
     await t.test('Prueba 3: Mutación de Estado (Kanban Flow)', async () => {
-        if (!process.env.DATABASE_URL) return;
+        if (!testDatabaseUrl) return;
 
         // Move to EN_CURSO (In Process)
         const updated = await updateTask(testTask.id, { status: 'EN_CURSO' }, testUser.id);
@@ -98,7 +103,7 @@ test('Kanban Critical Flow Integration', async (t) => {
     });
 
     await t.test('Prueba 4: Creación Unificada con Insumos y Comentarios', async () => {
-        if (!process.env.DATABASE_URL) return;
+        if (!testDatabaseUrl) return;
 
         const unifiedTaskData = {
             title: 'Unified Task Creation',
@@ -154,7 +159,7 @@ test('Kanban Critical Flow Integration', async (t) => {
     });
 
     await t.test('Prueba 5: Transaccionalidad de Base de Datos (Atomicidad/Rollback en Fallo)', async () => {
-        if (!process.env.DATABASE_URL) return;
+        if (!testDatabaseUrl) return;
 
         const invalidUnifiedTaskData = {
             title: 'Should Rollback Task',
@@ -187,7 +192,7 @@ test('Kanban Critical Flow Integration', async (t) => {
     });
 
     await t.test('Prueba 6: Preservación de Descripción e Historial en Transiciones de Estado', async () => {
-        if (!process.env.DATABASE_URL) return;
+        if (!testDatabaseUrl) return;
 
         // Create task with base description and initial comment
         const transitionTaskData = {

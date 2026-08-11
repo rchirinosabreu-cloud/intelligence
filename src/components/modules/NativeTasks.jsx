@@ -234,7 +234,10 @@ const NativeTasks = () => {
             }));
         },
         enabled: !!localStorage.getItem('authToken'),
-        refetchInterval: (localStorage.getItem('authToken') && !isCreating && !editingTask) ? 30000 : false,
+        refetchInterval: (localStorage.getItem('authToken') && !isCreating && !editingTask)
+            ? () => (document.hidden ? false : 60000)
+            : false,
+        refetchIntervalInBackground: false,
         refetchOnWindowFocus: () => !isCreating && !editingTask,
     });
 

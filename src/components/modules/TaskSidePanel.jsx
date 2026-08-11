@@ -39,6 +39,7 @@ import {
     DropdownMenuTrigger,
     DropdownMenuContent,
 } from '@/components/ui/dropdown-menu';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
@@ -179,6 +180,7 @@ const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage 
                                     }}
                                     className="p-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-white/10 dark:hover:bg-white/20 rounded-xl text-zinc-700 dark:text-white transition-all border border-zinc-200 dark:border-white/10 cursor-pointer"
                                     title="Cerrar"
+                                    aria-label="Cerrar vista previa"
                                 >
                                     <X className="w-5 h-5" />
                                 </button>
@@ -202,6 +204,7 @@ const MediaPreviewModal = ({ isOpen, onClose, previewImage, handleDownloadImage 
 
 const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = null, defaultClientId = null }) => {
     const { toast } = useToast();
+    const confirm = useConfirmDialog();
     const { currentUser } = useAuth();
     const isEdition = !!taskData?.id;
 
@@ -415,8 +418,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         fetchComments(true);
 
         const interval = setInterval(() => {
-            fetchComments(false);
-        }, 4000); // 4 seconds polling
+            if (!document.hidden) fetchComments(false);
+        }, 10000);
 
         return () => {
             isMounted = false;
@@ -685,7 +688,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         } else {
             isDraftHydratedRef.current = false;
         }
-    }, [isOpen, taskData, isEdition, defaultClientId]);
+    }, [isOpen, taskData, isEdition, defaultClientId, clientsList, toast]);
 
     // Handle Inline Hot PATCH saving
     const saveInlineField = async (fieldName, finalValue) => {
@@ -858,6 +861,19 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         } finally {
             setIsTogglingFollow(false);
         }
+    };
+
+    const handleTaskAttachmentOpen = (item) => {
+        if (!item?.url) return;
+        const isManagedUpload = item.id && /storageapi\.dev|\/chat-evidence\//i.test(item.url);
+        if (isManagedUpload) {
+            const downloadUrl = `${getApiBaseUrl()}/api/tasks/${formData.id}/attachments/${item.id}/download`;
+            handleDownloadImage(downloadUrl);
+            return;
+        }
+
+        const openedWindow = window.open(item.url, '_blank', 'noopener,noreferrer');
+        if (openedWindow) openedWindow.opener = null;
     };
 
     const handleToggleSpecial = async () => {
@@ -1190,7 +1206,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     };
 
     const handleDeleteComment = async (commentId) => {
-        if (!window.confirm("¿Estás seguro de que deseas eliminar este comentario?")) return;
+        if (!(await confirm({
+            title: 'Eliminar comentario',
+            description: 'El comentario y sus adjuntos asociados se eliminarán permanentemente.',
+            confirmLabel: 'Eliminar'
+        }))) return;
 
         const originalComments = [...(formData.taskComments || [])];
         setFormData(prev => {
@@ -1269,14 +1289,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         handleChatFileSelected(file);
     };
 
-    const handleImagePreview = (imgData) => {
-        const accessToken = localStorage.getItem('authToken');
+    const handleImagePreview = async (imgData) => {
         if (imgData.proxy && imgData.commentId) {
             let downloadUrl = `${getApiBaseUrl()}/api/tasks/${formData.id}/comments/${imgData.commentId}/download`;
             const params = [];
-            if (accessToken) {
-                params.push(`token=${encodeURIComponent(accessToken)}`);
-            }
             if (imgData.name) {
                 params.push(`filename=${encodeURIComponent(imgData.name)}`);
             }
@@ -1284,10 +1300,15 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 downloadUrl += `?${params.join('&')}`;
             }
 
-            setPreviewImage({
-                displayUrl: imgData.proxy,
-                downloadUrl: downloadUrl
-            });
+            try {
+                const response = await fetch(imgData.proxy);
+                if (!response.ok) throw new Error(`Preview failed with status ${response.status}`);
+                const displayUrl = URL.createObjectURL(await response.blob());
+                setPreviewImage({ displayUrl, downloadUrl });
+            } catch (error) {
+                console.error('Image preview failed:', error);
+                toast({ variant: 'destructive', title: 'No se pudo abrir la vista previa' });
+            }
         } else {
             setPreviewImage({
                 displayUrl: imgData.direct || imgData,
@@ -1333,9 +1354,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const renderCommentAttachment = (attachment, commentId) => {
         const visualMeta = getFileVisualMeta({ name: attachment.name, mimeType: attachment.mimeType });
         const FileIcon = visualMeta.icon;
-        const accessToken = localStorage.getItem('authToken');
         const params = [];
-        if (accessToken) params.push(`token=${encodeURIComponent(accessToken)}`);
         if (attachment.name) params.push(`filename=${encodeURIComponent(attachment.name)}`);
         const suffix = params.length > 0 ? `?${params.join('&')}` : '';
         const fileUrl = `${getApiBaseUrl()}/api/tasks/${formData.id}/comments/${commentId}/file${suffix}`;
@@ -1373,6 +1392,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         onClick={() => handleDownloadImage(downloadUrl)}
                         className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-400 rounded-lg shadow-sm transition-colors"
                         title="Descargar archivo"
+                        aria-label="Descargar archivo"
                     >
                         <Download size={14} />
                     </button>
@@ -1501,6 +1521,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 <button
                                                     type="button"
                                                     className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-zinc-650 transition-all select-none focus:outline-none outline-none"
+                                                    aria-label="Abrir acciones del comentario"
                                                 >
                                                     <MoreHorizontal size={14} />
                                                 </button>
@@ -2034,11 +2055,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 <div className="space-y-1.5 max-h-[120px] overflow-y-auto">
                                                     {refUrls.map((item) => (
                                                         <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-1.5 bg-transparent border border-zinc-200/70 dark:border-zinc-800/70 rounded-lg text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
-                                                            <a href={item.url} target="_blank" rel="noopener noreferrer" className="truncate hover:underline text-indigo-600 flex items-center gap-1">
+                                                            <button type="button" onClick={() => handleTaskAttachmentOpen(item)} className="min-w-0 truncate hover:underline text-indigo-600 flex items-center gap-1 text-left">
                                                                 <ExternalLink size={10} /> {item.name}
-                                                            </a>
+                                                            </button>
                                                             {item.id !== 'ref-legacy' && !item.id.startsWith('ref-link-') && (
-                                                                <button onClick={() => handleDeleteAttachment(item.id)} className="text-zinc-400 hover:text-red-500">
+                                                            <button onClick={() => handleDeleteAttachment(item.id)} className="text-zinc-400 hover:text-red-500" aria-label="Eliminar adjunto">
                                                                     <X size={10} />
                                                                 </button>
                                                             )}
@@ -2088,11 +2109,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 <div className="space-y-1.5 max-h-[120px] overflow-y-auto">
                                                     {inpUrls.map((item) => (
                                                         <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-1.5 bg-transparent border border-zinc-200/70 dark:border-zinc-800/70 rounded-lg text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
-                                                            <a href={item.url} target="_blank" rel="noopener noreferrer" className="truncate hover:underline text-indigo-600 flex items-center gap-1">
+                                                            <button type="button" onClick={() => handleTaskAttachmentOpen(item)} className="min-w-0 truncate hover:underline text-indigo-600 flex items-center gap-1 text-left">
                                                                 <ExternalLink size={10} /> {item.name}
-                                                            </a>
+                                                            </button>
                                                             {!item.id.startsWith('inp-link-') && (
-                                                                <button onClick={() => handleDeleteAttachment(item.id)} className="text-zinc-400 hover:text-red-500">
+                                                            <button onClick={() => handleDeleteAttachment(item.id)} className="text-zinc-400 hover:text-red-500" aria-label="Eliminar adjunto">
                                                                     <X size={10} />
                                                                 </button>
                                                             )}
@@ -2390,6 +2411,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                     type="button"
                                                     onClick={() => setSelectedFile(null)}
                                                     className="p-1 hover:bg-primary/10 rounded text-primary"
+                                                    aria-label="Quitar archivo seleccionado"
                                                 >
                                                     <X size={14} />
                                                 </button>
@@ -2421,6 +2443,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                             type="button"
                                                             onClick={() => setTempAttachments(prev => prev.filter((_, idx) => idx !== i))}
                                                             className="p-1 hover:bg-red-50 dark:hover:bg-red-900/10 rounded text-red-500 shrink-0"
+                                                            aria-label="Quitar adjunto del borrador"
                                                         >
                                                             <X size={12} />
                                                         </button>
@@ -2487,6 +2510,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                     type="button"
                                                     onClick={() => handleAddComment()}
                                                     disabled={isEdition ? ((!newCommentText && !selectedFile) || isSendingComment) : !newCommentText}
+                                                    aria-label="Enviar comentario"
                                                     className={cn(
                                                         "w-9 h-9 flex items-center justify-center rounded-lg transition-all",
                                                         (newCommentText || (selectedFile && isEdition)) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"

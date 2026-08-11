@@ -22,8 +22,10 @@ import {
   DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
 import { toast } from 'react-hot-toast';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const ContentGrids = () => {
+  const confirm = useConfirmDialog();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { currentUser } = useAuth();
@@ -139,10 +141,13 @@ const ContentGrids = () => {
     }
   };
 
-  const handleDelete = (id, clientName) => {
-    if (window.confirm(`¿Estás seguro de que deseas eliminar la parrilla de ${clientName}? Esta acción ocultará la parrilla.`)) {
-      deleteMutation.mutate(id);
-    }
+  const handleDelete = async (id, clientName) => {
+    const accepted = await confirm({
+      title: 'Eliminar parrilla',
+      description: `La parrilla de ${clientName} dejará de estar visible.`,
+      confirmLabel: 'Eliminar'
+    });
+    if (accepted) deleteMutation.mutate(id);
   };
 
   return (

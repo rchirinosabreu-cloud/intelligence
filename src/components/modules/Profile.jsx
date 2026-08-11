@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.j
 import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, Trash2, Edit2, X, Check, Calendar, Target, Award, Info, Camera } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const Card = ({ children, className }) => (
     <div className={cn("bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden", className)}>
@@ -42,6 +43,7 @@ const CardContent = ({ children, className }) => (
 );
 
 const Profile = () => {
+    const confirm = useConfirmDialog();
     const { currentUser } = useAuth();
     const { userId } = useParams();
     const navigate = useNavigate();
@@ -72,16 +74,7 @@ const Profile = () => {
     const isOwnProfile = !userId || userId === currentUser?.id;
     const isAdmin = currentUser?.role === 'ADMIN';
 
-    // Fetch initial data
-    useEffect(() => {
-        fetchProfile();
-        if (isOwnProfile) {
-            fetchNotes();
-        }
-        fetchFeedback();
-    }, [userId]);
-
-    const fetchProfile = async () => {
+    const fetchProfile = useCallback(async () => {
         try {
             const endpoint = userId ? `/api/user/profile/${userId}` : `/api/user/profile`;
             const res = await fetch(`${getApiBaseUrl()}${endpoint}`);
@@ -102,9 +95,9 @@ const Profile = () => {
         } catch (err) {
             console.error("Error fetching profile:", err);
         }
-    };
+    }, [navigate, toast, userId]);
 
-    const fetchFeedback = async () => {
+    const fetchFeedback = useCallback(async () => {
         setIsFeedbackLoading(true);
         try {
             const targetId = userId || currentUser?.id;
@@ -118,7 +111,7 @@ const Profile = () => {
         } finally {
             setIsFeedbackLoading(false);
         }
-    };
+    }, [currentUser?.id, userId]);
 
     const handleCreateFeedback = async (e) => {
         e.preventDefault();
@@ -156,7 +149,11 @@ const Profile = () => {
     };
 
     const handleDeleteFeedback = async (id) => {
-        if (!confirm("¿Estás seguro de que quieres eliminar este registro de feedback?")) return;
+        if (!(await confirm({
+            title: 'Eliminar feedback',
+            description: 'Este registro de feedback se eliminará permanentemente.',
+            confirmLabel: 'Eliminar'
+        }))) return;
         try {
             const res = await fetch(`${getApiBaseUrl()}/api/feedback/${id}`, { method: 'DELETE' });
             if (res.ok) {
@@ -168,7 +165,7 @@ const Profile = () => {
         }
     };
 
-    const fetchNotes = async () => {
+    const fetchNotes = useCallback(async () => {
         setIsNotesLoading(true);
         try {
             const res = await fetch(`${getApiBaseUrl()}/api/user/notes`);
@@ -181,7 +178,14 @@ const Profile = () => {
         } finally {
             setIsNotesLoading(false);
         }
-    };
+    }, []);
+
+    // Fetch initial data
+    useEffect(() => {
+        fetchProfile();
+        if (isOwnProfile) fetchNotes();
+        fetchFeedback();
+    }, [fetchFeedback, fetchNotes, fetchProfile, isOwnProfile]);
 
     const handleUpdateProfile = async (e) => {
         e.preventDefault();
@@ -279,7 +283,11 @@ const Profile = () => {
     };
 
     const handleDeleteNote = async (id) => {
-        if (!confirm("¿Estás seguro de que quieres eliminar esta nota?")) return;
+        if (!(await confirm({
+            title: 'Eliminar nota',
+            description: 'Esta nota se eliminará permanentemente de tu perfil.',
+            confirmLabel: 'Eliminar'
+        }))) return;
         try {
             const res = await fetch(`${getApiBaseUrl()}/api/user/notes/${id}`, { method: 'DELETE' });
             if (res.ok) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Plus, Search, MoreVertical, Loader2, Edit,
   Archive, RotateCcw, ChevronDown, ChevronUp,
@@ -43,7 +43,7 @@ const Clients = () => {
   const [isManualSlugCreate, setIsManualSlugCreate] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
-  const fetchClients = async () => {
+  const fetchClients = useCallback(async () => {
     try {
       setLoading(true);
       const baseUrl = getApiBaseUrl();
@@ -81,9 +81,9 @@ const Clients = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedPmId]);
 
-  const fetchPms = async () => {
+  const fetchPms = useCallback(async () => {
     try {
       const baseUrl = getApiBaseUrl();
       const res = await fetch(`${baseUrl}/api/team`, {
@@ -95,7 +95,7 @@ const Clients = () => {
     } catch (err) {
       console.error("Error fetching PMs:", err);
     }
-  };
+  }, []);
 
   // Click Outside Behavior
   const gridRef = useRef(null);
@@ -112,7 +112,7 @@ const Clients = () => {
   useEffect(() => {
     fetchClients();
     fetchPms();
-  }, [selectedPmId]);
+  }, [fetchClients, fetchPms]);
 
   const toggleExpand = (clientId) => {
     setExpandedClientId(prev => (prev === clientId ? null : clientId));

@@ -70,7 +70,7 @@ test('content pieces support final media uploads for client preview', async () =
   assert.match(contentRoutes, /deleteContentItemFinalAsset/);
   assert.match(contentRoutes, /router\.delete\('\/items\/:id\/final-asset'/);
   assert.match(contentRoutes, /items\/:id\/final-asset/);
-  assert.match(publicRoutes, /public\/items\/:id\/final-asset/);
+  assert.match(publicRoutes, /public\/parrilla\/:token\/items\/:id\/final-asset/);
   assert.match(publicController, /finalAsset:\s*item\.finalAssetKey/);
   assert.match(publicController, /version:\s*item\.finalAssetKey/);
   assert.match(editor, /handleFinalAssetUpload/);

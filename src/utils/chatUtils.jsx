@@ -83,6 +83,28 @@ export const AttachmentCard = ({ url, fileType, fileName, fileExt, downloadUrl, 
         typeLabel = `${fileExt} • Presentación`;
     }
 
+    const handleDownload = async (event) => {
+        event.stopPropagation();
+        try {
+            const target = downloadUrl || url;
+            const parsed = new URL(target, window.location.href);
+            if (parsed.pathname.startsWith('/api/')) {
+                const response = await fetch(target);
+                if (!response.ok) throw new Error(`Download failed with status ${response.status}`);
+                const blobUrl = URL.createObjectURL(await response.blob());
+                const anchor = document.createElement('a');
+                anchor.href = blobUrl;
+                anchor.download = fileName || 'archivo';
+                anchor.click();
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                return;
+            }
+            window.open(target, '_blank', 'noopener,noreferrer');
+        } catch (error) {
+            console.error('Attachment download failed:', error);
+        }
+    };
+
     return (
         <div className="flex items-center justify-between gap-4 p-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl my-2 max-w-md shadow-sm transition-all hover:bg-zinc-100 dark:hover:bg-zinc-800/80">
             <div className="flex items-center gap-3 min-w-0">
@@ -114,17 +136,15 @@ export const AttachmentCard = ({ url, fileType, fileName, fileExt, downloadUrl, 
                         <span className="sr-only">Vista previa</span>
                     </button>
                 )}
-                <a
-                    href={downloadUrl}
-                    download={fileName}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
+                <button
+                    type="button"
+                    onClick={handleDownload}
                     className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-400 rounded-lg shadow-sm transition-colors cursor-pointer"
                     title="Descargar archivo"
                 >
                     <Download size={14} />
-                </a>
+                    <span className="sr-only">Descargar archivo</span>
+                </button>
             </div>
         </div>
     );
@@ -142,8 +162,6 @@ export const linkify = (text, onImageClick = null, contextData = {}) => {
 
     const parts = text.split(urlRegex);
 
-    const accessToken = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-
     return parts.map((part, index) => {
         if (part.match(urlRegex)) {
             let href = part.startsWith('www.') ? `https://${part}` : part;
@@ -156,9 +174,6 @@ export const linkify = (text, onImageClick = null, contextData = {}) => {
             let displaySrc = href;
             if (isS3Bucket && contextData.taskId && contextData.commentId) {
                 displaySrc = `${getApiBaseUrl()}/api/tasks/${contextData.taskId}/comments/${contextData.commentId}/file`;
-                if (accessToken) {
-                    displaySrc += `?token=${encodeURIComponent(accessToken)}`;
-                }
             }
 
             // Render files, including images, as AttachmentCard. Images keep a preview affordance.
@@ -168,10 +183,22 @@ export const linkify = (text, onImageClick = null, contextData = {}) => {
                 let downloadUrl = href;
                 if (isS3Bucket && contextData.taskId && contextData.commentId) {
                     downloadUrl = `${getApiBaseUrl()}/api/tasks/${contextData.taskId}/comments/${contextData.commentId}/download`;
-                    if (accessToken) {
-                        downloadUrl += `?token=${encodeURIComponent(accessToken)}`;
-                    }
                 }
+
+                const handlePreview = isImage && onImageClick ? async () => {
+                    try {
+                        if (isS3Bucket) {
+                            const response = await fetch(displaySrc);
+                            if (!response.ok) throw new Error(`Preview failed with status ${response.status}`);
+                            const blobUrl = URL.createObjectURL(await response.blob());
+                            onImageClick({ direct: blobUrl, proxy: blobUrl, commentId: contextData.commentId, name });
+                            return;
+                        }
+                        onImageClick({ direct: href, proxy: displaySrc, commentId: contextData.commentId, name });
+                    } catch (error) {
+                        console.error('Attachment preview failed:', error);
+                    }
+                } : null;
 
                 return (
                     <AttachmentCard
@@ -182,7 +209,7 @@ export const linkify = (text, onImageClick = null, contextData = {}) => {
                         fileExt={ext}
                         downloadUrl={downloadUrl}
                         previewUrl={displaySrc}
-                        onPreview={isImage && onImageClick ? () => onImageClick({ direct: href, proxy: displaySrc, commentId: contextData.commentId, name }) : null}
+                        onPreview={handlePreview}
                     />
                 );
             }

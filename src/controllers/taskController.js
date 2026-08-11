@@ -13,6 +13,32 @@ import { getDashboardMetrics, getQualityStreak, getCompletedTasks, getTasks, cre
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from '../services/clientTaskService.js';
 import { uploadToS3, getFromS3Stream } from '../services/s3Service.js';
 import { createNotification, processMentionsAndNotifications } from '../services/notificationService.js';
+import { canDeleteTask, canUpdateTask, isManagerRole, pickAllowedTaskUpdates } from '../config/security.js';
+
+const COMMENT_MAX_LENGTH = 10_000;
+const taskCommentAuthorSelect = {
+    id: true,
+    name: true,
+    avatarUrl: true,
+    role: true
+};
+
+const extractManagedS3Key = (rawUrl) => {
+    const bucketName = process.env.AWS_S3_BUCKET_NAME || 'chat-evidence';
+    try {
+        const parsed = new URL(rawUrl);
+        const parts = parsed.pathname.split('/').filter(Boolean);
+        const bucketIndex = parts.indexOf(bucketName);
+        if (bucketIndex === -1 || parts.length <= bucketIndex + 1) return null;
+        return parts.slice(bucketIndex + 1).join('/');
+    } catch {
+        return null;
+    }
+};
+
+const safeDownloadName = (name = 'adjunto_tarea') => String(name)
+    .replace(/[\r\n"\\/]/g, '_')
+    .slice(0, 180) || 'adjunto_tarea';
 
 export const getMetrics = async (req, res) => {
     try {
@@ -113,7 +139,20 @@ export const updateExistingTask = async (req, res) => {
                 return res.status(403).json({ error: "No tienes permisos de Project Manager o Administrador para reordenar tareas" });
             }
         }
-        const updatedTask = await updateTask(req.params.taskId, req.body, req.user?.userId);
+        const task = await prisma.task.findUnique({
+            where: { id: req.params.taskId },
+            select: {
+                creatorId: true,
+                assignee: { select: { userId: true } }
+            }
+        });
+        if (!task) return res.status(404).json({ error: 'Task not found' });
+        if (!canUpdateTask(req.user, task)) {
+            return res.status(403).json({ error: 'No tienes permisos para actualizar esta tarea' });
+        }
+
+        const updateData = pickAllowedTaskUpdates(req.body);
+        const updatedTask = await updateTask(req.params.taskId, updateData, req.user?.userId);
         res.json(updatedTask);
     } catch (error) {
         res.status(500).json({ error: "Failed to update task", details: error.message });
@@ -152,6 +191,17 @@ export const deleteExistingTask = async (req, res) => {
     try {
         const { reason } = req.body;
         if (!reason) return res.status(400).json({ error: "Missing deletion reason" });
+        const task = await prisma.task.findUnique({
+            where: { id: req.params.taskId },
+            select: {
+                creatorId: true,
+                assignee: { select: { userId: true } }
+            }
+        });
+        if (!task) return res.status(404).json({ error: 'Task not found' });
+        if (!canDeleteTask(req.user, task)) {
+            return res.status(403).json({ error: 'No tienes permisos para eliminar esta tarea' });
+        }
         await auditAndDeleteTask(req.params.taskId, reason, req.user?.userId);
         res.json({ success: true });
     } catch (error) {
@@ -176,6 +226,36 @@ export const getFollowStatus = async (req, res) => {
         res.status(500).json({ error: "Failed to get follow status" });
     }
 };
+
+const streamTaskAttachment = async (req, res, disposition) => {
+    try {
+        const { taskId, attachmentId } = req.params;
+        const attachment = await prisma.taskAttachment.findFirst({
+            where: { id: attachmentId, taskId }
+        });
+        if (!attachment) return res.status(404).json({ error: 'Attachment not found' });
+
+        const key = extractManagedS3Key(attachment.url);
+        if (!key) return res.status(404).json({ error: 'Managed attachment not found' });
+
+        const object = await getFromS3Stream(key);
+        const fileName = safeDownloadName(attachment.name || key.split('/').pop());
+        res.setHeader('Content-Type', object.ContentType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
+        res.setHeader('Cache-Control', 'private, max-age=300');
+        object.Body.on('error', (error) => {
+            console.error('[TaskAttachment] Stream failed:', error);
+            if (!res.headersSent) res.status(500).json({ error: 'Failed to stream attachment' });
+        });
+        return object.Body.pipe(res);
+    } catch (error) {
+        console.error('[TaskAttachment] Proxy failed:', error);
+        if (!res.headersSent) return res.status(500).json({ error: 'Failed to load attachment' });
+    }
+};
+
+export const getTaskAttachmentFileProxy = (req, res) => streamTaskAttachment(req, res, 'inline');
+export const getTaskAttachmentDownloadProxy = (req, res) => streamTaskAttachment(req, res, 'attachment');
 
 export const getCommentFileProxy = async (req, res) => {
     try {
@@ -371,9 +451,13 @@ export const getCommentFileDownloadProxy = async (req, res) => {
 
 export const addTaskComment = async (req, res) => {
     try {
-        const { content, type } = req.body;
+        const content = req.body?.content;
         const { taskId } = req.params;
         const authorId = req.user.userId;
+
+        if (String(content || '').length > COMMENT_MAX_LENGTH) {
+            return res.status(400).json({ error: `El comentario no puede superar ${COMMENT_MAX_LENGTH} caracteres` });
+        }
 
         // Allow empty content if a file is present
         if (!content?.trim() && !req.file) {
@@ -407,7 +491,7 @@ export const addTaskComment = async (req, res) => {
                     taskId,
                     authorId,
                     content: finalContent,
-                    type: type || 'human'
+                    type: 'human'
                 }
             });
 
@@ -425,7 +509,7 @@ export const addTaskComment = async (req, res) => {
 
             return tx.taskComment.findUnique({
                 where: { id: createdComment.id },
-                include: { author: true, attachments: true }
+                include: { author: { select: taskCommentAuthorSelect }, attachments: true }
             });
         });
 
@@ -471,7 +555,7 @@ export const getTaskComments = async (req, res) => {
 
         const comments = await prisma.taskComment.findMany({
             where: { taskId },
-            include: { author: true, attachments: true, reactions: true },
+            include: { author: { select: taskCommentAuthorSelect }, attachments: true, reactions: true },
             orderBy: { createdAt: 'desc' }
         });
 
@@ -563,6 +647,9 @@ export const updateTaskComment = async (req, res) => {
         if (content === undefined || content === null) {
             return res.status(400).json({ error: "Content is required" });
         }
+        if (String(content).length > COMMENT_MAX_LENGTH) {
+            return res.status(400).json({ error: `El comentario no puede superar ${COMMENT_MAX_LENGTH} caracteres` });
+        }
 
         const comment = await prisma.taskComment.findUnique({
             where: { id: commentId }
@@ -582,7 +669,7 @@ export const updateTaskComment = async (req, res) => {
                 content: sanitizeHTML(content),
                 isEdited: true
             },
-            include: { author: true, attachments: true, reactions: true }
+            include: { author: { select: taskCommentAuthorSelect }, attachments: true, reactions: true }
         });
 
         const emojiGroups = {};
@@ -626,9 +713,9 @@ export const deleteTaskComment = async (req, res) => {
         }
 
         const isAuthor = comment.authorId === userId;
-        const isAdmin = role === 'ADMIN';
+        const canModerate = isManagerRole(role);
 
-        if (!isAuthor && !isAdmin) {
+        if (!isAuthor && !canModerate) {
             return res.status(403).json({ error: "No tienes permisos para eliminar este comentario" });
         }
 

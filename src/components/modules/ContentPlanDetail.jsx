@@ -19,6 +19,7 @@ import {
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { brainDatePickerProps } from '@/lib/brainDatePicker';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }) => {
   const [links, setLinks] = useState(Array.isArray(values) ? values : (values ? [values] : []));
@@ -146,8 +147,10 @@ const parsePlanInternalNotes = (value) => {
   return legacyNote ? [legacyNote] : [];
 };
 
-const getFinalAssetUrl = (item) => item.finalAssetKey
-  ? `${getApiBaseUrl()}/api/public/items/${item.id}/final-asset?v=${encodeURIComponent(item.finalAssetKey)}`
+const getFinalAssetUrl = (item, shareToken) => item.finalAssetKey
+  ? shareToken
+    ? `${getApiBaseUrl()}/api/public/parrilla/${encodeURIComponent(shareToken)}/items/${item.id}/final-asset?v=${encodeURIComponent(item.finalAssetKey)}`
+    : `${getApiBaseUrl()}/api/content/items/${item.id}/final-asset?v=${encodeURIComponent(item.finalAssetKey)}`
   : null;
 const isFinalAssetVideo = (item) => (item.finalAssetMimeType || '').startsWith('video/');
 const isFinalAssetImage = (item) => (item.finalAssetMimeType || '').startsWith('image/');
@@ -179,6 +182,7 @@ const FeedbackHistory = ({ comments, isOpen }) => {
 
 const ContentItemCard = ({
   item,
+  shareToken,
   index,
   isEditing,
   onEditToggle,
@@ -193,9 +197,42 @@ const ContentItemCard = ({
   isFinalAssetDeleting
 }) => {
   const [showFeedback, setShowFeedback] = useState(false);
+  const [assetUrl, setAssetUrl] = useState(null);
+  const finalAssetSourceUrl = getFinalAssetUrl(item, shareToken);
   const isRealizado = item.status === 'REALIZADO' || item.status === 'PUBLICADO';
   const isDevuelto = item.status === 'DEVUELTO';
   const latestTask = item.tasks?.[0];
+
+  useEffect(() => {
+    const sourceUrl = finalAssetSourceUrl;
+    if (!sourceUrl) {
+      setAssetUrl(null);
+      return undefined;
+    }
+    if (shareToken) {
+      setAssetUrl(sourceUrl);
+      return undefined;
+    }
+
+    let objectUrl;
+    let cancelled = false;
+    fetch(sourceUrl)
+      .then((response) => {
+        if (!response.ok) throw new Error(`Asset request failed with status ${response.status}`);
+        return response.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setAssetUrl(objectUrl);
+      })
+      .catch((error) => console.error('Final asset preview failed:', error));
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [finalAssetSourceUrl, shareToken]);
 
   return (
     <div
@@ -398,13 +435,13 @@ const ContentItemCard = ({
                     <div className="aspect-video bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center overflow-hidden">
                       {isFinalAssetImage(item) ? (
                         <img
-                          src={getFinalAssetUrl(item)}
+                          src={assetUrl || undefined}
                           alt={item.finalAssetName || 'Pieza final'}
                           className="w-full h-full object-cover"
                         />
                       ) : isFinalAssetVideo(item) ? (
                         <video
-                          src={getFinalAssetUrl(item)}
+                          src={assetUrl || undefined}
                           className="w-full h-full object-cover"
                           controls
                           preload="metadata"
@@ -419,7 +456,7 @@ const ContentItemCard = ({
                       </p>
                       <div className="flex items-center gap-2 shrink-0">
                         <a
-                          href={getFinalAssetUrl(item)}
+                          href={assetUrl || undefined}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700"
@@ -675,6 +712,7 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
 };
 
 const ContentPlanDetail = () => {
+  const confirm = useConfirmDialog();
   const { planId, clientSlug, period } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -914,6 +952,15 @@ const ContentPlanDetail = () => {
     finalAssetDeleteMutation.mutate(itemId);
   };
 
+  const handleDeleteItem = async (itemId) => {
+    const accepted = await confirm({
+      title: 'Eliminar pieza',
+      description: 'La pieza se eliminará permanentemente de esta parrilla.',
+      confirmLabel: 'Eliminar'
+    });
+    if (accepted) deleteItemMutation.mutate(itemId);
+  };
+
   const handleRemovePlanInternalNote = (indexToRemove) => {
     updatePlanMutation.mutate({
       internalNotes: serializePlanInternalNotes(planInternalNotes.filter((_, index) => index !== indexToRemove))
@@ -1107,13 +1154,12 @@ const ContentPlanDetail = () => {
             <ContentItemCard
               key={item.id}
               item={item}
+              shareToken={plan.shareToken}
               index={index}
               isEditing={editingItemId === item.id}
               onEditToggle={() => setEditingItemId(editingItemId === item.id ? null : item.id)}
               onUpdate={updateItemMutation.mutate}
-              onDelete={(id) => {
-                if(window.confirm('¿Eliminar esta pieza permanentemente?')) deleteItemMutation.mutate(id);
-              }}
+              onDelete={handleDeleteItem}
               onDispatch={() => setDispatchItemId(item.id)}
               navigate={navigate}
               itemRef={el => itemRefs.current[item.id] = el}

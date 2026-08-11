@@ -9,8 +9,10 @@ import SlideOver from '@/components/ui/SlideOver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const DeliverablesWidget = ({ clientId }) => {
+    const confirm = useConfirmDialog();
     const [files, setFiles] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isUploading, setIsUploading] = useState(false);
@@ -128,7 +130,11 @@ const DeliverablesWidget = ({ clientId }) => {
         e.preventDefault();
         e.stopPropagation();
 
-        if (!window.confirm("¿Estás seguro de que quieres eliminar este entregable? El archivo se borrará permanentemente de Google Cloud Storage.")) {
+        if (!(await confirm({
+            title: 'Eliminar entregable',
+            description: 'El archivo se borrará permanentemente del almacenamiento de Brainstudio.',
+            confirmLabel: 'Eliminar archivo'
+        }))) {
             return;
         }
 

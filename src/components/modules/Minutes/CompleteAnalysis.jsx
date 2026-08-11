@@ -81,10 +81,10 @@ IMPORTANTE: Todos los valores de los campos JSON deben ser Strings o Arrays de S
     }
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!analysisData) return;
     try {
-      generateAnalysisPDF(analysisData, sourceTitle, reportMeta);
+      await generateAnalysisPDF(analysisData, sourceTitle, reportMeta);
       toast.success("Descargando PDF...");
     } catch (err) {
       console.error(err);

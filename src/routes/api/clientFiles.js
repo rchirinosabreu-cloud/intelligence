@@ -1,14 +1,24 @@
 import express from 'express';
 import multer from 'multer';
 import prisma from '../../lib/prisma.js';
-import { uploadClientFile, getSignedUrl, deleteFileFromGCS, getClientFileStream, getUploadSignedUrl } from '../../services/storageService.js';
+import {
+    uploadClientFile,
+    getSignedUrl,
+    deleteFileFromGCS,
+    getClientFileStream,
+    getUploadSignedUrl,
+    getClientFileMetadata,
+    getClientStoragePrefix,
+    sanitizeStorageFileName
+} from '../../services/storageService.js';
+import { isSafeStoragePath, validateUploadFile } from '../../config/security.js';
 
 const router = express.Router({ mergeParams: true });
-
+const MAX_CLIENT_FILE_SIZE = 50 * 1024 * 1024;
 // Memory storage for multer - keeps file in RAM before GCS upload
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 50 * 1024 * 1024 } // Max 50MB
+    limits: { fileSize: MAX_CLIENT_FILE_SIZE, files: 1 }
 });
 
 /**
@@ -21,6 +31,11 @@ router.get('/storage/signed-url', async (req, res) => {
 
     if (!fileName || !fileType) {
         return res.status(400).json({ error: "fileName and fileType are required" });
+    }
+    try {
+        validateUploadFile({ originalname: fileName, mimetype: fileType, size: 0 }, { maxBytes: MAX_CLIENT_FILE_SIZE });
+    } catch (error) {
+        return res.status(415).json({ error: error.code || 'UNSAFE_FILE_TYPE' });
     }
 
     try {
@@ -69,16 +84,24 @@ router.post('/files', async (req, res, next) => {
     } = req.body;
 
     try {
-        // Security check: Block executable files
-        const forbiddenExtensions = [
-            '.exe', '.js', '.sh', '.php', '.bat', '.cmd', '.msi', '.vbs', '.scr', '.com',
-            '.ps1', '.vbe', '.jse', '.reg', '.wsf', '.pif', '.hta', '.jar'
-        ];
         const fileNameToCheck = (isDirectUpload === 'true' || isDirectUpload === true) ? name : req.file?.originalname;
 
-        if (fileNameToCheck && forbiddenExtensions.some(ext => fileNameToCheck.toLowerCase().endsWith(ext))) {
-            return res.status(403).json({ error: "Por seguridad, no se permiten archivos ejecutables" });
+        try {
+            validateUploadFile({
+                originalname: fileNameToCheck,
+                mimetype: mimeType || req.file?.mimetype,
+                size: Number(size || req.file?.size || 0),
+                buffer: req.file?.buffer
+            }, { maxBytes: MAX_CLIENT_FILE_SIZE });
+        } catch (error) {
+            return res.status(error.code === 'FILE_TOO_LARGE' ? 413 : 415).json({ error: error.code });
         }
+
+        const client = await prisma.client.findUnique({
+            where: { id: clientId },
+            select: { name: true }
+        });
+        if (!client) return res.status(404).json({ error: "Client not found" });
 
         let registrationData = {};
 
@@ -87,11 +110,31 @@ router.post('/files', async (req, res, next) => {
             if (!gcsPath || !name || !size || !mimeType) {
                 return res.status(400).json({ error: "Missing metadata for direct upload registration" });
             }
+            const prefix = `${getClientStoragePrefix(client.name)}/`;
+            const expectedSuffix = `_${sanitizeStorageFileName(name)}`;
+            if (!isSafeStoragePath(gcsPath, [prefix]) || !gcsPath.endsWith(expectedSuffix)) {
+                return res.status(400).json({ error: "Invalid storage path for this client" });
+            }
+            const storedMetadata = await getClientFileMetadata(gcsPath);
+            try {
+                validateUploadFile({
+                    originalname: name,
+                    mimetype: storedMetadata.contentType,
+                    size: storedMetadata.size
+                }, { maxBytes: MAX_CLIENT_FILE_SIZE });
+            } catch (error) {
+                await deleteFileFromGCS(gcsPath);
+                return res.status(error.code === 'FILE_TOO_LARGE' ? 413 : 415).json({ error: error.code });
+            }
+            if (storedMetadata.size > MAX_CLIENT_FILE_SIZE) {
+                await deleteFileFromGCS(gcsPath);
+                return res.status(413).json({ error: "El archivo supera el límite de 50 MB" });
+            }
             registrationData = {
                 name,
                 bucketUrl: gcsPath,
-                size: parseInt(size),
-                mimeType
+                size: storedMetadata.size,
+                mimeType: storedMetadata.contentType
             };
         } else {
             // Case B: Proxy upload (legacy/small files)
@@ -99,13 +142,6 @@ router.post('/files', async (req, res, next) => {
             if (!file) {
                 return res.status(400).json({ error: "No file uploaded" });
             }
-
-            const client = await prisma.client.findUnique({
-                where: { id: clientId },
-                select: { name: true }
-            });
-
-            if (!client) return res.status(404).json({ error: "Client not found" });
 
             const uploadResult = await uploadClientFile(file, client.name);
             registrationData = {
@@ -188,16 +224,11 @@ router.get('/files', async (req, res) => {
  * DELETE /api/clients/:clientId/files/:fileId
  */
 router.delete('/files/:fileId', async (req, res) => {
-    const { fileId } = req.params;
-
-    // Permissions check: Only ADMIN and EDITOR can delete files
-    if (req.user?.role !== 'ADMIN' && req.user?.role !== 'EDITOR') {
-        return res.status(403).json({ error: "No tienes permisos para eliminar archivos" });
-    }
+    const { clientId, fileId } = req.params;
 
     try {
-        const file = await prisma.clientFile.findUnique({
-            where: { id: fileId }
+        const file = await prisma.clientFile.findFirst({
+            where: { id: fileId, clientId }
         });
 
         if (!file) {
@@ -224,11 +255,11 @@ router.delete('/files/:fileId', async (req, res) => {
  * GET /api/clients/:clientId/files/:fileId/download
  */
 router.get('/files/:fileId/download', async (req, res) => {
-    const { fileId } = req.params;
+    const { clientId, fileId } = req.params;
 
     try {
-        const file = await prisma.clientFile.findUnique({
-            where: { id: fileId }
+        const file = await prisma.clientFile.findFirst({
+            where: { id: fileId, clientId }
         });
 
         if (!file) {

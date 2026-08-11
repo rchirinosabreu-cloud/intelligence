@@ -10,14 +10,16 @@
     "build": "npm run test:activity-build && prisma generate && vite build",
     "postinstall": "prisma generate",
     "preview": "vite preview --host :: --port 3000",
-    "lint": "node scripts/fix-richtext-lint.js && eslint . --quiet",
+    "lint": "eslint . --quiet",
+    "lint:fix-richtext": "node scripts/fix-richtext-lint.js",
     "lint:warn": "eslint .",
     "db:fix": "node scripts/fix_content_arrays.js",
     "db:status": "node scripts/add_status_message.js",
     "db:seed:financials": "node scripts/seed-financials.js",
     "db:seed:team": "node scripts/seed-team.js",
     "db:hard-cleanup": "node scripts/hard-cleanup.js",
-    "test": "node --test tests/kanbanLifecycle.test.js tests/draftAndLightbox.test.js tests/commentInteractions.test.js tests/richTextAndEmojis.test.js tests/composerActionLayout.test.js tests/reportsExtraction.test.js tests/reportPipelineRegression.test.js tests/passwordResetService.test.js tests/clientManagement.test.js",
+    "test": "node --test \"tests/**/*.test.js\"",
+    "storage:configure-cors": "node scripts/configure-storage-cors.js",
     "test:activity-build": "node --test tests/activityComponentsCompile.test.js"
   },
   "prisma": {
@@ -77,7 +79,6 @@
     "mammoth": "^1.11.0",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^9.0.5",
-    "openclaw": "^2026.5.7",
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^5.5.207",
     "pg": "^8.20.0",
@@ -97,6 +98,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@babel/preset-react": "^7.27.1",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20.17.10",
     "@types/react": "^18.3.18",

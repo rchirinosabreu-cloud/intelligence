@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Plus, Link as LinkIcon, Trash2, Loader2, ExternalLink } from '@/components/ui/icons';
 import * as Dialog from '@radix-ui/react-dialog';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { toast } from 'react-hot-toast';
 
 const KeyLinksWidget = ({ clientId }) => {
+    const confirm = useConfirmDialog();
     const [links, setLinks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -14,7 +17,7 @@ const KeyLinksWidget = ({ clientId }) => {
     const [newTitle, setNewTitle] = useState('');
     const [newUrl, setNewUrl] = useState('');
 
-    const fetchLinks = async () => {
+    const fetchLinks = useCallback(async () => {
         try {
             setLoading(true);
             const baseUrl = getApiBaseUrl();
@@ -28,11 +31,11 @@ const KeyLinksWidget = ({ clientId }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [clientId]);
 
     useEffect(() => {
         if (clientId) fetchLinks();
-    }, [clientId]);
+    }, [clientId, fetchLinks]);
 
     const handleAddLink = async (e) => {
         e.preventDefault();
@@ -49,7 +52,7 @@ const KeyLinksWidget = ({ clientId }) => {
 
             if (!res.ok) {
                 const errorData = await res.json();
-                alert(errorData.error || "Error al crear enlace");
+                toast.error(errorData.error || "Error al crear enlace");
                 return;
             }
 
@@ -61,14 +64,18 @@ const KeyLinksWidget = ({ clientId }) => {
 
         } catch (error) {
             console.error("Error creating link:", error);
-            alert("Error de conexión");
+            toast.error("Error de conexión");
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const handleDeleteLink = async (linkId) => {
-        if (!confirm("¿Eliminar este enlace?")) return;
+        if (!(await confirm({
+            title: 'Eliminar enlace',
+            description: '¿Deseas eliminar este enlace de la ficha del cliente?',
+            confirmLabel: 'Eliminar'
+        }))) return;
 
         try {
             const baseUrl = getApiBaseUrl();
@@ -79,7 +86,7 @@ const KeyLinksWidget = ({ clientId }) => {
             setLinks(links.filter(l => l.id !== linkId));
         } catch (error) {
              console.error("Error deleting link:", error);
-             alert("No se pudo eliminar el enlace");
+             toast.error("No se pudo eliminar el enlace");
         }
     };
 

@@ -88,7 +88,7 @@ const generatePDFFromHTML = async (htmlString, filename) => {
 
   } catch (error) {
     console.error("PDF Generation Error:", error);
-    alert("Hubo un error generando el PDF. Por favor intente nuevamente.");
+    throw new Error("Hubo un error generando el PDF. Por favor intenta nuevamente.");
   } finally {
     // Cleanup
     if (document.body.contains(container)) {
@@ -100,11 +100,11 @@ const generatePDFFromHTML = async (htmlString, filename) => {
 export const generateSummaryPDF = (data, sourceTitle, reportMeta) => {
   const htmlContent = generateSummaryHTML(data, sourceTitle, reportMeta);
   const filename = `Resumen_BrainStudio_${Date.now()}.pdf`;
-  generatePDFFromHTML(htmlContent, filename);
+  return generatePDFFromHTML(htmlContent, filename);
 };
 
 export const generateAnalysisPDF = (data, sourceTitle, reportMeta) => {
   const htmlContent = generateAnalysisHTML(data, sourceTitle, reportMeta);
   const filename = `Analisis_BrainStudio_${Date.now()}.pdf`;
-  generatePDFFromHTML(htmlContent, filename);
+  return generatePDFFromHTML(htmlContent, filename);
 };

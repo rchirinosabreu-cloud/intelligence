@@ -33,7 +33,7 @@ export const addNotification = async (req, res) => {
 
 export const markRead = async (req, res) => {
     try {
-        await markAsRead(req.params.id);
+        await markAsRead(req.params.id, req.user.userId);
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: "Failed to mark as read" });

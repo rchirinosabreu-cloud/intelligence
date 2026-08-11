@@ -19,6 +19,9 @@ test('SystemStreak Decoupled Quality Streak Tests', async (t) => {
     const originalCreateTask = prisma.task.create;
     const originalUpdateTask = prisma.task.update;
     const originalFindUniqueTask = prisma.task.findUnique;
+    const originalTransaction = prisma.$transaction;
+
+    prisma.$transaction = async (callback) => callback(prisma);
 
     t.after(() => {
         prisma.systemStreak.findUnique = originalFindUniqueSystemStreak;
@@ -28,6 +31,7 @@ test('SystemStreak Decoupled Quality Streak Tests', async (t) => {
         prisma.task.create = originalCreateTask;
         prisma.task.update = originalUpdateTask;
         prisma.task.findUnique = originalFindUniqueTask;
+        prisma.$transaction = originalTransaction;
     });
 
     await t.test('Test 1: getOrCreateSystemStreak creates record if not exists', async () => {

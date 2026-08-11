@@ -43,7 +43,7 @@ const Chat = () => {
 
     try {
       const baseUrl = getApiBaseUrl();
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('authToken');
 
       const response = await fetch(`${baseUrl}/api/chat`, {
         method: 'POST',

@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma.js';
 import { createTask } from './nativeTaskService.js';
 import { uploadToS3, deleteFromS3 } from './s3Service.js';
+import { randomBytes } from 'node:crypto';
 
 let strategicObjectivesColumnExists = null;
 let contentItemFinalAssetColumnsExist = null;
@@ -313,7 +314,7 @@ export const updateContentPlan = async (id, data) => {
 };
 
 export const generateShareToken = async (id) => {
-  const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  const token = randomBytes(32).toString('base64url');
   return await prisma.contentPlan.update({
     where: { id },
     data: { shareToken: token },

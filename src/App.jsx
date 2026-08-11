@@ -1,37 +1,43 @@
 
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
-import Dashboard from './components/modules/Dashboard';
-import NativeTasks from './components/modules/NativeTasks';
-import Chat from './components/modules/Chat';
-import Clients from './components/modules/Clients';
-import ClientDetailWrapper from './components/modules/ClientDetailWrapper';
-import Team from './components/modules/Team';
-import Profile from './components/modules/Profile';
-import ContentGrids from './components/modules/ContentGrids';
-import ContentPlanDetail from './components/modules/ContentPlanDetail';
-import FinancialDashboard from './components/modules/FinancialDashboard';
-import TalentRadar from './components/modules/TalentRadar';
-import BrainCore from './components/modules/BrainCore';
-import Activity from './components/modules/Activity';
-import GoogleCalendarCallback from './components/modules/Activity/GoogleCalendarCallback';
-import Reports from './components/modules/Reports';
-import MoodboardDashboard from './components/modules/Moodboard/MoodboardDashboard';
-import MoodboardCanvas from './components/modules/Moodboard/MoodboardCanvas';
 import Login from './components/Login';
 import ForcePasswordChange from './components/ForcePasswordChange';
-import PrivacyPolicy from './components/public/PrivacyPolicy';
-import TermsOfService from './components/public/TermsOfService';
-import SharedContentPlan from './components/public/SharedContentPlan';
-import QuotationForm from './components/modules/Quotations/QuotationForm';
-import QuotationsLayout from './components/modules/Quotations/QuotationsLayout';
-import PublicQuotation from './components/public/Quotations/PublicQuotation';
-import MinutesLayout from './components/modules/Minutes/MinutesLayout';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster, toast } from 'react-hot-toast';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const Dashboard = lazy(() => import('./components/modules/Dashboard'));
+const NativeTasks = lazy(() => import('./components/modules/NativeTasks'));
+const Clients = lazy(() => import('./components/modules/Clients'));
+const ClientDetailWrapper = lazy(() => import('./components/modules/ClientDetailWrapper'));
+const Team = lazy(() => import('./components/modules/Team'));
+const Profile = lazy(() => import('./components/modules/Profile'));
+const ContentGrids = lazy(() => import('./components/modules/ContentGrids'));
+const ContentPlanDetail = lazy(() => import('./components/modules/ContentPlanDetail'));
+const FinancialDashboard = lazy(() => import('./components/modules/FinancialDashboard'));
+const TalentRadar = lazy(() => import('./components/modules/TalentRadar'));
+const BrainCore = lazy(() => import('./components/modules/BrainCore'));
+const Activity = lazy(() => import('./components/modules/Activity'));
+const GoogleCalendarCallback = lazy(() => import('./components/modules/Activity/GoogleCalendarCallback'));
+const Reports = lazy(() => import('./components/modules/Reports'));
+const MoodboardDashboard = lazy(() => import('./components/modules/Moodboard/MoodboardDashboard'));
+const MoodboardCanvas = lazy(() => import('./components/modules/Moodboard/MoodboardCanvas'));
+const PrivacyPolicy = lazy(() => import('./components/public/PrivacyPolicy'));
+const TermsOfService = lazy(() => import('./components/public/TermsOfService'));
+const SharedContentPlan = lazy(() => import('./components/public/SharedContentPlan'));
+const QuotationForm = lazy(() => import('./components/modules/Quotations/QuotationForm'));
+const QuotationsLayout = lazy(() => import('./components/modules/Quotations/QuotationsLayout'));
+const PublicQuotation = lazy(() => import('./components/public/Quotations/PublicQuotation'));
+const MinutesLayout = lazy(() => import('./components/modules/Minutes/MinutesLayout'));
+
+const AppLoader = () => (
+  <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-300 flex items-center justify-center text-sm font-medium">
+    Cargando...
+  </div>
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -85,17 +91,19 @@ function AppContent() {
   }, []);
 
   if (isLoading) {
-    return <div className="min-h-screen bg-zinc-950 flex items-center justify-center">Cargando...</div>;
+    return <AppLoader />;
   }
 
   if (isAuthenticated && currentUser?.mustChangePassword) {
     return (
       <ThemeProvider>
         <Router>
+          <Suspense fallback={<AppLoader />}>
           <Routes>
             <Route path="/cambiar-password" element={<ForcePasswordChange />} />
             <Route path="*" element={<Navigate to="/cambiar-password" replace />} />
           </Routes>
+          </Suspense>
           <Toaster
             position="top-right"
             toastOptions={{
@@ -110,6 +118,7 @@ function AppContent() {
   return (
     <ThemeProvider>
       <Router>
+        <Suspense fallback={<AppLoader />}>
         <Routes>
           {/* Public Legal Routes */}
           <Route path="/privacidad" element={<PrivacyPolicy />} />
@@ -178,8 +187,22 @@ function AppContent() {
                         </ModuleGuard>
                       }
                     />
-                    <Route path="/parrillas/:clientSlug/:period" element={<ContentPlanDetail />} />
-                    <Route path="/parrillas/:planId" element={<ContentPlanDetail />} />
+                    <Route
+                      path="/parrillas/:clientSlug/:period"
+                      element={
+                        <ModuleGuard module="parrillas">
+                          <ContentPlanDetail />
+                        </ModuleGuard>
+                      }
+                    />
+                    <Route
+                      path="/parrillas/:planId"
+                      element={
+                        <ModuleGuard module="parrillas">
+                          <ContentPlanDetail />
+                        </ModuleGuard>
+                      }
+                    />
                     <Route
                       path="/minutas"
                       element={
@@ -188,9 +211,30 @@ function AppContent() {
                         </ModuleGuard>
                       }
                     />
-                    <Route path="/cotizaciones" element={<QuotationsLayout />} />
-                    <Route path="/cotizaciones/nueva" element={<QuotationForm />} />
-                    <Route path="/cotizaciones/editar/:id" element={<QuotationForm />} />
+                    <Route
+                      path="/cotizaciones"
+                      element={
+                        <ModuleGuard module="cotizaciones">
+                          <QuotationsLayout />
+                        </ModuleGuard>
+                      }
+                    />
+                    <Route
+                      path="/cotizaciones/nueva"
+                      element={
+                        <ModuleGuard module="cotizaciones">
+                          <QuotationForm />
+                        </ModuleGuard>
+                      }
+                    />
+                    <Route
+                      path="/cotizaciones/editar/:id"
+                      element={
+                        <ModuleGuard module="cotizaciones">
+                          <QuotationForm />
+                        </ModuleGuard>
+                      }
+                    />
 
                     <Route
                       path="/moodboard"
@@ -200,7 +244,14 @@ function AppContent() {
                         </ModuleGuard>
                       }
                     />
-                    <Route path="/moodboard/:boardId" element={<MoodboardCanvas />} />
+                    <Route
+                      path="/moodboard/:boardId"
+                      element={
+                        <ModuleGuard module="inspiracion">
+                          <MoodboardCanvas />
+                        </ModuleGuard>
+                      }
+                    />
 
                     <Route
                       path="/clientes"
@@ -210,7 +261,14 @@ function AppContent() {
                         </ModuleGuard>
                       }
                     />
-                    <Route path="/cliente/:clientId" element={<ClientDetailWrapper />} />
+                    <Route
+                      path="/cliente/:clientId"
+                      element={
+                        <ModuleGuard module="clientes">
+                          <ClientDetailWrapper />
+                        </ModuleGuard>
+                      }
+                    />
                     <Route
                       path="/radar"
                       element={
@@ -246,6 +304,7 @@ function AppContent() {
             />
           )}
         </Routes>
+        </Suspense>
         <Toaster
           position="top-right"
           toastOptions={{

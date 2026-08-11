@@ -1,19 +1,17 @@
 import * as cheerio from 'cheerio';
+import { safeFetchText } from '../config/security.js';
 
 export async function analyzeWebsiteDna(url) {
     console.log(`[Audit] Starting DNA analysis for: ${url}`);
     try {
-        const response = await fetch(url, {
+        const response = await safeFetchText(url, {
             headers: {
                 'User-Agent': 'Brainstudio-Intelligence-Bot/1.0 (Audit)'
-            }
+            },
+            timeoutMs: 10000,
+            maxBytes: 2 * 1024 * 1024
         });
-
-        if (!response.ok) {
-            throw new Error(`Failed to fetch URL. Status: ${response.status}`);
-        }
-
-        const html = await response.text();
+        const html = response.text;
         const $ = cheerio.load(html);
 
         const title = $('title').text().trim() || "Sin título";

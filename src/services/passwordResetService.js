@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { randomInt } from 'node:crypto';
 import prisma from '../lib/prisma.js';
 import { sendPasswordResetCode } from './passwordResetEmailService.js';
 
@@ -22,7 +23,7 @@ const isEmailLike = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 export const generateResetCode = () => {
   const max = 10 ** CODE_LENGTH;
-  return String(Math.floor(Math.random() * max)).padStart(CODE_LENGTH, '0');
+  return String(randomInt(0, max)).padStart(CODE_LENGTH, '0');
 };
 
 const buildDefaultDependencies = () => ({

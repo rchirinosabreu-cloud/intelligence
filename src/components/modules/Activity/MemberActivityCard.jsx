@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Clock, User, Trash2 } from '@/components/ui/icons';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
@@ -13,11 +13,12 @@ const MemberActivityCard = ({
   handlePointerEnter,
   handlePointerLeave
 }) => {
+  const memberName = member?.name;
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && member) {
-        console.log(`[Lifecycle] MemberActivityCard MOUNTED for ${member.name}`);
+    if (process.env.NODE_ENV === 'development' && memberName) {
+        console.log(`[Lifecycle] MemberActivityCard MOUNTED for ${memberName}`);
     }
-  }, [member?.name]);
+  }, [memberName]);
 
   if (!member) return null;
 

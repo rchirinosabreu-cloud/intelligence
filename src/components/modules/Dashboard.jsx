@@ -198,7 +198,8 @@ const Dashboard = () => {
     queryKey: ['personal-dashboard', selectedMemberUserId],
     queryFn: () => fetchJson(`${baseUrl}/api/dashboard/personal/${selectedMemberUserId}`),
     enabled: !!selectedMemberUserId,
-    refetchInterval: 45000,
+    refetchInterval: () => (document.hidden ? false : 60000),
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true
   });
 

@@ -10,6 +10,8 @@ import { getDeterministicColor, getClientInitials } from '@/utils/avatarUtils';
  * Eliminates ERR_HTTP2_PROTOCOL_ERROR by removing all image requests.
  */
 const ClientAvatar = ({ client, className, variant = "md", size: customSize }) => {
+    const clientId = client?.id;
+    const clientName = client?.name;
 
     // Standardized variants
     const variants = {
@@ -22,16 +24,16 @@ const ClientAvatar = ({ client, className, variant = "md", size: customSize }) =
 
     // Aislación Crítica: Cálculo memoizado para evitar bucles de renderizado y latencia
     const avatarData = useMemo(() => {
-        if (!client || !client.name) return null;
+        if (!clientName) return null;
 
         // Hashing strictly based on immutable ID when possible
-        const seed = client.id || client.name;
+        const seed = clientId || clientName;
 
         return {
-            initials: getClientInitials(client.name),
+            initials: getClientInitials(clientName),
             color: getDeterministicColor(seed)
         };
-    }, [client?.id, client?.name]);
+    }, [clientId, clientName]);
 
     // Guard against missing client data
     if (!client || !client.name || !avatarData) {

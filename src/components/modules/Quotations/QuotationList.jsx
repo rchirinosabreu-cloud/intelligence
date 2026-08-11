@@ -35,7 +35,7 @@ const QuotationList = () => {
         queryFn: async () => {
             const res = await fetch(`${getApiBaseUrl()}/api/quotations`, {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
             });
             if (!res.ok) throw new Error("Failed to fetch quotations");
@@ -57,7 +57,7 @@ const QuotationList = () => {
             const response = await fetch(`${getApiBaseUrl()}/api/quotations/${id}/pdf`, {
                 method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
             });
 

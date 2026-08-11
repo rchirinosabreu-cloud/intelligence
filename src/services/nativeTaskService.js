@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma.js';
 import { createNotification, processMentionsAndNotifications } from './notificationService.js';
 import { enqueueTaskClassification } from './taskClassificationService.js';
+import { pickAllowedTaskUpdates } from '../config/security.js';
 
 const taskContentPlanSelect = {
     id: true,
@@ -10,6 +11,31 @@ const taskContentPlanSelect = {
     status: true,
     ownerId: true,
     client: { select: { slug: true } }
+};
+
+const taskCommentAuthorSelect = {
+    id: true,
+    name: true,
+    avatarUrl: true,
+    role: true
+};
+
+const taskListInclude = {
+    client: {
+        select: { name: true, logoUrl: true, slug: true }
+    },
+    assignee: true,
+    creator: {
+        select: { id: true, name: true, avatarUrl: true, email: true, role: true }
+    },
+    taskAttachments: true,
+    contentItem: {
+        include: {
+            plan: {
+                select: taskContentPlanSelect
+            }
+        }
+    }
 };
 
 /**
@@ -279,35 +305,21 @@ export const getQualityStreak = async () => {
 
 export const getTasks = async (clientId) => {
     try {
-        const whereClause = clientId ? { clientId } : {};
-
-        const tasks = await prisma.task.findMany({
-            where: whereClause,
-            include: {
-                client: {
-                    select: { name: true, logoUrl: true, slug: true }
-                },
-                assignee: true,
-                creator: {
-                    select: { id: true, name: true, avatarUrl: true, email: true, role: true }
-                },
-                taskComments: {
-                    include: { author: true, attachments: true },
-                    orderBy: { createdAt: 'desc' }
-                },
-                taskAttachments: true,
-                contentItem: {
-                    include: {
-                        plan: {
-                            select: taskContentPlanSelect
-                        }
-                    }
-                }
-            },
-            orderBy: {
-                createdAt: 'asc' // Oldest first to match current kanban logic
-            }
-        });
+        const clientFilter = clientId ? { clientId } : {};
+        const [activeTasks, recentCompletedTasks] = await Promise.all([
+            prisma.task.findMany({
+                where: { ...clientFilter, status: { not: 'REALIZADA' } },
+                include: taskListInclude,
+                orderBy: { createdAt: 'asc' }
+            }),
+            prisma.task.findMany({
+                where: { ...clientFilter, status: 'REALIZADA' },
+                include: taskListInclude,
+                orderBy: { completedAt: 'desc' },
+                take: 200
+            })
+        ]);
+        const tasks = [...activeTasks, ...recentCompletedTasks];
 
         // Map for frontend compatibility: task.plan -> task.contentItem.plan
         return tasks.map(task => {
@@ -369,7 +381,9 @@ export const createTask = async ({
                     priority: priority || null,
                     isSpecial,
                     referenceUrl,
-                    contentItemId
+                    contentItemId,
+                    completedAt: mappedStatus === 'REALIZADA' ? new Date() : null,
+                    startedAt: mappedStatus === 'REALIZADA' ? new Date() : null
                 }
             });
 
@@ -392,8 +406,6 @@ export const createTask = async ({
                     }
                 });
 
-                await processMentionsAndNotifications(task.id, initialCommentText, creatorId);
-
                 // Create any remaining comments
                 for (let i = 1; i < initial_comments.length; i++) {
                     await tx.taskComment.create({
@@ -404,7 +416,6 @@ export const createTask = async ({
                             type: 'human'
                         }
                     });
-                    await processMentionsAndNotifications(task.id, initial_comments[i].content, creatorId);
                 }
             } else if (Array.isArray(tempAttachments) && tempAttachments.length > 0) {
                 // Shell comment to link files if no comment text
@@ -473,6 +484,12 @@ export const createTask = async ({
                 });
             }
 
+            if (followOnCreate && creatorId) {
+                await tx.taskFollower.create({
+                    data: { taskId: task.id, userId: creatorId }
+                });
+            }
+
             // Return the created task with its nested relations populated
             return tx.task.findUnique({
                 where: { id: task.id },
@@ -485,7 +502,7 @@ export const createTask = async ({
                         select: { id: true, name: true, avatarUrl: true, email: true, role: true }
                     },
                     taskComments: {
-                        include: { author: true, attachments: true },
+                        include: { author: { select: taskCommentAuthorSelect }, attachments: true },
                         orderBy: { createdAt: 'desc' }
                     },
                     taskAttachments: true,
@@ -508,15 +525,10 @@ export const createTask = async ({
             console.error("[nativeTaskService] Deferred classification trigger failed:", err.message)
         );
 
-        // Subscribe creator if requested
-        if (followOnCreate && creatorId) {
-            try {
-                await prisma.taskFollower.create({
-                    data: { taskId: newTask.id, userId: creatorId }
-                });
-            } catch (followErr) {
-                console.error("[nativeTaskService] Auto-follow failed:", followErr.message);
-            }
+        for (const initialComment of initial_comments) {
+            processMentionsAndNotifications(newTask.id, initialComment.content || '', creatorId).catch((error) => {
+                console.error('[nativeTaskService] Initial mention processing failed:', error);
+            });
         }
 
         // Map for frontend compatibility
@@ -595,8 +607,9 @@ export const getCompletedTasks = async (dateString) => {
 
 export const updateTask = async (id, data, updaterId = null) => {
     try {
+        const transition = await prisma.$transaction(async (tx) => {
         // 1. Fetch current task state to evaluate transitions (TDD Edge Cases)
-        const currentTask = await prisma.task.findUnique({
+        const currentTask = await tx.task.findUnique({
             where: { id },
             select: {
                 title: true,
@@ -619,7 +632,7 @@ export const updateTask = async (id, data, updaterId = null) => {
             throw new Error(`Task with id ${id} not found`);
         }
 
-        const updateData = { ...data };
+        const updateData = pickAllowedTaskUpdates(data);
 
         // Extract and isolate returnReason and reintegrateReason
         const { returnReason, reintegrateReason } = updateData;
@@ -629,7 +642,7 @@ export const updateTask = async (id, data, updaterId = null) => {
         // Handle adding a single new attachment in edition mode
         if (updateData.newAttachment) {
             const { name, url, category } = updateData.newAttachment;
-            await prisma.taskAttachment.create({
+            await tx.taskAttachment.create({
                 data: {
                     taskId: id,
                     name: name || null,
@@ -642,8 +655,8 @@ export const updateTask = async (id, data, updaterId = null) => {
 
         // Handle deleting an attachment in edition mode
         if (updateData.deleteAttachmentId) {
-            await prisma.taskAttachment.delete({
-                where: { id: updateData.deleteAttachmentId }
+            await tx.taskAttachment.deleteMany({
+                where: { id: updateData.deleteAttachmentId, taskId: id }
             });
             delete updateData.deleteAttachmentId;
         }
@@ -680,11 +693,11 @@ export const updateTask = async (id, data, updaterId = null) => {
                 updateData.isReturned = true;
                 updateData.returnedAt = new Date();
 
-                await resetSystemStreak(prisma);
+                await resetSystemStreak(tx);
 
                 // Create System Comment for Return using the decoupled returnReason
                 if (returnReason) {
-                    await prisma.taskComment.create({
+                    await tx.taskComment.create({
                         data: {
                             taskId: id,
                             authorId: updaterId,
@@ -715,7 +728,7 @@ export const updateTask = async (id, data, updaterId = null) => {
 
             // Fix Reintegration: Create system_reintegrate comment using the decoupled reintegrateReason
             if (isCorrected && reintegrateReason) {
-                await prisma.taskComment.create({
+                await tx.taskComment.create({
                     data: {
                         taskId: id,
                         authorId: updaterId,
@@ -739,8 +752,7 @@ export const updateTask = async (id, data, updaterId = null) => {
                     // --- AUTOMATION: HAND-OFF (Production to Publication) ---
                     // Only trigger if this was a production task transition to 'REALIZADA'
                     // and it hasn't already been handled.
-                    try {
-                        const linkedItem = await prisma.contentItem.findUnique({
+                        const linkedItem = await tx.contentItem.findUnique({
                             where: { id: currentTask.contentItemId || 'none' },
                             include: {
                                 plan: {
@@ -764,9 +776,18 @@ export const updateTask = async (id, data, updaterId = null) => {
                                 ? linkedItem.mediaUrl.join(', ')
                                 : (linkedItem.mediaUrl || 'N/A');
 
-                            await prisma.task.create({
+                            const publicationTitle = `[Publicar] ${linkedItem.format}: ${linkedItem.objective}`;
+                            const existingPublicationTask = await tx.task.findFirst({
+                                where: {
+                                    contentItemId: linkedItem.id,
+                                    title: publicationTitle
+                                },
+                                select: { id: true }
+                            });
+
+                            if (!existingPublicationTask) await tx.task.create({
                                 data: {
-                                    title: `[Publicar] ${linkedItem.format}: ${linkedItem.objective}`,
+                                    title: publicationTitle,
                                     dueDate: linkedItem.publishDate,
                                     assigneeId: linkedItem.plan.ownerId,
                                     creatorId: updaterId || currentTask.creatorId,
@@ -781,14 +802,11 @@ export const updateTask = async (id, data, updaterId = null) => {
                         // --- CLOSURE TRIGGER: Publication Task -> PUBLICADO ---
                         if (linkedItem && currentTask.title.startsWith('[Publicar]')) {
                             console.log(`[nativeTaskService] Publication task completed. Marking ContentItem ${linkedItem.id} as PUBLICADO.`);
-                            await prisma.contentItem.update({
+                            await tx.contentItem.update({
                                 where: { id: linkedItem.id },
                                 data: { status: 'PUBLICADO' }
                             });
                         }
-                    } catch (automationErr) {
-                        console.error("[nativeTaskService] Hand-off Automation Failed:", automationErr);
-                    }
                 } else {
                     // Do not touch completedAt to preserve historical data
                     delete updateData.completedAt;
@@ -799,7 +817,6 @@ export const updateTask = async (id, data, updaterId = null) => {
             }
 
             // --- Sincronización Bidireccional (Efecto Espejo Total) ---
-            try {
                 if (currentTask.contentItemId) {
                     let contentItemStatus = null;
                     const isPublicationTask = currentTask.title.startsWith('[Publicar]');
@@ -813,15 +830,12 @@ export const updateTask = async (id, data, updaterId = null) => {
                     }
 
                     if (contentItemStatus) {
-                        await prisma.contentItem.update({
+                        await tx.contentItem.update({
                             where: { id: currentTask.contentItemId },
                             data: { status: contentItemStatus }
                         });
                     }
                 }
-            } catch (mirrorErr) {
-                console.error("[nativeTaskService] Mirror Effect Failed:", mirrorErr);
-            }
         } else {
             // If status is not in payload, strictly do not modify completedAt
             delete updateData.completedAt;
@@ -829,7 +843,7 @@ export const updateTask = async (id, data, updaterId = null) => {
 
         console.log(`[nativeTaskService] FINAL updateData being sent to Prisma for ${id}:`, JSON.stringify(updateData, null, 2));
 
-        const updatedTask = await prisma.task.update({
+        const updatedTask = await tx.task.update({
             where: { id },
             data: updateData,
             include: {
@@ -841,7 +855,7 @@ export const updateTask = async (id, data, updaterId = null) => {
                     select: { id: true, name: true, avatarUrl: true, email: true, role: true }
                 },
                 taskComments: {
-                    include: { author: true, attachments: true },
+                    include: { author: { select: taskCommentAuthorSelect }, attachments: true },
                     orderBy: { createdAt: 'desc' }
                 },
                 taskAttachments: true,
@@ -855,9 +869,15 @@ export const updateTask = async (id, data, updaterId = null) => {
             }
         });
 
-        // Map for frontend compatibility
+        return { currentTask, updatedTask, isCorrected, isReturned };
+        }, { isolationLevel: 'Serializable' });
+
+        const { currentTask, updatedTask, isCorrected, isReturned } = transition;
+
+        // Map for frontend compatibility without skipping post-commit notifications.
+        let responseTask = updatedTask;
         if (updatedTask.contentItem && updatedTask.contentItem.plan) {
-            return {
+            responseTask = {
                 ...updatedTask,
                 contentPlanId: updatedTask.contentItem.plan.id, // Ensure ID is at root
                 plan: {
@@ -1007,7 +1027,7 @@ export const updateTask = async (id, data, updaterId = null) => {
             }
         }
 
-        return updatedTask;
+        return responseTask;
     } catch (error) {
         console.error("Error updating native task:", error);
         throw error;

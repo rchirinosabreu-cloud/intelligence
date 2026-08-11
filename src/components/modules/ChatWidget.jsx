@@ -1,6 +1,6 @@
 
 import TeamAvatar from "../../components/ui/TeamAvatar";
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
 import { Send, Loader2, ArrowRight, MessageSquare, Maximize2 } from '@/components/ui/icons';
@@ -47,7 +47,7 @@ const ChatWidget = ({
     }, []);
 
     // Fetch Messages
-    const fetchMessages = async (isPolling = false) => {
+    const fetchMessages = useCallback(async (isPolling = false) => {
         if (!localStorage.getItem('authToken')) return;
         try {
             if (!isPolling) setLoading(true);
@@ -62,16 +62,16 @@ const ChatWidget = ({
         } finally {
             if (!isPolling) setLoading(false);
         }
-    };
+    }, [apiEndpoint]);
 
     useEffect(() => {
         if (isGlobal || clientId) {
             fetchMessages();
 
-            // Polling interval (3 seconds)
+            const pollingDelay = (isModalOpen || fullInterface) ? 10000 : 60000;
             const intervalId = setInterval(() => {
-                fetchMessages(true);
-            }, 3000);
+                if (!document.hidden) fetchMessages(true);
+            }, pollingDelay);
 
             const handleOpenGeneral = () => {
                 if (isGlobal && setIsModalOpen) {
@@ -86,7 +86,7 @@ const ChatWidget = ({
                 window.removeEventListener('open-general-chat', handleOpenGeneral);
             };
         }
-    }, [clientId, apiEndpoint, isGlobal, setIsModalOpen]);
+    }, [clientId, fetchMessages, isGlobal, setIsModalOpen, isModalOpen, fullInterface]);
 
     const handleSendMessage = async () => {
         if (!content.trim() || isSubmitting) return;

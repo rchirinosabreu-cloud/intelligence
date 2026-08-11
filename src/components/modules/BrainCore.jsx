@@ -217,8 +217,8 @@ const BrainCore = () => {
     // --- Tab Content Components ---
 
     const CommandCenterTab = () => {
-        const threats = useMemo(() => feed.filter(i => i.type === 'AMENAZA' || i.severity === 'critical'), [feed]);
-        const recent = useMemo(() => feed.filter(i => i.type !== 'AMENAZA' && i.severity !== 'critical').slice(0, 9), [feed]);
+        const threats = feed.filter(i => i.type === 'AMENAZA' || i.severity === 'critical');
+        const recent = feed.filter(i => i.type !== 'AMENAZA' && i.severity !== 'critical').slice(0, 9);
 
         return (
             <div className="w-full max-w-6xl mx-auto py-8 space-y-12">

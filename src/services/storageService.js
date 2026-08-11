@@ -1,7 +1,16 @@
 import { Storage } from '@google-cloud/storage';
-import path from 'path';
+import { validateUploadFile } from '../config/security.js';
 
 let storage;
+
+export const getClientStoragePrefix = (clientName = '') => String(clientName)
+    .replace(/[^a-z0-9/]/gi, '_')
+    .toLowerCase();
+
+export const sanitizeStorageFileName = (fileName = '') => String(fileName)
+    .replace(/\s+/g, '_')
+    .replace(/[^a-zA-Z0-9._-]/g, '')
+    .slice(0, 180);
 
 /**
  * Initializes the GCS client.
@@ -39,6 +48,7 @@ const getStorageClient = () => {
  * @returns {Promise<Object>} - The uploaded file details (url, name, size).
  */
 export const uploadClientFile = async (file, clientName) => {
+    validateUploadFile(file, { maxBytes: 50 * 1024 * 1024 });
     const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
     const storageClient = getStorageClient();
 
@@ -49,11 +59,11 @@ export const uploadClientFile = async (file, clientName) => {
     const bucket = storageClient.bucket(bucketName);
 
     // Create a clean folder name from client name (allow slashes for structured paths)
-    const folderName = clientName.replace(/[^a-z0-9/]/gi, '_').toLowerCase();
+    const folderName = getClientStoragePrefix(clientName);
     const timestamp = Date.now();
 
     // Sanitize original filename (remove spaces, special chars)
-    const sanitizedOriginalName = file.originalname.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
+    const sanitizedOriginalName = sanitizeStorageFileName(file.originalname);
     const gcsFileName = `${folderName}/${timestamp}_${sanitizedOriginalName}`;
 
     const blob = bucket.file(gcsFileName);
@@ -110,13 +120,6 @@ export const configureBucketCors = async () => {
     }
 };
 
-// Initialize CORS configuration once at module load
-if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
-  setTimeout(() => {
-    configureBucketCors().catch(err => console.error("[Storage] Auto-CORS initialization failed:", err.message));
-  }, 1000);
-}
-
 /**
  * Generates a V4 Signed URL for uploading a file directly to GCS.
  * @param {string} clientName - For folder prefix.
@@ -125,6 +128,7 @@ if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
  * @returns {Promise<Object>} - Signed URL and gcsPath.
  */
 export const getUploadSignedUrl = async (clientName, fileName, contentType) => {
+    validateUploadFile({ originalname: fileName, mimetype: contentType, size: 0 }, { maxBytes: 50 * 1024 * 1024 });
     const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
     const storageClient = getStorageClient();
 
@@ -132,9 +136,11 @@ export const getUploadSignedUrl = async (clientName, fileName, contentType) => {
         throw new Error("Storage client not initialized");
     }
 
-    const folderName = clientName.replace(/[^a-z0-9/]/gi, '_').toLowerCase();
+    const folderName = getClientStoragePrefix(clientName);
     const timestamp = Date.now();
-    const gcsFileName = `${folderName}/${timestamp}_${fileName}`;
+    const sanitizedFileName = sanitizeStorageFileName(fileName);
+    if (!sanitizedFileName) throw new Error('Invalid file name');
+    const gcsFileName = `${folderName}/${timestamp}_${sanitizedFileName}`;
 
     const bucket = storageClient.bucket(bucketName);
     const file = bucket.file(gcsFileName);
@@ -209,6 +215,18 @@ export const getClientFileStream = (gcsPath) => {
     return storageClient.bucket(bucketName).file(gcsPath).createReadStream();
 };
 
+export const getClientFileMetadata = async (gcsPath) => {
+    const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
+    const storageClient = getStorageClient();
+    if (!storageClient) throw new Error('Storage client not initialized');
+
+    const [metadata] = await storageClient.bucket(bucketName).file(gcsPath).getMetadata();
+    return {
+        size: Number(metadata.size || 0),
+        contentType: metadata.contentType || 'application/octet-stream'
+    };
+};
+
 /**
  * Uploads a team member avatar to GCS.
  * Path: avatars/{memberId}_{timestamp}_{filename}
@@ -217,6 +235,7 @@ export const getClientFileStream = (gcsPath) => {
  * @returns {Promise<Object>} - GCS path and other metadata.
  */
 export const uploadAvatar = async (file, memberId) => {
+    validateUploadFile(file, { maxBytes: 5 * 1024 * 1024 });
     const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';
     const storageClient = getStorageClient();
 
@@ -226,7 +245,7 @@ export const uploadAvatar = async (file, memberId) => {
 
     const bucket = storageClient.bucket(bucketName);
     const timestamp = Date.now();
-    const gcsFileName = `avatars/${memberId}_${timestamp}_${file.originalname}`;
+    const gcsFileName = `avatars/${memberId}_${timestamp}_${sanitizeStorageFileName(file.originalname)}`;
 
     const blob = bucket.file(gcsFileName);
     const blobStream = blob.createWriteStream({

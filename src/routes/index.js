@@ -8,7 +8,8 @@ import * as announcementController from '../controllers/announcementController.j
 import * as flowController from '../controllers/flowController.js';
 import * as proxyController from '../controllers/proxyController.js';
 import * as publicController from '../controllers/publicController.js';
-import { authenticateToken } from '../middlewares/authMiddleware.js';
+import { authenticateToken, requireManagerRole, requireModulePermission } from '../middlewares/authMiddleware.js';
+import prisma from '../lib/prisma.js';
 import multer from 'multer';
 
 // Import existing modular routers
@@ -22,7 +23,7 @@ import servicesRouter from './api/services.js';
 import clientFileRouter from './api/clientFiles.js';
 import talentRadarRouter from './api/talentRadar.js';
 import activityRouter from './api/activity.js';
-import reportsRouter, { getReportPipelineStatus } from './api/reports.js';
+import reportsRouter from './api/reports.js';
 import brainCoreRouter from './api/brainCore.js';
 import boardsRouter from './api/boards.js';
 import quotationsRouter from './api/quotations.js';
@@ -32,17 +33,18 @@ import dashboardRouter from './api/dashboard.js';
 import { getUpcomingEvents } from '../services/calendarService.js';
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 25 * 1024 * 1024, files: 1 }
+});
 
 // --- Public Routes (No Auth) ---
 router.get('/public/parrilla/:token', publicController.getPublicPlan);
-router.get('/public/items/:id/final-asset', publicController.getPublicFinalAsset);
-router.post('/public/items/:id/approve', publicController.approvePublicItem);
-router.post('/public/items/:id/comment', publicController.commentPublicItem);
+router.get('/public/parrilla/:token/items/:id/final-asset', publicController.getPublicFinalAsset);
+router.post('/public/parrilla/:token/items/:id/approve', publicController.approvePublicItem);
+router.post('/public/parrilla/:token/items/:id/comment', publicController.commentPublicItem);
 router.use('/quotations', quotationsRouter);
 router.use('/services', servicesRouter);
-router.get('/reports/pipeline-status', (_req, res) => res.json(getReportPipelineStatus()));
-
 // Aliases for services catalog (ensuring compatibility with various frontend versions)
 router.get('/services-catalog', (req, res) => res.redirect(307, '/api/services'));
 
@@ -50,11 +52,12 @@ router.get('/services-catalog', (req, res) => res.redirect(307, '/api/services')
 router.post('/login', authController.login);
 router.post('/password-reset/request', authController.sendPasswordReset);
 router.post('/password-reset/confirm', authController.resetPasswordWithCode);
-router.get('/sync-users', authController.syncUsers);
 router.post('/users', authenticateToken, authController.createUser);
 
 // --- Protected Routes ---
 router.use(authenticateToken);
+
+router.post('/sync-users', requireManagerRole, authController.syncUsers);
 
 router.get('/auth/me', async (req, res) => {
     try {
@@ -92,9 +95,10 @@ router.get('/auth/me', async (req, res) => {
 router.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 // Chat
-router.post('/chat', chatController.handleChat);
+router.post('/chat', requireModulePermission('manager'), chatController.handleChat);
 
 // Tasks
+router.use('/tasks', requireModulePermission('gestion'));
 router.get('/metrics/tasks', taskController.getMetrics);
 router.get('/metrics/quality-streak', taskController.getStreak);
 router.get('/tasks/completed', taskController.getCompleted);
@@ -106,6 +110,8 @@ router.patch('/tasks/:taskId', taskController.updateExistingTask);
 router.delete('/tasks/:taskId', taskController.deleteExistingTask);
 router.post('/tasks/:taskId/toggle-follow', taskController.toggleFollow);
 router.get('/tasks/:taskId/follow-status', taskController.getFollowStatus);
+router.get('/tasks/:taskId/attachments/:attachmentId/file', taskController.getTaskAttachmentFileProxy);
+router.get('/tasks/:taskId/attachments/:attachmentId/download', taskController.getTaskAttachmentDownloadProxy);
 router.get('/tasks/:taskId/comments', taskController.getTaskComments);
 router.post('/tasks/:taskId/comments', upload.single('file'), taskController.addTaskComment);
 router.get('/tasks/:taskId/comments/:commentId/file', taskController.getCommentFileProxy);
@@ -130,26 +136,26 @@ router.get('/clients/:clientId/logo-image', clientController.getLogoProxy);
 router.get('/clients', clientController.listClients);
 router.get('/db/clients', clientController.listClients);
 router.get('/clients/health', clientController.getHealth);
-router.post('/clients', clientController.createNewClient);
-router.patch('/clients/:id', clientController.updateClient);
-router.patch('/clients/:id/archive', clientController.archiveClientHandler);
+router.post('/clients', requireManagerRole, clientController.createNewClient);
+router.patch('/clients/:id', requireManagerRole, clientController.updateClient);
+router.patch('/clients/:id/archive', requireManagerRole, clientController.archiveClientHandler);
 router.post('/clients/:id/health', clientController.updateHealthHandler);
 router.post('/clients/:id/health-comment', clientController.addHealthCommentHandler);
 
 // Notifications
 router.get('/notifications', notificationController.listNotifications);
 router.get('/notifications/unread-count', notificationController.getUnreadCount);
-router.post('/notifications', notificationController.addNotification);
+router.post('/notifications', requireManagerRole, notificationController.addNotification);
 router.patch('/notifications/:id/read', notificationController.markRead);
 router.post('/notifications/read-all', notificationController.markAllRead);
 
 // Announcements
 router.get('/global-announcements', announcementController.listGlobal);
-router.post('/global-announcements', announcementController.addGlobal);
-router.delete('/global-announcements/:id', announcementController.deleteGlobal);
+router.post('/global-announcements', requireManagerRole, announcementController.addGlobal);
+router.delete('/global-announcements/:id', requireManagerRole, announcementController.deleteGlobal);
 
 router.get('/clients/:clientId/announcements', announcementController.listClient);
-router.post('/clients/:clientId/announcements', announcementController.addClient);
+router.post('/clients/:clientId/announcements', requireManagerRole, announcementController.addClient);
 
 // Flow / Chat
 router.get('/clients/:clientId/flow', flowController.listFlow);
@@ -168,23 +174,23 @@ router.get('/calendar/upcoming', async (req, res) => {
 });
 
 // Proxies
-router.post('/openai/v1/chat/completions', proxyController.openaiProxy);
-router.post('/fireflies/graphql', proxyController.firefliesProxy);
+router.post('/openai/v1/chat/completions', requireModulePermission('manager'), proxyController.openaiProxy);
+router.post('/fireflies/graphql', requireModulePermission('minutas'), proxyController.firefliesProxy);
 
 // Re-mount existing routers
 router.use('/user', userRouter);
 router.use('/team', teamRouter);
 router.use('/feedback', feedbackRouter);
 router.use('/integrations', integrationsRouter);
-router.use('/content', contentRouter);
+router.use('/content', requireModulePermission('parrillas'), contentRouter);
 router.use('/db', dbRouter);
-router.use('/clients/:clientId', clientFileRouter);
+router.use('/clients/:clientId', requireModulePermission('clientes'), clientFileRouter);
 router.use('/talent-radar', talentRadarRouter);
-router.use('/activity', activityRouter);
+router.use('/activity', requireModulePermission('actividad'), activityRouter);
 router.use('/dashboard', dashboardRouter);
-router.use('/reports', reportsRouter);
+router.use('/reports', requireModulePermission('reportes'), reportsRouter);
 router.use('/brain-core', brainCoreRouter);
-router.use('/boards', boardsRouter);
+router.use('/boards', requireModulePermission('inspiracion'), boardsRouter);
 router.use('/operative-intelligence', operativeIntelligenceRouter);
 router.use('/financials', financialsRouter);
 

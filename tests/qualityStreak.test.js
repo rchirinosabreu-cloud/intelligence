@@ -1,16 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import prisma from '../src/lib/prisma.js';
-import { getQualityStreak } from '../src/services/nativeTaskService.js';
+import { getSafeTestDatabaseUrl } from './helpers/testDatabase.js';
 
-test('Quality Streak Backend Calculation Integration Tests', async (t) => {
+const testDatabaseUrl = getSafeTestDatabaseUrl();
+if (testDatabaseUrl) process.env.DATABASE_URL = testDatabaseUrl;
+const prisma = testDatabaseUrl ? (await import('../src/lib/prisma.js')).default : null;
+const taskService = testDatabaseUrl ? await import('../src/services/nativeTaskService.js') : {};
+const { getQualityStreak } = taskService;
+
+test('Quality Streak Backend Calculation Integration Tests', { skip: !testDatabaseUrl }, async (t) => {
     let testAdmin;
     let testClient;
     let testTaskNormal;
     let testTaskReturned;
 
     t.before(async () => {
-        if (!process.env.DATABASE_URL) {
+        if (!testDatabaseUrl) {
             console.warn('Skipping actual DB Quality Streak tests as DATABASE_URL is missing.');
             return;
         }
@@ -47,7 +52,7 @@ test('Quality Streak Backend Calculation Integration Tests', async (t) => {
     });
 
     t.after(async () => {
-        if (!process.env.DATABASE_URL) return;
+        if (!testDatabaseUrl) return;
 
         // Cleanup
         await prisma.task.deleteMany({
@@ -67,7 +72,7 @@ test('Quality Streak Backend Calculation Integration Tests', async (t) => {
     });
 
     await t.test('Test Case 1: No returned tasks at all (Streak calculated since Admin creation)', async () => {
-        if (!process.env.DATABASE_URL) return;
+        if (!testDatabaseUrl) return;
 
         const streakResult = await getQualityStreak();
 
@@ -79,7 +84,7 @@ test('Quality Streak Backend Calculation Integration Tests', async (t) => {
     });
 
     await t.test('Test Case 2: Active returned task forces currentStreak to 0 immediately', async () => {
-        if (!process.env.DATABASE_URL) return;
+        if (!testDatabaseUrl) return;
 
         // Create a task that is currently in DEVUELTA status
         testTaskReturned = await prisma.task.create({
@@ -103,7 +108,7 @@ test('Quality Streak Backend Calculation Integration Tests', async (t) => {
     });
 
     await t.test('Test Case 3: Same day return event forces currentStreak to 0', async () => {
-        if (!process.env.DATABASE_URL) return;
+        if (!testDatabaseUrl) return;
 
         // Create a task that was returned TODAY, but is now back to EN_CURSO
         const testTaskReturnedToday = await prisma.task.create({
@@ -127,7 +132,7 @@ test('Quality Streak Backend Calculation Integration Tests', async (t) => {
     });
 
     await t.test('Test Case 4: Return event in the past (e.g., 5 days ago) calculates streak from that timestamp', async () => {
-        if (!process.env.DATABASE_URL) return;
+        if (!testDatabaseUrl) return;
 
         // Create a task that was returned exactly 5 days ago, and is currently EN_CURSO
         const testTaskReturnedPast = await prisma.task.create({
@@ -151,7 +156,7 @@ test('Quality Streak Backend Calculation Integration Tests', async (t) => {
     });
 
     await t.test('Test Case 5: Setting a new historical record', async () => {
-        if (!process.env.DATABASE_URL) return;
+        if (!testDatabaseUrl) return;
 
         // Let's manually set a high streak record by modifying the Admin's creation date to 15 days ago
         await prisma.user.update({

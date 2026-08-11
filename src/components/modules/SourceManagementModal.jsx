@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Plus, Trash2, Globe, Database, Mail, Layout, Loader2, Link as LinkIcon, ShieldCheck, AlertCircle, Info } from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -10,8 +10,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const SourceManagementModal = ({ isOpen, onClose, onRefresh }) => {
+    const confirm = useConfirmDialog();
     const [integrations, setIntegrations] = useState([]);
     const [clients, setClients] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -26,7 +28,7 @@ const SourceManagementModal = ({ isOpen, onClose, onRefresh }) => {
     const baseUrl = getApiBaseUrl();
     const token = localStorage.getItem('authToken');
 
-    const fetchIntegrations = async () => {
+    const fetchIntegrations = useCallback(async () => {
         setIsLoading(true);
         try {
             const [intRes, clientsRes] = await Promise.all([
@@ -41,11 +43,11 @@ const SourceManagementModal = ({ isOpen, onClose, onRefresh }) => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [baseUrl, token]);
 
     useEffect(() => {
         if (isOpen) fetchIntegrations();
-    }, [isOpen]);
+    }, [fetchIntegrations, isOpen]);
 
     const handleAddSource = async (e) => {
         e.preventDefault();
@@ -76,7 +78,11 @@ const SourceManagementModal = ({ isOpen, onClose, onRefresh }) => {
     };
 
     const handleDelete = async (id) => {
-        if (!confirm('¿Desconectar esta fuente de datos?')) return;
+        if (!(await confirm({
+            title: 'Desconectar fuente',
+            description: 'La fuente dejará de estar disponible para nuevos análisis.',
+            confirmLabel: 'Desconectar'
+        }))) return;
         try {
             const res = await fetch(`${baseUrl}/api/integrations/integrations/${id}`, {
                 method: 'DELETE',

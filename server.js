@@ -9,6 +9,16 @@ import { initTaskClassificationCron } from './src/services/taskClassificationSer
 import { loggerMiddleware } from './src/middlewares/logger.js';
 import apiRouter from './src/routes/index.js';
 import { geminiProxy } from './src/controllers/proxyController.js';
+import { authenticateToken, requireManagerRole } from './src/middlewares/authMiddleware.js';
+import {
+  configureSecurityHeaders,
+  createRateLimiter,
+  errorResponseSanitizer,
+  isAllowedOrigin,
+  sanitizeUrlForLogs,
+  securityHeaders,
+  validateSecurityEnvironment
+} from './src/config/security.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,30 +27,21 @@ const app = express();
 
 // Trust proxy for Railway environment
 app.set('trust proxy', 1);
+configureSecurityHeaders(app);
+app.use(securityHeaders);
+app.use(errorResponseSanitizer);
+
+const apiRateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 1200 });
+const authRateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 });
+const publicRateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 100 });
+const aiRateLimiter = createRateLimiter({ windowMs: 5 * 60 * 1000, max: 40 });
 
 // --- CORS CONFIGURATION ---
-const normalizeOrigin = (origin = '') => String(origin).trim().replace(/\/$/, '');
-const allowedOrigins = new Set([
-  "https://labs.brainstudioagencia.com",
-  "https://intelligence.brainstudioagencia.com",
-  "http://localhost:3000",
-  "http://localhost:5173",
-  "http://localhost:4173",
-  ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",") : [])
-].map(normalizeOrigin));
-
-const isAllowedOrigin = (origin = '') => {
-  const normalizedOrigin = normalizeOrigin(origin);
-  if (!normalizedOrigin) return true;
-  if (allowedOrigins.has(normalizedOrigin)) return true;
-  return /^https:\/\/[a-z0-9-]+\.brainstudioagencia\.com$/i.test(normalizedOrigin);
-};
-
 const corsOptions = {
   origin: (origin, callback) => {
     if (isAllowedOrigin(origin)) return callback(null, true);
-    console.warn(`CORS warning: allowing unexpected origin ${origin}`);
-    return callback(null, true);
+    console.warn(`CORS blocked unexpected origin ${origin}`);
+    return callback(new Error('Origin not allowed by CORS'));
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   credentials: true,
@@ -50,16 +51,25 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
+app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.use('/api/login', authRateLimiter);
+app.use('/api/password-reset', authRateLimiter);
+app.use('/api/public', publicRateLimiter);
+app.use('/api/gemini', aiRateLimiter);
+app.use('/api/openai', aiRateLimiter);
+app.use('/api/fireflies', aiRateLimiter);
+app.use('/api', apiRateLimiter);
+
 // --- BODY PARSING ---
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
 // --- LOGGING ---
 app.use(loggerMiddleware);
 
 // --- ROUTES ---
 // Gemini proxy must be mounted before common API router if it has special body restreaming needs
-app.use('/api/gemini', geminiProxy);
+app.use('/api/gemini', authenticateToken, requireManagerRole, geminiProxy);
 app.use('/api', apiRouter);
 
 // --- STATIC FILES & SPA ---
@@ -87,14 +97,26 @@ app.get('*', (req, res) => {
 // --- GLOBAL ERROR HANDLING ---
 app.use((err, req, res, next) => {
   const isPrismaError = err.code && (err.code.startsWith('P') || err.message?.includes('Prisma'));
-  console.error(`[Global Error] ${req.method} ${req.originalUrl}:`, { message: err.message, code: err.code });
+  console.error(`[Global Error] ${req.method} ${sanitizeUrlForLogs(req.originalUrl)}:`, { message: err.message, code: err.code });
 
   if (req.originalUrl.startsWith('/api')) {
+    if (err.code === 'LIMIT_FILE_SIZE' || err.code === 'FILE_TOO_LARGE') {
+      return res.status(413).json({
+        error: 'FILE_TOO_LARGE',
+        message: 'El archivo supera el tamaño permitido'
+      });
+    }
+    if (err.code === 'UNSAFE_FILE_TYPE' || err.code === 'INVALID_FILE') {
+      return res.status(415).json({
+        error: err.code,
+        message: 'El tipo de archivo no está permitido'
+      });
+    }
+    const isProduction = process.env.NODE_ENV === 'production';
     return res.status(500).json({
       error: isPrismaError ? "Database Error" : "Internal Server Error",
-      message: err.message,
-      code: err.code,
-      path: req.originalUrl
+      message: isProduction ? 'Ocurrió un error inesperado' : err.message,
+      ...(isProduction ? {} : { code: err.code })
     });
   }
   next(err);
@@ -104,8 +126,10 @@ app.use((err, req, res, next) => {
 async function bootstrap() {
     console.log("--- INICIANDO BRAINSTUDIO INTELLIGENCE BACKEND ---");
 
+    validateSecurityEnvironment(process.env);
+
     // 1. System Checklist & Configuration
-    const ESSENTIAL_KEYS = ['DATABASE_URL', 'GEMINI_API_KEY', 'MODEL_NAME'];
+    const ESSENTIAL_KEYS = ['DATABASE_URL', 'JWT_SECRET', 'GEMINI_API_KEY', 'MODEL_NAME'];
     const missingKeys = ESSENTIAL_KEYS.filter(key => !process.env[key]);
 
     if (missingKeys.length > 0) {
@@ -153,16 +177,14 @@ async function bootstrap() {
 }
 
 // --- GLOBAL PROMISE MANAGEMENT ---
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
     console.error('⚠️ [Runtime] Promesa no controlada (Unhandled Rejection):', reason);
+    process.exit(1);
 });
 
 process.on('uncaughtException', (error) => {
     console.error('❌ [Runtime] Excepción no controlada (Uncaught Exception):', error);
-    // Decision: Maintain server alive if possible, or restart if it's a critical corruption
-    if (error.message.includes('EADDRINUSE')) {
-        process.exit(1);
-    }
+    process.exit(1);
 });
 
 // Run Bootstrap

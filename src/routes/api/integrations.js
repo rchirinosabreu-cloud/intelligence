@@ -1,11 +1,26 @@
 import express from 'express';
 import prisma from '../../lib/prisma.js';
+import { requireManagerRole } from '../../middlewares/authMiddleware.js';
 
 const router = express.Router();
+router.use(requireManagerRole);
+
+const publicIntegrationSelect = {
+    id: true,
+    type: true,
+    externalId: true,
+    alias: true,
+    isActive: true,
+    clientId: true,
+    metadata: true,
+    createdAt: true,
+    updatedAt: true
+};
 
 // Get all integrations
 router.get('/integrations', async (req, res) => {
     const integrations = await prisma.agencyIntegration.findMany({
+        select: publicIntegrationSelect,
         orderBy: { createdAt: 'desc' }
     });
     res.json(integrations);
@@ -22,7 +37,8 @@ router.post('/sources', async (req, res) => {
                 alias,
                 clientId: clientId || null,
                 isActive: true
-            }
+            },
+            select: publicIntegrationSelect
         });
         res.status(201).json(source);
     } catch (error) {

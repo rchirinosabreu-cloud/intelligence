@@ -82,6 +82,16 @@ const getBogotaMonthWindow = (value) => {
   };
 };
 
+const getBogotaDayWindow = (value) => {
+  const context = getBogotaWeekContext(value);
+  if (!context) return null;
+  const [year, month, day] = context.dateKey.split('-').map(Number);
+  const start = new Date(Date.UTC(year, month - 1, day, 5));
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { start, end };
+};
+
 const getBogotaWeekWindow = (value) => {
   const context = getBogotaWeekContext(value);
   if (!context) return null;
@@ -417,6 +427,8 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
 export const getPersonalDashboard = async ({ requester, targetUserId }) => {
   const userId = targetUserId || requester?.userId;
   assertPersonalDashboardAccess({ requester, targetUserId: userId });
+  const dashboardNow = new Date();
+  const dashboardDayWindow = getBogotaDayWindow(dashboardNow);
 
   const member = await prisma.teamMember.findUnique({
     where: { userId },
@@ -460,6 +472,18 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
         }
       },
       nativeTasks: {
+        where: {
+          OR: [
+            { status: { in: ACTIVE_STATUSES } },
+            {
+              status: 'REALIZADA',
+              completedAt: {
+                gte: dashboardDayWindow.start,
+                lt: dashboardDayWindow.end
+              }
+            }
+          ]
+        },
         include: {
           client: {
             select: {
@@ -475,7 +499,9 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
             }
           },
           taskComments: {
+            where: { authorId: { not: userId } },
             orderBy: { createdAt: 'desc' },
+            take: 1,
             select: {
               content: true,
               authorId: true,
@@ -497,9 +523,9 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
     throw error;
   }
 
-  const announcementLookback = new Date(Date.now() - (8 * 24 * 60 * 60 * 1000));
-  const contextMonthWindow = getBogotaMonthWindow(new Date());
-  const challengeWeekWindow = getBogotaWeekWindow(new Date());
+  const announcementLookback = new Date(dashboardNow.getTime() - (8 * 24 * 60 * 60 * 1000));
+  const contextMonthWindow = getBogotaMonthWindow(dashboardNow);
+  const challengeWeekWindow = getBogotaWeekWindow(dashboardNow);
   const [announcements, globalAchievements, createdTasks, authoredAnnouncements, authoredOperationalEvents] = await Promise.all([
     getDashboardAnnouncements(userId),
     prisma.task.findMany({
@@ -617,7 +643,8 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
 
   return buildPersonalDashboard({
     member: { ...member, announcements, createdTasks, authoredAnnouncements, authoredOperationalEvents },
-    globalAchievements
+    globalAchievements,
+    now: dashboardNow
   });
 };
 

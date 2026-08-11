@@ -93,6 +93,8 @@ model UserNote {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
 }
 
 model Notification {
@@ -107,6 +109,8 @@ model Notification {
   url        String?
   taskId     String?
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
 }
 
 model GeneralChatMessage {
@@ -157,6 +161,8 @@ model Client {
   financialRecords    FinancialRecord[]
   accountsReceivables AccountsReceivable[]
   metricReports       MetricReport[]
+
+  @@index([isArchived, responsibleId])
 }
 
 model ClientHealth {
@@ -183,6 +189,8 @@ model Board {
   updatedAt DateTime    @updatedAt
   client    Client?     @relation(fields: [clientId], references: [id], onDelete: Cascade)
   items     BoardItem[]
+
+  @@index([clientId, updatedAt])
 }
 
 model BoardItem {
@@ -198,6 +206,8 @@ model BoardItem {
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
   board      Board         @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@index([boardId, createdAt])
 }
 
 enum BoardItemType {
@@ -222,6 +232,9 @@ model ContentPlan {
   contentItems        ContentItem[]
   client              Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
   owner               TeamMember?       @relation(fields: [ownerId], references: [id])
+
+  @@index([clientId, deletedAt, year, month])
+  @@index([ownerId, deletedAt])
 }
 
 model ContentItem {
@@ -246,6 +259,9 @@ model ContentItem {
   deletedAt          DateTime?
   plan               ContentPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
   tasks              Task[]
+
+  @@index([planId, deletedAt, publishDate])
+  @@index([status, publishDate])
 }
 
 model Integration {
@@ -391,6 +407,12 @@ model Task {
   taskComments    TaskComment[]
   followers       TaskFollower[]
   taskAttachments TaskAttachment[]
+
+  @@index([assigneeId, status, dueDate])
+  @@index([creatorId, status, createdAt])
+  @@index([clientId, status, createdAt])
+  @@index([status, completedAt])
+  @@index([contentItemId, title])
 }
 
 enum AttachmentCategory {
@@ -443,6 +465,7 @@ model TaskComment {
   reactions   TaskCommentReaction[]
 
   @@index([taskId])
+  @@index([taskId, createdAt])
 }
 
 model TaskCommentReaction {
@@ -480,6 +503,8 @@ model ClientFile {
   deletedAt DateTime?
   updatedAt DateTime  @default(now()) @updatedAt
   client    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, deletedAt, createdAt])
 }
 
 model ClientLink {
@@ -510,6 +535,8 @@ model ClientAnnouncement {
   type      String
   createdAt DateTime @default(now())
   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
 }
 
 model FeedbackRecord {
@@ -567,6 +594,8 @@ model FlowMessage {
   createdAt DateTime   @default(now())
   author    TeamMember @relation(fields: [authorId], references: [id])
   client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
 }
 
 model GlobalAnnouncement {
@@ -1123,6 +1152,9 @@ model MetricReport {
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   sources           MetricReportSource[]
+
+  @@index([clientId, startDate, endDate])
+  @@index([status, createdAt])
 }
 
 model MetricReportSource {
@@ -1138,4 +1170,6 @@ model MetricReportSource {
   warnings       Json
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
+
+  @@index([reportId])
 }

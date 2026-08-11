@@ -2,6 +2,19 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 
 const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
 
+const sendUpstreamError = (res, provider, response) => {
+    const requestId = response.headers.get('x-request-id') || response.headers.get('fly-request-id');
+    console.error(`[${provider} Proxy] Upstream request failed`, {
+        status: response.status,
+        requestId: requestId || undefined
+    });
+    const status = response.status === 429 ? 429 : 502;
+    return res.status(status).json({
+        error: 'UPSTREAM_SERVICE_ERROR',
+        message: 'El proveedor externo no respondió correctamente'
+    });
+};
+
 export const openaiProxy = async (req, res) => {
     try {
         const apiKey = process.env.OPENAI_API_KEY;
@@ -18,7 +31,7 @@ export const openaiProxy = async (req, res) => {
             body: JSON.stringify(requestBody)
         });
 
-        if (!response.ok) return res.status(response.status).send(await response.text());
+        if (!response.ok) return sendUpstreamError(res, 'OpenAI', response);
 
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
@@ -41,10 +54,11 @@ export const openaiProxy = async (req, res) => {
              pump();
              req.on('close', () => reader.cancel());
         } else {
-             res.send(await response.text());
+             return res.status(502).json({ error: 'UPSTREAM_SERVICE_ERROR' });
         }
     } catch (error) {
-        res.status(504).json({ error: "Failed to connect to OpenAI API", details: error.message });
+        console.error('[OpenAI Proxy] Connection failed:', error.message);
+        res.status(504).json({ error: 'UPSTREAM_SERVICE_ERROR' });
     }
 };
 
@@ -63,11 +77,12 @@ export const firefliesProxy = async (req, res) => {
             body: JSON.stringify(req.body)
         });
 
-        const data = await response.text();
-        if (!response.ok) return res.status(response.status).send(data);
-        res.json(JSON.parse(data));
+        if (!response.ok) return sendUpstreamError(res, 'Fireflies', response);
+        const data = await response.json();
+        res.json(data);
     } catch (error) {
-        res.status(504).json({ error: "Failed to connect to Fireflies API", details: error.message });
+        console.error('[Fireflies Proxy] Connection failed:', error.message);
+        res.status(504).json({ error: 'UPSTREAM_SERVICE_ERROR' });
     }
 };
 
@@ -87,6 +102,13 @@ export const geminiProxy = createProxyMiddleware({
           proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
           proxyReq.write(bodyData);
         }
+      },
+      error: (error, _req, res) => {
+        console.error('[Gemini Proxy] Connection failed:', error.message);
+        if (!res.headersSent) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+        }
+        res.end(JSON.stringify({ error: 'UPSTREAM_SERVICE_ERROR' }));
       }
     }
 });

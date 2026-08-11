@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Clock, Trash2 } from '@/components/ui/icons';
 import { format } from 'date-fns';
 import TeamAvatar from '@/components/ui/TeamAvatar';
@@ -25,11 +25,12 @@ const EventActivityCard = ({
   handlePointerEnter,
   handlePointerLeave
 }) => {
+  const eventTitle = event?.title;
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && event) {
-        console.log(`[Lifecycle] EventActivityCard MOUNTED for ${event.title}`);
+    if (process.env.NODE_ENV === 'development' && eventTitle) {
+        console.log(`[Lifecycle] EventActivityCard MOUNTED for ${eventTitle}`);
     }
-  }, [event?.title]);
+  }, [eventTitle]);
 
   if (!event) return null;
 

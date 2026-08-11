@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand, PutBucketCorsCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { validateUploadFile } from '../config/security.js';
 
 /**
  * S3-Compatible Storage Service (Railway / T3)
@@ -57,11 +58,6 @@ export const configureS3Cors = async () => {
     }
 };
 
-// Initialize CORS configuration if credentials exist
-if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
-    configureS3Cors().catch(err => console.error("[S3 Storage] Auto-CORS initialization failed:", err.message));
-}
-
 /**
  * Uploads a file to the S3-compatible bucket.
  * @param {Object} file - Multer file object.
@@ -104,6 +100,7 @@ export const deleteFromS3 = async (key) => {
 };
 
 export const uploadToS3 = async (file, folder = "chat") => {
+    validateUploadFile(file, { maxBytes: 25 * 1024 * 1024 });
     const s3Client = getS3Client();
     const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
 
@@ -120,7 +117,6 @@ export const uploadToS3 = async (file, folder = "chat") => {
         Key: key,
         Body: file.buffer,
         ContentType: file.mimetype,
-        ACL: 'public-read', // Ensure it's publicly readable if the provider supports it
     });
 
     try {

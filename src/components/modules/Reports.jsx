@@ -760,6 +760,34 @@ const ActionPlan = ({ narrative, onUpdate }) => {
   );
 };
 
+const AuthenticatedImage = ({ src, alt, className }) => {
+  const [objectUrl, setObjectUrl] = useState(null);
+
+  useEffect(() => {
+    if (!src) return undefined;
+    let localUrl;
+    let cancelled = false;
+    fetch(src)
+      .then((response) => {
+        if (!response.ok) throw new Error(`Image request failed with status ${response.status}`);
+        return response.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        localUrl = URL.createObjectURL(blob);
+        setObjectUrl(localUrl);
+      })
+      .catch((error) => console.error('Report image failed to load:', error));
+
+    return () => {
+      cancelled = true;
+      if (localUrl) URL.revokeObjectURL(localUrl);
+    };
+  }, [src]);
+
+  return objectUrl ? <img src={objectUrl} alt={alt} className={className} /> : null;
+};
+
 const SourceAppendix = ({ sources }) => {
   if (!sources || sources.length === 0) return null;
 
@@ -778,7 +806,7 @@ const SourceAppendix = ({ sources }) => {
             </div>
             <div className="aspect-video rounded-xl overflow-hidden border border-slate-200/70 bg-white flex items-center justify-center">
               {src.storagePath ? (
-                <img
+                <AuthenticatedImage
                   src={`${getApiBaseUrl()}/api/reports/image-proxy?path=${encodeURIComponent(src.storagePath)}`}
                   alt={src.screenType}
                   className="w-full h-full object-cover"
@@ -1150,7 +1178,7 @@ const Reports = () => {
       const response = await axios.post(`${getApiBaseUrl()}/api/reports/extract-metrics`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
         }
       });
       if (response.data?.success && response.data?.report) {
@@ -1186,7 +1214,7 @@ const Reports = () => {
         normalizedMetrics: reviewedMetrics
       }, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
         }
       });
 
@@ -1198,7 +1226,7 @@ const Reports = () => {
         setIsGeneratingNarrative(true);
         const narrativeResponse = await axios.post(`${getApiBaseUrl()}/api/reports/${report.id}/generate-narrative`, {}, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
           },
           timeout: 270000
         });

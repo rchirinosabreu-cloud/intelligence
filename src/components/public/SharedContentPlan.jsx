@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -70,7 +70,7 @@ const SharedContentPlan = () => {
   const commentFormRefs = useRef({});
   const commentTextareaRefs = useRef({});
 
-  const fetchPlan = async () => {
+  const fetchPlan = useCallback(async () => {
     try {
       const response = await axios.get(`${getApiBaseUrl()}/api/public/parrilla/${token}`);
       setPlan(response.data);
@@ -79,11 +79,11 @@ const SharedContentPlan = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     fetchPlan();
-  }, [token]);
+  }, [fetchPlan]);
 
   useEffect(() => {
     if (!commentingItemId) return;
@@ -104,7 +104,7 @@ const SharedContentPlan = () => {
 
   const handleApprove = async (itemId) => {
     try {
-      await axios.post(`${getApiBaseUrl()}/api/public/items/${itemId}/approve`);
+      await axios.post(`${getApiBaseUrl()}/api/public/parrilla/${token}/items/${itemId}/approve`);
       toast.success('Pieza aprobada correctamente');
       fetchPlan();
     } catch (error) {
@@ -116,7 +116,7 @@ const SharedContentPlan = () => {
     if (!clientComment.trim() || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      const response = await axios.post(`${getApiBaseUrl()}/api/public/items/${itemId}/comment`, { comment: clientComment });
+      const response = await axios.post(`${getApiBaseUrl()}/api/public/parrilla/${token}/items/${itemId}/comment`, { comment: clientComment });
 
       // First, just clear text to avoid DOM jumps while React processes
       setClientComment('');

@@ -3,14 +3,29 @@ import ReactDOM from 'react-dom/client';
 import App from '@/App';
 import '@/index.css';
 import axios from 'axios';
+import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { isTrustedApiRequest } from '@/lib/trustedRequest';
+import { ConfirmDialogProvider } from '@/components/ui/ConfirmDialog';
+
+const apiBaseUrl = getApiBaseUrl();
+const pageOrigin = window.location.origin;
 
 // Global Axios Interceptor
 axios.interceptors.request.use((config) => {
+    let target = config.url;
+    if (config.baseURL) {
+        try {
+            target = new URL(config.url || '', config.baseURL).href;
+        } catch {
+            target = config.url;
+        }
+    }
+    const isTrusted = isTrustedApiRequest(target, apiBaseUrl, pageOrigin);
     const token = localStorage.getItem('authToken');
-    if (token) {
+    if (token && isTrusted) {
         config.headers.Authorization = `Bearer ${token}`;
     }
-    config.withCredentials = true;
+    config.withCredentials = isTrusted;
     return config;
 }, (error) => Promise.reject(error));
 
@@ -24,12 +39,13 @@ axios.interceptors.response.use(
         // Handle auth/session responses globally
         if (status === 401 || status === 403 || status === 428) {
             const url = error.config ? error.config.url : '';
+            const isTrusted = isTrustedApiRequest(url, apiBaseUrl, pageOrigin);
 
             // Skip global logout/error handling for specific routes (auth and external proxies like Gemini)
             const isAuthRoute = url.includes('/api/login');
             const isGeminiRoute = url.includes('/api/gemini');
 
-            if (!isAuthRoute && !isGeminiRoute) {
+            if (isTrusted && !isAuthRoute && !isGeminiRoute) {
                 if (status === 401 || errorData?.code === 'TokenExpiredError' || errorData?.message === 'TokenExpiredError') {
                     console.warn(`[Axios] 401 Unauthorized or Token Expired on ${url}. Triggering logout.`);
                     localStorage.removeItem('authToken');
@@ -57,31 +73,25 @@ axios.interceptors.response.use(
     }
 );
 
-// Global Fetch Interceptor to inject JWT Auth Token into every request
+// Global Fetch Interceptor for requests sent to the Brainstudio API.
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
     let [resource, config] = args;
-
-    // Ensure credentials are included (important for cross-subdomain/domain support)
-    if (!config) config = {};
-    config.credentials = config.credentials || 'include';
-
+    config = config ? { ...config } : {};
+    const isTrusted = isTrustedApiRequest(resource, apiBaseUrl, pageOrigin);
     const token = localStorage.getItem('authToken');
 
-    if (resource instanceof Request) {
-        // If a Request object is passed, we must modify its headers directly.
-        // Note: some browsers might require cloning if the request is already used.
+    if (isTrusted) {
+        const sourceHeaders = resource instanceof Request ? resource.headers : config.headers;
+        const headers = new Headers(sourceHeaders || {});
         if (token) {
-            resource.headers.set('Authorization', `Bearer ${token}`);
+            headers.set('Authorization', `Bearer ${token}`);
         }
-    } else {
-        // If resource is a URL string, we modify the config object.
-        if (token) {
-            // Ensure headers is a Headers object for easier manipulation
-            if (!(config.headers instanceof Headers)) {
-                config.headers = new Headers(config.headers || {});
-            }
-            config.headers.set('Authorization', `Bearer ${token}`);
+        config.headers = headers;
+        config.credentials = config.credentials || 'include';
+        if (resource instanceof Request) {
+            resource = new Request(resource, config);
+            config = undefined;
         }
     }
 
@@ -95,7 +105,7 @@ window.fetch = async (...args) => {
         const isAuthRoute = urlStr?.includes('/api/login');
         const isGeminiRoute = urlStr?.includes('/api/gemini');
 
-        if (urlStr && !isAuthRoute && !isGeminiRoute) {
+        if (isTrusted && urlStr && !isAuthRoute && !isGeminiRoute) {
             if (response.status === 401) {
                 console.warn(`[Auth] 401 Unauthorized on ${urlStr}. Triggering logout event.`);
                 localStorage.removeItem('authToken');
@@ -130,5 +140,7 @@ window.fetch = async (...args) => {
 
 // React.StrictMode disabled to prevent drag and drop issues in development
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <App />
+  <ConfirmDialogProvider>
+    <App />
+  </ConfirmDialogProvider>
 );

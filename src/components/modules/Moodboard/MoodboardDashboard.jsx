@@ -16,8 +16,10 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import PageHeader from '@/components/ui/PageHeader';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const MoodboardDashboard = () => {
+  const confirm = useConfirmDialog();
   const [boards, setBoards] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +70,11 @@ const MoodboardDashboard = () => {
 
   const handleDeleteBoard = async (e, id) => {
     e.stopPropagation();
-    if (!confirm("¿Eliminar este tablero permanentemente?")) return;
+    if (!(await confirm({
+      title: 'Eliminar tablero',
+      description: 'El tablero y sus referencias se eliminarán permanentemente.',
+      confirmLabel: 'Eliminar'
+    }))) return;
     try {
       await axios.delete(`/api/boards/${id}`);
       setBoards(boards.filter(b => b.id !== id));

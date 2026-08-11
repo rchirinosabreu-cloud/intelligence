@@ -1,6 +1,8 @@
 import express from 'express';
 import prisma from '../../lib/prisma.js';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'node:crypto';
+import { isManagerRole } from '../../config/security.js';
 
 const router = express.Router();
 
@@ -9,7 +11,9 @@ router.get('/', async (req, res) => {
   try {
     const { includeInactive } = req.query;
 
-    const whereClause = includeInactive === 'true' ? {} : { isActive: true };
+    const whereClause = includeInactive === 'true' && isManagerRole(req.user?.role)
+      ? {}
+      : { isActive: true };
 
     const teamMembers = await prisma.teamMember.findMany({
       where: whereClause,
@@ -105,8 +109,8 @@ router.post('/', async (req, res) => {
             });
 
             if (!user) {
-                const defaultPassword = 'Brainstudio2026';
-                const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+                const unusablePassword = randomBytes(32).toString('hex');
+                const hashedPassword = await bcrypt.hash(unusablePassword, 10);
 
                 user = await tx.user.create({
                     data: {
@@ -116,7 +120,8 @@ router.post('/', async (req, res) => {
                         role: systemRole || 'VIEWER',
                         modulePermissions: sanitizedPerms,
                         hasFinancialAccess,
-                        financialRole: resolvedFinancialRole
+                        financialRole: resolvedFinancialRole,
+                        mustChangePassword: true
                     }
                 });
             } else {
@@ -219,10 +224,10 @@ router.put('/:id', async (req, res) => {
 });
 
 router.patch('/member/status-message', async (req, res) => {
-  const { memberId, statusMessage } = req.body;
+  const statusMessage = String(req.body?.statusMessage || '').trim().slice(0, 160);
   try {
     const updatedMember = await prisma.teamMember.update({
-      where: { id: memberId },
+      where: { userId: req.user.userId },
       data: { statusMessage }
     });
     res.json(updatedMember);

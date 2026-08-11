@@ -1,6 +1,6 @@
 import express from 'express';
 import * as quotationController from '../../controllers/quotationController.js';
-import { authenticateToken } from '../../middlewares/authMiddleware.js';
+import { authenticateToken, requireModulePermission } from '../../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
@@ -19,7 +19,7 @@ router.get('/catalog', quotationController.getCatalog);
 /**
  * PROTECTED ROUTES: Management and creation
  */
-router.use(authenticateToken);
+router.use(authenticateToken, requireModulePermission('cotizaciones'));
 
 /**
  * POST /api/quotations

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Plus,
   Image as ImageIcon,
@@ -48,13 +48,6 @@ const MoodboardCanvas = () => {
   const viewportRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Fetch Board Data
-  useEffect(() => {
-    if (boardId) {
-      fetchBoardAndItems();
-    }
-  }, [boardId]);
-
   // Handle Global Listeners (Resize, Keyboard)
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -78,7 +71,7 @@ const MoodboardCanvas = () => {
     };
   }, []);
 
-  const fetchBoardAndItems = async () => {
+  const fetchBoardAndItems = useCallback(async () => {
     setLoading(true);
     try {
       const [boardRes, itemsRes] = await Promise.all([
@@ -94,7 +87,12 @@ const MoodboardCanvas = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [boardId, navigate]);
+
+  // Fetch Board Data
+  useEffect(() => {
+    if (boardId) fetchBoardAndItems();
+  }, [boardId, fetchBoardAndItems]);
 
   const handleAddItem = async (type, extraData = {}) => {
     if (!board) return;

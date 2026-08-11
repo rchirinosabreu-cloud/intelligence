@@ -1,12 +1,13 @@
 
 import TeamAvatar from "../../components/ui/TeamAvatar";
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Trash2, Megaphone, AlertCircle, Trophy, Info, X, Loader2, ArrowRight } from '@/components/ui/icons';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import SlideOver from '@/components/ui/SlideOver';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 // Types Configuration
 const TYPES = [
@@ -16,6 +17,7 @@ const TYPES = [
 ];
 
 const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
+    const confirm = useConfirmDialog();
     const [announcements, setAnnouncements] = useState([]);
     const [teamMembers, setTeamMembers] = useState([]);
     const [text, setText] = useState('');
@@ -32,11 +34,11 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
     const inputRef = useRef(null);
 
     // Endpoint mapping
-    const getEndpoint = () => {
+    const getEndpoint = useCallback(() => {
         const baseUrl = getApiBaseUrl();
         if (scope === "general") return `${baseUrl}/api/global-announcements`;
         return `${baseUrl}/api/clients/${clientId}/announcements`;
-    };
+    }, [clientId, scope]);
 
     // Fetch Team for Mentions
     useEffect(() => {
@@ -47,7 +49,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
     }, []);
 
     // Fetch Announcements
-    const fetchAnnouncements = async (isPolling = false) => {
+    const fetchAnnouncements = useCallback(async (isPolling = false) => {
         if (scope === "client" && !clientId) return;
         if (!localStorage.getItem('authToken')) return;
         try {
@@ -62,20 +64,20 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
         } finally {
             if (!isPolling) setLoading(false);
         }
-    };
+    }, [clientId, getEndpoint, scope]);
 
     useEffect(() => {
         fetchAnnouncements();
 
-        // Polling interval (15 seconds)
+        const pollingDelay = isModalOpen ? 15000 : 60000;
         const intervalId = setInterval(() => {
-            if (localStorage.getItem('authToken')) {
+            if (!document.hidden && localStorage.getItem('authToken')) {
                 fetchAnnouncements(true);
             }
-        }, 15000);
+        }, pollingDelay);
 
         return () => clearInterval(intervalId);
-    }, [clientId, scope]);
+    }, [fetchAnnouncements, isModalOpen]);
 
     // Handle Create
     const handleAdd = async () => {
@@ -117,7 +119,11 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
 
     const handleDelete = async (id) => {
         if (scope !== 'general') return;
-        if (!confirm('¿Eliminar este anuncio?')) return;
+        if (!(await confirm({
+            title: 'Eliminar anuncio',
+            description: '¿Deseas eliminar este anuncio? Esta acción no se puede deshacer.',
+            confirmLabel: 'Eliminar'
+        }))) return;
 
         const prev = [...announcements];
         setAnnouncements(prev.filter(a => a.id !== id));

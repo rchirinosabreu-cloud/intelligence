@@ -5,11 +5,16 @@ import { uploadAvatar, deleteFileFromGCS, getClientFileStream } from '../../serv
 import multer from 'multer';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
+import { requireManagerRole } from '../../middlewares/authMiddleware.js';
+import { isSafeStoragePath } from '../../config/security.js';
 
 dotenv.config();
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024, files: 1 }
+});
 
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
@@ -45,12 +50,7 @@ const normalizeCategory = (cat) => {
  * Radar de Talento: Global Summary
  * GET /api/talent-radar/summary
  */
-router.get('/summary', async (req, res) => {
-    // RBAC Check: Only ADMIN or PM (role check logic depends on user role string)
-    if (req.user?.role !== 'ADMIN' && req.user?.role !== 'PM') {
-        return res.status(403).json({ error: "No tienes permisos para acceder al Radar de Talento" });
-    }
-
+router.get('/summary', requireManagerRole, async (req, res) => {
     try {
         const { month, year } = req.query;
 
@@ -171,11 +171,7 @@ router.get('/summary', async (req, res) => {
  * Radar de Talento: Individual Member Details
  * GET /api/talent-radar/member/:memberId
  */
-router.get('/member/:memberId', async (req, res) => {
-    if (req.user?.role !== 'ADMIN' && req.user?.role !== 'PM') {
-        return res.status(403).json({ error: "Acceso denegado" });
-    }
-
+router.get('/member/:memberId', requireManagerRole, async (req, res) => {
     const { memberId } = req.params;
     const { month, year } = req.query;
     const targetMonth = month ? parseInt(month) : new Date().getMonth() + 1;
@@ -227,11 +223,7 @@ router.get('/member/:memberId', async (req, res) => {
  * Radar de Talento: AI Insights for 1-on-1s
  * POST /api/talent-radar/member/:memberId/ai-insights
  */
-router.post('/member/:memberId/ai-insights', async (req, res) => {
-    if (req.user?.role !== 'ADMIN' && req.user?.role !== 'PM') {
-        return res.status(403).json({ error: "Acceso denegado" });
-    }
-
+router.post('/member/:memberId/ai-insights', requireManagerRole, async (req, res) => {
     const { memberId } = req.params;
     const { month, year } = req.body;
     const targetMonth = month ? parseInt(month) : new Date().getMonth() + 1;
@@ -329,7 +321,7 @@ Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introd
  * - ADMIN: Puede subir para CUALQUIER :memberId.
  * - OTROS: Solo pueden subir para sí mismos (req.user.userId === :memberId o userId link).
  */
-router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res) => {
+router.put('/member/:memberId/avatar', requireManagerRole, upload.single('avatar'), async (req, res) => {
     const { memberId } = req.params;
     const currentUserId = req.user?.userId;
     const isAdmin = req.user?.role === 'ADMIN';
@@ -338,6 +330,9 @@ router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res)
 
     if (!file) {
         return res.status(400).json({ error: "No se proporcionó ningún archivo de imagen" });
+    }
+    if (!file.mimetype.startsWith('image/') || file.mimetype === 'image/svg+xml') {
+        return res.status(415).json({ error: 'El avatar debe ser una imagen segura' });
     }
 
     try {
@@ -444,14 +439,23 @@ router.put('/member/:memberId/avatar', upload.single('avatar'), async (req, res)
  * PERMITE ACCESO SIN TOKEN (para poder usarse en <img> tags directamente)
  */
 router.get('/member/:memberId/avatar-image', async (req, res) => {
-    const { gcsPath } = req.query;
-
-    if (!gcsPath) {
-        return res.status(400).send("Falta gcsPath");
-    }
-
     try {
-        const decodedPath = decodeURIComponent(gcsPath);
+        const member = await prisma.teamMember.findUnique({
+            where: { id: req.params.memberId },
+            select: { avatarUrl: true }
+        });
+        const user = member ? null : await prisma.user.findUnique({
+            where: { id: req.params.memberId },
+            select: { avatarUrl: true }
+        });
+        const avatarUrl = member?.avatarUrl || user?.avatarUrl;
+        const storedPath = avatarUrl?.split('gcsPath=')[1]?.split('&')[0];
+        if (!storedPath) return res.status(404).send("Avatar no encontrado");
+
+        const decodedPath = decodeURIComponent(storedPath);
+        if (!isSafeStoragePath(decodedPath, ['avatars/']) || !decodedPath.startsWith(`avatars/${req.params.memberId}_`)) {
+            return res.status(403).send("Ruta de avatar inválida");
+        }
 
         // Use storage SDK to get metadata (to set correct Content-Type)
         const bucketName = process.env.GCS_BUCKET_NAME || 'brainstudio-unstructured-v2';

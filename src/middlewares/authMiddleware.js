@@ -1,7 +1,8 @@
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma.js';
+import { getJwtSecret, hasModulePermission, isManagerRole } from '../config/security.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'brainstudio-secret-key-2025';
+const JWT_SECRET = getJwtSecret();
 
 export const authenticateToken = async (req, res, next) => {
   // Bypass authentication for OPTIONS requests (CORS pre-flight)
@@ -9,28 +10,22 @@ export const authenticateToken = async (req, res, next) => {
     return next();
   }
 
-  // Bypass authentication for public avatar, report images, and client logos (used in <img> tags)
+  // Public media paths resolve their storage object from database records.
   if (
     req.originalUrl.includes('/avatar-image') ||
-    req.originalUrl.includes('/image-proxy') ||
     /\/api\/clients\/.*\/logo-image/.test(req.originalUrl)
   ) {
     return next();
   }
 
   const authHeader = req.headers['authorization'];
-  let token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
-  // Fallback to query parameter for browser-native requests (<img> tags, downloads, etc)
-  if (!token && req.query.token) {
-    token = Array.isArray(req.query.token) ? req.query.token[0] : req.query.token;
-  }
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
   if (!token) {
     console.warn(`[Auth] No token provided for ${req.method} ${req.originalUrl}`);
     return res.status(401).json({
       error: "Unauthorized",
-      message: "Authentication token missing (Authorization header or token query parameter)",
+      message: "Authentication token missing",
       path: req.originalUrl
     });
   }
@@ -48,7 +43,6 @@ export const authenticateToken = async (req, res, next) => {
     return res.status(401).json({
       error: "Unauthorized",
       message: "Invalid or expired token",
-      details: err.message,
       code: err.name === 'TokenExpiredError' ? 'TokenExpiredError' : 'TOKEN_INVALID'
     });
   }
@@ -135,6 +129,16 @@ const FINANCIAL_PERMISSION_LEVELS = {
   ADMIN: 4
 };
 
+export const requireManagerRole = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Usuario no autenticado' });
+  }
+  if (!isManagerRole(req.user.role)) {
+    return res.status(403).json({ error: 'Acceso denegado. Se requiere rol ADMIN o PROJECT_MANAGER' });
+  }
+  return next();
+};
+
 const REQUIRED_FINANCIAL_LEVELS = {
   read: FINANCIAL_PERMISSION_LEVELS.VIEWER,
   write: FINANCIAL_PERMISSION_LEVELS.EDITOR,
@@ -193,40 +197,16 @@ export const requireFinancialApproval = requireFinancialPermission('approve');
 export const requireFinancialAdmin = requireFinancialPermission('admin');
 
 export const requireModulePermission = (moduleName) => {
-  return async (req, res, next) => {
+  return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized", message: "Usuario no autenticado" });
     }
-
-    try {
-      const userId = req.user.userId || req.user.id;
-      const dbUser = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { role: true, modulePermissions: true }
+    if (!hasModulePermission(req.user, moduleName)) {
+      console.warn(`[Auth] Access denied for user ${req.user.userId || req.user.id}: Module ${moduleName} is not permitted.`);
+      return res.status(403).json({
+        error: `No tienes permisos para acceder al módulo: ${moduleName}`
       });
-
-      if (!dbUser) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      // ADMIN users always have access to all modules bypass
-      if (dbUser.role === 'ADMIN') {
-        return next();
-      }
-
-      const permissions = dbUser.modulePermissions || {};
-      const key = String(moduleName || '').toLowerCase();
-      if (permissions[key] !== true && permissions[moduleName] !== true) {
-        console.warn(`[Auth] Access denied for user ${userId}: Module ${moduleName} is not permitted.`);
-        return res.status(403).json({
-          error: `No tienes permisos para acceder al módulo: ${moduleName}`
-        });
-      }
-
-      next();
-    } catch (error) {
-      console.error("[Auth] Error checking module permissions:", error);
-      return res.status(500).json({ error: "Failed to validate module permissions" });
     }
+    return next();
   };
 };

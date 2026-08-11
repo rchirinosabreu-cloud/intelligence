@@ -10,6 +10,7 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { getFloatingCardPosition } from '@/lib/floatingCardPosition';
 import MemberActivityCard from './MemberActivityCard';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const getAuthHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem('authToken')}`
@@ -120,6 +121,7 @@ const MemberAvatar = ({ member, hoveredMemberId, setHoveredMemberId, onDeleteEve
 };
 
 const ActivityMap = () => {
+  const confirm = useConfirmDialog();
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER';
   const queryClient = useQueryClient();
@@ -138,7 +140,8 @@ const ActivityMap = () => {
       if (!res.ok) throw new Error('Failed to fetch status');
       return res.json();
     },
-    refetchInterval: localStorage.getItem("authToken") ? 5000 : false,
+    refetchInterval: localStorage.getItem("authToken") ? () => (document.hidden ? false : 30000) : false,
+    refetchIntervalInBackground: false,
   });
 
   const deleteMutation = useMutation({
@@ -154,10 +157,13 @@ const ActivityMap = () => {
     }
   });
 
-  const handleDeleteEvent = (id) => {
-    if (window.confirm('¿Deseas eliminar este evento?')) {
-        deleteMutation.mutate(id);
-    }
+  const handleDeleteEvent = async (id) => {
+    const accepted = await confirm({
+      title: 'Eliminar evento',
+      description: '¿Deseas eliminar este evento del calendario?',
+      confirmLabel: 'Eliminar'
+    });
+    if (accepted) deleteMutation.mutate(id);
   };
 
   const handlePointerLeave = () => {
@@ -210,7 +216,7 @@ const ActivityMap = () => {
           position
       });
     }
-  }, [isCardOpen, hoveredData?.member.id, hoveredData?.rect]);
+  }, [isCardOpen, hoveredData]);
 
   if (isLoading) {
     return (

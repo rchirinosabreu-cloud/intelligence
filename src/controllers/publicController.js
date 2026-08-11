@@ -1,6 +1,12 @@
 import { getContentPlanByToken, updateContentItem, addClientComment, getContentItemFinalAsset } from '../services/contentService.js';
 import { getFromS3Stream } from '../services/s3Service.js';
 
+const getAuthorizedPublicItem = async (token, itemId) => {
+  const plan = await getContentPlanByToken(token);
+  if (!plan) return null;
+  return plan.items.find((item) => item.id === itemId) || null;
+};
+
 /**
  * GET /api/public/parrilla/:token
  * Retrieves a shared content plan for public viewing.
@@ -33,7 +39,7 @@ export const getPublicPlan = async (req, res) => {
           mimeType: item.finalAssetMimeType,
           size: item.finalAssetSize,
           version: item.finalAssetKey,
-          url: `/api/public/items/${item.id}/final-asset`
+          url: `/api/public/parrilla/${encodeURIComponent(req.params.token)}/items/${item.id}/final-asset`
         } : null,
         status: item.status,
         comments: item.comments
@@ -53,6 +59,8 @@ export const getPublicPlan = async (req, res) => {
  */
 export const approvePublicItem = async (req, res) => {
   try {
+    const authorizedItem = await getAuthorizedPublicItem(req.params.token, req.params.id);
+    if (!authorizedItem) return res.status(404).json({ error: 'Pieza no encontrada' });
     const item = await updateContentItem(req.params.id, { status: 'APROBADO' });
     return res.json(item);
   } catch (error) {
@@ -68,7 +76,13 @@ export const approvePublicItem = async (req, res) => {
 export const commentPublicItem = async (req, res) => {
   try {
     const { comment } = req.body;
-    const updatedItem = await addClientComment(req.params.id, comment);
+    const normalizedComment = typeof comment === 'string' ? comment.trim() : '';
+    if (!normalizedComment || normalizedComment.length > 2000) {
+      return res.status(400).json({ error: 'El comentario debe tener entre 1 y 2000 caracteres' });
+    }
+    const authorizedItem = await getAuthorizedPublicItem(req.params.token, req.params.id);
+    if (!authorizedItem) return res.status(404).json({ error: 'Pieza no encontrada' });
+    const updatedItem = await addClientComment(req.params.id, normalizedComment);
     return res.json(updatedItem);
   } catch (error) {
     console.error('[API] Public comment error:', error);
@@ -82,6 +96,8 @@ export const commentPublicItem = async (req, res) => {
  */
 export const getPublicFinalAsset = async (req, res) => {
   try {
+    const authorizedItem = await getAuthorizedPublicItem(req.params.token, req.params.id);
+    if (!authorizedItem) return res.status(404).json({ error: 'Archivo final no encontrado' });
     const item = await getContentItemFinalAsset(req.params.id);
     if (!item) return res.status(404).json({ error: 'Archivo final no encontrado' });
 

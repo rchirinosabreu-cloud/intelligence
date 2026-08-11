@@ -45,6 +45,11 @@ jobs:
           DATABASE_URL: postgresql://user:password@localhost:5432/brainstudio
         run: npx prisma generate
 
+      - name: Provision Test Schema
+        env:
+          DATABASE_URL: postgresql://user:password@localhost:5432/brainstudio
+        run: npx prisma db push
+
       - name: Lint Code
         run: npm run lint
 
@@ -54,6 +59,7 @@ jobs:
       - name: Run Tests
         env:
           DATABASE_URL: postgresql://user:password@localhost:5432/brainstudio
-          JWT_SECRET: test-secret
+          TEST_DATABASE_URL: postgresql://user:password@localhost:5432/brainstudio
+          JWT_SECRET: test-secret-with-at-least-32-characters
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: node --test tests/moodboardCompile.test.js tests/activityComponentsCompile.test.js
+        run: npm test

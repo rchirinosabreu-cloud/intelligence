@@ -18,9 +18,13 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { buildScopedReportData, normalizeAdsTableRows, orderReportSections } from '../../lib/reportStructure.js';
 import { sanitizeNarrativeForReport } from '../../lib/reportPresentation.js';
+import { isSafeStoragePath } from '../../config/security.js';
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024, files: 12 }
+});
 const REPORT_PIPELINE_VERSION = 'vision-2026-08-03.4';
 const REPORT_DEPLOY_COMMIT = process.env.REPORT_DEPLOY_COMMIT || 'development';
 
@@ -30,8 +34,7 @@ export const narrativeFailureRouteContract = { status: 'REVIEW', narrative: { ge
 export function getReportPipelineStatus() {
     return {
         pipelineVersion: REPORT_PIPELINE_VERSION,
-        commit: REPORT_DEPLOY_COMMIT,
-        legacyFilterGuard: typeof globalThis.filterTopContentRows === 'function'
+        commit: REPORT_DEPLOY_COMMIT
     };
 }
 
@@ -67,10 +70,16 @@ router.get('/image-proxy', async (req, res) => {
         console.log(`[Reports Proxy] Fully Decoded Path: ${decodedPath}`);
 
         // 2. Strict Security Check on decoded path
-        if (decodedPath.includes('..') || decodedPath.startsWith('/') || decodedPath.includes(':')) {
+        if (!isSafeStoragePath(decodedPath)) {
             console.warn(`[Reports Proxy] Blocked potentially malicious path: ${decodedPath}`);
             return res.status(403).send("Invalid path");
         }
+
+        const registeredSource = await prisma.metricReportSource.findFirst({
+            where: { storagePath: decodedPath },
+            select: { id: true }
+        });
+        if (!registeredSource) return res.status(404).send("Image not found");
 
         // Use standard service to get stream
         const stream = getClientFileStream(decodedPath);
@@ -81,11 +90,7 @@ router.get('/image-proxy', async (req, res) => {
         const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
 
         res.setHeader('Content-Type', contentType);
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-
-        // Critical for html2canvas / PDF export from frontend
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        res.setHeader('Cache-Control', 'private, max-age=300');
 
         stream.on('error', (err) => {
             console.error(`[Reports Proxy] Stream Error for ${decodedPath}:`, err.message);

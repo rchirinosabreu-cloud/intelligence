@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Search, Plus, Trash2, Copy, Check, DollarSign, FileText, Globe, Building2, User as UserIcon, ArrowLeft, Loader2 } from '@/components/ui/icons';
@@ -11,6 +11,7 @@ import SuccessModal from './SuccessModal';
 
 const QuotationForm = () => {
     const { id } = useParams();
+    const navigate = useNavigate();
     const isEditing = !!id;
 
     // State
@@ -29,27 +30,17 @@ const QuotationForm = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isLoadingData, setIsLoadingData] = useState(false);
 
-    // Fetch existing data if editing
-    useEffect(() => {
-        if (isEditing) {
-            fetchQuotation();
-        }
-    }, [id]);
-
-    const fetchQuotation = async () => {
+    const fetchQuotation = useCallback(async () => {
         setIsLoadingData(true);
         try {
             // Using admin endpoint for authenticated edit
             const res = await fetch(`${getApiBaseUrl()}/api/quotations/${id}`, {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
             });
             if (!res.ok) throw new Error("Failed to load quotation");
             const data = await res.json();
-            console.log("DEBUG - Datos de cotización recibidos (Edit):", data);
-            console.log("DEBUG - Items a mapear (Edit):", data?.items);
-
             setEmisorType(data.emisor_type);
             setClientCompany(data.client_company || '');
             setClientName(data.client_name);
@@ -78,7 +69,12 @@ const QuotationForm = () => {
         } finally {
             setIsLoadingData(false);
         }
-    };
+    }, [id, navigate]);
+
+    // Fetch existing data if editing
+    useEffect(() => {
+        if (isEditing) fetchQuotation();
+    }, [fetchQuotation, isEditing]);
 
     // Auto-toggle tax exempt based on emisor/client
     useEffect(() => {
@@ -142,8 +138,6 @@ const QuotationForm = () => {
         }).format(val);
     };
 
-    const navigate = useNavigate();
-
     const handleSubmit = async (targetStatus = 'ACTIVA') => {
         if (targetStatus === 'ACTIVA' && (!clientName || !clientPhone || selectedItems.length === 0)) {
             toast.error("Por favor completa los campos obligatorios para emitir");
@@ -159,7 +153,7 @@ const QuotationForm = () => {
                 method: method,
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 },
                 body: JSON.stringify({
                     emisor_type: emisorType,

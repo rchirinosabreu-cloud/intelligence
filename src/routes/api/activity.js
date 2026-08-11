@@ -15,6 +15,7 @@ import {
   listAccessibleGoogleCalendars,
   setActiveGoogleCalendar
 } from '../../services/googleCalendarOAuthService.js';
+import { requireManagerRole } from '../../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
@@ -71,7 +72,7 @@ router.get('/google-calendar/status', async (req, res) => {
   }
 });
 
-router.get('/google-calendar/auth-url', async (req, res) => {
+router.get('/google-calendar/auth-url', requireManagerRole, async (req, res) => {
   try {
     res.json({ url: getGoogleCalendarAuthUrl() });
   } catch (error) {
@@ -80,7 +81,7 @@ router.get('/google-calendar/auth-url', async (req, res) => {
   }
 });
 
-router.get('/google-calendar/calendars', async (req, res) => {
+router.get('/google-calendar/calendars', requireManagerRole, async (req, res) => {
   try {
     const calendars = await listAccessibleGoogleCalendars();
     res.json(calendars);
@@ -90,7 +91,7 @@ router.get('/google-calendar/calendars', async (req, res) => {
   }
 });
 
-router.patch('/google-calendar/active-calendar', async (req, res) => {
+router.patch('/google-calendar/active-calendar', requireManagerRole, async (req, res) => {
   try {
     const connection = await setActiveGoogleCalendar(req.body.calendarId);
     res.json(connection);
@@ -100,7 +101,7 @@ router.patch('/google-calendar/active-calendar', async (req, res) => {
   }
 });
 
-router.post('/google-calendar/oauth-callback', async (req, res) => {
+router.post('/google-calendar/oauth-callback', requireManagerRole, async (req, res) => {
   try {
     const connection = await storeGoogleCalendarOAuthCode(req.body.code, req.user?.userId || null);
     res.json(connection);
@@ -110,7 +111,7 @@ router.post('/google-calendar/oauth-callback', async (req, res) => {
   }
 });
 
-router.post('/google-calendar/sync', async (req, res) => {
+router.post('/google-calendar/sync', requireManagerRole, async (req, res) => {
   try {
     const result = await syncGoogleCalendarToOperationalEvents(req.body || {});
     res.json(result);

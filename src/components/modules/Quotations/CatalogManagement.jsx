@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const CATEGORIES = [
     { id: 'BRANDING', label: 'Branding' },
@@ -35,6 +36,7 @@ const CATEGORIES = [
 ];
 
 const CatalogManagement = () => {
+    const confirm = useConfirmDialog();
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
@@ -72,7 +74,7 @@ const CatalogManagement = () => {
                 method: editingService ? 'PUT' : 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 },
                 body: JSON.stringify(data)
             });
@@ -100,7 +102,7 @@ const CatalogManagement = () => {
             const res = await fetch(`${getApiBaseUrl()}/api/services/${id}`, {
                 method: 'DELETE',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
             });
             if (!res.ok) throw new Error("Delete failed");
@@ -142,6 +144,15 @@ const CatalogManagement = () => {
     const handleSubmit = (e) => {
         e.preventDefault();
         mutation.mutate(formData);
+    };
+
+    const handleDelete = async (serviceId) => {
+        const accepted = await confirm({
+            title: 'Eliminar servicio',
+            description: 'El servicio dejará de estar disponible en el catálogo.',
+            confirmLabel: 'Eliminar'
+        });
+        if (accepted) deleteMutation.mutate(serviceId);
     };
 
     const filteredServices = services.filter(s => {
@@ -237,9 +248,7 @@ const CatalogManagement = () => {
                                                         <Edit2 className="w-3.5 h-3.5" />
                                                     </button>
                                                     <button
-                                                        onClick={() => {
-                                                            if (confirm('¿Eliminar este servicio?')) deleteMutation.mutate(item.id);
-                                                        }}
+                                                        onClick={() => handleDelete(item.id)}
                                                         className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-zinc-500 hover:text-red-500 transition-colors"
                                                     >
                                                         <Trash2 className="w-3.5 h-3.5" />

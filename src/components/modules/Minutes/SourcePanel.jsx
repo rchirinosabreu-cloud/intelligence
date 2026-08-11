@@ -7,8 +7,10 @@ import MultiFileUpload from './MultiFileUpload';
 import FileList from './FileList';
 import { Button } from './ui/button';
 import { toast } from 'react-hot-toast';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const SourcePanel = ({ onSelectSource, selectedSource, analysisReady, onStartAnalysis }) => {
+  const confirm = useConfirmDialog();
   // Local state to manage the list of all files/sources
   const [files, setFiles] = useState([]);
 
@@ -60,13 +62,18 @@ const SourcePanel = ({ onSelectSource, selectedSource, analysisReady, onStartAna
     setFiles(prev => [...prev, meetingAsFile]);
   }, []);
 
-  const handleStartAnalysis = () => {
+  const handleStartAnalysis = async () => {
     if (files.length === 0) {
       toast.error('Agrega al menos una fuente antes de iniciar el análisis.');
       return;
     }
 
-    const confirmed = window.confirm('¿Deseas iniciar el análisis con las fuentes cargadas?');
+    const confirmed = await confirm({
+      title: 'Iniciar análisis',
+      description: 'Se procesarán todas las fuentes cargadas para generar el reporte.',
+      confirmLabel: 'Iniciar análisis',
+      tone: 'primary'
+    });
     if (confirmed) {
       onStartAnalysis();
       toast.success('Análisis iniciado. Ya puedes generar reportes.');
