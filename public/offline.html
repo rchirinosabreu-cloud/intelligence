@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#7C3AED" />
+    <title>Brainstudio sin conexión</title>
+    <style>
+      :root { color-scheme: light dark; font-family: "DM Sans", system-ui, sans-serif; }
+      * { box-sizing: border-box; }
+      body { min-height: 100dvh; margin: 0; display: grid; place-items: center; padding: 24px; background: #fafafa; color: #18181b; }
+      main { width: min(100%, 420px); text-align: center; }
+      img { width: 72px; height: 72px; border-radius: 18px; }
+      h1 { margin: 24px 0 8px; font-size: 24px; }
+      p { margin: 0; color: #71717a; line-height: 1.6; }
+      button { min-height: 44px; margin-top: 24px; border: 0; border-radius: 8px; padding: 0 20px; background: #7c3aed; color: white; font: inherit; font-weight: 700; cursor: pointer; }
+      @media (prefers-color-scheme: dark) { body { background: #09090b; color: #fafafa; } p { color: #a1a1aa; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/icons/icon-192.png" alt="" />
+      <h1>Sin conexión</h1>
+      <p>Brainstudio necesita internet para mostrar información operativa actualizada.</p>
+      <button type="button" onclick="window.location.reload()">Intentar nuevamente</button>
+    </main>
+  </body>
+</html>

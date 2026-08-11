@@ -51,16 +51,13 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   return (
     <aside className={cn(
-      "w-64 h-screen fixed left-0 top-0 z-30 flex flex-col transition-all duration-300 transform lg:translate-x-0 lg:static lg:h-full",
+      "fixed left-0 top-0 z-[60] flex h-[100dvh] w-[min(86vw,20rem)] flex-col overflow-hidden transition-transform duration-300 lg:w-64 lg:translate-x-0",
       isOpen ? "translate-x-0" : "-translate-x-full",
-      // Mobile Solid Background & desktop Glassmorphism
-      "bg-white lg:bg-white/70 border-r border-zinc-200/50 lg:backdrop-blur-xl shadow-sm",
-      "dark:bg-zinc-950 lg:dark:bg-zinc-900/60 dark:border-white/10 lg:dark:backdrop-blur-xl dark:shadow-[4px_0_24px_-12px_rgba(0,0,0,0.5)]",
-      // Mobile positioning
-      "fixed lg:fixed"
+      "border-r border-zinc-200/70 bg-white shadow-xl lg:bg-white/70 lg:shadow-sm lg:backdrop-blur-xl",
+      "dark:border-white/10 dark:bg-zinc-950 dark:shadow-[4px_0_24px_-12px_rgba(0,0,0,0.5)] lg:dark:bg-zinc-900/60 lg:dark:backdrop-blur-xl"
     )}>
       {/* Header */}
-      <div className="p-6 flex items-center justify-between">
+      <div className="flex shrink-0 items-center justify-between px-5 py-4 sm:p-6">
         <div className="flex items-center gap-3">
           <img src="/brainstudio-logo.png" alt="Brainstudio" className="w-8 h-8 object-contain" />
           <span className="text-xl font-bold tracking-tighter text-zinc-900 dark:text-zinc-100 drop-shadow-sm transition-colors">
@@ -69,14 +66,15 @@ const Sidebar = ({ isOpen, onClose }) => {
         </div>
         <button
           onClick={onClose}
-          className="lg:hidden p-2 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+          aria-label="Cerrar menú"
+          className="flex h-11 w-11 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100 lg:hidden"
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-2 relative">
+      <nav className="relative flex-1 space-y-2 overflow-y-auto overscroll-contain px-4 py-3">
         {filteredMenuItems.map((item) => {
           const Icon = item.icon;
 
@@ -128,7 +126,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-zinc-200/50 dark:border-white/5 bg-white/30 dark:bg-zinc-900/30 backdrop-blur-md transition-colors space-y-4">
+      <div className="shrink-0 space-y-4 border-t border-zinc-200/50 bg-white/30 p-4 backdrop-blur-md transition-colors dark:border-white/5 dark:bg-zinc-900/30">
         <ChaosMeter />
       </div>
     </aside>

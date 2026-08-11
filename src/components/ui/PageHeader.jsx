@@ -9,7 +9,8 @@ const PageHeader = ({
   icon: Icon,
   breadcrumbs = [],
   children,
-  className
+  className,
+  layout = 'responsive'
 }) => {
   return (
     <header className={cn("pt-8 pb-6 space-y-4", className)}>
@@ -36,9 +37,12 @@ const PageHeader = ({
         </nav>
       )}
 
-      <div className="flex flex-col 2xl:flex-row 2xl:items-end justify-between gap-6">
+      <div className={cn(
+        "flex flex-col justify-between gap-6",
+        layout === 'stacked' ? "items-stretch" : "2xl:flex-row 2xl:items-end"
+      )}>
         <div className="flex-1 min-w-0">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white truncate tracking-tight">
+          <h1 className="break-words text-2xl font-bold leading-tight text-slate-900 dark:text-white sm:text-3xl">
             {title}
           </h1>
           {subtitle && (
@@ -50,7 +54,12 @@ const PageHeader = ({
 
         {/* Controls / Actions */}
         {children && (
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+          <div className={cn(
+            "min-w-0",
+            layout === 'stacked'
+              ? "w-full"
+              : "flex shrink-0 flex-col items-stretch gap-3 sm:flex-row sm:items-center"
+          )}>
             {children}
           </div>
         )}

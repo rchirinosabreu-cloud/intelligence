@@ -20,6 +20,21 @@ const AppLayout = ({ children }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = isSidebarOpen ? 'hidden' : '';
+
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setIsSidebarOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isSidebarOpen]);
+
   // --- REACT QUERY: USER DATA (To sync avatar globaly) ---
   const { data: userData } = useQuery({
     queryKey: ['user-data', currentUser?.id],
@@ -387,8 +402,8 @@ const AppLayout = ({ children }) => {
       )}
 
       {/* Main Content Area - z-0 (above background) */}
-      <main className="lg:ml-64 pt-20 px-4 pb-4 md:px-8 md:pb-8 min-h-screen relative z-0 transition-all">
-        <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700">
+      <main className="relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8 lg:ml-64">
+        <div className="mx-auto min-w-0 max-w-7xl space-y-8 animate-in fade-in duration-700">
           {children}
         </div>
       </main>

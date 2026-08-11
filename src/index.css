@@ -71,6 +71,51 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased selection:bg-indigo-500/30 selection:text-indigo-700 dark:selection:text-indigo-200 transition-colors duration-300;
+    overflow-x: clip;
+  }
+}
+
+@layer components {
+  .task-toolbar-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  .task-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  .task-board-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    gap: 1.5rem;
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .task-toolbar-grid {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .task-filter-grid {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (min-width: 1536px) {
+    .task-toolbar-grid {
+      grid-template-columns: auto auto minmax(0, 1fr);
+      align-items: center;
+    }
+
+    .task-filter-grid {
+      grid-column: auto;
+    }
   }
 }
 

@@ -629,9 +629,10 @@ const NativeTasks = () => {
             <PageHeader
                 title="Gestión de Tareas"
                 subtitle="Gestiona y prioriza el flujo operativo de la agencia."
+                layout="stacked"
             >
-                <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                    <div className="flex h-10 items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="task-toolbar-grid">
+                    <div className="flex min-h-11 min-w-0 items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 dark:border-zinc-800 dark:bg-zinc-900 sm:justify-start">
                         <span className="hidden text-xs text-zinc-500 dark:text-zinc-400 lg:inline">
                             Última actualización
                         </span>
@@ -649,17 +650,17 @@ const NativeTasks = () => {
                             <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
                         </button>
                     </div>
-                    <Button size="lg" onClick={() => setIsCreating(true)} className="flex-1 sm:flex-none">
+                    <Button size="lg" onClick={() => setIsCreating(true)} className="min-h-11 w-full sm:w-auto">
                         <Plus className="w-4 h-4 mr-2" />
                         Nueva Tarea
                     </Button>
 
-                    <div className="flex flex-wrap items-center gap-3 flex-1 sm:flex-none">
-                        <div className="relative group">
+                    <div className="task-filter-grid">
+                        <div className="group relative min-w-0">
                             <select
                                 value={responsibleFilter}
                                 onChange={(e) => setResponsibleFilter(e.target.value)}
-                                className="appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-sm transition-all w-48 truncate"
+                                className="min-h-11 w-full min-w-0 appearance-none truncate rounded-xl border border-zinc-200 bg-white py-2 pl-9 pr-8 text-sm font-medium text-zinc-700 shadow-sm transition-all hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
                             >
                                 {responsibles.map((r, i) => (
                                     <option key={i} value={r}>
@@ -667,15 +668,15 @@ const NativeTasks = () => {
                                     </option>
                                 ))}
                             </select>
-                            <User className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5 pointer-events-none" />
-                            <ChevronDown className="w-4 h-4 text-zinc-400 absolute right-3 top-2.5 pointer-events-none group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors" />
+                            <User className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-zinc-400" />
+                            <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-zinc-400 transition-colors group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
                         </div>
 
-                        <div className="relative group">
+                        <div className="group relative min-w-0">
                             <select
                                 value={clientFilter}
                                 onChange={(e) => setClientFilter(e.target.value)}
-                                className="appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-sm transition-all w-48 truncate"
+                                className="min-h-11 w-full min-w-0 appearance-none truncate rounded-xl border border-zinc-200 bg-white py-2 pl-9 pr-8 text-sm font-medium text-zinc-700 shadow-sm transition-all hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
                             >
                                 {clients.map((c, i) => (
                                     <option key={i} value={c}>
@@ -683,16 +684,16 @@ const NativeTasks = () => {
                                     </option>
                                 ))}
                             </select>
-                            <Filter className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5 pointer-events-none" />
-                            <ChevronDown className="w-4 h-4 text-zinc-400 absolute right-3 top-2.5 pointer-events-none group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors" />
+                            <Filter className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-zinc-400" />
+                            <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-zinc-400 transition-colors group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
                         </div>
 
-                        <div className="relative group">
+                        <div className="group relative min-w-0">
                             <select
                                 value={dateFilter}
                                 onChange={(e) => setDateFilter(e.target.value)}
                                 className={cn(
-                                    "appearance-none pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer shadow-sm transition-all",
+                                    "min-h-11 w-full min-w-0 appearance-none rounded-xl border py-2 pl-9 pr-8 text-sm font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 dark:bg-zinc-900",
                                     dateFilter === 'Solo Vencidos'
                                         ? "border-red-200 text-red-600 bg-red-50 dark:bg-red-900/10 dark:text-red-400 dark:border-red-900/30"
                                         : "border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700"
@@ -704,11 +705,11 @@ const NativeTasks = () => {
                                 <option value="Todos">Todos</option>
                             </select>
                             {dateFilter === 'Solo Vencidos' ? (
-                                <AlertTriangle className="w-4 h-4 text-red-500 absolute left-3 top-2.5 pointer-events-none" />
+                                <AlertTriangle className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-red-500" />
                             ) : (
-                                <Calendar className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5 pointer-events-none" />
+                                <Calendar className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-zinc-400" />
                             )}
-                            <ChevronDown className="w-4 h-4 text-zinc-400 absolute right-3 top-2.5 pointer-events-none group-hover:text-zinc-600 dark:group-hover:text-zinc-200 transition-colors" />
+                            <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-zinc-400 transition-colors group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
                         </div>
                     </div>
                 </div>
@@ -874,7 +875,7 @@ const NativeTasks = () => {
                             )}
                         </Droppable>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1">
+                    <div className="task-board-grid flex-1">
                         {columns.map((col) => {
                             const columnTasks = filteredTasks.filter(t => getColumnId(t.status) === col.id);
                             return (

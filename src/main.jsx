@@ -6,6 +6,7 @@ import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { isTrustedApiRequest } from '@/lib/trustedRequest';
 import { ConfirmDialogProvider } from '@/components/ui/ConfirmDialog';
+import { registerBrainstudioServiceWorker } from '@/pwa/registerServiceWorker';
 
 const apiBaseUrl = getApiBaseUrl();
 const pageOrigin = window.location.origin;
@@ -144,3 +145,5 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </ConfirmDialogProvider>
 );
+
+registerBrainstudioServiceWorker();
