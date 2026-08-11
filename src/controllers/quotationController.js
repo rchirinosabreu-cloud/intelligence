@@ -8,8 +8,10 @@ import {
     buildQuotationValidityUpdate,
     calculateQuotationEconomics,
     calculateQuotationTotals,
+    normalizeQuotationTaxForCurrency,
     normalizeQuotationExchangeRate,
     prepareQuotationItems,
+    resolveQuotationTaxExemption,
     serializeCatalogService,
     serializePublicQuotation
 } from '../services/quotationDomainService.js';
@@ -47,6 +49,21 @@ const EMISORES_DATA = {
 const VALID_EMISORES = new Set(['BRAIN_STUDIO', 'FRANCISCO_VILLA']);
 const VALID_CURRENCIES = new Set(['COP', 'USD']);
 const VALID_STATUSES = new Set(['BORRADOR', 'ACTIVA']);
+
+const buildQuotationTerms = (emisorType, currency) => {
+    let terms = MANDATORY_TERMS;
+    if (currency === 'USD') {
+        terms = terms
+            .split('\n')
+            .filter((line) => !/19% de IVA/i.test(line))
+            .join('\n');
+    }
+    if (emisorType === 'FRANCISCO_VILLA') {
+        terms = terms.replace(/BRAIN STUDIO/gi, "El Prestador");
+        terms = terms.replace(/Brain Studio/gi, "El Prestador");
+    }
+    return terms;
+};
 
 const findCatalogServicesForItems = async (items = []) => {
     const ids = [...new Set(items.map((item) => item?.serviceId).filter(Boolean))];
@@ -113,12 +130,12 @@ export const createQuotation = async (req, res) => {
         const validity = buildNewQuotationValidity(status, created_at);
 
         // 3. Automated VAT (IVA) Logic
-        let is_tax_exempt = (emisor_type === 'FRANCISCO_VILLA' || client_type === 'PERSONA_NATURAL');
-
-        // Respect manual override if provided
-        if (manual_tax_exempt !== undefined) {
-            is_tax_exempt = manual_tax_exempt;
-        }
+        const is_tax_exempt = resolveQuotationTaxExemption({
+            currency,
+            emisorType: emisor_type,
+            clientType: client_type,
+            manualTaxExempt: manual_tax_exempt
+        });
 
         // 4. Financial Calculations
         const { subtotal, taxAmount: tax_amount, totalAmount: total_amount } = calculateQuotationTotals(
@@ -127,11 +144,7 @@ export const createQuotation = async (req, res) => {
         );
 
         // 5. Terms and Conditions (Immutable + Sanitization)
-        let final_terms = MANDATORY_TERMS;
-        if (emisor_type === 'FRANCISCO_VILLA') {
-            final_terms = final_terms.replace(/BRAIN STUDIO/gi, "El Prestador");
-            final_terms = final_terms.replace(/Brain Studio/gi, "El Prestador");
-        }
+        const final_terms = buildQuotationTerms(emisor_type, currency);
 
         // 6. Persistence
         const quotation = await prisma.quotation.create({
@@ -217,19 +230,19 @@ export const updateQuotation = async (req, res) => {
             exchangeRateDate: exchange_rate_date ?? existing.exchange_rate_date
         });
 
-        let is_tax_exempt = (targetEmisor === 'FRANCISCO_VILLA' || client_type === 'PERSONA_NATURAL');
-        if (manual_tax_exempt !== undefined) is_tax_exempt = manual_tax_exempt;
+        const is_tax_exempt = resolveQuotationTaxExemption({
+            currency: targetCurrency,
+            emisorType: targetEmisor,
+            clientType: client_type,
+            manualTaxExempt: manual_tax_exempt
+        });
 
         const { subtotal, taxAmount: tax_amount, totalAmount: total_amount } = calculateQuotationTotals(
             preparedItems,
             is_tax_exempt
         );
 
-        let final_terms = MANDATORY_TERMS;
-        if (targetEmisor === 'FRANCISCO_VILLA') {
-            final_terms = final_terms.replace(/BRAIN STUDIO/gi, "El Prestador");
-            final_terms = final_terms.replace(/Brain Studio/gi, "El Prestador");
-        }
+        const final_terms = buildQuotationTerms(targetEmisor, targetCurrency);
 
         const quotation = await prisma.quotation.update({
             where: { id },
@@ -354,9 +367,10 @@ export const getQuotation = async (req, res) => {
         if (!quotation) {
             return res.status(404).json({ error: "Cotización no encontrada" });
         }
+        const normalizedQuotation = normalizeQuotationTaxForCurrency(quotation);
 
         res.json({
-            ...quotation,
+            ...normalizedQuotation,
             consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`,
             isExpired: quotation.status === 'ACTIVA' && new Date() > quotation.expires_at,
             profitability: calculateQuotationEconomics(quotation.items || [], {
@@ -376,11 +390,14 @@ export const listQuotations = async (req, res) => {
             orderBy: { created_at: 'desc' }
         });
 
-        const formatted = quotations.map(q => ({
-            ...q,
-            consecutive_formatted: `COT-${String(q.consecutive).padStart(4, '0')}`,
-            isExpired: q.status === 'ACTIVA' && new Date() > q.expires_at
-        }));
+        const formatted = quotations.map((quotation) => {
+            const normalizedQuotation = normalizeQuotationTaxForCurrency(quotation);
+            return {
+                ...normalizedQuotation,
+                consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`,
+                isExpired: quotation.status === 'ACTIVA' && new Date() > quotation.expires_at
+            };
+        });
 
         res.json(formatted);
     } catch (error) {
@@ -395,9 +412,10 @@ export const listQuotations = async (req, res) => {
 export const generateQuotationPDF = async (req, res) => {
     try {
         const { id } = req.params;
-        const quotation = await prisma.quotation.findUnique({ where: { id } });
+        const storedQuotation = await prisma.quotation.findUnique({ where: { id } });
 
-        if (!quotation) return res.status(404).json({ error: "Cotización no encontrada" });
+        if (!storedQuotation) return res.status(404).json({ error: "Cotización no encontrada" });
+        const quotation = normalizeQuotationTaxForCurrency(storedQuotation);
 
         const doc = new jsPDF();
         const emisor = EMISORES_DATA[quotation.emisor_type];

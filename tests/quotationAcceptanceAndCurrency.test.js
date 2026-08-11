@@ -75,6 +75,52 @@ test('USD quotation snapshots require a positive exchange rate while COP clears 
   assert.equal(snapshot.exchange_rate_date.toISOString(), '2026-08-11T00:00:00.000Z');
 });
 
+test('USD quotations are always tax exempt regardless of a manual override', async () => {
+  const domain = await loadModule('../src/services/quotationDomainService.js');
+
+  assert.equal(domain.resolveQuotationTaxExemption({
+    currency: 'USD',
+    emisorType: 'BRAIN_STUDIO',
+    clientType: 'EMPRESA',
+    manualTaxExempt: false
+  }), true);
+  assert.equal(domain.resolveQuotationTaxExemption({
+    currency: 'COP',
+    emisorType: 'BRAIN_STUDIO',
+    clientType: 'EMPRESA',
+    manualTaxExempt: false
+  }), false);
+
+  assert.deepEqual(domain.normalizeQuotationTaxForCurrency({
+    currency: 'USD',
+    subtotal: 100,
+    tax_amount: 19,
+    total_amount: 119,
+    is_tax_exempt: false
+  }), {
+    currency: 'USD',
+    subtotal: 100,
+    tax_amount: 0,
+    total_amount: 100,
+    is_tax_exempt: true
+  });
+
+  const legacyPublicQuotation = domain.serializePublicQuotation({
+    status: 'ACTIVA',
+    currency: 'USD',
+    subtotal: 100,
+    tax_amount: 19,
+    total_amount: 119,
+    is_tax_exempt: false,
+    terms_and_conditions: 'Condicion general\nFactura con 19% de IVA.',
+    items: []
+  });
+  assert.equal(legacyPublicQuotation.is_tax_exempt, true);
+  assert.equal(legacyPublicQuotation.tax_amount, 0);
+  assert.equal(legacyPublicQuotation.total_amount, 100);
+  assert.doesNotMatch(legacyPublicQuotation.terms_and_conditions, /IVA/i);
+});
+
 test('USD profitability converts quoted revenue to COP before comparing catalog costs', async () => {
   const domain = await loadModule('../src/services/quotationDomainService.js');
   assert.equal(typeof domain.calculateQuotationEconomics, 'function');
@@ -237,4 +283,23 @@ test('public proposal keeps its commercial content in a simplified single-column
   assert.doesNotMatch(publicView, /lg:grid-cols-\[minmax\(0,1fr\)_420px\]/);
   assert.doesNotMatch(publicView, /rounded-lg bg-zinc-950 p-6 text-white/);
   assert.match(publicView, /rounded-lg bg-violet-(?:700|800|900) p-6 text-white/);
+});
+
+test('quotation UI removes the identity preview and presents USD and service notes correctly', async () => {
+  const [form, publicView, controller] = await Promise.all([
+    readFile(new URL('../src/components/modules/Quotations/QuotationForm.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/public/Quotations/PublicQuotation.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/controllers/quotationController.js', import.meta.url), 'utf8')
+  ]);
+
+  assert.doesNotMatch(form, /Vista Previa de Identidad/i);
+  assert.match(form, /currency !== 'USD'\s*&&\s*\(/);
+  assert.match(form, /is_tax_exempt:\s*currency === 'USD' \? true : isTaxExempt/);
+  assert.match(controller, /resolveQuotationTaxExemption/);
+  assert.match(controller, /generateQuotationPDF[\s\S]{0,500}normalizeQuotationTaxForCurrency/);
+  assert.doesNotMatch(publicView, /Preparada para/);
+  assert.match(publicView, />Cliente</);
+  assert.doesNotMatch(publicView, /text-sm italic[^>]*>\{item\.note\}/);
+  assert.match(publicView, /<\/article>\s*\{item\.note && \(/);
+  assert.match(publicView, /Nota adicional/);
 });

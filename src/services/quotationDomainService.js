@@ -130,6 +130,35 @@ export const prepareQuotationItems = (items, catalogServices = [], trustedExisti
   });
 };
 
+export const resolveQuotationTaxExemption = ({
+  currency,
+  emisorType,
+  clientType,
+  manualTaxExempt
+}) => {
+  if (currency === 'USD') return true;
+  if (typeof manualTaxExempt === 'boolean') return manualTaxExempt;
+  return emisorType === 'FRANCISCO_VILLA' || clientType === 'PERSONA_NATURAL';
+};
+
+export const normalizeQuotationTaxForCurrency = (quotation) => {
+  if (!quotation || quotation.currency !== 'USD') return quotation;
+
+  const normalized = {
+    ...quotation,
+    is_tax_exempt: true,
+    tax_amount: 0,
+    total_amount: quotation.subtotal
+  };
+  if (Object.prototype.hasOwnProperty.call(quotation, 'terms_and_conditions')) {
+    normalized.terms_and_conditions = String(quotation.terms_and_conditions || '')
+      .split('\n')
+      .filter((line) => !/19% de IVA/i.test(line))
+      .join('\n');
+  }
+  return normalized;
+};
+
 export const calculateQuotationTotals = (items, isTaxExempt) => {
   const subtotal = roundMoney(items.reduce(
     (sum, item) => sum + Number(item.price) * Number(item.quantity),
@@ -232,6 +261,7 @@ const serializePublicItem = (item) => ({
 
 export const serializePublicQuotation = (quotation) => {
   if (!quotation || !['ACTIVA', 'APROBADA'].includes(quotation.status)) return null;
+  const normalizedQuotation = normalizeQuotationTaxForCurrency(quotation);
 
   const publicFields = [
     'uuid_slug',
@@ -258,12 +288,12 @@ export const serializePublicQuotation = (quotation) => {
   ];
   const serialized = Object.fromEntries(
     publicFields
-      .filter((field) => quotation[field] !== undefined)
-      .map((field) => [field, quotation[field]])
+      .filter((field) => normalizedQuotation[field] !== undefined)
+      .map((field) => [field, normalizedQuotation[field]])
   );
 
   return {
     ...serialized,
-    items: Array.isArray(quotation.items) ? quotation.items.map(serializePublicItem) : []
+    items: Array.isArray(normalizedQuotation.items) ? normalizedQuotation.items.map(serializePublicItem) : []
   };
 };

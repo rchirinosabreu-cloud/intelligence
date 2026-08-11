@@ -209,24 +209,31 @@ const PublicQuotation = () => {
                             </div>
                             <div className="space-y-3">
                                 {(quotation.items || []).map((item, index) => (
-                                    <article key={`${item.name}-${index}`} className="rounded-lg border border-zinc-200 p-5 dark:border-zinc-800 sm:p-6">
-                                        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-start">
-                                            <div>
-                                                <div className="flex items-start gap-3">
-                                                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-xs font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">{index + 1}</span>
-                                                    <div>
-                                                        <h3 className="text-base font-bold">{item.name}</h3>
-                                                        {item.description && <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{item.description}</p>}
-                                                        {item.note && <p className="mt-3 border-l-2 border-violet-300 pl-3 text-sm italic leading-6 text-zinc-500 dark:border-violet-700">{item.note}</p>}
+                                    <div key={`${item.name}-${index}`} className="space-y-3">
+                                        <article className="rounded-lg border border-zinc-200 p-5 dark:border-zinc-800 sm:p-6">
+                                            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-start">
+                                                <div>
+                                                    <div className="flex items-start gap-3">
+                                                        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-xs font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">{index + 1}</span>
+                                                        <div>
+                                                            <h3 className="text-base font-bold">{item.name}</h3>
+                                                            {item.description && <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{item.description}</p>}
+                                                        </div>
                                                     </div>
                                                 </div>
+                                                <div className="border-t border-zinc-100 pt-4 text-left sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0 sm:text-right dark:border-zinc-800">
+                                                    <p className="text-xs font-semibold uppercase text-zinc-400">{Number(item.quantity)} {Number(item.quantity) === 1 ? 'unidad' : 'unidades'}</p>
+                                                    <p className="mt-1 text-xl font-bold">{formatCurrency(Number(item.price) * Number(item.quantity))}</p>
+                                                </div>
                                             </div>
-                                            <div className="border-t border-zinc-100 pt-4 text-left sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0 sm:text-right dark:border-zinc-800">
-                                                <p className="text-xs font-semibold uppercase text-zinc-400">{Number(item.quantity)} {Number(item.quantity) === 1 ? 'unidad' : 'unidades'}</p>
-                                                <p className="mt-1 text-xl font-bold">{formatCurrency(Number(item.price) * Number(item.quantity))}</p>
+                                        </article>
+                                        {item.note && (
+                                            <div className="ml-3 border-l-2 border-violet-300 pl-4 dark:border-violet-700">
+                                                <p className="text-xs font-bold uppercase text-violet-700 dark:text-violet-300">Nota adicional</p>
+                                                <p className="mt-1 text-sm font-normal leading-6 text-zinc-600 dark:text-zinc-300">{item.note}</p>
                                             </div>
-                                        </div>
-                                    </article>
+                                        )}
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -237,7 +244,7 @@ const PublicQuotation = () => {
                     <div className="mx-auto max-w-4xl space-y-8">
                         <div className="space-y-6">
                             <div className="border-t border-zinc-300 pt-4 dark:border-zinc-700">
-                                <p className="text-xs font-semibold uppercase text-zinc-400">Preparada para</p>
+                                <p className="text-xs font-semibold uppercase text-zinc-400">Cliente</p>
                                 <p className="mt-2 text-lg font-bold">{quotation.client_company || quotation.client_name}</p>
                                 {quotation.client_company && <p className="mt-1 text-sm text-zinc-500">Atención: {quotation.client_name}</p>}
                             </div>
@@ -253,7 +260,7 @@ const PublicQuotation = () => {
                             <p className="mt-3 text-4xl font-bold leading-none">{formatCurrency(quotation.total_amount)}</p>
                             <div className="mt-6 space-y-2 border-t border-white/20 pt-5 text-sm">
                                 <div className="flex justify-between gap-4"><span className="text-violet-100">Subtotal</span><span>{formatCurrency(quotation.subtotal)}</span></div>
-                                {!quotation.is_tax_exempt && <div className="flex justify-between gap-4"><span className="text-violet-100">IVA (19%)</span><span>{formatCurrency(quotation.tax_amount)}</span></div>}
+                                {quotation.currency !== 'USD' && !quotation.is_tax_exempt && <div className="flex justify-between gap-4"><span className="text-violet-100">IVA (19%)</span><span>{formatCurrency(quotation.tax_amount)}</span></div>}
                             </div>
 
                             {isApproved ? (

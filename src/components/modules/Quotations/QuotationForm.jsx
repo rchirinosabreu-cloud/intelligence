@@ -91,6 +91,10 @@ const QuotationForm = () => {
 
     // Auto-toggle tax exempt based on emisor/client
     useEffect(() => {
+        if (currency === 'USD') {
+            setIsTaxExempt(true);
+            return;
+        }
         if (!isEditing) {
             if (emisorType === 'FRANCISCO_VILLA' || clientType === 'PERSONA_NATURAL') {
                 setIsTaxExempt(true);
@@ -98,7 +102,7 @@ const QuotationForm = () => {
                 setIsTaxExempt(false);
             }
         }
-    }, [emisorType, clientType, isEditing]);
+    }, [currency, emisorType, clientType, isEditing]);
 
     // Fetch catalog
     const { data: catalog = [] } = useQuery({
@@ -185,6 +189,11 @@ const QuotationForm = () => {
             )
         })));
         setCurrency(nextCurrency);
+        setIsTaxExempt(
+            nextCurrency === 'USD'
+            || emisorType === 'FRANCISCO_VILLA'
+            || clientType === 'PERSONA_NATURAL'
+        );
     };
 
     const addItem = (service) => {
@@ -216,7 +225,7 @@ const QuotationForm = () => {
 
     const calculateTotals = () => {
         const subtotal = selectedItems.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
-        const tax = isTaxExempt ? 0 : subtotal * 0.19;
+        const tax = currency === 'USD' || isTaxExempt ? 0 : subtotal * 0.19;
         return { subtotal, tax, total: subtotal + tax };
     };
 
@@ -276,7 +285,7 @@ const QuotationForm = () => {
                     exchange_rate_source: currency === 'USD' ? exchangeRateSource : null,
                     exchange_rate_date: currency === 'USD' ? exchangeRateDate : null,
                     status: targetStatus,
-                    is_tax_exempt: isTaxExempt
+                    is_tax_exempt: currency === 'USD' ? true : isTaxExempt
                 })
             });
 
@@ -662,23 +671,25 @@ const QuotationForm = () => {
                                 <span className="text-zinc-500">Subtotal</span>
                                 <span className="font-medium">{formatCurrency(totals.subtotal)}</span>
                             </div>
-                            <div className="flex justify-between items-center text-xs">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-zinc-500">IVA (19%)</span>
-                                    <button
-                                        onClick={() => setIsTaxExempt(!isTaxExempt)}
-                                        className={cn(
-                                            "w-6 h-3 rounded-full relative transition-colors",
-                                            isTaxExempt ? "bg-zinc-200 dark:bg-zinc-700" : "bg-primary"
-                                        )}
-                                    >
-                                        <div className={cn("absolute top-0.5 w-2 h-2 rounded-full bg-white transition-all", isTaxExempt ? "left-0.5" : "right-0.5")} />
-                                    </button>
+                            {currency !== 'USD' && (
+                                <div className="flex justify-between items-center text-xs">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-zinc-500">IVA (19%)</span>
+                                        <button
+                                            onClick={() => setIsTaxExempt(!isTaxExempt)}
+                                            className={cn(
+                                                "w-6 h-3 rounded-full relative transition-colors",
+                                                isTaxExempt ? "bg-zinc-200 dark:bg-zinc-700" : "bg-primary"
+                                            )}
+                                        >
+                                            <div className={cn("absolute top-0.5 w-2 h-2 rounded-full bg-white transition-all", isTaxExempt ? "left-0.5" : "right-0.5")} />
+                                        </button>
+                                    </div>
+                                    <span className={cn("font-medium", isTaxExempt && "text-zinc-400 line-through")}>
+                                        {formatCurrency(totals.tax)}
+                                    </span>
                                 </div>
-                                <span className={cn("font-medium", isTaxExempt && "text-zinc-400 line-through")}>
-                                    {formatCurrency(totals.tax)}
-                                </span>
-                            </div>
+                            )}
                             <div className="flex justify-between text-base font-bold pt-3 border-t border-zinc-100 dark:border-zinc-800">
                                 <span>Total</span>
                                 <span className="text-primary">{formatCurrency(totals.total)}</span>
@@ -763,22 +774,6 @@ const QuotationForm = () => {
                         )}
                     </Card>
 
-                    <Card className="p-6 overflow-hidden relative">
-                         <div className="absolute top-0 left-0 w-full h-1 bg-primary/20" />
-                         <p className="text-[10px] font-bold text-zinc-400 uppercase mb-4">Vista Previa de Identidad</p>
-                         {emisorType === 'BRAIN_STUDIO' ? (
-                             <div className="flex items-center gap-3 opacity-60 grayscale">
-                                 <img src="/brainstudio-logo.png" className="w-8 h-8" />
-                                 <span className="font-bold tracking-tighter">Brainstudio</span>
-                             </div>
-                         ) : (
-                             <div className="opacity-60 space-y-1">
-                                 <p className="font-bold text-xs">Francisco Villa Zúñiga</p>
-                                 <p className="text-[10px] text-zinc-500">C.C. 1.235.038.569</p>
-                                 <p className="text-[10px] text-zinc-500">Colombia</p>
-                             </div>
-                         )}
-                    </Card>
                 </div>
             </div>
         </div>
