@@ -50,6 +50,7 @@ const QuotationList = () => {
         const matchesStatus = statusFilter === 'ALL'
             || (statusFilter === 'ACTIVA' && q.status === 'ACTIVA' && !q.isExpired)
             || (statusFilter === 'EXPIRADA' && q.isExpired)
+            || (statusFilter === 'APROBADA' && q.status === 'APROBADA')
             || (statusFilter === 'BORRADOR' && q.status === 'BORRADOR');
         return matchesSearch && matchesStatus;
     });
@@ -136,6 +137,7 @@ const QuotationList = () => {
                         <option value="ALL">Todos los Estados</option>
                         <option value="ACTIVA">Emitidas (Activas)</option>
                         <option value="EXPIRADA">Expiradas</option>
+                        <option value="APROBADA">Aprobadas</option>
                         <option value="BORRADOR">Borradores</option>
                     </select>
                 </div>
@@ -196,7 +198,11 @@ const QuotationList = () => {
                                             {formatCurrency(q.total_amount, q.currency)}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            {q.status === 'BORRADOR' ? (
+                                            {q.status === 'APROBADA' ? (
+                                                <span className="flex items-center gap-1 text-violet-600 text-xs font-bold bg-violet-50 dark:bg-violet-950/20 px-2 py-1 rounded-full w-fit border border-violet-100 dark:border-violet-900/30">
+                                                    <CheckCircle2 className="w-3 h-3" /> Aprobada
+                                                </span>
+                                            ) : q.status === 'BORRADOR' ? (
                                                 <span className="flex items-center gap-1 text-zinc-400 text-xs font-bold bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-full w-fit">
                                                     <FileText className="w-3 h-3" /> Borrador
                                                 </span>
@@ -212,13 +218,15 @@ const QuotationList = () => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right">
                                             <div className="flex items-center justify-end gap-2">
-                                                <button
-                                                    onClick={() => navigate(`/cotizaciones/editar/${q.id}`)}
-                                                    className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-zinc-500 transition-colors"
-                                                    title="Editar cotización"
-                                                >
-                                                    <Pencil className="w-4 h-4" />
-                                                </button>
+                                                {q.status !== 'APROBADA' && (
+                                                    <button
+                                                        onClick={() => navigate(`/cotizaciones/editar/${q.id}`)}
+                                                        className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-zinc-500 transition-colors"
+                                                        title="Editar cotización"
+                                                    >
+                                                        <Pencil className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => downloadPDF(q.id, q.consecutive_formatted)}
                                                     disabled={downloadingId === q.id}

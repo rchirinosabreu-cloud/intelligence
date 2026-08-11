@@ -8,10 +8,16 @@ import {
     buildQuotationValidityUpdate,
     calculateQuotationEconomics,
     calculateQuotationTotals,
+    normalizeQuotationExchangeRate,
     prepareQuotationItems,
     serializeCatalogService,
     serializePublicQuotation
 } from '../services/quotationDomainService.js';
+import { fetchOfficialUsdCopRate } from '../services/exchangeRateService.js';
+import {
+    QuotationAcceptanceError,
+    acceptQuotationBySlug
+} from '../services/quotationAcceptanceService.js';
 
 const MANDATORY_TERMS = `● El cliente tendrá un delegado quien será el contacto directo con la empresa prestadora del servicio BRAIN STUDIO, y se encargará de brindar la información necesaria para el desarrollo de los servicios.
 ● Las modificaciones de productos deben cumplir con un estándar mínimo de 2 correcciones con el fin de optimizar tiempo y recursos. Si el cliente requiere corregir un contenido luego de estar aprobado tiene un costo adicional.
@@ -79,6 +85,9 @@ export const createQuotation = async (req, res) => {
             items, // Array: [{ serviceId, name, description, price, quantity, note }]
             currency = 'COP',
             status = 'ACTIVA',
+            exchange_rate,
+            exchange_rate_source,
+            exchange_rate_date,
             is_tax_exempt: manual_tax_exempt
         } = req.body;
 
@@ -91,6 +100,12 @@ export const createQuotation = async (req, res) => {
         const rawItems = Array.isArray(items) ? items : [];
         const catalogServices = await findCatalogServicesForItems(rawItems);
         const preparedItems = prepareQuotationItems(rawItems, catalogServices);
+        const exchangeRateSnapshot = normalizeQuotationExchangeRate({
+            currency,
+            exchangeRate: exchange_rate,
+            exchangeRateSource: exchange_rate_source,
+            exchangeRateDate: exchange_rate_date
+        });
 
         // 2. Generate UUID Slug and validity window (15 days)
         const uuid_slug = crypto.randomUUID();
@@ -131,6 +146,7 @@ export const createQuotation = async (req, res) => {
                 is_tax_exempt,
                 items: preparedItems,
                 currency,
+                ...exchangeRateSnapshot,
                 subtotal,
                 tax_amount,
                 total_amount,
@@ -169,11 +185,17 @@ export const updateQuotation = async (req, res) => {
             items,
             currency,
             status,
+            exchange_rate,
+            exchange_rate_source,
+            exchange_rate_date,
             is_tax_exempt: manual_tax_exempt
         } = req.body;
 
         const existing = await prisma.quotation.findUnique({ where: { id } });
         if (!existing) return res.status(404).json({ error: "Cotizacion no encontrada" });
+        if (existing.status === 'APROBADA') {
+            return res.status(409).json({ error: "Una cotizacion aprobada no puede modificarse" });
+        }
 
         const targetStatus = status || existing.status;
         const targetEmisor = emisor_type || existing.emisor_type;
@@ -188,6 +210,12 @@ export const updateQuotation = async (req, res) => {
 
         const catalogServices = await findCatalogServicesForItems(rawItems);
         const preparedItems = prepareQuotationItems(rawItems, catalogServices, existing.items || []);
+        const exchangeRateSnapshot = normalizeQuotationExchangeRate({
+            currency: targetCurrency,
+            exchangeRate: exchange_rate ?? existing.exchange_rate,
+            exchangeRateSource: exchange_rate_source ?? existing.exchange_rate_source,
+            exchangeRateDate: exchange_rate_date ?? existing.exchange_rate_date
+        });
 
         let is_tax_exempt = (targetEmisor === 'FRANCISCO_VILLA' || client_type === 'PERSONA_NATURAL');
         if (manual_tax_exempt !== undefined) is_tax_exempt = manual_tax_exempt;
@@ -215,6 +243,7 @@ export const updateQuotation = async (req, res) => {
                 is_tax_exempt,
                 items: preparedItems,
                 currency: targetCurrency,
+                ...exchangeRateSnapshot,
                 subtotal,
                 tax_amount,
                 total_amount,
@@ -255,7 +284,7 @@ export const getPublicQuotation = async (req, res) => {
         }
 
         const now = new Date();
-        const isExpired = now > quotation.expires_at;
+        const isExpired = quotation.status === 'ACTIVA' && now > quotation.expires_at;
 
         const emisor_data = EMISORES_DATA[quotation.emisor_type] || {};
 
@@ -268,6 +297,43 @@ export const getPublicQuotation = async (req, res) => {
     } catch (error) {
         console.error("[QuotationController] Fetch public failed:", error);
         res.status(500).json({ error: "Error al obtener la cotizacion" });
+    }
+};
+
+export const acceptPublicQuotation = async (req, res) => {
+    try {
+        const { quotation, alreadyAccepted } = await acceptQuotationBySlug({
+            db: prisma,
+            slug: req.params.uuid_slug
+        });
+        const publicQuotation = serializePublicQuotation(quotation);
+        const emisor_data = EMISORES_DATA[quotation.emisor_type] || {};
+
+        res.json({
+            ...publicQuotation,
+            consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`,
+            emisor_data,
+            isExpired: false,
+            alreadyAccepted
+        });
+    } catch (error) {
+        console.error("[QuotationController] Public acceptance failed:", error);
+        if (error instanceof QuotationAcceptanceError) {
+            return res.status(error.statusCode).json({ error: error.message });
+        }
+        return res.status(500).json({ error: "Error al aprobar la cotizacion" });
+    }
+};
+
+export const getExchangeRate = async (_req, res) => {
+    try {
+        const rate = await fetchOfficialUsdCopRate();
+        res.json(rate);
+    } catch (error) {
+        console.error("[QuotationController] Exchange rate fetch failed:", error);
+        res.status(503).json({
+            error: "No fue posible consultar la TRM oficial. Puedes registrar una tasa manual."
+        });
     }
 };
 
@@ -293,7 +359,10 @@ export const getQuotation = async (req, res) => {
             ...quotation,
             consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`,
             isExpired: quotation.status === 'ACTIVA' && new Date() > quotation.expires_at,
-            profitability: calculateQuotationEconomics(quotation.items || [])
+            profitability: calculateQuotationEconomics(quotation.items || [], {
+                currency: quotation.currency,
+                exchangeRate: quotation.exchange_rate
+            })
         });
     } catch (error) {
         console.error("[QuotationController] Fetch failed:", error);

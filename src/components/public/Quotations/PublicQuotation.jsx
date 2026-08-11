@@ -1,38 +1,95 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { Calendar, Clock, Download, MessageCircle, AlertCircle, CheckCircle2, ChevronRight, FileText } from '@/components/ui/icons';
+import {
+    AlertCircle,
+    Calendar,
+    CheckCircle2,
+    Clock,
+    FileText,
+    Mail,
+    MessageCircle,
+    ShieldCheck,
+    Smartphone
+} from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/Card';
-import { cn } from '@/lib/utils';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+
+const WHATSAPP_NUMBER = '573004329276';
+
+const formatDate = (value) => new Date(value).toLocaleDateString('es-CO', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+});
 
 const PublicQuotation = () => {
     const { slug } = useParams();
+    const queryClient = useQueryClient();
+    const confirm = useConfirmDialog();
+    const [acceptanceError, setAcceptanceError] = useState('');
 
     const { data: quotation, isLoading, error } = useQuery({
         queryKey: ['public-quotation', slug],
         queryFn: async () => {
             const res = await fetch(`${getApiBaseUrl()}/api/quotations/public/${slug}`);
-            if (!res.ok) throw new Error("Propuesta no encontrada");
-            return res.json();
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Propuesta no encontrada');
+            return data;
         }
     });
 
-    const formatCurrency = (val) => {
-        return new Intl.NumberFormat('es-CO', {
-            style: 'currency',
-            currency: quotation?.currency || 'COP',
-            minimumFractionDigits: 0
-        }).format(val);
+    const acceptMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch(`${getApiBaseUrl()}/api/quotations/public/${slug}/accept`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'No fue posible aceptar la cotización');
+            return data;
+        },
+        onSuccess: (data) => {
+            setAcceptanceError('');
+            queryClient.setQueryData(['public-quotation', slug], data);
+        },
+        onError: (mutationError) => {
+            console.error('[PublicQuotation] Acceptance failed:', mutationError);
+            setAcceptanceError(mutationError.message || 'No fue posible aceptar la cotización');
+        }
+    });
+
+    const formatCurrency = (value) => new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: quotation?.currency || 'COP',
+        minimumFractionDigits: quotation?.currency === 'USD' ? 2 : 0,
+        maximumFractionDigits: quotation?.currency === 'USD' ? 2 : 0
+    }).format(Number(value) || 0);
+
+    const openWhatsApp = (message) => {
+        window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+    };
+
+    const handleAccept = async () => {
+        const accepted = await confirm({
+            title: 'Aceptar cotización',
+            description: `Confirmas la aprobación de la propuesta ${quotation.consecutive_formatted}. Brainstudio recibirá una notificación para continuar contigo.`,
+            confirmLabel: 'Confirmar aceptación',
+            cancelLabel: 'Volver',
+            tone: 'primary'
+        });
+        if (!accepted) return;
+        setAcceptanceError('');
+        acceptMutation.mutate();
     };
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center p-4">
-                <div className="text-center space-y-4">
-                    <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-                    <p className="text-zinc-500 font-medium animate-pulse">Cargando propuesta comercial...</p>
+            <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-6 dark:bg-zinc-950">
+                <div className="text-center">
+                    <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-violet-600 border-t-transparent" />
+                    <p className="mt-4 text-sm font-medium text-zinc-500">Cargando propuesta comercial...</p>
                 </div>
             </div>
         );
@@ -40,268 +97,226 @@ const PublicQuotation = () => {
 
     if (error || !quotation) {
         return (
-            <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center p-4">
-                <Card className="max-w-md w-full p-8 text-center space-y-6">
-                    <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto">
-                        <AlertCircle className="w-8 h-8 text-red-500" />
+            <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-6 dark:bg-zinc-950">
+                <div className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-8 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-[#E11D48] dark:bg-rose-500/10">
+                        <AlertCircle className="h-6 w-6" />
                     </div>
-                    <div className="space-y-2">
-                        <h2 className="text-xl font-bold">Enlace no válido</h2>
-                        <p className="text-sm text-zinc-500">La propuesta que intentas visualizar no existe o el enlace es incorrecto.</p>
-                    </div>
-                    <Button variant="outline" className="w-full rounded-xl" onClick={() => window.location.href = 'https://brainstudioagencia.com'}>
-                        Ir a la web principal
+                    <h1 className="mt-5 text-xl font-bold text-zinc-950 dark:text-white">Propuesta no disponible</h1>
+                    <p className="mt-2 text-sm leading-6 text-zinc-500">El enlace no existe o la propuesta todavía no ha sido emitida.</p>
+                    <Button variant="outline" className="mt-6 w-full rounded-md" onClick={() => { window.location.href = 'https://brainstudioagencia.com'; }}>
+                        Ir a Brainstudio
                     </Button>
-                </Card>
+                </div>
             </div>
         );
     }
 
     if (quotation.isExpired) {
         return (
-            <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center p-4 font-sans">
-                <Card className="max-w-xl w-full p-10 text-center space-y-8 overflow-hidden relative border-zinc-200 dark:border-zinc-800">
-                    <div className="absolute top-0 left-0 w-full h-1.5 bg-amber-500" />
-
-                    <div className="w-20 h-20 bg-amber-500/10 rounded-3xl flex items-center justify-center mx-auto rotate-12">
-                        <Clock className="w-10 h-10 text-amber-500 -rotate-12" />
+            <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-6 dark:bg-zinc-950">
+                <div className="w-full max-w-xl rounded-lg border border-amber-200 bg-white p-8 text-center shadow-sm dark:border-amber-900/60 dark:bg-zinc-900 sm:p-10">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+                        <Clock className="h-7 w-7" />
                     </div>
-
-                    <div className="space-y-4">
-                        <h2 className="text-3xl font-black tracking-tight text-zinc-900 dark:text-white">Propuesta Vencida</h2>
-                        <p className="text-zinc-600 dark:text-zinc-400 text-lg leading-relaxed">
-                            Esta propuesta ha superado su vigencia de <span className="font-bold text-zinc-900 dark:text-white">15 días</span>.
-                            Por favor, ponte en contacto con tu asesor para actualizar los valores y la disponibilidad.
-                        </p>
-                    </div>
-
-                    <div className="pt-4 flex flex-col sm:flex-row gap-4">
-                        <Button
-                            className="flex-1 h-14 rounded-2xl bg-zinc-900 dark:bg-white dark:text-zinc-950 hover:opacity-90 transition-all font-bold text-base"
-                            onClick={() => window.open(`https://wa.me/573004329276?text=Hola! Mi propuesta comercial ha expirado y me gustaría actualizarla.`, '_blank')}
-                        >
-                            <MessageCircle className="w-5 h-5 mr-2" />
-                            Contactar por WhatsApp
-                        </Button>
-                    </div>
-                </Card>
+                    <p className="mt-5 text-xs font-bold uppercase text-amber-600 dark:text-amber-400">Vigencia finalizada</p>
+                    <h1 className="mt-2 text-2xl font-bold text-zinc-950 dark:text-white">Esta propuesta debe actualizarse</h1>
+                    <p className="mx-auto mt-3 max-w-md text-base leading-7 text-zinc-600 dark:text-zinc-300">
+                        La propuesta superó sus 15 días de vigencia. Escríbenos para confirmar valores y disponibilidad.
+                    </p>
+                    <Button
+                        className="mt-7 h-12 rounded-md px-6"
+                        onClick={() => openWhatsApp('Hola, mi propuesta comercial expiró y me gustaría actualizarla.')}
+                    >
+                        <MessageCircle className="mr-2 h-5 w-5" />
+                        Contactar por WhatsApp
+                    </Button>
+                </div>
             </div>
         );
     }
 
     const isBrain = quotation.emisor_type === 'BRAIN_STUDIO';
+    const isApproved = quotation.status === 'APROBADA';
+    const terms = String(quotation.terms_and_conditions || '')
+        .split('\n')
+        .map((line) => line.replace(/^[●•]\s*/, '').trim())
+        .filter(Boolean);
 
     return (
-        <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-20 font-sans selection:bg-primary/20">
-            {/* Top Identity Bar */}
-            <div className="h-2 bg-primary w-full sticky top-0 z-50" />
+        <div className="min-h-screen bg-[#f7f7fa] text-zinc-950 dark:bg-zinc-950 dark:text-white">
+            <div className="h-1 bg-violet-600" />
 
-            <header className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 py-8 px-6 lg:px-12">
-                <div className="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                    <div>
+            <header className="border-b border-zinc-200 bg-white px-5 py-5 dark:border-zinc-800 dark:bg-zinc-900 sm:px-8">
+                <div className="mx-auto flex max-w-6xl items-center justify-between gap-5">
+                    <div className="flex min-w-0 items-center gap-3">
                         {isBrain ? (
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 bg-zinc-50 dark:bg-zinc-800 rounded-2xl">
-                                    <img src="/brainstudio-logo.png" alt="Brainstudio" className="w-10 h-10 object-contain" />
-                                </div>
-                                <div>
-                                    <h1 className="text-2xl font-black tracking-tighter uppercase">Brainstudio</h1>
-                                    <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">
-                                        {quotation.emisor_data?.razonSocial} · NIT {quotation.emisor_data?.nit}
-                                    </p>
-                                </div>
-                            </div>
+                            <img src="/brainstudio-logo.png" alt="Brainstudio" className="h-10 w-10 shrink-0 object-contain" />
                         ) : (
-                            <div className="space-y-1">
-                                <h1 className="text-2xl font-black tracking-tight">{quotation.emisor_data?.nombre}</h1>
-                                <p className="text-xs text-zinc-500 font-bold uppercase">
-                                    Persona Natural · {quotation.emisor_data?.identificacion}
-                                </p>
-                            </div>
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-zinc-950 text-sm font-bold text-white dark:bg-white dark:text-zinc-950">FV</div>
                         )}
-                    </div>
-
-                    <div className="text-right">
-                        <div className="bg-primary/5 px-4 py-2 rounded-2xl border border-primary/10">
-                            <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-1">Consecutivo</p>
-                            <p className="text-2xl font-black text-zinc-900 dark:text-white tracking-tighter">
-                                {quotation.consecutive_formatted}
+                        <div className="min-w-0">
+                            <p className="truncate text-base font-bold">{isBrain ? 'Brainstudio' : quotation.emisor_data?.nombre}</p>
+                            <p className="truncate text-xs text-zinc-500">
+                                {isBrain ? `${quotation.emisor_data?.razonSocial} · NIT ${quotation.emisor_data?.nit}` : quotation.emisor_data?.identificacion}
                             </p>
                         </div>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-xs font-semibold uppercase text-zinc-400">Propuesta</p>
+                        <p className="mt-0.5 text-sm font-bold text-violet-700 dark:text-violet-300">{quotation.consecutive_formatted}</p>
                     </div>
                 </div>
             </header>
 
-            <main className="max-w-5xl mx-auto px-6 lg:px-12 pt-12 space-y-12">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <Card className="lg:col-span-2 p-8 bg-white dark:bg-zinc-900 border-zinc-100 dark:border-zinc-800 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full -mr-12 -mt-12" />
-                        <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Información del Cliente</h4>
-                        <div className="space-y-4">
-                             <div>
-                                <h2 className="text-3xl font-black tracking-tight text-zinc-900 dark:text-white">
-                                    {quotation.client_company || quotation.client_name}
-                                </h2>
-                                {quotation.client_company && (
-                                    <p className="text-sm font-bold text-zinc-500 uppercase mt-1">Atn: {quotation.client_name}</p>
+            <main>
+                <section className="px-5 py-12 sm:px-8 sm:py-16">
+                    <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-end">
+                        <div className="max-w-3xl">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-md bg-violet-100 px-2.5 py-1 text-xs font-bold text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">Propuesta comercial</span>
+                                {isApproved && (
+                                    <span className="rounded-md bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">Aprobada</span>
                                 )}
-                             </div>
-                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                                 <div className="space-y-1">
-                                     <p className="text-[10px] font-bold text-zinc-400 uppercase">Correo Electrónico</p>
-                                     <p className="text-sm font-medium">{quotation.client_email || 'No proporcionado'}</p>
-                                 </div>
-                                 <div className="space-y-1">
-                                     <p className="text-[10px] font-bold text-zinc-400 uppercase">Teléfono de Contacto</p>
-                                     <p className="text-sm font-medium">{quotation.client_phone}</p>
-                                 </div>
-                             </div>
-                        </div>
-                    </Card>
-
-                    <div className="flex items-center gap-3">
-                        <Button disabled variant="outline" className="h-12 px-6 rounded-2xl bg-zinc-50 dark:bg-zinc-800 border-none font-bold text-zinc-400">
-                            <Download className="w-4 h-4 mr-2" />
-                            Descargar PDF (Próximamente)
-                        </Button>
-                    </div>
-                </div>
-
-                {/* Intro Card */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-2 space-y-6">
-                        <div className="space-y-2">
-                            <span className="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-black uppercase tracking-wider">
-                                Propuesta Comercial
-                            </span>
-                            <h2 className="text-4xl font-black tracking-tight text-zinc-900 dark:text-white">
-                                Servicios de Estrategia & Diseño para <span className="text-primary">{quotation.client_name}</span>
-                            </h2>
+                            </div>
+                            <h1 className="mt-6 text-3xl font-bold leading-tight sm:text-4xl">
+                                Una propuesta construida para {quotation.client_company || quotation.client_name}
+                            </h1>
+                            <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-300 sm:text-lg sm:leading-8">
+                                Reunimos los servicios, alcances e inversión necesarios para avanzar con claridad hacia los objetivos acordados.
+                            </p>
                         </div>
 
-                        <p className="text-lg text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                            A continuación, detallamos la inversión estratégica requerida para alcanzar los objetivos discutidos.
-                            Cada servicio ha sido seleccionado para maximizar el impacto y retorno de su marca.
-                        </p>
-                    </div>
-
-                    <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-100 dark:border-zinc-800 space-y-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-primary/5 flex items-center justify-center shrink-0">
-                                <Calendar className="w-5 h-5 text-primary" />
+                        <dl className="grid grid-cols-2 gap-x-6 gap-y-5 border-l-0 border-zinc-200 lg:grid-cols-1 lg:border-l lg:pl-8 dark:border-zinc-800">
+                            <div>
+                                <dt className="flex items-center gap-2 text-xs font-semibold uppercase text-zinc-400"><Calendar className="h-4 w-4" /> Emisión</dt>
+                                <dd className="mt-1.5 text-sm font-semibold">{formatDate(quotation.issued_at || quotation.created_at)}</dd>
                             </div>
                             <div>
-                                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-none mb-1">Fecha Emisión</p>
-                                <p className="text-sm font-bold">{new Date(quotation.issued_at || quotation.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                <dt className="flex items-center gap-2 text-xs font-semibold uppercase text-zinc-400"><Clock className="h-4 w-4" /> Vigencia</dt>
+                                <dd className="mt-1.5 text-sm font-semibold">{formatDate(quotation.expires_at)}</dd>
                             </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-amber-500/5 flex items-center justify-center shrink-0">
-                                <Clock className="w-5 h-5 text-amber-500" />
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-none mb-1">Válida Hasta</p>
-                                <p className="text-sm font-bold">{new Date(quotation.expires_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                            </div>
-                        </div>
-                    </Card>
-                </div>
-
-                {/* Items List */}
-                <div className="space-y-6">
-                    <h3 className="text-xl font-bold flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-zinc-400" />
-                        Desglose de Servicios
-                    </h3>
-                    <div className="space-y-4">
-                        {(quotation?.items || []).map((item, idx) => (
-                            <div key={idx} className="group p-6 bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-100 dark:border-zinc-800 hover:border-primary/20 transition-all shadow-sm">
-                                <div className="flex flex-col md:flex-row justify-between gap-6">
-                                    <div className="space-y-2 flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-6 h-6 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-black text-zinc-400">
-                                                {idx + 1}
-                                            </span>
-                                            <h4 className="text-lg font-bold group-hover:text-primary transition-colors">{item.name}</h4>
-                                        </div>
-                                        <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed pl-8">
-                                            {item.description}
-                                        </p>
-                                        {item.note && (
-                                            <p className="text-xs italic text-zinc-400 pl-8 pt-2">
-                                                * {item.note}
-                                            </p>
-                                        )}
-                                    </div>
-                                    <div className="md:text-right space-y-1 shrink-0 flex flex-row md:flex-col justify-between items-center md:items-end">
-                                        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Inversión x {item.quantity}</p>
-                                        <p className="text-xl font-black text-zinc-900 dark:text-white">
-                                            {formatCurrency(Number(item.price) * Number(item.quantity))}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Redesigned Summary Section */}
-                <div className="pt-12 border-t border-zinc-100 dark:border-zinc-800 flex flex-col items-center">
-                    <div className="w-full max-w-md space-y-6 text-center">
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center text-zinc-500 text-sm font-medium">
-                                <span>Subtotal Neto</span>
-                                <span className="text-zinc-900 dark:text-white">{formatCurrency(quotation.subtotal)}</span>
-                            </div>
-
-                            {!quotation.is_tax_exempt && (
-                                <div className="flex justify-between items-center text-zinc-500 text-sm font-medium">
-                                    <span>IVA (19%)</span>
-                                    <span className="text-zinc-900 dark:text-white">{formatCurrency(quotation.tax_amount)}</span>
+                            {quotation.currency === 'USD' && quotation.exchange_rate && (
+                                <div className="col-span-2 lg:col-span-1">
+                                    <dt className="text-xs font-semibold uppercase text-zinc-400">Tasa de referencia</dt>
+                                    <dd className="mt-1.5 text-sm font-semibold">1 USD = {new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(Number(quotation.exchange_rate))} COP</dd>
                                 </div>
                             )}
+                        </dl>
+                    </div>
+                </section>
 
-                            <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-between items-end">
-                                <div className="text-left">
-                                    <p className="text-primary text-[10px] font-black uppercase tracking-[0.2em]">Inversión Total</p>
-                                    <p className="text-4xl font-black tracking-tighter text-zinc-900 dark:text-white">
-                                        {formatCurrency(quotation.total_amount)}
-                                    </p>
-                                </div>
-                                <div className="bg-zinc-100 dark:bg-zinc-800 px-3 py-1 rounded-full text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                                    {quotation.currency}
-                                </div>
+                <section className="border-y border-zinc-200 bg-white px-5 py-12 dark:border-zinc-800 dark:bg-zinc-900 sm:px-8 sm:py-16">
+                    <div className="mx-auto max-w-6xl">
+                        <div className="grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
+                            <div>
+                                <p className="text-xs font-bold uppercase text-violet-700 dark:text-violet-300">Alcance</p>
+                                <h2 className="mt-2 text-2xl font-bold">Servicios incluidos</h2>
+                                <p className="mt-3 text-sm leading-6 text-zinc-500">Cada componente corresponde al alcance comercial de esta propuesta.</p>
+                            </div>
+                            <div className="space-y-3">
+                                {(quotation.items || []).map((item, index) => (
+                                    <article key={`${item.name}-${index}`} className="rounded-lg border border-zinc-200 p-5 dark:border-zinc-800 sm:p-6">
+                                        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-start">
+                                            <div>
+                                                <div className="flex items-start gap-3">
+                                                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-xs font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">{index + 1}</span>
+                                                    <div>
+                                                        <h3 className="text-base font-bold">{item.name}</h3>
+                                                        {item.description && <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{item.description}</p>}
+                                                        {item.note && <p className="mt-3 border-l-2 border-violet-300 pl-3 text-sm italic leading-6 text-zinc-500 dark:border-violet-700">{item.note}</p>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="border-t border-zinc-100 pt-4 text-left sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0 sm:text-right dark:border-zinc-800">
+                                                <p className="text-xs font-semibold uppercase text-zinc-400">{Number(item.quantity)} {Number(item.quantity) === 1 ? 'unidad' : 'unidades'}</p>
+                                                <p className="mt-1 text-xl font-bold">{formatCurrency(Number(item.price) * Number(item.quantity))}</p>
+                                            </div>
+                                        </div>
+                                    </article>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section className="px-5 py-12 sm:px-8 sm:py-16">
+                    <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-start">
+                        <div className="grid gap-5 sm:grid-cols-2">
+                            <div className="border-t border-zinc-300 pt-4 dark:border-zinc-700">
+                                <p className="text-xs font-semibold uppercase text-zinc-400">Preparada para</p>
+                                <p className="mt-2 text-lg font-bold">{quotation.client_company || quotation.client_name}</p>
+                                {quotation.client_company && <p className="mt-1 text-sm text-zinc-500">Atención: {quotation.client_name}</p>}
+                            </div>
+                            <div className="border-t border-zinc-300 pt-4 dark:border-zinc-700">
+                                <p className="text-xs font-semibold uppercase text-zinc-400">Contacto</p>
+                                <p className="mt-2 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300"><Mail className="h-4 w-4" /> {quotation.client_email || 'No proporcionado'}</p>
+                                <p className="mt-2 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300"><Smartphone className="h-4 w-4" /> {quotation.client_phone}</p>
                             </div>
                         </div>
 
-                        <Button
-                            className="w-full h-12 rounded-xl bg-primary hover:opacity-90 transition-all font-bold text-sm shadow-lg shadow-primary/20"
-                            onClick={() => window.open(`https://wa.me/573004329276?text=Hola! Acabo de ver la propuesta para ${quotation.client_name} y me gustaría proceder.`, '_blank')}
-                        >
-                            Aceptar & Comenzar Ahora
-                            <ChevronRight className="w-4 h-4 ml-2" />
-                        </Button>
-                    </div>
-                </div>
-
-                {/* Terms and Conditions in 2 columns */}
-                <div className="pt-16 space-y-6">
-                    <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400 text-center">Términos & Condiciones</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                        {quotation.terms_and_conditions?.split('\n').map((line, i) => (
-                            <div key={i} className="flex gap-3">
-                                <span className="text-primary shrink-0">•</span>
-                                <p>{line.replace('● ', '')}</p>
+                        <div className="rounded-lg bg-zinc-950 p-6 text-white shadow-xl shadow-zinc-950/10 dark:bg-white dark:text-zinc-950 sm:p-8">
+                            <p className="text-xs font-semibold uppercase text-zinc-400">Inversión total</p>
+                            <p className="mt-3 text-4xl font-bold leading-none">{formatCurrency(quotation.total_amount)}</p>
+                            <div className="mt-6 space-y-2 border-t border-white/15 pt-5 text-sm dark:border-zinc-200">
+                                <div className="flex justify-between gap-4"><span className="text-zinc-400">Subtotal</span><span>{formatCurrency(quotation.subtotal)}</span></div>
+                                {!quotation.is_tax_exempt && <div className="flex justify-between gap-4"><span className="text-zinc-400">IVA (19%)</span><span>{formatCurrency(quotation.tax_amount)}</span></div>}
                             </div>
-                        ))}
+
+                            {isApproved ? (
+                                <div className="mt-7 rounded-md bg-emerald-500/15 p-4 text-emerald-200 dark:bg-emerald-100 dark:text-emerald-800">
+                                    <p className="flex items-center gap-2 font-bold"><CheckCircle2 className="h-5 w-5" /> Propuesta aprobada</p>
+                                    <p className="mt-1 text-sm leading-6 opacity-90">Confirmada el {formatDate(quotation.accepted_at)}. Nuestro equipo se pondrá en contacto contigo.</p>
+                                </div>
+                            ) : (
+                                <Button
+                                    className="mt-7 h-12 w-full rounded-md bg-violet-600 text-white hover:bg-violet-700"
+                                    onClick={handleAccept}
+                                    disabled={acceptMutation.isPending}
+                                >
+                                    <ShieldCheck className="mr-2 h-5 w-5" />
+                                    {acceptMutation.isPending ? 'Confirmando...' : 'Aceptar cotización'}
+                                </Button>
+                            )}
+
+                            <Button
+                                variant="outline"
+                                className="mt-3 h-12 w-full rounded-md border-white/20 bg-transparent text-white hover:bg-white/10 dark:border-zinc-300 dark:text-zinc-900 dark:hover:bg-zinc-100"
+                                onClick={() => openWhatsApp(`Hola, quiero conversar sobre la propuesta ${quotation.consecutive_formatted} para ${quotation.client_name}.`)}
+                            >
+                                <MessageCircle className="mr-2 h-5 w-5" />
+                                Contactar por WhatsApp
+                            </Button>
+
+                            {acceptanceError && <p className="mt-3 text-sm leading-6 text-rose-300 dark:text-[#E11D48]">{acceptanceError}</p>}
+                        </div>
                     </div>
-                </div>
+                </section>
+
+                <section className="border-t border-zinc-200 bg-white px-5 py-12 dark:border-zinc-800 dark:bg-zinc-900 sm:px-8 sm:py-16">
+                    <div className="mx-auto max-w-4xl">
+                        <div className="flex items-start gap-3">
+                            <FileText className="mt-1 h-5 w-5 shrink-0 text-violet-600" />
+                            <div>
+                                <p className="text-xs font-bold uppercase text-violet-700 dark:text-violet-300">Información contractual</p>
+                                <h2 className="mt-2 text-2xl font-bold">Términos y condiciones</h2>
+                            </div>
+                        </div>
+                        <ol className="mt-8 space-y-5 text-sm leading-7 text-zinc-600 dark:text-zinc-300 sm:text-base">
+                            {terms.map((term, index) => (
+                                <li key={`${index}-${term.slice(0, 20)}`} className="grid grid-cols-[28px_minmax(0,1fr)] gap-3">
+                                    <span className="flex h-7 w-7 items-center justify-center rounded-md bg-violet-50 text-xs font-bold text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">{index + 1}</span>
+                                    <p>{term}</p>
+                                </li>
+                            ))}
+                        </ol>
+                    </div>
+                </section>
             </main>
 
-            <footer className="max-w-5xl mx-auto px-6 lg:px-12 mt-24 pt-8 border-t border-zinc-100 dark:border-zinc-800 text-center">
-                <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
-                    Brain OS Intelligence · Sistema de Gestión Comercial v2.0
-                </p>
+            <footer className="border-t border-zinc-200 bg-[#f7f7fa] px-5 py-8 text-center dark:border-zinc-800 dark:bg-zinc-950 sm:px-8">
+                <p className="text-sm font-semibold">Brainstudio</p>
+                <p className="mt-1 text-xs text-zinc-500">{quotation.emisor_data?.email} · {quotation.emisor_data?.whatsapp}</p>
             </footer>
         </div>
     );

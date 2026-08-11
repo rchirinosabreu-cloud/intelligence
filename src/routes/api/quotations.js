@@ -9,6 +9,7 @@ const router = express.Router();
  * GET /api/quotations/public/:uuid_slug
  */
 router.get('/public/:uuid_slug', quotationController.getPublicQuotation);
+router.post('/public/:uuid_slug/accept', quotationController.acceptPublicQuotation);
 
 /**
  * PROTECTED ROUTES: Management and creation
@@ -20,6 +21,7 @@ router.use(authenticateToken, requireModulePermission('cotizaciones'));
  * Internal catalog with commercial costing data
  */
 router.get('/catalog', quotationController.getCatalog);
+router.get('/exchange-rate', quotationController.getExchangeRate);
 
 /**
  * POST /api/quotations

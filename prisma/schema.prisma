@@ -665,6 +665,7 @@ enum CurrencyType {
 enum QuotationStatus {
   BORRADOR
   ACTIVA
+  APROBADA
 }
 
 enum ServiceCategory {
@@ -1115,6 +1116,9 @@ model Quotation {
   is_tax_exempt        Boolean         @default(false)
   items                Json
   currency             CurrencyType    @default(COP)
+  exchange_rate        Decimal?
+  exchange_rate_source String?
+  exchange_rate_date   DateTime?
   subtotal             Decimal
   tax_amount           Decimal
   total_amount         Decimal
@@ -1122,6 +1126,7 @@ model Quotation {
   created_at           DateTime        @default(now())
   issued_at            DateTime?
   reactivated_at       DateTime?
+  accepted_at          DateTime?
   expires_at           DateTime
   updated_at           DateTime        @default(now()) @updatedAt
 }

@@ -55,6 +55,7 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Da
 app.use('/api/login', authRateLimiter);
 app.use('/api/password-reset', authRateLimiter);
 app.use('/api/public', publicRateLimiter);
+app.use('/api/quotations/public', publicRateLimiter);
 app.use('/api/gemini', aiRateLimiter);
 app.use('/api/openai', aiRateLimiter);
 app.use('/api/fireflies', aiRateLimiter);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { Search, Plus, Trash2, Copy, Check, DollarSign, FileText, Globe, Building2, User as UserIcon, ArrowLeft, Loader2 } from '@/components/ui/icons';
+import { Search, Plus, Trash2, Copy, Check, DollarSign, FileText, Globe, Building2, User as UserIcon, ArrowLeft, Loader2, RefreshCw } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/Card';
 import { toast } from 'react-hot-toast';
@@ -32,6 +32,11 @@ const QuotationForm = () => {
     const [isLoadingData, setIsLoadingData] = useState(false);
     const [wasExpired, setWasExpired] = useState(false);
     const [issuedAt, setIssuedAt] = useState(null);
+    const [exchangeRate, setExchangeRate] = useState('');
+    const [exchangeRateSource, setExchangeRateSource] = useState(null);
+    const [exchangeRateDate, setExchangeRateDate] = useState(null);
+    const [isLoadingRate, setIsLoadingRate] = useState(false);
+    const [exchangeRateError, setExchangeRateError] = useState('');
 
     const fetchQuotation = useCallback(async () => {
         setIsLoadingData(true);
@@ -54,6 +59,9 @@ const QuotationForm = () => {
             setIsTaxExempt(data.is_tax_exempt);
             setWasExpired(Boolean(data.isExpired));
             setIssuedAt(data.issued_at || data.created_at);
+            setExchangeRate(data.exchange_rate ? Number(data.exchange_rate) : '');
+            setExchangeRateSource(data.exchange_rate_source || null);
+            setExchangeRateDate(data.exchange_rate_date || null);
 
             // Robust parsing for items to prevent crash
             let parsedItems = [];
@@ -130,12 +138,64 @@ const QuotationForm = () => {
         item.category.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const roundQuoteAmount = (value, targetCurrency = currency) => (
+        targetCurrency === 'USD'
+            ? Math.round((Number(value) + Number.EPSILON) * 100) / 100
+            : Math.round(Number(value))
+    );
+
+    const loadOfficialExchangeRate = async () => {
+        setIsLoadingRate(true);
+        setExchangeRateError('');
+        try {
+            const res = await fetch(`${getApiBaseUrl()}/api/quotations/exchange-rate`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'No fue posible consultar la TRM');
+            setExchangeRate(Number(data.rate));
+            setExchangeRateSource(data.source);
+            setExchangeRateDate(data.validFrom);
+            return Number(data.rate);
+        } catch (error) {
+            console.error('[QuotationForm] Exchange rate fetch failed:', error);
+            setExchangeRateError(error.message || 'No fue posible consultar la TRM');
+            return null;
+        } finally {
+            setIsLoadingRate(false);
+        }
+    };
+
+    const handleCurrencyChange = async (nextCurrency) => {
+        if (nextCurrency === currency) return;
+        let usableRate = Number(exchangeRate);
+        if (nextCurrency === 'USD' && (!Number.isFinite(usableRate) || usableRate <= 0)) {
+            usableRate = await loadOfficialExchangeRate();
+            if (!usableRate) return;
+        }
+        if (!Number.isFinite(usableRate) || usableRate <= 0) return;
+
+        setSelectedItems((items) => items.map((item) => ({
+            ...item,
+            price: roundQuoteAmount(
+                nextCurrency === 'USD'
+                    ? Number(item.price) / usableRate
+                    : Number(item.price) * usableRate,
+                nextCurrency
+            )
+        })));
+        setCurrency(nextCurrency);
+    };
+
     const addItem = (service) => {
+        const quotePrice = currency === 'USD' && Number(exchangeRate) > 0
+            ? Number(service.valor_neto_actual) / Number(exchangeRate)
+            : Number(service.valor_neto_actual);
         setSelectedItems([...selectedItems, {
             serviceId: service.id,
             name: service.name,
             description: service.description,
-            price: service.valor_neto_actual,
+            price: roundQuoteAmount(quotePrice),
             quantity: 1,
             note: '',
             estimatedCost: service.costo_real_estimado,
@@ -164,13 +224,31 @@ const QuotationForm = () => {
         return new Intl.NumberFormat('es-CO', {
             style: 'currency',
             currency: currency,
-            minimumFractionDigits: 0
+            minimumFractionDigits: currency === 'USD' ? 2 : 0,
+            maximumFractionDigits: currency === 'USD' ? 2 : 0
         }).format(val);
     };
+
+    const formatCop = (val) => new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(Number(val) || 0);
+
+    const formatCatalogPrice = (copValue) => formatCurrency(
+        currency === 'USD' && Number(exchangeRate) > 0
+            ? Number(copValue) / Number(exchangeRate)
+            : Number(copValue)
+    );
 
     const handleSubmit = async (targetStatus = 'ACTIVA') => {
         if (targetStatus === 'ACTIVA' && (!clientName || !clientPhone || selectedItems.length === 0)) {
             toast.error("Por favor completa los campos obligatorios para emitir");
+            return;
+        }
+        if (currency === 'USD' && (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)) {
+            toast.error('Registra una tasa USD/COP válida antes de guardar');
             return;
         }
 
@@ -194,6 +272,9 @@ const QuotationForm = () => {
                     client_type: clientType,
                     items: selectedItems,
                     currency,
+                    exchange_rate: currency === 'USD' ? Number(exchangeRate) : null,
+                    exchange_rate_source: currency === 'USD' ? exchangeRateSource : null,
+                    exchange_rate_date: currency === 'USD' ? exchangeRateDate : null,
                     status: targetStatus,
                     is_tax_exempt: isTaxExempt
                 })
@@ -215,6 +296,9 @@ const QuotationForm = () => {
             const wasReactivated = wasExpired && shouldShare;
             setWasExpired(false);
             setIssuedAt(data.issued_at || issuedAt);
+            setExchangeRate(data.exchange_rate ? Number(data.exchange_rate) : '');
+            setExchangeRateSource(data.exchange_rate_source || null);
+            setExchangeRateDate(data.exchange_rate_date || null);
             toast.success(
                 wasReactivated
                     ? "Cotización reactivada por 15 días"
@@ -236,8 +320,10 @@ const QuotationForm = () => {
     };
 
     const totals = calculateTotals();
-    const profitability = calculateQuotationEconomics(selectedItems);
-    const profitabilityAvailable = currency === 'COP';
+    const profitabilityAvailable = currency === 'COP' || Number(exchangeRate) > 0;
+    const profitability = profitabilityAvailable
+        ? calculateQuotationEconomics(selectedItems, { currency, exchangeRate: Number(exchangeRate) })
+        : null;
     const displayIssueDate = wasExpired ? new Date() : new Date(issuedAt || Date.now());
 
     if (isEditing && isLoadingData) {
@@ -417,12 +503,12 @@ const QuotationForm = () => {
                                                 <p className="text-sm font-bold">{service.name}</p>
                                                 <div className="flex justify-between items-center mt-1 gap-3">
                                                     <span className="text-[10px] text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full">{service.category}</span>
-                                                    <span className="text-xs font-semibold text-primary">Actual {formatCurrency(service.valor_neto_actual)}</span>
+                                                    <span className="text-xs font-semibold text-primary">Actual {formatCatalogPrice(service.valor_neto_actual)}</span>
                                                 </div>
                                                 <div className="mt-2 flex justify-end gap-3 text-[10px] text-zinc-400">
-                                                    <span>Final {formatCurrency(service.valor_neto)}</span>
+                                                    <span>Final {formatCatalogPrice(service.valor_neto)}</span>
                                                     <span className="text-emerald-600 dark:text-emerald-400">
-                                                        Ganancia {service.ganancia_estimada === null ? 'sin costo' : formatCurrency(service.ganancia_estimada)}
+                                                        Ganancia {service.ganancia_estimada === null ? 'sin costo' : formatCop(service.ganancia_estimada)}
                                                     </span>
                                                 </div>
                                             </button>
@@ -489,13 +575,13 @@ const QuotationForm = () => {
                                                 </div>
                                                 {item.estimatedCost !== null && item.estimatedCost !== undefined && (
                                                     <div className="flex flex-wrap justify-end gap-x-4 gap-y-1 text-[10px] text-zinc-400">
-                                                        <span>Costo estimado {formatCurrency(Number(item.estimatedCost) * Number(item.quantity || 0))}</span>
+                                                        <span>Costo estimado {formatCop(Number(item.estimatedCost) * Number(item.quantity || 0))}</span>
                                                         <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                                                            Ganancia {formatCurrency((Number(item.price) - Number(item.estimatedCost)) * Number(item.quantity || 0))}
+                                                            Ganancia {formatCop((((Number(item.price) * (currency === 'USD' ? Number(exchangeRate) : 1)) - Number(item.estimatedCost)) * Number(item.quantity || 0)))}
                                                         </span>
                                                         <span>
-                                                            Margen {Number(item.price) > 0
-                                                                ? (((Number(item.price) - Number(item.estimatedCost)) / Number(item.price)) * 100).toFixed(1)
+                                                            Margen {Number(item.price) > 0 && profitabilityAvailable
+                                                                ? ((((Number(item.price) * (currency === 'USD' ? Number(exchangeRate) : 1)) - Number(item.estimatedCost)) / (Number(item.price) * (currency === 'USD' ? Number(exchangeRate) : 1))) * 100).toFixed(1)
                                                                 : '0.0'}%
                                                         </span>
                                                     </div>
@@ -517,15 +603,59 @@ const QuotationForm = () => {
                             <h3 className="font-bold text-sm">Resumen y Ajustes</h3>
                             <div className="flex gap-1 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg">
                                 <button
-                                    onClick={() => setCurrency('COP')}
+                                    onClick={() => handleCurrencyChange('COP')}
                                     className={cn("px-2 py-1 text-[10px] font-bold rounded-md transition-all", currency === 'COP' ? "bg-white dark:bg-zinc-700 shadow-sm" : "text-zinc-500")}
                                 >COP</button>
                                 <button
-                                    onClick={() => setCurrency('USD')}
+                                    onClick={() => handleCurrencyChange('USD')}
                                     className={cn("px-2 py-1 text-[10px] font-bold rounded-md transition-all", currency === 'USD' ? "bg-white dark:bg-zinc-700 shadow-sm" : "text-zinc-500")}
                                 >USD</button>
                             </div>
                         </div>
+
+                        {currency === 'USD' && (
+                            <div className="rounded-lg border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/50 dark:bg-violet-950/20">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <p className="text-[10px] font-bold uppercase text-violet-700 dark:text-violet-300">Tasa USD/COP</p>
+                                        <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                                            {exchangeRateSource === 'SUPERFINANCIERA_TRM' ? 'TRM oficial' : 'Tasa manual'}
+                                            {exchangeRateDate ? ` · ${new Date(exchangeRateDate).toLocaleDateString('es-CO')}` : ''}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={loadOfficialExchangeRate}
+                                        disabled={isLoadingRate}
+                                        title="Actualizar TRM oficial"
+                                        aria-label="Actualizar TRM oficial"
+                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-violet-200 bg-white text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-50 dark:border-violet-800 dark:bg-zinc-900 dark:text-violet-300 dark:hover:bg-violet-950"
+                                    >
+                                        <RefreshCw className={cn('h-4 w-4', isLoadingRate && 'animate-spin')} />
+                                    </button>
+                                </div>
+                                <div className="mt-3 flex items-center gap-2">
+                                    <span className="text-xs font-semibold text-zinc-500">1 USD =</span>
+                                    <input
+                                        type="number"
+                                        min="0.01"
+                                        step="0.01"
+                                        value={exchangeRate}
+                                        onChange={(event) => {
+                                            setExchangeRate(event.target.value);
+                                            setExchangeRateSource('MANUAL');
+                                            setExchangeRateDate(new Date().toISOString());
+                                            setExchangeRateError('');
+                                        }}
+                                        className="min-w-0 flex-1 rounded-md border border-violet-200 bg-white px-3 py-2 text-right text-sm font-bold outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-violet-800 dark:bg-zinc-950"
+                                    />
+                                    <span className="text-xs font-semibold text-zinc-500">COP</span>
+                                </div>
+                                {exchangeRateError && (
+                                    <p className="mt-2 text-[11px] leading-5 text-[#E11D48]">{exchangeRateError}</p>
+                                )}
+                            </div>
+                        )}
 
                         <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
                             <div className="flex justify-between text-xs">
@@ -573,11 +703,11 @@ const QuotationForm = () => {
                                     <div className="mt-4 space-y-2 border-t border-emerald-200/70 pt-3 text-xs dark:border-emerald-900/40">
                                         <div className="flex justify-between">
                                             <span className="text-zinc-500">Costo estimado</span>
-                                            <span className="font-semibold">{formatCurrency(profitability.estimatedCost)}</span>
+                                            <span className="font-semibold">{formatCop(profitability.estimatedCost)}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-zinc-500">Ganancia estimada</span>
-                                            <span className="font-bold text-emerald-700 dark:text-emerald-400">{formatCurrency(profitability.estimatedProfit)}</span>
+                                            <span className="font-bold text-emerald-700 dark:text-emerald-400">{formatCop(profitability.estimatedProfit)}</span>
                                         </div>
                                         {!profitability.hasCompleteCostData && (
                                             <p className="pt-1 text-[10px] leading-relaxed text-amber-700 dark:text-amber-400">
@@ -587,7 +717,7 @@ const QuotationForm = () => {
                                     </div>
                                 ) : (
                                     <p className="mt-3 border-t border-emerald-200/70 pt-3 text-[10px] leading-relaxed text-amber-700 dark:border-emerald-900/40 dark:text-amber-400">
-                                        El margen se calcula en COP. Para cotizaciones en USD hace falta definir una tasa de conversión.
+                                        Registra una tasa USD/COP para calcular el margen estimado.
                                     </p>
                                 )}
                             </div>

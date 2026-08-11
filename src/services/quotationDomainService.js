@@ -139,14 +139,40 @@ export const calculateQuotationTotals = (items, isTaxExempt) => {
   return { subtotal, taxAmount, totalAmount: roundMoney(subtotal + taxAmount) };
 };
 
-export const calculateQuotationEconomics = (items = []) => {
+export const calculateQuotationEconomics = (items = [], options = {}) => {
+  const currency = options.currency || 'COP';
+  const rawExchangeRate = Number(options.exchangeRate);
+  if (currency === 'USD' && (!Number.isFinite(rawExchangeRate) || rawExchangeRate <= 0)) {
+    let estimatedCost = 0;
+    let pricedItems = 0;
+    items.forEach((item) => {
+      const unitCost = toOptionalNumber(item.estimatedCost);
+      if (unitCost === null) return;
+      pricedItems += 1;
+      estimatedCost += unitCost * (Number(item.quantity) || 0);
+    });
+    return {
+      revenue: null,
+      estimatedCost: roundMoney(estimatedCost),
+      estimatedProfit: null,
+      estimatedMargin: null,
+      pricedItems,
+      totalItems: items.length,
+      hasCompleteCostData: pricedItems === items.length,
+      hasExchangeRate: false
+    };
+  }
+  const exchangeRate = currency === 'USD'
+    ? rawExchangeRate
+    : 1;
   let revenue = 0;
   let pricedRevenue = 0;
   let estimatedCost = 0;
   let pricedItems = 0;
 
   items.forEach((item) => {
-    const lineRevenue = (Number(item.price) || 0) * (Number(item.quantity) || 0);
+    const quotedRevenue = (Number(item.price) || 0) * (Number(item.quantity) || 0);
+    const lineRevenue = quotedRevenue * exchangeRate;
     revenue += lineRevenue;
     const unitCost = toOptionalNumber(item.estimatedCost);
     if (unitCost === null) return;
@@ -169,6 +195,33 @@ export const calculateQuotationEconomics = (items = []) => {
   };
 };
 
+export const normalizeQuotationExchangeRate = ({
+  currency,
+  exchangeRate,
+  exchangeRateSource,
+  exchangeRateDate
+}) => {
+  if (currency !== 'USD') {
+    return {
+      exchange_rate: null,
+      exchange_rate_source: null,
+      exchange_rate_date: null
+    };
+  }
+
+  const normalizedRate = toFiniteNumber(exchangeRate, 'Tasa de cambio', { min: Number.EPSILON });
+  const normalizedDate = exchangeRateDate ? new Date(exchangeRateDate) : new Date();
+  if (Number.isNaN(normalizedDate.getTime())) {
+    throw new QuotationValidationError('Fecha de tasa de cambio invalida');
+  }
+
+  return {
+    exchange_rate: normalizedRate,
+    exchange_rate_source: exchangeRateSource === 'SUPERFINANCIERA_TRM' ? 'SUPERFINANCIERA_TRM' : 'MANUAL',
+    exchange_rate_date: normalizedDate
+  };
+};
+
 const serializePublicItem = (item) => ({
   name: String(item?.name || ''),
   description: String(item?.description || ''),
@@ -178,7 +231,7 @@ const serializePublicItem = (item) => ({
 });
 
 export const serializePublicQuotation = (quotation) => {
-  if (!quotation || quotation.status !== 'ACTIVA') return null;
+  if (!quotation || !['ACTIVA', 'APROBADA'].includes(quotation.status)) return null;
 
   const publicFields = [
     'uuid_slug',
@@ -190,6 +243,9 @@ export const serializePublicQuotation = (quotation) => {
     'client_phone',
     'is_tax_exempt',
     'currency',
+    'exchange_rate',
+    'exchange_rate_source',
+    'exchange_rate_date',
     'subtotal',
     'tax_amount',
     'total_amount',
@@ -197,6 +253,7 @@ export const serializePublicQuotation = (quotation) => {
     'created_at',
     'issued_at',
     'reactivated_at',
+    'accepted_at',
     'expires_at'
   ];
   const serialized = Object.fromEntries(
