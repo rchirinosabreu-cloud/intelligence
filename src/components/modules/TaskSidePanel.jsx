@@ -102,14 +102,15 @@ const getFileVisualMeta = (file = {}) => {
     };
 };
 
-const taskComposerLabelClass = "text-[11px] font-medium text-zinc-500 dark:text-zinc-400";
-const taskComposerFieldClass = "w-full rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-transparent px-3 py-2 text-sm font-medium text-zinc-900 dark:text-zinc-100 shadow-none outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/10";
+const taskComposerLabelClass = "text-xs sm:text-[11px] font-medium text-zinc-500 dark:text-zinc-400";
+const taskComposerFieldClass = "w-full rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-transparent px-3 py-2 text-base sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 shadow-none outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/10";
 const taskComposerSectionClass = "space-y-4 border-t border-zinc-200/70 dark:border-zinc-800/70 pt-5";
-const taskOperationalGridClass = "grid grid-cols-6 gap-x-5 gap-y-4";
+const taskOperationalGridClass = "grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-6 sm:gap-x-5";
 const taskCreateLabelClass = taskComposerLabelClass;
 const taskCreateFieldClass = taskComposerFieldClass;
 const taskCreateSectionClass = taskComposerSectionClass;
 const taskPriorityOptions = [
+    { value: 'NONE', label: 'Sin prioridad', className: 'bg-zinc-700 text-white border-zinc-600 dark:bg-zinc-200 dark:text-zinc-900 dark:border-zinc-100' },
     { value: 'URGENTE', label: 'Urgente', className: 'bg-red-600 text-white border-red-500' },
     { value: 'ALTA', label: 'Alta', className: 'bg-amber-500 text-white border-amber-500' },
     { value: 'NORMAL', label: 'Normal', className: 'bg-blue-600 text-white border-blue-500' }
@@ -1688,11 +1689,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const displayComments = isEdition
         ? [...(formData.taskComments || [])].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
         : [...tempComments].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    const selectedPriorityValue = formData.isPriority ? (formData.priority || 'NORMAL') : 'NONE';
+    const selectedPriorityLabel = taskPriorityOptions.find(option => option.value === selectedPriorityValue)?.label || 'Sin prioridad';
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && (isEdition ? handleClosePanel() : handlePassiveClose())}>
             <DialogContent
-                className="w-[92vw] max-w-6xl h-[85vh] max-h-[92dvh] p-0 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col rounded-2xl shadow-2xl z-[100] overflow-hidden"
+                data-task-panel-content
+                className="left-0 top-0 h-[100dvh] w-screen max-h-none max-w-none translate-x-0 translate-y-0 rounded-none p-0 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col shadow-2xl z-[100] overflow-hidden sm:left-[50%] sm:top-[50%] sm:h-[85vh] sm:w-[92vw] sm:max-h-[92dvh] sm:max-w-6xl sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-2xl"
                 onPointerDownOutside={(e) => {
                     const target = e.target;
                     const isToolbar = target && (target.closest('[data-task-format-toolbar]') || target.hasAttribute('data-task-format-toolbar'));
@@ -1715,25 +1719,30 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             >
 
                 {/* Header Section */}
-                <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
-                    <div className="flex items-center gap-3">
+                <div className="flex shrink-0 flex-col items-stretch gap-3 border-b border-zinc-200 bg-white px-4 py-3 pr-12 dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4 sm:pr-12">
+                    <div className="flex min-w-0 items-center gap-3">
                         <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-primary">
                             {isEdition ? <ClipboardList size={20} /> : <Plus size={20} />}
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <DialogTitle className={cn(
                                 "text-zinc-900 dark:text-white",
                                 "text-base font-semibold"
                             )}>
                                 {isEdition ? `Tarea #${formData.id?.split('-')[0] || ''}` : "Nueva tarea"}
                             </DialogTitle>
-                            <DialogDescription className="text-xs text-zinc-500 font-medium mt-0.5">
-                                {isEdition ? `ID: ${formData.id?.split('-')[0]} • Gestiona los metadatos y la conversación en tiempo real` : "Crea un nuevo pendiente operativo en el tablero Kanban"}
+                            <DialogDescription className="mt-0.5 truncate text-xs font-medium text-zinc-500">
+                                {isEdition ? (
+                                    <>
+                                        <span className="sm:hidden">ID: {formData.id?.split('-')[0]}</span>
+                                        <span className="hidden sm:inline">ID: {formData.id?.split('-')[0]} • Gestiona los metadatos y la conversación en tiempo real</span>
+                                    </>
+                                ) : "Crea un nuevo pendiente operativo en el tablero Kanban"}
                             </DialogDescription>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3.5">
+                    <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:gap-3.5 sm:overflow-visible sm:px-0 sm:pb-0">
                         {!isEdition && hasStoredMeaningfulDraft() && (
                             <div
                                 data-task-draft-status-pill
@@ -1823,7 +1832,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 {/* Main Single Column Layout (Basecamp Style) */}
                 <div
                     ref={chatContainerRef}
-                    className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-zinc-50 dark:bg-zinc-950 flex flex-col"
+                    className="flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-6 custom-scrollbar bg-zinc-50 dark:bg-zinc-950 flex flex-col sm:p-6 sm:space-y-8"
                 >
 
                     {/* Metadata Grid Area - Full Width compact top section */}
@@ -1875,13 +1884,20 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             <label className={taskComposerLabelClass}>
                                 {isEdition ? "Título de la tarea" : "Nombre de la tarea"}
                             </label>
-                            <input
-                                type="text"
+                            <textarea
+                                data-task-title-input
+                                rows={2}
                                 required
                                 value={formData.title || ''}
                                 onChange={e => setFormData({...formData, title: e.target.value})}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                        event.preventDefault();
+                                        event.currentTarget.blur();
+                                    }
+                                }}
                                 placeholder={isEdition ? "Ej: Revisión de artes para campaña..." : "Escribe el nombre de la tarea"}
-                                className="w-full bg-transparent border-0 border-b border-zinc-200/80 dark:border-zinc-800/80 rounded-none px-0 py-2 text-2xl font-semibold text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:ring-0 focus:border-primary/50 outline-none transition-colors"
+                                className="min-h-[72px] w-full resize-none overflow-y-auto rounded-none border-0 border-b border-zinc-200/80 bg-transparent px-0 py-2 text-xl font-semibold leading-snug text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:border-primary/50 focus:ring-0 dark:border-zinc-800/80 dark:text-zinc-50 dark:placeholder:text-zinc-600 sm:min-h-[76px] sm:text-2xl"
                             />
                         </div>
 
@@ -1889,14 +1905,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         <div className={taskOperationalGridClass}>
 
                             {/* Cliente Selector */}
-                            <div className="col-span-3 space-y-1">
+                            <div className="col-span-2 space-y-1.5 sm:col-span-3 sm:space-y-1">
                                 <label className={taskComposerLabelClass}>Cliente</label>
                                 <select
                                     required
                                     value={formData.clientId}
                                     onChange={e => setFormData({...formData, clientId: e.target.value})}
                                     disabled={isEdition || !!defaultClientId}
-                                    className={`${taskComposerFieldClass} h-[38px] cursor-pointer disabled:opacity-80`}
+                                    className={`${taskComposerFieldClass} h-12 sm:h-[38px] cursor-pointer disabled:opacity-80`}
                                 >
                                     <option value="">Seleccionar cliente...</option>
                                     {clientsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1904,12 +1920,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                             {/* Responsable */}
-                            <div className="col-span-3 space-y-1">
+                            <div className="col-span-2 space-y-1.5 sm:col-span-3 sm:space-y-1">
                                 <label className={taskComposerLabelClass}>Responsable</label>
                                 <select
                                     value={formData.assigneeId || ''}
                                     onChange={e => setFormData({...formData, assigneeId: e.target.value})}
-                                    className={`${taskComposerFieldClass} h-[38px] cursor-pointer`}
+                                    className={`${taskComposerFieldClass} h-12 sm:h-[38px] cursor-pointer`}
                                 >
                                     <option value="">Sin asignar</option>
                                     {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -1917,7 +1933,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                             {/* Deadline / Fecha Entrega */}
-                            <div className="col-span-2 space-y-1">
+                            <div className="col-span-1 space-y-1.5 sm:col-span-2 sm:space-y-1">
                                 <label className={taskComposerLabelClass}>Deadline</label>
                                 <div className="relative w-full">
                                     <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none z-10" />
@@ -1928,7 +1944,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             setFormData({...formData, dueDate: dateStr});
                                         }}
                                         dateFormat="dd/MM/yyyy"
-                                        className={`${taskComposerFieldClass} h-[38px] pl-10 cursor-pointer`}
+                                        className={`${taskComposerFieldClass} h-12 sm:h-[38px] pl-9 sm:pl-10 cursor-pointer`}
                                         wrapperClassName="w-full"
                                         {...brainDatePickerProps}
                                         placeholderText="Elegir fecha..."
@@ -1938,12 +1954,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                             {/* Estado Actual */}
-                            <div className="col-span-2 space-y-1">
+                            <div className="col-span-1 space-y-1.5 sm:col-span-2 sm:space-y-1">
                                 <label className={taskComposerLabelClass}>Estado actual</label>
                                 <select
                                     value={formData.status}
                                     onChange={e => setFormData({...formData, status: e.target.value})}
-                                    className={`${taskComposerFieldClass} h-[38px] cursor-pointer`}
+                                    className={`${taskComposerFieldClass} h-12 sm:h-[38px] cursor-pointer`}
                                 >
                                     <option value="PENDIENTE">PENDIENTE</option>
                                     <option value="EN_CURSO">EN PROCESO</option>
@@ -1953,27 +1969,32 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                             {/* Prioridad */}
-                            <div className="col-span-2 space-y-1">
+                            <div className="col-span-2 sm:col-span-2 space-y-1.5 sm:space-y-1">
                                 <label className={taskComposerLabelClass}>Prioridad</label>
                                 <div className={cn(
                                     "relative rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-transparent transition-colors",
                                     formData.isPriority && "border-red-500/30 bg-red-500/5"
                                 )}>
                                     <button
+                                        data-task-priority-trigger
                                         type="button"
                                         onClick={() => {
                                             setShowPriorityPopover(prev => !prev);
                                         }}
                                         aria-expanded={showPriorityPopover}
                                         className={cn(
-                                            "flex h-[38px] w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                                            "flex h-12 w-full items-center justify-between gap-2 rounded-lg px-4 py-2 text-base transition-colors sm:h-[38px] sm:justify-center sm:px-3 sm:text-sm",
                                             formData.isPriority
                                                 ? "text-red-600 font-semibold"
                                                 : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/60"
                                         )}
                                     >
-                                        <Zap size={12} fill={formData.isPriority ? "currentColor" : "none"} />
-                                        <span className="text-sm font-medium">Prioridad</span>
+                                        <span className="flex items-center gap-2">
+                                            <Zap size={14} fill={formData.isPriority ? "currentColor" : "none"} />
+                                            <span className="sr-only">Prioridad</span>
+                                            <span className="font-medium">{selectedPriorityLabel}</span>
+                                        </span>
+                                        <span className="text-xs opacity-60 sm:hidden">Cambiar</span>
                                     </button>
 
                                     <AnimatePresence>
@@ -1984,32 +2005,34 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                                                 transition={{ duration: 0.14 }}
-                                                className="absolute left-0 right-0 top-[calc(100%+6px)] z-[125] grid grid-cols-3 gap-1.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 p-1.5 shadow-xl shadow-zinc-950/10 backdrop-blur"
+                                                className="absolute left-0 right-0 top-[calc(100%+6px)] z-[125] grid grid-cols-2 gap-2 rounded-xl border border-zinc-200/80 bg-white/95 p-2 shadow-xl shadow-zinc-950/10 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 sm:grid-cols-4 sm:gap-1.5 sm:p-1.5"
                                                 role="radiogroup"
                                                 aria-label="Nivel de prioridad"
                                             >
                                                 {taskPriorityOptions.map((option) => {
-                                                    const selected = formData.isPriority && (formData.priority || 'NORMAL') === option.value;
+                                                    const selected = selectedPriorityValue === option.value;
                                                     return (
                                                         <button
+                                                            data-task-priority-option
                                                             key={option.value}
                                                             type="button"
                                                             role="radio"
                                                             aria-checked={selected}
                                                             onClick={() => {
+                                                                const isNone = option.value === 'NONE';
                                                                 setFormData(prev => ({
                                                                     ...prev,
-                                                                    priority: option.value,
-                                                                    isPriority: true
+                                                                    priority: isNone ? null : option.value,
+                                                                    isPriority: !isNone
                                                                 }));
                                                                 setShowPriorityPopover(false);
                                                             }}
                                                             className={cn(
-                                                                "inline-flex h-[30px] min-w-0 items-center justify-center gap-1 rounded-lg border px-2 text-[11px] font-semibold transition-all",
+                                                                "inline-flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-lg border px-2 text-sm font-semibold transition-all sm:min-h-[34px] sm:text-[11px]",
                                                                 selected ? option.className : "border-zinc-200/70 dark:border-zinc-800/70 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100/70 dark:hover:bg-zinc-900/70"
                                                             )}
                                                         >
-                                                            <Zap size={11} fill={selected ? "currentColor" : "none"} />
+                                                            {option.value !== 'NONE' && <Zap size={11} fill={selected ? "currentColor" : "none"} />}
                                                             {option.label}
                                                         </button>
                                                     );
@@ -2029,7 +2052,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         Insumos & referencias vinculadas
                                     </label>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-4">
 
                                     {/* Referencias en Edición */}
                                     <div className="space-y-2">
@@ -2040,7 +2063,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 placeholder="https://..."
                                                 value={editRefUrl}
                                                 onChange={e => setEditRefUrl(e.target.value)}
-                                                className={`${taskComposerFieldClass} flex-1 h-[38px]`}
+                                                className={`${taskComposerFieldClass} flex-1 h-12 sm:h-[38px]`}
                                             />
                                             <button
                                                 type="button"
@@ -2048,7 +2071,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                     handleCreateAttachment(editRefUrl, editRefUrl, 'REFERENCIA');
                                                     setEditRefUrl("");
                                                 }}
-                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-lg shrink-0 flex items-center justify-center h-[38px] w-[38px]"
+                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-lg shrink-0 flex items-center justify-center h-12 w-12 sm:h-[38px] sm:w-[38px]"
                                             >
                                                 <Plus size={14} />
                                             </button>
@@ -2095,7 +2118,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 placeholder="https://..."
                                                 value={editInpUrl}
                                                 onChange={e => setEditInpUrl(e.target.value)}
-                                                className={`${taskComposerFieldClass} flex-1 h-[38px]`}
+                                                className={`${taskComposerFieldClass} flex-1 h-12 sm:h-[38px]`}
                                             />
                                             <button
                                                 type="button"
@@ -2103,7 +2126,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                     handleCreateAttachment(editInpUrl, editInpUrl, 'INSUMO');
                                                     setEditInpUrl("");
                                                 }}
-                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-lg shrink-0 flex items-center justify-center h-[38px] w-[38px]"
+                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-lg shrink-0 flex items-center justify-center h-12 w-12 sm:h-[38px] sm:w-[38px]"
                                             >
                                                 <Plus size={14} />
                                             </button>
@@ -2150,7 +2173,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     <label className={`${taskCreateLabelClass} block`}>
                                         Referencias iniciales
                                     </label>
-                                    <div className="grid grid-cols-2 gap-3 items-center">
+                                    <div className="grid grid-cols-1 gap-3 items-center sm:grid-cols-2">
                                         <input
                                             type="text"
                                             placeholder="Nombre de la referencia (ej: Figma...)"
@@ -2178,7 +2201,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                     setNewRefUrl("");
                                                     setNewRefName("");
                                                 }}
-                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-lg transition-all shrink-0 flex items-center justify-center h-[38px] w-[38px]"
+                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-lg transition-all shrink-0 flex items-center justify-center h-12 w-12 sm:h-[38px] sm:w-[38px]"
                                                 title="Agregar Referencia"
                                             >
                                                 <Plus size={16} />
@@ -2210,7 +2233,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     <label className={`${taskCreateLabelClass} block`}>
                                         Insumos iniciales
                                     </label>
-                                    <div className="grid grid-cols-2 gap-3 items-center">
+                                    <div className="grid grid-cols-1 gap-3 items-center sm:grid-cols-2">
                                         <input
                                             type="text"
                                             placeholder="Nombre del insumo (ej: Assets...)"
@@ -2238,7 +2261,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                     setNewInpUrl("");
                                                     setNewInpName("");
                                                 }}
-                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-lg transition-all shrink-0 flex items-center justify-center h-[38px] w-[38px]"
+                                                className="bg-primary hover:bg-primary/90 text-primary-foreground p-2 rounded-lg transition-all shrink-0 flex items-center justify-center h-12 w-12 sm:h-[38px] sm:w-[38px]"
                                                 title="Agregar Insumo"
                                             >
                                                 <Plus size={16} />
@@ -2290,11 +2313,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         )}
 
                         {isEdition && (
-                            <div className="mt-auto pt-6 border-t border-zinc-200/70 dark:border-zinc-800/70 flex justify-end gap-3">
+                            <div className="mt-auto flex gap-3 border-t border-zinc-200/70 pt-6 dark:border-zinc-800/70 sm:justify-end">
                                 <button
                                     type="button"
                                     onClick={handleClosePanel}
-                                    className="px-6 py-2.5 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg transition-colors"
+                                    className="min-h-12 flex-1 rounded-lg bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 sm:min-h-0 sm:flex-none sm:px-6 sm:text-xs"
                                 >
                                     Cerrar
                                 </button>
@@ -2302,7 +2325,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     type="button"
                                     onClick={() => handleSave()}
                                     disabled={isSubmitting}
-                                    className="px-6 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold rounded-lg transition-all shadow-lg flex items-center justify-center gap-2"
+                                    className="flex min-h-12 flex-[2] items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg transition-all hover:bg-primary/90 sm:min-h-0 sm:flex-none sm:px-6 sm:text-xs"
                                 >
                                     {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                                     Guardar cambios

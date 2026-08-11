@@ -206,7 +206,7 @@ const RichTextEditor = React.forwardRef(({
     editorProps: {
       attributes: {
         class: cn(
-          'w-full text-sm font-medium outline-none prose dark:prose-invert max-w-none text-zinc-800 dark:text-zinc-200 px-4 py-3 pb-12',
+          'w-full text-base sm:text-sm font-medium outline-none prose dark:prose-invert max-w-none text-zinc-800 dark:text-zinc-200 px-4 py-3 pb-12',
           'focus:outline-none focus-visible:outline-none [&_.ProseMirror]:outline-none',
           editorContentClassName
         ),

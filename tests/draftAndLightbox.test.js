@@ -256,7 +256,7 @@ test('Task Deadline DatePicker - uses Brainstudio themed calendar chrome', async
     assert.ok(helper.includes("popperClassName: 'brain-datepicker-popper'"), 'Shared calendar props should use a scoped popper class.');
     assert.ok(helper.includes("registerLocale('es', es)"), 'Shared calendar helper should register the Spanish datepicker locale.');
     assert.ok(helper.includes("locale: 'es'"), 'Shared calendar helper should render month and weekday labels in Spanish.');
-    assert.ok(code.includes('h-[38px] pl-10 cursor-pointer'), 'Task deadline input should leave enough space for the calendar icon.');
+    assert.ok(code.includes('h-12 sm:h-[38px] pl-9 sm:pl-10 cursor-pointer'), 'Task deadline input should keep a large mobile touch target and enough space for the calendar icon.');
     assert.ok(css.includes('.brain-datepicker'), 'Global CSS should include the themed datepicker shell.');
     assert.ok(css.includes('.brain-datepicker .react-datepicker__day--selected'), 'Selected days should have explicit themed styling.');
     assert.ok(css.includes('.dark .brain-datepicker'), 'The themed datepicker must support dark mode.');
