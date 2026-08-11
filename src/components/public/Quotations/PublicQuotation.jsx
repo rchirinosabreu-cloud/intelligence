@@ -180,7 +180,7 @@ const PublicQuotation = () => {
                                 )}
                             </div>
                             <h1 className="mt-6 text-3xl font-bold leading-tight sm:text-4xl">
-                                Una propuesta construida para {quotation.client_company || quotation.client_name}
+                                {quotation.client_company || quotation.client_name}
                             </h1>
                             <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-300 sm:text-lg sm:leading-8">
                                 Reunimos los servicios, alcances e inversión necesarios para avanzar con claridad hacia los objetivos acordados.
@@ -196,23 +196,16 @@ const PublicQuotation = () => {
                                 <dt className="flex items-center gap-2 text-xs font-semibold uppercase text-zinc-400"><Clock className="h-4 w-4" /> Vigencia</dt>
                                 <dd className="mt-1.5 text-sm font-semibold">{formatDate(quotation.expires_at)}</dd>
                             </div>
-                            {quotation.currency === 'USD' && quotation.exchange_rate && (
-                                <div className="col-span-2 lg:col-span-1">
-                                    <dt className="text-xs font-semibold uppercase text-zinc-400">Tasa de referencia</dt>
-                                    <dd className="mt-1.5 text-sm font-semibold">1 USD = {new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(Number(quotation.exchange_rate))} COP</dd>
-                                </div>
-                            )}
                         </dl>
                     </div>
                 </section>
 
                 <section className="border-y border-zinc-200 bg-white px-5 py-12 dark:border-zinc-800 dark:bg-zinc-900 sm:px-8 sm:py-16">
                     <div className="mx-auto max-w-6xl">
-                        <div className="grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
+                        <div className="space-y-8">
                             <div>
                                 <p className="text-xs font-bold uppercase text-violet-700 dark:text-violet-300">Alcance</p>
                                 <h2 className="mt-2 text-2xl font-bold">Servicios incluidos</h2>
-                                <p className="mt-3 text-sm leading-6 text-zinc-500">Cada componente corresponde al alcance comercial de esta propuesta.</p>
                             </div>
                             <div className="space-y-3">
                                 {(quotation.items || []).map((item, index) => (
@@ -241,8 +234,8 @@ const PublicQuotation = () => {
                 </section>
 
                 <section className="px-5 py-12 sm:px-8 sm:py-16">
-                    <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-start">
-                        <div className="grid gap-5 sm:grid-cols-2">
+                    <div className="mx-auto max-w-4xl space-y-8">
+                        <div className="space-y-6">
                             <div className="border-t border-zinc-300 pt-4 dark:border-zinc-700">
                                 <p className="text-xs font-semibold uppercase text-zinc-400">Preparada para</p>
                                 <p className="mt-2 text-lg font-bold">{quotation.client_company || quotation.client_name}</p>
@@ -255,22 +248,22 @@ const PublicQuotation = () => {
                             </div>
                         </div>
 
-                        <div className="rounded-lg bg-zinc-950 p-6 text-white shadow-xl shadow-zinc-950/10 dark:bg-white dark:text-zinc-950 sm:p-8">
-                            <p className="text-xs font-semibold uppercase text-zinc-400">Inversión total</p>
+                        <div className="rounded-lg bg-violet-700 p-6 text-white shadow-xl shadow-violet-950/10 dark:bg-violet-800 sm:p-8">
+                            <p className="text-xs font-semibold uppercase text-violet-200">Inversión total</p>
                             <p className="mt-3 text-4xl font-bold leading-none">{formatCurrency(quotation.total_amount)}</p>
-                            <div className="mt-6 space-y-2 border-t border-white/15 pt-5 text-sm dark:border-zinc-200">
-                                <div className="flex justify-between gap-4"><span className="text-zinc-400">Subtotal</span><span>{formatCurrency(quotation.subtotal)}</span></div>
-                                {!quotation.is_tax_exempt && <div className="flex justify-between gap-4"><span className="text-zinc-400">IVA (19%)</span><span>{formatCurrency(quotation.tax_amount)}</span></div>}
+                            <div className="mt-6 space-y-2 border-t border-white/20 pt-5 text-sm">
+                                <div className="flex justify-between gap-4"><span className="text-violet-100">Subtotal</span><span>{formatCurrency(quotation.subtotal)}</span></div>
+                                {!quotation.is_tax_exempt && <div className="flex justify-between gap-4"><span className="text-violet-100">IVA (19%)</span><span>{formatCurrency(quotation.tax_amount)}</span></div>}
                             </div>
 
                             {isApproved ? (
-                                <div className="mt-7 rounded-md bg-emerald-500/15 p-4 text-emerald-200 dark:bg-emerald-100 dark:text-emerald-800">
+                                <div className="mt-7 rounded-md bg-white/15 p-4 text-white">
                                     <p className="flex items-center gap-2 font-bold"><CheckCircle2 className="h-5 w-5" /> Propuesta aprobada</p>
                                     <p className="mt-1 text-sm leading-6 opacity-90">Confirmada el {formatDate(quotation.accepted_at)}. Nuestro equipo se pondrá en contacto contigo.</p>
                                 </div>
                             ) : (
                                 <Button
-                                    className="mt-7 h-12 w-full rounded-md bg-violet-600 text-white hover:bg-violet-700"
+                                    className="mt-7 h-12 w-full rounded-md bg-white text-violet-700 hover:bg-violet-50 dark:bg-white dark:text-violet-800 dark:hover:bg-violet-50"
                                     onClick={handleAccept}
                                     disabled={acceptMutation.isPending}
                                 >
@@ -281,14 +274,14 @@ const PublicQuotation = () => {
 
                             <Button
                                 variant="outline"
-                                className="mt-3 h-12 w-full rounded-md border-white/20 bg-transparent text-white hover:bg-white/10 dark:border-zinc-300 dark:text-zinc-900 dark:hover:bg-zinc-100"
+                                className="mt-3 h-12 w-full rounded-md border-white/30 bg-transparent text-white hover:bg-white/10 dark:border-white/30 dark:text-white dark:hover:bg-white/10"
                                 onClick={() => openWhatsApp(`Hola, quiero conversar sobre la propuesta ${quotation.consecutive_formatted} para ${quotation.client_name}.`)}
                             >
                                 <MessageCircle className="mr-2 h-5 w-5" />
                                 Contactar por WhatsApp
                             </Button>
 
-                            {acceptanceError && <p className="mt-3 text-sm leading-6 text-rose-300 dark:text-[#E11D48]">{acceptanceError}</p>}
+                            {acceptanceError && <p className="mt-3 text-sm leading-6 text-rose-100">{acceptanceError}</p>}
                         </div>
                     </div>
                 </section>

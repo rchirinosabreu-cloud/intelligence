@@ -223,3 +223,18 @@ test('public proposal removes PDF actions and presents acceptance, WhatsApp, and
   assert.match(publicView, /text-(?:sm|base)[^"']*leading-(?:6|7|relaxed)/);
   assert.match(confirmDialog, /request\?\.tone === 'danger'\s*\?\s*AlertTriangle\s*:\s*CheckCircle2/);
 });
+
+test('public proposal keeps its commercial content in a simplified single-column flow', async () => {
+  const publicView = await readFile(
+    new URL('../src/components/public/Quotations/PublicQuotation.jsx', import.meta.url),
+    'utf8'
+  );
+
+  assert.doesNotMatch(publicView, /Una propuesta construida para/);
+  assert.doesNotMatch(publicView, /Cada componente corresponde al alcance comercial de esta propuesta/);
+  assert.doesNotMatch(publicView, /Tasa de referencia/);
+  assert.doesNotMatch(publicView, /lg:grid-cols-\[260px_minmax\(0,1fr\)\]/);
+  assert.doesNotMatch(publicView, /lg:grid-cols-\[minmax\(0,1fr\)_420px\]/);
+  assert.doesNotMatch(publicView, /rounded-lg bg-zinc-950 p-6 text-white/);
+  assert.match(publicView, /rounded-lg bg-violet-(?:700|800|900) p-6 text-white/);
+});
