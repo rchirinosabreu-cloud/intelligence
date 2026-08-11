@@ -25,7 +25,8 @@ import {
     Trash2,
     Zap,
     ClipboardList,
-    Plus
+    Plus,
+    RefreshCw
 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
@@ -114,6 +115,14 @@ const formatTaskCardDate = (dateStr) => {
     return `${day} ${monthLabels[taskDate.getMonth()]}`;
 };
 
+const formatLastSyncTime = (timestamp) => {
+    if (!timestamp) return 'Pendiente';
+    return new Intl.DateTimeFormat('es-CO', {
+        hour: 'numeric',
+        minute: '2-digit'
+    }).format(new Date(timestamp));
+};
+
 // --- STYLES ---
 
 const CLIENT_COLORS = {
@@ -187,6 +196,9 @@ const NativeTasks = () => {
         data: tasks = [],
         isLoading: loadingTasks,
         error: tasksError,
+        dataUpdatedAt,
+        isFetching,
+        refetch,
     } = useQuery({
         queryKey: ['nativeTasks'],
         queryFn: async () => {
@@ -234,11 +246,11 @@ const NativeTasks = () => {
             }));
         },
         enabled: !!localStorage.getItem('authToken'),
-        refetchInterval: (localStorage.getItem('authToken') && !isCreating && !editingTask)
-            ? () => (document.hidden ? false : 60000)
+        refetchInterval: localStorage.getItem('authToken')
+            ? () => (document.hidden ? false : 30_000)
             : false,
         refetchIntervalInBackground: false,
-        refetchOnWindowFocus: () => !isCreating && !editingTask,
+        refetchOnWindowFocus: true,
     });
 
     const { data: clientsList = [] } = useQuery({
@@ -619,6 +631,24 @@ const NativeTasks = () => {
                 subtitle="Gestiona y prioriza el flujo operativo de la agencia."
             >
                 <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                    <div className="flex h-10 items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 dark:border-zinc-800 dark:bg-zinc-900">
+                        <span className="hidden text-xs text-zinc-500 dark:text-zinc-400 lg:inline">
+                            Última actualización
+                        </span>
+                        <span className="min-w-[4.5rem] text-right text-xs font-medium text-zinc-700 dark:text-zinc-200">
+                            {isFetching ? 'Actualizando' : formatLastSyncTime(dataUpdatedAt)}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => refetch()}
+                            disabled={isFetching}
+                            aria-label="Actualizar tareas"
+                            title="Actualizar tareas"
+                            className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-violet-600 disabled:cursor-wait dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-violet-400"
+                        >
+                            <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+                        </button>
+                    </div>
                     <Button size="lg" onClick={() => setIsCreating(true)} className="flex-1 sm:flex-none">
                         <Plus className="w-4 h-4 mr-2" />
                         Nueva Tarea
