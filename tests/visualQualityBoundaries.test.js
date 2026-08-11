@@ -18,3 +18,11 @@ test('new platform dialog supports both themes and the destructive token', async
   assert.match(source, /dark:bg-slate-900/);
   assert.match(source, /#E11D48/);
 });
+
+test('DM Sans is loaded once through the document head', async () => {
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
+
+  assert.match(html, /fonts\.googleapis\.com\/css2\?family=DM\+Sans/);
+  assert.doesNotMatch(css, /@import[^;]*fonts\.googleapis\.com/);
+});

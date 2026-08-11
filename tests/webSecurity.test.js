@@ -113,6 +113,9 @@ test('security headers remove framework disclosure and set browser protections',
   assert.deepEqual(app.disableCalls, ['x-powered-by']);
   assert.equal(headers.get('X-Content-Type-Options'), 'nosniff');
   assert.equal(headers.get('X-Frame-Options'), 'DENY');
-  assert.match(headers.get('Content-Security-Policy'), /default-src 'self'/);
+  const contentSecurityPolicy = headers.get('Content-Security-Policy');
+  assert.match(contentSecurityPolicy, /default-src 'self'/);
+  assert.match(contentSecurityPolicy, /style-src 'self' 'unsafe-inline' https:\/\/fonts\.googleapis\.com/);
+  assert.match(contentSecurityPolicy, /font-src 'self' data: https:\/\/fonts\.gstatic\.com/);
   assert.equal(nextCalled, true);
 });
