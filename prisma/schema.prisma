@@ -51,6 +51,8 @@ model User {
   authoredGlobalAnnouncements GlobalAnnouncement[]
   createdOperationalEvents    OperationalEvent[]      @relation("OperationalEventCreator")
   notifications               Notification[]
+  operationalTraceActions     OperationalTraceEvent[] @relation("OperationalTraceActor")
+  operationalTraceSubjects    OperationalTraceEvent[] @relation("OperationalTraceSubject")
   createdTasks                Task[]                  @relation("CreatedTasks")
   notes                       UserNote[]
   taskComments                TaskComment[]
@@ -98,19 +100,38 @@ model UserNote {
 }
 
 model Notification {
-  id         String   @id @default(uuid())
+  id         String    @id @default(uuid())
   userId     String
   message    String
-  isRead     Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  isRead     Boolean   @default(false)
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
   relatedId  String?
   type       String?
   resourceId String?
   url        String?
   taskId     String?
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead, createdAt])
+}
+
+model OperationalTraceEvent {
+  id            String   @id @default(uuid())
+  eventType     String
+  actorId       String?
+  subjectUserId String?
+  taskId        String?
+  metadata      Json?
+  occurredAt    DateTime @default(now())
+  actor         User?    @relation("OperationalTraceActor", fields: [actorId], references: [id], onDelete: SetNull)
+  subjectUser   User?    @relation("OperationalTraceSubject", fields: [subjectUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, eventType, occurredAt])
+  @@index([subjectUserId, occurredAt])
+  @@index([taskId, occurredAt])
+  @@index([eventType, occurredAt])
+  @@index([occurredAt])
 }
 
 model GeneralChatMessage {

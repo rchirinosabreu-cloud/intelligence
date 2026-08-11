@@ -1,6 +1,7 @@
 
 import prisma from '../lib/prisma.js';
 import { cleanNotificationPreview } from '../utils/notificationUtils.js';
+import { recordOperationalTrace } from './operationalTraceService.js';
 
 export const createNotification = async (data) => {
     try {
@@ -14,6 +15,15 @@ export const createNotification = async (data) => {
                 url: data.url || null,
                 taskId: data.taskId || (data.type?.startsWith('TASK_') ? data.relatedId : null)
             }
+        });
+        recordOperationalTrace({
+            eventType: 'NOTIFICATION_CREATED',
+            actorId: data.actorId || null,
+            subjectUserId: data.userId,
+            taskId: notification.taskId || null,
+            metadata: { notificationType: notification.type || 'GENERAL' }
+        }).catch((traceError) => {
+            console.error('[NotificationService] Creation trace failed:', traceError?.message || traceError);
         });
         return notification;
     } catch (error) {
@@ -115,9 +125,24 @@ export const processMentionsAndNotifications = async (taskId, commentContent, au
 
 export const markAllNotificationsAsRead = async (userId) => {
     try {
+        const unreadNotifications = await prisma.notification.findMany({
+            where: { userId, isRead: false },
+            select: { id: true, taskId: true, type: true }
+        });
+        const readAt = new Date();
         await prisma.notification.updateMany({
             where: { userId, isRead: false },
-            data: { isRead: true }
+            data: { isRead: true, readAt }
+        });
+        Promise.all(unreadNotifications.map((notification) => recordOperationalTrace({
+            eventType: 'NOTIFICATION_READ',
+            actorId: userId,
+            subjectUserId: userId,
+            taskId: notification.taskId || null,
+            metadata: { notificationType: notification.type || 'GENERAL' },
+            occurredAt: readAt
+        }))).catch((traceError) => {
+            console.error('[NotificationService] Bulk read trace failed:', traceError?.message || traceError);
         });
     } catch (error) {
         console.error(`[${new Date().toISOString()}] [NotificationService] Error marking all as read:`, error?.message || error);
@@ -156,11 +181,29 @@ export const getNotifications = async (userId) => {
 
 export const markAsRead = async (notificationId, userId) => {
     try {
-        const result = await prisma.notification.updateMany({
+        const notification = await prisma.notification.findFirst({
             where: { id: notificationId, userId },
-            data: { isRead: true }
+            select: { id: true, taskId: true, type: true, isRead: true }
         });
-        return result.count > 0;
+        if (!notification) return false;
+        const readAt = new Date();
+        const result = await prisma.notification.updateMany({
+            where: { id: notificationId, userId, isRead: false },
+            data: { isRead: true, readAt }
+        });
+        if (result.count > 0) {
+            recordOperationalTrace({
+                eventType: 'NOTIFICATION_READ',
+                actorId: userId,
+                subjectUserId: userId,
+                taskId: notification.taskId || null,
+                metadata: { notificationType: notification.type || 'GENERAL' },
+                occurredAt: readAt
+            }).catch((traceError) => {
+                console.error('[NotificationService] Read trace failed:', traceError?.message || traceError);
+            });
+        }
+        return result.count > 0 || notification.isRead;
     } catch (error) {
         console.error(`[${new Date().toISOString()}] [NotificationService] Error marking as read:`, error?.message || error);
         throw error;

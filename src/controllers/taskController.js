@@ -13,6 +13,8 @@ import { getDashboardMetrics, getQualityStreak, getCompletedTasks, getTasks, cre
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from '../services/clientTaskService.js';
 import { uploadToS3, getFromS3Stream } from '../services/s3Service.js';
 import { createNotification, processMentionsAndNotifications } from '../services/notificationService.js';
+import { recordTaskListSync } from '../services/operationalTraceService.js';
+import { traceTaskOpenHandler } from './operationalTraceController.js';
 import { canDeleteTask, canUpdateTask, isManagerRole, pickAllowedTaskUpdates } from '../config/security.js';
 
 const COMMENT_MAX_LENGTH = 10_000;
@@ -71,6 +73,9 @@ export const getAllTasks = async (req, res) => {
     try {
         const tasks = await getTasks(req.query.clientId);
         res.json(tasks);
+        recordTaskListSync({ userId: req.user?.userId, taskCount: tasks.length }).catch((error) => {
+            console.error('[TaskController] Task sync trace failed:', error?.message || error);
+        });
     } catch (error) {
         res.status(500).json({ error: "Failed to fetch native tasks", details: error.message });
     }
@@ -226,6 +231,8 @@ export const getFollowStatus = async (req, res) => {
         res.status(500).json({ error: "Failed to get follow status" });
     }
 };
+
+export const traceTaskOpen = traceTaskOpenHandler;
 
 const streamTaskAttachment = async (req, res, disposition) => {
     try {

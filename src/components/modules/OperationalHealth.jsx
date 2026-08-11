@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
 import TeamAvatar from '@/components/ui/TeamAvatar';
+import OperationalTracePanel from './OperationalTracePanel';
 import {
   Activity,
   AlertCircle,
@@ -449,6 +450,8 @@ const OperationalHealth = () => {
 
         <IssueList issues={data.issues} />
       </div>
+
+      <OperationalTracePanel />
     </div>
   );
 };

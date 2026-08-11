@@ -370,6 +370,22 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
     }, [isOpen]);
 
+    useEffect(() => {
+        if (!isOpen || !isEdition || !taskData?.id || !currentUser?.id) return;
+
+        fetch(`${getApiBaseUrl()}/api/tasks/${taskData.id}/trace-open`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
+            keepalive: true
+        }).then((response) => {
+            if (!response.ok) {
+                console.error('[TaskSidePanel] Task open trace failed:', response.status);
+            }
+        }).catch((error) => {
+            console.error('[TaskSidePanel] Task open trace failed:', error);
+        });
+    }, [isOpen, isEdition, taskData?.id, currentUser?.id]);
+
     // Decoupled chat/comments polling while focus modal is open
     useEffect(() => {
         if (!isOpen || !isEdition || !formData.id) {

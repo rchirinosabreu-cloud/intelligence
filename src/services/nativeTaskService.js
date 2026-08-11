@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma.js';
 import { createNotification, processMentionsAndNotifications } from './notificationService.js';
+import { recordOperationalTrace } from './operationalTraceService.js';
 import { enqueueTaskClassification } from './taskClassificationService.js';
 import { pickAllowedTaskUpdates } from '../config/security.js';
 
@@ -525,6 +526,27 @@ export const createTask = async ({
             console.error("[nativeTaskService] Deferred classification trigger failed:", err.message)
         );
 
+        const taskTraceEvents = [
+            recordOperationalTrace({
+                eventType: 'TASK_CREATED',
+                actorId: creatorId,
+                subjectUserId: newTask.assignee?.userId || null,
+                taskId: newTask.id,
+                metadata: { status: newTask.status }
+            })
+        ];
+        if (newTask.assignee?.userId) {
+            taskTraceEvents.push(recordOperationalTrace({
+                eventType: 'TASK_ASSIGNED',
+                actorId: creatorId,
+                subjectUserId: newTask.assignee.userId,
+                taskId: newTask.id
+            }));
+        }
+        Promise.all(taskTraceEvents).catch((error) => {
+            console.error('[nativeTaskService] Creation trace failed:', error?.message || error);
+        });
+
         for (const initialComment of initial_comments) {
             processMentionsAndNotifications(newTask.id, initialComment.content || '', creatorId).catch((error) => {
                 console.error('[nativeTaskService] Initial mention processing failed:', error);
@@ -873,6 +895,20 @@ export const updateTask = async (id, data, updaterId = null) => {
         }, { isolationLevel: 'Serializable' });
 
         const { currentTask, updatedTask, isCorrected, isReturned } = transition;
+
+        recordOperationalTrace({
+            eventType: 'TASK_UPDATED',
+            actorId: updaterId,
+            subjectUserId: updatedTask.assignee?.userId || null,
+            taskId: updatedTask.id,
+            metadata: {
+                changedFields: Object.keys(data || {}),
+                fromStatus: currentTask.status,
+                toStatus: updatedTask.status
+            }
+        }).catch((error) => {
+            console.error('[nativeTaskService] Update trace failed:', error?.message || error);
+        });
 
         // Map for frontend compatibility without skipping post-commit notifications.
         let responseTask = updatedTask;
