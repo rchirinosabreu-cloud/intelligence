@@ -243,7 +243,7 @@ const QuotationList = () => {
                                                     <Copy className="w-4 h-4" />
                                                 </button>
                                                 <button
-                                                    onClick={() => window.open(`/cotizaciones/ver/${q.uuid_slug}`, '_blank')}
+                                                    onClick={() => navigate(`/cotizaciones/ver/${q.uuid_slug}`)}
                                                     className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-zinc-500 transition-colors"
                                                     title="Ver propuesta"
                                                 >

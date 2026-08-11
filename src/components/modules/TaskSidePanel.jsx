@@ -40,6 +40,7 @@ import {
     DropdownMenuContent,
 } from '@/components/ui/dropdown-menu';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useNavigate } from 'react-router-dom';
 
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
@@ -207,6 +208,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const { toast } = useToast();
     const confirm = useConfirmDialog();
     const { currentUser } = useAuth();
+    const navigate = useNavigate();
     const isEdition = !!taskData?.id;
 
     const [commentPopover, setCommentPopover] = useState({ commentId: null, view: null }); // view: 'quick-actions' | 'all-emojis' | null
@@ -1764,9 +1766,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             <button
                                 onClick={() => {
                                     if (formData.plan?.id) {
-                                        window.open(`/parrillas/${formData.plan.id}?item=${formData.contentItemId}`, '_blank');
+                                        navigate(`/parrillas/${formData.plan.id}?item=${formData.contentItemId}`);
                                     } else {
-                                        window.open(`/parrillas/${formData.contentPlanId}?item=${formData.contentItemId}`, '_blank');
+                                        navigate(`/parrillas/${formData.contentPlanId}?item=${formData.contentItemId}`);
                                     }
                                 }}
                                 className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all border border-indigo-100 dark:border-indigo-900/30 shadow-sm"

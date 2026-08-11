@@ -3,9 +3,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Copy, Check, ExternalLink, Globe } from '@/components/ui/icons';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import { openPlatformLink } from '@/lib/platformNavigation';
 
 const SuccessModal = ({ isOpen, onClose, link }) => {
     const [copied, setCopied] = React.useState(false);
+    const navigate = useNavigate();
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(link);
@@ -54,7 +57,7 @@ const SuccessModal = ({ isOpen, onClose, link }) => {
                     <Button
                         type="button"
                         className="flex-1 rounded-xl h-12 font-bold"
-                        onClick={() => window.open(link, '_blank')}
+                        onClick={() => openPlatformLink(link, { navigate })}
                     >
                         <ExternalLink className="w-4 h-4 mr-2" />
                         Ver Propuesta

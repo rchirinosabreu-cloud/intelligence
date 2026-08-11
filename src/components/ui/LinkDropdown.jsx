@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import { ChevronDown, ExternalLink, Link as LinkIcon } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { sanitizeUrl } from '@/utils/urlHelper';
+import { useNavigate } from 'react-router-dom';
+import { openPlatformLink } from '@/lib/platformNavigation';
 
 const LinkDropdown = ({ label, links = [], icon: Icon = LinkIcon }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const navigate = useNavigate();
 
     // Normalize links to array and sanitize
     let linkArray = [];
@@ -28,7 +31,7 @@ const LinkDropdown = ({ label, links = [], icon: Icon = LinkIcon }) => {
                 type="button"
                 onClick={(e) => {
                     e.stopPropagation();
-                    window.open(sanitizeUrl(linkArray[0]), '_blank', 'noopener,noreferrer');
+                    openPlatformLink(sanitizeUrl(linkArray[0]), { navigate });
                 }}
                 className="flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-400 hover:text-primary hover:border-primary/30 transition-all shadow-sm flex-1"
             >
@@ -78,7 +81,7 @@ const LinkDropdown = ({ label, links = [], icon: Icon = LinkIcon }) => {
                                 type="button"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    window.open(sanitizeUrl(url), '_blank', 'noopener,noreferrer');
+                                    openPlatformLink(sanitizeUrl(url), { navigate });
                                 }}
                                 className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-[10px] font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border-b last:border-0 border-zinc-100 dark:border-zinc-800/50"
                             >
