@@ -1,14 +1,14 @@
 import express from 'express';
 import * as serviceController from '../../controllers/serviceController.js';
-import { authenticateToken, requireManagerRole } from '../../middlewares/authMiddleware.js';
+import { authenticateToken, requireManagerRole, requireModulePermission } from '../../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
-// Publicly list services for the quotation form
-router.get('/', serviceController.listServices);
+router.use(authenticateToken);
+router.get('/', requireModulePermission('cotizaciones'), serviceController.listServices);
 
-// CRUD operations (Admin/PM only via authenticateToken)
-router.use(authenticateToken, requireManagerRole);
+// CRUD operations (Admin/PM only)
+router.use(requireManagerRole);
 router.post('/', serviceController.createService);
 router.put('/:id', serviceController.updateService);
 router.delete('/:id', serviceController.deleteService);

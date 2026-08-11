@@ -1,4 +1,16 @@
 import prisma from '../lib/prisma.js';
+import { serializeCatalogService } from '../services/quotationDomainService.js';
+
+const parseMoneyField = (value, label, { required = true } = {}) => {
+    if (!required && (value === undefined || value === null || value === '')) return undefined;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+        const error = new Error(`${label} debe ser un valor mayor o igual a cero`);
+        error.statusCode = 400;
+        throw error;
+    }
+    return parsed;
+};
 
 /**
  * Lists all services in the catalog.
@@ -10,11 +22,7 @@ export const listServices = async (req, res) => {
         });
 
         // Strict mapping to convert Prisma Decimal to JS Number
-        const serialized = services.map(service => ({
-            ...service,
-            valor_neto: Number(service.valor_neto),
-            valor_neto_actual: Number(service.valor_neto_actual)
-        }));
+        const serialized = services.map(serializeCatalogService);
 
         res.json(serialized);
     } catch (error) {
@@ -30,9 +38,9 @@ const VALID_CATEGORIES = ['BRANDING', 'DISENO', 'PRODUCCION_AUDIOVISUAL', 'MARKE
 
 export const createService = async (req, res) => {
     try {
-        const { category, name, description, valor_neto, valor_neto_actual } = req.body;
+        const { category, name, description, costo_real_estimado, valor_neto, valor_neto_actual } = req.body;
 
-        if (!category || !name || !valor_neto_actual) {
+        if (!category || !String(name).trim()) {
             return res.status(400).json({ error: "Faltan campos obligatorios" });
         }
 
@@ -40,17 +48,22 @@ export const createService = async (req, res) => {
             return res.status(400).json({ error: "Categoría inválida", details: `La categoría debe ser una de: ${VALID_CATEGORIES.join(', ')}` });
         }
 
+        const estimatedCost = parseMoneyField(costo_real_estimado, 'El costo real estimado');
+        const finalPrice = parseMoneyField(valor_neto, 'El precio final');
+        const currentPrice = parseMoneyField(valor_neto_actual, 'El precio actual');
+
         const service = await prisma.serviceCatalog.create({
             data: {
                 category: category.toUpperCase(),
-                name,
+                name: String(name).trim(),
                 description: description || "",
-                valor_neto: Number(valor_neto) || Number(valor_neto_actual),
-                valor_neto_actual: Number(valor_neto_actual)
+                costo_real_estimado: estimatedCost,
+                valor_neto: finalPrice,
+                valor_neto_actual: currentPrice
             }
         });
 
-        res.status(201).json(service);
+        res.status(201).json(serializeCatalogService(service));
     } catch (error) {
         console.error("[ServiceController] Create failed:", error);
 
@@ -62,7 +75,7 @@ export const createService = async (req, res) => {
             });
         }
 
-        res.status(500).json({ error: "Error al crear el servicio" });
+        res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : "Error al crear el servicio" });
     }
 };
 
@@ -72,7 +85,7 @@ export const createService = async (req, res) => {
 export const updateService = async (req, res) => {
     try {
         const { id } = req.params;
-        const { category, name, description, valor_neto, valor_neto_actual } = req.body;
+        const { category, name, description, costo_real_estimado, valor_neto, valor_neto_actual } = req.body;
 
         if (category && !VALID_CATEGORIES.includes(category.toUpperCase())) {
             return res.status(400).json({ error: "Categoría inválida" });
@@ -82,17 +95,18 @@ export const updateService = async (req, res) => {
             where: { id },
             data: {
                 category: category ? category.toUpperCase() : undefined,
-                name,
+                name: name === undefined ? undefined : String(name).trim(),
                 description,
-                valor_neto: Number(valor_neto),
-                valor_neto_actual: Number(valor_neto_actual)
+                costo_real_estimado: parseMoneyField(costo_real_estimado, 'El costo real estimado', { required: false }),
+                valor_neto: parseMoneyField(valor_neto, 'El precio final', { required: false }),
+                valor_neto_actual: parseMoneyField(valor_neto_actual, 'El precio actual', { required: false })
             }
         });
 
-        res.json(service);
+        res.json(serializeCatalogService(service));
     } catch (error) {
         console.error("[ServiceController] Update failed:", error);
-        res.status(500).json({ error: "Error al actualizar el servicio" });
+        res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : "Error al actualizar el servicio" });
     }
 };
 

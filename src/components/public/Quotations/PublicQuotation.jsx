@@ -15,10 +15,7 @@ const PublicQuotation = () => {
         queryFn: async () => {
             const res = await fetch(`${getApiBaseUrl()}/api/quotations/public/${slug}`);
             if (!res.ok) throw new Error("Propuesta no encontrada");
-            const data = await res.json();
-            console.log("DEBUG - Datos de cotización recibidos (Public):", data);
-            console.log("DEBUG - Items a mapear (Public):", data?.items);
-            return data;
+            return res.json();
         }
     });
 
@@ -195,7 +192,7 @@ const PublicQuotation = () => {
                             </div>
                             <div>
                                 <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-none mb-1">Fecha Emisión</p>
-                                <p className="text-sm font-bold">{new Date(quotation.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                <p className="text-sm font-bold">{new Date(quotation.issued_at || quotation.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">

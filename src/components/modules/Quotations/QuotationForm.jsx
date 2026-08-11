@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { useNavigate, useParams } from 'react-router-dom';
 import SuccessModal from './SuccessModal';
+import { calculateQuotationEconomics } from '@/services/quotationDomainService';
 
 const QuotationForm = () => {
     const { id } = useParams();
@@ -29,6 +30,8 @@ const QuotationForm = () => {
     const [generatedLink, setGeneratedLink] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isLoadingData, setIsLoadingData] = useState(false);
+    const [wasExpired, setWasExpired] = useState(false);
+    const [issuedAt, setIssuedAt] = useState(null);
 
     const fetchQuotation = useCallback(async () => {
         setIsLoadingData(true);
@@ -49,6 +52,8 @@ const QuotationForm = () => {
             setClientType(data.client_company ? 'EMPRESA' : 'PERSONA_NATURAL');
             setCurrency(data.currency);
             setIsTaxExempt(data.is_tax_exempt);
+            setWasExpired(Boolean(data.isExpired));
+            setIssuedAt(data.issued_at || data.created_at);
 
             // Robust parsing for items to prevent crash
             let parsedItems = [];
@@ -91,11 +96,34 @@ const QuotationForm = () => {
     const { data: catalog = [] } = useQuery({
         queryKey: ['service-catalog'],
         queryFn: async () => {
-            const res = await fetch(`${getApiBaseUrl()}/api/quotations/catalog`);
+            const res = await fetch(`${getApiBaseUrl()}/api/quotations/catalog`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
             if (!res.ok) throw new Error("Failed to fetch catalog");
             return await res.json();
         }
     });
+
+    useEffect(() => {
+        if (catalog.length === 0 || isLoadingData) return;
+        const catalogById = new Map(catalog.map((service) => [service.id, service]));
+        setSelectedItems((currentItems) => {
+            let changed = false;
+            const enrichedItems = currentItems.map((item) => {
+                const service = item.serviceId ? catalogById.get(item.serviceId) : null;
+                if (!service) return item;
+
+                const estimatedCost = item.estimatedCost ?? service.costo_real_estimado;
+                const catalogFinalPrice = item.catalogFinalPrice ?? service.valor_neto;
+                if (estimatedCost === item.estimatedCost && catalogFinalPrice === item.catalogFinalPrice) return item;
+                changed = true;
+                return { ...item, estimatedCost, catalogFinalPrice };
+            });
+            return changed ? enrichedItems : currentItems;
+        });
+    }, [catalog, isLoadingData]);
 
     const filteredCatalog = catalog.filter(item =>
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -109,7 +137,9 @@ const QuotationForm = () => {
             description: service.description,
             price: service.valor_neto_actual,
             quantity: 1,
-            note: ''
+            note: '',
+            estimatedCost: service.costo_real_estimado,
+            catalogFinalPrice: service.valor_neto
         }]);
         setSearchText('');
     };
@@ -169,15 +199,32 @@ const QuotationForm = () => {
                 })
             });
 
-            if (!res.ok) throw new Error("Error saving quotation");
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Error al guardar la cotización");
 
-            const link = `${window.location.origin}/cotizaciones/ver/${data.uuid_slug}`;
-            setGeneratedLink(link);
-            setIsModalOpen(true);
-            toast.success(isEditing ? "Cotización actualizada" : "Cotización generada con éxito");
+            const shouldShare = targetStatus === 'ACTIVA';
+            if (shouldShare) {
+                const link = `${window.location.origin}/cotizaciones/ver/${data.uuid_slug}`;
+                setGeneratedLink(link);
+                setIsModalOpen(true);
+            } else {
+                setGeneratedLink('');
+                setIsModalOpen(false);
+            }
+
+            const wasReactivated = wasExpired && shouldShare;
+            setWasExpired(false);
+            setIssuedAt(data.issued_at || issuedAt);
+            toast.success(
+                wasReactivated
+                    ? "Cotización reactivada por 15 días"
+                    : shouldShare
+                        ? (isEditing ? "Cotización actualizada" : "Cotización generada con éxito")
+                        : "Borrador guardado"
+            );
         } catch (error) {
-            toast.error("Fallo al guardar la cotización");
+            console.error("[QuotationForm] Save failed:", error);
+            toast.error(error.message || "Fallo al guardar la cotización");
         } finally {
             setIsSaving(false);
         }
@@ -189,6 +236,9 @@ const QuotationForm = () => {
     };
 
     const totals = calculateTotals();
+    const profitability = calculateQuotationEconomics(selectedItems);
+    const profitabilityAvailable = currency === 'COP';
+    const displayIssueDate = wasExpired ? new Date() : new Date(issuedAt || Date.now());
 
     if (isEditing && isLoadingData) {
         return (
@@ -214,8 +264,14 @@ const QuotationForm = () => {
                         <ArrowLeft className="w-5 h-5" />
                     </Button>
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight">Nueva Propuesta</h1>
-                        <p className="text-zinc-500 mt-1 text-sm">Crea propuestas comerciales elegantes y dinámicas.</p>
+                        <h1 className="text-3xl font-bold tracking-tight">
+                            {isEditing ? (wasExpired ? 'Reactivar propuesta' : 'Editar propuesta') : 'Nueva propuesta'}
+                        </h1>
+                        <p className="text-zinc-500 mt-1 text-sm">
+                            {wasExpired
+                                ? 'Al emitirla, su vigencia comenzará nuevamente por 15 días calendario.'
+                                : 'Crea propuestas comerciales elegantes y dinámicas.'}
+                        </p>
                     </div>
                 </div>
             </div>
@@ -285,7 +341,7 @@ const QuotationForm = () => {
                                     <input
                                         type="text"
                                         disabled
-                                        value={new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                        value={displayIssueDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                         className="w-full bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-500"
                                     />
                                 </div>
@@ -359,9 +415,15 @@ const QuotationForm = () => {
                                                 className="w-full text-left p-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-0"
                                             >
                                                 <p className="text-sm font-bold">{service.name}</p>
-                                                <div className="flex justify-between items-center mt-1">
+                                                <div className="flex justify-between items-center mt-1 gap-3">
                                                     <span className="text-[10px] text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full">{service.category}</span>
-                                                    <span className="text-xs font-medium text-primary">{formatCurrency(service.valor_neto_actual)}</span>
+                                                    <span className="text-xs font-semibold text-primary">Actual {formatCurrency(service.valor_neto_actual)}</span>
+                                                </div>
+                                                <div className="mt-2 flex justify-end gap-3 text-[10px] text-zinc-400">
+                                                    <span>Final {formatCurrency(service.valor_neto)}</span>
+                                                    <span className="text-emerald-600 dark:text-emerald-400">
+                                                        Ganancia {service.ganancia_estimada === null ? 'sin costo' : formatCurrency(service.ganancia_estimada)}
+                                                    </span>
                                                 </div>
                                             </button>
                                         ))}
@@ -425,6 +487,19 @@ const QuotationForm = () => {
                                                         />
                                                     </div>
                                                 </div>
+                                                {item.estimatedCost !== null && item.estimatedCost !== undefined && (
+                                                    <div className="flex flex-wrap justify-end gap-x-4 gap-y-1 text-[10px] text-zinc-400">
+                                                        <span>Costo estimado {formatCurrency(Number(item.estimatedCost) * Number(item.quantity || 0))}</span>
+                                                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                                            Ganancia {formatCurrency((Number(item.price) - Number(item.estimatedCost)) * Number(item.quantity || 0))}
+                                                        </span>
+                                                        <span>
+                                                            Margen {Number(item.price) > 0
+                                                                ? (((Number(item.price) - Number(item.estimatedCost)) / Number(item.price)) * 100).toFixed(1)
+                                                                : '0.0'}%
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -480,13 +555,51 @@ const QuotationForm = () => {
                             </div>
                         </div>
 
+                        {selectedItems.length > 0 && (
+                            <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                        <p className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400">Margen estimado</p>
+                                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Solo visible dentro de Brainstudio</p>
+                                    </div>
+                                    {profitabilityAvailable && (
+                                        <span className="text-xl font-black text-emerald-700 dark:text-emerald-400">
+                                            {profitability.estimatedMargin}%
+                                        </span>
+                                    )}
+                                </div>
+
+                                {profitabilityAvailable ? (
+                                    <div className="mt-4 space-y-2 border-t border-emerald-200/70 pt-3 text-xs dark:border-emerald-900/40">
+                                        <div className="flex justify-between">
+                                            <span className="text-zinc-500">Costo estimado</span>
+                                            <span className="font-semibold">{formatCurrency(profitability.estimatedCost)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-zinc-500">Ganancia estimada</span>
+                                            <span className="font-bold text-emerald-700 dark:text-emerald-400">{formatCurrency(profitability.estimatedProfit)}</span>
+                                        </div>
+                                        {!profitability.hasCompleteCostData && (
+                                            <p className="pt-1 text-[10px] leading-relaxed text-amber-700 dark:text-amber-400">
+                                                Cálculo parcial: {profitability.pricedItems} de {profitability.totalItems} servicios tienen costo registrado.
+                                            </p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="mt-3 border-t border-emerald-200/70 pt-3 text-[10px] leading-relaxed text-amber-700 dark:border-emerald-900/40 dark:text-amber-400">
+                                        El margen se calcula en COP. Para cotizaciones en USD hace falta definir una tasa de conversión.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 gap-3">
                             <Button
                                 className="w-full h-12 rounded-xl"
                                 onClick={() => handleSubmit('ACTIVA')}
                                 disabled={isSaving}
                             >
-                                {isSaving ? "Generando..." : "Emitir Propuesta"}
+                                {isSaving ? "Generando..." : (wasExpired ? "Reactivar Propuesta" : "Emitir Propuesta")}
                             </Button>
                             <Button
                                 variant="outline"

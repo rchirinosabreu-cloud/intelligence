@@ -103,6 +103,7 @@ async function seedCatalog() {
                 category: CATEGORY_MAP[currentCategory] || 'WEB',
                 name: nombreServicio.replace(/^"|"$/g, ''),
                 description: descripcion.replace(/^"|"$/g, ''),
+                costo_real_estimado: cleanNumber(costoReal),
                 valor_neto: cleanNumber(valorNeto),
                 valor_neto_actual: cleanNumber(valorNetoActual)
             });
@@ -145,6 +146,7 @@ async function seedCatalog() {
                     data: {
                         category: service.category,
                         description: service.description,
+                        costo_real_estimado: service.costo_real_estimado,
                         valor_neto: service.valor_neto,
                         valor_neto_actual: service.valor_neto_actual
                     }

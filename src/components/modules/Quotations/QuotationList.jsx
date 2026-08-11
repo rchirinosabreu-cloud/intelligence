@@ -47,7 +47,10 @@ const QuotationList = () => {
         const matchesSearch = q.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                              q.consecutive_formatted?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                              (q.client_company && q.client_company.toLowerCase().includes(searchTerm.toLowerCase()));
-        const matchesStatus = statusFilter === 'ALL' || q.status === statusFilter;
+        const matchesStatus = statusFilter === 'ALL'
+            || (statusFilter === 'ACTIVA' && q.status === 'ACTIVA' && !q.isExpired)
+            || (statusFilter === 'EXPIRADA' && q.isExpired)
+            || (statusFilter === 'BORRADOR' && q.status === 'BORRADOR');
         return matchesSearch && matchesStatus;
     });
 
@@ -132,6 +135,7 @@ const QuotationList = () => {
                     >
                         <option value="ALL">Todos los Estados</option>
                         <option value="ACTIVA">Emitidas (Activas)</option>
+                        <option value="EXPIRADA">Expiradas</option>
                         <option value="BORRADOR">Borradores</option>
                     </select>
                 </div>

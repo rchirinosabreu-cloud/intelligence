@@ -2,6 +2,16 @@ import prisma from '../lib/prisma.js';
 import crypto from 'crypto';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import {
+    QuotationValidationError,
+    buildNewQuotationValidity,
+    buildQuotationValidityUpdate,
+    calculateQuotationEconomics,
+    calculateQuotationTotals,
+    prepareQuotationItems,
+    serializeCatalogService,
+    serializePublicQuotation
+} from '../services/quotationDomainService.js';
 
 const MANDATORY_TERMS = `● El cliente tendrá un delegado quien será el contacto directo con la empresa prestadora del servicio BRAIN STUDIO, y se encargará de brindar la información necesaria para el desarrollo de los servicios.
 ● Las modificaciones de productos deben cumplir con un estándar mínimo de 2 correcciones con el fin de optimizar tiempo y recursos. Si el cliente requiere corregir un contenido luego de estar aprobado tiene un costo adicional.
@@ -28,6 +38,32 @@ const EMISORES_DATA = {
     }
 };
 
+const VALID_EMISORES = new Set(['BRAIN_STUDIO', 'FRANCISCO_VILLA']);
+const VALID_CURRENCIES = new Set(['COP', 'USD']);
+const VALID_STATUSES = new Set(['BORRADOR', 'ACTIVA']);
+
+const findCatalogServicesForItems = async (items = []) => {
+    const ids = [...new Set(items.map((item) => item?.serviceId).filter(Boolean))];
+    if (ids.length === 0) return [];
+    return prisma.serviceCatalog.findMany({ where: { id: { in: ids } } });
+};
+
+const sendQuotationError = (res, error, fallbackMessage) => {
+    if (error instanceof QuotationValidationError) {
+        return res.status(error.statusCode).json({ error: error.message });
+    }
+    if (error?.code === 'P2025') {
+        return res.status(404).json({ error: 'Cotizacion no encontrada' });
+    }
+    return res.status(500).json({ error: fallbackMessage });
+};
+
+const validateQuotationEnums = ({ emisorType, currency, status }) => {
+    if (!VALID_EMISORES.has(emisorType)) throw new QuotationValidationError('Emisor invalido');
+    if (!VALID_CURRENCIES.has(currency)) throw new QuotationValidationError('Moneda invalida');
+    if (!VALID_STATUSES.has(status)) throw new QuotationValidationError('Estado de cotizacion invalido');
+};
+
 /**
  * Creates a new quotation with financial rules and contractual sanitization.
  */
@@ -46,16 +82,20 @@ export const createQuotation = async (req, res) => {
             is_tax_exempt: manual_tax_exempt
         } = req.body;
 
-        // 1. Validation
+        validateQuotationEnums({ emisorType: emisor_type, currency, status });
         const isDraft = status === 'BORRADOR';
-        if (!isDraft && (!emisor_type || !client_name || !client_phone || !items || !Array.isArray(items))) {
+        if (!isDraft && (!client_name || !client_phone || !Array.isArray(items) || items.length === 0)) {
             return res.status(400).json({ error: "Faltan campos obligatorios" });
         }
 
-        // 2. Generate UUID Slug and expiration (15 days)
+        const rawItems = Array.isArray(items) ? items : [];
+        const catalogServices = await findCatalogServicesForItems(rawItems);
+        const preparedItems = prepareQuotationItems(rawItems, catalogServices);
+
+        // 2. Generate UUID Slug and validity window (15 days)
         const uuid_slug = crypto.randomUUID();
         const created_at = new Date();
-        const expires_at = new Date(created_at.getTime() + (15 * 24 * 60 * 60 * 1000));
+        const validity = buildNewQuotationValidity(status, created_at);
 
         // 3. Automated VAT (IVA) Logic
         let is_tax_exempt = (emisor_type === 'FRANCISCO_VILLA' || client_type === 'PERSONA_NATURAL');
@@ -66,9 +106,10 @@ export const createQuotation = async (req, res) => {
         }
 
         // 4. Financial Calculations
-        const subtotal = items.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
-        const tax_amount = is_tax_exempt ? 0 : (subtotal * 0.19);
-        const total_amount = subtotal + tax_amount;
+        const { subtotal, taxAmount: tax_amount, totalAmount: total_amount } = calculateQuotationTotals(
+            preparedItems,
+            is_tax_exempt
+        );
 
         // 5. Terms and Conditions (Immutable + Sanitization)
         let final_terms = MANDATORY_TERMS;
@@ -88,14 +129,14 @@ export const createQuotation = async (req, res) => {
                 client_email: client_email || '',
                 client_phone: client_phone || '',
                 is_tax_exempt,
-                items: items || [],
+                items: preparedItems,
                 currency,
                 subtotal,
                 tax_amount,
                 total_amount,
                 terms_and_conditions: final_terms,
                 created_at,
-                expires_at
+                ...validity
             }
         });
 
@@ -108,7 +149,7 @@ export const createQuotation = async (req, res) => {
         });
     } catch (error) {
         console.error("[QuotationController] Create failed:", error);
-        res.status(500).json({ error: "Error al crear la cotización", details: error.message });
+        sendQuotationError(res, error, "Error al crear la cotizacion");
     }
 };
 
@@ -126,25 +167,38 @@ export const updateQuotation = async (req, res) => {
             client_phone,
             client_type,
             items,
-            currency = 'COP',
+            currency,
             status,
             is_tax_exempt: manual_tax_exempt
         } = req.body;
 
-        const isDraft = status === 'BORRADOR';
-        if (!isDraft && (!emisor_type || !client_name || !client_phone || !items || !Array.isArray(items))) {
+        const existing = await prisma.quotation.findUnique({ where: { id } });
+        if (!existing) return res.status(404).json({ error: "Cotizacion no encontrada" });
+
+        const targetStatus = status || existing.status;
+        const targetEmisor = emisor_type || existing.emisor_type;
+        const targetCurrency = currency || existing.currency;
+        const rawItems = Array.isArray(items) ? items : (Array.isArray(existing.items) ? existing.items : []);
+        validateQuotationEnums({ emisorType: targetEmisor, currency: targetCurrency, status: targetStatus });
+
+        const isDraft = targetStatus === 'BORRADOR';
+        if (!isDraft && (!client_name || !client_phone || rawItems.length === 0)) {
             return res.status(400).json({ error: "Faltan campos obligatorios para emitir" });
         }
 
-        let is_tax_exempt = (emisor_type === 'FRANCISCO_VILLA' || client_type === 'PERSONA_NATURAL');
+        const catalogServices = await findCatalogServicesForItems(rawItems);
+        const preparedItems = prepareQuotationItems(rawItems, catalogServices, existing.items || []);
+
+        let is_tax_exempt = (targetEmisor === 'FRANCISCO_VILLA' || client_type === 'PERSONA_NATURAL');
         if (manual_tax_exempt !== undefined) is_tax_exempt = manual_tax_exempt;
 
-        const subtotal = (items || []).reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
-        const tax_amount = is_tax_exempt ? 0 : (subtotal * 0.19);
-        const total_amount = subtotal + tax_amount;
+        const { subtotal, taxAmount: tax_amount, totalAmount: total_amount } = calculateQuotationTotals(
+            preparedItems,
+            is_tax_exempt
+        );
 
         let final_terms = MANDATORY_TERMS;
-        if (emisor_type === 'FRANCISCO_VILLA') {
+        if (targetEmisor === 'FRANCISCO_VILLA') {
             final_terms = final_terms.replace(/BRAIN STUDIO/gi, "El Prestador");
             final_terms = final_terms.replace(/Brain Studio/gi, "El Prestador");
         }
@@ -152,19 +206,20 @@ export const updateQuotation = async (req, res) => {
         const quotation = await prisma.quotation.update({
             where: { id },
             data: {
-                emisor_type,
-                status,
+                emisor_type: targetEmisor,
+                status: targetStatus,
                 client_name,
                 client_company: client_type === 'EMPRESA' ? client_company : null,
                 client_email,
                 client_phone,
                 is_tax_exempt,
-                items,
-                currency,
+                items: preparedItems,
+                currency: targetCurrency,
                 subtotal,
                 tax_amount,
                 total_amount,
-                terms_and_conditions: final_terms
+                terms_and_conditions: final_terms,
+                ...buildQuotationValidityUpdate(existing, targetStatus)
             }
         });
 
@@ -175,7 +230,7 @@ export const updateQuotation = async (req, res) => {
 
     } catch (error) {
         console.error("[QuotationController] Update failed:", error);
-        res.status(500).json({ error: "Error al actualizar la cotización" });
+        sendQuotationError(res, error, "Error al actualizar la cotizacion");
     }
 };
 
@@ -194,20 +249,25 @@ export const getPublicQuotation = async (req, res) => {
             return res.status(404).json({ error: "Cotización no encontrada" });
         }
 
+        const publicQuotation = serializePublicQuotation(quotation);
+        if (!publicQuotation) {
+            return res.status(404).json({ error: "Cotización no encontrada" });
+        }
+
         const now = new Date();
         const isExpired = now > quotation.expires_at;
 
         const emisor_data = EMISORES_DATA[quotation.emisor_type] || {};
 
         res.json({
-            ...quotation,
+            ...publicQuotation,
             consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`,
             emisor_data,
             isExpired
         });
     } catch (error) {
         console.error("[QuotationController] Fetch public failed:", error);
-        res.status(500).json({ error: "Error al obtener la cotización", details: error.message });
+        res.status(500).json({ error: "Error al obtener la cotizacion" });
     }
 };
 
@@ -232,7 +292,8 @@ export const getQuotation = async (req, res) => {
         res.json({
             ...quotation,
             consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`,
-            isExpired: new Date() > quotation.expires_at
+            isExpired: quotation.status === 'ACTIVA' && new Date() > quotation.expires_at,
+            profitability: calculateQuotationEconomics(quotation.items || [])
         });
     } catch (error) {
         console.error("[QuotationController] Fetch failed:", error);
@@ -249,7 +310,7 @@ export const listQuotations = async (req, res) => {
         const formatted = quotations.map(q => ({
             ...q,
             consecutive_formatted: `COT-${String(q.consecutive).padStart(4, '0')}`,
-            isExpired: new Date() > q.expires_at
+            isExpired: q.status === 'ACTIVA' && new Date() > q.expires_at
         }));
 
         res.json(formatted);
@@ -352,9 +413,9 @@ export const generateQuotationPDF = async (req, res) => {
 export const getCatalog = async (req, res) => {
     try {
         const catalog = await prisma.serviceCatalog.findMany({
-            orderBy: { category: 'asc' }
+            orderBy: [{ category: 'asc' }, { name: 'asc' }]
         });
-        res.json(catalog);
+        res.json(catalog.map(serializeCatalogService));
     } catch (error) {
         console.error("[QuotationController] Catalog fetch failed:", error);
         res.status(500).json({ error: "Error al obtener el catálogo de servicios" });

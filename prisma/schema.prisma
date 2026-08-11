@@ -1091,12 +1091,13 @@ model ReceivablePayment {
 }
 
 model ServiceCatalog {
-  id                String          @id @default(uuid())
-  category          ServiceCategory
-  name              String          @unique
-  description       String
-  valor_neto        Decimal
-  valor_neto_actual Decimal
+  id                  String          @id @default(uuid())
+  category            ServiceCategory
+  name                String          @unique
+  description         String
+  costo_real_estimado Decimal?
+  valor_neto          Decimal
+  valor_neto_actual   Decimal
 
   @@index([category])
 }
@@ -1119,7 +1120,10 @@ model Quotation {
   total_amount         Decimal
   terms_and_conditions String
   created_at           DateTime        @default(now())
+  issued_at            DateTime?
+  reactivated_at       DateTime?
   expires_at           DateTime
+  updated_at           DateTime        @default(now()) @updatedAt
 }
 
 enum MetricPeriodKind {

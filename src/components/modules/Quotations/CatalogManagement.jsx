@@ -48,6 +48,7 @@ const CatalogManagement = () => {
         name: '',
         category: CATEGORIES[0].id,
         description: '',
+        costo_real_estimado: '',
         valor_neto: '',
         valor_neto_actual: ''
     });
@@ -55,7 +56,11 @@ const CatalogManagement = () => {
     const { data: services = [], isLoading } = useQuery({
         queryKey: ['services-catalog'],
         queryFn: async () => {
-            const res = await fetch(`${getApiBaseUrl()}/api/services`);
+            const res = await fetch(`${getApiBaseUrl()}/api/services`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
             if (!res.ok) throw new Error("Failed to fetch services");
             return await res.json();
         }
@@ -120,6 +125,7 @@ const CatalogManagement = () => {
                 name: service.name,
                 category: service.category,
                 description: service.description,
+                costo_real_estimado: service.costo_real_estimado ?? '',
                 valor_neto: service.valor_neto,
                 valor_neto_actual: service.valor_neto_actual
             });
@@ -127,8 +133,9 @@ const CatalogManagement = () => {
             setEditingService(null);
             setFormData({
                 name: '',
-                category: CATEGORIES[0],
+                category: CATEGORIES[0].id,
                 description: '',
+                costo_real_estimado: '',
                 valor_neto: '',
                 valor_neto_actual: ''
             });
@@ -167,6 +174,19 @@ const CatalogManagement = () => {
         if (catServices.length > 0) acc[cat.label] = catServices;
         return acc;
     }, {});
+
+    const formatCurrency = (value) => new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 0
+    }).format(Number(value) || 0);
+
+    const formFinalPrice = Number(formData.valor_neto) || 0;
+    const formEstimatedCost = Number(formData.costo_real_estimado) || 0;
+    const formEstimatedProfit = formFinalPrice - formEstimatedCost;
+    const formEstimatedMargin = formFinalPrice > 0
+        ? (formEstimatedProfit / formFinalPrice) * 100
+        : 0;
 
     return (
         <div className="space-y-6">
@@ -259,11 +279,36 @@ const CatalogManagement = () => {
                                                 {item.description}
                                             </p>
                                         </div>
-                                        <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
-                                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">Tarifa Actual</span>
-                                            <span className="text-lg font-black text-primary">
-                                                {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(item.valor_neto_actual)}
-                                            </span>
+                                        <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
+                                            <div className="flex justify-between items-end gap-3">
+                                                <span className="text-[10px] font-bold text-zinc-400 uppercase">Precio actual</span>
+                                                <span className="text-lg font-black text-primary">{formatCurrency(item.valor_neto_actual)}</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-zinc-400 uppercase">Precio final</p>
+                                                    <p className="mt-1 font-semibold text-zinc-700 dark:text-zinc-200">{formatCurrency(item.valor_neto)}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[10px] font-bold text-zinc-400 uppercase">Ganancia</p>
+                                                    <p className={cn(
+                                                        "mt-1 font-semibold",
+                                                        item.ganancia_estimada === null
+                                                            ? "text-zinc-400"
+                                                            : item.ganancia_estimada >= 0
+                                                                ? "text-emerald-600 dark:text-emerald-400"
+                                                                : "text-rose-600 dark:text-rose-400"
+                                                    )}>
+                                                        {item.ganancia_estimada === null ? 'Sin costo' : formatCurrency(item.ganancia_estimada)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {item.margen_estimado !== null && (
+                                                <div className="flex justify-between text-[10px] text-zinc-400">
+                                                    <span>Margen estimado</span>
+                                                    <span className="font-bold text-zinc-600 dark:text-zinc-300">{item.margen_estimado}%</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </Card>
                                 ))}
@@ -313,15 +358,59 @@ const CatalogManagement = () => {
                                 </select>
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold uppercase text-zinc-500">Precio Actual (Neto)</label>
+                                <label className="text-xs font-bold uppercase text-zinc-500">Costo real estimado</label>
                                 <input
                                     type="number"
                                     required
+                                    min="0"
+                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20"
+                                    value={formData.costo_real_estimado}
+                                    onChange={e => setFormData({...formData, costo_real_estimado: e.target.value})}
+                                    placeholder="220000"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold uppercase text-zinc-500">Precio actual</label>
+                                <input
+                                    type="number"
+                                    required
+                                    min="0"
                                     className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20"
                                     value={formData.valor_neto_actual}
                                     onChange={e => setFormData({...formData, valor_neto_actual: e.target.value})}
                                     placeholder="350000"
                                 />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold uppercase text-zinc-500">Precio final</label>
+                                <input
+                                    type="number"
+                                    required
+                                    min="0"
+                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20"
+                                    value={formData.valor_neto}
+                                    onChange={e => setFormData({...formData, valor_neto: e.target.value})}
+                                    placeholder="730000"
+                                />
+                            </div>
+                            <div className="col-span-2 grid grid-cols-2 gap-4 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4">
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase text-zinc-400">Ganancia</p>
+                                    <p className={cn(
+                                        "mt-1 text-base font-bold",
+                                        formEstimatedProfit >= 0
+                                            ? "text-emerald-600 dark:text-emerald-400"
+                                            : "text-rose-600 dark:text-rose-400"
+                                    )}>
+                                        {formatCurrency(formEstimatedProfit)}
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-bold uppercase text-zinc-400">Margen estimado</p>
+                                    <p className="mt-1 text-base font-bold text-zinc-800 dark:text-zinc-100">
+                                        {formEstimatedMargin.toFixed(1)}%
+                                    </p>
+                                </div>
                             </div>
                             <div className="col-span-2 space-y-1.5">
                                 <label className="text-xs font-bold uppercase text-zinc-500">Descripción Comercial</label>

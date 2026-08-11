@@ -17,6 +17,7 @@
     "db:status": "node scripts/add_status_message.js",
     "db:seed:financials": "node scripts/seed-financials.js",
     "db:seed:team": "node scripts/seed-team.js",
+    "db:backfill-service-costs": "node scripts/backfill-service-costs.js",
     "db:hard-cleanup": "node scripts/hard-cleanup.js",
     "test": "node --test \"tests/**/*.test.js\"",
     "storage:configure-cors": "node scripts/configure-storage-cors.js",
