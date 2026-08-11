@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma.js';
 import DOMPurify from 'isomorphic-dompurify';
+import { createNotification } from './notificationService.js';
 
 const ACTIVE_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 const MANAGER_ROLES = ['ADMIN', 'PROJECT_MANAGER'];
@@ -694,7 +695,10 @@ export const getDashboardAnnouncements = async (userId, { db = prisma } = {}) =>
   ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 };
 
-export const createDashboardAnnouncement = async ({ requester, scope, content, targetUserId }, { db = prisma } = {}) => {
+export const createDashboardAnnouncement = async (
+  { requester, scope, content, targetUserId },
+  { db = prisma, notificationCreator = createNotification } = {}
+) => {
   assertDashboardManagerAccess(requester);
 
   const cleanContent = sanitizeDashboardAnnouncementContent(content);
@@ -705,13 +709,38 @@ export const createDashboardAnnouncement = async ({ requester, scope, content, t
   }
 
   if (scope === 'GLOBAL') {
-    return db.globalAnnouncement.create({
+    const announcement = await db.globalAnnouncement.create({
       data: {
         content: cleanContent,
         type: 'DASHBOARD',
         authorId: requester?.userId || null
       }
     });
+
+    if (typeof db.user?.findMany === 'function') {
+      const recipients = await db.user.findMany({
+        where: {
+          isActive: true,
+          id: requester?.userId ? { not: requester.userId } : undefined
+        },
+        select: { id: true }
+      });
+      const recipientUsers = recipients.filter(({ id }) => id !== requester?.userId);
+      const deliveryResults = await Promise.allSettled(recipientUsers.map(({ id: userId }) => notificationCreator({
+        userId,
+        message: cleanContent,
+        type: 'ANNOUNCEMENT_GLOBAL',
+        relatedId: announcement.id,
+        resourceId: 'dashboard',
+        url: '/'
+      }, { db })));
+      const failedDeliveries = deliveryResults.filter(({ status }) => status === 'rejected');
+      if (failedDeliveries.length > 0) {
+        console.error(`[PersonalDashboardService] ${failedDeliveries.length} global announcement notifications failed.`);
+      }
+    }
+
+    return announcement;
   }
 
   if (scope === 'MEMBER') {
@@ -721,16 +750,14 @@ export const createDashboardAnnouncement = async ({ requester, scope, content, t
       throw error;
     }
 
-    return db.notification.create({
-      data: {
-        userId: targetUserId,
-        message: cleanContent,
-        type: 'TEAM_ANNOUNCEMENT',
-        relatedId: requester?.userId || null,
-        resourceId: 'dashboard',
-        url: '/'
-      }
-    });
+    return notificationCreator({
+      userId: targetUserId,
+      message: cleanContent,
+      type: 'TEAM_ANNOUNCEMENT',
+      relatedId: requester?.userId || null,
+      resourceId: 'dashboard',
+      url: '/'
+    }, { db });
   }
 
   const error = new Error('Alcance de anuncio no soportado.');

@@ -11,6 +11,7 @@ import TeamAvatar from '../ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { getNotificationDisplayParts } from '@/utils/notificationUtils';
+import PushNotificationControl from '@/components/notifications/PushNotificationControl';
 
 const AppLayout = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -78,6 +79,38 @@ const AppLayout = ({ children }) => {
   });
 
   const unreadCount = notifications.filter((notification) => !notification.isRead).length;
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const params = new URLSearchParams(window.location.search);
+    const notificationId = params.get('pushNotificationId');
+    if (!notificationId) return;
+
+    const markOpenedPushAsRead = async () => {
+      try {
+        const response = await fetch(`${getApiBaseUrl()}/api/notifications/${notificationId}/read`, { method: 'PATCH' });
+        if (!response.ok) throw new Error(`Notification read failed with ${response.status}`);
+        params.delete('pushNotificationId');
+        const nextSearch = params.toString();
+        window.history.replaceState({}, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`);
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+        queryClient.invalidateQueries({ queryKey: ['unreadNotificationsCount'] });
+      } catch (error) {
+        console.error('[AppLayout] Could not mark opened push as read:', error);
+      }
+    };
+    markOpenedPushAsRead();
+  }, [currentUser?.id, queryClient]);
+
+  useEffect(() => {
+    if (!('setAppBadge' in navigator)) return;
+    const badgeUpdate = unreadCount > 0
+      ? navigator.setAppBadge(unreadCount)
+      : navigator.clearAppBadge?.();
+    Promise.resolve(badgeUpdate).catch((error) => {
+      console.error('[AppLayout] Could not update app badge:', error);
+    });
+  }, [unreadCount]);
 
   useEffect(() => {
     const handleNotificationsRead = () => {
@@ -211,6 +244,7 @@ const AppLayout = ({ children }) => {
                         Notificaciones
                     </h4>
                 </div>
+                <PushNotificationControl />
                 <div className="max-h-96 overflow-y-auto">
                     {loadingNotifications && notifications.length === 0 ? (
                         <div className="p-8 text-center"><Loader2 className="w-5 h-5 animate-spin text-zinc-400 mx-auto" /></div>

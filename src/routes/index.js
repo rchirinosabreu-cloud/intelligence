@@ -4,6 +4,7 @@ import * as chatController from '../controllers/chatController.js';
 import * as taskController from '../controllers/taskController.js';
 import * as clientController from '../controllers/clientController.js';
 import * as notificationController from '../controllers/notificationController.js';
+import * as pushNotificationController from '../controllers/pushNotificationController.js';
 import * as announcementController from '../controllers/announcementController.js';
 import * as flowController from '../controllers/flowController.js';
 import * as proxyController from '../controllers/proxyController.js';
@@ -149,6 +150,12 @@ router.get('/notifications/unread-count', notificationController.getUnreadCount)
 router.post('/notifications', requireManagerRole, notificationController.addNotification);
 router.patch('/notifications/:id/read', notificationController.markRead);
 router.post('/notifications/read-all', notificationController.markAllRead);
+
+// Native device notifications. All ownership comes from the authenticated session.
+router.get('/push/status', pushNotificationController.status);
+router.post('/push/subscriptions', pushNotificationController.subscribe);
+router.delete('/push/subscriptions', pushNotificationController.unsubscribe);
+router.patch('/push/subscriptions/preferences', pushNotificationController.updatePreferences);
 
 // Announcements
 router.get('/global-announcements', announcementController.listGlobal);

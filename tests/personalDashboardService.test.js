@@ -153,6 +153,35 @@ test('dashboard announcements preserve safe rich text and target only the select
   assert.match(writes[1].payload.data.message, /<em>personal<\/em>/);
 });
 
+test('global dashboard announcements create a notification for each active teammate except the author', async () => {
+  const notifications = [];
+  const db = {
+    globalAnnouncement: {
+      create: async (payload) => ({ id: 'global-created', ...payload.data })
+    },
+    user: {
+      findMany: async () => [
+        { id: 'user-admin' },
+        { id: 'user-helen' },
+        { id: 'user-francisco' }
+      ]
+    }
+  };
+
+  await createDashboardAnnouncement({
+    requester: { role: 'ADMIN', userId: 'user-admin' },
+    scope: 'GLOBAL',
+    content: '<p>Reunion general a las 4:00 p. m.</p>'
+  }, {
+    db,
+    notificationCreator: async (data) => notifications.push(data)
+  });
+
+  assert.deepEqual(notifications.map(({ userId }) => userId), ['user-helen', 'user-francisco']);
+  assert.ok(notifications.every(({ type }) => type === 'ANNOUNCEMENT_GLOBAL'));
+  assert.ok(notifications.every(({ relatedId }) => relatedId === 'global-created'));
+});
+
 test('global announcements keep an optional author relation for role-based challenges', () => {
   const schema = readFileSync('prisma/schema.prisma', 'utf8');
   const model = schema.match(/model GlobalAnnouncement \{[\s\S]*?\n\}/)?.[0] || '';

@@ -59,6 +59,14 @@ export const getNotificationDisplayParts = (notification = {}) => {
         };
     }
 
+    if (type === 'ANNOUNCEMENT_GLOBAL') {
+        return {
+            title: 'Tienes un nuevo anuncio general',
+            context: '',
+            body: cleanNotificationPreview(message, 120)
+        };
+    }
+
     if (type === 'TASK_COMMENT_REPLY') {
         const parsed = parseQuotedTaskMessage(message, 'Nuevo mensaje en el hilo de la tarea');
         if (parsed) return parsed;

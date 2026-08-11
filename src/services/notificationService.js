@@ -2,10 +2,14 @@
 import prisma from '../lib/prisma.js';
 import { cleanNotificationPreview } from '../utils/notificationUtils.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
+import { sendPushForNotification } from './pushNotificationService.js';
 
-export const createNotification = async (data) => {
+export const createNotification = async (
+    data,
+    { db = prisma, traceRecorder = recordOperationalTrace, pushSender = sendPushForNotification } = {}
+) => {
     try {
-        const notification = await prisma.notification.create({
+        const notification = await db.notification.create({
             data: {
                 userId: data.userId,
                 message: data.message,
@@ -16,15 +20,23 @@ export const createNotification = async (data) => {
                 taskId: data.taskId || (data.type?.startsWith('TASK_') ? data.relatedId : null)
             }
         });
-        recordOperationalTrace({
-            eventType: 'NOTIFICATION_CREATED',
-            actorId: data.actorId || null,
-            subjectUserId: data.userId,
-            taskId: notification.taskId || null,
-            metadata: { notificationType: notification.type || 'GENERAL' }
-        }).catch((traceError) => {
-            console.error('[NotificationService] Creation trace failed:', traceError?.message || traceError);
-        });
+        if (typeof db.operationalTraceEvent?.create === 'function') {
+            traceRecorder({
+                eventType: 'NOTIFICATION_CREATED',
+                actorId: data.actorId || null,
+                subjectUserId: data.userId,
+                taskId: notification.taskId || null,
+                metadata: { notificationType: notification.type || 'GENERAL' },
+                db
+            }).catch((traceError) => {
+                console.error('[NotificationService] Creation trace failed:', traceError?.message || traceError);
+            });
+        }
+        Promise.resolve()
+            .then(() => pushSender(notification))
+            .catch((pushError) => {
+                console.error('[NotificationService] Push delivery failed:', pushError?.message || pushError);
+            });
         return notification;
     } catch (error) {
         console.error(`[${new Date().toISOString()}] [NotificationService] Error creating notification:`, error?.message || error);

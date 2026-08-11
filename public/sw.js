@@ -38,3 +38,56 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
+
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data?.json() || {};
+  } catch {
+    payload = { body: event.data?.text() || 'Tienes una novedad en Brainstudio.' };
+  }
+
+  const title = payload.title || 'Brainstudio Intelligence';
+  const options = {
+    body: payload.body || 'Tienes una novedad en Brainstudio.',
+    icon: payload.icon || '/icons/icon-192.png',
+    badge: payload.badge || '/icons/icon-192.png',
+    tag: payload.tag || 'brainstudio-notification',
+    renotify: true,
+    data: {
+      url: payload.url || '/',
+      notificationId: payload.notificationId || null
+    }
+  };
+
+  const updateBadge = typeof self.navigator?.setAppBadge === 'function'
+    ? self.navigator.setAppBadge(payload.badgeCount || 1)
+    : Promise.resolve();
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(title, options),
+    updateBadge
+  ]));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const targetUrl = new URL(event.notification.data?.url || '/', self.location.origin);
+  const isSafeTarget = targetUrl.origin === self.location.origin;
+  if (!isSafeTarget) {
+    targetUrl.href = new URL('/', self.location.origin).href;
+  }
+  const notificationId = event.notification.data?.notificationId;
+  if (notificationId) targetUrl.searchParams.set('pushNotificationId', notificationId);
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (windowClients) => {
+      const appClient = windowClients.find((client) => new URL(client.url).origin === self.location.origin);
+      if (appClient) {
+        await appClient.navigate(targetUrl.href);
+        return appClient.focus();
+      }
+      return self.clients.openWindow(targetUrl.href);
+    })
+  );
+});

@@ -64,3 +64,13 @@ test('personal announcements use a clear notification title and keep the message
     assert.equal(parts.context, '');
     assert.equal(parts.body, 'Recuerda preparar la propuesta antes de la reuniÃ³n.');
 });
+
+test('general announcements use a recognizable title and readable rich text body', () => {
+    const parts = getNotificationDisplayParts({
+        type: 'ANNOUNCEMENT_GLOBAL',
+        message: '<p>Reunion general a las <strong>4:00 p. m.</strong></p>'
+    });
+
+    assert.equal(parts.title, 'Tienes un nuevo anuncio general');
+    assert.equal(parts.body, 'Reunion general a las 4:00 p. m.');
+});
