@@ -153,7 +153,11 @@ const summarizeTaskCounts = (tasks, now) => {
   return {
     activeTasks: activeTasks.length,
     returnedTasks: activeTasks.filter((task) => task.status === 'DEVUELTA').length,
-    overdueTasks: activeTasks.filter((task) => task.dueDate && new Date(task.dueDate) < now).length
+    overdueTasks: activeTasks.filter((task) => (
+      task.status !== 'DEVUELTA'
+      && task.dueDate
+      && new Date(task.dueDate) < now
+    )).length
   };
 };
 
@@ -205,6 +209,14 @@ const buildClientSummaries = (tasks, now) => {
 
 export const buildPersonalDashboard = ({ member, now = new Date(), globalAchievements = null }) => {
   const tasks = Array.isArray(member?.nativeTasks) ? member.nativeTasks : [];
+  const returnedTaskCandidates = Array.isArray(member?.returnedTasks)
+    ? member.returnedTasks
+    : tasks.filter((task) => task.status === 'DEVUELTA' && task.creatorId === member?.userId);
+  const returnedTasks = Array.from(new Map(
+    returnedTaskCandidates
+      .filter((task) => task.status === 'DEVUELTA' && task.creatorId === member?.userId)
+      .map((task) => [task.id, task])
+  ).values());
   const isCommunityManager = isCommunityManagerRole(member?.role);
   const isProjectManager = isProjectManagerRole(member?.role);
   const isAccountant = isAccountantRole(member?.role);
@@ -221,14 +233,16 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
       ))
     : [];
   const assignedClients = buildAssignedClientSummaries(member?.responsibleClients || [], now);
-  const activeTasks = tasks.filter((task) => ACTIVE_STATUSES.includes(task.status));
-  const overdueTasks = activeTasks.filter((task) => {
+  const assignedActiveTasks = tasks.filter((task) => ['PENDIENTE', 'EN_CURSO'].includes(task.status));
+  const activeTasks = Array.from(new Map(
+    [...assignedActiveTasks, ...returnedTasks].map((task) => [task.id, task])
+  ).values());
+  const overdueTasks = assignedActiveTasks.filter((task) => {
     const dueDate = toDate(task.dueDate);
     return dueDate && dueDate < now;
   });
-  const returnedTasks = activeTasks.filter((task) => task.status === 'DEVUELTA');
-  const todayTasks = activeTasks.filter((task) => isSameBogotaDay(toDate(task.dueDate), now));
-  const upcomingTasks = activeTasks
+  const todayTasks = assignedActiveTasks.filter((task) => isSameBogotaDay(toDate(task.dueDate), now));
+  const upcomingTasks = assignedActiveTasks
     .filter((task) => {
       const dueDate = toDate(task.dueDate);
       return dueDate && dueDate > now && !isSameBogotaDay(dueDate, now);
@@ -430,6 +444,34 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
   assertPersonalDashboardAccess({ requester, targetUserId: userId });
   const dashboardNow = new Date();
   const dashboardDayWindow = getBogotaDayWindow(dashboardNow);
+  const dashboardTaskInclude = {
+    assignee: {
+      select: { id: true, name: true, role: true, avatarUrl: true }
+    },
+    client: {
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        logoUrl: true,
+        healthRecords: {
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+          select: { score: true }
+        }
+      }
+    },
+    taskComments: {
+      where: { authorId: { not: userId } },
+      orderBy: { createdAt: 'desc' },
+      take: 1,
+      select: {
+        content: true,
+        authorId: true,
+        createdAt: true
+      }
+    }
+  };
 
   const member = await prisma.teamMember.findUnique({
     where: { userId },
@@ -475,7 +517,7 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
       nativeTasks: {
         where: {
           OR: [
-            { status: { in: ACTIVE_STATUSES } },
+            { status: { in: ['PENDIENTE', 'EN_CURSO'] } },
             {
               status: 'REALIZADA',
               completedAt: {
@@ -485,31 +527,7 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
             }
           ]
         },
-        include: {
-          client: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              logoUrl: true,
-              healthRecords: {
-                orderBy: { updatedAt: 'desc' },
-                take: 1,
-                select: { score: true }
-              }
-            }
-          },
-          taskComments: {
-            where: { authorId: { not: userId } },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-            select: {
-              content: true,
-              authorId: true,
-              createdAt: true
-            }
-          }
-        },
+        include: dashboardTaskInclude,
         orderBy: [
           { dueDate: 'asc' },
           { updatedAt: 'desc' }
@@ -527,7 +545,7 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
   const announcementLookback = new Date(dashboardNow.getTime() - (8 * 24 * 60 * 60 * 1000));
   const contextMonthWindow = getBogotaMonthWindow(dashboardNow);
   const challengeWeekWindow = getBogotaWeekWindow(dashboardNow);
-  const [announcements, globalAchievements, createdTasks, authoredAnnouncements, authoredOperationalEvents] = await Promise.all([
+  const [announcements, globalAchievements, createdTasks, authoredAnnouncements, authoredOperationalEvents, returnedTasks] = await Promise.all([
     getDashboardAnnouncements(userId),
     prisma.task.findMany({
       where: {
@@ -639,11 +657,22 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
         },
         select: { id: true, createdAt: true }
       })
-      : Promise.resolve([])
+      : Promise.resolve([]),
+    prisma.task.findMany({
+      where: {
+        creatorId: userId,
+        status: 'DEVUELTA'
+      },
+      include: dashboardTaskInclude,
+      orderBy: [
+        { returnedAt: 'desc' },
+        { updatedAt: 'desc' }
+      ]
+    })
   ]);
 
   return buildPersonalDashboard({
-    member: { ...member, announcements, createdTasks, authoredAnnouncements, authoredOperationalEvents },
+    member: { ...member, announcements, createdTasks, authoredAnnouncements, authoredOperationalEvents, returnedTasks },
     globalAchievements,
     now: dashboardNow
   });

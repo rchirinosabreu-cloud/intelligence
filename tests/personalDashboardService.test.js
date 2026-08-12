@@ -270,6 +270,7 @@ test('buildPersonalDashboard returns actionable focus cards for overdue and retu
           id: 'returned-1',
           title: 'Ajustar copy',
           status: 'DEVUELTA',
+          creatorId: 'user-1',
           dueDate: new Date('2026-08-08T18:00:00.000Z'),
           taskComments: [{ content: 'Hace falta aterrizar el CTA.', authorId: 'pm-1', createdAt: fixedNow }]
         }),
@@ -291,9 +292,51 @@ test('buildPersonalDashboard returns actionable focus cards for overdue and retu
   assert.match(dashboard.focusCards[0].title, /tarea vencida/);
   assert.equal(dashboard.focusCards[1].type, 'BLOQUEO');
   assert.match(dashboard.focusCards[1].title, /correcci/);
-  assert.equal(dashboard.todayTasks.length, 1);
+  assert.equal(dashboard.todayTasks.length, 0, 'Returned corrections must stay out of the normal due-today queue.');
   assert.equal(dashboard.returnedTasks[0].lastFeedback, 'Hace falta aterrizar el CTA.');
   assert.deepEqual(dashboard.clients, [], 'Non-community-manager dashboards should not expose a client widget payload.');
+});
+
+test('buildPersonalDashboard attributes returned work to the creator instead of the reviewer who returned it', () => {
+  const returnedTask = makeTask({
+    id: 'returned-to-jarlan',
+    title: 'Corregir pieza devuelta',
+    status: 'DEVUELTA',
+    creatorId: 'user-jarlan',
+    assigneeId: 'member-rodny',
+    dueDate: new Date('2026-08-01T12:00:00.000Z')
+  });
+
+  const rodnyDashboard = buildPersonalDashboard({
+    now: fixedNow,
+    member: {
+      id: 'member-rodny',
+      userId: 'user-rodny',
+      name: 'Rodny',
+      role: 'Project Manager',
+      nativeTasks: [returnedTask],
+      returnedTasks: []
+    }
+  });
+
+  const jarlanDashboard = buildPersonalDashboard({
+    now: fixedNow,
+    member: {
+      id: 'member-jarlan',
+      userId: 'user-jarlan',
+      name: 'Jarlan',
+      role: 'Disenador',
+      nativeTasks: [],
+      returnedTasks: [returnedTask]
+    }
+  });
+
+  assert.equal(rodnyDashboard.stats.returned, 0);
+  assert.equal(rodnyDashboard.stats.overdue, 0, 'Returned corrections must not also inflate the reviewer overdue count.');
+  assert.equal(rodnyDashboard.focusCards.some(({ id }) => id === 'returned-focus'), false);
+  assert.equal(jarlanDashboard.stats.returned, 1);
+  assert.equal(jarlanDashboard.stats.overdue, 0, 'Returned corrections have their own category and must not be counted twice.');
+  assert.equal(jarlanDashboard.returnedTasks[0].id, 'returned-to-jarlan');
 });
 
 test('buildPersonalDashboard keeps the achievement feed global and the daily stat personal', () => {
