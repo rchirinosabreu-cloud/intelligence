@@ -1,6 +1,5 @@
 import express from 'express';
 import prisma from '../../lib/prisma.js';
-import { classifyTaskWithAI } from '../../services/aiService.js';
 import { uploadAvatar, deleteFileFromGCS, getClientFileStream } from '../../services/storageService.js';
 import multer from 'multer';
 import { GoogleGenAI } from '@google/genai';

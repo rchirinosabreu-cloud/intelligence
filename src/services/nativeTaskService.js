@@ -1,7 +1,7 @@
 import prisma from '../lib/prisma.js';
 import { createNotification, processMentionsAndNotifications } from './notificationService.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
-import { enqueueTaskClassification } from './taskClassificationService.js';
+import { classifyTaskDeterministically } from './deterministicTaskClassifier.js';
 import { pickAllowedTaskUpdates } from '../config/security.js';
 
 const taskContentPlanSelect = {
@@ -365,6 +365,16 @@ export const createTask = async ({
 }) => {
     try {
         const mappedStatus = statusMapper[status] || 'PENDIENTE';
+        const taskClassification = classifyTaskDeterministically({
+            title,
+            description: [
+                comments,
+                ...(Array.isArray(initial_comments) ? initial_comments : [])
+                    .map((comment) => comment?.content || '')
+            ].filter(Boolean).join(' '),
+            attachmentCount: [initial_references, initial_inputs, initial_insumos, tempAttachments]
+                .reduce((total, items) => total + (Array.isArray(items) ? items.length : 0), 0)
+        });
 
         // Use a Prisma transaction to ensure atomicity
         const newTask = await prisma.$transaction(async (tx) => {
@@ -383,6 +393,8 @@ export const createTask = async ({
                     isSpecial,
                     referenceUrl,
                     contentItemId,
+                    aiCategory: taskClassification.category,
+                    aiComplexity: taskClassification.complexity,
                     completedAt: mappedStatus === 'REALIZADA' ? new Date() : null,
                     startedAt: mappedStatus === 'REALIZADA' ? new Date() : null
                 }
@@ -518,14 +530,6 @@ export const createTask = async ({
             });
         });
 
-        // Task classification hybrid flow:
-        // 1. Instant return for UX.
-        // 2. Background individual classification for immediate feedback.
-        // 3. Hourly batch system as a safety net for any misses.
-        enqueueTaskClassification(newTask.id, title, comments || "").catch(err =>
-            console.error("[nativeTaskService] Deferred classification trigger failed:", err.message)
-        );
-
         const taskTraceEvents = [
             recordOperationalTrace({
                 eventType: 'TASK_CREATED',
@@ -655,6 +659,15 @@ export const updateTask = async (id, data, updaterId = null) => {
         }
 
         const updateData = pickAllowedTaskUpdates(data);
+
+        if ('title' in updateData || 'comments' in updateData) {
+            const taskClassification = classifyTaskDeterministically({
+                title: updateData.title ?? currentTask.title,
+                description: updateData.comments ?? currentTask.comments ?? ''
+            });
+            updateData.aiCategory = taskClassification.category;
+            updateData.aiComplexity = taskClassification.complexity;
+        }
 
         // Extract and isolate returnReason and reintegrateReason
         const { returnReason, reintegrateReason } = updateData;
