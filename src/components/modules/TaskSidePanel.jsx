@@ -6,7 +6,7 @@ import {
     X, Send, MessageSquare, RotateCcw, CheckCircle2, Bell,
     LayoutGrid, Calendar, User, Trash2, Plus, ClipboardList,
     FileText, Database, Paperclip, ImageIcon, Eye, Download, Check,
-    MoreHorizontal, Lightbulb, ChevronDown
+    MoreHorizontal, ChevronDown
 } from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -1912,13 +1912,15 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         {!isEdition && (
                             <section
                                 data-task-context-tutorial
-                                className="hidden overflow-hidden rounded-lg border border-violet-200/80 bg-violet-50/70 dark:border-violet-900/70 dark:bg-violet-950/25 lg:block"
+                                className="brain-tip-highlight hidden overflow-hidden rounded-lg border border-violet-200/80 bg-violet-50/70 dark:border-violet-900/70 dark:bg-violet-950/25 lg:block"
                             >
                                 <div className="flex items-center justify-between gap-5 p-5">
                                     <div className="flex min-w-0 gap-3.5">
-                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm shadow-primary/20">
-                                            <Lightbulb size={18} aria-hidden="true" />
-                                        </div>
+                                        <img
+                                            src="/brainstudio-mascot-tip.png"
+                                            alt="Mascota de Brainstudio"
+                                            className="h-12 w-12 shrink-0 object-contain"
+                                        />
                                         <div className="min-w-0">
                                             <p className="text-sm font-semibold leading-5 text-zinc-950 dark:text-zinc-50">
                                                 Una buena tarea evita una conversación adicional

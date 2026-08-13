@@ -146,6 +146,20 @@
   animation: pulse-subtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+.brain-tip-highlight {
+  position: relative;
+  isolation: isolate;
+  box-shadow:
+    0 0 0 1px rgb(124 58 237 / 0.03),
+    0 0 18px rgb(124 58 237 / 0.09);
+}
+
+.dark .brain-tip-highlight {
+  box-shadow:
+    0 0 0 1px rgb(167 139 250 / 0.04),
+    0 0 20px rgb(124 58 237 / 0.12);
+}
+
 /* Tiptap / Prosemirror Rich Text Styling */
 .ProseMirror h1, .prose h1 {
   font-size: 1.35rem !important;
