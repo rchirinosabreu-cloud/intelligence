@@ -6,7 +6,7 @@ import {
     X, Send, MessageSquare, RotateCcw, CheckCircle2, Bell,
     LayoutGrid, Calendar, User, Trash2, Plus, ClipboardList,
     FileText, Database, Paperclip, ImageIcon, Eye, Download, Check,
-    MoreHorizontal
+    MoreHorizontal, Lightbulb, ChevronDown
 } from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -218,6 +218,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [showToolbar, setShowToolbar] = useState(false);
     const [showEditToolbar, setShowEditToolbar] = useState(false);
     const [showPriorityPopover, setShowPriorityPopover] = useState(false);
+    const [showContextTutorialDetails, setShowContextTutorialDetails] = useState(false);
 
     // Local state for atomic inline editing
     const [editingField, setEditingField] = useState(null); // 'title' | 'assigneeId' | 'dueDate' | 'status' | null
@@ -277,6 +278,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [newRefName, setNewRefName] = useState("");
     const [newInpUrl, setNewInpUrl] = useState("");
     const [newInpName, setNewInpName] = useState("");
+
+    const contextReadinessSubject = teamMembers
+        .find(member => String(member.id) === String(formData.assigneeId))
+        ?.name?.trim().split(/\s+/)[0] || 'La persona responsable';
 
     // States for Task Edition mode attachments
     const [editRefUrl, setEditRefUrl] = useState("");
@@ -546,6 +551,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             setShowToolbar(false);
             setShowEditToolbar(false);
             setShowPriorityPopover(false);
+            setShowContextTutorialDetails(false);
             setShowInputEmojiPicker(false);
             setCommentPopover({ commentId: null, view: null });
             setNewRefUrl("");
@@ -1888,7 +1894,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </label>
                             <textarea
                                 data-task-title-input
-                                rows={2}
+                                rows={1}
                                 required
                                 value={formData.title || ''}
                                 onChange={e => setFormData({...formData, title: e.target.value})}
@@ -1899,9 +1905,103 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     }
                                 }}
                                 placeholder={isEdition ? "Ej: Revisión de artes para campaña..." : "Escribe el nombre de la tarea"}
-                                className="min-h-[72px] w-full resize-none overflow-y-auto rounded-none border-0 border-b border-zinc-200/80 bg-transparent px-0 py-2 text-xl font-semibold leading-snug text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:border-primary/50 focus:ring-0 dark:border-zinc-800/80 dark:text-zinc-50 dark:placeholder:text-zinc-600 sm:min-h-[76px] sm:text-2xl"
+                                className="min-h-[52px] w-full resize-none overflow-y-auto rounded-none border-0 border-b border-zinc-200/80 bg-transparent px-0 py-1.5 text-xl font-semibold leading-snug text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:border-primary/50 focus:ring-0 dark:border-zinc-800/80 dark:text-zinc-50 dark:placeholder:text-zinc-600 sm:min-h-[56px] sm:text-2xl"
                             />
                         </div>
+
+                        {!isEdition && (
+                            <section
+                                data-task-context-tutorial
+                                className="hidden overflow-hidden rounded-lg border border-violet-200/80 bg-violet-50/70 dark:border-violet-900/70 dark:bg-violet-950/25 lg:block"
+                            >
+                                <div className="flex items-center justify-between gap-5 p-5">
+                                    <div className="flex min-w-0 gap-3.5">
+                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm shadow-primary/20">
+                                            <Lightbulb size={18} aria-hidden="true" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-semibold leading-5 text-zinc-950 dark:text-zinc-50">
+                                                Una buena tarea evita una conversación adicional
+                                            </p>
+                                            <p className="mt-1 max-w-3xl text-xs leading-5 text-zinc-600 dark:text-zinc-300">
+                                                Antes de guardarla, confirma que la persona responsable tenga todo lo necesario para comenzar sin pedir más información.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        aria-expanded={showContextTutorialDetails}
+                                        aria-controls="task-context-tutorial-details"
+                                        onClick={() => setShowContextTutorialDetails(previous => !previous)}
+                                        className="flex min-h-9 shrink-0 items-center gap-2 rounded-lg border border-violet-200 bg-white/80 px-3 text-xs font-semibold text-violet-700 transition-colors hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-violet-800 dark:bg-zinc-950/50 dark:text-violet-200 dark:hover:bg-zinc-950"
+                                    >
+                                        Aprende cómo
+                                        <ChevronDown
+                                            size={15}
+                                            className={cn('transition-transform', showContextTutorialDetails && 'rotate-180')}
+                                            aria-hidden="true"
+                                        />
+                                    </button>
+                                </div>
+
+                                <AnimatePresence initial={false}>
+                                    {showContextTutorialDetails && (
+                                        <motion.div
+                                            id="task-context-tutorial-details"
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.2, ease: 'easeOut' }}
+                                            className="overflow-hidden border-t border-violet-200/70 dark:border-violet-900/60"
+                                        >
+                                <div className="grid grid-cols-4">
+                                    <div className="flex gap-2.5 px-4 py-3.5">
+                                        <FileText size={16} className="mt-0.5 shrink-0 text-violet-600 dark:text-violet-300" aria-hidden="true" />
+                                        <div>
+                                            <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-100">Información suficiente</p>
+                                            <p className="mt-0.5 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">Descripción, enlaces, documentos, capturas o ejemplos.</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2.5 border-l border-violet-200/70 px-4 py-3.5 dark:border-violet-900/60">
+                                        <Paperclip size={16} className="mt-0.5 shrink-0 text-violet-600 dark:text-violet-300" aria-hidden="true" />
+                                        <div>
+                                            <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-100">Insumos disponibles</p>
+                                            <p className="mt-0.5 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">Archivos, accesos, diseños y datos listos para usar.</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2.5 border-l border-violet-200/70 px-4 py-3.5 dark:border-violet-900/60">
+                                        <User size={16} className="mt-0.5 shrink-0 text-violet-600 dark:text-violet-300" aria-hidden="true" />
+                                        <div>
+                                            <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-100">Responsable definido</p>
+                                            <p className="mt-0.5 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">Confirma quién la realizará y que pueda asumirla.</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2.5 border-l border-violet-200/70 px-4 py-3.5 dark:border-violet-900/60">
+                                        <Zap size={16} className="mt-0.5 shrink-0 text-violet-600 dark:text-violet-300" aria-hidden="true" />
+                                        <div>
+                                            <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-100">Prioridad clara</p>
+                                            <p className="mt-0.5 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">Define si realmente es urgente, prioritaria o normal.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-start gap-3 border-t border-violet-200/70 bg-white/60 px-5 py-4 dark:border-violet-900/60 dark:bg-zinc-950/30">
+                                    <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                                    <div>
+                                        <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                                            ¿{contextReadinessSubject} podría comenzar y completar esta tarea con la información suministrada?
+                                        </p>
+                                        <p className="mt-1 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
+                                            Si la respuesta es no, reúne primero lo necesario y crea la tarea cuando esté lista para ejecutarse.
+                                        </p>
+                                    </div>
+                                </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </section>
+                        )}
 
                         {/* Metadata Grid */}
                         <div className={taskOperationalGridClass}>
