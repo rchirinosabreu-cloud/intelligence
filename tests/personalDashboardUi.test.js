@@ -36,6 +36,27 @@ test('Dashboard presents adoption-oriented sections', () => {
     /Aun no tienes retos para esta semana/i,
     'The empty weekly challenge should explain that no challenge is assigned.'
   );
+  assert.match(source, /data-weekly-challenge/, 'The weekly challenge should expose its dedicated visual surface.');
+  assert.match(source, /bg-gradient-to-br/, 'The weekly challenge should use a restrained directional gradient.');
+  assert.match(source, /from-violet-600/, 'The weekly challenge should return to the lighter branded tone.');
+  assert.match(source, /to-violet-700/, 'The weekly challenge gradient should remain subtle and tonal.');
+  assert.match(source, /text-white/, 'The solid weekly challenge should preserve readable contrast.');
+  assert.doesNotMatch(source, /brainstudio-mascot-seated\.png/, 'The weekly challenge should remain visually restrained without an illustration.');
+  assert.match(
+    source,
+    /weeklyHabit\?\.isEmpty[\s\S]*?src="\/chill-cat\.png"/,
+    'The relaxed cat should appear only when no weekly challenge is assigned.'
+  );
+  assert.match(
+    source,
+    /className="[^"]*text-xs[^"]*"[\s\S]*?Aún no tienes retos para esta semana/,
+    'The empty challenge message should sit below the illustration with quieter typography.'
+  );
+  assert.match(
+    source,
+    /weeklyHabit\?\.progress === null/,
+    'A configured challenge with no weekly activity should render a neutral state instead of a false 0% score.'
+  );
 });
 
 test('Dashboard includes community manager account leadership widgets', () => {

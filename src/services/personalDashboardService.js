@@ -72,17 +72,6 @@ const getBogotaWeekContext = (value) => {
   };
 };
 
-const getBogotaMonthWindow = (value) => {
-  const context = getBogotaWeekContext(value);
-  if (!context) return null;
-  const [year, month] = context.dateKey.split('-').map(Number);
-
-  return {
-    start: new Date(Date.UTC(year, month - 1, 1, 5)),
-    end: new Date(Date.UTC(year, month, 1, 5))
-  };
-};
-
 const getBogotaDayWindow = (value) => {
   const context = getBogotaWeekContext(value);
   if (!context) return null;
@@ -102,6 +91,17 @@ const getBogotaWeekWindow = (value) => {
   end.setUTCDate(end.getUTCDate() + 7);
 
   return { start, end };
+};
+
+export const buildContextChallengeTaskWhere = ({ userId, now = new Date() }) => {
+  const weekWindow = getBogotaWeekWindow(now);
+  return {
+    creatorId: userId,
+    createdAt: {
+      gte: weekWindow.start,
+      lt: weekWindow.end
+    }
+  };
 };
 
 const toDate = (value) => (value ? new Date(value) : null);
@@ -147,6 +147,12 @@ const newestExternalFeedback = (task, memberUserId) => {
   const comment = (task.taskComments || []).find((item) => item.authorId !== memberUserId);
   return comment?.content || null;
 };
+
+const hasCreatorContext = (task) => (task.taskComments || []).some((comment) => (
+  comment.authorId === task.creatorId
+  && (!comment.type || comment.type === 'human')
+  && hasAnnouncementText(comment.content || '')
+));
 
 const summarizeTaskCounts = (tasks, now) => {
   const activeTasks = tasks.filter((task) => ACTIVE_STATUSES.includes(task.status));
@@ -220,17 +226,10 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
   const isCommunityManager = isCommunityManagerRole(member?.role);
   const isProjectManager = isProjectManagerRole(member?.role);
   const isAccountant = isAccountantRole(member?.role);
-  const currentMonthKey = getBogotaWeekContext(now)?.dateKey.slice(0, 7);
-  const currentMonthLabel = new Intl.DateTimeFormat('es-CO', {
-    timeZone: 'America/Bogota',
-    month: 'long'
-  }).format(now);
+  const currentWeek = getBogotaWeekContext(now)?.weekKey;
   const createdTasks = isCommunityManager
     ? (Array.isArray(member?.createdTasks) ? member.createdTasks : tasks.filter((task) => task.creatorId === member.userId))
-      .filter((task) => (
-        task.status === 'PENDIENTE'
-        && getBogotaWeekContext(task.createdAt)?.dateKey.slice(0, 7) === currentMonthKey
-      ))
+      .filter((task) => getBogotaWeekContext(task.createdAt)?.weekKey === currentWeek)
     : [];
   const assignedClients = buildAssignedClientSummaries(member?.responsibleClients || [], now);
   const assignedActiveTasks = tasks.filter((task) => ['PENDIENTE', 'EN_CURSO'].includes(task.status));
@@ -286,9 +285,8 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
     });
   }
 
-  const undocumentedTasks = createdTasks.filter((task) => (task.taskComments || []).length === 0);
+  const undocumentedTasks = createdTasks.filter((task) => !hasCreatorContext(task));
   const documentedTaskCount = createdTasks.length - undocumentedTasks.length;
-  const currentWeek = getBogotaWeekContext(now)?.weekKey;
   const announcementDaysThisWeek = new Set(
     (member?.authoredAnnouncements || [])
       .map((announcement) => getBogotaWeekContext(announcement.createdAt))
@@ -310,11 +308,11 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
     ? {
         id: 'keep-context-fresh',
         title: 'Mantener contexto fresco',
-        description: `Esta semana, cada tarea pendiente que hayas creado en ${currentMonthLabel} debe incluir al menos un comentario con contexto.`,
-        progress: createdTasks.length > 0 ? Math.round((documentedTaskCount / createdTasks.length) * 100) : 0,
+        description: 'Cada tarea que crees esta semana debe incluir un comentario tuyo con la información necesaria para comenzar.',
+        progress: createdTasks.length > 0 ? Math.round((documentedTaskCount / createdTasks.length) * 100) : null,
         targetLabel: createdTasks.length > 0
-          ? `${documentedTaskCount} de ${createdTasks.length} pendientes de ${currentMonthLabel} con contexto`
-          : `Sin tareas pendientes creadas en ${currentMonthLabel}`
+          ? `${documentedTaskCount} de ${createdTasks.length} tareas creadas esta semana con contexto`
+          : 'Aún no has creado tareas esta semana'
       }
     : isProjectManager
     ? {
@@ -381,8 +379,8 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
 
   if (undocumentedTasks.length > 0) {
     const taskLabel = undocumentedTasks.length === 1
-      ? `1 tarea pendiente creada por ti en ${currentMonthLabel} no tiene comentarios`
-      : `${undocumentedTasks.length} tareas pendientes creadas por ti en ${currentMonthLabel} no tienen comentarios`;
+      ? '1 tarea creada por ti esta semana no tiene un comentario con contexto'
+      : `${undocumentedTasks.length} tareas creadas por ti esta semana no tienen comentarios con contexto`;
     focusCards.push({
       id: 'habit-document-progress',
       type: 'HABITO',
@@ -543,7 +541,6 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
   }
 
   const announcementLookback = new Date(dashboardNow.getTime() - (8 * 24 * 60 * 60 * 1000));
-  const contextMonthWindow = getBogotaMonthWindow(dashboardNow);
   const challengeWeekWindow = getBogotaWeekWindow(dashboardNow);
   const [announcements, globalAchievements, createdTasks, authoredAnnouncements, authoredOperationalEvents, returnedTasks] = await Promise.all([
     getDashboardAnnouncements(userId),
@@ -581,12 +578,7 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
     isCommunityManagerRole(member.role)
       ? prisma.task.findMany({
         where: {
-          creatorId: userId,
-          status: 'PENDIENTE',
-          createdAt: {
-            gte: contextMonthWindow.start,
-            lt: contextMonthWindow.end
-          }
+          ...buildContextChallengeTaskWhere({ userId, now: dashboardNow })
         },
         orderBy: { createdAt: 'desc' },
         select: {
@@ -618,8 +610,16 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
             }
           },
           taskComments: {
-            take: 1,
-            select: { id: true }
+            where: {
+              authorId: userId,
+              type: 'human'
+            },
+            select: {
+              id: true,
+              authorId: true,
+              content: true,
+              type: true
+            }
           }
         }
       })

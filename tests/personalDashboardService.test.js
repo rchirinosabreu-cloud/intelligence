@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   buildPersonalDashboard,
+  buildContextChallengeTaskWhere,
   assertPersonalDashboardAccess,
   assertDashboardManagerAccess,
   createDashboardAnnouncement,
@@ -515,6 +516,22 @@ test('buildPersonalDashboard only asks community managers to document tasks they
           status: 'EN_CURSO',
           createdAt: new Date('2026-08-05T12:00:00.000Z'),
           taskComments: []
+        }),
+        makeTask({
+          id: 'completed-with-context',
+          title: 'Tarea completada esta semana',
+          creatorId: 'user-cm',
+          status: 'REALIZADA',
+          createdAt: new Date('2026-08-04T12:00:00.000Z'),
+          taskComments: [{ content: '<p>Entregar el reporte con hallazgos y próximos pasos.</p>', authorId: 'user-cm', type: 'human', createdAt: fixedNow }]
+        }),
+        makeTask({
+          id: 'returned-with-external-comment',
+          title: 'Tarea devuelta con comentario ajeno',
+          creatorId: 'user-cm',
+          status: 'DEVUELTA',
+          createdAt: new Date('2026-08-03T12:00:00.000Z'),
+          taskComments: [{ content: 'Debes ajustar el formato.', authorId: 'reviewer-user', type: 'human', createdAt: fixedNow }]
         })
       ],
       nativeTasks: [
@@ -532,13 +549,31 @@ test('buildPersonalDashboard only asks community managers to document tasks they
 
   const habitCard = dashboard.focusCards.find((card) => card.id === 'habit-document-progress');
   assert.equal(dashboard.weeklyHabit.id, 'keep-context-fresh');
-  assert.equal(dashboard.weeklyHabit.progress, 50);
-  assert.equal(dashboard.weeklyHabit.targetLabel, '1 de 2 pendientes de agosto con contexto');
+  assert.equal(dashboard.weeklyHabit.progress, 40);
+  assert.equal(dashboard.weeklyHabit.targetLabel, '2 de 5 tareas creadas esta semana con contexto');
   assert.match(dashboard.weeklyHabit.description, /esta semana/i);
   assert.equal(habitCard.type, 'HABITO');
-  assert.match(habitCard.content, /1 tarea/);
-  assert.equal(habitCard.items.length, 1);
+  assert.match(habitCard.content, /3 tareas/);
+  assert.equal(habitCard.items.length, 3);
   assert.equal(habitCard.items[0].id, 'created-without-context');
+  assert.deepEqual(
+    habitCard.items.map((task) => task.id),
+    ['created-without-context', 'in-progress-without-context', 'returned-with-external-comment'],
+    'Changing status or receiving a reviewer comment must not distort the creator context challenge.'
+  );
+});
+
+test('community manager context challenge queries the current Bogota week without filtering by status', () => {
+  assert.deepEqual(buildContextChallengeTaskWhere({
+    userId: 'user-cm',
+    now: fixedNow
+  }), {
+    creatorId: 'user-cm',
+    createdAt: {
+      gte: new Date('2026-08-03T05:00:00.000Z'),
+      lt: new Date('2026-08-10T05:00:00.000Z')
+    }
+  });
 });
 
 test('buildPersonalDashboard frames community manager work around assigned clients', () => {
@@ -584,8 +619,8 @@ test('buildPersonalDashboard frames community manager work around assigned clien
   assert.equal(dashboard.clients[0].activeTasks, 2);
   assert.equal(dashboard.weeklyHabit.id, 'keep-context-fresh');
   assert.match(dashboard.weeklyHabit.title, /contexto/i);
-  assert.equal(dashboard.weeklyHabit.progress, 0);
-  assert.equal(dashboard.weeklyHabit.targetLabel, 'Sin tareas pendientes creadas en agosto');
+  assert.equal(dashboard.weeklyHabit.progress, null);
+  assert.equal(dashboard.weeklyHabit.targetLabel, 'Aún no has creado tareas esta semana');
   assert.equal(dashboard.focusCards.some((card) => card.id === 'cm-client-health'), true);
   assert.equal(dashboard.focusCards.some((card) => card.id === 'cm-content-plan'), true);
   assert.ok(dashboard.focusCards.find((card) => card.id === 'cm-client-health').items.length > 0);

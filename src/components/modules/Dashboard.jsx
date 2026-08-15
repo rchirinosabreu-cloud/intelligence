@@ -376,44 +376,61 @@ const Dashboard = () => {
               </div>
             </Card>
 
-            <Card className={cn(dashboardPanelClass, 'p-6 flex flex-col justify-between')}>
-              <div>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-lg bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center">
-                    <Target className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+            <section
+              data-weekly-challenge
+              className="relative min-h-[250px] overflow-hidden rounded-lg border border-violet-500/70 bg-gradient-to-br from-violet-600 via-violet-600 to-violet-700 p-6 text-white shadow-lg shadow-violet-950/15 dark:border-violet-700 dark:from-violet-800 dark:via-violet-800 dark:to-violet-950 dark:shadow-black/20 flex flex-col justify-between"
+            >
+              <div className="relative z-[1]">
+                <div className="mb-6 flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/15">
+                    <Target className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-zinc-950 dark:text-white">Reto de la semana</h3>
+                    <h3 className="font-semibold text-white">Reto de la semana</h3>
                     {!dashboard.weeklyHabit?.isEmpty && (
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">Hábito operativo calibrable</p>
+                      <p className="text-xs text-violet-100/75">Hábito operativo calibrable</p>
                     )}
                   </div>
                 </div>
+
                 {dashboard.weeklyHabit?.isEmpty ? (
-                  <div className="min-h-[120px] flex items-center justify-center text-center px-4">
-                    <h4 className="text-lg font-semibold text-zinc-500 dark:text-zinc-400">
+                  <div className="flex min-h-[130px] flex-col items-center justify-center gap-2 px-4 text-center">
+                    <img
+                      src="/chill-cat.png"
+                      alt=""
+                      aria-hidden="true"
+                      className="h-20 w-auto max-w-[150px] object-contain drop-shadow-[0_8px_14px_rgba(30,27,75,0.2)]"
+                    />
+                    <p className="text-xs font-medium text-violet-100/70">
                       Aún no tienes retos para esta semana
-                    </h4>
+                    </p>
                   </div>
                 ) : (
                   <>
-                    <h4 className="text-xl font-semibold text-zinc-950 dark:text-white">{dashboard.weeklyHabit?.title}</h4>
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 leading-6">{dashboard.weeklyHabit?.description}</p>
+                    <h4 className="text-xl font-semibold text-white">{dashboard.weeklyHabit?.title}</h4>
+                    <p className="mt-2 text-sm leading-6 text-violet-100/80">{dashboard.weeklyHabit?.description}</p>
                   </>
                 )}
               </div>
-              {!dashboard.weeklyHabit?.isEmpty && (
-                <div className="mt-7">
-                  <div className="flex justify-between text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-2.5">
+
+              {!dashboard.weeklyHabit?.isEmpty && dashboard.weeklyHabit?.progress === null && (
+                <div className="relative z-[1] mt-7 rounded-lg border border-white/15 bg-white/10 px-4 py-3 text-sm font-medium text-violet-50/90">
+                  {dashboard.weeklyHabit?.targetLabel}
+                </div>
+              )}
+
+              {!dashboard.weeklyHabit?.isEmpty && dashboard.weeklyHabit?.progress !== null && (
+                <div className="relative z-[1] mt-7">
+                  <div className="mb-2.5 flex justify-between gap-4 text-xs font-semibold text-violet-100/80">
                     <span>{dashboard.weeklyHabit?.targetLabel}</span>
-                    <span>{dashboard.weeklyHabit?.progress ?? 0}%</span>
+                    <span className="text-white">{dashboard.weeklyHabit?.progress ?? 0}%</span>
                   </div>
-                  <div className="h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                    <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${dashboard.weeklyHabit?.progress ?? 0}%` }} />
+                  <div className="h-2 overflow-hidden rounded-full bg-white/20">
+                    <div className="h-full rounded-full bg-cyan-300 transition-all duration-700" style={{ width: `${dashboard.weeklyHabit?.progress ?? 0}%` }} />
                   </div>
                 </div>
               )}
-            </Card>
+            </section>
           </motion.div>
 
           <motion.div variants={item} className={cn(balancedDashboardGridClass, 'items-stretch')}>
