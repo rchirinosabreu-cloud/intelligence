@@ -438,10 +438,17 @@ const OperationalCalendar = () => {
                 </button>
                 <button
                   type="button"
+                  onClick={() => connectGoogleCalendar('coordinadorbrainstudio@gmail.com')}
+                  className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-700 transition hover:text-indigo-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300"
+                >
+                  Conectar coordinador
+                </button>
+                <button
+                  type="button"
                   onClick={() => connectGoogleCalendar('social.brainstudio@gmail.com')}
                   className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-700 transition hover:text-indigo-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300"
                 >
-                  Conectar otra cuenta
+                  Conectar social
                 </button>
               </div>
             ) : (
@@ -451,7 +458,7 @@ const OperationalCalendar = () => {
                 className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-bold text-zinc-700 transition hover:border-indigo-200 hover:text-indigo-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300"
               >
                 <CalendarIcon className="h-4 w-4" />
-                Conectar Google
+                Conectar coordinador
               </button>
             )
           )}

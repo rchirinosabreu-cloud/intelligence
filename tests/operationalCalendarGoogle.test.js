@@ -102,6 +102,8 @@ test('operational calendar supports multiple reciprocal Google accounts and exte
   assert.match(calendar, /attendeeEmails/);
   assert.match(calendar, /Cuenta de Google/);
   assert.match(calendar, /Invitados externos/);
+  assert.match(calendar, /Conectar coordinador/);
+  assert.match(calendar, /Conectar social/);
   assert.match(calendar, /refetchInterval:\s*15_000/);
 });
 
