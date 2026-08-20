@@ -42,11 +42,11 @@ axios.interceptors.response.use(
             const url = error.config ? error.config.url : '';
             const isTrusted = isTrustedApiRequest(url, apiBaseUrl, pageOrigin);
 
-            // Skip global logout/error handling for specific routes (auth and external proxies like Gemini)
+            // Skip global logout/error handling for auth and the external AI proxy.
             const isAuthRoute = url.includes('/api/login');
-            const isGeminiRoute = url.includes('/api/gemini');
+            const isAIRoute = url.includes('/api/openai');
 
-            if (isTrusted && !isAuthRoute && !isGeminiRoute) {
+            if (isTrusted && !isAuthRoute && !isAIRoute) {
                 if (status === 401 || errorData?.code === 'TokenExpiredError' || errorData?.message === 'TokenExpiredError') {
                     console.warn(`[Axios] 401 Unauthorized or Token Expired on ${url}. Triggering logout.`);
                     localStorage.removeItem('authToken');
@@ -102,11 +102,11 @@ window.fetch = async (...args) => {
     if (response.status === 401 || response.status === 403 || response.status === 428) {
         const urlStr = typeof resource === 'string' ? resource : resource?.url;
 
-        // Skip global logout/error handling for specific routes (auth and external proxies like Gemini)
+        // Skip global logout/error handling for auth and the external AI proxy.
         const isAuthRoute = urlStr?.includes('/api/login');
-        const isGeminiRoute = urlStr?.includes('/api/gemini');
+        const isAIRoute = urlStr?.includes('/api/openai');
 
-        if (isTrusted && urlStr && !isAuthRoute && !isGeminiRoute) {
+        if (isTrusted && urlStr && !isAuthRoute && !isAIRoute) {
             if (response.status === 401) {
                 console.warn(`[Auth] 401 Unauthorized on ${urlStr}. Triggering logout event.`);
                 localStorage.removeItem('authToken');
@@ -128,8 +128,8 @@ window.fetch = async (...args) => {
                 console.warn(`[Auth] 403 Forbidden on ${urlStr}. Triggering toast event.`);
                 window.dispatchEvent(new Event('auth-forbidden'));
             }
-        } else if (isGeminiRoute) {
-            console.log(`[Auth] ${response.status} status on Gemini proxy ignored for global logout.`);
+        } else if (isAIRoute) {
+            console.log(`[Auth] ${response.status} status on OpenAI proxy ignored for global logout.`);
             if (response.status >= 400) {
                 window.dispatchEvent(new Event('ai-error'));
             }

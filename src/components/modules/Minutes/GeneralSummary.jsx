@@ -6,7 +6,7 @@ import { buildSummaryReportContent } from '../../../utils/reportContent';
 import { downloadHTML } from '../../../utils/downloadUtils';
 import { generateSummaryPDF } from '../../../utils/pdfExport';
 import { toast } from 'react-hot-toast';
-import { GEMINI_BENTO_PROMPT_TEMPLATE, SUMMARY_PROMPT_TEMPLATE } from '../../../utils/promptTemplates';
+import { OPENAI_BENTO_PROMPT_TEMPLATE, SUMMARY_PROMPT_TEMPLATE } from '../../../utils/promptTemplates';
 import { parseJsonFromAiResponse } from '../../../utils/jsonParser';
 
 const GeneralSummary = ({ files, content, reportMeta }) => {
@@ -36,7 +36,7 @@ const GeneralSummary = ({ files, content, reportMeta }) => {
       // Use the template from utils
       const prompt = SUMMARY_PROMPT_TEMPLATE.replace('{{CONTENT}}', combinedPrompt);
 
-      console.log(`[GeneralSummary] Sending prompt to Gemini. Total length: ${prompt.length}`);
+      console.log(`[GeneralSummary] Sending prompt to OpenAI. Total length: ${prompt.length}`);
 
       const systemPrompt = `Actúa como un Secretario Ejecutivo de Alta Gerencia. Sintetiza la reunión con foco en ejecución.
 Es obligatorio responder en JSON siguiendo estrictamente la estructura solicitada, profundizando en:
@@ -50,7 +50,7 @@ Es obligatorio responder en JSON siguiendo estrictamente la estructura solicitad
 REGLA DE ORO: No resumas de forma perezosa. Si se discutieron ejemplos específicos (como el caso "dulce vs salado") o nombres de clientes previos, inclúyelos para dar contexto real.
 IMPORTANTE: Todos los valores de los campos JSON deben ser Strings o Arrays de Strings. Prohibido usar objetos anidados dentro de los campos. Responde SIEMPRE en Español.`;
 
-      const resultString = await frontendApiService.generateGeminiCompletion(prompt, systemPrompt);
+      const resultString = await frontendApiService.generateOpenAICompletion(prompt, systemPrompt);
       const result = parseJsonFromAiResponse(resultString);
       setSummaryData(result);
 
@@ -67,18 +67,18 @@ IMPORTANTE: Todos los valores de los campos JSON deben ser Strings o Arrays de S
 
   const handleDownloadHTML = async () => {
     if (!summaryData) return;
-    const toastId = toast.loading("Generando HTML con Gemini...");
+    const toastId = toast.loading("Generando HTML con OpenAI...");
     setHtmlLoading(true);
     try {
       const reportContent = buildSummaryReportContent(summaryData, reportMeta);
-      const prompt = GEMINI_BENTO_PROMPT_TEMPLATE.replace('{{CONTENT}}', reportContent);
-      const htmlContent = await frontendApiService.generateGeminiHtmlReport(prompt);
+      const prompt = OPENAI_BENTO_PROMPT_TEMPLATE.replace('{{CONTENT}}', reportContent);
+      const htmlContent = await frontendApiService.generateOpenAIHtmlReport(prompt);
       const filename = `Resumen_BrainStudio_${Date.now()}.html`;
       downloadHTML(htmlContent, filename);
       toast.success("Descargando reporte HTML...", { id: toastId });
     } catch (err) {
       console.error(err);
-      toast.error(err.message || "Error al generar el HTML con Gemini", { id: toastId });
+      toast.error(err.message || "Error al generar el HTML con OpenAI", { id: toastId });
     } finally {
       setHtmlLoading(false);
     }

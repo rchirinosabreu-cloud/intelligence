@@ -31,7 +31,6 @@
     "@floating-ui/react": "^0.27.19",
     "@google-cloud/discoveryengine": "^2.5.2",
     "@google-cloud/storage": "^7.19.0",
-    "@google/genai": "^2.15.0",
     "@hello-pangea/dnd": "^18.0.1",
     "@hugeicons/core-free-icons": "^4.2.3",
     "@hugeicons/react": "^1.1.9",

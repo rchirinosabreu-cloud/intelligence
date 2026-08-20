@@ -1,10 +1,10 @@
-import { GoogleGenAI } from '@google/genai';
+import { OpenAICompat } from './openAICompat.js';
 import aiConfig from '../config/aiConfig.js';
 
 let genAI = null;
 
 /**
- * BrainstudioAI Adapter - Encapsulates Google GenAI SDK logic and provides a stable interface.
+ * BrainstudioAI Adapter - Encapsulates OpenAI logic and provides a stable interface.
  */
 export const BrainstudioAI = {
     isReady: aiConfig.isReady,
@@ -15,13 +15,13 @@ export const BrainstudioAI = {
     async initialize() {
         if (genAI) return genAI;
         if (!aiConfig.apiKey) {
-            console.error("[BrainstudioAI] CRITICAL: GEMINI_API_KEY is missing.");
+            console.error("[BrainstudioAI] CRITICAL: OPENAI_API_KEY is missing.");
             this.isReady = false;
             return null;
         }
 
         try {
-            genAI = new GoogleGenAI({ apiKey: aiConfig.apiKey });
+            genAI = new OpenAICompat({ apiKey: aiConfig.apiKey });
 
             // Bootstrap Sanity Check (Ping)
             console.log(`[BrainstudioAI] Performing sanity check with model: ${aiConfig.modelName}...`);
@@ -215,7 +215,7 @@ export const parseJsonResponse = (text) => {
         try {
             return JSON.parse(cleanText);
         } catch (parseError) {
-            // Gemini occasionally exhausts its output while emitting a needlessly long
+            // A model can exhaust its output while emitting a needlessly long
             // decimal. Only repair this narrow, deterministic truncation shape; never
             // fabricate missing strings, arrays, keys, or values.
             const withoutFence = text.replace(/```json|```/gi, '').trim();
@@ -290,7 +290,7 @@ export async function sendMessageStreamWithRetry(genAIInstance, payload, maxAtte
                 throw error;
             }
             const delayMs = 500 * Math.pow(2, attempt - 1);
-            console.warn(`[GoogleGenAI] Rate limited. Retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts})`);
+            console.warn(`[OpenAI] Rate limited. Retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts})`);
             await new Promise(resolve => setTimeout(resolve, delayMs));
         }
     }
@@ -366,7 +366,7 @@ export const extractModelText = (result) => {
     if (!result) throw new Error("Null result provided to text extractor");
 
     try {
-        // In @google/genai, result.text() is the standard way to get text
+        // Prefer the adapter's direct text value.
         if (typeof result.text === 'function') {
             const text = result.text();
             if (text && String(text).trim()) return text;

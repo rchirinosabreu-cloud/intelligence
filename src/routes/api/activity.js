@@ -4,14 +4,17 @@ import {
   createOperationalEvent,
   updateOperationalEvent,
   deleteOperationalEvent,
-  syncGoogleCalendarToOperationalEvents
+  syncGoogleCalendarToOperationalEvents,
+  syncAllGoogleCalendars
 } from '../../services/operationalEventService.js';
 import { getTeamActivityStatus } from '../../services/activityStatusService.js';
 import { createMeetEvent } from '../../services/calendarService.js';
 import {
   getGoogleCalendarAuthUrl,
+  verifyGoogleCalendarOAuthState,
   storeGoogleCalendarOAuthCode,
   getCentralGoogleCalendarConnectionStatus,
+  getGoogleCalendarConnections,
   listAccessibleGoogleCalendars,
   setActiveGoogleCalendar
 } from '../../services/googleCalendarOAuthService.js';
@@ -74,16 +77,25 @@ router.get('/google-calendar/status', async (req, res) => {
 
 router.get('/google-calendar/auth-url', requireManagerRole, async (req, res) => {
   try {
-    res.json({ url: getGoogleCalendarAuthUrl() });
+    res.json({ url: getGoogleCalendarAuthUrl(req.query.email || null) });
   } catch (error) {
     console.error('[Activity API] Error generating Google Calendar OAuth URL:', error.response?.data || error);
     res.status(500).json({ error: 'Failed to generate Google Calendar OAuth URL', details: error.message });
   }
 });
 
+router.get('/google-calendar/connections', requireManagerRole, async (_req, res) => {
+  try {
+    res.json(await getGoogleCalendarConnections());
+  } catch (error) {
+    console.error('[Activity API] Error consultando conexiones de Google Calendar:', error.response?.data || error);
+    res.status(500).json({ error: 'No se pudieron consultar las conexiones de Google Calendar', details: error.message });
+  }
+});
+
 router.get('/google-calendar/calendars', requireManagerRole, async (req, res) => {
   try {
-    const calendars = await listAccessibleGoogleCalendars();
+    const calendars = await listAccessibleGoogleCalendars(req.query.connectionId || null);
     res.json(calendars);
   } catch (error) {
     console.error('[Activity API] Error listing Google calendars:', error.response?.data || error);
@@ -93,7 +105,7 @@ router.get('/google-calendar/calendars', requireManagerRole, async (req, res) =>
 
 router.patch('/google-calendar/active-calendar', requireManagerRole, async (req, res) => {
   try {
-    const connection = await setActiveGoogleCalendar(req.body.calendarId);
+    const connection = await setActiveGoogleCalendar(req.body.calendarId, req.body.connectionId || null);
     res.json(connection);
   } catch (error) {
     console.error('[Activity API] Error setting active Google calendar:', error.response?.data || error);
@@ -103,7 +115,8 @@ router.patch('/google-calendar/active-calendar', requireManagerRole, async (req,
 
 router.post('/google-calendar/oauth-callback', requireManagerRole, async (req, res) => {
   try {
-    const connection = await storeGoogleCalendarOAuthCode(req.body.code, req.user?.userId || null);
+    const oauthState = verifyGoogleCalendarOAuthState(req.body.state);
+    const connection = await storeGoogleCalendarOAuthCode(req.body.code, req.user?.userId || null, oauthState.requestedEmail || null);
     res.json(connection);
   } catch (error) {
     console.error('[Activity API] Error completing Google Calendar OAuth:', error.response?.data || error);
@@ -113,7 +126,9 @@ router.post('/google-calendar/oauth-callback', requireManagerRole, async (req, r
 
 router.post('/google-calendar/sync', requireManagerRole, async (req, res) => {
   try {
-    const result = await syncGoogleCalendarToOperationalEvents(req.body || {});
+    const result = req.body?.connectionId
+      ? await syncGoogleCalendarToOperationalEvents(req.body)
+      : await syncAllGoogleCalendars(req.body || {});
     res.json(result);
   } catch (error) {
     console.error('[Activity API] Error syncing Google Calendar:', error.response?.data || error);

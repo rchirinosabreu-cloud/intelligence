@@ -95,7 +95,9 @@ const OperationalCalendar = () => {
     recurrence: 'NONE',
     recurrenceEnd: null,
     meetingLink: '',
-    description: ''
+    description: '',
+    attendeeEmails: [],
+    googleConnectionId: ''
   });
 
   const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER';
@@ -136,7 +138,8 @@ const OperationalCalendar = () => {
         throw new Error('Failed to fetch events');
       }
       return res.json();
-    }
+    },
+    refetchInterval: 15_000
   });
 
   const { data: googleCalendarStatus } = useQuery({
@@ -147,6 +150,8 @@ const OperationalCalendar = () => {
       return res.json();
     }
   });
+
+  const googleConnections = googleCalendarStatus?.connections || [];
 
   const eventsByDay = useMemo(() => {
     const grouped = new Map();
@@ -160,14 +165,16 @@ const OperationalCalendar = () => {
     return grouped;
   }, [events]);
 
-  const connectGoogleCalendar = async () => {
+  const connectGoogleCalendar = async (email = '') => {
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/auth-url`, { headers: getAuthHeaders() });
+      const query = email ? `?email=${encodeURIComponent(email)}` : '';
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/auth-url${query}`, { headers: getAuthHeaders() });
       if (!res.ok) {
         const error = await res.json().catch(() => ({}));
         throw new Error(error.details || error.error || 'No se pudo iniciar la conexion');
       }
       const data = await res.json();
+      if (email) sessionStorage.setItem('googleCalendarRequestedEmail', email);
       window.location.href = data.url;
     } catch (error) {
       console.error('Google Calendar auth URL error:', error);
@@ -268,7 +275,9 @@ const OperationalCalendar = () => {
       recurrence: 'NONE',
       recurrenceEnd: null,
       meetingLink: '',
-      description: ''
+      description: '',
+      attendeeEmails: [],
+      googleConnectionId: googleConnections[0]?.id || ''
     });
     setEditingEventId(null);
     setIsModalOpen(true);
@@ -290,7 +299,9 @@ const OperationalCalendar = () => {
       recurrence: event.recurrence || 'NONE',
       recurrenceEnd: event.recurrenceEnd ? new Date(event.recurrenceEnd) : null,
       meetingLink: event.meetingLink || '',
-      description: event.description || ''
+      description: event.description || '',
+      attendeeEmails: event.attendeeEmails || [],
+      googleConnectionId: event.googleConnectionId || googleConnections[0]?.id || ''
     });
     setIsModalOpen(true);
   };
@@ -415,19 +426,28 @@ const OperationalCalendar = () => {
         <div className="flex flex-wrap items-center gap-3">
           {isAdmin && (
             googleCalendarStatus?.connected ? (
-              <button
-                type="button"
-                onClick={() => googleCalendarSyncMutation.mutate()}
-                disabled={googleCalendarSyncMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"
-              >
-                {googleCalendarSyncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarIcon className="h-4 w-4" />}
-                Sincronizar Google
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => googleCalendarSyncMutation.mutate()}
+                  disabled={googleCalendarSyncMutation.isPending}
+                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"
+                >
+                  {googleCalendarSyncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarIcon className="h-4 w-4" />}
+                  {googleConnections.length} cuenta{googleConnections.length === 1 ? '' : 's'} · Actualización automática
+                </button>
+                <button
+                  type="button"
+                  onClick={() => connectGoogleCalendar('social.brainstudio@gmail.com')}
+                  className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-700 transition hover:text-indigo-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300"
+                >
+                  Conectar otra cuenta
+                </button>
+              </div>
             ) : (
               <button
                 type="button"
-                onClick={connectGoogleCalendar}
+                onClick={() => connectGoogleCalendar('coordinadorbrainstudio@gmail.com')}
                 className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-bold text-zinc-700 transition hover:border-indigo-200 hover:text-indigo-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300"
               >
                 <CalendarIcon className="h-4 w-4" />
@@ -694,6 +714,37 @@ const OperationalCalendar = () => {
                     wrapperClassName="w-full"
                   />
                 </div>
+              </div>
+
+              {googleConnections.length > 0 && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Cuenta de Google</label>
+                  <select
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5 dark:text-zinc-100"
+                    value={formData.googleConnectionId}
+                    onChange={event => setFormData({ ...formData, googleConnectionId: event.target.value })}
+                  >
+                    {googleConnections.map(connection => (
+                      <option key={connection.id} value={connection.id}>{connection.email}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Invitados externos</label>
+                <input
+                  type="text"
+                  inputMode="email"
+                  placeholder="cliente@empresa.com, otra@empresa.com"
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5 dark:text-zinc-100"
+                  value={(formData.attendeeEmails || []).join(', ')}
+                  onChange={event => setFormData({
+                    ...formData,
+                    attendeeEmails: event.target.value.split(',').map(email => email.trim().toLowerCase()).filter(Boolean)
+                  })}
+                />
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Google Calendar enviará la invitación y cualquier cambio de horario.</p>
               </div>
 
               {formData.type === 'MEETING' && (

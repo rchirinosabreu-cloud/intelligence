@@ -42,7 +42,7 @@ INSTRUCCIONES DE GENERACIÓN:
 {{CONTENT}}
 `;
 
-export const GEMINI_BENTO_PROMPT_TEMPLATE = `
+export const OPENAI_BENTO_PROMPT_TEMPLATE = `
 Eres un Desarrollador Senior de Frontend y Diseñador UI/UX. Cuando recibes análisis y resúmenes generados por OpenAI, debes transformarlos en un documento HTML profesional para reportes estratégicos corporativos de alta gama.
 
 FUENTES DE ESTILO VISUAL (REFERENCIAS OBLIGATORIAS):

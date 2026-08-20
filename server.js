@@ -6,10 +6,9 @@ import cors from 'cors';
 import fs from 'fs';
 import prisma from './src/lib/prisma.js';
 import { initTaskClassificationCron } from './src/services/taskClassificationService.js';
+import { startGoogleCalendarAutoSync } from './src/services/googleCalendarAutoSyncService.js';
 import { loggerMiddleware } from './src/middlewares/logger.js';
 import apiRouter from './src/routes/index.js';
-import { geminiProxy } from './src/controllers/proxyController.js';
-import { authenticateToken, requireManagerRole } from './src/middlewares/authMiddleware.js';
 import {
   configureSecurityHeaders,
   createRateLimiter,
@@ -56,7 +55,6 @@ app.use('/api/login', authRateLimiter);
 app.use('/api/password-reset', authRateLimiter);
 app.use('/api/public', publicRateLimiter);
 app.use('/api/quotations/public', publicRateLimiter);
-app.use('/api/gemini', aiRateLimiter);
 app.use('/api/openai', aiRateLimiter);
 app.use('/api/fireflies', aiRateLimiter);
 app.use('/api', apiRateLimiter);
@@ -69,8 +67,6 @@ app.use(express.urlencoded({ limit: '5mb', extended: true }));
 app.use(loggerMiddleware);
 
 // --- ROUTES ---
-// Gemini proxy must be mounted before common API router if it has special body restreaming needs
-app.use('/api/gemini', authenticateToken, requireManagerRole, geminiProxy);
 app.use('/api', apiRouter);
 
 // --- STATIC FILES & SPA ---
@@ -130,7 +126,7 @@ async function bootstrap() {
     validateSecurityEnvironment(process.env);
 
     // 1. System Checklist & Configuration
-    const ESSENTIAL_KEYS = ['DATABASE_URL', 'JWT_SECRET', 'GEMINI_API_KEY', 'MODEL_NAME'];
+    const ESSENTIAL_KEYS = ['DATABASE_URL', 'JWT_SECRET', 'OPENAI_API_KEY'];
     const missingKeys = ESSENTIAL_KEYS.filter(key => !process.env[key]);
 
     if (missingKeys.length > 0) {
@@ -152,8 +148,9 @@ async function bootstrap() {
     // 3. AI Service Initialization (Non-blocking)
     try {
         const { initialize } = await import('./src/services/aiService.js');
-        await initialize();
-        console.log("[Service: AI] Google GenAI iniciado correctamente.");
+        const aiClient = await initialize();
+        if (aiClient) console.log("[Service: AI] OpenAI iniciado correctamente.");
+        else console.warn("[Service: AI] OpenAI no superó la verificación de arranque.");
     } catch (aiError) {
         console.error("[Service: AI] ADVERTENCIA: No se pudo inicializar el servicio de IA:", aiError.message);
         console.info("[Service: AI] El servidor continuará sin capacidades de IA activas.");
@@ -162,6 +159,7 @@ async function bootstrap() {
     // 4. Background Tasks & Cron
     try {
         initTaskClassificationCron();
+        startGoogleCalendarAutoSync();
         console.log("[Service: Cron] Tareas en segundo plano inicializadas.");
     } catch (cronError) {
         console.error("[Service: Cron] Fallo al iniciar tareas programadas:", cronError.message);

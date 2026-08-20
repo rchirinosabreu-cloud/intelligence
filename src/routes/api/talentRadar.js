@@ -1,8 +1,8 @@
 import express from 'express';
 import prisma from '../../lib/prisma.js';
 import { uploadAvatar, deleteFileFromGCS, getClientFileStream } from '../../services/storageService.js';
+import { generateTalentInsightWithOpenAI } from '../../services/talentInsightService.js';
 import multer from 'multer';
-import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { requireManagerRole } from '../../middlewares/authMiddleware.js';
 import { isSafeStoragePath } from '../../config/security.js';
@@ -14,8 +14,6 @@ const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024, files: 1 }
 });
-
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
 const MASTER_CATEGORIES = [
     "Estratégico",
@@ -255,11 +253,6 @@ router.post('/member/:memberId/ai-insights', requireManagerRole, async (req, res
 
         const returnedTasks = allTasks.filter(t => (t.returnCount || 0) > 0);
 
-        // Initialize AI
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
-        const genAI = new GoogleGenAI({ apiKey });
-
         // Aggregate metrics for dynamic analysis
         const categoryStats = allTasks.reduce((acc, t) => {
             const normalized = normalizeCategory(t.aiCategory);
@@ -297,19 +290,13 @@ TAREA DE ANÁLISIS V2:
 
 Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introducciones como "Aquí tienes el análisis...".`;
 
-        const result = await genAI.models.generateContent({
-            model: MODEL_NAME,
-            contents: [{ role: 'user', parts: [{ text: prompt }] }]
-        });
-        console.log("================ DEPURACIÓN IA RAW (Talent Insight) ================", JSON.stringify(result, null, 2));
-
-        const insight = result.text;
+        const insight = await generateTalentInsightWithOpenAI(prompt);
 
         res.json({ insight });
 
     } catch (error) {
         console.error("[TalentRadar] AI Insight failed:", error);
-        return res.status(500).json({ error: "Error generando insights con IA", details: error.message });
+        return res.status(500).json({ error: "Error generando insights con IA" });
     }
 });
 

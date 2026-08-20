@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { OpenAICompat } from './openAICompat.js';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import prisma from '../lib/prisma.js';
@@ -8,20 +8,20 @@ import { parseJsonResponse, extractModelText } from './aiService.js';
 
 dotenv.config();
 
-const EMBEDDING_MODEL = "gemini-embedding-2";
-const CHAT_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+const EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-large";
+const CHAT_MODEL = process.env.OPENAI_MODEL_BRAIN_CORE || process.env.OPENAI_MODEL || "gpt-5";
 
 let genAI;
 try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (apiKey) {
-        genAI = new GoogleGenAI({ apiKey });
-        console.log("[BrainCoreService] Google Generative AI initialized with API Key.");
+        genAI = new OpenAICompat({ apiKey });
+        console.log("[BrainCoreService] OpenAI initialized with API Key.");
     } else {
-        console.warn("[BrainCoreService] GEMINI_API_KEY is missing.");
+        console.warn("[BrainCoreService] OPENAI_API_KEY is missing.");
     }
 } catch (e) {
-    console.error("[BrainCoreService] Failed to initialize Google Generative AI client:", e);
+    console.error("[BrainCoreService] Failed to initialize OpenAI client:", e);
 }
 
 /**
@@ -50,7 +50,7 @@ export const generateEmbedding = async (text) => {
 };
 
 /**
- * Performs OCR and extraction using Gemini.
+ * Performs OCR and extraction using OpenAI vision.
  */
 export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
     if (!genAI) return null;

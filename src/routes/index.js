@@ -24,6 +24,7 @@ import servicesRouter from './api/services.js';
 import clientFileRouter from './api/clientFiles.js';
 import talentRadarRouter from './api/talentRadar.js';
 import activityRouter from './api/activity.js';
+import { handleGoogleCalendarWebhook } from '../services/operationalEventService.js';
 import reportsRouter from './api/reports.js';
 import brainCoreRouter from './api/brainCore.js';
 import boardsRouter from './api/boards.js';
@@ -32,6 +33,7 @@ import operativeIntelligenceRouter from './api/operativeIntelligence.js';
 import financialsRouter from './api/financials.js';
 import dashboardRouter from './api/dashboard.js';
 import { getUpcomingEvents } from '../services/calendarService.js';
+import { collectServiceStatuses } from '../services/serviceStatusService.js';
 
 const router = express.Router();
 const upload = multer({
@@ -56,6 +58,16 @@ router.post('/password-reset/confirm', authController.resetPasswordWithCode);
 router.post('/users', authenticateToken, authController.createUser);
 
 // --- Protected Routes ---
+router.post('/activity/google-calendar/webhook', async (req, res) => {
+  try {
+    const result = await handleGoogleCalendarWebhook(req.headers);
+    res.sendStatus(result.accepted ? 200 : 404);
+  } catch (error) {
+    console.error('[Google Calendar] Error procesando notificación:', error.response?.data || error.message);
+    res.sendStatus(500);
+  }
+});
+
 router.use(authenticateToken);
 
 router.post('/sync-users', requireManagerRole, authController.syncUsers);
@@ -94,7 +106,15 @@ router.get('/auth/me', async (req, res) => {
 
 // System Health
 router.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
-
+router.get('/system/services-status', async (_req, res) => {
+    try {
+        const services = await collectServiceStatuses();
+        res.json({ services });
+    } catch (error) {
+        console.error('[ServiceStatus] Unable to collect service statuses:', error.message);
+        res.status(500).json({ error: 'No fue posible consultar el estado de los servicios.' });
+    }
+});
 // Chat
 router.post('/chat', requireModulePermission('manager'), chatController.handleChat);
 

@@ -1,6 +1,3 @@
-import { createProxyMiddleware } from 'http-proxy-middleware';
-
-const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
 
 const sendUpstreamError = (res, provider, response) => {
     const requestId = response.headers.get('x-request-id') || response.headers.get('fly-request-id');
@@ -14,7 +11,6 @@ const sendUpstreamError = (res, provider, response) => {
         message: 'El proveedor externo no respondió correctamente'
     });
 };
-
 export const openaiProxy = async (req, res) => {
     try {
         const apiKey = process.env.OPENAI_API_KEY;
@@ -61,7 +57,6 @@ export const openaiProxy = async (req, res) => {
         res.status(504).json({ error: 'UPSTREAM_SERVICE_ERROR' });
     }
 };
-
 export const firefliesProxy = async (req, res) => {
     try {
         const apiKey = process.env.FIREFLIES_API_KEY;
@@ -85,30 +80,3 @@ export const firefliesProxy = async (req, res) => {
         res.status(504).json({ error: 'UPSTREAM_SERVICE_ERROR' });
     }
 };
-
-export const geminiProxy = createProxyMiddleware({
-    target: 'https://generativelanguage.googleapis.com',
-    changeOrigin: true,
-    secure: true,
-    pathRewrite: (path) => path.replace(/^\/api\/gemini/, ''),
-    on: {
-      proxyReq: (proxyReq, req) => {
-        proxyReq.setHeader('User-Agent', 'BrainStudioIntelligence/2.0');
-        proxyReq.removeHeader('Authorization');
-        if (geminiApiKey) proxyReq.setHeader('x-goog-api-key', geminiApiKey);
-        if (req.body) {
-          const bodyData = JSON.stringify(req.body);
-          proxyReq.setHeader('Content-Type', 'application/json');
-          proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
-          proxyReq.write(bodyData);
-        }
-      },
-      error: (error, _req, res) => {
-        console.error('[Gemini Proxy] Connection failed:', error.message);
-        if (!res.headersSent) {
-          res.writeHead(502, { 'Content-Type': 'application/json' });
-        }
-        res.end(JSON.stringify({ error: 'UPSTREAM_SERVICE_ERROR' }));
-      }
-    }
-});

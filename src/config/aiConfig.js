@@ -2,13 +2,13 @@
  * aiConfig.js - Centralized configuration for AI services.
  */
 
-// Model priority: MODEL_NAME > GEMINI_MODEL > Default
-export const FINAL_MODEL_NAME = process.env.MODEL_NAME || process.env.GEMINI_MODEL || "gemini-1.5-flash";
+// Gemini-era MODEL_NAME is intentionally ignored to prevent cross-provider model leakage.
+export const FINAL_MODEL_NAME = process.env.OPENAI_MODEL || "gpt-5";
 
 const aiConfig = {
-    apiKey: process.env.GEMINI_API_KEY,
+    apiKey: process.env.OPENAI_API_KEY,
     modelName: FINAL_MODEL_NAME,
-    isReady: !!process.env.GEMINI_API_KEY
+    isReady: !!process.env.OPENAI_API_KEY
 };
 
 export default aiConfig;

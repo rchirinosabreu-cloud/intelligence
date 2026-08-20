@@ -1,5 +1,5 @@
 import { extractModelText, parseJsonResponse } from './aiService.js';
-import { GoogleGenAI } from '@google/genai';
+import { OpenAICompat } from './openAICompat.js';
 import { adaptDatasetForChart } from '../lib/reportChartData.js';
 import { filterTopContentRows, hasPublishableValue } from '../lib/reportPresentation.js';
 
@@ -338,7 +338,7 @@ export const visionExtractionSchema = {
 };
 
 // Structured output stays intentionally compact: requiring a large object with every
-// possible organic and paid key caused Gemini to repeat keys and truncate JSON.
+// possible organic and paid key caused the model to repeat keys and truncate JSON.
 visionExtractionSchema.properties.metrics = {
   type: "array",
   items: {
@@ -358,7 +358,7 @@ visionExtractionSchema.properties.metrics = {
   }
 };
 
-const SYSTEM_PROMPT = `You are a professional Meta Ads and Organic Social Media data extraction expert using Google Generative AI (Gemini).
+const SYSTEM_PROMPT = `You are a professional Meta Ads and Organic Social Media data extraction expert using OpenAI.
 Analyze the provided screenshot and extract metrics using their real semantics. Paid screenshots may contain the 6 canonical paid keys:
 - spend: Inversión (e.g. amount spent in USD, COP, EUR, etc.)
 - impressions: Impresiones
@@ -433,21 +433,21 @@ const hasUsableExtractionSignal = (extracted) => {
 };
 
 /**
- * Analyzes a screenshot of Meta Ads using Gemini Vision with Structured Outputs.
+ * Analyzes a screenshot of Meta Ads using OpenAI vision with Structured Outputs.
  * @param {Buffer} imageBuffer - The binary image data.
  * @param {string} mimeType - The mime type of the image (image/png, image/jpeg).
  * @returns {Promise<Object>} The parsed canonical metrics extraction response.
  */
-export const extractMetricsWithGemini = async (imageBuffer, mimeType = 'image/jpeg') => {
-    const apiKey = process.env.GEMINI_API_KEY;
+export const extractMetricsWithOpenAI = async (imageBuffer, mimeType = 'image/jpeg') => {
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-        throw new Error("Missing GEMINI_API_KEY in server configuration");
+        throw new Error("Missing OPENAI_API_KEY in server configuration");
     }
 
-    const genAI = new GoogleGenAI({ apiKey });
-    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const genAI = new OpenAICompat({ apiKey });
+    const model = process.env.OPENAI_MODEL_VISION || process.env.OPENAI_MODEL || "gpt-5";
 
-    console.log(`[Vision Service] Sending image to Gemini using model ${model}...`);
+    console.log(`[Vision Service] Sending image to OpenAI using model ${model}...`);
 
     const base64Image = imageBuffer.toString('base64');
 
@@ -476,7 +476,7 @@ export const extractMetricsWithGemini = async (imageBuffer, mimeType = 'image/jp
 
         const content = result.text;
         if (!content) {
-            lastParseError = new Error("Gemini Vision response content is empty");
+            lastParseError = new Error("OpenAI Vision response content is empty");
         } else {
             try {
                 return parseJsonResponse(content);
@@ -485,7 +485,7 @@ export const extractMetricsWithGemini = async (imageBuffer, mimeType = 'image/jp
                 console.error(`[Vision Service] Invalid JSON on attempt ${attempt}/${maxAttempts}:`, parseError.message, "Raw snippet:", content.slice(0, 500));
             }
         }
-        if (attempt < maxAttempts) console.warn(`[Vision Service] Retrying malformed Gemini structured output (${attempt}/${maxAttempts - 1}).`);
+        if (attempt < maxAttempts) console.warn(`[Vision Service] Retrying malformed OpenAI structured output (${attempt}/${maxAttempts - 1}).`);
     }
     throw lastParseError;
 };
@@ -500,7 +500,7 @@ export const validateAndCleanSourceExtraction = (extracted) => {
     }
 
     let metrics = extracted.metrics || {};
-    // ADAPTER: If metrics is formatted as an Array from Gemini, convert it to a Dictionary indexable by key!
+    // ADAPTER: If metrics is formatted as an Array, convert it to a Dictionary indexable by key!
     if (Array.isArray(metrics)) {
         const dict = {};
         metrics.forEach(item => {
@@ -631,7 +631,7 @@ export const mergeSourceMetricsIntoAccumulator = (accumulator, incomingExtractio
 
     let { metrics, demographics, topContent } = incomingExtraction;
 
-    // ADAPTER: If metrics is formatted as an Array from Gemini, convert it to a Dictionary indexable by key!
+    // ADAPTER: If metrics is formatted as an Array, convert it to a Dictionary indexable by key!
     if (Array.isArray(metrics)) {
         const dict = {};
         metrics.forEach(item => {
@@ -845,6 +845,7 @@ export const parseNarrativeResponse = (content, sections = [], clientName = 'el 
     }
 };
 
+
 const formatOfficialReportPeriod = (normalizedMetrics = {}) => {
     const period = normalizedMetrics.reportPeriod || {};
     return period.start && period.end ? `${period.start} a ${period.end}` : 'periodo seleccionado por el usuario';
@@ -1023,7 +1024,6 @@ export const generateNarrativeWithOpenAI = async (normalizedMetrics, sections = 
 export const generateNarrativeWithAIProvider = async (normalizedMetrics, sections = [], clientName = 'el cliente', deps = {}) => {
     const env = deps.env || process.env;
     const openaiGenerator = deps.openaiGenerator || generateNarrativeWithOpenAI;
-    const geminiGenerator = deps.geminiGenerator || generateNarrativeWithGemini;
     const errors = [];
 
     if (env.OPENAI_API_KEY) {
@@ -1031,39 +1031,27 @@ export const generateNarrativeWithAIProvider = async (normalizedMetrics, section
             return await openaiGenerator(normalizedMetrics, sections, clientName);
         } catch (error) {
             errors.push(`OpenAI: ${error.message}`);
-            console.warn('[Vision Service] OpenAI narrative generation failed. Falling back to Gemini:', error.message);
+            console.error('[Vision Service] OpenAI narrative generation failed:', error.message);
         }
     }
 
-    if (env.GEMINI_API_KEY) {
-        try {
-            return await geminiGenerator(normalizedMetrics, sections, clientName);
-        } catch (error) {
-            errors.push(`Gemini: ${error.message}`);
-            if (error.rawContent) {
-                error.providerErrors = errors;
-                throw error;
-            }
-        }
-    }
-
-    throw new Error(errors.length ? `All narrative providers failed. ${errors.join(' | ')}` : 'No narrative AI provider configured');
+    throw new Error(errors.length ? `OpenAI narrative generation failed. ${errors.join(' | ')}` : 'Missing OPENAI_API_KEY in server configuration');
 };
 
 /**
- * Generates an editorial narrative and strategic action plan from normalized metrics and sections using Gemini.
+ * Generates an editorial narrative and strategic action plan from normalized metrics and sections using OpenAI.
  * @param {Object} normalizedMetrics - The validated metrics object.
  * @param {Array} sections - The structured sections array.
  * @returns {Promise<Object>} The parsed narrative structure.
  */
-export const generateNarrativeWithGemini = async (normalizedMetrics, sections = [], clientName = 'el cliente') => {
-    const apiKey = process.env.GEMINI_API_KEY;
+export const generateNarrativeWithOpenAICompatible = async (normalizedMetrics, sections = [], clientName = 'el cliente') => {
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-        throw new Error("Missing GEMINI_API_KEY in server configuration");
+        throw new Error("Missing OPENAI_API_KEY in server configuration");
     }
 
-    const genAI = new GoogleGenAI({ apiKey });
-    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const genAI = new OpenAICompat({ apiKey });
+    const model = process.env.OPENAI_MODEL_NARRATIVE || process.env.OPENAI_MODEL || "gpt-5";
 
     const prompt = `Analiza las siguientes métricas cuantitativas ya validadas y la colección de secciones visuales, y genera una narración editorial estructurada en Español.
 
@@ -1221,7 +1209,7 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
 
     const content = response.text;
     if (!content) {
-        throw new Error("Gemini Narrative response content is empty");
+        throw new Error("OpenAI Narrative response content is empty");
     }
 
     try {
@@ -1234,21 +1222,22 @@ REGLAS DE REDACCIÓN DE LA NARRATIVA:
 };
 
 
-export const repairNarrativeJsonWithGemini = async ({ rawContent, normalizedMetrics, sections = [], clientName = 'el cliente', error } = {}) => {
+
+export const repairNarrativeJsonWithOpenAI = async ({ rawContent, normalizedMetrics, sections = [], clientName = 'el cliente', error } = {}) => {
     if (!rawContent) {
         const missingRawError = new Error('Narrative JSON repair skipped because rawContent is unavailable');
         missingRawError.recoverable = true;
         throw missingRawError;
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-        throw new Error('Missing GEMINI_API_KEY in server configuration');
+        throw new Error('Missing OPENAI_API_KEY in server configuration');
     }
 
-    const genAI = new GoogleGenAI({ apiKey });
-    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-    const prompt = `Repara la siguiente respuesta JSON rota de Gemini para una narrativa de reportes. Devuelve SOLO JSON válido, sin markdown, sin explicación y sin texto fuera del JSON. No inventes métricas ni modifiques los IDs de secciones. Si falta contenido, completa únicamente la estructura editorial usando las métricas y secciones reales provistas.
+    const genAI = new OpenAICompat({ apiKey });
+    const model = process.env.OPENAI_MODEL_NARRATIVE || process.env.OPENAI_MODEL || 'gpt-5';
+    const prompt = `Repara la siguiente respuesta JSON rota de OpenAI para una narrativa de reportes. Devuelve SOLO JSON válido, sin markdown, sin explicación y sin texto fuera del JSON. No inventes métricas ni modifiques los IDs de secciones. Si falta contenido, completa únicamente la estructura editorial usando las métricas y secciones reales provistas.
 
 ERROR ORIGINAL:
 ${error || 'JSON inválido'}
@@ -1278,7 +1267,7 @@ ${clientName}`;
 
     const repairedContent = response.text;
     if (!repairedContent) {
-        throw new Error('Gemini JSON repair response content is empty');
+        throw new Error('OpenAI JSON repair response content is empty');
     }
     return parseNarrativeResponse(repairedContent, sections, clientName);
 };
@@ -1351,7 +1340,7 @@ const findInvalidNarrativeSections = (narrativeSections = [], sourceSections = [
 
 const parseNarrativeCandidate = (candidate, sections = [], clientName = 'el cliente') => typeof candidate === 'string' ? parseNarrativeResponse(candidate, sections, clientName) : candidate;
 
-const isFatalNarrativeDependencyError = (error) => /Missing GEMINI_API_KEY/i.test(error?.message || '');
+const isFatalNarrativeDependencyError = (error) => /Missing OPENAI_API_KEY/i.test(error?.message || '');
 
 const mergeRegeneratedSections = (narrative, regeneratedSections = []) => {
     const replacements = new Map(regeneratedSections.map(section => [section.sectionId, section]));
@@ -1389,8 +1378,8 @@ export const buildNarrativeFailureUpdate = (attempts = [], technicalDraft = null
 
 export const generatePublishableNarrative = async (normalizedMetrics, sections = [], clientName = 'el cliente', deps = {}, timeoutContext = { cancelled: false }) => {
     const attempts = [];
-    const fullGenerator = deps.generateFullNarrative || generateNarrativeWithGemini;
-    const repairGenerator = deps.repairNarrativeJson || repairNarrativeJsonWithGemini;
+    const fullGenerator = deps.generateFullNarrative || generateNarrativeWithOpenAICompatible;
+    const repairGenerator = deps.repairNarrativeJson || repairNarrativeJsonWithOpenAI;
     const sectionRegenerator = deps.regenerateSections || (async (invalidSections) => generateFallbackNarrative(normalizedMetrics, invalidSections, clientName).sections);
 
     let candidate;

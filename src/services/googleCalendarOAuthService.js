@@ -1,9 +1,13 @@
 import { google } from 'googleapis';
+import crypto from 'crypto';
 import prisma from '../lib/prisma.js';
 import { encrypt, decrypt } from '../utils/encryption.js';
 
 export const CENTRAL_GOOGLE_CALENDAR_EMAIL = process.env.GOOGLE_CALENDAR_ACCOUNT_EMAIL || 'coordinadorbrainstudio@gmail.com';
 const DEFAULT_SCOPES = [
+  'openid',
+  'email',
+  'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/calendar',
   'https://www.googleapis.com/auth/meetings.space.created'
 ];
@@ -25,25 +29,49 @@ export const getOAuthClient = () => {
   );
 };
 
-export const getGoogleCalendarAuthUrl = () => {
+export const getGoogleCalendarAuthUrl = (requestedEmail = null) => {
   const oauth2Client = getOAuthClient();
+  const payload = Buffer.from(JSON.stringify({ requestedEmail: requestedEmail?.trim().toLowerCase() || null })).toString('base64url');
+  const signature = crypto.createHmac('sha256', process.env.ENCRYPTION_KEY || process.env.GOOGLE_OAUTH_CLIENT_SECRET).update(payload).digest('base64url');
 
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope: DEFAULT_SCOPES,
-    include_granted_scopes: true
+    include_granted_scopes: true,
+    login_hint: requestedEmail || undefined,
+    state: `${payload}.${signature}`
   });
 };
 
-export const storeGoogleCalendarOAuthCode = async (code, connectedById = null) => {
+export const verifyGoogleCalendarOAuthState = (state) => {
+  if (!state || !state.includes('.')) throw new Error('El estado OAuth de Google no es válido');
+  const [payload, signature] = state.split('.');
+  const expected = crypto.createHmac('sha256', process.env.ENCRYPTION_KEY || process.env.GOOGLE_OAUTH_CLIENT_SECRET).update(payload).digest();
+  const received = Buffer.from(signature, 'base64url');
+  if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
+    throw new Error('No se pudo verificar el estado OAuth de Google');
+  }
+  return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+};
+
+export const storeGoogleCalendarOAuthCode = async (code, connectedById = null, requestedEmail = null) => {
   if (!code) throw new Error('Missing Google OAuth code');
 
   const oauth2Client = getOAuthClient();
   const { tokens } = await oauth2Client.getToken(code);
+  oauth2Client.setCredentials(tokens);
+  const profile = await google.oauth2({ version: 'v2', auth: oauth2Client }).userinfo.get();
+  const authenticatedEmail = profile.data.email?.trim().toLowerCase();
+  if (!authenticatedEmail || profile.data.verified_email === false) {
+    throw new Error('Google no devolvió un correo verificado');
+  }
+  if (requestedEmail && authenticatedEmail !== requestedEmail.trim().toLowerCase()) {
+    throw new Error(`Se autorizó ${authenticatedEmail}, pero se esperaba ${requestedEmail.trim().toLowerCase()}`);
+  }
 
   const existing = await prisma.googleCalendarConnection.findUnique({
-    where: { email: CENTRAL_GOOGLE_CALENDAR_EMAIL }
+    where: { email: authenticatedEmail }
   });
 
   const mergedTokens = {
@@ -52,9 +80,9 @@ export const storeGoogleCalendarOAuthCode = async (code, connectedById = null) =
   };
 
   return await prisma.googleCalendarConnection.upsert({
-    where: { email: CENTRAL_GOOGLE_CALENDAR_EMAIL },
+    where: { email: authenticatedEmail },
     create: {
-      email: CENTRAL_GOOGLE_CALENDAR_EMAIL,
+      email: authenticatedEmail,
       calendarId: 'primary',
       encryptedTokens: encrypt(JSON.stringify(mergedTokens)),
       scopes: DEFAULT_SCOPES,
@@ -83,14 +111,22 @@ export const storeGoogleCalendarOAuthCode = async (code, connectedById = null) =
 export const getCentralGoogleCalendarConnection = async () => {
   return await prisma.googleCalendarConnection.findFirst({
     where: {
-      email: CENTRAL_GOOGLE_CALENDAR_EMAIL,
       isActive: true
-    }
+    },
+    orderBy: { connectedAt: 'asc' }
   });
 };
 
-export const getAuthorizedGoogleOAuthClient = async () => {
-  const connection = await getCentralGoogleCalendarConnection();
+export const getGoogleCalendarConnections = async () => prisma.googleCalendarConnection.findMany({
+  where: { isActive: true },
+  orderBy: { connectedAt: 'asc' },
+  select: { id: true, email: true, calendarId: true, scopes: true, isActive: true, connectedAt: true, lastSyncedAt: true }
+});
+
+export const getAuthorizedGoogleOAuthClient = async (connectionId = null) => {
+  const connection = connectionId
+    ? await prisma.googleCalendarConnection.findFirst({ where: { id: connectionId, isActive: true } })
+    : await getCentralGoogleCalendarConnection();
   if (!connection) return null;
 
   const oauth2Client = getOAuthClient();
@@ -98,28 +134,22 @@ export const getAuthorizedGoogleOAuthClient = async () => {
   return { oauth2Client, connection };
 };
 
-export const getCentralGoogleCalendarConnectionStatus = async () => {
-  const connection = await getCentralGoogleCalendarConnection();
-  if (!connection) {
-    return {
-      connected: false,
-      email: CENTRAL_GOOGLE_CALENDAR_EMAIL
-    };
-  }
-
-  return {
-    connected: true,
-    id: connection.id,
-    email: connection.email,
-    calendarId: connection.calendarId,
-    scopes: connection.scopes,
-    connectedAt: connection.connectedAt,
-    lastSyncedAt: connection.lastSyncedAt
-  };
+export const getAuthorizedGoogleOAuthClients = async () => {
+  const connections = await prisma.googleCalendarConnection.findMany({ where: { isActive: true } });
+  return connections.map(connection => {
+    const oauth2Client = getOAuthClient();
+    oauth2Client.setCredentials(JSON.parse(decrypt(connection.encryptedTokens)));
+    return { oauth2Client, connection };
+  });
 };
 
-export const listAccessibleGoogleCalendars = async () => {
-  const auth = await getAuthorizedGoogleOAuthClient();
+export const getCentralGoogleCalendarConnectionStatus = async () => {
+  const connections = await getGoogleCalendarConnections();
+  return { connected: connections.length > 0, connections };
+};
+
+export const listAccessibleGoogleCalendars = async (connectionId = null) => {
+  const auth = await getAuthorizedGoogleOAuthClient(connectionId);
   if (!auth) return [];
 
   const calendar = google.calendar({ version: 'v3', auth: auth.oauth2Client });
@@ -130,6 +160,8 @@ export const listAccessibleGoogleCalendars = async () => {
 
   return (response.data.items || []).map(item => ({
     id: item.id,
+    connectionId: auth.connection.id,
+    accountEmail: auth.connection.email,
     summary: item.summary,
     description: item.description,
     primary: item.primary === true,
@@ -139,10 +171,12 @@ export const listAccessibleGoogleCalendars = async () => {
   }));
 };
 
-export const setActiveGoogleCalendar = async (calendarId) => {
+export const setActiveGoogleCalendar = async (calendarId, connectionId = null) => {
   if (!calendarId) throw new Error('calendarId is required');
 
-  const connection = await getCentralGoogleCalendarConnection();
+  const connection = connectionId
+    ? await prisma.googleCalendarConnection.findFirst({ where: { id: connectionId, isActive: true } })
+    : await getCentralGoogleCalendarConnection();
   if (!connection) throw new Error('Google Calendar is not connected');
 
   return await prisma.googleCalendarConnection.update({
@@ -164,8 +198,8 @@ export const setActiveGoogleCalendar = async (calendarId) => {
   });
 };
 
-export const createOpenGoogleMeetSpace = async () => {
-  const auth = await getAuthorizedGoogleOAuthClient();
+export const createOpenGoogleMeetSpace = async (connectionId = null) => {
+  const auth = await getAuthorizedGoogleOAuthClient(connectionId);
   if (!auth) return null;
 
   const accessToken = await auth.oauth2Client.getAccessToken();

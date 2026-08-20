@@ -203,6 +203,14 @@ const Dashboard = () => {
     refetchOnWindowFocus: true
   });
 
+  const { data: serviceStatusData, isLoading: isLoadingServices, error: serviceStatusError } = useQuery({
+    queryKey: ['service-status'],
+    queryFn: () => fetchJson(`${baseUrl}/api/system/services-status`),
+    refetchInterval: () => (document.hidden ? false : 60000),
+    refetchIntervalInBackground: false,
+    staleTime: 45000
+  });
+
   const communityManagers = useMemo(
     () => teamMembers.filter((member) => member.role?.toLowerCase().includes('community manager')),
     [teamMembers]
@@ -686,6 +694,36 @@ const Dashboard = () => {
           )}
         </>
       )}
+      <motion.footer
+        variants={item}
+        className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-zinc-200/80 dark:border-zinc-800 pt-4 text-[11px] text-zinc-500 dark:text-zinc-400"
+      >
+        <span className="font-semibold text-zinc-700 dark:text-zinc-300">Estado de servicios</span>
+        {isLoadingServices ? (
+          <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> Comprobando</span>
+        ) : serviceStatusError ? (
+          <span className="inline-flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+            <span className="h-2 w-2 rounded-full bg-rose-500" aria-hidden="true" />
+            No se pudo comprobar
+          </span>
+        ) : (serviceStatusData?.services || []).map((service) => {
+          const isOperational = service.status === 'operational';
+          return (
+            <span
+              key={service.id}
+              aria-label={`${service.name}: ${isOperational ? 'operativo' : 'no disponible'}`}
+              title={`${service.name}: ${isOperational ? 'operativo' : 'no disponible'}`}
+              className="inline-flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <span
+                aria-hidden="true"
+                className={cn('h-2 w-2 rounded-full', isOperational ? 'bg-emerald-500' : 'bg-rose-500')}
+              />
+              {service.name}
+            </span>
+          );
+        })}
+      </motion.footer>
       {showHistoryModal && (
         <CompletedTasksHistoryModal
           isOpen={showHistoryModal}

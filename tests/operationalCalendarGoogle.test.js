@@ -59,6 +59,52 @@ test('operational calendar records the authenticated creator for dashboard chall
   assert.match(eventService, /createdById/);
 });
 
+test('operational calendar supports multiple reciprocal Google accounts and external guests', async () => {
+  const schema = await read('prisma/schema.prisma');
+  const oauthService = await read('src/services/googleCalendarOAuthService.js');
+  const eventService = await read('src/services/operationalEventService.js');
+  const routes = await read('src/routes/api/activity.js');
+  const routeIndex = await read('src/routes/index.js');
+  const server = await read('server.js');
+  const calendar = await read('src/components/modules/Activity/OperationalCalendar.jsx');
+
+  const eventModel = schema.match(/model OperationalEvent \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(eventModel, /googleConnectionId\s+String\?/);
+  assert.match(eventModel, /attendeeEmails\s+String\[\]/);
+  assert.match(eventModel, /attendeeResponses\s+Json\?/);
+  assert.match(eventModel, /@@index\(\[googleConnectionId, googleCalendarId, googleEventId\]\)/);
+  assert.match(schema, /model GoogleCalendarEventLink/);
+  assert.match(schema, /@@unique\(\[connectionId, calendarId, googleEventId\]\)/);
+  assert.match(eventService, /googleCalendarEventLink/);
+  assert.match(eventService, /googleICalUID/);
+
+  assert.match(oauthService, /userinfo\.email/);
+  assert.match(oauthService, /getGoogleCalendarConnections/);
+  assert.match(oauthService, /getAuthorizedGoogleOAuthClients/);
+  assert.match(oauthService, /state/);
+  assert.match(oauthService, /verifyGoogleCalendarOAuthState/);
+  assert.match(oauthService, /timingSafeEqual/);
+  assert.doesNotMatch(oauthService, /where:\s*\{\s*email:\s*CENTRAL_GOOGLE_CALENDAR_EMAIL/);
+
+  assert.match(eventService, /sendUpdates:\s*'all'/);
+  assert.match(eventService, /attendees:\s*event\.attendeeEmails/);
+  assert.match(eventService, /syncAllGoogleCalendars/);
+  assert.match(eventService, /syncToken/);
+  assert.match(eventService, /status === 'cancelled'/);
+  assert.match(eventService, /handleGoogleCalendarWebhook/);
+  assert.match(eventService, /renewGoogleCalendarWatchChannels/);
+  assert.match(eventService, /calendar\.events\.watch/);
+  assert.match(server, /startGoogleCalendarAutoSync/);
+
+  assert.match(routes, /google-calendar\/connections/);
+  assert.match(routeIndex, /google-calendar\/webhook/);
+  assert.match(routes, /connectionId/);
+  assert.match(calendar, /attendeeEmails/);
+  assert.match(calendar, /Cuenta de Google/);
+  assert.match(calendar, /Invitados externos/);
+  assert.match(calendar, /refetchInterval:\s*15_000/);
+});
+
 test('operational calendar fixes current render and role issues', async () => {
   const calendar = await read('src/components/modules/Activity/OperationalCalendar.jsx');
   const activityMap = await read('src/components/modules/Activity/ActivityMap.jsx');

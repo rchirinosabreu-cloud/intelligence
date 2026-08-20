@@ -1,11 +1,11 @@
 import express from 'express';
 import multer from 'multer';
 import prisma from '../../lib/prisma.js';
-import { GoogleGenAI } from '@google/genai';
+import { OpenAICompat } from '../../services/openAICompat.js';
 import { uploadClientFile, getSignedUrl, getClientFileStream } from '../../services/storageService.js';
 import { parseJsonResponse, extractModelText } from '../../services/aiService.js';
 import {
-    extractMetricsWithGemini,
+    extractMetricsWithOpenAI,
     generateNarrativeWithAIProvider,
     generatePublishableNarrative,
     validateAndCleanSourceExtraction,
@@ -39,16 +39,16 @@ export function getReportPipelineStatus() {
 }
 
 // Initialize AI
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+const MODEL_NAME = process.env.OPENAI_MODEL_VISION || process.env.OPENAI_MODEL || "gpt-5.6-terra";
 
 let genAI;
 try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (apiKey) {
-        genAI = new GoogleGenAI({ apiKey });
-        console.log("[Reports API] Google Generative AI initialized.");
+        genAI = new OpenAICompat({ apiKey });
+        console.log("[Reports API] OpenAI initialized.");
     } else {
-        console.warn("[Reports API] GEMINI_API_KEY is missing.");
+        console.warn("[Reports API] OPENAI_API_KEY is missing.");
     }
 } catch (e) {
     console.error("[Reports API] Failed to initialize AI client:", e);
@@ -271,7 +271,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             const uploadResult = await uploadClientFile(file, client.name);
 
             // 2. Vision analysis
-            const extracted = await extractMetricsWithGemini(file.buffer, file.mimetype);
+            const extracted = await extractMetricsWithOpenAI(file.buffer, file.mimetype);
 
             // 3. Validation and cleaning by Source
             const cleaned = validateAndCleanSourceExtraction({
@@ -624,7 +624,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
             );
         } catch (generationError) {
             timeoutContext.cancelled = true;
-            if (/Missing GEMINI_API_KEY/i.test(generationError?.message || '')) throw generationError;
+            if (/Missing OPENAI_API_KEY/i.test(generationError?.message || '')) throw generationError;
 
             const loggedError = buildNarrativeErrorLog(generationError, null, { step: 'withTimeout', reportId, isFatal: false });
             console.error('[Reports API] Narrative generation did not produce publishable content:', loggedError);

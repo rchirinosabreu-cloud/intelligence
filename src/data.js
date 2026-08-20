@@ -8,7 +8,7 @@ export const MOCK_DATA = {
       { id: 4, label: "Horas Ahorradas", value: "48h", change: "+12%", trend: "up" },
     ],
     news: [
-      { id: 1, title: "Nuevo Modelo Gemini 1.5 Pro Integrado", date: "Hace 2h", category: "System" },
+      { id: 1, title: "OpenAI integrado en todos los procesos", date: "Hace 2h", category: "System" },
       { id: 2, title: "Reporte Mensual Generado: SunPartners", date: "Ayer", category: "Report" },
       { id: 3, title: "Alerta de Tendencia: TikTok SEO", date: "Hace 3d", category: "Insight" },
     ]

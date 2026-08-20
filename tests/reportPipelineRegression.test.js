@@ -461,38 +461,29 @@ test('report creation stores the selected reporting period for narrative generat
   assert.match(route, /end:\s*parsedEndDate\.toISOString\(\)\.slice\(0,\s*10\)/);
 });
 
-test('AI narrative provider falls back to Gemini when OpenAI narrative generation fails', async () => {
+test('AI narrative provider does not fall back to another provider when OpenAI fails', async () => {
   const { generateNarrativeWithAIProvider } = await import('../src/services/reportVisionService.js');
   const calls = [];
-  const result = await generateNarrativeWithAIProvider({}, [], 'Cliente Demo', {
+  await assert.rejects(() => generateNarrativeWithAIProvider({}, [], 'Cliente Demo', {
     openaiGenerator: async () => {
       calls.push('openai');
       throw new Error('openai unavailable');
     },
-    geminiGenerator: async () => {
-      calls.push('gemini');
-      return { headline: 'gemini fallback', summaryPoints: [], keyAchievements: '', actionPlan: [], logrosYAvances: [], contenidoTopAnalisis: '', oportunidadesYAprendizajes: [], recomendacionesEstrategicas: [], sections: [], granularNarratives: [] };
-    },
-    env: { OPENAI_API_KEY: 'openai-key', GEMINI_API_KEY: 'gemini-key' }
-  });
+    env: { OPENAI_API_KEY: 'openai-key' }
+  }), /OpenAI narrative generation failed/);
 
-  assert.equal(result.headline, 'gemini fallback');
-  assert.deepEqual(calls, ['openai', 'gemini']);
+  assert.deepEqual(calls, ['openai']);
 });
 
-test('AI narrative provider preserves Gemini rawContent for downstream JSON repair', async () => {
+test('AI narrative provider reports an OpenAI failure without invoking a secondary provider', async () => {
   const { generateNarrativeWithAIProvider } = await import('../src/services/reportVisionService.js');
-  const geminiError = new Error('gemini invalid json');
-  geminiError.rawContent = '{"headline":"roto"';
-
   await assert.rejects(
     () => generateNarrativeWithAIProvider({}, [], 'Cliente Demo', {
       openaiGenerator: async () => { throw new Error('openai unavailable'); },
-      geminiGenerator: async () => { throw geminiError; },
-      env: { OPENAI_API_KEY: 'openai-key', GEMINI_API_KEY: 'gemini-key' }
+      env: { OPENAI_API_KEY: 'openai-key' }
     }),
     (error) => {
-      assert.equal(error.rawContent, geminiError.rawContent);
+      assert.match(error.message, /OpenAI narrative generation failed/);
       return true;
     }
   );

@@ -1,4 +1,4 @@
-const TRIAGE_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+const TRIAGE_MODEL = process.env.OPENAI_MODEL_EMAIL || process.env.OPENAI_MODEL || 'gpt-5-mini';
 
 const TRIAGE_SCHEMA = {
   type: 'object',

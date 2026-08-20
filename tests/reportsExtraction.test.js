@@ -1,20 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import {
-    extractMetricsWithGemini,
+    extractMetricsWithOpenAI,
     filterExtractedTopContentRows,
     validateAndCleanSourceExtraction,
     mergeSourceMetricsIntoAccumulator,
     finalizeNormalizedMetrics
 } from '../src/services/reportVisionService.js';
 
-// We can mock the fetch call to Gemini to test the vision service
-test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) => {
+// Mock OpenAI responses to test the vision service without external calls.
+test('Vision Extraction Service - OpenAI Mock and Math Validation', async (t) => {
 
-    await t.test('Retries once when Gemini returns malformed structured JSON', async () => {
+    await t.test('Retries once when OpenAI returns malformed structured JSON', async () => {
         const originalFetch = globalThis.fetch;
-        const originalApiKey = process.env.GEMINI_API_KEY;
-        process.env.GEMINI_API_KEY = 'mock-key';
+        const originalApiKey = process.env.OPENAI_API_KEY;
+        process.env.OPENAI_API_KEY = 'mock-key';
         let calls = 0;
         globalThis.fetch = async () => {
             calls += 1;
@@ -28,19 +28,19 @@ test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) =>
         };
 
         try {
-            const result = await extractMetricsWithGemini(Buffer.from('mock-image'), 'image/jpeg');
+            const result = await extractMetricsWithOpenAI(Buffer.from('mock-image'), 'image/jpeg');
             assert.strictEqual(calls, 2);
             assert.strictEqual(result.metrics.spend.value, 2500);
         } finally {
             globalThis.fetch = originalFetch;
-            process.env.GEMINI_API_KEY = originalApiKey;
+            process.env.OPENAI_API_KEY = originalApiKey;
         }
     });
 
     await t.test('recovers when two structured responses are malformed', async () => {
         const originalFetch = globalThis.fetch;
-        const originalApiKey = process.env.GEMINI_API_KEY;
-        process.env.GEMINI_API_KEY = 'mock-key';
+        const originalApiKey = process.env.OPENAI_API_KEY;
+        process.env.OPENAI_API_KEY = 'mock-key';
         let calls = 0;
         globalThis.fetch = async () => {
             calls += 1;
@@ -53,12 +53,12 @@ test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) =>
             });
         };
         try {
-            const result = await extractMetricsWithGemini(Buffer.from('mock-image'), 'image/jpeg');
+            const result = await extractMetricsWithOpenAI(Buffer.from('mock-image'), 'image/jpeg');
             assert.strictEqual(calls, 3);
             assert.strictEqual(result.metrics[0].value, 42500);
         } finally {
             globalThis.fetch = originalFetch;
-            process.env.GEMINI_API_KEY = originalApiKey;
+            process.env.OPENAI_API_KEY = originalApiKey;
         }
     });
 
@@ -121,11 +121,11 @@ test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) =>
         };
 
         // Set mock env variables
-        const originalApiKey = process.env.GEMINI_API_KEY;
-        process.env.GEMINI_API_KEY = 'mock-key';
+        const originalApiKey = process.env.OPENAI_API_KEY;
+        process.env.OPENAI_API_KEY = 'mock-key';
 
         try {
-            const result = await extractMetricsWithGemini(Buffer.from('mock-image'), 'image/jpeg');
+            const result = await extractMetricsWithOpenAI(Buffer.from('mock-image'), 'image/jpeg');
             assert.ok(result.metrics);
             assert.strictEqual(result.metrics.spend.value, 1250.50);
             assert.strictEqual(result.metrics.clicks.value, 1500);
@@ -135,7 +135,7 @@ test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) =>
         } finally {
             // Restore
             globalThis.fetch = originalFetch;
-            process.env.GEMINI_API_KEY = originalApiKey;
+            process.env.OPENAI_API_KEY = originalApiKey;
         }
     });
 
@@ -406,15 +406,15 @@ test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) =>
             });
         };
 
-        const originalApiKey = process.env.GEMINI_API_KEY;
-        process.env.GEMINI_API_KEY = 'mock-key';
+        const originalApiKey = process.env.OPENAI_API_KEY;
+        process.env.OPENAI_API_KEY = 'mock-key';
 
         try {
             // Import and run the new narrative generation service
-            const { generateNarrativeWithGemini } = await import('../src/services/reportVisionService.js');
+            const { generateNarrativeWithOpenAICompatible } = await import('../src/services/reportVisionService.js');
             const metrics = { spend: { value: 1300 } };
             const sections = [{ sectionId: "sec-1", chartType: "LINE_CHART", title: "Rendimiento y Tendencia", sectionCategory: "ADS", platform: "META_ADS", dataset: [{ label: "Día 1", value: 100, hombres: null, mujeres: null }] }];
-            const result = await generateNarrativeWithGemini(metrics, sections, 'Cliente Demo');
+            const result = await generateNarrativeWithOpenAICompatible(metrics, sections, 'Cliente Demo');
 
 
             assert.ok(result);
@@ -424,7 +424,7 @@ test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) =>
             assert.strictEqual(result.actionPlan[0].suggestedAssignee, "Director de Performance");
         } finally {
             globalThis.fetch = originalFetch;
-            process.env.GEMINI_API_KEY = originalApiKey;
+            process.env.OPENAI_API_KEY = originalApiKey;
         }
     });
 });
