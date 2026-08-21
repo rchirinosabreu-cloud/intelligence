@@ -28,6 +28,17 @@ export const getCalendarPopoverPosition = (rect, viewport, dimensions = { width:
   return { left, top: fitsBelow ? rect.bottom + gap : Math.max(margin, rect.top - dimensions.height - gap), placement: fitsBelow ? 'bottom' : 'top' };
 };
 
+export const explainGoogleSyncError = (error = '') => {
+  const normalized = String(error).toLowerCase();
+  if (normalized.includes('timerangeempty') || normalized.includes('specified time range is empty') || normalized.includes('"timemax"')) {
+    return 'El evento no tiene un rango de tiempo válido para Google Calendar. Es histórico y su hora de finalización está vacía o no es posterior al inicio. Esto no afecta la sincronización de los demás eventos.';
+  }
+  if (normalized.includes('insufficient permission') || normalized.includes('insufficientpermissions') || normalized.includes('forbidden')) {
+    return 'La cuenta conectada no tiene permisos suficientes para sincronizar este evento. Puedes reintentar después de revisar la conexión con Google.';
+  }
+  return 'Google rechazó la sincronización de este evento. Puedes reintentarlo; si vuelve a fallar, los detalles técnicos permiten identificar la causa.';
+};
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const addExternalEmailTags = (currentEmails = [], rawValue = '') => {

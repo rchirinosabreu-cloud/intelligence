@@ -10,12 +10,24 @@ import {
 } from '../src/services/operationalEventService.js';
 import {
   addExternalEmailTags,
+  explainGoogleSyncError,
   getGoogleConnectionHealth,
   getCalendarPopoverPosition,
   getDayEventDisplay,
   normalizeCalendarDescription,
   summarizeGoogleSyncResults
 } from '../src/components/modules/Activity/calendarPresentation.js';
+
+test('Google synchronization errors become clear Spanish explanations', () => {
+  assert.equal(
+    explainGoogleSyncError('Google Calendar sync failed: {"reason":"timeRangeEmpty","location":"timeMax"}'),
+    'El evento no tiene un rango de tiempo válido para Google Calendar. Es histórico y su hora de finalización está vacía o no es posterior al inicio. Esto no afecta la sincronización de los demás eventos.'
+  );
+  assert.equal(
+    explainGoogleSyncError('Google Calendar sync failed: permiso denegado'),
+    'Google rechazó la sincronización de este evento. Puedes reintentarlo; si vuelve a fallar, los detalles técnicos permiten identificar la causa.'
+  );
+});
 
 test('calendar popovers open above bottom-row events and below when space allows', () => {
   assert.deepEqual(
@@ -139,6 +151,7 @@ test('calendar exposes failed events, retry recovery and an organized manual syn
   assert.match(calendar, /Reintentar/);
   assert.match(calendar, /pointer-events-none/);
   assert.match(calendar, /googleSyncError/);
+  assert.match(calendar, /Ver detalles técnicos/);
   assert.match(schema, /googleSyncError\s+String\?/);
   assert.match(service, /googleSyncError:\s*details/);
   assert.match(service, /googleSyncError:\s*null/);

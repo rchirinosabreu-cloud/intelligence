@@ -38,6 +38,7 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   addExternalEmailTags,
+  explainGoogleSyncError,
   getCalendarPopoverPosition,
   getDayEventDisplay,
   getGoogleConnectionHealth,
@@ -761,15 +762,29 @@ const OperationalCalendar = () => {
           <div className="max-h-[50vh] space-y-2 overflow-y-auto overscroll-contain">
             {googleRetryError && (
               <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
-                <p className="font-bold">Causa devuelta por Google</p>
-                <p className="mt-1 break-words">{googleRetryError}</p>
+                <p className="font-bold">No se pudo completar la sincronización</p>
+                <p className="mt-1 leading-relaxed">{explainGoogleSyncError(googleRetryError)}</p>
+                <details className="mt-2">
+                  <summary className="cursor-pointer font-semibold">Ver detalles técnicos</summary>
+                  <p className="mt-2 break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-black/20">{googleRetryError}</p>
+                </details>
               </div>
             )}
             {(googleErrorConnection?.syncErrors || []).map(event => (
               <div key={event.id} className="rounded-xl border border-red-200 bg-red-50/60 p-3 dark:border-red-500/20 dark:bg-red-500/10">
                 <p className="font-semibold text-zinc-950 dark:text-white">{event.title}</p>
                 <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">{format(new Date(event.startAt), 'd MMM yyyy, HH:mm', { locale: es })}</p>
-                <p className="mt-2 break-words text-xs text-red-700 dark:text-red-200">{event.googleSyncError || 'Aún no hay diagnóstico guardado. Pulsa Reintentar para obtener la causa actual de Google.'}</p>
+                {event.googleSyncError ? (
+                  <div className="mt-2 text-xs text-red-700 dark:text-red-200">
+                    <p className="leading-relaxed">{explainGoogleSyncError(event.googleSyncError)}</p>
+                    <details className="mt-2">
+                      <summary className="cursor-pointer font-semibold">Ver detalles técnicos</summary>
+                      <p className="mt-2 break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-black/20">{event.googleSyncError}</p>
+                    </details>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-red-700 dark:text-red-200">Aún no hay diagnóstico guardado. Pulsa Reintentar para obtener la causa actual de Google.</p>
+                )}
                 <button type="button" onClick={() => reconciliationMutation.mutate({ eventIds: [event.id], connectionId: googleErrorConnection.id })} disabled={reconciliationMutation.isPending} className="brain-danger-button mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-xs font-bold disabled:opacity-60">
                   {reconciliationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Reintentar
                 </button>
