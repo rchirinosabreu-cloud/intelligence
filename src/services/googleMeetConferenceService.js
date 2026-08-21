@@ -88,7 +88,9 @@ export async function endGoogleMeetConference(eventId, dependencies = {}) {
   const getAccessToken = dependencies.getAccessToken || defaultGetAccessToken;
   const event = await db.operationalEvent.findUnique({ where: { id: eventId }, include: { googleLinks: true } });
   if (!event) throw new Error('El evento no existe');
-  if (event.type !== 'MEETING' || !event.meetingLink) throw new Error('El evento no tiene una reunión de Google Meet');
+  if (!event.googleMeetSpaceName && (event.type !== 'MEETING' || !event.meetingLink)) {
+    throw new Error('El evento no tiene una reunión de Google Meet');
+  }
   const { headers } = await getAuthorizedMeetContext(event, { getAuth, getAccessToken });
   const space = event.googleMeetSpaceName ? { name: event.googleMeetSpaceName } : await resolveMeetSpace(event, { db, request, headers });
   if (!space.name) throw new Error('Google Meet no devolvió el identificador del espacio');
@@ -106,7 +108,12 @@ export async function autoCloseFinishedFirefliesMeetings(dependencies = {}) {
   const now = dependencies.now || new Date();
   const events = await db.operationalEvent.findMany({
     where: {
-      type: 'MEETING', captureWithFireflies: true, meetingLink: { not: null }, googleMeetEndedAt: null,
+      captureWithFireflies: true,
+      googleMeetEndedAt: null,
+      OR: [
+        { googleMeetSpaceName: { not: null } },
+        { type: 'MEETING', meetingLink: { not: null } }
+      ],
       startAt: { lte: now, gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) }
     },
     include: { googleLinks: true }

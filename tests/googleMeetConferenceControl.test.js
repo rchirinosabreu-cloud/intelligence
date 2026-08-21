@@ -6,7 +6,7 @@ test('finaliza la conferencia activa usando el espacio persistente y la cuenta o
   const { endGoogleMeetConference } = await import('../src/services/googleMeetConferenceService.js');
   const calls = [];
   const db = { operationalEvent: {
-    findUnique: async () => ({ id: 'event-1', type: 'MEETING', meetingLink: 'https://meet.google.com/abc-defg-hij', googleMeetSpaceName: 'spaces/space-123', googleConnectionId: 'connection-1', googleLinks: [] }),
+    findUnique: async () => ({ id: 'event-1', type: 'PROJECT', meetingLink: null, googleMeetSpaceName: 'spaces/space-123', googleConnectionId: 'connection-1', googleLinks: [] }),
     update: async () => ({})
   } };
   const result = await endGoogleMeetConference('event-1', {
@@ -38,6 +38,20 @@ test('nunca cierra mientras quede una persona activa ni antes de que alguien hay
   const human = { signedinUser: { displayName: 'Rodny' } };
   assert.equal(evaluateMeetAutoCloseState({ participants: [fireflies, human], onlyBotSince: new Date() }).action, 'RESET');
   assert.equal(evaluateMeetAutoCloseState({ participants: [fireflies], onlyBotSince: null }).action, 'IGNORE');
+});
+
+test('incluye reuniones antiguas con espacio Meet aunque el sync haya perdido tipo y enlace', async () => {
+  const { autoCloseFinishedFirefliesMeetings } = await import('../src/services/googleMeetConferenceService.js');
+  let query;
+  await autoCloseFinishedFirefliesMeetings({
+    db: { operationalEvent: { findMany: async options => { query = options; return []; } } },
+    now: new Date('2026-08-21T17:40:00Z')
+  });
+  assert.deepEqual(query.where.OR, [
+    { googleMeetSpaceName: { not: null } },
+    { type: 'MEETING', meetingLink: { not: null } }
+  ]);
+  assert.equal(query.where.captureWithFireflies, true);
 });
 
 test('recupera enlaces de Meet creados por la plataforma desde ubicación o descripción de Google Calendar', async () => {
