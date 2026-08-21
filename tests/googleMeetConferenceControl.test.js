@@ -79,6 +79,10 @@ test('el cierre es automático y no aparece como botón en el calendario', async
   assert.doesNotMatch(calendarUi, /Finalizar reunión/);
   assert.match(calendarUi, /googleMeetSpaceName/);
   assert.match(autoSync, /autoCloseFinishedFirefliesMeetings/);
+  assert.ok(
+    autoSync.indexOf('await autoCloseFinishedFirefliesMeetings()') < autoSync.indexOf('await syncAllGoogleCalendars()'),
+    'el monitor de Meet debe ejecutarse antes de la sincronización de Calendar'
+  );
   assert.match(schema, /googleMeetOnlyBotSince\s+DateTime\?/);
   assert.match(schema, /googleMeetEndedAt\s+DateTime\?/);
 });
