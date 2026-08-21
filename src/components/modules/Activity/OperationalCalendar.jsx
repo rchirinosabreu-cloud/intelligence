@@ -112,6 +112,7 @@ const OperationalCalendar = () => {
     startAt: getRoundedBogotaNow(new Date()),
     endAt: addDays(getRoundedBogotaNow(new Date()), 0),
     isAllDay: false,
+    captureWithFireflies: false,
     memberIds: [],
     recurrence: 'NONE',
     recurrenceEnd: null,
@@ -340,6 +341,7 @@ const OperationalCalendar = () => {
       startAt: start,
       endAt: end,
       isAllDay: false,
+      captureWithFireflies: false,
       memberIds: [],
       recurrence: 'NONE',
       recurrenceEnd: null,
@@ -367,12 +369,13 @@ const OperationalCalendar = () => {
       startAt: new Date(event.startAt),
       endAt: new Date(event.endAt),
       isAllDay: Boolean(event.isAllDay),
+      captureWithFireflies: Boolean(event.captureWithFireflies || event.attendeeEmails?.some(email => email.toLowerCase() === 'fred@fireflies.ai')),
       memberIds: event.memberIds || [],
       recurrence: event.recurrence || 'NONE',
       recurrenceEnd: event.recurrenceEnd ? new Date(event.recurrenceEnd) : null,
       meetingLink: event.meetingLink || '',
       description: normalizeCalendarDescription(event.description || ''),
-      attendeeEmails: event.attendeeEmails || [],
+      attendeeEmails: (event.attendeeEmails || []).filter(email => email.toLowerCase() !== 'fred@fireflies.ai'),
       googleConnectionId: event.googleConnectionId || googleConnections[0]?.id || ''
     });
     setExternalEmailDraft('');
@@ -402,7 +405,7 @@ const OperationalCalendar = () => {
       setExternalEmailError(`Correo no válido: ${result.invalid.join(', ')}`);
       return;
     }
-    eventMutation.mutate({ ...formData, attendeeEmails: result.emails });
+    eventMutation.mutate({ ...formData, attendeeEmails: result.emails, captureWithFireflies: formData.captureWithFireflies });
   };
 
   const generateMeetLink = async () => {
@@ -1020,7 +1023,14 @@ const OperationalCalendar = () => {
               </div>
 
               {formData.type === 'MEETING' && (
-                <div className="space-y-2 rounded-xl border border-violet-500/10 bg-violet-500/5 p-4 md:col-span-2">
+                <div className="space-y-4 rounded-xl border border-violet-500/10 bg-violet-500/5 p-4 md:col-span-2">
+                  <label className="flex min-h-11 cursor-pointer items-center justify-between gap-4 rounded-xl border border-violet-200 bg-white px-4 py-3 dark:border-violet-500/20 dark:bg-zinc-900">
+                    <span>
+                      <span className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white"><Sparkles className="h-4 w-4 text-violet-500" />Invitar a Fireflies</span>
+                      <span className="mt-1 block text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">Fred se añadirá como invitado y entrará automáticamente a la reunión para generar la transcripción.</span>
+                    </span>
+                    <input type="checkbox" checked={formData.captureWithFireflies} onChange={event => setFormData({ ...formData, captureWithFireflies: event.target.checked })} className="h-4 w-4 shrink-0 rounded border-zinc-300 text-violet-600 focus:ring-violet-600" />
+                  </label>
                   <div className="flex items-center justify-between gap-3">
                     <label className="text-xs font-bold text-indigo-600 dark:text-indigo-300">Google Meet</label>
                     <button

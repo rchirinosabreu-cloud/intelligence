@@ -249,3 +249,16 @@ test('external guest tags stay in one horizontal row without changing field heig
   assert.match(calendar, /overflow-x-auto/);
   assert.doesNotMatch(calendar, /data-operational-external-guests="tags"[\s\S]{0,500}flex-wrap/);
 });
+
+test('calendar events can invite Fireflies automatically and preserve the choice reciprocally', async () => {
+  const schema = await readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
+  const service = await readFile(new URL('../src/services/operationalEventService.js', import.meta.url), 'utf8');
+  const calendar = await readFile(new URL('../src/components/modules/Activity/OperationalCalendar.jsx', import.meta.url), 'utf8');
+
+  assert.match(schema, /captureWithFireflies\s+Boolean\s+@default\(false\)/);
+  assert.match(service, /FIREFLIES_BOT_EMAIL\s*=\s*'fred@fireflies\.ai'/);
+  assert.match(service, /captureWithFireflies/);
+  assert.match(calendar, /Invitar a Fireflies/);
+  assert.match(calendar, /formData\.captureWithFireflies/);
+  assert.match(calendar, /captureWithFireflies:\s*formData\.captureWithFireflies/);
+});

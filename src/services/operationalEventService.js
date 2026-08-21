@@ -3,6 +3,8 @@ import { google } from 'googleapis';
 import { getAuthorizedGoogleOAuthClient, getAuthorizedGoogleOAuthClients, CENTRAL_GOOGLE_CALENDAR_EMAIL } from './googleCalendarOAuthService.js';
 import crypto from 'crypto';
 
+const FIREFLIES_BOT_EMAIL = 'fred@fireflies.ai';
+
 const getGoogleErrorDetails = (error) => {
   const data = error.response?.data || error.errors || error.message || error;
   if (typeof data === 'string') return data;
@@ -121,6 +123,7 @@ const toOperationalEventDataFromGoogle = (event, calendarId, connectionId) => ({
   startAt: mapGoogleEventDates(event).startAt,
   endAt: mapGoogleEventDates(event).endAt,
   isAllDay: mapGoogleEventDates(event).isAllDay,
+  captureWithFireflies: (event.attendees || []).some(attendee => attendee.email?.toLowerCase() === FIREFLIES_BOT_EMAIL),
   memberIds: [],
   ...getGoogleRecurrenceData(event),
   meetingLink: getMeetLinkFromGoogleEvent(event),
@@ -545,7 +548,9 @@ async function deleteGoogleEventIfLinked(event) {
 }
 
 export async function createOperationalEvent(data, createdById = null) {
-  const attendeeEmails = await normalizeAttendeeEmails(data.memberIds || [], data.attendeeEmails || []);
+  const externalEmails = (data.attendeeEmails || []).filter(email => email?.toLowerCase() !== FIREFLIES_BOT_EMAIL);
+  if (data.captureWithFireflies) externalEmails.push(FIREFLIES_BOT_EMAIL);
+  const attendeeEmails = await normalizeAttendeeEmails(data.memberIds || [], externalEmails);
   const event = await prisma.operationalEvent.create({
     data: {
       title: data.title,
@@ -554,6 +559,7 @@ export async function createOperationalEvent(data, createdById = null) {
       startAt: new Date(data.startAt),
       endAt: new Date(data.endAt),
       isAllDay: Boolean(data.isAllDay),
+      captureWithFireflies: Boolean(data.captureWithFireflies),
       memberIds: data.memberIds || [],
       attendeeEmails,
       attendeeResponses: {},
@@ -574,7 +580,10 @@ export async function createOperationalEvent(data, createdById = null) {
 export async function updateOperationalEvent(id, data) {
   const current = await prisma.operationalEvent.findUnique({ where: { id } });
   const memberIds = data.memberIds ?? current?.memberIds ?? [];
-  const attendeeEmails = await normalizeAttendeeEmails(memberIds, data.attendeeEmails ?? current?.attendeeEmails ?? []);
+  const captureWithFireflies = data.captureWithFireflies ?? current?.captureWithFireflies ?? false;
+  const externalEmails = (data.attendeeEmails ?? current?.attendeeEmails ?? []).filter(email => email?.toLowerCase() !== FIREFLIES_BOT_EMAIL);
+  if (captureWithFireflies) externalEmails.push(FIREFLIES_BOT_EMAIL);
+  const attendeeEmails = await normalizeAttendeeEmails(memberIds, externalEmails);
   const event = await prisma.operationalEvent.update({
     where: { id },
     data: {
@@ -584,6 +593,7 @@ export async function updateOperationalEvent(id, data) {
       startAt: data.startAt ? new Date(data.startAt) : undefined,
       endAt: data.endAt ? new Date(data.endAt) : undefined,
       isAllDay: data.isAllDay === undefined ? undefined : Boolean(data.isAllDay),
+      captureWithFireflies,
       memberIds: data.memberIds,
       attendeeEmails,
       recurrence: data.recurrence,

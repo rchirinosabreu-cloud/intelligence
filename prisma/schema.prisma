@@ -347,6 +347,7 @@ model OperationalEvent {
   startAt              DateTime
   endAt                DateTime
   isAllDay             Boolean   @default(false)
+  captureWithFireflies Boolean   @default(false)
   memberIds            String[]  @default([]) // IDs of TeamMembers involved
   recurrence           String? // NONE, WEEKLY
   recurrenceEnd        DateTime?
