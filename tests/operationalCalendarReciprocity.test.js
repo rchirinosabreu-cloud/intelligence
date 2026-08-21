@@ -199,6 +199,9 @@ test('calendar dialogs use the shared modal system, wide layout and scroll conta
   assert.match(calendar, /<Dialog open=\{isModalOpen\}/);
   assert.match(calendar, /max-w-3xl/);
   assert.match(calendar, /data-operational-event-form="dialog"/);
+  assert.match(calendar, /data-calendar-scroll-container="event-form"[^>]*className="[^"]*overflow-y-auto[^"]*pb-6/);
+  assert.match(calendar, /data-calendar-form-footer="event-form"[^>]*className="[^"]*shrink-0[^"]*py-4/);
+  assert.match(calendar, /max-h-\[calc\(100dvh-1rem\)\]/);
   assert.match(calendar, /data-operational-external-guests="tags"/);
   assert.doesNotMatch(calendar, /value=\{\(formData\.attendeeEmails \|\| \[\]\)\.join\(', '\)\}/);
 });
@@ -247,6 +250,9 @@ test('external guest tags stay in one horizontal row without changing field heig
   assert.match(calendar, /data-operational-external-guests="tags"/);
   assert.match(calendar, /flex-nowrap/);
   assert.match(calendar, /overflow-x-auto/);
+  assert.match(calendar, /overflow-y-hidden/);
+  assert.match(calendar, /scrollbar-width:none/);
+  assert.doesNotMatch(calendar, /Presiona Enter para aÃ±adir/);
   assert.doesNotMatch(calendar, /data-operational-external-guests="tags"[\s\S]{0,500}flex-wrap/);
 });
 

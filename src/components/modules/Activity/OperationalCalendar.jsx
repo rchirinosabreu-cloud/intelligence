@@ -838,13 +838,14 @@ const OperationalCalendar = () => {
 
       {isModalOpen && (
         <Dialog open={isModalOpen} onOpenChange={open => { if (!open) closeModal(); }}>
-          <DialogContent data-operational-event-form="dialog" className="max-h-[90vh] max-w-3xl gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+          <DialogContent data-operational-event-form="dialog" className="flex max-h-[calc(100dvh-1rem)] max-w-3xl flex-col gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:max-h-[90dvh]">
             <DialogHeader className="border-b border-zinc-100 bg-zinc-50/50 px-6 py-4 text-left dark:border-zinc-800 dark:bg-zinc-900/50">
               <DialogTitle className="text-lg font-semibold text-zinc-950 dark:text-white">{editingEventId ? 'Editar evento' : 'Nuevo evento'}</DialogTitle>
               <DialogDescription className="sr-only">Formulario para crear o editar un evento del calendario.</DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="grid min-h-0 overscroll-contain overflow-y-auto p-6 gap-4 md:grid-cols-2" data-calendar-scroll-container="event-form">
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div data-calendar-scroll-container="event-form" className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto overscroll-contain px-4 pb-6 pt-5 sm:px-6 sm:pt-6 md:grid-cols-2">
               <div className="space-y-1.5 md:col-span-2">
                 <label className="text-xs font-bold text-zinc-500">Título del evento</label>
                 <input
@@ -988,7 +989,7 @@ const OperationalCalendar = () => {
 
               <div className="space-y-1.5" data-operational-external-guests="tags">
                 <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Invitados externos</label>
-                <div className="flex h-11 flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-2 transition focus-within:ring-2 focus-within:ring-primary/50 dark:border-zinc-800 dark:bg-zinc-950">
+                <div className="flex h-11 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-2 transition [scrollbar-width:none] focus-within:ring-2 focus-within:ring-primary/50 [&::-webkit-scrollbar]:hidden dark:border-zinc-800 dark:bg-zinc-950">
                   {formData.attendeeEmails.map(email => (
                     <span key={email} className="inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-lg bg-violet-100 px-2 py-1 text-xs font-medium text-violet-700 dark:bg-violet-500/15 dark:text-violet-200">
                       <span className="truncate">{email}</span>
@@ -998,7 +999,6 @@ const OperationalCalendar = () => {
                   <input
                     type="email"
                     inputMode="email"
-                    aria-describedby="external-guests-help"
                     placeholder={formData.attendeeEmails.length ? 'Añadir otro correo' : 'cliente@empresa.com'}
                     className="min-w-[12rem] flex-1 shrink-0 border-0 bg-transparent px-1 py-1 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-600"
                     value={externalEmailDraft}
@@ -1022,7 +1022,6 @@ const OperationalCalendar = () => {
                   />
                 </div>
                 {externalEmailError && <p className="text-xs font-medium text-destructive" role="alert">{externalEmailError}</p>}
-                <p id="external-guests-help" className="text-[11px] text-zinc-500 dark:text-zinc-400">Presiona Enter para añadir. Google Calendar enviará la invitación y los cambios.</p>
               </div>
 
               {formData.type === 'MEETING' && (
@@ -1102,7 +1101,9 @@ const OperationalCalendar = () => {
                 )}
               </div>
 
-              <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800 md:col-span-2 md:flex-row">
+              </div>
+
+              <div data-calendar-form-footer="event-form" className="flex shrink-0 flex-col gap-3 border-t border-zinc-100 bg-white px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-zinc-800 dark:bg-zinc-900 sm:px-6 md:flex-row">
                 {editingEventId && (
                   <button
                     type="button"
