@@ -3,13 +3,16 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 import {
+  buildGoogleEventPayload,
   buildGoogleRecurrence,
   listAllGoogleEventPages,
   mapGoogleEventDates
 } from '../src/services/operationalEventService.js';
 import {
+  addExternalEmailTags,
   getGoogleConnectionHealth,
   getDayEventDisplay,
+  normalizeCalendarDescription,
   summarizeGoogleSyncResults
 } from '../src/components/modules/Activity/calendarPresentation.js';
 
@@ -122,4 +125,77 @@ test('historical reconciliation requires an explicit bounded event selection', a
   assert.match(routes, /google-calendar\/reconciliation/);
   assert.match(calendar, /Confirmar y sincronizar/);
   assert.match(calendar, /puede enviar invitaciones/i);
+});
+
+test('external guests become validated, normalized and unique email tags', () => {
+  assert.deepEqual(
+    addExternalEmailTags(['cliente@empresa.com'], ' SOCIAL@BRAINSTUDIO.COM, cliente@empresa.com; invalido '),
+    {
+      emails: ['cliente@empresa.com', 'social@brainstudio.com'],
+      invalid: ['invalido']
+    }
+  );
+});
+
+test('Google Calendar HTML descriptions are converted to readable plain text', () => {
+  const description = '<p>Enlace donde nos reuniremos:</p><p><a href="https://meet.google.com/abc-defg-hij">Google Meet</a></p>';
+  assert.equal(normalizeCalendarDescription(description), 'Enlace donde nos reuniremos:\nGoogle Meet');
+});
+
+test('calendar dialogs use the shared modal system, wide layout and scroll containment', async () => {
+  const calendar = await readFile(new URL('../src/components/modules/Activity/OperationalCalendar.jsx', import.meta.url), 'utf8');
+
+  assert.match(calendar, /<Dialog open=\{!!selectedDayAgenda\}/);
+  assert.match(calendar, /<Dialog open=\{isModalOpen\}/);
+  assert.match(calendar, /max-w-3xl/);
+  assert.match(calendar, /data-operational-event-form="dialog"/);
+  assert.match(calendar, /data-operational-external-guests="tags"/);
+  assert.doesNotMatch(calendar, /value=\{\(formData\.attendeeEmails \|\| \[\]\)\.join\(', '\)\}/);
+});
+
+test('calendar header hides connect actions for accounts that are already linked', async () => {
+  const calendar = await readFile(new URL('../src/components/modules/Activity/OperationalCalendar.jsx', import.meta.url), 'utf8');
+
+  assert.match(calendar, /isGoogleAccountConnected/);
+  assert.match(calendar, /!isGoogleAccountConnected\('coordinadorbrainstudio@gmail.com'\)/);
+  assert.match(calendar, /!isGoogleAccountConnected\('social.brainstudio@gmail.com'\)/);
+  assert.doesNotMatch(calendar, /Actualizaci[oó]n autom[aá]tica[\s\S]{0,80}<\/button>/i);
+});
+
+test('all-day Brainstudio events use Google date fields with an exclusive end date', () => {
+  const payload = buildGoogleEventPayload({
+    id: 'event-1',
+    title: 'Día creativo',
+    type: 'PROJECT',
+    description: '',
+    startAt: new Date('2026-08-20T05:00:00.000Z'),
+    endAt: new Date('2026-08-21T05:00:00.000Z'),
+    isAllDay: true,
+    attendeeEmails: [],
+    recurrence: 'NONE'
+  });
+
+  assert.deepEqual(payload.start, { date: '2026-08-20' });
+  assert.deepEqual(payload.end, { date: '2026-08-21' });
+});
+
+test('all-day state is persisted and exposed by the operational calendar', async () => {
+  const schema = await readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
+  const service = await readFile(new URL('../src/services/operationalEventService.js', import.meta.url), 'utf8');
+  const calendar = await readFile(new URL('../src/components/modules/Activity/OperationalCalendar.jsx', import.meta.url), 'utf8');
+
+  assert.match(schema, /isAllDay\s+Boolean\s+@default\(false\)/);
+  assert.match(service, /isAllDay:\s*mapGoogleEventDates\(event\)\.isAllDay/);
+  assert.match(service, /isAllDay:\s*Boolean\(data\.isAllDay\)/);
+  assert.match(calendar, /Todo el día/);
+  assert.match(calendar, /formData\.isAllDay/);
+});
+
+test('external guest tags stay in one horizontal row without changing field height', async () => {
+  const calendar = await readFile(new URL('../src/components/modules/Activity/OperationalCalendar.jsx', import.meta.url), 'utf8');
+
+  assert.match(calendar, /data-operational-external-guests="tags"/);
+  assert.match(calendar, /flex-nowrap/);
+  assert.match(calendar, /overflow-x-auto/);
+  assert.doesNotMatch(calendar, /data-operational-external-guests="tags"[\s\S]{0,500}flex-wrap/);
 });

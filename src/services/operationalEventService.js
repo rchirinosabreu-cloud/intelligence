@@ -120,6 +120,7 @@ const toOperationalEventDataFromGoogle = (event, calendarId, connectionId) => ({
   description: event.description || null,
   startAt: mapGoogleEventDates(event).startAt,
   endAt: mapGoogleEventDates(event).endAt,
+  isAllDay: mapGoogleEventDates(event).isAllDay,
   memberIds: [],
   ...getGoogleRecurrenceData(event),
   meetingLink: getMeetLinkFromGoogleEvent(event),
@@ -146,12 +147,27 @@ export const buildGoogleRecurrence = (event) => {
   return [`RRULE:FREQ=WEEKLY${until ? `;UNTIL=${until}` : ''}`];
 };
 
-const toGoogleEventPayload = (event) => ({
+const formatGoogleAllDayDate = value => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date(value));
+  const part = type => parts.find(item => item.type === type)?.value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
+};
+
+export const buildGoogleEventPayload = (event) => ({
   summary: event.title,
   description: [event.description, event.meetingLink ? `Google Meet: ${event.meetingLink}` : ''].filter(Boolean).join('\n\n'),
   ...(event.meetingLink ? { location: event.meetingLink } : {}),
-  start: { dateTime: formatGoogleDateTimeInBogota(event.startAt), timeZone: 'America/Bogota' },
-  end: { dateTime: formatGoogleDateTimeInBogota(event.endAt), timeZone: 'America/Bogota' },
+  start: event.isAllDay
+    ? { date: formatGoogleAllDayDate(event.startAt) }
+    : { dateTime: formatGoogleDateTimeInBogota(event.startAt), timeZone: 'America/Bogota' },
+  end: event.isAllDay
+    ? { date: formatGoogleAllDayDate(event.endAt) }
+    : { dateTime: formatGoogleDateTimeInBogota(event.endAt), timeZone: 'America/Bogota' },
   attendees: event.attendeeEmails.map(email => ({ email })),
   ...(buildGoogleRecurrence(event) ? { recurrence: buildGoogleRecurrence(event) } : {}),
   extendedProperties: {
@@ -169,6 +185,8 @@ const toGoogleEventPayload = (event) => ({
     }
   } : {})
 });
+
+const toGoogleEventPayload = buildGoogleEventPayload;
 
 export async function getOperationalEvents(start, end) {
   const startDate = new Date(start);
@@ -532,6 +550,7 @@ export async function createOperationalEvent(data, createdById = null) {
       description: data.description,
       startAt: new Date(data.startAt),
       endAt: new Date(data.endAt),
+      isAllDay: Boolean(data.isAllDay),
       memberIds: data.memberIds || [],
       attendeeEmails,
       attendeeResponses: {},
@@ -561,6 +580,7 @@ export async function updateOperationalEvent(id, data) {
       description: data.description,
       startAt: data.startAt ? new Date(data.startAt) : undefined,
       endAt: data.endAt ? new Date(data.endAt) : undefined,
+      isAllDay: data.isAllDay === undefined ? undefined : Boolean(data.isAllDay),
       memberIds: data.memberIds,
       attendeeEmails,
       recurrence: data.recurrence,

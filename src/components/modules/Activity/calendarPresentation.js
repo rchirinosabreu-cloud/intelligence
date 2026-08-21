@@ -19,3 +19,31 @@ export const getGoogleConnectionHealth = (connection, now = new Date()) => {
   }
   return { status: 'healthy', label: 'Actualizado' };
 };
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const addExternalEmailTags = (currentEmails = [], rawValue = '') => {
+  const candidates = rawValue
+    .split(/[;,\n]/)
+    .map(email => email.trim().toLowerCase())
+    .filter(Boolean);
+  const valid = candidates.filter(email => EMAIL_PATTERN.test(email));
+
+  return {
+    emails: [...new Set([...currentEmails.map(email => email.toLowerCase()), ...valid])],
+    invalid: candidates.filter(email => !EMAIL_PATTERN.test(email))
+  };
+};
+
+export const normalizeCalendarDescription = (description = '') => description
+  .replace(/<br\s*\/?\s*>/gi, '\n')
+  .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+  .replace(/<[^>]+>/g, '')
+  .replace(/&nbsp;/gi, ' ')
+  .replace(/&amp;/gi, '&')
+  .replace(/&lt;/gi, '<')
+  .replace(/&gt;/gi, '>')
+  .replace(/&quot;/gi, '"')
+  .replace(/&#39;/gi, "'")
+  .replace(/\n{3,}/g, '\n\n')
+  .trim();

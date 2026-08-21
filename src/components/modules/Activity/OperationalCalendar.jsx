@@ -34,12 +34,18 @@ import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
-import { getDayEventDisplay, getGoogleConnectionHealth, summarizeGoogleSyncResults } from './calendarPresentation';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  addExternalEmailTags,
+  getDayEventDisplay,
+  getGoogleConnectionHealth,
+  normalizeCalendarDescription
+} from './calendarPresentation';
 
 const EVENT_TYPES = [
-  { value: 'PRODUCTION', label: 'Produccion' },
+  { value: 'PRODUCTION', label: 'Producción' },
   { value: 'PROJECT', label: 'Proyecto' },
-  { value: 'MEETING', label: 'Reunion' },
+  { value: 'MEETING', label: 'Reunión' },
   { value: 'ABSENCE', label: 'Ausencia' },
   { value: 'BREAK', label: 'Descanso' }
 ];
@@ -91,12 +97,15 @@ const OperationalCalendar = () => {
   const [selectedReconciliationIds, setSelectedReconciliationIds] = useState([]);
   const [reconciliationConnectionId, setReconciliationConnectionId] = useState('');
   const [isLoadingReconciliation, setIsLoadingReconciliation] = useState(false);
+  const [externalEmailDraft, setExternalEmailDraft] = useState('');
+  const [externalEmailError, setExternalEmailError] = useState('');
   const hoverCloseTimerRef = useRef(null);
   const [formData, setFormData] = useState({
     title: '',
     type: 'PRODUCTION',
     startAt: getRoundedBogotaNow(new Date()),
     endAt: addDays(getRoundedBogotaNow(new Date()), 0),
+    isAllDay: false,
     memberIds: [],
     recurrence: 'NONE',
     recurrenceEnd: null,
@@ -158,6 +167,7 @@ const OperationalCalendar = () => {
   });
 
   const googleConnections = googleCalendarStatus?.connections || [];
+  const isGoogleAccountConnected = email => googleConnections.some(connection => connection.email.toLowerCase() === email.toLowerCase());
 
   const eventsByDay = useMemo(() => {
     const grouped = new Map();
@@ -233,36 +243,6 @@ const OperationalCalendar = () => {
     }
   });
 
-  const googleCalendarSyncMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/sync`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({
-          start: monthRange.start.toISOString(),
-          end: monthRange.end.toISOString()
-        })
-      });
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}));
-        throw new Error(error.details || error.error || 'No se pudo sincronizar Google Calendar');
-      }
-      return res.json();
-    },
-    onSuccess: (result) => {
-      const summary = summarizeGoogleSyncResults(Array.isArray(result) ? result : [result]);
-      queryClient.invalidateQueries({ queryKey: ['operational-events'] });
-      queryClient.invalidateQueries({ queryKey: ['team-activity-status'] });
-      queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
-      const failedText = summary.failed ? `, ${summary.failed} cuenta(s) con error` : '';
-      toast.success(`Google Calendar sincronizado (${summary.imported} nuevos, ${summary.updated} actualizados${failedText})`);
-    },
-    onError: (error) => {
-      console.error('Google Calendar sync error:', error);
-      toast.error(error.message || 'No se pudo sincronizar Google Calendar');
-    }
-  });
-
   const eventMutation = useMutation({
     mutationFn: async (eventData) => {
       const url = editingEventId
@@ -324,6 +304,7 @@ const OperationalCalendar = () => {
       type,
       startAt: start,
       endAt: end,
+      isAllDay: false,
       memberIds: [],
       recurrence: 'NONE',
       recurrenceEnd: null,
@@ -332,6 +313,8 @@ const OperationalCalendar = () => {
       attendeeEmails: [],
       googleConnectionId: googleConnections[0]?.id || ''
     });
+    setExternalEmailDraft('');
+    setExternalEmailError('');
     setEditingEventId(null);
     setIsModalOpen(true);
   };
@@ -348,20 +331,43 @@ const OperationalCalendar = () => {
       type: event.type,
       startAt: new Date(event.startAt),
       endAt: new Date(event.endAt),
+      isAllDay: Boolean(event.isAllDay),
       memberIds: event.memberIds || [],
       recurrence: event.recurrence || 'NONE',
       recurrenceEnd: event.recurrenceEnd ? new Date(event.recurrenceEnd) : null,
       meetingLink: event.meetingLink || '',
-      description: event.description || '',
+      description: normalizeCalendarDescription(event.description || ''),
       attendeeEmails: event.attendeeEmails || [],
       googleConnectionId: event.googleConnectionId || googleConnections[0]?.id || ''
     });
+    setExternalEmailDraft('');
+    setExternalEmailError('');
     setIsModalOpen(true);
+  };
+
+  const commitExternalEmailTags = () => {
+    if (!externalEmailDraft.trim()) return;
+    const result = addExternalEmailTags(formData.attendeeEmails, externalEmailDraft);
+    setFormData(current => ({ ...current, attendeeEmails: result.emails }));
+    setExternalEmailError(result.invalid.length ? `Correo no válido: ${result.invalid.join(', ')}` : '');
+    if (!result.invalid.length) setExternalEmailDraft('');
+  };
+
+  const removeExternalEmailTag = emailToRemove => {
+    setFormData(current => ({
+      ...current,
+      attendeeEmails: current.attendeeEmails.filter(email => email !== emailToRemove)
+    }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    eventMutation.mutate(formData);
+    const result = addExternalEmailTags(formData.attendeeEmails, externalEmailDraft);
+    if (result.invalid.length) {
+      setExternalEmailError(`Correo no válido: ${result.invalid.join(', ')}`);
+      return;
+    }
+    eventMutation.mutate({ ...formData, attendeeEmails: result.emails });
   };
 
   const generateMeetLink = async () => {
@@ -405,10 +411,6 @@ const OperationalCalendar = () => {
     setIsModalOpen(false);
     setEditingEventId(null);
     setDeleteCandidate(null);
-  };
-
-  const handleModalBackdropClick = (event) => {
-    if (event.target === event.currentTarget) closeModal();
   };
 
   useEffect(() => {
@@ -457,7 +459,7 @@ const OperationalCalendar = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-5 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-zinc-900 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 text-center dark:border-white/10 dark:bg-white/5">
             <span className="bg-zinc-100 py-1 text-[10px] font-bold uppercase text-zinc-500 dark:bg-white/10 dark:text-zinc-400">
@@ -477,34 +479,10 @@ const OperationalCalendar = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-3 xl:items-end">
           {isAdmin && (
             googleCalendarStatus?.connected ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => googleCalendarSyncMutation.mutate()}
-                  disabled={googleCalendarSyncMutation.isPending}
-                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"
-                >
-                  {googleCalendarSyncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarIcon className="h-4 w-4" />}
-                  {googleConnections.length} cuenta{googleConnections.length === 1 ? '' : 's'} · Actualización automática
-                </button>
-                <button
-                  type="button"
-                  onClick={() => connectGoogleCalendar('coordinadorbrainstudio@gmail.com')}
-                  className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-700 transition hover:text-indigo-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300"
-                >
-                  Conectar coordinador
-                </button>
-                <button
-                  type="button"
-                  onClick={() => connectGoogleCalendar('social.brainstudio@gmail.com')}
-                  className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-700 transition hover:text-indigo-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300"
-                >
-                  Conectar social
-                </button>
-                <div className="flex w-full flex-wrap gap-2 pt-1" aria-label="Estado de cuentas de Google Calendar">
+              <div className="flex flex-wrap items-center gap-2" aria-label="Estado de cuentas de Google Calendar">
                   {googleConnections.map(connection => {
                     const health = getGoogleConnectionHealth(connection);
                     return (
@@ -519,7 +497,12 @@ const OperationalCalendar = () => {
                       {googleCalendarStatus.reconciliation.pendingCount} pendientes de reconciliar
                     </button>
                   )}
-                </div>
+                  {!isGoogleAccountConnected('coordinadorbrainstudio@gmail.com') && (
+                    <button type="button" onClick={() => connectGoogleCalendar('coordinadorbrainstudio@gmail.com')} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-700 transition hover:text-violet-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300">Conectar coordinador</button>
+                  )}
+                  {!isGoogleAccountConnected('social.brainstudio@gmail.com') && (
+                    <button type="button" onClick={() => connectGoogleCalendar('social.brainstudio@gmail.com')} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-700 transition hover:text-violet-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300">Conectar social</button>
+                  )}
               </div>
             ) : (
               <button
@@ -533,6 +516,7 @@ const OperationalCalendar = () => {
             )
           )}
 
+          <div className="flex flex-wrap items-center gap-3">
           <div className="inline-flex overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-white/5">
             <button type="button" onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2.5 hover:bg-zinc-50 dark:hover:bg-white/10">
               <ChevronLeft className="h-4 w-4" />
@@ -555,12 +539,13 @@ const OperationalCalendar = () => {
               Evento
             </button>
           )}
+          </div>
         </div>
       </div>
 
       <div data-operational-calendar="traditional-month-grid" className="hidden overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900 md:block">
         <div className="grid grid-cols-5 border-b border-zinc-200 bg-zinc-50/80 dark:border-white/10 dark:bg-white/5">
-          {['Lun', 'Mar', 'Mie', 'Jue', 'Vie'].map(day => (
+          {['Lun', 'Mar', 'Mié', 'Jue', 'Vie'].map(day => (
             <div key={day} className="px-3 py-3 text-center text-xs font-bold text-zinc-500">
               {day}
             </div>
@@ -627,7 +612,7 @@ const OperationalCalendar = () => {
                       >
                         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
                         <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                        <span className="shrink-0 font-medium opacity-80">{format(new Date(event.startAt), 'HH:mm')}</span>
+                        <span className="shrink-0 font-medium opacity-80">{event.isAllDay ? 'Todo el día' : format(new Date(event.startAt), 'HH:mm')}</span>
                       </button>
                     ))}
                     {overflow > 0 && (
@@ -663,7 +648,7 @@ const OperationalCalendar = () => {
                   <button key={event.id} type="button" onClick={() => handleEdit(event)} className={cn('flex min-h-11 w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-bold', getEventTypeStyles(event.type))}>
                     <span className="h-2 w-2 shrink-0 rounded-full bg-current" />
                     <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                    <span className="shrink-0 font-medium opacity-80">{format(new Date(event.startAt), 'HH:mm')}</span>
+                    <span className="shrink-0 font-medium opacity-80">{event.isAllDay ? 'Todo el día' : format(new Date(event.startAt), 'HH:mm')}</span>
                   </button>
                 ))}
               </div>
@@ -673,25 +658,27 @@ const OperationalCalendar = () => {
       </div>
 
       {selectedDayAgenda && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedDayAgenda(null); }}>
-          <section data-operational-day-agenda="dialog" role="dialog" aria-modal="true" aria-labelledby="operational-day-agenda-title" className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-zinc-900">
-            <div className="mb-4 flex items-center justify-between gap-4">
+        <Dialog open={!!selectedDayAgenda} onOpenChange={open => { if (!open) setSelectedDayAgenda(null); }}>
+          <DialogContent data-operational-day-agenda="dialog" role="dialog" aria-modal="true" className="max-h-[82vh] max-w-2xl gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <DialogHeader className="border-b border-zinc-100 bg-zinc-50/50 px-6 py-4 text-left dark:border-zinc-800 dark:bg-zinc-900/50">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-violet-600 dark:text-violet-300">Agenda del día</p>
-                <h3 id="operational-day-agenda-title" className="mt-1 text-lg font-bold capitalize text-zinc-950 dark:text-white">{format(selectedDayAgenda, 'EEEE d MMMM', { locale: es })}</h3>
+                <DialogTitle id="operational-day-agenda-title" className="mt-1 text-lg font-semibold capitalize text-zinc-950 dark:text-white">{format(selectedDayAgenda, 'EEEE d MMMM', { locale: es })}</DialogTitle>
+                <DialogDescription className="sr-only">Eventos programados para el día seleccionado.</DialogDescription>
               </div>
-              <button type="button" onClick={() => setSelectedDayAgenda(null)} className="flex h-11 w-11 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/10" aria-label="Cerrar agenda del día"><X className="h-5 w-5" /></button>
-            </div>
-            <div className="space-y-2">
+            </DialogHeader>
+            <div className="min-h-0 overscroll-contain overflow-y-auto p-6" data-calendar-scroll-container="agenda">
+            <div className="grid gap-2 sm:grid-cols-2">
               {(eventsByDay.get(format(selectedDayAgenda, 'yyyy-MM-dd')) || []).map(event => (
                 <button key={event.id} type="button" onClick={() => { setSelectedDayAgenda(null); handleEdit(event); }} className={cn('flex min-h-12 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-xs font-bold', getEventTypeStyles(event.type))}>
                   <span className="h-2 w-2 shrink-0 rounded-full bg-current" />
-                  <span className="min-w-0 flex-1"><span className="block truncate">{event.title}</span><span className="mt-1 block font-medium opacity-75">{format(new Date(event.startAt), 'HH:mm')} – {format(new Date(event.endAt), 'HH:mm')}</span></span>
+                  <span className="min-w-0 flex-1"><span className="block truncate">{event.title}</span><span className="mt-1 block font-medium opacity-75">{event.isAllDay ? 'Todo el día' : `${format(new Date(event.startAt), 'HH:mm')} – ${format(new Date(event.endAt), 'HH:mm')}`}</span></span>
                 </button>
               ))}
             </div>
-          </section>
-        </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {hoveredEvent && (
@@ -713,7 +700,7 @@ const OperationalCalendar = () => {
             <div className="flex items-center gap-2">
               <Clock className="h-3.5 w-3.5 text-indigo-500" />
               <span>
-                {format(new Date(hoveredEvent.event.startAt), 'd MMM, HH:mm', { locale: es })} - {format(new Date(hoveredEvent.event.endAt), 'HH:mm')}
+                {hoveredEvent.event.isAllDay ? `Todo el día · ${format(new Date(hoveredEvent.event.startAt), 'd MMM', { locale: es })}` : `${format(new Date(hoveredEvent.event.startAt), 'd MMM, HH:mm', { locale: es })} - ${format(new Date(hoveredEvent.event.endAt), 'HH:mm')}`}
               </span>
             </div>
             {hoveredEvent.event.meetingLink && (
@@ -724,7 +711,7 @@ const OperationalCalendar = () => {
             )}
             {hoveredEvent.event.description && (
               <p className="line-clamp-3 rounded-xl bg-zinc-50 p-3 text-zinc-500 dark:bg-white/5 dark:text-zinc-400">
-                {hoveredEvent.event.description}
+                {normalizeCalendarDescription(hoveredEvent.event.description)}
               </p>
             )}
           </div>
@@ -768,38 +755,27 @@ const OperationalCalendar = () => {
       )}
 
       {isModalOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-          onMouseDown={handleModalBackdropClick}
-        >
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-7 shadow-2xl dark:bg-zinc-900">
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-bold text-zinc-950 dark:text-white">{editingEventId ? 'Editar evento' : 'Nuevo evento'}</h3>
-              </div>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-full p-2 text-zinc-400 transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+        <Dialog open={isModalOpen} onOpenChange={open => { if (!open) closeModal(); }}>
+          <DialogContent data-operational-event-form="dialog" className="max-h-[90vh] max-w-3xl gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <DialogHeader className="border-b border-zinc-100 bg-zinc-50/50 px-6 py-4 text-left dark:border-zinc-800 dark:bg-zinc-900/50">
+              <DialogTitle className="text-lg font-semibold text-zinc-950 dark:text-white">{editingEventId ? 'Editar evento' : 'Nuevo evento'}</DialogTitle>
+              <DialogDescription className="sr-only">Formulario para crear o editar un evento del calendario.</DialogDescription>
+            </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-500">Titulo del evento</label>
+            <form onSubmit={handleSubmit} className="grid min-h-0 overscroll-contain overflow-y-auto p-6 gap-4 md:grid-cols-2" data-calendar-scroll-container="event-form">
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-xs font-bold text-zinc-500">Título del evento</label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej: Reunion de trafico"
+                  placeholder="Ej.: Reunión de tráfico"
                   className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5"
                   value={formData.title}
                   onChange={e => setFormData({ ...formData, title: e.target.value })}
                 />
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-500">Tipo</label>
                   <select
@@ -819,7 +795,7 @@ const OperationalCalendar = () => {
                     value={formData.recurrence}
                     onChange={e => setFormData({ ...formData, recurrence: e.target.value })}
                   >
-                    <option value="NONE">Unica vez</option>
+                    <option value="NONE">Única vez</option>
                     <option value="WEEKLY">Semanal</option>
                   </select>
                 </div>
@@ -827,7 +803,7 @@ const OperationalCalendar = () => {
 
               {formData.recurrence === 'WEEKLY' && (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500">Hasta cuando</label>
+                  <label className="text-xs font-bold text-zinc-500">Hasta cuándo</label>
                   <DatePicker
                     {...brainDatePickerProps}
                     selected={formData.recurrenceEnd}
@@ -840,35 +816,73 @@ const OperationalCalendar = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label className="flex min-h-11 cursor-pointer items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-950 md:col-span-2">
+                <span>
+                  <span className="block text-sm font-medium text-zinc-800 dark:text-zinc-100">Todo el día</span>
+                  <span className="block text-[11px] text-zinc-500 dark:text-zinc-400">El evento se mostrará sin horas en Brain Studio y Google Calendar.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={formData.isAllDay}
+                  onChange={event => {
+                    const isAllDay = event.target.checked;
+                    const startAt = new Date(formData.startAt);
+                    if (isAllDay) startAt.setHours(0, 0, 0, 0);
+                    else {
+                      const rounded = getRoundedBogotaNow(startAt);
+                      startAt.setHours(rounded.getHours(), rounded.getMinutes(), 0, 0);
+                    }
+                    setFormData({ ...formData, isAllDay, startAt, endAt: isAllDay ? addDays(startAt, 1) : new Date(startAt.getTime() + 60 * 60 * 1000) });
+                  }}
+                  className="h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                />
+              </label>
+
+              <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-2">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500">Inicio</label>
+                  <label className="text-xs font-bold text-zinc-500">{formData.isAllDay ? 'Desde' : 'Inicio'}</label>
                   <DatePicker
                     {...brainDatePickerProps}
                     selected={formData.startAt}
                     onChange={date => {
                       if (!date) return;
+                      if (formData.isAllDay) {
+                        const startAt = new Date(date);
+                        startAt.setHours(0, 0, 0, 0);
+                        const durationDays = Math.max(1, Math.round((new Date(formData.endAt) - new Date(formData.startAt)) / (24 * 60 * 60 * 1000)));
+                        setFormData({ ...formData, startAt, endAt: addDays(startAt, durationDays) });
+                        return;
+                      }
                       const currentDuration = new Date(formData.endAt).getTime() - new Date(formData.startAt).getTime();
                       setFormData({ ...formData, startAt: date, endAt: new Date(date.getTime() + Math.max(currentDuration, 15 * 60 * 1000)) });
                     }}
-                    showTimeSelect
+                    showTimeSelect={!formData.isAllDay}
                     timeIntervals={15}
                     timeCaption="Hora"
-                    dateFormat="d MMM, HH:mm"
+                    dateFormat={formData.isAllDay ? 'd MMMM, yyyy' : 'd MMM, HH:mm'}
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5"
                     wrapperClassName="w-full"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500">Fin</label>
+                  <label className="text-xs font-bold text-zinc-500">{formData.isAllDay ? 'Hasta' : 'Fin'}</label>
                   <DatePicker
                     {...brainDatePickerProps}
-                    selected={formData.endAt}
-                    onChange={date => setFormData({ ...formData, endAt: date })}
-                    showTimeSelect
+                    selected={formData.isAllDay ? addDays(formData.endAt, -1) : formData.endAt}
+                    onChange={date => {
+                      if (!date) return;
+                      if (formData.isAllDay) {
+                        const inclusiveEnd = new Date(date);
+                        inclusiveEnd.setHours(0, 0, 0, 0);
+                        setFormData({ ...formData, endAt: addDays(inclusiveEnd < formData.startAt ? formData.startAt : inclusiveEnd, 1) });
+                        return;
+                      }
+                      setFormData({ ...formData, endAt: date });
+                    }}
+                    showTimeSelect={!formData.isAllDay}
                     timeIntervals={15}
                     timeCaption="Hora"
-                    dateFormat="d MMM, HH:mm"
+                    dateFormat={formData.isAllDay ? 'd MMMM, yyyy' : 'd MMM, HH:mm'}
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5"
                     wrapperClassName="w-full"
                   />
@@ -890,24 +904,47 @@ const OperationalCalendar = () => {
                 </div>
               )}
 
-              <div className="space-y-1.5">
+              <div className="space-y-1.5" data-operational-external-guests="tags">
                 <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Invitados externos</label>
-                <input
-                  type="text"
-                  inputMode="email"
-                  placeholder="cliente@empresa.com, otra@empresa.com"
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5 dark:text-zinc-100"
-                  value={(formData.attendeeEmails || []).join(', ')}
-                  onChange={event => setFormData({
-                    ...formData,
-                    attendeeEmails: event.target.value.split(',').map(email => email.trim().toLowerCase()).filter(Boolean)
-                  })}
-                />
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Google Calendar enviará la invitación y cualquier cambio de horario.</p>
+                <div className="flex h-11 flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-2 transition focus-within:ring-2 focus-within:ring-primary/50 dark:border-zinc-800 dark:bg-zinc-950">
+                  {formData.attendeeEmails.map(email => (
+                    <span key={email} className="inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-lg bg-violet-100 px-2 py-1 text-xs font-medium text-violet-700 dark:bg-violet-500/15 dark:text-violet-200">
+                      <span className="truncate">{email}</span>
+                      <button type="button" onClick={() => removeExternalEmailTag(email)} className="rounded p-0.5 text-violet-500 transition hover:bg-violet-200 hover:text-violet-800 dark:hover:bg-violet-500/20 dark:hover:text-white" aria-label={`Eliminar invitado ${email}`}><X className="h-3 w-3" /></button>
+                    </span>
+                  ))}
+                  <input
+                    type="email"
+                    inputMode="email"
+                    aria-describedby="external-guests-help"
+                    placeholder={formData.attendeeEmails.length ? 'Añadir otro correo' : 'cliente@empresa.com'}
+                    className="min-w-[12rem] flex-1 shrink-0 border-0 bg-transparent px-1 py-1 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-600"
+                    value={externalEmailDraft}
+                    onChange={event => { setExternalEmailDraft(event.target.value); setExternalEmailError(''); }}
+                    onBlur={commitExternalEmailTags}
+                    onKeyDown={event => {
+                      if (['Enter', ',', ';'].includes(event.key)) {
+                        event.preventDefault();
+                        commitExternalEmailTags();
+                      }
+                      if (event.key === 'Backspace' && !externalEmailDraft && formData.attendeeEmails.length) removeExternalEmailTag(formData.attendeeEmails.at(-1));
+                    }}
+                    onPaste={event => {
+                      const pasted = event.clipboardData.getData('text');
+                      if (!/[;,\n]/.test(pasted)) return;
+                      event.preventDefault();
+                      const result = addExternalEmailTags(formData.attendeeEmails, pasted);
+                      setFormData(current => ({ ...current, attendeeEmails: result.emails }));
+                      setExternalEmailError(result.invalid.length ? `Correo no válido: ${result.invalid.join(', ')}` : '');
+                    }}
+                  />
+                </div>
+                {externalEmailError && <p className="text-xs font-medium text-destructive" role="alert">{externalEmailError}</p>}
+                <p id="external-guests-help" className="text-[11px] text-zinc-500 dark:text-zinc-400">Presiona Enter para añadir. Google Calendar enviará la invitación y los cambios.</p>
               </div>
 
               {formData.type === 'MEETING' && (
-                <div className="space-y-2 rounded-2xl border border-indigo-500/10 bg-indigo-500/5 p-4">
+                <div className="space-y-2 rounded-xl border border-violet-500/10 bg-violet-500/5 p-4 md:col-span-2">
                   <div className="flex items-center justify-between gap-3">
                     <label className="text-xs font-bold text-indigo-600 dark:text-indigo-300">Google Meet</label>
                     <button
@@ -933,18 +970,18 @@ const OperationalCalendar = () => {
                 </div>
               )}
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-500">Descripcion</label>
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-xs font-bold text-zinc-500">Descripción</label>
                 <textarea
                   rows={3}
                   placeholder="Contexto adicional para el equipo..."
-                  className="w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5"
+                  className="w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:ring-2 focus:ring-primary/50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-600"
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-xs font-bold text-zinc-500">Equipo involucrado</label>
                 <div className="grid max-h-36 grid-cols-2 gap-2 overflow-y-auto rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-white/10 dark:bg-white/5">
                   {team.map(member => (
@@ -976,13 +1013,13 @@ const OperationalCalendar = () => {
                 )}
               </div>
 
-              <div className="flex flex-col gap-3 pt-2 md:flex-row">
+              <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800 md:col-span-2 md:flex-row">
                 {editingEventId && (
                   <button
                     type="button"
                     onClick={handleRequestDelete}
                     disabled={deleteMutation.isPending}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-red-600 transition hover:bg-red-100 disabled:opacity-60 dark:border-red-500/20 dark:bg-red-500/10"
+                    className="brain-danger-button-outline inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold transition disabled:opacity-60"
                   >
                     {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                     Eliminar
@@ -991,15 +1028,15 @@ const OperationalCalendar = () => {
                 <button
                   type="submit"
                   disabled={eventMutation.isPending}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-indigo-600 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:opacity-60"
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:opacity-60"
                 >
                   {eventMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
                   {editingEventId ? 'Actualizar evento' : 'Guardar evento'}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {deleteCandidate && (
@@ -1014,7 +1051,7 @@ const OperationalCalendar = () => {
             <div className="mb-5">
               <h3 className="text-lg font-bold text-zinc-950 dark:text-white">Eliminar evento</h3>
               <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                Esta accion eliminara "{deleteCandidate.title || 'este evento'}" del calendario operativo.
+                Esta acción eliminará “{deleteCandidate.title || 'este evento'}” del calendario operativo.
               </p>
             </div>
             <div className="flex gap-3">
@@ -1029,7 +1066,7 @@ const OperationalCalendar = () => {
                 type="button"
                 onClick={() => deleteMutation.mutate(deleteCandidate.id)}
                 disabled={deleteMutation.isPending}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-red-600 px-4 py-3 text-xs font-bold text-white transition hover:bg-red-700 disabled:opacity-60"
+                className="brain-danger-button inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold transition disabled:opacity-60"
               >
                 {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 Eliminar
