@@ -88,6 +88,31 @@ test('content pieces support final media uploads for client preview', async () =
   assert.doesNotMatch(service, /contentItemFinalAssetColumnsExist\s*=\s*Number\(result\?\.\[0\]\?\.count/);
 });
 
+test('content pieces support ordered multi-file carousels end to end', async () => {
+  const schema = await read('prisma/schema.prisma');
+  const contentRoutes = await read('src/routes/api/content.js');
+  const publicRoutes = await read('src/routes/index.js');
+  const publicController = await read('src/controllers/publicController.js');
+  const editor = await read('src/components/modules/ContentPlanDetail.jsx');
+  const shared = await read('src/components/public/SharedContentPlan.jsx');
+  const service = await read('src/services/contentService.js');
+
+  assert.match(schema, /model ContentItemFinalAsset[\s\S]*contentItemId\s+String[\s\S]*position\s+Int/);
+  assert.match(schema, /finalAssets\s+ContentItemFinalAsset\[\]/);
+  assert.match(contentRoutes, /carouselUpload\.array\('files',\s*10\)/);
+  assert.match(contentRoutes, /items\/:id\/final-assets/);
+  assert.match(contentRoutes, /items\/:id\/final-assets\/:assetId/);
+  assert.match(publicRoutes, /final-assets\/:assetId/);
+  assert.match(service, /uploadContentItemFinalAssets/);
+  assert.match(service, /deleteContentItemFinalAssetById/);
+  assert.match(publicController, /finalAssets:/);
+  assert.match(editor, /multiple/);
+  assert.match(editor, /Archivos seleccionados|AÃ±adir archivos/);
+  assert.match(shared, /Carrusel/);
+  assert.match(shared, /ChevronRight/);
+  assert.match(shared, /aria-label=\{`Ver l.mina/);
+});
+
 test('DatePicker instances use the global Brainstudio calendar chrome', async () => {
   const files = [
     'src/components/modules/TaskSidePanel.jsx',

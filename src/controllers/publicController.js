@@ -1,4 +1,4 @@
-import { getContentPlanByToken, updateContentItem, addClientComment, getContentItemFinalAsset } from '../services/contentService.js';
+import { getContentPlanByToken, updateContentItem, addClientComment, getContentItemFinalAsset, getContentItemFinalAssetById } from '../services/contentService.js';
 import { getFromS3Stream } from '../services/s3Service.js';
 
 const getAuthorizedPublicItem = async (token, itemId) => {
@@ -41,6 +41,15 @@ export const getPublicPlan = async (req, res) => {
           version: item.finalAssetKey,
           url: `/api/public/parrilla/${encodeURIComponent(req.params.token)}/items/${item.id}/final-asset`
         } : null,
+        finalAssets: (item.finalAssets || []).map(asset => ({
+          id: asset.id,
+          name: asset.name,
+          mimeType: asset.mimeType,
+          size: asset.size,
+          position: asset.position,
+          version: asset.storageKey,
+          url: `/api/public/parrilla/${encodeURIComponent(req.params.token)}/items/${item.id}/final-assets/${asset.id}`
+        })),
         status: item.status,
         comments: item.comments
       }))
@@ -109,6 +118,24 @@ export const getPublicFinalAsset = async (req, res) => {
     return object.Body.pipe(res);
   } catch (error) {
     console.error('[API] Public final asset error:', error);
+    return res.status(500).json({ error: 'Failed to load final asset' });
+  }
+};
+
+export const getPublicFinalAssetById = async (req, res) => {
+  try {
+    const authorizedItem = await getAuthorizedPublicItem(req.params.token, req.params.id);
+    if (!authorizedItem) return res.status(404).json({ error: 'Archivo final no encontrado' });
+    const asset = await getContentItemFinalAssetById(req.params.id, req.params.assetId);
+    if (!asset) return res.status(404).json({ error: 'Archivo final no encontrado' });
+
+    const object = await getFromS3Stream(asset.storageKey || asset.finalAssetKey);
+    res.setHeader('Content-Type', asset.mimeType || asset.finalAssetMimeType || object.ContentType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(asset.name || asset.finalAssetName || 'pieza-final')}"`);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    return object.Body.pipe(res);
+  } catch (error) {
+    console.error('[API] Public carousel asset error:', error.response?.data || error);
     return res.status(500).json({ error: 'Failed to load final asset' });
   }
 };

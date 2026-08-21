@@ -155,6 +155,53 @@ const getFinalAssetUrl = (item, shareToken) => item.finalAssetKey
 const isFinalAssetVideo = (item) => (item.finalAssetMimeType || '').startsWith('video/');
 const isFinalAssetImage = (item) => (item.finalAssetMimeType || '').startsWith('image/');
 
+const getFinalAssetEntryUrl = (item, asset, shareToken) => shareToken
+  ? `${getApiBaseUrl()}/api/public/parrilla/${encodeURIComponent(shareToken)}/items/${item.id}/final-assets/${asset.id}?v=${encodeURIComponent(asset.storageKey || '')}`
+  : `${getApiBaseUrl()}/api/content/items/${item.id}/final-assets/${asset.id}?v=${encodeURIComponent(asset.storageKey || '')}`;
+
+const FinalAssetTile = ({ item, asset, shareToken, isEditing, onDelete, isDeleting }) => {
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const sourceUrl = getFinalAssetEntryUrl(item, asset, shareToken);
+  const isImage = (asset.mimeType || '').startsWith('image/');
+  const isVideo = (asset.mimeType || '').startsWith('video/');
+
+  useEffect(() => {
+    if (shareToken) {
+      setPreviewUrl(sourceUrl);
+      return undefined;
+    }
+    let objectUrl;
+    let cancelled = false;
+    fetch(sourceUrl, { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } })
+      .then(response => {
+        if (!response.ok) throw new Error(`Asset request failed with status ${response.status}`);
+        return response.blob();
+      })
+      .then(blob => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPreviewUrl(objectUrl);
+      })
+      .catch(error => console.error('Final carousel asset preview failed:', error));
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [sourceUrl, shareToken]);
+
+  return (
+    <div className="group/asset relative overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 dark:border-white/10 dark:bg-zinc-950">
+      <div className="aspect-square">
+        {isImage ? <img src={previewUrl || undefined} alt={asset.name || 'Lámina del carrusel'} className="h-full w-full object-cover" /> : isVideo ? <video src={previewUrl || undefined} className="h-full w-full object-cover" controls preload="metadata" /> : <FileText className="m-auto h-8 w-8 text-zinc-300" />}
+      </div>
+      <div className="flex items-center justify-between gap-2 px-2.5 py-2">
+        <span className="truncate text-[10px] font-bold text-zinc-600 dark:text-zinc-300">{asset.name || 'Archivo final'}</span>
+        {isEditing && <button type="button" onClick={() => onDelete(item.id, asset.id)} disabled={isDeleting} className="brain-danger-button-icon shrink-0 rounded-lg p-1.5" aria-label={`Eliminar ${asset.name || 'archivo final'}`}><Trash2 className="h-3.5 w-3.5" /></button>}
+      </div>
+    </div>
+  );
+};
+
 const serializePlanInternalNotes = (notes) => JSON.stringify(
   notes.map(note => String(note || '').trim()).filter(Boolean)
 );
@@ -197,42 +244,10 @@ const ContentItemCard = ({
   isFinalAssetDeleting
 }) => {
   const [showFeedback, setShowFeedback] = useState(false);
-  const [assetUrl, setAssetUrl] = useState(null);
-  const finalAssetSourceUrl = getFinalAssetUrl(item, shareToken);
+  const finalAssets = item.finalAssets || [];
   const isRealizado = item.status === 'REALIZADO' || item.status === 'PUBLICADO';
   const isDevuelto = item.status === 'DEVUELTO';
   const latestTask = item.tasks?.[0];
-
-  useEffect(() => {
-    const sourceUrl = finalAssetSourceUrl;
-    if (!sourceUrl) {
-      setAssetUrl(null);
-      return undefined;
-    }
-    if (shareToken) {
-      setAssetUrl(sourceUrl);
-      return undefined;
-    }
-
-    let objectUrl;
-    let cancelled = false;
-    fetch(sourceUrl)
-      .then((response) => {
-        if (!response.ok) throw new Error(`Asset request failed with status ${response.status}`);
-        return response.blob();
-      })
-      .then((blob) => {
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setAssetUrl(objectUrl);
-      })
-      .catch((error) => console.error('Final asset preview failed:', error));
-
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [finalAssetSourceUrl, shareToken]);
 
   return (
     <div
@@ -430,53 +445,9 @@ const ContentItemCard = ({
                 <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
                   <UploadCloud className="w-3.5 h-3.5 text-indigo-600" /> Pieza final
                 </label>
-                {item.finalAssetKey ? (
-                  <div className="rounded-2xl border border-zinc-200/70 dark:border-white/10 overflow-hidden bg-zinc-50 dark:bg-white/5">
-                    <div className="aspect-video bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center overflow-hidden">
-                      {isFinalAssetImage(item) ? (
-                        <img
-                          src={assetUrl || undefined}
-                          alt={item.finalAssetName || 'Pieza final'}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : isFinalAssetVideo(item) ? (
-                        <video
-                          src={assetUrl || undefined}
-                          className="w-full h-full object-cover"
-                          controls
-                          preload="metadata"
-                        />
-                      ) : (
-                        <FileText className="w-8 h-8 text-zinc-300" />
-                      )}
-                    </div>
-                    <div className="p-3 flex items-center justify-between gap-3">
-                      <p className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300 truncate">
-                        {item.finalAssetName || 'Archivo final'}
-                      </p>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <a
-                          href={assetUrl || undefined}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700"
-                        >
-                          Ver
-                        </a>
-                        {isEditing && (
-                          <button
-                            type="button"
-                            onClick={() => onFinalAssetDelete(item.id)}
-                            disabled={isFinalAssetDeleting}
-                            className="p-1.5 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                            title="Eliminar pieza final"
-                            aria-label="Eliminar pieza final"
-                          >
-                            {isFinalAssetDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                {finalAssets.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2" aria-label="Archivos finales del contenido">
+                    {finalAssets.map(asset => <FinalAssetTile key={asset.id} item={item} asset={asset} shareToken={shareToken} isEditing={isEditing} onDelete={onFinalAssetDelete} isDeleting={isFinalAssetDeleting} />)}
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-zinc-200 dark:border-white/10 bg-zinc-50/60 dark:bg-white/5 p-4 text-[10px] text-zinc-400">
@@ -487,15 +458,16 @@ const ContentItemCard = ({
                 {isEditing && (
                   <label className="flex items-center justify-center gap-2 rounded-xl border border-indigo-100 dark:border-indigo-500/20 bg-indigo-50 dark:bg-indigo-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors">
                     {isFinalAssetUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
-                    {item.finalAssetKey ? 'Reemplazar archivo' : 'Cargar archivo'}
+                    {finalAssets.length ? 'AÃ±adir archivos' : 'Cargar archivos'}
                     <input
                       type="file"
+                      multiple
                       accept="image/*,video/*"
                       className="hidden"
                       disabled={isFinalAssetUploading}
                       onChange={(event) => {
-                        const [file] = Array.from(event.target.files || []);
-                        if (file) onFinalAssetUpload(item.id, file);
+                        const files = Array.from(event.target.files || []);
+                        if (files.length) onFinalAssetUpload(item.id, files);
                         event.target.value = '';
                       }}
                     />
@@ -850,10 +822,10 @@ const ContentPlanDetail = () => {
   });
 
   const finalAssetUploadMutation = useMutation({
-    mutationFn: async ({ itemId, file }) => {
+    mutationFn: async ({ itemId, files }) => {
       const uploadData = new FormData();
-      uploadData.append('file', file);
-      const response = await axios.post(`${getApiBaseUrl()}/api/content/items/${itemId}/final-asset`, uploadData, {
+      files.forEach(file => uploadData.append('files', file));
+      const response = await axios.post(`${getApiBaseUrl()}/api/content/items/${itemId}/final-assets`, uploadData, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('authToken')}`,
           'Content-Type': 'multipart/form-data'
@@ -863,7 +835,7 @@ const ContentPlanDetail = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
-      toast.success('Pieza final cargada');
+      toast.success('Archivos finales cargados');
     },
     onError: (error) => {
       console.error('Error uploading final content asset:', error.response?.data || error);
@@ -872,8 +844,8 @@ const ContentPlanDetail = () => {
   });
 
   const finalAssetDeleteMutation = useMutation({
-    mutationFn: async (itemId) => {
-      const response = await axios.delete(`${getApiBaseUrl()}/api/content/items/${itemId}/final-asset`, {
+    mutationFn: async ({ itemId, assetId }) => {
+      const response = await axios.delete(`${getApiBaseUrl()}/api/content/items/${itemId}/final-assets/${assetId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
       return response.data;
@@ -944,12 +916,12 @@ const ContentPlanDetail = () => {
     setNewPlanInternalNote('');
   };
 
-  const handleFinalAssetUpload = (itemId, file) => {
-    finalAssetUploadMutation.mutate({ itemId, file });
+  const handleFinalAssetUpload = (itemId, files) => {
+    finalAssetUploadMutation.mutate({ itemId, files });
   };
 
-  const handleFinalAssetDelete = (itemId) => {
-    finalAssetDeleteMutation.mutate(itemId);
+  const handleFinalAssetDelete = (itemId, assetId) => {
+    finalAssetDeleteMutation.mutate({ itemId, assetId });
   };
 
   const handleDeleteItem = async (itemId) => {
