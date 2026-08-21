@@ -97,8 +97,8 @@ export async function getUpcomingEvents(calendarId = process.env.GOOGLE_CALENDAR
  * Creates a Google Calendar event with a Google Meet link.
  */
 export async function createMeetEvent(title, startAt, endAt, description = '', connectionId = null) {
-    const centralMeetLink = await createCentralOAuthMeetEvent(title, startAt, endAt, description, connectionId);
-    if (centralMeetLink) return centralMeetLink;
+    const centralMeet = await createCentralOAuthMeetEvent(title, startAt, endAt, description, connectionId);
+    if (centralMeet) return centralMeet;
     if (connectionId) return null;
 
     const calendar = getCalendarClient();
@@ -127,7 +127,7 @@ export async function createMeetEvent(title, startAt, endAt, description = '', c
 
         const meetLink = response.data.hangoutLink;
         console.log(`[CalendarService] Created event with link: ${meetLink}`);
-        return meetLink;
+        return { meetingLink: meetLink, googleMeetSpaceName: null };
     } catch (error) {
         console.error("[CalendarService] Failed to create Meet event:", error.message);
         // Fallback or return null so the UI can handle it
@@ -141,7 +141,9 @@ async function createCentralOAuthMeetEvent(_title, _startAt, _endAt, _descriptio
         if (!auth) return null;
 
         const meetSpace = await createOpenGoogleMeetSpace(connectionId);
-        return meetSpace?.meetingUri || null;
+        return meetSpace?.meetingUri
+            ? { meetingLink: meetSpace.meetingUri, googleMeetSpaceName: meetSpace.name || null }
+            : null;
     } catch (error) {
         console.error("[CalendarService] Central OAuth Meet creation failed:", error.response?.data || error.message);
         return null;

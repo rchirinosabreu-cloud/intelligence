@@ -96,6 +96,7 @@ const OperationalCalendar = () => {
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [hoveredEvent, setHoveredEvent] = useState(null);
   const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const [conferenceEndCandidate, setConferenceEndCandidate] = useState(null);
   const [selectedDayAgenda, setSelectedDayAgenda] = useState(null);
   const [reconciliationPreview, setReconciliationPreview] = useState(null);
   const [googleErrorConnection, setGoogleErrorConnection] = useState(null);
@@ -117,6 +118,7 @@ const OperationalCalendar = () => {
     recurrence: 'NONE',
     recurrenceEnd: null,
     meetingLink: '',
+    googleMeetSpaceName: '',
     description: '',
     attendeeEmails: [],
     googleConnectionId: ''
@@ -332,6 +334,29 @@ const OperationalCalendar = () => {
     }
   });
 
+  const endConferenceMutation = useMutation({
+    mutationFn: async id => {
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/events/${id}/end-conference`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.details || error.error || 'No se pudo finalizar la reunión');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['operational-events'] });
+      setConferenceEndCandidate(null);
+      toast.success('Reunión finalizada. Google Meet desconectó a los participantes y a Fireflies.');
+    },
+    onError: error => {
+      console.error('Google Meet end conference error:', error);
+      toast.error(error.message || 'No se pudo finalizar la reunión');
+    }
+  });
+
   const openCreateModal = (date = currentDate, type = 'PRODUCTION') => {
     const start = getRoundedBogotaNow(date);
     const end = new Date(start.getTime() + 60 * 60 * 1000);
@@ -346,6 +371,7 @@ const OperationalCalendar = () => {
       recurrence: 'NONE',
       recurrenceEnd: null,
       meetingLink: '',
+      googleMeetSpaceName: '',
       description: '',
       attendeeEmails: [],
       googleConnectionId: googleConnections[0]?.id || ''
@@ -374,6 +400,7 @@ const OperationalCalendar = () => {
       recurrence: event.recurrence || 'NONE',
       recurrenceEnd: event.recurrenceEnd ? new Date(event.recurrenceEnd) : null,
       meetingLink: event.meetingLink || '',
+      googleMeetSpaceName: event.googleMeetSpaceName || '',
       description: normalizeCalendarDescription(event.description || ''),
       attendeeEmails: (event.attendeeEmails || []).filter(email => email.toLowerCase() !== 'fred@fireflies.ai'),
       googleConnectionId: event.googleConnectionId || googleConnections[0]?.id || ''
@@ -433,7 +460,7 @@ const OperationalCalendar = () => {
         throw new Error(error.details || error.error || 'No se pudo generar el link');
       }
       const data = await res.json();
-      setFormData({ ...formData, meetingLink: data.meetingLink });
+      setFormData({ ...formData, meetingLink: data.meetingLink, googleMeetSpaceName: data.googleMeetSpaceName || '' });
       toast.success('Google Meet generado');
     } catch (err) {
       console.error(err);
@@ -449,6 +476,7 @@ const OperationalCalendar = () => {
     setIsModalOpen(false);
     setEditingEventId(null);
     setDeleteCandidate(null);
+    setConferenceEndCandidate(null);
   };
 
   useEffect(() => {
@@ -1100,6 +1128,17 @@ const OperationalCalendar = () => {
               </div>
 
               <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800 md:col-span-2 md:flex-row">
+                {editingEventId && formData.type === 'MEETING' && formData.meetingLink && (
+                  <button
+                    type="button"
+                    onClick={() => setConferenceEndCandidate({ id: editingEventId, title: formData.title })}
+                    disabled={endConferenceMutation.isPending}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    {endConferenceMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
+                    Finalizar reunión
+                  </button>
+                )}
                 {editingEventId && (
                   <button
                     type="button"
@@ -1156,6 +1195,25 @@ const OperationalCalendar = () => {
               >
                 {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      , document.body)}
+
+      {conferenceEndCandidate && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-zinc-950/55 p-4 backdrop-blur-sm">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="end-conference-title" className="w-full max-w-md rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
+            <h3 id="end-conference-title" className="text-lg font-bold text-zinc-950 dark:text-white">Finalizar reunión</h3>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+              Google Meet cerrará la conferencia activa de “{conferenceEndCandidate.title}” y desconectará a todos, incluido Brain Studio · Minutas.
+            </p>
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">El evento del calendario y su información no se eliminarán.</p>
+            <div className="mt-6 flex gap-3">
+              <button type="button" onClick={() => setConferenceEndCandidate(null)} disabled={endConferenceMutation.isPending} className="flex-1 rounded-2xl border border-zinc-200 px-4 py-3 text-xs font-bold text-zinc-600 transition hover:bg-zinc-50 disabled:opacity-60 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5">Cancelar</button>
+              <button type="button" onClick={() => endConferenceMutation.mutate(conferenceEndCandidate.id)} disabled={endConferenceMutation.isPending} className="brain-danger-button inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold transition disabled:opacity-60">
+                {endConferenceMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                Finalizar ahora
               </button>
             </div>
           </div>

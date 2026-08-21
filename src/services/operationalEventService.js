@@ -283,7 +283,8 @@ export async function syncOperationalEventToGoogle(event) {
         googleLastSyncedAt: new Date(),
         googleSyncStatus: 'SYNCED',
         googleSyncError: null,
-        meetingLink: getMeetLinkFromGoogleEvent(googleEvent) || event.meetingLink || null
+        meetingLink: getMeetLinkFromGoogleEvent(googleEvent) || event.meetingLink || null,
+        googleMeetSpaceName: event.googleMeetSpaceName || null
       }
     });
   } catch (error) {
@@ -566,6 +567,7 @@ export async function createOperationalEvent(data, createdById = null) {
       recurrence: data.recurrence || 'NONE',
       recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
       meetingLink: data.meetingLink || null,
+      googleMeetSpaceName: data.googleMeetSpaceName || null,
       source: data.source || 'BRAIN',
       createdById,
       googleConnectionId: data.googleConnectionId || null,
@@ -599,6 +601,7 @@ export async function updateOperationalEvent(id, data) {
       recurrence: data.recurrence,
       recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
       meetingLink: data.meetingLink,
+      googleMeetSpaceName: data.googleMeetSpaceName,
       googleMeetAccessType: data.googleMeetAccessType
     }
   });
