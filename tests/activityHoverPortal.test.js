@@ -26,5 +26,6 @@ test('floating cards compute viewport-aware positions', () => {
   assert.match(activityMap, /getFloatingCardPosition/);
   assert.match(activityMap, /getBoundingClientRect\(\)/);
   assert.match(operationalCalendar, /getBoundingClientRect\(\)/);
-  assert.match(operationalCalendar, /window\.innerWidth - width - 16/);
+  assert.match(operationalCalendar, /getCalendarPopoverPosition/);
+  assert.match(operationalCalendar, /pointer-events-none/);
 });

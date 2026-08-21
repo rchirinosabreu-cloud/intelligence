@@ -20,6 +20,14 @@ export const getGoogleConnectionHealth = (connection, now = new Date()) => {
   return { status: 'healthy', label: 'Actualizado' };
 };
 
+export const getCalendarPopoverPosition = (rect, viewport, dimensions = { width: 300, height: 200 }) => {
+  const gap = 8;
+  const margin = 16;
+  const left = Math.min(Math.max(rect.left, margin), viewport.width - dimensions.width - margin);
+  const fitsBelow = rect.bottom + gap + dimensions.height <= viewport.height - margin;
+  return { left, top: fitsBelow ? rect.bottom + gap : Math.max(margin, rect.top - dimensions.height - gap), placement: fitsBelow ? 'bottom' : 'top' };
+};
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const addExternalEmailTags = (currentEmails = [], rawValue = '') => {

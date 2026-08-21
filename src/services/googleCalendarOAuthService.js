@@ -165,15 +165,14 @@ export const getCentralGoogleCalendarConnectionStatus = async () => {
       _count: { select: { eventLinks: true } }
     }
   });
-  const connections = await Promise.all(rawConnections.map(async ({ syncToken, channels, _count, ...connection }) => ({
-    ...connection,
-    incrementalSyncReady: Boolean(syncToken),
-    channelExpiresAt: channels[0]?.expiresAt || null,
-    linkedEventCount: _count.eventLinks,
-    errorCount: await prisma.operationalEvent.count({
-      where: { googleConnectionId: connection.id, googleSyncStatus: 'ERROR' }
-    })
-  })));
+  const connections = await Promise.all(rawConnections.map(async ({ syncToken, channels, _count, ...connection }) => {
+    const errorWhere = { googleConnectionId: connection.id, googleSyncStatus: 'ERROR' };
+    const [errorCount, syncErrors] = await Promise.all([
+      prisma.operationalEvent.count({ where: errorWhere }),
+      prisma.operationalEvent.findMany({ where: errorWhere, orderBy: { googleLastSyncedAt: 'desc' }, take: 10, select: { id: true, title: true, startAt: true, googleLastSyncedAt: true } })
+    ]);
+    return { ...connection, incrementalSyncReady: Boolean(syncToken), channelExpiresAt: channels[0]?.expiresAt || null, linkedEventCount: _count.eventLinks, errorCount, syncErrors };
+  }));
   const [pendingCount, errorCount] = await Promise.all([
     prisma.operationalEvent.count({ where: { source: 'BRAIN', googleLinks: { none: {} } } }),
     prisma.operationalEvent.count({ where: { source: 'BRAIN', googleSyncStatus: 'ERROR' } })

@@ -120,7 +120,7 @@ test('operational calendar fixes current render and role issues', async () => {
   assert.match(calendar, /if \(!res\.ok\) \{[\s\S]*throw new Error/);
   assert.match(calendar, /Authorization:\s*`Bearer \$\{localStorage\.getItem\('authToken'\)\}`/);
   assert.match(calendar, /google-calendar\/auth-url/);
-  assert.doesNotMatch(calendar, /google-calendar\/sync/);
+  assert.match(calendar, /google-calendar\/sync/);
   assert.match(calendar, /monthCalendarDays/);
   assert.match(calendar, /eventsByDay/);
   assert.match(calendar, /getRoundedBogotaNow/);

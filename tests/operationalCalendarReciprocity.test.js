@@ -11,10 +11,22 @@ import {
 import {
   addExternalEmailTags,
   getGoogleConnectionHealth,
+  getCalendarPopoverPosition,
   getDayEventDisplay,
   normalizeCalendarDescription,
   summarizeGoogleSyncResults
 } from '../src/components/modules/Activity/calendarPresentation.js';
+
+test('calendar popovers open above bottom-row events and below when space allows', () => {
+  assert.deepEqual(
+    getCalendarPopoverPosition({ left: 60, top: 740, bottom: 770 }, { width: 1280, height: 800 }),
+    { left: 60, top: 532, placement: 'top' }
+  );
+  assert.deepEqual(
+    getCalendarPopoverPosition({ left: 60, top: 100, bottom: 130 }, { width: 1280, height: 800 }),
+    { left: 60, top: 138, placement: 'bottom' }
+  );
+});
 
 test('Google Calendar pagination reaches the final page and returns its sync token', async () => {
   const calls = [];
@@ -112,7 +124,19 @@ test('status endpoint exposes operational health without exposing tokens', async
   assert.match(oauth, /incrementalSyncReady/);
   assert.match(oauth, /channelExpiresAt/);
   assert.match(oauth, /errorCount/);
+  assert.match(oauth, /syncErrors/);
   assert.doesNotMatch(oauth, /encryptedTokens:\s*true/);
+});
+
+test('calendar exposes failed events, retry recovery and an organized manual sync control', async () => {
+  const calendar = await readFile(new URL('../src/components/modules/Activity/OperationalCalendar.jsx', import.meta.url), 'utf8');
+
+  assert.match(calendar, /google-calendar\/sync/);
+  assert.match(calendar, /Sincronizar/);
+  assert.match(calendar, /data-google-calendar-errors="dialog"/);
+  assert.match(calendar, /Reintentar/);
+  assert.match(calendar, /pointer-events-none/);
+  assert.match(calendar, /deleteCandidate && createPortal/);
 });
 
 test('historical reconciliation requires an explicit bounded event selection', async () => {

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Calendar as CalendarIcon,
@@ -37,9 +38,11 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   addExternalEmailTags,
+  getCalendarPopoverPosition,
   getDayEventDisplay,
   getGoogleConnectionHealth,
-  normalizeCalendarDescription
+  normalizeCalendarDescription,
+  summarizeGoogleSyncResults
 } from './calendarPresentation';
 
 const EVENT_TYPES = [
@@ -94,6 +97,7 @@ const OperationalCalendar = () => {
   const [deleteCandidate, setDeleteCandidate] = useState(null);
   const [selectedDayAgenda, setSelectedDayAgenda] = useState(null);
   const [reconciliationPreview, setReconciliationPreview] = useState(null);
+  const [googleErrorConnection, setGoogleErrorConnection] = useState(null);
   const [selectedReconciliationIds, setSelectedReconciliationIds] = useState([]);
   const [reconciliationConnectionId, setReconciliationConnectionId] = useState('');
   const [isLoadingReconciliation, setIsLoadingReconciliation] = useState(false);
@@ -219,11 +223,11 @@ const OperationalCalendar = () => {
   };
 
   const reconciliationMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (selection) => {
       const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/reconciliation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ eventIds: selectedReconciliationIds, connectionId: reconciliationConnectionId })
+        body: JSON.stringify({ eventIds: selection?.eventIds || selectedReconciliationIds, connectionId: selection?.connectionId || reconciliationConnectionId })
       });
       if (!res.ok) {
         const error = await res.json().catch(() => ({}));
@@ -235,11 +239,33 @@ const OperationalCalendar = () => {
       queryClient.invalidateQueries({ queryKey: ['operational-events'] });
       queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
       setReconciliationPreview(null);
+      setGoogleErrorConnection(null);
       toast.success(`${result.synced} evento(s) sincronizados${result.failed ? `, ${result.failed} con error` : ''}`);
     },
     onError: error => {
       console.error('Google Calendar reconciliation error:', error);
       toast.error(error.message || 'No se pudieron reconciliar los eventos');
+    }
+  });
+
+  const manualSyncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() } });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.details || error.error || 'No se pudo sincronizar Google Calendar');
+      }
+      return res.json();
+    },
+    onSuccess: results => {
+      const summary = summarizeGoogleSyncResults(results);
+      queryClient.invalidateQueries({ queryKey: ['operational-events'] });
+      queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
+      toast.success(`Sincronización lista: ${summary.imported} nuevos y ${summary.updated} actualizados`);
+    },
+    onError: error => {
+      console.error('Google Calendar manual sync error:', error);
+      toast.error(error.message || 'No se pudo sincronizar Google Calendar');
     }
   });
 
@@ -431,26 +457,16 @@ const OperationalCalendar = () => {
   const handleEventMouseEnter = (event, calendarEvent) => {
     if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
     const rect = event.currentTarget.getBoundingClientRect();
-    const width = 300;
-    const left = Math.min(Math.max(rect.left, 16), window.innerWidth - width - 16);
-    const top = Math.min(rect.bottom + 8, window.innerHeight - 190);
+    const position = getCalendarPopoverPosition(rect, { width: window.innerWidth, height: window.innerHeight });
     setHoveredEvent({
       event: calendarEvent,
-      position: { left, top }
+      position
     });
   };
 
   const handleEventMouseLeave = () => {
     if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
     hoverCloseTimerRef.current = setTimeout(() => setHoveredEvent(null), 180);
-  };
-
-  const handlePopoverMouseEnter = () => {
-    if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
-  };
-
-  const handlePopoverMouseLeave = () => {
-    setHoveredEvent(null);
   };
 
   const handleRequestDelete = () => {
@@ -486,10 +502,10 @@ const OperationalCalendar = () => {
                   {googleConnections.map(connection => {
                     const health = getGoogleConnectionHealth(connection);
                     return (
-                      <span key={connection.id} title={connection.lastSyncedAt ? `Última actualización: ${format(new Date(connection.lastSyncedAt), 'd MMM, HH:mm', { locale: es })}` : 'Sin sincronización registrada'} className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-[10px] font-bold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
+                      <button type="button" key={connection.id} onClick={() => health.status === 'error' && setGoogleErrorConnection(connection)} disabled={health.status !== 'error'} title={connection.lastSyncedAt ? `Última actualización: ${format(new Date(connection.lastSyncedAt), 'd MMM, HH:mm', { locale: es })}` : 'Sin sincronización registrada'} className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-[10px] font-bold text-zinc-600 transition hover:bg-zinc-200 disabled:cursor-default dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15">
                         <span className={cn('h-2 w-2 rounded-full', health.status === 'healthy' ? 'bg-emerald-500' : health.status === 'error' ? 'bg-red-500' : 'bg-amber-500')} />
                         {connection.email.split('@')[0]} · {health.label}
-                      </span>
+                      </button>
                     );
                   })}
                   {(googleCalendarStatus?.reconciliation?.pendingCount || 0) > 0 && (
@@ -517,6 +533,12 @@ const OperationalCalendar = () => {
           )}
 
           <div className="flex flex-wrap items-center gap-3">
+          {isAdmin && googleCalendarStatus?.connected && (
+            <button type="button" onClick={() => manualSyncMutation.mutate()} disabled={manualSyncMutation.isPending} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 text-xs font-bold text-zinc-700 transition hover:border-violet-200 hover:text-violet-600 disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200">
+              {manualSyncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarIcon className="h-4 w-4" />}
+              Sincronizar
+            </button>
+          )}
           <div className="inline-flex overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-white/5">
             <button type="button" onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2.5 hover:bg-zinc-50 dark:hover:bg-white/10">
               <ChevronLeft className="h-4 w-4" />
@@ -684,10 +706,8 @@ const OperationalCalendar = () => {
       {hoveredEvent && (
         <div
           data-operational-event-popover="preview"
-          className="fixed z-[90] w-[300px] rounded-2xl border border-zinc-200 bg-white p-4 text-sm shadow-2xl shadow-zinc-950/10 dark:border-white/10 dark:bg-zinc-900 dark:shadow-black/30"
+          className="pointer-events-none fixed z-[90] w-[300px] rounded-2xl border border-zinc-200 bg-white p-4 text-sm shadow-2xl shadow-zinc-950/10 dark:border-white/10 dark:bg-zinc-900 dark:shadow-black/30"
           style={{ left: hoveredEvent.position.left, top: hoveredEvent.position.top }}
-          onMouseEnter={handlePopoverMouseEnter}
-          onMouseLeave={handlePopoverMouseLeave}
         >
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
@@ -717,6 +737,26 @@ const OperationalCalendar = () => {
           </div>
         </div>
       )}
+
+      <Dialog open={!!googleErrorConnection} onOpenChange={open => { if (!open) setGoogleErrorConnection(null); }}>
+        <DialogContent data-google-calendar-errors="dialog" className="max-w-xl rounded-2xl border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <DialogHeader className="text-left">
+            <DialogTitle>Errores de Google Calendar</DialogTitle>
+            <DialogDescription>{googleErrorConnection?.email}. Estos eventos no lograron crearse o actualizarse en Google.</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[50vh] space-y-2 overflow-y-auto overscroll-contain">
+            {(googleErrorConnection?.syncErrors || []).map(event => (
+              <div key={event.id} className="rounded-xl border border-red-200 bg-red-50/60 p-3 dark:border-red-500/20 dark:bg-red-500/10">
+                <p className="font-semibold text-zinc-950 dark:text-white">{event.title}</p>
+                <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">{format(new Date(event.startAt), 'd MMM yyyy, HH:mm', { locale: es })}</p>
+                <button type="button" onClick={() => reconciliationMutation.mutate({ eventIds: [event.id], connectionId: googleErrorConnection.id })} disabled={reconciliationMutation.isPending} className="brain-danger-button mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-xs font-bold disabled:opacity-60">
+                  {reconciliationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Reintentar
+                </button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {reconciliationPreview && (
         <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) setReconciliationPreview(null); }}>
@@ -1039,7 +1079,7 @@ const OperationalCalendar = () => {
         </Dialog>
       )}
 
-      {deleteCandidate && (
+      {deleteCandidate && createPortal(
         <div
           data-operational-delete-dialog="event"
           className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
@@ -1074,7 +1114,7 @@ const OperationalCalendar = () => {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 };
