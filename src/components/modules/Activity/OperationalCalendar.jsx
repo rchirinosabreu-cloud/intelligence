@@ -1206,7 +1206,7 @@ const OperationalCalendar = () => {
           <div role="alertdialog" aria-modal="true" aria-labelledby="end-conference-title" className="w-full max-w-md rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
             <h3 id="end-conference-title" className="text-lg font-bold text-zinc-950 dark:text-white">Finalizar reunión</h3>
             <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
-              Google Meet cerrará la conferencia activa de “{conferenceEndCandidate.title}” y desconectará a todos, incluido Brain Studio · Minutas.
+              Google Meet cerrará la conferencia activa de “{conferenceEndCandidate.title}” y desconectará a todos, incluido Fireflies.
             </p>
             <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">El evento del calendario y su información no se eliminarán.</p>
             <div className="mt-6 flex gap-3">

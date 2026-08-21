@@ -84,4 +84,6 @@ test('expone el cierre protegido y conserva el identificador al generar y guarda
   assert.match(calendarService, /googleMeetSpaceName/);
   assert.match(calendarUi, /Finalizar reuni[oó]n/);
   assert.match(calendarUi, /googleMeetSpaceName/);
+  assert.match(calendarUi, /incluido Fireflies/);
+  assert.doesNotMatch(calendarUi, /Brain Studio · Minutas/);
 });
