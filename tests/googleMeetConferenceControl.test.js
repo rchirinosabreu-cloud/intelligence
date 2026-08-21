@@ -40,6 +40,18 @@ test('nunca cierra mientras quede una persona activa ni antes de que alguien hay
   assert.equal(evaluateMeetAutoCloseState({ participants: [fireflies], onlyBotSince: null }).action, 'IGNORE');
 });
 
+test('recupera enlaces de Meet creados por la plataforma desde ubicación o descripción de Google Calendar', async () => {
+  const { getMeetLinkFromGoogleEvent } = await import('../src/services/operationalEventService.js');
+  assert.equal(
+    getMeetLinkFromGoogleEvent({ location: 'https://meet.google.com/abc-defg-hij' }),
+    'https://meet.google.com/abc-defg-hij'
+  );
+  assert.equal(
+    getMeetLinkFromGoogleEvent({ description: 'Agenda\n\nGoogle Meet: https://meet.google.com/xyz-abcd-efg' }),
+    'https://meet.google.com/xyz-abcd-efg'
+  );
+});
+
 test('el cierre es automático y no aparece como botón en el calendario', async () => {
   const [routes, calendarService, calendarUi, autoSync, schema] = await Promise.all([
     readFile(new URL('../src/routes/api/activity.js', import.meta.url), 'utf8'),

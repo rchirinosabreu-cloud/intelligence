@@ -79,10 +79,12 @@ const formatGoogleDateTimeInBogota = (value) => {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
 };
 
-const getMeetLinkFromGoogleEvent = (event) => {
+export const getMeetLinkFromGoogleEvent = (event) => {
   if (event.hangoutLink) return event.hangoutLink;
   const videoEntry = event.conferenceData?.entryPoints?.find(entry => entry.entryPointType === 'video');
-  return videoEntry?.uri || null;
+  if (videoEntry?.uri) return videoEntry.uri;
+  const fallbackText = [event.location, event.description].filter(Boolean).join('\n');
+  return fallbackText.match(/https:\/\/meet\.google\.com\/[a-z0-9-]+/i)?.[0] || null;
 };
 
 const mapGoogleEventType = (event) => {
