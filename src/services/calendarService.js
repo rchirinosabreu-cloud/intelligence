@@ -96,9 +96,10 @@ export async function getUpcomingEvents(calendarId = process.env.GOOGLE_CALENDAR
 /**
  * Creates a Google Calendar event with a Google Meet link.
  */
-export async function createMeetEvent(title, startAt, endAt, description = '') {
-    const centralMeetLink = await createCentralOAuthMeetEvent(title, startAt, endAt, description);
+export async function createMeetEvent(title, startAt, endAt, description = '', connectionId = null) {
+    const centralMeetLink = await createCentralOAuthMeetEvent(title, startAt, endAt, description, connectionId);
     if (centralMeetLink) return centralMeetLink;
+    if (connectionId) return null;
 
     const calendar = getCalendarClient();
     if (!calendar) return null;
@@ -134,29 +135,13 @@ export async function createMeetEvent(title, startAt, endAt, description = '') {
     }
 }
 
-async function createCentralOAuthMeetEvent(title, startAt, endAt, description = '') {
+async function createCentralOAuthMeetEvent(_title, _startAt, _endAt, _description = '', connectionId = null) {
     try {
-        const auth = await getAuthorizedGoogleOAuthClient();
+        const auth = await getAuthorizedGoogleOAuthClient(connectionId);
         if (!auth) return null;
 
-        const meetSpace = await createOpenGoogleMeetSpace();
-        const meetingLink = meetSpace?.meetingUri;
-        const calendar = google.calendar({ version: 'v3', auth: auth.oauth2Client });
-        const calendarId = auth.connection.calendarId || 'primary';
-
-        const response = await calendar.events.insert({
-            calendarId,
-            sendUpdates: 'none',
-            requestBody: {
-                summary: title,
-                description: [description, meetingLink ? `Google Meet abierto: ${meetingLink}` : ''].filter(Boolean).join('\n\n'),
-                location: meetingLink || undefined,
-                start: { dateTime: new Date(startAt).toISOString(), timeZone: 'America/Bogota' },
-                end: { dateTime: new Date(endAt).toISOString(), timeZone: 'America/Bogota' }
-            }
-        });
-
-        return meetingLink || response.data.hangoutLink || response.data.htmlLink || null;
+        const meetSpace = await createOpenGoogleMeetSpace(connectionId);
+        return meetSpace?.meetingUri || null;
     } catch (error) {
         console.error("[CalendarService] Central OAuth Meet creation failed:", error.response?.data || error.message);
         return null;

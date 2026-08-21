@@ -19,6 +19,37 @@ const isGoogleEventAlreadyDeleted = (error) => {
   return status === 404 || status === 410 || errors.some(item => item.reason === 'deleted');
 };
 
+const isExpiredGoogleSyncTokenError = (error) => {
+  const status = error.code || error.response?.status;
+  const errors = error.response?.data?.error?.errors || error.errors || [];
+  return status === 410 || errors.some(item => item.reason === 'fullSyncRequired');
+};
+
+export async function listAllGoogleEventPages(calendar, request) {
+  const items = [];
+  let pageToken;
+  let nextSyncToken;
+
+  try {
+    do {
+      const response = await calendar.events.list({ ...request, ...(pageToken ? { pageToken } : {}) });
+      items.push(...(response.data.items || []));
+      pageToken = response.data.nextPageToken;
+      if (!pageToken) nextSyncToken = response.data.nextSyncToken || null;
+    } while (pageToken);
+  } catch (error) {
+    if (request.syncToken && isExpiredGoogleSyncTokenError(error)) {
+      const expiredError = new Error('El token incremental de Google Calendar venció');
+      expiredError.code = 'GOOGLE_SYNC_TOKEN_EXPIRED';
+      expiredError.cause = error;
+      throw expiredError;
+    }
+    throw error;
+  }
+
+  return { items, nextSyncToken };
+}
+
 const normalizeAttendeeEmails = async (memberIds = [], externalEmails = []) => {
   const members = memberIds.length
     ? await prisma.teamMember.findMany({ where: { id: { in: memberIds } }, select: { email: true } })
@@ -61,15 +92,36 @@ const mapGoogleEventType = (event) => {
   return 'PROJECT';
 };
 
+export const mapGoogleEventDates = (event) => {
+  const isAllDay = Boolean(event.start?.date && event.end?.date);
+  return {
+    isAllDay,
+    startAt: new Date(event.start?.dateTime || `${event.start?.date}T00:00:00.000-05:00`),
+    endAt: new Date(event.end?.dateTime || `${event.end?.date}T00:00:00.000-05:00`)
+  };
+};
+
+const getGoogleRecurrenceData = (event) => {
+  const rule = (event.recurrence || []).find(item => item.startsWith('RRULE:'));
+  if (!rule) return { recurrence: 'NONE', recurrenceEnd: null };
+  const until = rule.match(/(?:^|;)UNTIL=([^;]+)/)?.[1];
+  const recurrenceEnd = until && /^\d{8}T\d{6}Z$/.test(until)
+    ? new Date(`${until.slice(0, 4)}-${until.slice(4, 6)}-${until.slice(6, 8)}T${until.slice(9, 11)}:${until.slice(11, 13)}:${until.slice(13, 15)}Z`)
+    : null;
+  return {
+    recurrence: rule.includes('FREQ=WEEKLY') ? 'WEEKLY' : 'NONE',
+    recurrenceEnd
+  };
+};
+
 const toOperationalEventDataFromGoogle = (event, calendarId, connectionId) => ({
   title: event.summary || 'Evento de Google Calendar',
   type: mapGoogleEventType(event),
   description: event.description || null,
-  startAt: new Date(event.start?.dateTime || `${event.start?.date}T00:00:00.000-05:00`),
-  endAt: new Date(event.end?.dateTime || `${event.end?.date}T23:59:59.000-05:00`),
+  startAt: mapGoogleEventDates(event).startAt,
+  endAt: mapGoogleEventDates(event).endAt,
   memberIds: [],
-  recurrence: 'NONE',
-  recurrenceEnd: null,
+  ...getGoogleRecurrenceData(event),
   meetingLink: getMeetLinkFromGoogleEvent(event),
   source: 'GOOGLE',
   organizerEmail: event.organizer?.email || null,
@@ -86,12 +138,22 @@ const toOperationalEventDataFromGoogle = (event, calendarId, connectionId) => ({
   googleSyncStatus: 'SYNCED'
 });
 
+export const buildGoogleRecurrence = (event) => {
+  if (event.recurrence !== 'WEEKLY') return undefined;
+  const until = event.recurrenceEnd
+    ? new Date(event.recurrenceEnd).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
+    : null;
+  return [`RRULE:FREQ=WEEKLY${until ? `;UNTIL=${until}` : ''}`];
+};
+
 const toGoogleEventPayload = (event) => ({
   summary: event.title,
-  description: event.description || '',
+  description: [event.description, event.meetingLink ? `Google Meet: ${event.meetingLink}` : ''].filter(Boolean).join('\n\n'),
+  ...(event.meetingLink ? { location: event.meetingLink } : {}),
   start: { dateTime: formatGoogleDateTimeInBogota(event.startAt), timeZone: 'America/Bogota' },
   end: { dateTime: formatGoogleDateTimeInBogota(event.endAt), timeZone: 'America/Bogota' },
   attendees: event.attendeeEmails.map(email => ({ email })),
+  ...(buildGoogleRecurrence(event) ? { recurrence: buildGoogleRecurrence(event) } : {}),
   extendedProperties: {
     private: {
       brainOperationalEventId: event.id,
@@ -226,12 +288,13 @@ export async function syncGoogleCalendarToOperationalEvents({ start, end, connec
   const timeMin = start ? new Date(start) : new Date();
   const timeMax = end ? new Date(end) : new Date(timeMin.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-  const response = await calendar.events.list(auth.connection.syncToken ? {
+  const incrementalRequest = auth.connection.syncToken ? {
     calendarId,
     syncToken: auth.connection.syncToken,
     showDeleted: true,
     maxResults: 250
-  } : {
+  } : null;
+  const fullRequest = {
     calendarId,
     timeMin: timeMin.toISOString(),
     timeMax: timeMax.toISOString(),
@@ -239,13 +302,25 @@ export async function syncGoogleCalendarToOperationalEvents({ start, end, connec
     orderBy: 'startTime',
     showDeleted: true,
     maxResults: 250
-  });
+  };
+
+  let pageResult;
+  try {
+    pageResult = await listAllGoogleEventPages(calendar, incrementalRequest || fullRequest);
+  } catch (error) {
+    if (error.code !== 'GOOGLE_SYNC_TOKEN_EXPIRED') throw error;
+    await prisma.googleCalendarConnection.update({
+      where: { id: auth.connection.id },
+      data: { syncToken: null }
+    });
+    pageResult = await listAllGoogleEventPages(calendar, fullRequest);
+  }
 
   let imported = 0;
   let updated = 0;
   let skipped = 0;
 
-  for (const googleEvent of response.data.items || []) {
+  for (const googleEvent of pageResult.items) {
     if (googleEvent.status === 'cancelled') {
       const cancelledLink = await prisma.googleCalendarEventLink.findFirst({
         where: { connectionId: auth.connection.id, calendarId, googleEventId: googleEvent.id }
@@ -308,7 +383,7 @@ export async function syncGoogleCalendarToOperationalEvents({ start, end, connec
 
   await prisma.googleCalendarConnection.update({
     where: { id: auth.connection.id },
-    data: { lastSyncedAt: new Date(), syncToken: response.data.nextSyncToken || auth.connection.syncToken }
+    data: { lastSyncedAt: new Date(), syncToken: pageResult.nextSyncToken || auth.connection.syncToken }
   });
 
   return { imported, updated, skipped, connected: true };
@@ -326,6 +401,53 @@ export async function syncAllGoogleCalendars(options = {}) {
     }
   }
   return results;
+}
+
+export async function getOperationalEventReconciliationPreview(limit = 20) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 20);
+  const where = { source: 'BRAIN', googleLinks: { none: {} } };
+  const [total, events] = await Promise.all([
+    prisma.operationalEvent.count({ where }),
+    prisma.operationalEvent.findMany({
+      where,
+      orderBy: { startAt: 'desc' },
+      take: safeLimit,
+      select: { id: true, title: true, startAt: true, endAt: true, attendeeEmails: true, googleSyncStatus: true }
+    })
+  ]);
+  return { total, events };
+}
+
+export async function reconcilePendingOperationalEvents({ eventIds = [], connectionId } = {}) {
+  if (!Array.isArray(eventIds) || eventIds.length === 0) throw new Error('Selecciona al menos un evento');
+  if (eventIds.length > 20) throw new Error('Solo se pueden reconciliar hasta 20 eventos por operación');
+  if (!connectionId) throw new Error('Selecciona la cuenta organizadora de Google');
+  const auth = await getAuthorizedGoogleOAuthClient(connectionId);
+  if (!auth) throw new Error('La cuenta organizadora de Google no está disponible');
+
+  const events = await prisma.operationalEvent.findMany({
+    where: { id: { in: [...new Set(eventIds)] }, source: 'BRAIN', googleLinks: { none: {} } }
+  });
+  const results = [];
+  for (const event of events) {
+    try {
+      const assigned = await prisma.operationalEvent.update({
+        where: { id: event.id },
+        data: { googleConnectionId: connectionId }
+      });
+      await syncOperationalEventToGoogle(assigned);
+      results.push({ id: event.id, status: 'SYNCED' });
+    } catch (error) {
+      console.error(`[OperationalEventService] Error reconciliando ${event.id}:`, error.response?.data || error.message);
+      results.push({ id: event.id, status: 'ERROR', error: getGoogleErrorDetails(error) });
+    }
+  }
+  return {
+    requested: eventIds.length,
+    synced: results.filter(result => result.status === 'SYNCED').length,
+    failed: results.filter(result => result.status === 'ERROR').length,
+    results
+  };
 }
 
 export async function renewGoogleCalendarWatchChannels() {

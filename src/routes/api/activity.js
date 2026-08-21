@@ -5,7 +5,9 @@ import {
   updateOperationalEvent,
   deleteOperationalEvent,
   syncGoogleCalendarToOperationalEvents,
-  syncAllGoogleCalendars
+  syncAllGoogleCalendars,
+  getOperationalEventReconciliationPreview,
+  reconcilePendingOperationalEvents
 } from '../../services/operationalEventService.js';
 import { getTeamActivityStatus } from '../../services/activityStatusService.js';
 import { createMeetEvent } from '../../services/calendarService.js';
@@ -55,9 +57,9 @@ router.post('/events', async (req, res) => {
 });
 
 router.post('/events/generate-meet', async (req, res) => {
-  const { title, startAt, endAt, description } = req.body;
+  const { title, startAt, endAt, description, googleConnectionId } = req.body;
   try {
-    const meetingLink = await createMeetEvent(title, startAt, endAt, description);
+    const meetingLink = await createMeetEvent(title, startAt, endAt, description, googleConnectionId);
     if (!meetingLink) throw new Error("Could not generate link");
     res.json({ meetingLink });
   } catch (error) {
@@ -133,6 +135,24 @@ router.post('/google-calendar/sync', requireManagerRole, async (req, res) => {
   } catch (error) {
     console.error('[Activity API] Error syncing Google Calendar:', error.response?.data || error);
     res.status(500).json({ error: 'Failed to sync Google Calendar', details: error.message });
+  }
+});
+
+router.get('/google-calendar/reconciliation', requireManagerRole, async (req, res) => {
+  try {
+    res.json(await getOperationalEventReconciliationPreview(req.query.limit));
+  } catch (error) {
+    console.error('[Activity API] Error consultando reconciliación de Google Calendar:', error.response?.data || error);
+    res.status(500).json({ error: 'No se pudo consultar la reconciliación', details: error.message });
+  }
+});
+
+router.post('/google-calendar/reconciliation', requireManagerRole, async (req, res) => {
+  try {
+    res.json(await reconcilePendingOperationalEvents(req.body));
+  } catch (error) {
+    console.error('[Activity API] Error reconciliando Google Calendar:', error.response?.data || error);
+    res.status(400).json({ error: 'No se pudieron reconciliar los eventos', details: error.message });
   }
 });
 

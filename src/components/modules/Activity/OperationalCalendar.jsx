@@ -34,6 +34,7 @@ import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
+import { getDayEventDisplay, getGoogleConnectionHealth, summarizeGoogleSyncResults } from './calendarPresentation';
 
 const EVENT_TYPES = [
   { value: 'PRODUCTION', label: 'Produccion' },
@@ -85,6 +86,11 @@ const OperationalCalendar = () => {
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [hoveredEvent, setHoveredEvent] = useState(null);
   const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const [selectedDayAgenda, setSelectedDayAgenda] = useState(null);
+  const [reconciliationPreview, setReconciliationPreview] = useState(null);
+  const [selectedReconciliationIds, setSelectedReconciliationIds] = useState([]);
+  const [reconciliationConnectionId, setReconciliationConnectionId] = useState('');
+  const [isLoadingReconciliation, setIsLoadingReconciliation] = useState(false);
   const hoverCloseTimerRef = useRef(null);
   const [formData, setFormData] = useState({
     title: '',
@@ -182,6 +188,51 @@ const OperationalCalendar = () => {
     }
   };
 
+  const openReconciliation = async () => {
+    setIsLoadingReconciliation(true);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/reconciliation`, { headers: getAuthHeaders() });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.details || error.error || 'No se pudo consultar la reconciliación');
+      }
+      const preview = await res.json();
+      setReconciliationPreview(preview);
+      setSelectedReconciliationIds([]);
+      setReconciliationConnectionId(googleConnections[0]?.id || '');
+    } catch (error) {
+      console.error('Google Calendar reconciliation preview error:', error);
+      toast.error(error.message || 'No se pudo consultar la reconciliación');
+    } finally {
+      setIsLoadingReconciliation(false);
+    }
+  };
+
+  const reconciliationMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/reconciliation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ eventIds: selectedReconciliationIds, connectionId: reconciliationConnectionId })
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.details || error.error || 'No se pudieron reconciliar los eventos');
+      }
+      return res.json();
+    },
+    onSuccess: result => {
+      queryClient.invalidateQueries({ queryKey: ['operational-events'] });
+      queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
+      setReconciliationPreview(null);
+      toast.success(`${result.synced} evento(s) sincronizados${result.failed ? `, ${result.failed} con error` : ''}`);
+    },
+    onError: error => {
+      console.error('Google Calendar reconciliation error:', error);
+      toast.error(error.message || 'No se pudieron reconciliar los eventos');
+    }
+  });
+
   const googleCalendarSyncMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/sync`, {
@@ -199,10 +250,12 @@ const OperationalCalendar = () => {
       return res.json();
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries(['operational-events']);
-      queryClient.invalidateQueries(['team-activity-status']);
-      queryClient.invalidateQueries(['google-calendar-status']);
-      toast.success(`Google Calendar sincronizado (${result.imported || 0} nuevos, ${result.updated || 0} actualizados)`);
+      const summary = summarizeGoogleSyncResults(Array.isArray(result) ? result : [result]);
+      queryClient.invalidateQueries({ queryKey: ['operational-events'] });
+      queryClient.invalidateQueries({ queryKey: ['team-activity-status'] });
+      queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
+      const failedText = summary.failed ? `, ${summary.failed} cuenta(s) con error` : '';
+      toast.success(`Google Calendar sincronizado (${summary.imported} nuevos, ${summary.updated} actualizados${failedText})`);
     },
     onError: (error) => {
       console.error('Google Calendar sync error:', error);
@@ -228,8 +281,8 @@ const OperationalCalendar = () => {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['operational-events']);
-      queryClient.invalidateQueries(['team-activity-status']);
+      queryClient.invalidateQueries({ queryKey: ['operational-events'] });
+      queryClient.invalidateQueries({ queryKey: ['team-activity-status'] });
       setIsModalOpen(false);
       setEditingEventId(null);
       toast.success(editingEventId ? 'Evento actualizado' : 'Evento creado');
@@ -250,8 +303,8 @@ const OperationalCalendar = () => {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['operational-events']);
-      queryClient.invalidateQueries(['team-activity-status']);
+      queryClient.invalidateQueries({ queryKey: ['operational-events'] });
+      queryClient.invalidateQueries({ queryKey: ['team-activity-status'] });
       setIsModalOpen(false);
       setEditingEventId(null);
       setDeleteCandidate(null);
@@ -326,7 +379,8 @@ const OperationalCalendar = () => {
           title: formData.title,
           startAt: formData.startAt,
           endAt: formData.endAt,
-          description: formData.description
+          description: formData.description,
+          googleConnectionId: formData.googleConnectionId
         })
       });
 
@@ -450,6 +504,22 @@ const OperationalCalendar = () => {
                 >
                   Conectar social
                 </button>
+                <div className="flex w-full flex-wrap gap-2 pt-1" aria-label="Estado de cuentas de Google Calendar">
+                  {googleConnections.map(connection => {
+                    const health = getGoogleConnectionHealth(connection);
+                    return (
+                      <span key={connection.id} title={connection.lastSyncedAt ? `Última actualización: ${format(new Date(connection.lastSyncedAt), 'd MMM, HH:mm', { locale: es })}` : 'Sin sincronización registrada'} className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-[10px] font-bold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
+                        <span className={cn('h-2 w-2 rounded-full', health.status === 'healthy' ? 'bg-emerald-500' : health.status === 'error' ? 'bg-red-500' : 'bg-amber-500')} />
+                        {connection.email.split('@')[0]} · {health.label}
+                      </span>
+                    );
+                  })}
+                  {(googleCalendarStatus?.reconciliation?.pendingCount || 0) > 0 && (
+                    <button type="button" onClick={openReconciliation} disabled={isLoadingReconciliation} className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700 transition hover:bg-amber-100 disabled:opacity-60 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20" title="Revisar eventos históricos que todavía no tienen enlace con Google Calendar">
+                      {googleCalendarStatus.reconciliation.pendingCount} pendientes de reconciliar
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <button
@@ -488,7 +558,7 @@ const OperationalCalendar = () => {
         </div>
       </div>
 
-      <div data-operational-calendar="traditional-month-grid" className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
+      <div data-operational-calendar="traditional-month-grid" className="hidden overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900 md:block">
         <div className="grid grid-cols-5 border-b border-zinc-200 bg-zinc-50/80 dark:border-white/10 dark:bg-white/5">
           {['Lun', 'Mar', 'Mie', 'Jue', 'Vie'].map(day => (
             <div key={day} className="px-3 py-3 text-center text-xs font-bold text-zinc-500">
@@ -506,8 +576,7 @@ const OperationalCalendar = () => {
             {monthCalendarDays.map(day => {
               const dayKey = format(day, 'yyyy-MM-dd');
               const dayEvents = eventsByDay.get(dayKey) || [];
-              const visibleEvents = dayEvents.slice(0, 4);
-              const overflow = dayEvents.length - visibleEvents.length;
+              const { visible: visibleEvents, overflow } = getDayEventDisplay(dayEvents);
               return (
                 <div
                   key={dayKey}
@@ -564,10 +633,10 @@ const OperationalCalendar = () => {
                     {overflow > 0 && (
                       <button
                         type="button"
-                        onClick={() => handleEmptyDayClick(day)}
+                        onClick={() => setSelectedDayAgenda(day)}
                         className="px-2 text-[11px] font-medium text-zinc-500 hover:text-indigo-600"
                       >
-                        {overflow} mas...
+                        {overflow} más
                       </button>
                     )}
                   </div>
@@ -577,6 +646,53 @@ const OperationalCalendar = () => {
           </div>
         )}
       </div>
+
+      <div className="space-y-3 md:hidden" aria-label="Agenda mensual">
+        {monthCalendarDays.filter(day => isSameMonth(day, currentDate)).map(day => {
+          const dayKey = format(day, 'yyyy-MM-dd');
+          const dayEvents = eventsByDay.get(dayKey) || [];
+          if (!dayEvents.length) return null;
+          return (
+            <section key={dayKey} className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-bold capitalize text-zinc-900 dark:text-white">{format(day, 'EEEE d', { locale: es })}</h3>
+                {isAdmin && <button type="button" onClick={() => handleEmptyDayClick(day)} className="min-h-11 min-w-11 rounded-xl text-indigo-600 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-500/10" aria-label={`Crear evento el ${format(day, 'd MMMM', { locale: es })}`}><Plus className="mx-auto h-4 w-4" /></button>}
+              </div>
+              <div className="space-y-2">
+                {dayEvents.map(event => (
+                  <button key={event.id} type="button" onClick={() => handleEdit(event)} className={cn('flex min-h-11 w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-bold', getEventTypeStyles(event.type))}>
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-current" />
+                    <span className="min-w-0 flex-1 truncate">{event.title}</span>
+                    <span className="shrink-0 font-medium opacity-80">{format(new Date(event.startAt), 'HH:mm')}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+
+      {selectedDayAgenda && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedDayAgenda(null); }}>
+          <section data-operational-day-agenda="dialog" role="dialog" aria-modal="true" aria-labelledby="operational-day-agenda-title" className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-zinc-900">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-violet-600 dark:text-violet-300">Agenda del día</p>
+                <h3 id="operational-day-agenda-title" className="mt-1 text-lg font-bold capitalize text-zinc-950 dark:text-white">{format(selectedDayAgenda, 'EEEE d MMMM', { locale: es })}</h3>
+              </div>
+              <button type="button" onClick={() => setSelectedDayAgenda(null)} className="flex h-11 w-11 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/10" aria-label="Cerrar agenda del día"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-2">
+              {(eventsByDay.get(format(selectedDayAgenda, 'yyyy-MM-dd')) || []).map(event => (
+                <button key={event.id} type="button" onClick={() => { setSelectedDayAgenda(null); handleEdit(event); }} className={cn('flex min-h-12 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-xs font-bold', getEventTypeStyles(event.type))}>
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-current" />
+                  <span className="min-w-0 flex-1"><span className="block truncate">{event.title}</span><span className="mt-1 block font-medium opacity-75">{format(new Date(event.startAt), 'HH:mm')} – {format(new Date(event.endAt), 'HH:mm')}</span></span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
 
       {hoveredEvent && (
         <div
@@ -612,6 +728,42 @@ const OperationalCalendar = () => {
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {reconciliationPreview && (
+        <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) setReconciliationPreview(null); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="reconciliation-title" className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-zinc-900">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-300">Reconciliación controlada</p>
+                <h3 id="reconciliation-title" className="mt-1 text-lg font-bold text-zinc-950 dark:text-white">Eventos pendientes de Google Calendar</h3>
+              </div>
+              <button type="button" onClick={() => setReconciliationPreview(null)} className="flex h-11 w-11 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/10" aria-label="Cerrar reconciliación"><X className="h-5 w-5" /></button>
+            </div>
+            <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">Confirma únicamente eventos vigentes: sincronizarlos puede enviar invitaciones a sus asistentes.</p>
+            <label className="mt-4 block text-xs font-bold text-zinc-500 dark:text-zinc-400">
+              Cuenta organizadora
+              <select value={reconciliationConnectionId} onChange={event => setReconciliationConnectionId(event.target.value)} className="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm text-zinc-900 dark:border-white/10 dark:bg-white/5 dark:text-white">
+                {googleConnections.map(connection => <option key={connection.id} value={connection.id}>{connection.email}</option>)}
+              </select>
+            </label>
+            <div className="mt-4 space-y-2">
+              {reconciliationPreview.events.map(event => (
+                <label key={event.id} className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-200 p-3 hover:bg-zinc-50 dark:border-white/10 dark:hover:bg-white/5">
+                  <input type="checkbox" className="mt-1 h-4 w-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-600" checked={selectedReconciliationIds.includes(event.id)} onChange={input => setSelectedReconciliationIds(input.target.checked ? [...selectedReconciliationIds, event.id] : selectedReconciliationIds.filter(id => id !== event.id))} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-bold text-zinc-900 dark:text-white">{event.title}</span>
+                    <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{format(new Date(event.startAt), 'd MMM yyyy, HH:mm', { locale: es })}{event.attendeeEmails?.length ? ` · ${event.attendeeEmails.length} invitado(s)` : ''}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <button type="button" onClick={() => reconciliationMutation.mutate()} disabled={!selectedReconciliationIds.length || !reconciliationConnectionId || reconciliationMutation.isPending} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-violet-700 disabled:opacity-50">
+              {reconciliationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Confirmar y sincronizar
+            </button>
+          </section>
         </div>
       )}
 

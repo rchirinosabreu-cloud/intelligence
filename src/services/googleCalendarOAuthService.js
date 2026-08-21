@@ -144,8 +144,41 @@ export const getAuthorizedGoogleOAuthClients = async () => {
 };
 
 export const getCentralGoogleCalendarConnectionStatus = async () => {
-  const connections = await getGoogleCalendarConnections();
-  return { connected: connections.length > 0, connections };
+  const rawConnections = await prisma.googleCalendarConnection.findMany({
+    where: { isActive: true },
+    orderBy: { connectedAt: 'asc' },
+    select: {
+      id: true,
+      email: true,
+      calendarId: true,
+      scopes: true,
+      isActive: true,
+      connectedAt: true,
+      lastSyncedAt: true,
+      syncToken: true,
+      channels: {
+        where: { expiresAt: { gt: new Date() } },
+        orderBy: { expiresAt: 'desc' },
+        take: 1,
+        select: { expiresAt: true }
+      },
+      _count: { select: { eventLinks: true } }
+    }
+  });
+  const connections = await Promise.all(rawConnections.map(async ({ syncToken, channels, _count, ...connection }) => ({
+    ...connection,
+    incrementalSyncReady: Boolean(syncToken),
+    channelExpiresAt: channels[0]?.expiresAt || null,
+    linkedEventCount: _count.eventLinks,
+    errorCount: await prisma.operationalEvent.count({
+      where: { googleConnectionId: connection.id, googleSyncStatus: 'ERROR' }
+    })
+  })));
+  const [pendingCount, errorCount] = await Promise.all([
+    prisma.operationalEvent.count({ where: { source: 'BRAIN', googleLinks: { none: {} } } }),
+    prisma.operationalEvent.count({ where: { source: 'BRAIN', googleSyncStatus: 'ERROR' } })
+  ]);
+  return { connected: connections.length > 0, connections, reconciliation: { pendingCount, errorCount } };
 };
 
 export const listAccessibleGoogleCalendars = async (connectionId = null) => {
