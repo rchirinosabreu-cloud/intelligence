@@ -136,7 +136,8 @@ const toOperationalEventDataFromGoogle = (event, calendarId, connectionId) => ({
   googleHtmlLink: event.htmlLink,
   googleUpdatedAt: event.updated ? new Date(event.updated) : null,
   googleLastSyncedAt: new Date(),
-  googleSyncStatus: 'SYNCED'
+  googleSyncStatus: 'SYNCED',
+  googleSyncError: null
 });
 
 export const buildGoogleRecurrence = (event) => {
@@ -278,6 +279,7 @@ export async function syncOperationalEventToGoogle(event) {
         googleUpdatedAt: googleEvent.updated ? new Date(googleEvent.updated) : null,
         googleLastSyncedAt: new Date(),
         googleSyncStatus: 'SYNCED',
+        googleSyncError: null,
         meetingLink: getMeetLinkFromGoogleEvent(googleEvent) || event.meetingLink || null
       }
     });
@@ -288,6 +290,7 @@ export async function syncOperationalEventToGoogle(event) {
       where: { id: event.id },
       data: {
         googleSyncStatus: 'ERROR',
+        googleSyncError: details.slice(0, 2000),
         googleLastSyncedAt: new Date()
       }
     });

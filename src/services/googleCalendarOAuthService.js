@@ -169,7 +169,7 @@ export const getCentralGoogleCalendarConnectionStatus = async () => {
     const errorWhere = { googleConnectionId: connection.id, googleSyncStatus: 'ERROR' };
     const [errorCount, syncErrors] = await Promise.all([
       prisma.operationalEvent.count({ where: errorWhere }),
-      prisma.operationalEvent.findMany({ where: errorWhere, orderBy: { googleLastSyncedAt: 'desc' }, take: 10, select: { id: true, title: true, startAt: true, googleLastSyncedAt: true } })
+      prisma.operationalEvent.findMany({ where: errorWhere, orderBy: { googleLastSyncedAt: 'desc' }, take: 10, select: { id: true, title: true, startAt: true, googleLastSyncedAt: true, googleSyncError: true } })
     ]);
     return { ...connection, incrementalSyncReady: Boolean(syncToken), channelExpiresAt: channels[0]?.expiresAt || null, linkedEventCount: _count.eventLinks, errorCount, syncErrors };
   }));

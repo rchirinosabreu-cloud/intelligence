@@ -98,6 +98,7 @@ const OperationalCalendar = () => {
   const [selectedDayAgenda, setSelectedDayAgenda] = useState(null);
   const [reconciliationPreview, setReconciliationPreview] = useState(null);
   const [googleErrorConnection, setGoogleErrorConnection] = useState(null);
+  const [googleRetryError, setGoogleRetryError] = useState('');
   const [selectedReconciliationIds, setSelectedReconciliationIds] = useState([]);
   const [reconciliationConnectionId, setReconciliationConnectionId] = useState('');
   const [isLoadingReconciliation, setIsLoadingReconciliation] = useState(false);
@@ -238,8 +239,15 @@ const OperationalCalendar = () => {
     onSuccess: result => {
       queryClient.invalidateQueries({ queryKey: ['operational-events'] });
       queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
+      if (result.failed) {
+        const diagnostic = result.results?.find(item => item.status === 'ERROR')?.error || 'Google no aceptó la sincronización.';
+        setGoogleRetryError(diagnostic);
+        toast.error('El evento sigue sin sincronizar. Revisa la causa indicada.');
+        return;
+      }
       setReconciliationPreview(null);
       setGoogleErrorConnection(null);
+      setGoogleRetryError('');
       toast.success(`${result.synced} evento(s) sincronizados${result.failed ? `, ${result.failed} con error` : ''}`);
     },
     onError: error => {
@@ -471,6 +479,12 @@ const OperationalCalendar = () => {
 
   const handleRequestDelete = () => {
     setDeleteCandidate({ id: editingEventId, title: formData.title });
+    setIsModalOpen(false);
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteCandidate(null);
+    setIsModalOpen(true);
   };
 
   return (
@@ -502,7 +516,7 @@ const OperationalCalendar = () => {
                   {googleConnections.map(connection => {
                     const health = getGoogleConnectionHealth(connection);
                     return (
-                      <button type="button" key={connection.id} onClick={() => health.status === 'error' && setGoogleErrorConnection(connection)} disabled={health.status !== 'error'} title={connection.lastSyncedAt ? `Última actualización: ${format(new Date(connection.lastSyncedAt), 'd MMM, HH:mm', { locale: es })}` : 'Sin sincronización registrada'} className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-[10px] font-bold text-zinc-600 transition hover:bg-zinc-200 disabled:cursor-default dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15">
+                      <button type="button" key={connection.id} onClick={() => { if (health.status === 'error') { setGoogleRetryError(''); setGoogleErrorConnection(connection); } }} disabled={health.status !== 'error'} title={connection.lastSyncedAt ? `Última actualización: ${format(new Date(connection.lastSyncedAt), 'd MMM, HH:mm', { locale: es })}` : 'Sin sincronización registrada'} className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-[10px] font-bold text-zinc-600 transition hover:bg-zinc-200 disabled:cursor-default dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15">
                         <span className={cn('h-2 w-2 rounded-full', health.status === 'healthy' ? 'bg-emerald-500' : health.status === 'error' ? 'bg-red-500' : 'bg-amber-500')} />
                         {connection.email.split('@')[0]} · {health.label}
                       </button>
@@ -745,10 +759,17 @@ const OperationalCalendar = () => {
             <DialogDescription>{googleErrorConnection?.email}. Estos eventos no lograron crearse o actualizarse en Google.</DialogDescription>
           </DialogHeader>
           <div className="max-h-[50vh] space-y-2 overflow-y-auto overscroll-contain">
+            {googleRetryError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
+                <p className="font-bold">Causa devuelta por Google</p>
+                <p className="mt-1 break-words">{googleRetryError}</p>
+              </div>
+            )}
             {(googleErrorConnection?.syncErrors || []).map(event => (
               <div key={event.id} className="rounded-xl border border-red-200 bg-red-50/60 p-3 dark:border-red-500/20 dark:bg-red-500/10">
                 <p className="font-semibold text-zinc-950 dark:text-white">{event.title}</p>
                 <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">{format(new Date(event.startAt), 'd MMM yyyy, HH:mm', { locale: es })}</p>
+                <p className="mt-2 break-words text-xs text-red-700 dark:text-red-200">{event.googleSyncError || 'Aún no hay diagnóstico guardado. Pulsa Reintentar para obtener la causa actual de Google.'}</p>
                 <button type="button" onClick={() => reconciliationMutation.mutate({ eventIds: [event.id], connectionId: googleErrorConnection.id })} disabled={reconciliationMutation.isPending} className="brain-danger-button mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-xs font-bold disabled:opacity-60">
                   {reconciliationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Reintentar
                 </button>
@@ -1084,7 +1105,7 @@ const OperationalCalendar = () => {
           data-operational-delete-dialog="event"
           className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setDeleteCandidate(null);
+            if (event.target === event.currentTarget) handleCancelDelete();
           }}
         >
           <div className="w-full max-w-sm rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-zinc-900">
@@ -1097,7 +1118,7 @@ const OperationalCalendar = () => {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setDeleteCandidate(null)}
+                onClick={handleCancelDelete}
                 className="flex-1 rounded-2xl border border-zinc-200 px-4 py-3 text-xs font-bold text-zinc-600 transition hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
               >
                 Cancelar

@@ -365,6 +365,7 @@ model OperationalEvent {
   googleMeetSpaceName  String?
   googleMeetAccessType String?
   googleSyncStatus     String?
+  googleSyncError      String?
   googleLastSyncedAt   DateTime?
   googleUpdatedAt      DateTime?
   createdById          String?

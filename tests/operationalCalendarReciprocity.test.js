@@ -130,13 +130,26 @@ test('status endpoint exposes operational health without exposing tokens', async
 
 test('calendar exposes failed events, retry recovery and an organized manual sync control', async () => {
   const calendar = await readFile(new URL('../src/components/modules/Activity/OperationalCalendar.jsx', import.meta.url), 'utf8');
+  const schema = await readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
+  const service = await readFile(new URL('../src/services/operationalEventService.js', import.meta.url), 'utf8');
 
   assert.match(calendar, /google-calendar\/sync/);
   assert.match(calendar, /Sincronizar/);
   assert.match(calendar, /data-google-calendar-errors="dialog"/);
   assert.match(calendar, /Reintentar/);
   assert.match(calendar, /pointer-events-none/);
-  assert.match(calendar, /deleteCandidate && createPortal/);
+  assert.match(calendar, /googleSyncError/);
+  assert.match(schema, /googleSyncError\s+String\?/);
+  assert.match(service, /googleSyncError:\s*details/);
+  assert.match(service, /googleSyncError:\s*null/);
+});
+
+test('delete confirmation releases the event modal interaction lock and cancel restores it', async () => {
+  const calendar = await readFile(new URL('../src/components/modules/Activity/OperationalCalendar.jsx', import.meta.url), 'utf8');
+
+  assert.match(calendar, /handleRequestDelete[\s\S]{0,180}setIsModalOpen\(false\)/);
+  assert.match(calendar, /handleCancelDelete[\s\S]{0,180}setIsModalOpen\(true\)/);
+  assert.match(calendar, /onClick=\{handleCancelDelete\}/);
 });
 
 test('historical reconciliation requires an explicit bounded event selection', async () => {
