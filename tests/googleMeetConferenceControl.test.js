@@ -54,6 +54,53 @@ test('incluye reuniones antiguas con espacio Meet aunque el sync haya perdido ti
   assert.equal(query.where.captureWithFireflies, true);
 });
 
+test('pausa Fireflies si Google ya cerró y la grabación continúa después del horario', async () => {
+  const { autoCloseFinishedFirefliesMeetings } = await import('../src/services/googleMeetConferenceService.js');
+  const updates = [];
+  const firefliesBodies = [];
+  const event = {
+    id: 'event-1',
+    title: 'Prueba 04 - Fireflies',
+    type: 'PROJECT',
+    meetingLink: 'https://meet.google.com/abc-defg-hij',
+    googleMeetSpaceName: 'spaces/space-123',
+    googleMeetEndedAt: null,
+    googleMeetOnlyBotSince: null,
+    googleConnectionId: 'connection-1',
+    startAt: new Date('2026-08-21T17:20:00Z'),
+    endAt: new Date('2026-08-21T17:25:00Z'),
+    googleLinks: []
+  };
+  const db = { operationalEvent: {
+    findMany: async () => [event],
+    update: async input => { updates.push(input); return {}; }
+  } };
+  const request = async (url, options) => {
+    if (url.startsWith('https://meet.googleapis.com/')) {
+      return { ok: true, json: async () => ({ name: 'spaces/space-123' }) };
+    }
+    firefliesBodies.push(JSON.parse(options.body));
+    if (firefliesBodies.length === 1) {
+      return { ok: true, json: async () => ({ data: { active_meetings: [{
+        id: 'fireflies-meeting-1', title: event.title, meeting_link: event.meetingLink,
+        start_time: event.startAt.toISOString(), state: 'active'
+      }] } }) };
+    }
+    return { ok: true, json: async () => ({ data: { updateMeetingState: { success: true, action: 'pause_recording' } } }) };
+  };
+  const result = await autoCloseFinishedFirefliesMeetings({
+    db,
+    request,
+    getAuth: async () => ({ oauth2Client: {} }),
+    getAccessToken: async () => 'google-token',
+    firefliesApiKey: 'fireflies-token',
+    now: new Date('2026-08-21T17:28:00Z')
+  });
+  assert.deepEqual(result, [{ eventId: 'event-1', action: 'FIREFLIES_PAUSED' }]);
+  assert.equal(firefliesBodies[1].variables.input.action, 'pause_recording');
+  assert.equal(updates.at(-1).data.googleMeetEndedAt.toISOString(), '2026-08-21T17:28:00.000Z');
+});
+
 test('recupera enlaces de Meet creados por la plataforma desde ubicación o descripción de Google Calendar', async () => {
   const { getMeetLinkFromGoogleEvent } = await import('../src/services/operationalEventService.js');
   assert.equal(

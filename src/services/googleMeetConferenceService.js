@@ -2,6 +2,7 @@ import prisma from '../lib/prisma.js';
 import { getAuthorizedGoogleOAuthClient } from './googleCalendarOAuthService.js';
 
 const MEET_API_BASE_URL = 'https://meet.googleapis.com/v2';
+const FIREFLIES_API_URL = 'https://api.fireflies.ai/graphql';
 const DEFAULT_ONLY_BOT_GRACE_MS = 2 * 60 * 1000;
 
 const getMeetingCode = meetingLink => {
@@ -81,6 +82,56 @@ const listConferenceParticipants = async (conferenceRecordName, { request, heade
   return participants;
 };
 
+const requestFireflies = async ({ request, apiKey, query, variables }) => {
+  const response = await request(FIREFLIES_API_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, variables })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.errors?.length) {
+    throw new Error(payload.errors?.map(error => error.message).join('; ') || 'Fireflies no pudo procesar la solicitud');
+  }
+  return payload.data || {};
+};
+
+const normalizeMeetingLink = value => String(value || '').trim().replace(/\/$/, '').toLowerCase();
+
+export const findMatchingFirefliesMeeting = (event, meetings = []) => {
+  const eventLink = normalizeMeetingLink(event.meetingLink);
+  const eventTitle = String(event.title || '').trim().toLowerCase();
+  const eventStart = new Date(event.startAt).getTime();
+  return meetings.find(meeting => {
+    const linkMatches = eventLink && normalizeMeetingLink(meeting.meeting_link) === eventLink;
+    const meetingStart = new Date(meeting.start_time).getTime();
+    const titleAndTimeMatch = eventTitle && String(meeting.title || '').trim().toLowerCase() === eventTitle
+      && Number.isFinite(eventStart) && Number.isFinite(meetingStart)
+      && Math.abs(eventStart - meetingStart) <= 30 * 60 * 1000;
+    return linkMatches || titleAndTimeMatch;
+  }) || null;
+};
+
+const pauseFirefliesAfterGoogleEnded = async (event, { request, apiKey, now }) => {
+  if (!apiKey) throw new Error('FIREFLIES_API_KEY no está configurada');
+  const activeData = await requestFireflies({
+    request,
+    apiKey,
+    query: 'query ActiveMeetings { active_meetings { id title meeting_link start_time end_time state } }'
+  });
+  const meeting = findMatchingFirefliesMeeting(event, activeData.active_meetings || []);
+  if (!meeting) return { action: 'FINISHED' };
+  if (meeting.state !== 'paused') {
+    const mutationData = await requestFireflies({
+      request,
+      apiKey,
+      query: 'mutation UpdateMeetingState($input: UpdateMeetingStateInput!) { updateMeetingState(input: $input) { success action } }',
+      variables: { input: { meeting_id: meeting.id, action: 'pause_recording' } }
+    });
+    if (!mutationData.updateMeetingState?.success) throw new Error('Fireflies no confirmó la pausa de la grabación');
+  }
+  return { action: 'FIREFLIES_PAUSED', endedAt: now };
+};
+
 export async function endGoogleMeetConference(eventId, dependencies = {}) {
   const db = dependencies.db || prisma;
   const getAuth = dependencies.getAuth || getAuthorizedGoogleOAuthClient;
@@ -105,6 +156,7 @@ export async function autoCloseFinishedFirefliesMeetings(dependencies = {}) {
   const getAuth = dependencies.getAuth || getAuthorizedGoogleOAuthClient;
   const request = dependencies.request || ((url, options) => fetch(url, options));
   const getAccessToken = dependencies.getAccessToken || defaultGetAccessToken;
+  const firefliesApiKey = dependencies.firefliesApiKey || process.env.FIREFLIES_API_KEY;
   const now = dependencies.now || new Date();
   const events = await db.operationalEvent.findMany({
     where: {
@@ -124,7 +176,18 @@ export async function autoCloseFinishedFirefliesMeetings(dependencies = {}) {
       const { headers } = await getAuthorizedMeetContext(event, { getAuth, getAccessToken });
       const space = await resolveMeetSpace(event, { db, request, headers });
       const conferenceRecordName = space.activeConference?.conferenceRecord;
-      if (!conferenceRecordName) continue;
+      if (!conferenceRecordName) {
+        const scheduledEnd = new Date(event.endAt).getTime();
+        const graceMs = dependencies.graceMs ?? DEFAULT_ONLY_BOT_GRACE_MS;
+        if (!Number.isFinite(scheduledEnd) || now.getTime() < scheduledEnd + graceMs) continue;
+        const fallback = await pauseFirefliesAfterGoogleEnded(event, { request, apiKey: firefliesApiKey, now });
+        await db.operationalEvent.update({
+          where: { id: event.id },
+          data: { googleMeetEndedAt: now, googleMeetOnlyBotSince: null }
+        });
+        results.push({ eventId: event.id, action: fallback.action });
+        continue;
+      }
       const participants = await listConferenceParticipants(conferenceRecordName, { request, headers });
       const state = evaluateMeetAutoCloseState({ participants, onlyBotSince: event.googleMeetOnlyBotSince, now, graceMs: dependencies.graceMs });
       if (state.action === 'ARM') await db.operationalEvent.update({ where: { id: event.id }, data: { googleMeetOnlyBotSince: state.onlyBotSince } });
