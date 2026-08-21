@@ -11,7 +11,6 @@ import {
 } from '../../services/operationalEventService.js';
 import { getTeamActivityStatus } from '../../services/activityStatusService.js';
 import { createMeetEvent } from '../../services/calendarService.js';
-import { endGoogleMeetConference } from '../../services/googleMeetConferenceService.js';
 import {
   getGoogleCalendarAuthUrl,
   verifyGoogleCalendarOAuthState,
@@ -65,15 +64,6 @@ router.post('/events/generate-meet', async (req, res) => {
     res.json(meeting);
   } catch (error) {
     res.status(500).json({ error: 'Failed to generate Meet link', details: error.message });
-  }
-});
-
-router.post('/events/:id/end-conference', requireManagerRole, async (req, res) => {
-  try {
-    res.json(await endGoogleMeetConference(req.params.id));
-  } catch (error) {
-    console.error('[Activity API] Error finalizando Google Meet:', error.response?.data || error);
-    res.status(400).json({ error: 'No se pudo finalizar la reunión', details: error.message });
   }
 });
 

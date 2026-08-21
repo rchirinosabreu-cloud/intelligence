@@ -365,6 +365,8 @@ model OperationalEvent {
   googleHtmlLink       String?
   googleMeetSpaceName  String?
   googleMeetAccessType String?
+  googleMeetOnlyBotSince DateTime?
+  googleMeetEndedAt      DateTime?
   googleSyncStatus     String?
   googleSyncError      String?
   googleLastSyncedAt   DateTime?
