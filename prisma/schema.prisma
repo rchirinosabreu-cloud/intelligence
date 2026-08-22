@@ -34,7 +34,7 @@ model User {
   email                       String                  @unique
   password                    String
   role                        SystemRole              @default(VIEWER)
-  modulePermissions           Json?                   @default("{\"dashboard\": true, \"manager\": false, \"gestion\": false, \"actividad\": false, \"reportes\": false, \"inspiracion\": false, \"parrillas\": false, \"minutas\": false, \"cotizaciones\": false, \"financiero\": false, \"radar\": false, \"clientes\": false, \"equipo\": false}")
+  modulePermissions           Json?                   @default("{\"dashboard\": true, \"manager\": false, \"crecimiento\": false, \"gestion\": false, \"actividad\": false, \"reportes\": false, \"inspiracion\": false, \"parrillas\": false, \"minutas\": false, \"cotizaciones\": false, \"financiero\": false, \"radar\": false, \"clientes\": false, \"equipo\": false}")
   createdAt                   DateTime                @default(now())
   updatedAt                   DateTime                @updatedAt
   avatarUrl                   String?
@@ -921,20 +921,170 @@ model FinancialRecord {
 }
 
 model FinancialAccount {
-  id                 String               @id @default(uuid())
+  id                 String                     @id @default(uuid())
   name               String
   type               FinancialAccountType
-  currency           String               @default("COP")
-  openingBalance     Decimal              @default(0)
+  currency           String                     @default("COP")
+  openingBalance     Decimal                    @default(0)
   openingBalanceDate DateTime
-  isActive           Boolean              @default(true)
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  isActive           Boolean                    @default(true)
+  institution        String?
+  holderName         String?
+  holderType         FinancialAccountHolderType @default(COMPANY)
+  lastFour           String?
+  isThirdPartyHeld   Boolean                    @default(false)
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
   records            FinancialRecord[]
   payments           ReceivablePayment[]
 
   @@unique([name, currency])
   @@index([type, isActive])
+}
+
+enum FinancialAccountHolderType {
+  COMPANY
+  PERSON
+}
+
+enum GrowthCycleStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum GrowthActionStatus {
+  PENDING
+  IN_PROGRESS
+  SUBMITTED
+  APPROVED
+  RETURNED
+  COMPLETED
+}
+
+enum FinancialDiscrepancyStatus {
+  DETECTED
+  IN_REVIEW
+  FINANCE_PROPOSAL
+  APPROVED
+  RETURNED
+  APPLIED
+}
+
+model GrowthCycle {
+  id          String                 @id @default(uuid())
+  name        String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  status      GrowthCycleStatus      @default(DRAFT)
+  sourceHash  String?                @unique
+  sourceFile  String?
+  createdById String?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  weeks       GrowthWeek[]
+  actions     GrowthAction[]
+  metrics     GrowthMetricSnapshot[]
+
+  @@index([status, startDate])
+}
+
+model GrowthWeek {
+  id        String         @id @default(uuid())
+  cycleId   String
+  cycle     GrowthCycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  number    Int
+  title     String?
+  focus     String?
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  actions   GrowthAction[]
+
+  @@unique([cycleId, number])
+}
+
+model GrowthAction {
+  id               String                 @id @default(uuid())
+  cycleId          String
+  cycle            GrowthCycle            @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  weekId           String?
+  week             GrowthWeek?            @relation(fields: [weekId], references: [id], onDelete: SetNull)
+  title            String
+  description      String?
+  front            String?
+  ownerName        String?
+  ownerUserId      String?
+  status           GrowthActionStatus     @default(PENDING)
+  evidenceRequired Boolean                @default(false)
+  isCritical       Boolean                @default(false)
+  dueDate          DateTime?
+  completedAt      DateTime?
+  sourceRow        Int?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  evidence         GrowthActionEvidence[]
+
+  @@index([cycleId, status])
+  @@index([weekId])
+  @@index([ownerUserId, status])
+}
+
+model GrowthActionEvidence {
+  id          String       @id @default(uuid())
+  actionId    String
+  action      GrowthAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  label       String?
+  url         String?
+  storageKey  String?
+  mimeType    String?
+  submittedBy String?
+  createdAt   DateTime     @default(now())
+
+  @@index([actionId, createdAt])
+}
+
+model GrowthMetricSnapshot {
+  id            String      @id @default(uuid())
+  cycleId       String
+  cycle         GrowthCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  name          String
+  value         Decimal
+  target        Decimal?
+  unit          String?
+  source        String      @default("MANUAL")
+  justification String?
+  measuredAt    DateTime    @default(now())
+  createdById   String?
+  createdAt     DateTime    @default(now())
+
+  @@index([cycleId, name, measuredAt])
+}
+
+model FinancialDiscrepancy {
+  id            String                     @id @default(uuid())
+  importBatchId String?
+  sourceHash    String?
+  sourceSheet   String?
+  sourceCell    String?
+  title         String
+  explanation   String
+  detectedValue Decimal?
+  expectedValue Decimal?
+  status        FinancialDiscrepancyStatus @default(DETECTED)
+  proposal      String?
+  resolution    String?
+  assignedToId  String?
+  resolvedById  String?
+  resolvedAt    DateTime?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  @@index([status, createdAt])
+  @@index([sourceHash])
 }
 
 model FinancialPeriod {

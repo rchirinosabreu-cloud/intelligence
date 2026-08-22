@@ -28,6 +28,7 @@ export default function Team() {
   const [financialRole, setFinancialRole] = useState('NONE');
   const [modulePermissions, setModulePermissions] = useState({
     manager: false,
+    crecimiento: false,
     gestion: false,
     actividad: false,
     reportes: false,
@@ -46,6 +47,7 @@ export default function Team() {
     setFinancialRole(selectedRole === 'ADMIN' ? 'ADMIN' : 'NONE');
     let presets = {
       manager: false,
+      crecimiento: false,
       gestion: false,
       actividad: false,
       reportes: false,

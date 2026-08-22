@@ -4,6 +4,7 @@ import {
 } from './financialRecordService.js';
 
 const ACCOUNT_TYPES = new Set(['BANK', 'CASH', 'OTHER']);
+const HOLDER_TYPES = new Set(['COMPANY', 'PERSON']);
 
 const toNumber = (value) => {
   if (value && typeof value.toNumber === 'function') return value.toNumber();
@@ -29,13 +30,26 @@ const normalizeAccountInput = (input = {}) => {
   }
 
   const { date: openingBalanceDate } = parseFinancialDateInput(input.openingBalanceDate);
+  const lastFour = String(input.lastFour || '').replace(/\D/g, '');
+  if (lastFour && lastFour.length !== 4) {
+    throw new FinancialDomainError('FINANCIAL_ACCOUNT_LAST_FOUR_INVALID', 'Registra solamente los ultimos cuatro digitos de la cuenta.');
+  }
+  const holderType = String(input.holderType || 'COMPANY').trim().toUpperCase();
+  if (!HOLDER_TYPES.has(holderType)) {
+    throw new FinancialDomainError('FINANCIAL_ACCOUNT_HOLDER_TYPE_INVALID', 'El tipo de titular no es valido.');
+  }
   return {
     name,
     type,
     currency: String(input.currency || 'COP').trim().toUpperCase(),
     openingBalance,
     openingBalanceDate,
-    isActive: input.isActive !== false
+    isActive: input.isActive !== false,
+    institution: String(input.institution || '').trim() || null,
+    holderName: String(input.holderName || '').trim() || null,
+    holderType,
+    lastFour: lastFour || null,
+    isThirdPartyHeld: input.isThirdPartyHeld === true
   };
 };
 

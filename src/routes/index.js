@@ -32,6 +32,7 @@ import quotationsRouter from './api/quotations.js';
 import operativeIntelligenceRouter from './api/operativeIntelligence.js';
 import financialsRouter from './api/financials.js';
 import dashboardRouter from './api/dashboard.js';
+import growthRouter from './api/growth.js';
 import { getUpcomingEvents } from '../services/calendarService.js';
 import { collectServiceStatuses } from '../services/serviceStatusService.js';
 
@@ -222,5 +223,6 @@ router.use('/brain-core', brainCoreRouter);
 router.use('/boards', requireModulePermission('inspiracion'), boardsRouter);
 router.use('/operative-intelligence', operativeIntelligenceRouter);
 router.use('/financials', financialsRouter);
+router.use('/growth', requireModulePermission('crecimiento'), growthRouter);
 
 export default router;

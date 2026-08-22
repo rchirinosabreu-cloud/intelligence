@@ -69,3 +69,19 @@ test('createFinancialAccount rejects unsupported account types', async () => {
     (error) => error.code === 'FINANCIAL_ACCOUNT_TYPE_INVALID'
   );
 });
+
+test('createFinancialAccount persists only masked banking identity', async () => {
+  let saved;
+  const prismaClient = { $transaction: async (callback) => callback({
+    financialAccount: { create: async ({ data }) => { saved = data; return { id: 'a2', ...data }; } },
+    financialAuditEvent: { create: async () => ({}) }
+  }) };
+  await createFinancialAccount(prismaClient, {
+    name: 'Cuenta operativa', type: 'BANK', openingBalanceDate: '2026-01-01',
+    institution: 'Bancolombia', holderName: 'Brain Studio', holderType: 'company', lastFour: '0032'
+  }, { id: 'u1' });
+  assert.equal(saved.lastFour, '0032');
+  assert.equal(saved.holderType, 'COMPANY');
+  assert.equal(saved.institution, 'Bancolombia');
+  assert.equal(Object.hasOwn(saved, 'accountNumber'), false);
+});

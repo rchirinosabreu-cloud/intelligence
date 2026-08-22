@@ -35,6 +35,7 @@ router.get('/', async (req, res) => {
 const defaultPermissions = {
     dashboard: true,
     manager: false,
+    crecimiento: false,
     gestion: false,
     actividad: false,
     reportes: false,

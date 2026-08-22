@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign } from '@/components/ui/icons';
+import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign, Target } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
@@ -18,6 +18,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/', moduleKey: 'dashboard' },
     { id: 'brain-core', label: 'Manager', icon: Brain, path: '/manager', moduleKey: 'manager' },
+    { id: 'growth-center', label: 'Crecimiento', icon: Target, path: '/crecimiento', moduleKey: 'crecimiento' },
     { id: 'tasks-native', label: 'Gestión', icon: CheckSquare, path: '/gestion', moduleKey: 'gestion' },
     { id: 'activity', label: 'Actividad', icon: Map, path: '/actividad', moduleKey: 'actividad' },
     { id: 'reports', label: 'Reportes', icon: FileBarChart, path: '/reportes', moduleKey: 'reportes' },

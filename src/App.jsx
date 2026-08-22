@@ -18,6 +18,7 @@ const Profile = lazy(() => import('./components/modules/Profile'));
 const ContentGrids = lazy(() => import('./components/modules/ContentGrids'));
 const ContentPlanDetail = lazy(() => import('./components/modules/ContentPlanDetail'));
 const FinancialDashboard = lazy(() => import('./components/modules/FinancialDashboard'));
+const GrowthCenter = lazy(() => import('./components/modules/GrowthCenter'));
 const TalentRadar = lazy(() => import('./components/modules/TalentRadar'));
 const BrainCore = lazy(() => import('./components/modules/BrainCore'));
 const Activity = lazy(() => import('./components/modules/Activity'));
@@ -288,6 +289,14 @@ function AppContent() {
                       element={
                         <ModuleGuard module="radar">
                           <TalentRadar />
+                        </ModuleGuard>
+                      }
+                    />
+                    <Route
+                      path="/crecimiento"
+                      element={
+                        <ModuleGuard module="crecimiento">
+                          <GrowthCenter />
                         </ModuleGuard>
                       }
                     />
