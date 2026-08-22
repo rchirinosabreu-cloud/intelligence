@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import prisma from '../../lib/prisma.js';
 import { buildGrowthImportPlan } from '../../services/growthImportService.js';
+import { persistGrowthCyclePlan } from '../../services/growthCycleService.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -36,7 +37,12 @@ router.get('/dashboard', async (_req, res) => {
 router.post('/import/preview', upload.single('file'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Selecciona el archivo del plan de 90 días.' });
-    return res.json(buildGrowthImportPlan(req.file.buffer, { filename: req.file.originalname, name: req.body.name }));
+    return res.json(buildGrowthImportPlan(req.file.buffer, {
+      filename: req.file.originalname,
+      name: req.body.name,
+      startDate: req.body.startDate,
+      endDate: req.body.endDate
+    }));
   } catch (error) {
     console.error('[Growth] Error leyendo el plan:', error.response?.data || error.message);
     return res.status(422).json({ error: 'No fue posible interpretar el plan. Revisa sus columnas.' });
@@ -49,56 +55,12 @@ router.post('/import/commit', upload.single('file'), async (req, res) => {
     const plan = buildGrowthImportPlan(req.file.buffer, {
       filename: req.file.originalname,
       name: req.body.name,
-      startDate: req.body.startDate
+      startDate: req.body.startDate,
+      endDate: req.body.endDate
     });
-    const existing = await prisma.growthCycle.findUnique({ where: { sourceHash: plan.sourceHash } });
-    if (existing) return res.status(409).json({ error: 'Este archivo ya fue importado.', cycleId: existing.id });
-
-    const cycle = await prisma.$transaction(async (tx) => {
-      const created = await tx.growthCycle.create({
-        data: {
-          name: plan.cycle.name,
-          startDate: new Date(plan.cycle.startDate),
-          endDate: new Date(plan.cycle.endDate),
-          status: 'ACTIVE',
-          sourceHash: plan.sourceHash,
-          sourceFile: plan.filename,
-          createdById: req.user.userId
-        }
-      });
-      const weekIds = new Map();
-      for (const week of plan.weeks) {
-        const saved = await tx.growthWeek.create({ data: { cycleId: created.id, number: week.number, title: week.title } });
-        weekIds.set(week.number, saved.id);
-      }
-      if (plan.actions.length) {
-        await tx.growthAction.createMany({ data: plan.actions.map((action) => ({
-          cycleId: created.id,
-          weekId: weekIds.get(action.weekNumber),
-          title: action.title,
-          front: action.front,
-          ownerName: action.ownerName,
-          sourceRow: action.sourceRow,
-          evidenceRequired: action.evidenceRequired,
-          isCritical: action.isCritical,
-          dueDate: action.dueDate ? new Date(action.dueDate) : null,
-          description: action.evidenceLabel ? `Evidencia esperada: ${action.evidenceLabel}` : null
-        })) });
-      }
-      if (plan.metrics.length) {
-        await tx.growthMetricSnapshot.createMany({ data: plan.metrics.map((metric) => ({
-          cycleId: created.id,
-          name: metric.name,
-          value: metric.value || 0,
-          target: metric.target,
-          unit: metric.unit,
-          source: 'IMPORT',
-          createdById: req.user.userId
-        })) });
-      }
-      return created;
-    });
-    return res.status(201).json({ cycle: await serializeCycle(cycle.id) });
+    const result = await persistGrowthCyclePlan(prisma, plan, { actorId: req.user.userId });
+    if (!result.created) return res.status(409).json({ error: 'Este archivo ya fue importado.', cycleId: result.cycle.id });
+    return res.status(201).json({ cycle: await serializeCycle(result.cycle.id) });
   } catch (error) {
     console.error('[Growth] Error importando el plan:', error.response?.data || error.message);
     return res.status(500).json({ error: 'No fue posible guardar el plan de crecimiento.' });

@@ -108,12 +108,13 @@ export const parseGrowthWorkbook = (buffer, { filename = 'plan-90-dias.xlsm' } =
 
 export const buildGrowthImportPlan = (buffer, options = {}) => {
   const parsed = parseGrowthWorkbook(buffer, options);
+  const startDate = options.startDate || new Date().toISOString();
   return {
     ...parsed,
     cycle: {
       name: options.name || 'Ruta de crecimiento · 90 días',
-      startDate: options.startDate || new Date().toISOString(),
-      endDate: options.endDate || new Date(Date.now() + 90 * 86400000).toISOString()
+      startDate,
+      endDate: options.endDate || new Date(new Date(startDate).getTime() + 90 * 86400000).toISOString()
     }
   };
 };

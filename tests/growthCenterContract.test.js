@@ -33,4 +33,10 @@ test('la interfaz incluye ruta, métricas, acciones y bandeja de conciliación',
   assert.match(component, /Conciliación financiera/);
   assert.match(component, /dark:/);
   assert.match(component, /sm:|md:|lg:/);
+  assert.match(component, /Dato financiero provisional/);
+  assert.match(component, /Ordenar/);
+  assert.match(component, /Vender/);
+  assert.match(component, /Consolidar/);
+  assert.match(component, /selectedWeek/);
+  assert.doesNotMatch(component, /actions\.slice\(0, 10\)/);
 });
