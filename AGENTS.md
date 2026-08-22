@@ -20,6 +20,13 @@ Este archivo contiene las reglas y el contexto inmutable del proyecto para evita
 - **Boring Avatars:** Se utiliza la librería `boring-avatars` para los avatares en toda la aplicación (Dashboard, CampfireWidget, Tasks). Siempre respeta su importación y uso en los componentes en lugar de depender exclusivamente de imágenes estáticas, a menos que se especifique lo contrario.
 - **React Datepicker:** (Si se especifica o está instalado) Debe integrarse correctamente y utilizar los estilos oscuros (`react-datepicker/dist/react-datepicker.css`), asegurándose de no romper la estética general del formulario en modals (e.g., bordes redondos, fondos transparentes, hover oscuro).
 
+### Reglas globales de formularios e idioma
+
+- **Componentes globales obligatorios:** Fechas, campos, selectores, areas de texto, botones, modales y confirmaciones deben reutilizar los componentes globales de Brain Studio. No basta con usar la misma libreria: contenedor, icono, altura, borde, foco, tema y comportamiento responsive tambien deben ser compartidos.
+- **Alineacion de formularios:** Toda etiqueta debe mostrarse en una linea propia encima de su control. En una misma fila, los controles deben comenzar a la misma altura y conservar alturas compatibles. Se prohiben etiquetas y controles en linea que produzcan desplazamientos visuales.
+- **Idioma de interfaz:** Todas las etiquetas, estados y conceptos visibles deben mostrarse en espanol correcto. Los valores tecnicos internos pueden permanecer en ingles, pero nunca deben presentarse directamente al usuario sin traduccion. Un anglicismo visible exige justificacion expresa.
+- **Auditoria visual minima:** Antes de cerrar una interfaz deben verificarse alineacion vertical, anchos consistentes, ausencia de desbordamientos, capas de modales, bloqueo del fondo, escritorio y movil, modo claro y oscuro, textos en espanol y uso de componentes globales.
+
 ## 5. Integridad de Estados (Task Lifecycle)
 - **Regla Estricta de Completitud:** El campo `completedAt` de una `Task` está estrictamente acoplado a su `status`.
   - Si `status` cambia a `'Realizado'`, el backend DEBE inyectar automáticamente `completedAt: new Date()` (solo si no tenía una fecha previa para evitar sobrescribir el historial al editar otros campos).

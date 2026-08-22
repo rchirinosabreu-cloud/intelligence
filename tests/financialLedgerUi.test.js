@@ -52,6 +52,27 @@ test('financial operational payment dates use the shared calendar', () => {
     assert.doesNotMatch(dashboardSource, /required type="date" value=\{payrollPaymentForm\.paidAt\}/);
     assert.match(dashboardSource, /selected=\{paymentForm\.paidAt/);
     assert.match(dashboardSource, /selected=\{payrollPaymentForm\.paidAt/);
+    assert.match(dashboardSource, /<BrainDateField[\s\S]*payrollPaymentForm\.paidAt/);
+});
+
+test('financial reconciliation exposes Spanish labels and a complete annual desktop view', () => {
+    assert.match(dashboardSource, /TONE_LABELS/);
+    assert.match(dashboardSource, /income:\s*'Ingreso'/);
+    assert.match(dashboardSource, /expense:\s*'Egreso'/);
+    assert.match(dashboardSource, /financing:\s*'Financiaci\\u00f3n'/);
+    assert.doesNotMatch(dashboardSource, />\s*\{row\.tone\}\s*</);
+    assert.match(dashboardSource, /xl:min-w-0/);
+});
+
+test('financial account editor captures bank, holder and identification data', () => {
+    const ledgerSource = fs.readFileSync(
+        new URL('../src/components/modules/financial/FinancialLedger.jsx', import.meta.url),
+        'utf8'
+    );
+    assert.match(ledgerSource, /Banco o entidad/);
+    assert.match(ledgerSource, /Tipo de identificaci&oacute;n/);
+    assert.match(ledgerSource, /N&uacute;mero de identificaci&oacute;n/);
+    assert.match(ledgerSource, /identificationNumber/);
 });
 
 test('page headers preserve title width until wide desktop layouts', () => {

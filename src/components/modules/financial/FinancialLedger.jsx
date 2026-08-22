@@ -6,6 +6,7 @@ import DatePicker from 'react-datepicker';
 import { format } from 'date-fns';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { brainDatePickerProps } from '@/lib/brainDatePicker';
+import BrainDateField from '@/components/ui/BrainDateField';
 import {
     Dialog,
     DialogContent,
@@ -65,7 +66,13 @@ const emptyAccountForm = (year) => ({
     type: 'BANK',
     currency: 'COP',
     openingBalance: '0',
-    openingBalanceDate: `${year}-01-01`
+    openingBalanceDate: `${year}-01-01`,
+    institution: '',
+    holderName: '',
+    holderType: 'COMPANY',
+    identificationType: 'NIT',
+    identificationNumber: '',
+    lastFour: ''
 });
 
 const authHeaders = () => ({
@@ -352,7 +359,7 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
                         <div key={account.id} className="flex items-center justify-between border-b border-zinc-200 py-3 dark:border-white/10">
                             <div className="flex min-w-0 items-center gap-3">
                                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300"><Wallet className="h-4 w-4" /></span>
-                                <div className="min-w-0"><p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{account.name}</p><p className="text-xs text-zinc-500">{account.type === 'BANK' ? 'Banco' : account.type === 'CASH' ? 'Caja' : 'Otra cuenta'}</p></div>
+                                <div className="min-w-0"><p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{account.name}</p><p className="text-xs text-zinc-500">{account.institution || (account.type === 'BANK' ? 'Banco' : account.type === 'CASH' ? 'Caja' : 'Otra cuenta')}{account.lastFour ? ` \u00b7 \u2022\u2022\u2022\u2022 ${account.lastFour}` : ''}</p><p className="truncate text-[11px] text-zinc-400">{account.holderName || ''}{account.identificationNumber ? ` \u00b7 ${account.identificationType === 'CC' ? 'C.C.' : account.identificationType}: ${account.identificationNumber}` : ''}</p></div>
                             </div>
                             <div className="text-right"><p className="text-xs text-zinc-500">Saldo actual</p><p className="text-sm font-semibold text-zinc-900 dark:text-white">{formatCurrency(Number(account.balance))}</p></div>
                         </div>
@@ -476,7 +483,16 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Tipo<select className={inputClass} value={accountForm.type} onChange={(event) => setAccountForm((current) => ({ ...current, type: event.target.value }))}><option value="BANK">Banco</option><option value="CASH">Caja</option><option value="OTHER">Otra</option></select></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Saldo inicial<input required type="number" step="0.01" className={inputClass} value={accountForm.openingBalance} onChange={(event) => setAccountForm((current) => ({ ...current, openingBalance: event.target.value }))} /></label>
                         </div>
-                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Fecha del saldo inicial<DatePicker {...brainDatePickerProps} selected={accountForm.openingBalanceDate ? new Date(`${accountForm.openingBalanceDate}T12:00:00`) : null} onChange={(date) => setAccountForm((current) => ({ ...current, openingBalanceDate: date ? format(date, 'yyyy-MM-dd') : '' }))} className={inputClass} dateFormat="dd/MM/yyyy" /></label>
+                        <BrainDateField label="Fecha del saldo inicial" selected={accountForm.openingBalanceDate ? new Date(`${accountForm.openingBalanceDate}T12:00:00`) : null} onChange={(date) => setAccountForm((current) => ({ ...current, openingBalanceDate: date ? format(date, 'yyyy-MM-dd') : '' }))} dateFormat="dd/MM/yyyy" />
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Banco o entidad<input required={accountForm.type === 'BANK'} className={inputClass} value={accountForm.institution} onChange={(event) => setAccountForm((current) => ({ ...current, institution: event.target.value }))} placeholder="Bancolombia" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">&Uacute;ltimos cuatro d&iacute;gitos<input inputMode="numeric" maxLength={4} className={inputClass} value={accountForm.lastFour} onChange={(event) => setAccountForm((current) => ({ ...current, lastFour: event.target.value.replace(/\D/g, '').slice(0, 4) }))} placeholder="0000" /></label>
+                        </div>
+                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Titular<input required className={inputClass} value={accountForm.holderName} onChange={(event) => setAccountForm((current) => ({ ...current, holderName: event.target.value }))} /></label>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Tipo de identificaci&oacute;n<select required className={inputClass} value={accountForm.identificationType} onChange={(event) => setAccountForm((current) => ({ ...current, identificationType: event.target.value, holderType: event.target.value === 'NIT' ? 'COMPANY' : 'PERSON' }))}><option value="CC">C.C.</option><option value="NIT">NIT</option></select></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">N&uacute;mero de identificaci&oacute;n<input required className={inputClass} value={accountForm.identificationNumber} onChange={(event) => setAccountForm((current) => ({ ...current, identificationNumber: event.target.value }))} placeholder={accountForm.identificationType === 'NIT' ? '901533409-4' : '1235038569'} /></label>
+                        </div>
                         <DialogFooter><button type="button" onClick={() => setIsAccountEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingAccount} className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50">{isSavingAccount && <Loader2 className="h-4 w-4 animate-spin" />}Crear cuenta</button></DialogFooter>
                     </form>
                 </DialogContent>

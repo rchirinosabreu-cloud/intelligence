@@ -5,6 +5,7 @@ import DatePicker from 'react-datepicker';
 import { format } from 'date-fns';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { brainDatePickerProps } from '@/lib/brainDatePicker';
+import BrainDateField from '@/components/ui/BrainDateField';
 import { Card } from '@/components/ui/Card';
 import {
     Dialog,
@@ -1274,14 +1275,14 @@ const FinancialDashboard = () => {
                                 </div>
                             ) : monthlyLedger?.rows?.length > 0 ? (
                                 <div className="overflow-x-auto">
-                                    <table className="min-w-[1120px] w-full text-left border-collapse">
+                                    <table className="min-w-[980px] xl:min-w-0 w-full table-fixed text-left border-collapse">
                                         <thead>
                                             <tr className="border-b border-zinc-100 dark:border-white/5 bg-zinc-50/80 dark:bg-zinc-900/60 text-[10px] font-black uppercase text-zinc-400 tracking-wider">
-                                                <th className="sticky left-0 z-10 bg-zinc-50/95 dark:bg-zinc-900 p-4 min-w-[220px]">Rubro</th>
+                                                <th className="sticky left-0 z-10 w-44 bg-zinc-50/95 p-3 dark:bg-zinc-900">Rubro</th>
                                                 {monthlyLedger.months.map((month) => (
-                                                    <th key={month.month} className="p-3 text-right min-w-[110px]">{month.label}</th>
+                                                    <th key={month.month} className="p-2 text-right">{month.label}</th>
                                                 ))}
-                                                <th className="p-3 text-right min-w-[130px]">Total</th>
+                                                <th className="w-24 p-2 text-right">Total</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
@@ -1299,7 +1300,7 @@ const FinancialDashboard = () => {
                                                                 row.tone === 'warning' && "bg-amber-500/10 text-amber-600",
                                                                 row.tone === 'net' && "bg-violet-600/10 text-violet-600"
                                                             )}>
-                                                                {row.tone}
+                                                                {TONE_LABELS[row.tone] || 'Referencia'}
                                                             </div>
                                                         </td>
                                                         {row.values.map((cell) => (
@@ -1722,7 +1723,7 @@ const FinancialDashboard = () => {
                             <strong className="float-right text-zinc-900 dark:text-white">{formatCurrency(payrollPayment?.netAmount || 0)}</strong>
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Fecha<DatePicker {...brainDatePickerProps} required selected={payrollPaymentForm.paidAt ? new Date(`${payrollPaymentForm.paidAt}T12:00:00`) : null} onChange={(date) => setPayrollPaymentForm((current) => ({ ...current, paidAt: date ? format(date, 'yyyy-MM-dd') : '' }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" dateFormat="dd/MM/yyyy" /></label>
+                            <BrainDateField label="Fecha" required selected={payrollPaymentForm.paidAt ? new Date(`${payrollPaymentForm.paidAt}T12:00:00`) : null} onChange={(date) => setPayrollPaymentForm((current) => ({ ...current, paidAt: date ? format(date, 'yyyy-MM-dd') : '' }))} dateFormat="dd/MM/yyyy" />
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cuenta<select required value={payrollPaymentForm.accountId} onChange={(event) => setPayrollPaymentForm((current) => ({ ...current, accountId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{(financialAccounts?.accounts || []).map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
                         </div>
                         <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Referencia<input value={payrollPaymentForm.reference} onChange={(event) => setPayrollPaymentForm((current) => ({ ...current, reference: event.target.value }))} placeholder="Transferencia, comprobante..." className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
@@ -1741,8 +1742,8 @@ const FinancialDashboard = () => {
                         <div className="grid gap-4 sm:grid-cols-2">
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Colaborador<input required value={payrollContractForm.name} onChange={(event) => setPayrollContractForm((current) => ({ ...current, name: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cargo<input value={payrollContractForm.position} onChange={(event) => setPayrollContractForm((current) => ({ ...current, position: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Inicio<DatePicker {...brainDatePickerProps} selected={payrollContractForm.startDate ? new Date(`${payrollContractForm.startDate}T12:00:00`) : null} onChange={(date) => setPayrollContractForm((current) => ({ ...current, startDate: date ? format(date, 'yyyy-MM-dd') : '' }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" dateFormat="dd/MM/yyyy" /></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Terminación<DatePicker {...brainDatePickerProps} isClearable selected={payrollContractForm.endDate ? new Date(`${payrollContractForm.endDate}T12:00:00`) : null} onChange={(date) => setPayrollContractForm((current) => ({ ...current, endDate: date ? format(date, 'yyyy-MM-dd') : '' }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" dateFormat="dd/MM/yyyy" placeholderText="Contrato activo" /></label>
+                            <BrainDateField label="Inicio" selected={payrollContractForm.startDate ? new Date(`${payrollContractForm.startDate}T12:00:00`) : null} onChange={(date) => setPayrollContractForm((current) => ({ ...current, startDate: date ? format(date, 'yyyy-MM-dd') : '' }))} dateFormat="dd/MM/yyyy" />
+                            <BrainDateField label="Terminación" isClearable selected={payrollContractForm.endDate ? new Date(`${payrollContractForm.endDate}T12:00:00`) : null} onChange={(date) => setPayrollContractForm((current) => ({ ...current, endDate: date ? format(date, 'yyyy-MM-dd') : '' }))} dateFormat="dd/MM/yyyy" placeholderText="Contrato activo" />
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Salario base<input required min="0" step="0.01" type="number" value={payrollContractForm.baseSalary} onChange={(event) => setPayrollContractForm((current) => ({ ...current, baseSalary: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Seguridad social<input required min="0" step="0.01" type="number" value={payrollContractForm.socialSecurity} onChange={(event) => setPayrollContractForm((current) => ({ ...current, socialSecurity: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2">Total mensual<input required min="0" step="0.01" type="number" value={payrollContractForm.monthlyTotal} onChange={(event) => setPayrollContractForm((current) => ({ ...current, monthlyTotal: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
@@ -1753,6 +1754,14 @@ const FinancialDashboard = () => {
             </Dialog>
         </div>
     );
+};
+
+const TONE_LABELS = {
+    income: 'Ingreso',
+    expense: 'Egreso',
+    financing: 'Financiaci\u00f3n',
+    warning: 'Advertencia',
+    net: 'Resultado neto'
 };
 
 const emptyPayrollContractForm = (year) => ({

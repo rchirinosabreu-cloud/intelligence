@@ -921,22 +921,24 @@ model FinancialRecord {
 }
 
 model FinancialAccount {
-  id                 String                     @id @default(uuid())
-  name               String
-  type               FinancialAccountType
-  currency           String                     @default("COP")
-  openingBalance     Decimal                    @default(0)
-  openingBalanceDate DateTime
-  isActive           Boolean                    @default(true)
-  institution        String?
-  holderName         String?
-  holderType         FinancialAccountHolderType @default(COMPANY)
-  lastFour           String?
-  isThirdPartyHeld   Boolean                    @default(false)
-  createdAt          DateTime                   @default(now())
-  updatedAt          DateTime                   @updatedAt
-  records            FinancialRecord[]
-  payments           ReceivablePayment[]
+  id                   String                     @id @default(uuid())
+  name                 String
+  type                 FinancialAccountType
+  currency             String                     @default("COP")
+  openingBalance       Decimal                    @default(0)
+  openingBalanceDate   DateTime
+  isActive             Boolean                    @default(true)
+  institution          String?
+  holderName           String?
+  holderType           FinancialAccountHolderType @default(COMPANY)
+  identificationType   String?
+  identificationNumber String?
+  lastFour             String?
+  isThirdPartyHeld     Boolean                    @default(false)
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  records              FinancialRecord[]
+  payments             ReceivablePayment[]
 
   @@unique([name, currency])
   @@index([type, isActive])

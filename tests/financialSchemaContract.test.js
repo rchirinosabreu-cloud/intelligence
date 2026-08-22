@@ -35,6 +35,8 @@ test('financial records are the canonical auditable ledger', () => {
     assert.match(schema, /model FinancialPeriod \{/);
     assert.match(schema, /model FinancialAccount \{/);
     assert.match(schema, /model FinancialAccount \{[\s\S]*openingBalanceDate\s+DateTime/);
+    assert.match(schema, /model FinancialAccount \{[\s\S]*identificationType\s+String\?/);
+    assert.match(schema, /model FinancialAccount \{[\s\S]*identificationNumber\s+String\?/);
 });
 
 test('receivables support partial payments with an audit trail', () => {

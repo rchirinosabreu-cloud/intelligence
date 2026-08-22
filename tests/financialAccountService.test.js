@@ -85,3 +85,20 @@ test('createFinancialAccount persists only masked banking identity', async () =>
   assert.equal(saved.institution, 'Bancolombia');
   assert.equal(Object.hasOwn(saved, 'accountNumber'), false);
 });
+
+test('createFinancialAccount preserves the holder identification required for reconciliation', async () => {
+  let saved;
+  const prismaClient = { $transaction: async (callback) => callback({
+    financialAccount: { create: async ({ data }) => { saved = data; return { id: 'a3', ...data }; } },
+    financialAuditEvent: { create: async () => ({}) }
+  }) };
+
+  await createFinancialAccount(prismaClient, {
+    name: 'Bancolombia empresarial', type: 'BANK', openingBalanceDate: '2026-01-01',
+    institution: 'Bancolombia', holderName: 'Brain Studio Agencia Creativa S.A.S',
+    holderType: 'COMPANY', identificationType: 'NIT', identificationNumber: '901533409-4', lastFour: '3251'
+  }, { id: 'u1' });
+
+  assert.equal(saved.identificationType, 'NIT');
+  assert.equal(saved.identificationNumber, '901533409-4');
+});

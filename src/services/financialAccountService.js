@@ -5,6 +5,7 @@ import {
 
 const ACCOUNT_TYPES = new Set(['BANK', 'CASH', 'OTHER']);
 const HOLDER_TYPES = new Set(['COMPANY', 'PERSON']);
+const IDENTIFICATION_TYPES = new Set(['CC', 'NIT']);
 
 const toNumber = (value) => {
   if (value && typeof value.toNumber === 'function') return value.toNumber();
@@ -38,6 +39,14 @@ const normalizeAccountInput = (input = {}) => {
   if (!HOLDER_TYPES.has(holderType)) {
     throw new FinancialDomainError('FINANCIAL_ACCOUNT_HOLDER_TYPE_INVALID', 'El tipo de titular no es valido.');
   }
+  const identificationType = String(input.identificationType || '').trim().toUpperCase().replaceAll('.', '');
+  if (identificationType && !IDENTIFICATION_TYPES.has(identificationType)) {
+    throw new FinancialDomainError('FINANCIAL_ACCOUNT_IDENTIFICATION_TYPE_INVALID', 'El tipo de identificaci\u00f3n debe ser C.C. o NIT.');
+  }
+  const identificationNumber = String(input.identificationNumber || '').trim();
+  if ((identificationType && !identificationNumber) || (!identificationType && identificationNumber)) {
+    throw new FinancialDomainError('FINANCIAL_ACCOUNT_IDENTIFICATION_INCOMPLETE', 'Registra el tipo y el n\u00famero de identificaci\u00f3n del titular.');
+  }
   return {
     name,
     type,
@@ -48,6 +57,8 @@ const normalizeAccountInput = (input = {}) => {
     institution: String(input.institution || '').trim() || null,
     holderName: String(input.holderName || '').trim() || null,
     holderType,
+    identificationType: identificationType || null,
+    identificationNumber: identificationNumber || null,
     lastFour: lastFour || null,
     isThirdPartyHeld: input.isThirdPartyHeld === true
   };

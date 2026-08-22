@@ -10,8 +10,9 @@ async function query(client, text, values = []) {
 }
 
 async function main() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL no esta configurada');
+  const databaseUrl = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error('No hay una URL de base de datos configurada');
   }
 
   const workbookPath = process.argv[2] || null;
@@ -37,7 +38,7 @@ async function main() {
   }
 
   const client = new Client({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: databaseUrl,
     ssl: { rejectUnauthorized: false },
   });
 
