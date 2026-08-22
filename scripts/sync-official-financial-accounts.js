@@ -1,5 +1,7 @@
-import { PrismaClient } from '@prisma/client';
-import { createFinancialAccount } from '../src/services/financialAccountService.js';
+if (process.env.DATABASE_PUBLIC_URL) process.env.DATABASE_URL = process.env.DATABASE_PUBLIC_URL;
+
+const { PrismaClient } = await import('@prisma/client');
+const { createFinancialAccount } = await import('../src/services/financialAccountService.js');
 
 const prisma = new PrismaClient();
 const shouldApply = process.argv.includes('--apply');
