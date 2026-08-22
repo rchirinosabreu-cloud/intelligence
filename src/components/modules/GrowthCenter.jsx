@@ -7,7 +7,7 @@ import { Target, TrendingUp, CheckCircle2, AlertTriangle, UploadCloud, Loader2, 
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
 
-const API = `${getApiBaseUrl()}/growth`;
+const API = `${getApiBaseUrl()}/api/growth`;
 const statusLabel = {
   PENDING: 'Pendiente', IN_PROGRESS: 'En curso', SUBMITTED: 'En revisión', APPROVED: 'Aprobada',
   RETURNED: 'Devuelta', COMPLETED: 'Completada', DETECTED: 'Detectada', IN_REVIEW: 'En revisión',

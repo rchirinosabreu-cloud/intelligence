@@ -40,3 +40,9 @@ test('la interfaz incluye ruta, métricas, acciones y bandeja de conciliación',
   assert.match(component, /selectedWeek/);
   assert.doesNotMatch(component, /actions\.slice\(0, 10\)/);
 });
+
+test('el Centro de Crecimiento consulta el enrutador protegido de la API', async () => {
+  const component = await read('src/components/modules/GrowthCenter.jsx');
+  assert.match(component, /getApiBaseUrl\(\)\}\/api\/growth/);
+  assert.doesNotMatch(component, /getApiBaseUrl\(\)\}\/growth/);
+});
