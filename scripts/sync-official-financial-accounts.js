@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 if (process.env.DATABASE_PUBLIC_URL) process.env.DATABASE_URL = process.env.DATABASE_PUBLIC_URL;
 
 const { PrismaClient } = await import('@prisma/client');
