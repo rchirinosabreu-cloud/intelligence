@@ -865,7 +865,7 @@ model FinancialImportBatch {
 }
 
 model FinancialRecord {
-  id                 String                @id @default(uuid())
+  id                 String                    @id @default(uuid())
   amount             Decimal
   category           FinancialCategory
   type               FinancialType
@@ -874,23 +874,23 @@ model FinancialRecord {
   year               Int?
   month              Int?
   clientId           String?
-  client             Client?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  client             Client?                   @relation(fields: [clientId], references: [id], onDelete: SetNull)
   userId             String?
-  user               User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user               User?                     @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdById        String?
-  createdBy          User?                 @relation("FinancialRecordCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy          User?                     @relation("FinancialRecordCreator", fields: [createdById], references: [id], onDelete: SetNull)
   accountId          String?
-  account            FinancialAccount?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  account            FinancialAccount?         @relation(fields: [accountId], references: [id], onDelete: SetNull)
   importBatchId      String?
-  importBatch        FinancialImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  importBatch        FinancialImportBatch?     @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
   description        String?
   sourceSheet        String?
   sourceRow          Int?
   sourceLabel        String?
-  scenario           FinancialScenario     @default(ACTUAL)
-  status             FinancialRecordStatus @default(POSTED)
-  origin             FinancialRecordOrigin @default(MANUAL)
-  isProjection       Boolean               @default(false)
+  scenario           FinancialScenario         @default(ACTUAL)
+  status             FinancialRecordStatus     @default(POSTED)
+  origin             FinancialRecordOrigin     @default(MANUAL)
+  isProjection       Boolean                   @default(false)
   counterparty       String?
   subcategory        String?
   reference          String?
@@ -902,10 +902,11 @@ model FinancialRecord {
   voidedAt           DateTime?
   voidReason         String?
   metadata           Json?
-  createdAt          DateTime              @default(now())
-  updatedAt          DateTime              @updatedAt
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
   receivablePayment  ReceivablePayment?
   payrollTransaction PayrollTransaction?
+  bankMatches        BankReconciliationMatch[]
 
   @@index([date])
   @@index([year, month])
@@ -939,6 +940,8 @@ model FinancialAccount {
   updatedAt            DateTime                   @updatedAt
   records              FinancialRecord[]
   payments             ReceivablePayment[]
+  statementImports     BankStatementImport[]
+  bankTransactions     BankTransaction[]
 
   @@unique([name, currency])
   @@index([type, isActive])
@@ -972,6 +975,83 @@ enum FinancialDiscrepancyStatus {
   APPROVED
   RETURNED
   APPLIED
+}
+
+enum BankTransactionStatus {
+  UNMATCHED
+  PROPOSED
+  PARTIAL
+  MATCHED
+  IGNORED
+}
+
+enum BankMatchStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+}
+
+model BankStatementImport {
+  id             String            @id @default(uuid())
+  accountId      String
+  account        FinancialAccount  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  sourceFilename String
+  sourceHash     String
+  periodStart    DateTime
+  periodEnd      DateTime
+  openingBalance Decimal
+  closingBalance Decimal
+  importedById   String?
+  importedAt     DateTime          @default(now())
+  createdAt      DateTime          @default(now())
+  transactions   BankTransaction[]
+
+  @@unique([accountId, sourceHash])
+  @@index([accountId, periodStart, periodEnd])
+}
+
+model BankTransaction {
+  id          String                    @id @default(uuid())
+  importId    String
+  statement   BankStatementImport       @relation(fields: [importId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     FinancialAccount          @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  postedAt    DateTime
+  description String
+  amount      Decimal
+  balance     Decimal?
+  sourceRow   Int
+  fingerprint String
+  status      BankTransactionStatus     @default(UNMATCHED)
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  matches     BankReconciliationMatch[]
+
+  @@unique([accountId, fingerprint])
+  @@index([accountId, postedAt])
+  @@index([status, postedAt])
+}
+
+model BankReconciliationMatch {
+  id                String          @id @default(uuid())
+  bankTransactionId String
+  bankTransaction   BankTransaction @relation(fields: [bankTransactionId], references: [id], onDelete: Cascade)
+  financialRecordId String
+  financialRecord   FinancialRecord @relation(fields: [financialRecordId], references: [id], onDelete: Restrict)
+  amount            Decimal
+  confidence        Decimal
+  reason            String
+  status            BankMatchStatus @default(PROPOSED)
+  approvedById      String?
+  approvedAt        DateTime?
+  rejectedById      String?
+  rejectedAt        DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([bankTransactionId, financialRecordId])
+  @@index([status, createdAt])
+  @@index([financialRecordId])
 }
 
 model GrowthCycle {

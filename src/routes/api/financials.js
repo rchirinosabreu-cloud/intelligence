@@ -37,6 +37,12 @@ import {
     updateFinancialRecordHandler,
     voidFinancialRecordHandler
 } from '../../controllers/financialRecordController.js';
+import {
+    approveBankReconciliationMatch,
+    getBankReconciliation,
+    importBankStatement,
+    previewBankStatement
+} from '../../controllers/bankReconciliationController.js';
 
 const router = express.Router();
 const upload = multer({
@@ -73,5 +79,9 @@ router.post('/payroll-transactions/:id/approve', requireFinancialApproval, appro
 router.post('/payroll-transactions/:id/pay', requireFinancialApproval, payPayrollTransactionHandler);
 router.post('/import/preview', requireFinancialApproval, upload.single('file'), previewFinancialImport);
 router.post('/import/commit', requireFinancialApproval, upload.single('file'), commitFinancialImport);
+router.get('/bank-reconciliation', requireFinancialAccess, getBankReconciliation);
+router.post('/bank-reconciliation/preview', requireFinancialApproval, upload.single('file'), previewBankStatement);
+router.post('/bank-reconciliation/import', requireFinancialApproval, upload.single('file'), importBankStatement);
+router.post('/bank-reconciliation/matches/:id/approve', requireFinancialApproval, approveBankReconciliationMatch);
 
 export default router;
