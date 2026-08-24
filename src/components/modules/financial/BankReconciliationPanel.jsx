@@ -17,10 +17,11 @@ export default function BankReconciliationPanel({ selectedYear, canApprove }) {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
 
-  const { data: accounts = [] } = useQuery({
+  const { data: accountData } = useQuery({
     queryKey: ['financial-accounts'],
     queryFn: async () => (await axios.get(`${getApiBaseUrl()}/api/financials/accounts`, { headers: headers() })).data
   });
+  const accounts = Array.isArray(accountData) ? accountData : accountData?.accounts || [];
   const { data, isLoading } = useQuery({
     queryKey: ['bank-reconciliation', selectedYear],
     queryFn: async () => (await axios.get(`${getApiBaseUrl()}/api/financials/bank-reconciliation?year=${selectedYear}`, { headers: headers() })).data

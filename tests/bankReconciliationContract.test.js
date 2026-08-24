@@ -27,6 +27,8 @@ test('la conciliación bancaria muestra propuestas en español y no éxitos anti
   assert.match(component, /Continuidad de saldos/);
   assert.match(component, /Alta confianza/);
   assert.match(component, /Requiere verificación/);
+  assert.match(component, /accountData\?\.accounts/);
+  assert.doesNotMatch(component, /const \{ data: accounts = \[\] \} = useQuery/);
   assert.match(component, /onSuccess/);
   assert.match(component, /dark:/);
   assert.match(component, /sm:|lg:/);
