@@ -135,8 +135,10 @@ test('persistFinancialImportPlan replaces prior imported year data and writes no
         receivables: 1,
         payrollContracts: 1
     });
-    assert.deepEqual(calls[0], ['financialRecord', 'deleteMany', { where: { year: 2026, importBatchId: { not: null } } }]);
-    assert.deepEqual(calls[3], ['financialImportBatch', 'updateMany', { where: { year: 2026, status: 'IMPORTED' }, data: { status: 'REPLACED' } }]);
+    const recordsDelete = calls.find(([model, action]) => model === 'financialRecord' && action === 'deleteMany');
+    assert.deepEqual(recordsDelete, ['financialRecord', 'deleteMany', { where: { year: 2026, importBatchId: { not: null } } }]);
+    const batchReplace = calls.find(([model, action]) => model === 'financialImportBatch' && action === 'updateMany');
+    assert.deepEqual(batchReplace, ['financialImportBatch', 'updateMany', { where: { year: 2026, status: 'IMPORTED' }, data: { status: 'REPLACED' } }]);
 
     const recordsCreate = calls.find(([model, action]) => model === 'financialRecord' && action === 'createMany');
     assert.equal(recordsCreate[2].data[0].importBatchId, 'batch-1');
@@ -156,11 +158,66 @@ test('persistFinancialImportPlan replaces prior imported year data and writes no
     assert.equal(payrollCreate[2].data.collaboratorId, 'collaborator-1');
 });
 
+test('persistFinancialImportPlan preserves prior client links by source label when replacing an import', async () => {
+    let createdRecords = [];
+    let createdReceivable = null;
+    const tx = {
+        financialRecord: {
+            findMany: async () => [{ sourceLabel: 'Gobernación de Bolivar', clientId: 'client-desarrollo' }],
+            deleteMany: async () => {},
+            createMany: async ({ data }) => { createdRecords = data; }
+        },
+        accountsReceivable: {
+            findMany: async (args) => {
+                assert.equal(args.where.clientId, undefined);
+                return [{ sourceLabel: 'Gobernación de Bolivar', clientId: 'client-desarrollo' }];
+            },
+            deleteMany: async () => {},
+            create: async ({ data }) => { createdReceivable = data; }
+        },
+        financialMonthlySummary: { deleteMany: async () => {} },
+        financialImportBatch: {
+            updateMany: async () => {},
+            create: async () => ({ id: 'batch-new' })
+        },
+        client: { upsert: async () => ({ id: 'unexpected-new-client' }) },
+        user: { findMany: async () => [] }
+    };
+    const prisma = { $transaction: async (callback) => callback(tx) };
+    const plan = {
+        batch: { year: 2026 },
+        records: [{
+            amount: 4173000,
+            category: 'MEMBRESIA',
+            type: 'INCOME',
+            year: 2026,
+            month: 7,
+            sourceLabel: 'Gobernación de Bolivar'
+        }],
+        monthlySummaries: [],
+        receivables: [{
+            amount: 4173000,
+            period: new Date(Date.UTC(2026, 7, 1)),
+            year: 2026,
+            month: 8,
+            status: 'DEBE',
+            sourceLabel: 'Gobernación de Bolivar'
+        }],
+        payrollPositions: [],
+        payrollContracts: []
+    };
+
+    await persistFinancialImportPlan(prisma, plan);
+
+    assert.equal(createdRecords[0].clientId, 'client-desarrollo');
+    assert.equal(createdReceivable.clientId, 'client-desarrollo');
+});
+
 test('persistFinancialImportPlan creates payroll contracts even when the payroll person has no user login', async () => {
     const calls = [];
     const tx = {
-        financialRecord: { deleteMany: async () => {}, createMany: async () => {} },
-        accountsReceivable: { deleteMany: async () => {}, create: async () => {} },
+        financialRecord: { findMany: async () => [], deleteMany: async () => {}, createMany: async () => {} },
+        accountsReceivable: { findMany: async () => [], deleteMany: async () => {}, create: async () => {} },
         financialMonthlySummary: { deleteMany: async () => {}, createMany: async () => {} },
         financialImportBatch: {
             updateMany: async () => {},
