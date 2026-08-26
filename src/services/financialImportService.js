@@ -33,6 +33,9 @@ const normalizeText = (value) => String(value || '')
     .trim()
     .toLowerCase();
 
+const isActualLedgerSheet = (sheetName) => normalizeText(sheetName).startsWith('finanzas brain studio');
+const isMembershipProjectionSheet = (sheetName) => normalizeText(sheetName).includes('flujo mensual membresias');
+
 const parseMoney = (value) => {
     if (value === null || value === undefined || value === '') return 0;
     if (typeof value === 'number') {
@@ -191,6 +194,9 @@ const buildMonthlySummaries = (preview) => {
     const explicit = preview.totals?.monthly?.explicit || {};
     const calculated = preview.totals?.monthly?.calculated || {};
 
+    const sourceIsActualLedger = isActualLedgerSheet(preview.sourceSheet);
+    const sourceIsMembershipProjection = isMembershipProjectionSheet(preview.sourceSheet);
+
     return MONTHS.map((_monthName, monthIndex) => {
         const explicitIncome = explicit.income?.[monthIndex] || 0;
         const calculatedIncome = calculated.income?.[monthIndex] || 0;
@@ -208,7 +214,11 @@ const buildMonthlySummaries = (preview) => {
         return {
             year: preview.year,
             month: monthIndex + 1,
-            scenario: preview.actualThroughMonth >= monthIndex + 1 ? 'ACTUAL' : 'FORECAST',
+            scenario: sourceIsActualLedger
+                ? 'ACTUAL'
+                : sourceIsMembershipProjection
+                    ? 'FORECAST'
+                    : preview.actualThroughMonth >= monthIndex + 1 ? 'ACTUAL' : 'FORECAST',
             explicitIncome,
             calculatedIncome,
             explicitAdminCost,
@@ -239,7 +249,9 @@ const readWorkbookContext = (buffer, options = {}) => {
     const rawValues = !String(options.filename || '').toLowerCase().endsWith('.csv');
     const sheetNames = workbook.SheetNames;
     const normalizedSheetNames = new Map(sheetNames.map((name) => [normalizeText(name), name]));
+    const actualLedgerSheet = sheetNames.find(isActualLedgerSheet);
     const sourceSheet = options.sheetName
+        || actualLedgerSheet
         || normalizedSheetNames.get('flujo mensual membresias')
         || sheetNames[0];
 
@@ -604,6 +616,8 @@ export const buildFinancialImportPersistencePlan = (buffer, options = {}) => {
         .update(buffer)
         .digest('hex');
 
+    const sourceIsActualLedger = isActualLedgerSheet(preview.sourceSheet);
+    const sourceIsMembershipProjection = isMembershipProjectionSheet(preview.sourceSheet);
     const records = preview.entries.map((entry) => ({
         amount: entry.amount,
         category: entry.category,
@@ -616,10 +630,16 @@ export const buildFinancialImportPersistencePlan = (buffer, options = {}) => {
         sourceSheet: preview.sourceSheet,
         sourceRow: entry.rowNumber,
         sourceLabel: entry.sourceLabel,
-        scenario: entry.month <= preview.actualThroughMonth ? 'ACTUAL' : 'FORECAST',
+        scenario: sourceIsActualLedger
+            ? 'ACTUAL'
+            : sourceIsMembershipProjection
+                ? 'FORECAST'
+                : entry.month <= preview.actualThroughMonth ? 'ACTUAL' : 'FORECAST',
         status: 'POSTED',
         origin: 'IMPORT',
-        isProjection: entry.month > preview.actualThroughMonth,
+        isProjection: sourceIsActualLedger
+            ? false
+            : sourceIsMembershipProjection || entry.month > preview.actualThroughMonth,
         postedAt: dateFromYearMonth(entry.year, entry.month),
         metadata: {
             monthName: entry.monthName,
@@ -706,6 +726,49 @@ export const persistFinancialImportPlan = async (prismaClient, plan, options = {
     const year = plan.batch.year;
 
     return prismaClient.$transaction(async (tx) => {
+        const priorClientLinks = replaceExisting
+            ? await tx.financialRecord.findMany({
+                where: {
+                    year,
+                    importBatchId: { not: null },
+                    clientId: { not: null },
+                    sourceLabel: { not: null }
+                },
+                select: {
+                    sourceLabel: true,
+                    clientId: true
+                }
+            })
+            : [];
+        const priorReceivableClientLinks = replaceExisting
+            ? await tx.accountsReceivable.findMany({
+                where: {
+                    year,
+                    importBatchId: { not: null },
+                    sourceLabel: { not: null }
+                },
+                select: {
+                    sourceLabel: true,
+                    clientId: true
+                }
+            })
+            : [];
+        const clientIdsBySourceLabel = new Map();
+        const ambiguousSourceLabels = new Set();
+        for (const link of [...priorClientLinks, ...priorReceivableClientLinks]) {
+            if (!link.sourceLabel || !link.clientId) continue;
+            const normalizedLabel = normalizeText(link.sourceLabel);
+            const currentClientId = clientIdsBySourceLabel.get(normalizedLabel);
+            if (currentClientId && currentClientId !== link.clientId) {
+                ambiguousSourceLabels.add(normalizedLabel);
+                clientIdsBySourceLabel.delete(normalizedLabel);
+                continue;
+            }
+            if (!ambiguousSourceLabels.has(normalizedLabel)) {
+                clientIdsBySourceLabel.set(normalizedLabel, link.clientId);
+            }
+        }
+
         if (replaceExisting) {
             await tx.financialRecord.deleteMany({
                 where: { year, importBatchId: { not: null } }
@@ -730,6 +793,9 @@ export const persistFinancialImportPlan = async (prismaClient, plan, options = {
             await tx.financialRecord.createMany({
                 data: plan.records.map((record) => ({
                     ...record,
+                    clientId: record.clientId
+                        || clientIdsBySourceLabel.get(normalizeText(record.sourceLabel))
+                        || null,
                     importBatchId: batch.id
                 }))
             });
@@ -748,16 +814,21 @@ export const persistFinancialImportPlan = async (prismaClient, plan, options = {
         for (const receivable of plan.receivables) {
             const label = receivable.sourceLabel || receivable.notes || 'Cartera sin cliente';
             if (!clientIdByLabel.has(label)) {
-                const slug = slugify(label);
-                const client = await tx.client.upsert({
-                    where: { slug },
-                    update: {},
-                    create: {
-                        name: label,
-                        slug
-                    }
-                });
-                clientIdByLabel.set(label, client.id);
+                const preservedClientId = clientIdsBySourceLabel.get(normalizeText(label));
+                if (preservedClientId) {
+                    clientIdByLabel.set(label, preservedClientId);
+                } else {
+                    const slug = slugify(label);
+                    const client = await tx.client.upsert({
+                        where: { slug },
+                        update: {},
+                        create: {
+                            name: label,
+                            slug
+                        }
+                    });
+                    clientIdByLabel.set(label, client.id);
+                }
             }
 
             await tx.accountsReceivable.create({

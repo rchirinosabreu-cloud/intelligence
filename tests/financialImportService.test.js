@@ -80,6 +80,44 @@ const createWorkbookFixture = () => {
     return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 };
 
+const createActualVsProjectionWorkbookFixture = () => {
+    const workbook = XLSX.utils.book_new();
+    const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+    XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+            ['Clientes', ...months],
+            ['Pablo Hoff', 1450000, 1450000, 1450000, 1450000, 1450000, 1450000, 1450000, '', '', '', '', ''],
+            ['Desarrollo Economico', 4173000, 4173000, 4173000, 4173000, 4173000, 4173000, 4173000, '', '', '', '', ''],
+            ['Total ingresos', 5623000, 5623000, 5623000, 5623000, 5623000, 5623000, 5623000, '', '', '', '', '']
+        ]),
+        'FINANZAS BRAIN STUDIO 2026'
+    );
+
+    XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+            ['Categoría', 'Detalle', ...months],
+            ['Ingresos mensuales', 'Clientes Fee mensual'],
+            ['', 'Pablo Hoff', ...Array(12).fill(1450000)],
+            ['', 'Desarrollo Economico', ...Array(12).fill(4173000)]
+        ]),
+        'FLUJO MENSUAL MEMBRESIAS'
+    );
+
+    XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+            ['Morosos', ...months, 'ESTADO', 'COMENTARIOS'],
+            ['Desarrollo Economico', '', '', '', '', '', '', '', 4173000, '', '', '', '', 'DEBE', 'Pendiente agosto']
+        ]),
+        'MOROSOS'
+    );
+
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+};
+
 test('parseFinancialImportWorkbook converts monthly finance rows into importable entries', () => {
     const result = parseFinancialImportWorkbook(Buffer.from(fixtureCsv, 'utf8'), {
         filename: 'FINANZAS BRAIN STUDIO 2026.csv',
@@ -183,6 +221,23 @@ test('parseFinancialImportWorkbook reads the complete finance workbook using the
     assert.equal(result.totals.explicit.debtComments, 800000);
 });
 
+test('uses FINANZAS BRAIN STUDIO as actual source and never imports membership flow as actual records', () => {
+    const plan = buildFinancialImportPersistencePlan(createActualVsProjectionWorkbookFixture(), {
+        filename: 'FINANZAS BRAIN STUDIO 2026.xlsx',
+        year: 2026,
+        actualThroughMonth: 8
+    });
+
+    assert.equal(plan.preview.sourceSheet, 'FINANZAS BRAIN STUDIO 2026');
+    assert.equal(plan.records.filter((record) => record.sourceLabel === 'Pablo Hoff').length, 7);
+    assert.equal(plan.records.filter((record) => record.sourceLabel === 'Desarrollo Economico').length, 7);
+    assert.ok(plan.records.every((record) => record.sourceSheet === 'FINANZAS BRAIN STUDIO 2026'));
+    assert.ok(plan.records.every((record) => record.scenario === 'ACTUAL'));
+    assert.ok(plan.records.every((record) => record.isProjection === false));
+    assert.equal(plan.receivables.length, 1);
+    assert.ok(plan.receivables.every((receivable) => receivable.sourceSheet === 'MOROSOS'));
+});
+
 test('buildFinancialImportPersistencePlan separates actual months from forecast months', () => {
     const plan = buildFinancialImportPersistencePlan(Buffer.from(fixtureCsv, 'utf8'), {
         filename: 'FINANZAS BRAIN STUDIO 2026.csv',
@@ -209,6 +264,26 @@ test('buildFinancialImportPersistencePlan preserves payroll contract start dates
     });
     const francisco = plan.payrollContracts.find((contract) => contract.employeeName === 'Francisco Villa');
     assert.equal(francisco.startDate.toISOString(), '2026-02-01T00:00:00.000Z');
+});
+
+test('treats every membership-flow value as forecast when the actual finance sheet is absent', () => {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet(categorizedMonthlyFixtureCsv.split('\n').map((line) => line.split(','))),
+        'FLUJO MENSUAL MEMBRESIAS'
+    );
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    const plan = buildFinancialImportPersistencePlan(buffer, {
+        filename: 'proyeccion-membresias.xlsx',
+        year: 2026,
+        actualThroughMonth: 8
+    });
+
+    assert.ok(plan.records.length > 0);
+    assert.ok(plan.records.every((record) => record.scenario === 'FORECAST'));
+    assert.ok(plan.records.every((record) => record.isProjection === true));
+    assert.ok(plan.monthlySummaries.every((summary) => summary.scenario === 'FORECAST'));
 });
 
 test('parseFinancialImportWorkbook preserves exact numeric formula results below one thousand', () => {
