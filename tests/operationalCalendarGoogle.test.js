@@ -81,8 +81,8 @@ test('operational calendar fixes current render and role issues', async () => {
   assert.match(calendar, /\['Lun', 'Mar', 'Mie', 'Jue', 'Vie'\]/);
   assert.doesNotMatch(calendar, /Sab|Dom|Add event|Horario configurado en America\/Bogota/);
   assert.doesNotMatch(calendar, /rounded-xl bg-zinc-950/);
-  assert.match(calendar, /bg-indigo-600 px-4 py-2\.5/);
-  assert.match(calendar, /bg-indigo-600 text-white shadow-sm/);
+  assert.match(calendar, /bg-\[#009EB9\] px-4 py-2\.5/);
+  assert.match(calendar, /bg-\[#009EB9\] py-3[\s\S]*text-white shadow-lg/);
   assert.match(calendar, /handleEmptyDayClick/);
   assert.match(calendar, /getEventTypeStyles/);
   assert.match(calendar, /hoveredEvent/);

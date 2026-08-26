@@ -22,9 +22,7 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
 
         // 1. Setup clean state for tests
         // Clean any existing test streak records to have predictable behavior
-        await prisma.agencyContext.deleteMany({
-            where: { type: 'STREAK_RECORD' }
-        }).catch(() => {});
+        await prisma.systemStreak.deleteMany();
 
         // Clean any test tasks or users
         await prisma.task.deleteMany({
@@ -49,6 +47,15 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
                 createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000) // 10 days ago
             }
         });
+
+        await prisma.systemStreak.create({
+            data: {
+                id: 'global',
+                currentStreak: 10,
+                highestStreak: 10,
+                lastIncrementedAt: new Date()
+            }
+        });
     });
 
     t.after(async () => {
@@ -66,17 +73,14 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
             await prisma.client.delete({ where: { id: testClient.id } }).catch(() => {});
         }
 
-        await prisma.agencyContext.deleteMany({
-            where: { type: 'STREAK_RECORD' }
-        }).catch(() => {});
+        await prisma.systemStreak.deleteMany().catch(() => {});
     });
 
-    await t.test('Test Case 1: No returned tasks at all (Streak calculated since Admin creation)', async () => {
+    await t.test('Test Case 1: Persisted streak is returned when no task is currently returned', async () => {
         if (!testDatabaseUrl) return;
 
         const streakResult = await getQualityStreak();
 
-        // Admin was created 10 days ago, so currentStreak should be exactly 10 days
         assert.strictEqual(streakResult.currentStreak, 10);
         assert.strictEqual(streakResult.currentReturnedTasksCount, 0);
         // maxStreak should also be updated to 10
@@ -107,7 +111,7 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
         await prisma.task.delete({ where: { id: testTaskReturned.id } });
     });
 
-    await t.test('Test Case 3: Same day return event forces currentStreak to 0', async () => {
+    await t.test('Test Case 3: A resolved return does not reset the persisted streak again', async () => {
         if (!testDatabaseUrl) return;
 
         // Create a task that was returned TODAY, but is now back to EN_CURSO
@@ -122,8 +126,7 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
 
         const streakResult = await getQualityStreak();
 
-        // Since it was returned today, currentStreak should be forced to 0
-        assert.strictEqual(streakResult.currentStreak, 0);
+        assert.strictEqual(streakResult.currentStreak, 10);
         assert.strictEqual(streakResult.currentReturnedTasksCount, 0);
         assert.strictEqual(streakResult.maxStreak, 10);
 
@@ -131,7 +134,7 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
         await prisma.task.delete({ where: { id: testTaskReturnedToday.id } });
     });
 
-    await t.test('Test Case 4: Return event in the past (e.g., 5 days ago) calculates streak from that timestamp', async () => {
+    await t.test('Test Case 4: Historical returnedAt metadata does not replace the persisted streak', async () => {
         if (!testDatabaseUrl) return;
 
         // Create a task that was returned exactly 5 days ago, and is currently EN_CURSO
@@ -146,8 +149,7 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
 
         const streakResult = await getQualityStreak();
 
-        // Five days since last return
-        assert.strictEqual(streakResult.currentStreak, 5);
+        assert.strictEqual(streakResult.currentStreak, 10);
         assert.strictEqual(streakResult.currentReturnedTasksCount, 0);
         assert.strictEqual(streakResult.maxStreak, 10); // remains 10
 
@@ -158,11 +160,12 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
     await t.test('Test Case 5: Setting a new historical record', async () => {
         if (!testDatabaseUrl) return;
 
-        // Let's manually set a high streak record by modifying the Admin's creation date to 15 days ago
-        await prisma.user.update({
-            where: { id: testAdmin.id },
+        await prisma.systemStreak.update({
+            where: { id: 'global' },
             data: {
-                createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000) // 15 days ago
+                currentStreak: 15,
+                highestStreak: 15,
+                lastIncrementedAt: new Date()
             }
         });
 

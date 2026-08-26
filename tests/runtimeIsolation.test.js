@@ -32,9 +32,13 @@ test('storage modules never mutate bucket CORS configuration at import time', as
   assert.equal(pkg.scripts['storage:configure-cors'], 'node scripts/configure-storage-cors.js');
 });
 
-test('CI provisions the schema and runs the complete test command', async () => {
+test('CI provisions the schema and runs database suites serially', async () => {
   const workflow = await read('.github/workflows/ci.yml');
+  const pkg = JSON.parse(await read('package.json'));
+  assert.match(workflow, /image: pgvector\/pgvector:pg15/);
+  assert.match(workflow, /CREATE EXTENSION IF NOT EXISTS vector/);
   assert.match(workflow, /prisma db push/);
   assert.match(workflow, /TEST_DATABASE_URL:/);
-  assert.match(workflow, /run: npm test/);
+  assert.match(workflow, /run: npm run test:ci/);
+  assert.equal(pkg.scripts['test:ci'], 'node --test --test-concurrency=1 "tests/**/*.test.js"');
 });

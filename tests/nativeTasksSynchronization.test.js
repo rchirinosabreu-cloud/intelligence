@@ -19,9 +19,11 @@ test('task board keeps syncing while a task form is open without discarding crea
 test('task board exposes a manual refresh with visible synchronization state', async () => {
   const board = await read('src/components/modules/NativeTasks.jsx');
 
-  assert.match(board, /dataUpdatedAt/);
   assert.match(board, /isFetching/);
-  assert.match(board, /aria-label="Actualizar tareas"/);
-  assert.match(board, /Última actualización/);
-  assert.match(board, /onClick=\{\(\) => refetch\(\)\}/);
+  assert.match(board, /handleManualRefresh/);
+  assert.match(board, /const result = await refetch\(\)/);
+  assert.match(board, /refreshConfirmed/);
+  assert.match(board, /'Tareas actualizadas'\s*:\s*'Actualizar tareas'/);
+  assert.match(board, /onClick=\{handleManualRefresh\}/);
+  assert.match(board, /isFetching && 'animate-spin'/);
 });

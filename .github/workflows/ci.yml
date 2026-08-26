@@ -13,7 +13,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:15
+        image: pgvector/pgvector:pg15
         env:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
@@ -45,6 +45,11 @@ jobs:
           DATABASE_URL: postgresql://user:password@localhost:5432/brainstudio
         run: npx prisma generate
 
+      - name: Enable pgvector
+        env:
+          PGPASSWORD: password
+        run: psql -h localhost -U user -d brainstudio -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+
       - name: Provision Test Schema
         env:
           DATABASE_URL: postgresql://user:password@localhost:5432/brainstudio
@@ -62,4 +67,4 @@ jobs:
           TEST_DATABASE_URL: postgresql://user:password@localhost:5432/brainstudio
           JWT_SECRET: test-secret-with-at-least-32-characters
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: npm test
+        run: npm run test:ci
