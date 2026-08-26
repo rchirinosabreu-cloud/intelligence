@@ -670,9 +670,11 @@ export const updateTask = async (id, data, updaterId = null) => {
         }
 
         // Extract and isolate returnReason and reintegrateReason
-        const { returnReason, reintegrateReason } = updateData;
+        const { returnReason, reintegrateReason, reopenReason, reopenNote } = updateData;
         delete updateData.returnReason;
         delete updateData.reintegrateReason;
+        delete updateData.reopenReason;
+        delete updateData.reopenNote;
 
         // Handle adding a single new attachment in edition mode
         if (updateData.newAttachment) {
@@ -719,6 +721,19 @@ export const updateTask = async (id, data, updaterId = null) => {
             updateData.status = statusMapper[updateData.status] || updateData.status;
             const newStatus = updateData.status;
             const oldStatus = currentTask.status;
+            const isReopened = oldStatus === 'REALIZADA' && newStatus === 'PENDIENTE';
+
+            if (isReopened) {
+                updateData.startedAt = null;
+                await tx.taskComment.create({
+                    data: {
+                        taskId: id,
+                        authorId: updaterId,
+                        content: reopenNote ? `${reopenReason || 'OTHER'}: ${reopenNote}` : (reopenReason || 'OTHER'),
+                        type: 'system_reopen'
+                    }
+                });
+            }
 
             isReturned = (newStatus === 'DEVUELTA' && oldStatus !== 'DEVUELTA');
 
@@ -744,7 +759,7 @@ export const updateTask = async (id, data, updaterId = null) => {
             }
 
             // Radar de Mérito: Initial startedAt logic
-            if (newStatus === 'EN_CURSO' && !currentTask.startedAt) {
+            if (newStatus === 'EN_CURSO' && oldStatus !== 'EN_CURSO') {
                 updateData.startedAt = new Date();
             }
 

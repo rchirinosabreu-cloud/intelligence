@@ -46,6 +46,8 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import ClientAvatar from "../../components/ui/ClientAvatar";
 import TaskSidePanel from './TaskSidePanel';
 import { triggerConfetti } from '@/utils/confetti';
+import TaskTimerBadge from './TaskTimerBadge';
+import { findConflictingActiveTask, REOPEN_REASONS } from '@/lib/taskTiming';
 
 // --- DATE HELPERS ---
 
@@ -166,8 +168,8 @@ const NativeTasks = () => {
     const queryClient = useQueryClient();
     const { toast } = useToast();
 
-    const [responsibleFilter, setResponsibleFilter] = useState(currentUser?.name || 'Todos');
-    const [dateFilter, setDateFilter] = useState('Hoy + Vencidos');
+    const [responsibleFilter, setResponsibleFilter] = useState('Todos');
+    const [dateFilter, setDateFilter] = useState('Todos');
     const [clientFilter, setClientFilter] = useState('Todos');
     const [searchQuery, setSearchQuery] = useState("");
 
@@ -191,6 +193,11 @@ const NativeTasks = () => {
 
     const [isCreating, setIsCreating] = useState(false);
     const [editingTask, setEditingTask] = useState(null);
+    const [conflictingMove, setConflictingMove] = useState(null);
+    const [reopeningTask, setReopeningTask] = useState(null);
+    const [reopenReason, setReopenReason] = useState('CLIENT_CORRECTION');
+    const [reopenNote, setReopenNote] = useState('');
+    const [isSubmittingReopen, setIsSubmittingReopen] = useState(false);
 
     const {
         data: tasks = [],
@@ -229,6 +236,8 @@ const NativeTasks = () => {
                 dueDate: task.dueDate,
                 dueDateFormatted: task.dueDate ? task.dueDate.split('T')[0].split('-').reverse().join('-') : null,
                 completedAt: task.completedAt,
+                startedAt: task.startedAt,
+                accumulatedWorkMs: task.accumulatedWorkMs || 0,
                 comments: task.comments,
                 isPriority: task.isPriority || false,
                 priority: task.priority || null,
@@ -466,6 +475,20 @@ const NativeTasks = () => {
         const taskId = draggableId;
         const destinationColumnId = destination.droppableId;
         const sourceColumnId = source.droppableId;
+        const targetTask = tasks.find(task => String(task.id) === String(taskId));
+
+        if (!result.timingConflictConfirmed && destinationColumnId === 'en-proceso') {
+            const conflict = findConflictingActiveTask(tasks, targetTask);
+            if (conflict) {
+                setConflictingMove({ result, conflict, targetTask });
+                return;
+            }
+        }
+
+        if (sourceColumnId === 'realizado' && destinationColumnId !== 'realizado') {
+            setReopeningTask(targetTask);
+            return;
+        }
 
         const isPMOrAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER' || currentUser?.role === 'PM';
 
@@ -533,6 +556,9 @@ const NativeTasks = () => {
             destinationColumnId === 'en-proceso' ? 'EN_CURSO' :
             destinationColumnId === 'devuelto' ? 'DEVUELTA' : 'REALIZADA';
         movedTask.status = newStatusEnum;
+        if (newStatusEnum === 'EN_CURSO' && sourceColumnId !== 'en-proceso') {
+            movedTask.startedAt = new Date().toISOString();
+        }
         if (newStatusEnum === 'PENDIENTE' && sourceColumnId === 'devuelto') {
             movedTask.isReturned = false;
         }
@@ -582,6 +608,7 @@ const NativeTasks = () => {
                 body: JSON.stringify(payload)
             });
             if (!response.ok) throw new Error("Failed to update status in backend");
+            await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
             queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
             queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
         } catch (err) {
@@ -592,6 +619,38 @@ const NativeTasks = () => {
                 description: "Se revirtió el movimiento porque no se pudo actualizar el estado.",
                 variant: "destructive"
             });
+        }
+    };
+
+    const handleReopenTask = async () => {
+        if (!reopeningTask || !reopenReason || isSubmittingReopen) return;
+        try {
+            setIsSubmittingReopen(true);
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const response = await fetch(`${baseUrl}/api/tasks/${reopeningTask.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({
+                    status: 'PENDIENTE',
+                    reopenReason,
+                    reopenNote: reopenNote.trim() || null
+                })
+            });
+            if (!response.ok) throw new Error(`Reopen failed with status ${response.status}`);
+            await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+            toast({ title: 'Tarea reabierta', description: 'Conserva su código, responsable, prioridad e historial.' });
+            setReopeningTask(null);
+            setReopenNote('');
+            setReopenReason('CLIENT_CORRECTION');
+        } catch (error) {
+            console.error('Error reopening task:', error);
+            toast({ variant: 'destructive', title: 'No se pudo reabrir', description: 'La tarea permanece en Realizado.' });
+        } finally {
+            setIsSubmittingReopen(false);
         }
     };
 
@@ -735,6 +794,65 @@ const NativeTasks = () => {
                 clientsList={clientsList}
                 taskData={editingTask}
             />
+
+            <Dialog open={!!conflictingMove} onOpenChange={(open) => !open && setConflictingMove(null)}>
+                <DialogContent className="sm:max-w-md border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
+                            <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" /> Ya tienes un cronómetro activo
+                        </DialogTitle>
+                        <DialogDescription>
+                            Ya estás registrando tiempo en <strong>“{conflictingMove?.conflict?.title}”</strong>. Si continúas, el cronómetro también se activará en esta tarea y ambos seguirán registrando tiempo. ¿Quieres continuar?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-3 sm:justify-between">
+                        <button onClick={() => setConflictingMove(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={() => {
+                                const pending = conflictingMove;
+                                setConflictingMove(null);
+                                onDragEnd({ ...pending.result, timingConflictConfirmed: true });
+                            }}
+                            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                        >
+                            Sí, continuar
+                        </button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!reopeningTask} onOpenChange={(open) => !open && setReopeningTask(null)}>
+                <DialogContent className="sm:max-w-md border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
+                            <RefreshCw className="h-5 w-5 text-purple-600 dark:text-purple-400" /> Reabrir tarea
+                        </DialogTitle>
+                        <DialogDescription>
+                            <strong>{reopeningTask?.title}</strong> conservará su código, responsable, prioridad e historial.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <label className="block space-y-1.5">
+                            <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Motivo de reapertura</span>
+                            <select value={reopenReason} onChange={(event) => setReopenReason(event.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:ring-2 focus:ring-purple-500/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white">
+                                {REOPEN_REASONS.map(reason => <option key={reason.value} value={reason.value}>{reason.label}</option>)}
+                            </select>
+                        </label>
+                        <label className="block space-y-1.5">
+                            <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Nota opcional</span>
+                            <textarea value={reopenNote} onChange={(event) => setReopenNote(event.target.value)} placeholder="Describe brevemente la novedad o solicitud." className="min-h-[96px] w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-900 focus:ring-2 focus:ring-purple-500/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" />
+                        </label>
+                    </div>
+                    <DialogFooter className="gap-3 sm:justify-between">
+                        <button onClick={() => setReopeningTask(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button>
+                        <button onClick={handleReopenTask} disabled={isSubmittingReopen} className="flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50">
+                            {isSubmittingReopen && <Loader2 className="h-4 w-4 animate-spin" />} Reabrir en pendientes
+                        </button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={!!returningTask} onOpenChange={(open) => !open && setReturningTask(null)}>
                 <DialogContent className="sm:max-w-md dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
@@ -1031,6 +1149,12 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                                 )}>
                                                     {task.aiComplexity}
                                                 </span>
+                                            </>
+                                        )}
+                                        {String(task.status || '').toUpperCase() === 'EN_CURSO' && (
+                                            <>
+                                                <span className="w-1 h-1 rounded-full bg-zinc-200" />
+                                                <TaskTimerBadge task={task} />
                                             </>
                                         )}
                                     </div>
