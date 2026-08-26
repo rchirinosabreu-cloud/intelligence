@@ -106,18 +106,34 @@ const getContentItemSelect = async (extra = {}) => {
       finalAssetMimeType: true,
       finalAssetSize: true
     } : {}),
+    finalAssets: {
+      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+    },
     ...extra
   };
 };
 
 const normalizeContentItem = (item) => {
   if (!item) return item;
+  const legacyFinalAsset = item.finalAssetKey
+    ? [{
+          id: 'legacy',
+          storageKey: item.finalAssetKey,
+          name: item.finalAssetName,
+          mimeType: item.finalAssetMimeType,
+          size: item.finalAssetSize,
+          position: 0,
+          isLegacy: true
+        }]
+    : [];
+  const finalAssets = [...legacyFinalAsset, ...(item.finalAssets || [])];
   return {
     ...item,
     finalAssetKey: item.finalAssetKey ?? null,
     finalAssetName: item.finalAssetName ?? null,
     finalAssetMimeType: item.finalAssetMimeType ?? null,
-    finalAssetSize: item.finalAssetSize ?? null
+    finalAssetSize: item.finalAssetSize ?? null,
+    finalAssets
   };
 };
 
@@ -540,6 +556,7 @@ export const uploadContentItemFinalAsset = async (itemId, file) => {
     where: { id: itemId },
     select: {
       id: true,
+      planId: true,
       finalAssetKey: true,
       plan: {
         select: {
@@ -619,6 +636,68 @@ export const deleteContentItemFinalAsset = async (itemId) => {
     finalAssetMimeType: null,
     finalAssetSize: null
   });
+};
+
+export const uploadContentItemFinalAssets = async (itemId, files = []) => {
+  if (!Array.isArray(files) || files.length === 0) throw new Error('Selecciona al menos un archivo');
+  if (files.length > 10) throw new Error('Puedes cargar hasta 10 archivos a la vez');
+  if (files.some(file => !/^image\/|^video\//.test(file.mimetype || ''))) {
+    throw new Error('Solo se permiten imágenes o videos para el carrusel');
+  }
+
+  const item = await prisma.contentItem.findUnique({
+    where: { id: itemId },
+    select: {
+      id: true,
+      _count: { select: { finalAssets: true } },
+      finalAssets: { orderBy: { position: 'desc' }, take: 1, select: { position: true } },
+      plan: { select: { month: true, year: true, client: { select: { slug: true } } } }
+    }
+  });
+  if (!item) throw new Error('Content item not found');
+  if (item._count.finalAssets + files.length > 20) throw new Error('Una pieza puede contener máximo 20 archivos finales');
+
+  const basePath = `content-plans/${item.plan.client.slug}/${item.plan.year}-${String(item.plan.month).padStart(2, '0')}/${item.id}/final-assets`;
+  const uploads = await Promise.all(files.map(file => uploadToS3(file, basePath)));
+  const firstPosition = (item.finalAssets[0]?.position ?? -1) + 1;
+
+  try {
+    await prisma.$transaction(uploads.map((upload, index) => prisma.contentItemFinalAsset.create({
+      data: {
+        contentItemId: item.id,
+        storageKey: upload.key,
+        name: upload.name,
+        mimeType: upload.mimeType,
+        size: upload.size,
+        position: firstPosition + index
+      }
+    })));
+  } catch (error) {
+    await Promise.allSettled(uploads.map(upload => deleteFromS3(upload.key)));
+    throw error;
+  }
+
+  return prisma.contentItemFinalAsset.findMany({
+    where: { contentItemId: item.id },
+    orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+  });
+};
+
+export const getContentItemFinalAssetById = async (itemId, assetId) => {
+  if (assetId === 'legacy') return getContentItemFinalAsset(itemId);
+  return prisma.contentItemFinalAsset.findFirst({ where: { id: assetId, contentItemId: itemId } });
+};
+
+export const deleteContentItemFinalAssetById = async (itemId, assetId) => {
+  if (assetId === 'legacy') return deleteContentItemFinalAsset(itemId);
+  const asset = await prisma.contentItemFinalAsset.findFirst({ where: { id: assetId, contentItemId: itemId } });
+  if (!asset) throw new Error('Archivo final no encontrado');
+
+  await prisma.contentItemFinalAsset.delete({ where: { id: asset.id } });
+  deleteFromS3(asset.storageKey).catch(error => {
+    console.error('[Service] Failed to delete carousel asset from storage:', error.response?.data || error.message);
+  });
+  return { success: true, id: asset.id };
 };
 
 export const addClientComment = async (itemId, comment) => {

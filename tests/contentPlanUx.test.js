@@ -54,7 +54,7 @@ test('client correction action scrolls to and focuses the feedback form', async 
   assert.match(shared, /focus\(\{\s*preventScroll:\s*true\s*\}\)/);
 });
 
-test('content pieces support final media uploads for client preview', async () => {
+test('content pieces support persistent multi-file carousel assets internally', async () => {
   const schema = await read('prisma/schema.prisma');
   const contentRoutes = await read('src/routes/api/content.js');
   const publicRoutes = await read('src/routes/index.js');
@@ -66,24 +66,36 @@ test('content pieces support final media uploads for client preview', async () =
 
   assert.match(schema, /model ContentItem[\s\S]*finalAssetKey\s+String\?/);
   assert.match(schema, /model ContentItem[\s\S]*finalAssetMimeType\s+String\?/);
+  assert.match(schema, /finalAssets\s+ContentItemFinalAsset\[\]/);
+  assert.match(schema, /model ContentItemFinalAsset/);
   assert.match(contentRoutes, /upload\.single\('file'\)[\s\S]*uploadContentItemFinalAsset/);
   assert.match(contentRoutes, /deleteContentItemFinalAsset/);
   assert.match(contentRoutes, /router\.delete\('\/items\/:id\/final-asset'/);
   assert.match(contentRoutes, /items\/:id\/final-asset/);
+  assert.match(contentRoutes, /carouselUpload\.array\('files', 10\)/);
+  assert.match(contentRoutes, /items\/:id\/final-assets\/:assetId/);
   assert.match(publicRoutes, /public\/parrilla\/:token\/items\/:id\/final-asset/);
+  assert.match(publicRoutes, /public\/parrilla\/:token\/items\/:id\/final-assets\/:assetId/);
   assert.match(publicController, /finalAsset:\s*item\.finalAssetKey/);
   assert.match(publicController, /version:\s*item\.finalAssetKey/);
+  assert.match(publicController, /finalAssets:\s*\(item\.finalAssets \|\| \[\]\)\.map/);
+  assert.match(publicController, /getPublicFinalAssetById/);
   assert.match(editor, /handleFinalAssetUpload/);
   assert.match(editor, /handleFinalAssetDelete/);
-  assert.match(editor, /encodeURIComponent\(item\.finalAssetKey\)/);
+  assert.match(editor, /encodeURIComponent\(asset\.storageKey/);
+  assert.match(editor, /files\.forEach\(file => uploadData\.append\('files', file\)\)/);
   assert.match(editor, /Pieza final/);
   assert.match(shared, /URLSearchParams/);
   assert.match(shared, /FinalAssetPreview/);
+  assert.match(shared, /assets\.length > 1 \? 'Carrusel'/);
+  assert.match(shared, /Ver lámina siguiente/);
   assert.match(shared, /<video/);
   assert.match(shared, /<img/);
   assert.match(s3Service, /DeleteObjectCommand/);
   assert.match(service, /deleteContentItemFinalAsset/);
   assert.match(service, /finalAssetKey:\s*null/);
+  assert.match(service, /uploadContentItemFinalAssets/);
+  assert.match(service, /prisma\.contentItemFinalAsset\.create/);
   assert.match(service, /if \(hasColumns\) contentItemFinalAssetColumnsExist = true/);
   assert.doesNotMatch(service, /contentItemFinalAssetColumnsExist\s*=\s*Number\(result\?\.\[0\]\?\.count/);
 });

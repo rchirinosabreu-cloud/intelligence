@@ -5,7 +5,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import {
   CheckCircle2, Clock, AlertCircle, Loader2, Calendar,
   Video, Image as ImageIcon, MessageSquare, Check, X, Send,
-  ExternalLink
+  ExternalLink, ChevronLeft, ChevronRight
 } from '@/components/ui/icons';
 import { toast } from 'react-hot-toast';
 import ClientAvatar from '@/components/ui/ClientAvatar';
@@ -21,8 +21,11 @@ const getPublicAssetUrl = (asset) => {
   return `${path}?${params.toString()}`;
 };
 
-const FinalAssetPreview = ({ asset }) => {
-  if (!asset) return null;
+const FinalAssetPreview = ({ assets = [] }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  if (!assets.length) return null;
+
+  const asset = assets[Math.min(activeIndex, assets.length - 1)];
 
   const src = getPublicAssetUrl(asset);
   const isImage = (asset.mimeType || '').startsWith('image/');
@@ -30,9 +33,12 @@ const FinalAssetPreview = ({ asset }) => {
 
   return (
     <div className="space-y-3">
-      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Pieza final</label>
+      <div className="flex items-center justify-between gap-3">
+        <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">{assets.length > 1 ? 'Carrusel' : 'Pieza final'}</label>
+        {assets.length > 1 && <span className="text-[10px] font-bold text-zinc-400">{activeIndex + 1} / {assets.length}</span>}
+      </div>
       <div className="overflow-hidden rounded-[2rem] border border-zinc-100 dark:border-white/10 bg-zinc-50 dark:bg-white/5">
-        <div className="bg-zinc-100 dark:bg-zinc-950">
+        <div className="relative bg-zinc-100 dark:bg-zinc-950">
           {isImage ? (
             <img
               src={src}
@@ -49,6 +55,12 @@ const FinalAssetPreview = ({ asset }) => {
           ) : (
             <div className="p-6 text-sm text-zinc-500">Archivo final disponible para revisi&oacute;n.</div>
           )}
+          {assets.length > 1 && (
+            <>
+              <button type="button" onClick={() => setActiveIndex(index => (index - 1 + assets.length) % assets.length)} className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-zinc-800 shadow-lg backdrop-blur transition hover:bg-white dark:bg-zinc-900/90 dark:text-white" aria-label="Ver lámina anterior"><ChevronLeft className="h-5 w-5" /></button>
+              <button type="button" onClick={() => setActiveIndex(index => (index + 1) % assets.length)} className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-zinc-800 shadow-lg backdrop-blur transition hover:bg-white dark:bg-zinc-900/90 dark:text-white" aria-label="Ver lámina siguiente"><ChevronRight className="h-5 w-5" /></button>
+            </>
+          )}
         </div>
         {asset.name && (
           <div className="px-5 py-3 text-xs font-bold text-zinc-600 dark:text-zinc-300 truncate">
@@ -56,6 +68,13 @@ const FinalAssetPreview = ({ asset }) => {
           </div>
         )}
       </div>
+      {assets.length > 1 && (
+        <div className="flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Navegación del carrusel">
+          {assets.map((entry, index) => (
+            <button key={entry.id || entry.url || index} type="button" onClick={() => setActiveIndex(index)} aria-label={`Ver lámina ${index + 1}`} aria-current={index === activeIndex ? 'true' : undefined} className={`h-2.5 rounded-full transition-all ${index === activeIndex ? 'w-7 bg-[#009EB9]' : 'w-2.5 bg-zinc-300 dark:bg-zinc-700'}`} />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -300,7 +319,7 @@ const SharedContentPlan = () => {
                         </div>
                       </div>
 
-                      <FinalAssetPreview asset={item.finalAsset} />
+                      <FinalAssetPreview assets={item.finalAssets?.length ? item.finalAssets : (item.finalAsset ? [item.finalAsset] : [])} />
 
                       {item.mediaUrl && item.mediaUrl.length > 0 && (
                         <div className="space-y-3">

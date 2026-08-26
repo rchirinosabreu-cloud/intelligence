@@ -279,30 +279,45 @@ model ContentPlan {
 }
 
 model ContentItem {
-  id                 String            @id @default(uuid())
+  id                 String                  @id @default(uuid())
   planId             String
   objective          String
   format             String
   copyText           String
   captionText        String
   publishDate        DateTime
-  mediaUrl           String[]          @default([])
-  status             ContentItemStatus @default(BORRADOR)
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  assetsLinks        String[]          @default([])
+  mediaUrl           String[]                @default([])
+  status             ContentItemStatus       @default(BORRADOR)
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  assetsLinks        String[]                @default([])
   internalNotes      String?
   comments           String?
   finalAssetKey      String?
   finalAssetName     String?
   finalAssetMimeType String?
   finalAssetSize     Int?
+  finalAssets        ContentItemFinalAsset[]
   deletedAt          DateTime?
-  plan               ContentPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
+  plan               ContentPlan             @relation(fields: [planId], references: [id], onDelete: Cascade)
   tasks              Task[]
 
   @@index([planId, deletedAt, publishDate])
   @@index([status, publishDate])
+}
+
+model ContentItemFinalAsset {
+  id            String      @id @default(uuid())
+  contentItemId String
+  storageKey    String      @unique
+  name          String
+  mimeType      String
+  size          Int
+  position      Int         @default(0)
+  createdAt     DateTime    @default(now())
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@index([contentItemId, position, createdAt])
 }
 
 model Integration {
