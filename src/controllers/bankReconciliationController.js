@@ -4,6 +4,7 @@ import {
   listBankReconciliation,
   parseBankStatementPdf,
   persistBankStatementImport,
+  rebuildBankMatchProposals,
   sourceHashFor
 } from '../services/bankReconciliationService.js';
 
@@ -57,5 +58,16 @@ export const approveBankReconciliationMatch = async (req, res) => {
   } catch (error) {
     console.error('[Bank reconciliation] Approval failed:', error.response?.data || error.message);
     return sendError(res, error, 'BANK_MATCH_APPROVAL_FAILED', 'No fue posible aprobar la coincidencia.');
+  }
+};
+
+export const rebuildBankReconciliation = async (req, res) => {
+  try {
+    const year = Number(req.body?.year) || 2026;
+    const result = await rebuildBankMatchProposals(prisma, year);
+    return res.json({ message: 'Propuestas de conciliación recalculadas.', ...result });
+  } catch (error) {
+    console.error('[Bank reconciliation] Rebuild failed:', error.response?.data || error.message);
+    return sendError(res, error, 'BANK_RECONCILIATION_REBUILD_FAILED', 'No fue posible recalcular las propuestas de conciliación.');
   }
 };

@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import axios from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, UploadCloud } from '@/components/ui/icons';
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, RefreshCw, UploadCloud } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/Card';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -67,6 +67,17 @@ export default function BankReconciliationPanel({ selectedYear, canApprove }) {
       toast.error(error.response?.data?.message || 'No fue posible aprobar la coincidencia.');
     }
   });
+  const rebuildMutation = useMutation({
+    mutationFn: async () => (await axios.post(`${getApiBaseUrl()}/api/financials/bank-reconciliation/rebuild`, { year: selectedYear }, { headers: headers() })).data,
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ['bank-reconciliation', selectedYear] });
+      toast.success(`${result.proposalCount} coincidencias listas para revisar.`);
+    },
+    onError: (error) => {
+      console.error('[Conciliación bancaria] Error al recalcular:', error.response?.data || error.message);
+      toast.error(error.response?.data?.message || 'No fue posible recalcular las propuestas.');
+    }
+  });
 
   const transactions = data?.transactions || [];
   const proposed = transactions.filter((item) => item.matches?.some((match) => match.status === 'PROPOSED'));
@@ -81,6 +92,8 @@ export default function BankReconciliationPanel({ selectedYear, canApprove }) {
         <div><h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Conciliación bancaria</h2><p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">El extracto no altera el libro contable. Cada coincidencia necesita aprobación.</p></div>
         {canApprove && <div className="flex flex-col gap-2 sm:flex-row"><label className="block text-xs font-medium text-zinc-600 dark:text-zinc-300"><span className="mb-1 block">Cuenta del extracto</span><select value={accountId} onChange={(event) => setAccountId(event.target.value)} className="min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 dark:border-white/10 dark:bg-zinc-950 dark:text-white sm:w-64"><option value="">Seleccionar cuenta</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label><div className="self-end"><input ref={inputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(event) => { const selected = event.target.files?.[0]; if (selected) previewMutation.mutate(selected); event.target.value = ''; }} /><Button type="button" disabled={!accountId || previewMutation.isPending} onClick={() => inputRef.current?.click()} className="min-h-11 bg-violet-600 hover:bg-violet-700"><UploadCloud className="mr-2 h-4 w-4" />{previewMutation.isPending ? 'Leyendo…' : 'Importar extracto'}</Button></div></div>}
       </div>
+
+      {canApprove && data?.transactions?.length > 0 && <div className="flex justify-end"><Button type="button" disabled={rebuildMutation.isPending} onClick={() => rebuildMutation.mutate()} className="bg-[#009EB9] hover:bg-[#008da6]"><RefreshCw className={`mr-2 h-4 w-4 ${rebuildMutation.isPending ? 'animate-spin' : ''}`} />{rebuildMutation.isPending ? 'Recalculando…' : 'Recalcular propuestas'}</Button></div>}
 
       {preview && <Card className="rounded-2xl border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-zinc-900 dark:text-white">Revisión previa</p><p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{preview.periodStart} a {preview.periodEnd} · {preview.transactions.length} movimientos · saldo final {currency.format(preview.closingBalance)}</p></div><div className="flex gap-2"><Button variant="outline" type="button" onClick={() => { setPreview(null); setFile(null); }}>Cancelar</Button><Button type="button" disabled={importMutation.isPending} onClick={() => importMutation.mutate()} className="bg-violet-600 hover:bg-violet-700">{importMutation.isPending ? 'Guardando…' : 'Confirmar importación'}</Button></div></div></Card>}
 

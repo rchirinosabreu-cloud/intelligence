@@ -15,6 +15,7 @@ test('el esquema mantiene extractos y coincidencias separados del libro contable
 test('la API financiera expone revisión, importación y aprobación con permisos', async () => {
   const routes = await read('src/routes/api/financials.js');
   assert.match(routes, /bank-reconciliation/);
+  assert.match(routes, /bank-reconciliation\/rebuild/);
   assert.match(routes, /requireFinancialApproval/);
 });
 
@@ -27,6 +28,7 @@ test('la conciliación bancaria muestra propuestas en español y no éxitos anti
   assert.match(component, /Continuidad de saldos/);
   assert.match(component, /Alta confianza/);
   assert.match(component, /Requiere verificación/);
+  assert.match(component, /Recalcular propuestas/);
   assert.match(component, /accountData\?\.accounts/);
   assert.doesNotMatch(component, /const \{ data: accounts = \[\] \} = useQuery/);
   assert.match(component, /onSuccess/);

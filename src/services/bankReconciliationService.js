@@ -278,6 +278,40 @@ export const persistBankStatementImport = async (prismaClient, input, parsed, ac
   });
 };
 
+export const rebuildBankMatchProposals = async (prismaClient, year) => prismaClient.$transaction(async (tx) => {
+  const start = new Date(`${year}-01-01T00:00:00Z`);
+  const end = new Date(`${year + 1}-01-01T00:00:00Z`);
+  const transactions = await tx.bankTransaction.findMany({
+    where: { postedAt: { gte: start, lt: end }, status: { in: ['UNMATCHED', 'PROPOSED'] } },
+    orderBy: [{ postedAt: 'asc' }, { sourceRow: 'asc' }]
+  });
+  const transactionIds = transactions.map((transaction) => transaction.id);
+  if (!transactionIds.length) return { transactionCount: 0, proposalCount: 0, unmatchedCount: 0 };
+
+  await tx.bankReconciliationMatch.deleteMany({ where: {
+    bankTransactionId: { in: transactionIds }, status: 'PROPOSED'
+  } });
+  await tx.bankTransaction.updateMany({
+    where: { id: { in: transactionIds }, status: 'PROPOSED' }, data: { status: 'UNMATCHED' }
+  });
+  const records = await tx.financialRecord.findMany({ where: {
+    year, status: 'POSTED', scenario: 'ACTUAL',
+    bankMatches: { none: { status: { in: ['APPROVED', 'REJECTED'] } } }
+  } });
+  const proposals = proposeBankMatches(transactions, records);
+  if (proposals.length) {
+    await tx.bankReconciliationMatch.createMany({ data: proposals, skipDuplicates: true });
+    await tx.bankTransaction.updateMany({
+      where: { id: { in: proposals.map((proposal) => proposal.bankTransactionId) } }, data: { status: 'PROPOSED' }
+    });
+  }
+  return {
+    transactionCount: transactions.length,
+    proposalCount: proposals.length,
+    unmatchedCount: transactions.length - proposals.length
+  };
+});
+
 export const approveBankMatch = async (prismaClient, matchId, actor) => prismaClient.$transaction(async (tx) => {
   const match = await tx.bankReconciliationMatch.findUnique({
     where: { id: matchId }, include: { bankTransaction: true, financialRecord: true }

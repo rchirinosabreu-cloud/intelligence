@@ -41,7 +41,8 @@ import {
     approveBankReconciliationMatch,
     getBankReconciliation,
     importBankStatement,
-    previewBankStatement
+    previewBankStatement,
+    rebuildBankReconciliation
 } from '../../controllers/bankReconciliationController.js';
 
 const router = express.Router();
@@ -82,6 +83,7 @@ router.post('/import/commit', requireFinancialApproval, upload.single('file'), c
 router.get('/bank-reconciliation', requireFinancialAccess, getBankReconciliation);
 router.post('/bank-reconciliation/preview', requireFinancialApproval, upload.single('file'), previewBankStatement);
 router.post('/bank-reconciliation/import', requireFinancialApproval, upload.single('file'), importBankStatement);
+router.post('/bank-reconciliation/rebuild', requireFinancialApproval, rebuildBankReconciliation);
 router.post('/bank-reconciliation/matches/:id/approve', requireFinancialApproval, approveBankReconciliationMatch);
 
 export default router;

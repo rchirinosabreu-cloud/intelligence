@@ -9,7 +9,8 @@ import {
   filterMatchedOnlyTransactions,
   scoreBankMatch,
   persistBankStatementImport,
-  approveBankMatch
+  approveBankMatch,
+  rebuildBankMatchProposals
 } from '../src/services/bankReconciliationService.js';
 
 test('detecta transferencias internas entre cuentas sin confundirlas con ingresos o gastos', () => {
@@ -131,4 +132,25 @@ test('aprobar una coincidencia exacta enlaza la cuenta dentro de una transacció
   assert.deepEqual(calls.find(([name]) => name === 'record')[1], { accountId: 'a1' });
   assert.equal(calls.find(([name]) => name === 'bank')[1].status, 'MATCHED');
   assert.equal(calls.find(([name]) => name === 'match')[1].status, 'APPROVED');
+});
+
+test('recalcula propuestas desde movimientos guardados sin aprobarlas', async () => {
+  const calls = [];
+  const tx = {
+    bankTransaction: {
+      findMany: async () => [{ id: 'b1', postedAt: new Date('2026-07-09'), amount: 500000, description: 'PAGO CLIENTE', sourceRow: 1 }],
+      updateMany: async (input) => calls.push(['transactions', input])
+    },
+    bankReconciliationMatch: {
+      deleteMany: async (input) => calls.push(['delete', input]),
+      createMany: async (input) => calls.push(['create', input])
+    },
+    financialRecord: {
+      findMany: async () => [{ id: 'r1', year: 2026, month: 7, amount: 500000, type: 'INCOME', description: 'Pago cliente' }]
+    }
+  };
+  const result = await rebuildBankMatchProposals({ $transaction: async (callback) => callback(tx) }, 2026);
+  assert.deepEqual(result, { transactionCount: 1, proposalCount: 1, unmatchedCount: 0 });
+  assert.equal(calls.find(([name]) => name === 'create')[1].data[0].financialRecordId, 'r1');
+  assert.equal(calls.filter(([name]) => name === 'transactions').at(-1)[1].data.status, 'PROPOSED');
 });
