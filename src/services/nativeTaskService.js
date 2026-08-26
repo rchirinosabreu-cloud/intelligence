@@ -3,6 +3,7 @@ import { createNotification, processMentionsAndNotifications } from './notificat
 import { recordOperationalTrace } from './operationalTraceService.js';
 import { classifyTaskDeterministically } from './deterministicTaskClassifier.js';
 import { pickAllowedTaskUpdates } from '../config/security.js';
+import { closeTaskWorkSession } from '../lib/taskTiming.js';
 
 const taskContentPlanSelect = {
     id: true,
@@ -642,6 +643,7 @@ export const updateTask = async (id, data, updaterId = null) => {
                 status: true,
                 completedAt: true,
                 startedAt: true,
+                accumulatedWorkMs: true,
                 returnCount: true,
                 isReturned: true,
                 returnedAt: true,
@@ -722,6 +724,12 @@ export const updateTask = async (id, data, updaterId = null) => {
             const newStatus = updateData.status;
             const oldStatus = currentTask.status;
             const isReopened = oldStatus === 'REALIZADA' && newStatus === 'PENDIENTE';
+
+            if (oldStatus === 'EN_CURSO' && newStatus !== 'EN_CURSO') {
+                const sessionEndedAt = new Date();
+                updateData.accumulatedWorkMs = closeTaskWorkSession(currentTask, sessionEndedAt);
+                updateData.startedAt = null;
+            }
 
             if (isReopened) {
                 if (!reopenReason || !reopenNote?.trim()) {

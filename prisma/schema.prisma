@@ -455,6 +455,7 @@ model Task {
   isReturned      Boolean          @default(false)
   returnedAt      DateTime?
   startedAt       DateTime?
+  accumulatedWorkMs Float           @default(0)
   sortOrder       Int?             @default(0)
   assignee        TeamMember?      @relation(fields: [assigneeId], references: [id])
   client          Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)

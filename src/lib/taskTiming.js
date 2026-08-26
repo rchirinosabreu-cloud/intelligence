@@ -93,6 +93,15 @@ export function getTaskElapsedMs(task, now = new Date()) {
   return accumulated + Math.max(0, currentTime - startedAt);
 }
 
+export function closeTaskWorkSession(task, endedAt = new Date()) {
+  const accumulated = asNonNegativeNumber(task?.accumulatedWorkMs);
+  if (!task?.startedAt) return accumulated;
+  const startedAt = new Date(task.startedAt).getTime();
+  const endedAtMs = endedAt instanceof Date ? endedAt.getTime() : new Date(endedAt).getTime();
+  if (!Number.isFinite(startedAt) || !Number.isFinite(endedAtMs)) return accumulated;
+  return accumulated + Math.max(0, endedAtMs - startedAt);
+}
+
 export function findConflictingActiveTask(tasks, targetTask) {
   if (!targetTask?.assigneeId) return null;
   return (tasks || []).find(task =>

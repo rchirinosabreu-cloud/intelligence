@@ -194,6 +194,7 @@ model Task {
   updatedAt DateTime @updatedAt
   completedAt DateTime?
   startedAt   DateTime?
+  accumulatedWorkMs Float @default(0)
 
   // Radar de Mérito (IA Analytics)
   aiCategory   String?

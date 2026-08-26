@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  closeTaskWorkSession,
   formatElapsedTime,
   getTaskElapsedMs,
   findConflictingActiveTask,
@@ -50,6 +51,14 @@ test('findConflictingActiveTask only finds another active task for the same assi
 test('reopening taxonomy includes client correction and scope change', () => {
   assert.ok(REOPEN_REASONS.some(reason => reason.value === 'CLIENT_CORRECTION'));
   assert.ok(REOPEN_REASONS.some(reason => reason.value === 'SCOPE_CHANGE'));
+});
+
+test('closeTaskWorkSession preserves prior time and adds the active session', () => {
+  const total = closeTaskWorkSession({
+    startedAt: '2026-08-26T14:30:00.000Z',
+    accumulatedWorkMs: 90_000,
+  }, new Date('2026-08-26T14:32:00.000Z'));
+  assert.equal(total, 210_000);
 });
 
 test('reopening event content separates its reason label from the note', () => {

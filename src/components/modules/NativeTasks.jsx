@@ -49,6 +49,7 @@ import TaskSidePanel from './TaskSidePanel';
 import { triggerConfetti } from '@/utils/confetti';
 import TaskTimerBadge from './TaskTimerBadge';
 import {
+    closeTaskWorkSession,
     findConflictingActiveTask,
     hasSeenTaskTimingTutorial,
     markTaskTimingTutorialAfternoonSeen,
@@ -618,6 +619,10 @@ const NativeTasks = () => {
             destinationColumnId === 'en-proceso' ? 'EN_CURSO' :
             destinationColumnId === 'devuelto' ? 'DEVUELTA' : 'REALIZADA';
         movedTask.status = newStatusEnum;
+        if (sourceColumnId === 'en-proceso' && newStatusEnum !== 'EN_CURSO') {
+            movedTask.accumulatedWorkMs = closeTaskWorkSession(movedTask);
+            movedTask.startedAt = null;
+        }
         if (newStatusEnum === 'EN_CURSO' && sourceColumnId !== 'en-proceso') {
             movedTask.startedAt = new Date().toISOString();
         }
