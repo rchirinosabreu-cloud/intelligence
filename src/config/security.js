@@ -130,7 +130,9 @@ const TASK_UPDATE_FIELDS = new Set([
   'newAttachment',
   'deleteAttachmentId',
   'returnReason',
-  'reintegrateReason'
+  'reintegrateReason',
+  'reopenReason',
+  'reopenNote'
 ]);
 
 export const pickAllowedTaskUpdates = (payload = {}) => Object.fromEntries(

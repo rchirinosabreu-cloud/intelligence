@@ -724,12 +724,15 @@ export const updateTask = async (id, data, updaterId = null) => {
             const isReopened = oldStatus === 'REALIZADA' && newStatus === 'PENDIENTE';
 
             if (isReopened) {
+                if (!reopenReason || !reopenNote?.trim()) {
+                    throw new Error('Reopening a completed task requires a reason and note');
+                }
                 updateData.startedAt = null;
                 await tx.taskComment.create({
                     data: {
                         taskId: id,
                         authorId: updaterId,
-                        content: reopenNote ? `${reopenReason || 'OTHER'}: ${reopenNote}` : (reopenReason || 'OTHER'),
+                        content: `[${reopenReason}]\n${reopenNote.trim()}`,
                         type: 'system_reopen'
                     }
                 });

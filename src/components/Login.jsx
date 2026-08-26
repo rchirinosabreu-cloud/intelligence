@@ -271,7 +271,7 @@ const Login = ({ onLogin }) => {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 font-semibold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#009EB9] px-4 py-3 font-semibold text-white shadow-lg shadow-[#009EB9]/20 transition hover:bg-[#008CA4] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading
                   ? 'Verificando...'

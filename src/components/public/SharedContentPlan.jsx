@@ -339,7 +339,7 @@ const SharedContentPlan = () => {
                           <>
                             <button
                               onClick={() => handleApprove(item.id)}
-                              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[1.5rem] transition-all font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-500/20"
+                              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-[#009EB9] hover:bg-[#008CA4] text-white rounded-[1.5rem] transition-all font-black text-xs uppercase tracking-widest shadow-xl shadow-[#009EB9]/20"
                             >
                               <Check className="w-4 h-4" />
                               Aprobar Pieza
@@ -413,7 +413,7 @@ const SharedContentPlan = () => {
                           <button
                             onClick={() => handleSubmitComment(item.id)}
                             disabled={isSubmitting || !clientComment.trim()}
-                            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest disabled:opacity-50"
+                            className="flex items-center gap-2 px-6 py-3 bg-[#009EB9] hover:bg-[#008CA4] text-white rounded-xl font-bold text-xs uppercase tracking-widest disabled:opacity-50"
                           >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                             Enviar Feedback

@@ -361,7 +361,7 @@ const BrainCore = () => {
                         <button
                             onClick={handleSaveQuickNote}
                             disabled={!quickNote.trim() || isSavingNote}
-                            className="px-10 py-2.5 bg-foreground text-background dark:bg-primary dark:text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:opacity-90 active:scale-95 transition-all disabled:opacity-30"
+                            className="px-10 py-2.5 bg-[#009EB9] text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-[#009EB9]/20 hover:bg-[#008CA4] active:scale-95 transition-all disabled:opacity-30"
                         >
                             {isSavingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar Memoria"}
                         </button>

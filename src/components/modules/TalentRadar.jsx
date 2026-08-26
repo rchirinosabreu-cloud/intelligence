@@ -576,7 +576,7 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                     <button
                                         onClick={generateInsight}
                                         disabled={isGenerating}
-                                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-600 disabled:opacity-50 rounded-xl text-white text-[10px] font-bold transition-all shadow-lg flex items-center gap-2"
+                                        className="px-3 py-1.5 bg-[#009EB9] hover:bg-[#008CA4] disabled:opacity-50 rounded-xl text-white text-[10px] font-bold transition-all shadow-lg flex items-center gap-2"
                                     >
                                         {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
                                         GENERAR ANÁLISIS

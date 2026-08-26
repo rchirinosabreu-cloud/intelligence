@@ -35,6 +35,8 @@ test('task update payload cannot overwrite lifecycle or ownership fields', () =>
   const result = security.pickAllowedTaskUpdates({
     title: 'Actualizada',
     status: 'EN_CURSO',
+    reopenReason: 'CLIENT_CORRECTION',
+    reopenNote: 'Cambiar el cierre.',
     creatorId: 'attacker',
     completedAt: '2026-01-01',
     returnCount: 999,
@@ -42,7 +44,12 @@ test('task update payload cannot overwrite lifecycle or ownership fields', () =>
     unknown: true
   });
 
-  assert.deepEqual(result, { title: 'Actualizada', status: 'EN_CURSO' });
+  assert.deepEqual(result, {
+    title: 'Actualizada',
+    status: 'EN_CURSO',
+    reopenReason: 'CLIENT_CORRECTION',
+    reopenNote: 'Cambiar el cierre.'
+  });
 });
 
 test('task attachment deletion is scoped to its parent task', async () => {

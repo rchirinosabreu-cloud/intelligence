@@ -338,7 +338,7 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
                     {canWrite && <button
                         type="button"
                         onClick={openCreate}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 text-sm font-semibold text-white transition hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 text-sm font-semibold text-white transition hover:bg-[#008CA4] focus:outline-none focus:ring-2 focus:ring-[#009EB9]/30"
                     >
                         <Plus className="h-4 w-4" />
                         Registrar movimiento
@@ -462,7 +462,7 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Referencia<input className={inputClass} value={form.reference} onChange={(event) => setField('reference', event.target.value)} placeholder="Factura, transferencia..." /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Notas<input className={inputClass} value={form.notes} onChange={(event) => setField('notes', event.target.value)} /></label>
                         </div>
-                        <DialogFooter><button type="button" onClick={() => setIsEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Cancelar</button><button type="submit" disabled={isSaving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60">{isSaving && <Loader2 className="h-4 w-4 animate-spin" />}{editingRecord ? 'Guardar cambios' : 'Registrar movimiento'}</button></DialogFooter>
+                        <DialogFooter><button type="button" onClick={() => setIsEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Cancelar</button><button type="submit" disabled={isSaving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-60">{isSaving && <Loader2 className="h-4 w-4 animate-spin" />}{editingRecord ? 'Guardar cambios' : 'Registrar movimiento'}</button></DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
@@ -477,7 +477,7 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Saldo inicial<input required type="number" step="0.01" className={inputClass} value={accountForm.openingBalance} onChange={(event) => setAccountForm((current) => ({ ...current, openingBalance: event.target.value }))} /></label>
                         </div>
                         <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Fecha del saldo inicial<DatePicker {...brainDatePickerProps} selected={accountForm.openingBalanceDate ? new Date(`${accountForm.openingBalanceDate}T12:00:00`) : null} onChange={(date) => setAccountForm((current) => ({ ...current, openingBalanceDate: date ? format(date, 'yyyy-MM-dd') : '' }))} className={inputClass} dateFormat="dd/MM/yyyy" /></label>
-                        <DialogFooter><button type="button" onClick={() => setIsAccountEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingAccount} className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50">{isSavingAccount && <Loader2 className="h-4 w-4 animate-spin" />}Crear cuenta</button></DialogFooter>
+                        <DialogFooter><button type="button" onClick={() => setIsAccountEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingAccount} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingAccount && <Loader2 className="h-4 w-4 animate-spin" />}Crear cuenta</button></DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
@@ -486,7 +486,7 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
                 <DialogContent className="sm:max-w-md dark:bg-zinc-900">
                     <DialogHeader><DialogTitle>Cerrar mes</DialogTitle><DialogDescription>Después del cierre no se podrán editar, anular ni registrar movimientos en este periodo. Todos los ejecutados deben tener una cuenta conciliada.</DialogDescription></DialogHeader>
                     <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Nota de cierre<textarea rows={3} value={closePeriodNotes} onChange={(event) => setClosePeriodNotes(event.target.value)} placeholder="Ej. Extracto y cartera conciliados" className={inputClass} /></label>
-                    <DialogFooter><button type="button" onClick={() => setIsClosePeriodOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="button" onClick={closeSelectedPeriod} disabled={isClosingPeriod} className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50">{isClosingPeriod && <Loader2 className="h-4 w-4 animate-spin" />}Confirmar cierre</button></DialogFooter>
+                    <DialogFooter><button type="button" onClick={() => setIsClosePeriodOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="button" onClick={closeSelectedPeriod} disabled={isClosingPeriod} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isClosingPeriod && <Loader2 className="h-4 w-4 animate-spin" />}Confirmar cierre</button></DialogFooter>
                 </DialogContent>
             </Dialog>
 
@@ -494,7 +494,7 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
                 <DialogContent className="sm:max-w-md dark:bg-zinc-900">
                     <DialogHeader><DialogTitle>Reabrir mes</DialogTitle><DialogDescription>Esta accion vuelve a permitir cambios en el periodo. El motivo y el usuario quedaran registrados en la auditoria.</DialogDescription></DialogHeader>
                     <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Motivo<textarea autoFocus rows={3} value={reopenPeriodReason} onChange={(event) => setReopenPeriodReason(event.target.value)} placeholder="Ej. Corregir un movimiento conciliado" className={inputClass} /></label>
-                    <DialogFooter><button type="button" onClick={() => setIsReopenPeriodOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="button" onClick={reopenSelectedPeriod} disabled={!reopenPeriodReason.trim() || isReopeningPeriod} className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50">{isReopeningPeriod && <Loader2 className="h-4 w-4 animate-spin" />}Confirmar reapertura</button></DialogFooter>
+                    <DialogFooter><button type="button" onClick={() => setIsReopenPeriodOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="button" onClick={reopenSelectedPeriod} disabled={!reopenPeriodReason.trim() || isReopeningPeriod} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isReopeningPeriod && <Loader2 className="h-4 w-4 animate-spin" />}Confirmar reapertura</button></DialogFooter>
                 </DialogContent>
             </Dialog>
 

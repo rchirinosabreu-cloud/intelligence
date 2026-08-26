@@ -452,7 +452,7 @@ const OperationalCalendar = () => {
             <button
               type="button"
               onClick={() => openCreateModal(currentDate)}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-indigo-600/20 transition hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#009EB9] px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-[#009EB9]/20 transition hover:bg-[#008CA4]"
             >
               <Plus className="h-4 w-4" />
               Evento
@@ -704,7 +704,7 @@ const OperationalCalendar = () => {
                       type="button"
                       onClick={generateMeetLink}
                       disabled={isGeneratingLink}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-[#009EB9] px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-[#008CA4] disabled:opacity-50"
                     >
                       {isGeneratingLink ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                       Generar
@@ -781,7 +781,7 @@ const OperationalCalendar = () => {
                 <button
                   type="submit"
                   disabled={eventMutation.isPending}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-indigo-600 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:opacity-60"
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#009EB9] py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-[#009EB9]/20 transition hover:bg-[#008CA4] disabled:opacity-60"
                 >
                   {eventMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
                   {editingEventId ? 'Actualizar evento' : 'Guardar evento'}

@@ -72,7 +72,7 @@ export const ConfirmDialogProvider = ({ children }) => {
               <AlertDialog.Action asChild>
                 <button
                   type="button"
-                  className={`min-h-11 rounded-md px-4 text-sm font-semibold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${request?.tone === 'danger' ? 'bg-[#E11D48] hover:bg-[#BE123C] focus-visible:ring-rose-500' : 'bg-violet-600 hover:bg-violet-700 focus-visible:ring-violet-500'}`}
+                  className={`min-h-11 rounded-md px-4 text-sm font-semibold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${request?.tone === 'danger' ? 'bg-[#E11D48] hover:bg-[#BE123C] focus-visible:ring-rose-500' : 'bg-[#009EB9] hover:bg-[#008CA4] focus-visible:ring-[#009EB9]'}`}
                   onClick={() => closeDialog(true)}
                 >
                   {request?.confirmLabel}

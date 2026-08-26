@@ -8,6 +8,7 @@ import {
   hasSeenTaskTimingTutorial,
   markTaskTimingTutorialAfternoonSeen,
   markTaskTimingTutorialSeen,
+  parseReopenEventContent,
   shouldShowTaskTimingTutorialAgain,
   REOPEN_REASONS,
 } from '../src/lib/taskTiming.js';
@@ -49,6 +50,15 @@ test('findConflictingActiveTask only finds another active task for the same assi
 test('reopening taxonomy includes client correction and scope change', () => {
   assert.ok(REOPEN_REASONS.some(reason => reason.value === 'CLIENT_CORRECTION'));
   assert.ok(REOPEN_REASONS.some(reason => reason.value === 'SCOPE_CHANGE'));
+});
+
+test('reopening event content separates its reason label from the note', () => {
+  assert.deepEqual(parseReopenEventContent('[CLIENT_CORRECTION]\nCambiar el cierre del video.'), {
+    reasonValue: 'CLIENT_CORRECTION',
+    reasonLabel: 'Corrección normal del cliente',
+    note: 'Cambiar el cierre del video.',
+  });
+  assert.equal(parseReopenEventContent('SCOPE_CHANGE: Agregar una escena.').reasonLabel, 'Cambio de alcance');
 });
 
 test('task timing tutorial acknowledgement is versioned per user', () => {

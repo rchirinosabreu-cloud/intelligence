@@ -8,6 +8,16 @@ export const REOPEN_REASONS = [
   { value: 'OTHER', label: 'Otro motivo' },
 ];
 
+export function parseReopenEventContent(content = '') {
+  const text = String(content || '').trim();
+  const bracketMatch = text.match(/^\[([^\]]+)\]\s*\n?([\s\S]*)$/);
+  const legacyMatch = text.match(/^([A-Z_]+):\s*([\s\S]*)$/);
+  const reasonValue = bracketMatch?.[1] || legacyMatch?.[1] || 'OTHER';
+  const note = (bracketMatch?.[2] || legacyMatch?.[2] || text).trim();
+  const reason = REOPEN_REASONS.find(item => item.value === reasonValue);
+  return { reasonValue, reasonLabel: reason?.label || 'Otro motivo', note };
+}
+
 export const TASK_TIMING_TUTORIAL_VERSION = 'v2';
 
 export function getTaskTimingTutorialStorageKey(userId = 'guest') {

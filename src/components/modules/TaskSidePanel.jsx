@@ -6,7 +6,7 @@ import {
     X, Send, MessageSquare, RotateCcw, CheckCircle2, Bell,
     LayoutGrid, Calendar, User, Trash2, Plus, ClipboardList,
     FileText, Database, Paperclip, ImageIcon, Eye, Download, Check,
-    MoreHorizontal, ChevronDown
+    MoreHorizontal, ChevronDown, RefreshCw
 } from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useNavigate } from 'react-router-dom';
+import { parseReopenEventContent } from '@/lib/taskTiming';
 
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
@@ -1427,39 +1428,56 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     };
 
     const renderComment = (comment) => {
-        const isSystem = comment.type === 'system_return' || comment.type === 'system_reintegrate';
+        const isSystem = comment.type === 'system_return' || comment.type === 'system_reintegrate' || comment.type === 'system_reopen';
         const contextData = { taskId: formData.id, commentId: comment.id };
 
         if (isSystem) {
             const isReturn = comment.type === 'system_return';
+            const isReopen = comment.type === 'system_reopen';
             const cleanContent = cleanSystemMessage(comment.content);
+            const reopenEvent = isReopen ? parseReopenEventContent(comment.content) : null;
 
             return (
                 <div key={comment.id} className={cn(
                     "p-3.5 rounded-2xl mb-3 border flex gap-3.5 items-start shadow-sm",
-                    isReturn ? "bg-red-50/40 border-red-100 dark:bg-red-900/10 dark:border-red-900/20" : "bg-emerald-50/40 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900/20"
+                    isReturn
+                        ? "bg-red-50/40 border-red-100 dark:bg-red-900/10 dark:border-red-900/20"
+                        : isReopen
+                            ? "bg-cyan-50/50 border-cyan-100 dark:bg-cyan-950/20 dark:border-cyan-900/30"
+                            : "bg-emerald-50/40 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900/20"
                 )}>
                     <div className={cn(
                         "w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-sm",
-                        isReturn ? "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400" : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400"
+                        isReturn
+                            ? "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400"
+                            : isReopen
+                                ? "bg-cyan-100 text-[#009EB9] dark:bg-cyan-950 dark:text-cyan-300"
+                                : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400"
                     )}>
-                        {isReturn ? <RotateCcw size={13} /> : <CheckCircle2 size={13} />}
+                        {isReturn ? <RotateCcw size={13} /> : isReopen ? <RefreshCw size={13} /> : <CheckCircle2 size={13} />}
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                            <span className={cn("text-[10px] font-black uppercase tracking-wider", isReturn ? "text-red-600" : "text-emerald-600")}>
-                                {isReturn ? "Evento: Devolución" : "Evento: Reintegración"}
+                            <span className={cn("text-[10px] font-black uppercase tracking-wider", isReturn ? "text-red-600" : isReopen ? "text-[#009EB9]" : "text-emerald-600")}>
+                                {isReturn ? "Evento: Devolución" : isReopen ? "Evento: Reapertura" : "Evento: Reintegración"}
                             </span>
                             <span className="text-[10px] text-zinc-400">•</span>
                             <span className="text-[10px] text-zinc-400 font-medium">{new Date(comment.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short'})}</span>
                         </div>
-                        <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed italic">
-                            "<RichCommentContent
-                                content={cleanContent}
-                                contextData={contextData}
-                                onImageClick={handleImagePreview}
-                            />"
-                        </div>
+                        {isReopen ? (
+                            <div className="space-y-2">
+                                <span className="inline-flex rounded-full border border-cyan-200 bg-cyan-100/70 px-2.5 py-1 text-[10px] font-bold text-cyan-800 dark:border-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-200">
+                                    {reopenEvent.reasonLabel}
+                                </span>
+                                <div className="text-sm font-medium leading-relaxed text-zinc-700 dark:text-zinc-300">
+                                    <RichCommentContent content={reopenEvent.note} contextData={contextData} onImageClick={handleImagePreview} />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed italic">
+                                "<RichCommentContent content={cleanContent} contextData={contextData} onImageClick={handleImagePreview} />"
+                            </div>
+                        )}
                     </div>
                 </div>
             );
@@ -1786,7 +1804,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         {isEdition && formData.status === 'DEVUELTA' && !showReintegratePrompt && (
                             <button
                                 onClick={() => setShowReintegratePrompt(true)}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-emerald-600 transition-all shadow-md shadow-emerald-500/20"
+                                className="flex items-center gap-2 px-3 py-1.5 bg-[#009EB9] text-white rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-[#008CA4] transition-all shadow-md shadow-[#009EB9]/20"
                             >
                                 <RotateCcw size={11} /> Reintegrar Tarea
                             </button>
@@ -1879,7 +1897,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     </button>
                                     <button
                                         onClick={handleReintegrate}
-                                        className="flex-[2] bg-emerald-500 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 active:scale-[0.98] transition-all"
+                                        className="flex-[2] bg-[#009EB9] text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#009EB9]/20 hover:bg-[#008CA4] active:scale-[0.98] transition-all"
                                     >
                                         Confirmar Reintegración
                                     </button>

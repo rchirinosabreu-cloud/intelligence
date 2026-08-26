@@ -685,7 +685,7 @@ const NativeTasks = () => {
     };
 
     const handleReopenTask = async () => {
-        if (!reopeningTask || !reopenReason || isSubmittingReopen) return;
+        if (!reopeningTask || !reopenReason || !reopenNote.trim() || isSubmittingReopen) return;
         try {
             setIsSubmittingReopen(true);
             const baseUrl = getApiBaseUrl();
@@ -699,7 +699,7 @@ const NativeTasks = () => {
                 body: JSON.stringify({
                     status: 'PENDIENTE',
                     reopenReason,
-                    reopenNote: reopenNote.trim() || null
+                    reopenNote: reopenNote.trim()
                 })
             });
             if (!response.ok) throw new Error(`Reopen failed with status ${response.status}`);
@@ -796,7 +796,7 @@ const NativeTasks = () => {
                                         initial={{ opacity: 0, y: 6, scale: 0.96 }}
                                         animate={{ opacity: 1, y: 0, scale: 1 }}
                                         exit={{ opacity: 0, y: 4, scale: 0.97 }}
-                                        className="absolute right-0 top-12 z-[210] whitespace-nowrap rounded-lg bg-zinc-900 px-3 py-2 text-[11px] font-semibold text-white shadow-xl dark:bg-white dark:text-zinc-900"
+                                        className="absolute right-0 top-12 z-[210] whitespace-nowrap rounded-lg bg-[#009EB9] px-3 py-2 text-[11px] font-semibold text-white shadow-xl shadow-[#009EB9]/20"
                                     >
                                         Puedes volver a verlo aquí
                                     </motion.div>
@@ -973,13 +973,13 @@ const NativeTasks = () => {
                             </select>
                         </label>
                         <label className="block space-y-1.5">
-                            <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Nota opcional</span>
+                            <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Nota de reapertura</span>
                             <textarea value={reopenNote} onChange={(event) => setReopenNote(event.target.value)} placeholder="Describe brevemente la novedad o solicitud." className="min-h-[96px] w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-900 focus:ring-2 focus:ring-[#009EB9]/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" />
                         </label>
                     </div>
                     <DialogFooter className="gap-3 sm:justify-between">
                         <button onClick={() => setReopeningTask(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button>
-                        <button onClick={handleReopenTask} disabled={isSubmittingReopen} className="flex items-center gap-2 rounded-xl bg-[#009EB9] px-4 py-2 text-sm font-medium text-white hover:bg-[#008CA4] disabled:opacity-50">
+                        <button onClick={handleReopenTask} disabled={isSubmittingReopen || !reopenNote.trim()} className="flex items-center gap-2 rounded-xl bg-[#009EB9] px-4 py-2 text-sm font-medium text-white hover:bg-[#008CA4] disabled:opacity-50">
                             {isSubmittingReopen && <Loader2 className="h-4 w-4 animate-spin" />} Reabrir en pendientes
                         </button>
                     </DialogFooter>
@@ -1116,6 +1116,7 @@ const NativeTasks = () => {
                                                 highlightedTaskId={highlightedTaskId}
                                                 onClick={(t) => setEditingTask(t)}
                                                 onReturn={(t) => setReturningTask(t)}
+                                                onReopen={(t) => setReopeningTask(t)}
                                                 onDelete={(t) => setDeletingTask(t)}
                                             />
                                         ))
@@ -1169,6 +1170,7 @@ const NativeTasks = () => {
                                                         highlightedTaskId={highlightedTaskId}
                                                         onClick={(t) => setEditingTask(t)}
                                                         onReturn={(t) => setReturningTask(t)}
+                                                        onReopen={(t) => setReopeningTask(t)}
                                                         onDelete={(t) => setDeletingTask(t)}
                                                     />
                                                 ))}
@@ -1191,7 +1193,7 @@ const NativeTasks = () => {
     );
 };
 
-const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete }) => {
+const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen, onDelete }) => {
     const isHighlighted = highlightedTaskId === String(task.id);
     const columnId = getColumnId(task.status);
     const isDone = columnId === 'realizado';
@@ -1293,10 +1295,21 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onDelete 
                                 </div>
                                 <div className="flex flex-col items-end gap-1">
                                     <div className="flex items-center gap-1">
-                                        {!isReturned && (
+                                        {isDone ? (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); onReopen(task); }}
+                                                className="p-1 text-zinc-400 hover:text-[#009EB9] hover:bg-[#009EB9]/10 rounded-xl transition-colors"
+                                                title="Reabrir tarea"
+                                                aria-label="Reabrir tarea"
+                                            >
+                                                <RefreshCw className="w-3.5 h-3.5" />
+                                            </button>
+                                        ) : !isReturned && (
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); onReturn(task); }}
                                                 className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-500 rounded-xl transition-colors group/btn"
+                                                title="Devolver tarea"
+                                                aria-label="Devolver tarea"
                                             >
                                                 <RotateCcw className="w-3.5 h-3.5" />
                                             </button>

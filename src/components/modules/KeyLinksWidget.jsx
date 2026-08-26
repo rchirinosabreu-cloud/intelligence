@@ -154,7 +154,7 @@ const KeyLinksWidget = ({ clientId }) => {
                                         <button
                                             type="submit"
                                             disabled={isSubmitting || !newTitle || !newUrl}
-                                            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-600 text-white rounded-xl text-sm font-medium flex items-center gap-2"
+                                            className="px-3 py-2 bg-[#009EB9] hover:bg-[#008CA4] text-white rounded-xl text-sm font-medium flex items-center gap-2"
                                         >
                                             {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Guardar'}
                                         </button>

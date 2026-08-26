@@ -385,7 +385,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                             className={cn(
                                 "px-6 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm",
                                 (editFormData.isReturned || editFormData.originalStatus === 'DEVUELTA' || (editFormData.originalStatus === 'PENDIENTE' && (editFormData.comments || '').includes('[DEVOLUCIÓN')))
-                                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 border-none"
+                                    ? "bg-[#009EB9] hover:bg-[#008CA4] text-white shadow-[#009EB9]/20 border-none"
                                     : "bg-primary hover:bg-primary/90 text-primary-foreground"
                             )}
                         >

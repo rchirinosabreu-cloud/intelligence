@@ -14,8 +14,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
 
-    /* Brainstudio Purple */
-    --primary: 262 80% 50%;
+    /* Brainstudio positive action: #009EB9 */
+    --primary: 189 100% 36.3%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 240 4.8% 95.9%;
@@ -48,8 +48,8 @@
     --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
 
-    /* Brainstudio Purple */
-    --primary: 262 80% 65%;
+    /* Brainstudio positive action: #009EB9 */
+    --primary: 189 100% 36.3%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 240 3.7% 15.9%;
