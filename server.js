@@ -7,6 +7,7 @@ import fs from 'fs';
 import prisma from './src/lib/prisma.js';
 import { initTaskClassificationCron } from './src/services/taskClassificationService.js';
 import { loggerMiddleware } from './src/middlewares/logger.js';
+import { operationalAuditMiddleware } from './src/middlewares/operationalAuditMiddleware.js';
 import apiRouter from './src/routes/index.js';
 import { geminiProxy } from './src/controllers/proxyController.js';
 import { authenticateToken, requireManagerRole } from './src/middlewares/authMiddleware.js';
@@ -67,6 +68,7 @@ app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
 // --- LOGGING ---
 app.use(loggerMiddleware);
+app.use(operationalAuditMiddleware);
 
 // --- ROUTES ---
 // Gemini proxy must be mounted before common API router if it has special body restreaming needs

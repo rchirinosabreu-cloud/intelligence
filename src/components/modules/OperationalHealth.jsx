@@ -106,7 +106,7 @@ const ScorePanel = ({ data }) => {
       <div className="flex h-full items-center gap-5">
         <div
           className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-full"
-          style={{ background: `conic-gradient(#7c3aed ${data.score * 3.6}deg, rgba(161,161,170,.18) 0deg)` }}
+          style={{ background: `conic-gradient(#009EB9 ${data.score * 3.6}deg, rgba(161,161,170,.18) 0deg)` }}
           aria-label={`Puntaje de salud ${data.score} de 100`}
         >
           <div className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-white dark:bg-zinc-900">

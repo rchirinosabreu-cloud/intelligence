@@ -9,6 +9,7 @@ import {
   PasswordResetError,
   requestPasswordReset
 } from '../services/passwordResetService.js';
+import { recordOperationalTrace } from '../services/operationalTraceService.js';
 
 const JWT_SECRET = getJwtSecret();
 const AUTH_TOKEN_EXPIRES_IN = process.env.AUTH_TOKEN_EXPIRES_IN || '12h';
@@ -52,6 +53,13 @@ export const login = async (req, res) => {
           JWT_SECRET,
           { expiresIn: AUTH_TOKEN_EXPIRES_IN }
       );
+
+      await recordOperationalTrace({
+          eventType: 'SESSION_STARTED',
+          actorId: user.id,
+          subjectUserId: user.id,
+          metadata: { method: 'PASSWORD' }
+      }).catch((error) => console.error('[Auth] Login trace failed:', error?.message || error));
 
       return res.json({
           token,

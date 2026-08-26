@@ -5,7 +5,7 @@ export const HTML_TEMPLATE_BASE = `
     <meta charset="UTF-8">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        :root { --purple: #635bff; --neon: #d9ff66; --bg: #f8faf5; --dark: #111827; --card: #ffffff; --border: rgba(0,0,0,0.08); }
+        :root { --purple: #009EB9; --neon: #00AC8A; --bg: #f8faf5; --dark: #111827; --card: #ffffff; --border: rgba(0,0,0,0.08); }
         body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: var(--bg); color: var(--dark); margin: 0; padding: 40px; line-height: 1.6; }
         .bento-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; max-width: 1600px; margin: 0 auto; }
         .card { background: var(--card); border-radius: 32px; padding: 40px; border: 1px solid var(--border); box-shadow: 0 16px 40px rgba(17, 24, 39, 0.08); display: flex; flex-direction: column; gap: 18px; }

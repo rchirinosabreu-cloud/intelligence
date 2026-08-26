@@ -17,8 +17,8 @@ import AvatarUploader from './Radar/AvatarUploader';
 import ClientLogo from '@/components/ui/ClientLogo';
 
 const CATEGORY_COLORS = {
-    'Estratégico': '#8b5cf6', // Violet (Morado institucional)
-    'Creativo & Diseño': '#6366f1', // Indigo (Azul/Azul-Violeta)
+    'Estratégico': '#009EB9',
+    'Creativo & Diseño': '#00AC8A',
     'Marketing & Social Media': '#06b6d4', // Cyan
     'Producción Audiovisual': '#ec4899', // Pink
     'Creación de Contenido': '#f97316', // Orange
@@ -335,7 +335,7 @@ const TalentRadar = () => {
                                                 <circle
                                                     cx="15" cy="15" r="16"
                                                     fill="#fff"
-                                                    stroke={isHovered ? glowColor.replace('0.5', '1').replace('0.6', '1') : "#6366f1"}
+                                                    stroke={isHovered ? glowColor.replace('0.5', '1').replace('0.6', '1') : "#009EB9"}
                                                     strokeWidth={isHovered ? "3" : "2"}
                                                 />
                                                 {payload.avatarUrl ? (
@@ -348,7 +348,7 @@ const TalentRadar = () => {
                                                     />
                                                 ) : (
                                                     <>
-                                                        <circle cx="15" cy="15" r="15" fill="#6366f1" />
+                                                        <circle cx="15" cy="15" r="15" fill="#009EB9" />
                                                         <text
                                                             x="15" y="15"
                                                             textAnchor="middle"

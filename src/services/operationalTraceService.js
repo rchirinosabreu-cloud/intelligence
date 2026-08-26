@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma.js';
 
-export const TRACE_RETENTION_DAYS = 90;
+export const TRACE_RETENTION_DAYS = 365;
 export const TRACE_SYNC_THROTTLE_MS = 5 * 60 * 1000;
 
 const knownEventTypes = new Set([
@@ -9,6 +9,8 @@ const knownEventTypes = new Set([
   'TASK_UPDATED',
   'TASK_OPENED',
   'TASK_LIST_SYNCED',
+  'SESSION_STARTED',
+  'PLATFORM_MUTATION',
   'NOTIFICATION_CREATED',
   'NOTIFICATION_READ'
 ]);
@@ -120,6 +122,8 @@ const eventDescription = (event, task) => {
     case 'TASK_UPDATED': return `${actor} actualizó ${taskName}.`;
     case 'TASK_OPENED': return `${actor} abrió ${taskName}.`;
     case 'TASK_LIST_SYNCED': return `${actor} sincronizó ${event.metadata?.taskCount ?? 0} tareas en Gestión.`;
+    case 'SESSION_STARTED': return `${actor} inició sesión en la plataforma.`;
+    case 'PLATFORM_MUTATION': return `${actor} ${event.metadata?.action || 'modificó'} ${event.metadata?.resource || 'un registro'} en ${event.metadata?.module || 'la plataforma'}.`;
     case 'NOTIFICATION_CREATED': return `Se generó una notificación para ${subject || 'un miembro del equipo'}.`;
     case 'NOTIFICATION_READ': return `${subject || actor} leyó una notificación${task ? ` de ${taskName}` : ''}.`;
     default: return 'Actividad operativa registrada.';
@@ -196,6 +200,8 @@ export const getOperationalTrace = async ({
       syncs: events.filter((event) => event.eventType === 'TASK_LIST_SYNCED').length,
       taskOpens: events.filter((event) => event.eventType === 'TASK_OPENED').length,
       taskMutations: events.filter((event) => ['TASK_CREATED', 'TASK_ASSIGNED', 'TASK_UPDATED'].includes(event.eventType)).length,
+      platformMutations: events.filter((event) => event.eventType === 'PLATFORM_MUTATION').length,
+      sessionStarts: events.filter((event) => event.eventType === 'SESSION_STARTED').length,
       notificationReads: events.filter((event) => event.eventType === 'NOTIFICATION_READ').length,
       lastSyncAt: lastSync?.occurredAt?.toISOString?.() || lastSync?.occurredAt || null
     },

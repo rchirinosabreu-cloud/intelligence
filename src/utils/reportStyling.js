@@ -2,7 +2,7 @@
 // Utilities for HTML and PDF Report Styling
 
 export const COLORS = {
-  primary: '#635bff',
+  primary: '#009EB9',
   primaryLight: '#E6E4FF',
   secondary: '#F5FAF9',
   secondaryLight: '#f3f6ef',

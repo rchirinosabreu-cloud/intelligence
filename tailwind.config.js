@@ -1,6 +1,16 @@
 import tailwindcssAnimate from 'tailwindcss-animate';
 import typography from '@tailwindcss/typography';
 
+const brainBlue = {
+  50: '#E6F7FA', 100: '#CCEFF4', 200: '#99DFE9', 300: '#66CFDE', 400: '#33BFD3',
+  500: '#00AEC8', 600: '#009EB9', 700: '#00859C', 800: '#006B7E', 900: '#005261', 950: '#003841'
+};
+
+const brainGreen = {
+  50: '#E6F7F3', 100: '#CCEFE7', 200: '#99DFD0', 300: '#66CEB8', 400: '#33BEA1',
+  500: '#16B394', 600: '#00AC8A', 700: '#008A6F', 800: '#006753', 900: '#004537', 950: '#002B22'
+};
+
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: ["class"],
@@ -22,6 +32,9 @@ export default {
     },
     extend: {
       colors: {
+        indigo: brainBlue,
+        violet: brainBlue,
+        purple: brainGreen,
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -63,9 +76,9 @@ export default {
           teal: '#366882',
           charcoal: '#4F4C73',
           purple: {
-             DEFAULT: '#8B5CF6',
-             deep: '#7C3AED',
-             light: '#A78BFA'
+             DEFAULT: '#009EB9',
+             deep: '#00859C',
+             light: '#66CFDE'
           },
           gray: {
              bg: '#F3F3F3',

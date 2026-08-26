@@ -137,8 +137,8 @@ const CLIENT_COLORS = {
 };
 
 const CATEGORY_COLORS = {
-    'Estratégico': '#8b5cf6',
-    'Creativo & Diseño': '#6366f1',
+    'Estratégico': '#009EB9',
+    'Creativo & Diseño': '#00AC8A',
     'Marketing & Social Media': '#06b6d4',
     'Producción Audiovisual': '#ec4899',
     'Creación de Contenido': '#f97316',

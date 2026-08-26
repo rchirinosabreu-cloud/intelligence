@@ -31,11 +31,11 @@ import FinancialLedger from './financial/FinancialLedger';
 import BankReconciliationPanel from './financial/BankReconciliationPanel';
 
 const CATEGORY_COLORS = {
-    'MEMBRESIA': '#8b5cf6',      // Violet
+    'MEMBRESIA': '#009EB9',
     'PAUTA': '#06b6d4',          // Cyan
     'NOMINA': '#ec4899',         // Pink
     'LOGISTICA': '#f97316',      // Orange
-    'ADMINISTRATIVO': '#6366f1',  // Indigo
+    'ADMINISTRATIVO': '#00AC8A',
     'TAX': '#ef4444',            // Red
     'FINANCIAL': '#10b981',      // Emerald
     'OPERATIVO': '#71717a'       // Zinc

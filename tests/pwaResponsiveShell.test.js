@@ -16,7 +16,7 @@ test('Brainstudio exposes an installable standalone web app manifest', async () 
   assert.ok(manifest.icons.some((icon) => icon.sizes === '192x192'));
   assert.ok(manifest.icons.some((icon) => icon.sizes === '512x512' && icon.purpose.includes('maskable')));
   assert.match(index, /rel="manifest" href="\/manifest\.webmanifest"/);
-  assert.match(index, /name="theme-color" content="#7C3AED"/);
+  assert.match(index, /name="theme-color" content="#009EB9"/);
   assert.match(index, /rel="apple-touch-icon" href="\/icons\/apple-touch-icon\.png"/);
 });
 

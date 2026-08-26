@@ -54,7 +54,7 @@ const ChatInput = ({ onSend, isLoading, input, setInput }) => {
 
   return (
     <div className="w-full max-w-4xl mx-auto p-4">
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden focus-within:ring-2 focus-within:ring-[#7C3AED]/20 transition-all duration-300">
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden focus-within:ring-2 focus-within:ring-[#009EB9]/20 transition-all duration-300">
         <form onSubmit={handleSubmit} className="relative">
           <textarea
             ref={textareaRef}
@@ -99,7 +99,7 @@ const ChatInput = ({ onSend, isLoading, input, setInput }) => {
                     "rounded-full h-10 w-10 p-0 flex items-center justify-center transition-all duration-200 shadow-sm",
                     !input.trim() || isLoading
                     ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                    : "bg-[#7C3AED] hover:bg-[#6D28D9] text-white"
+                    : "bg-[#009EB9] hover:bg-[#00859C] text-white"
                 )}
                 >
                 {isLoading ? (

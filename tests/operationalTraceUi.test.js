@@ -31,6 +31,20 @@ test('trace collection covers task sync, task opening, mutations, and notificati
   assert.match(notificationService, /eventType:\s*'NOTIFICATION_READ'/);
 });
 
+test('central audit covers every successful platform mutation and login without storing request bodies', async () => {
+  const middleware = await read('src/middlewares/operationalAuditMiddleware.js');
+  const server = await read('server.js');
+  const auth = await read('src/controllers/authController.js');
+  const trace = await read('src/services/operationalTraceService.js');
+
+  assert.match(middleware, /POST.*PUT.*PATCH.*DELETE/);
+  assert.match(middleware, /PLATFORM_MUTATION/);
+  assert.doesNotMatch(middleware, /req\.body/);
+  assert.match(server, /app\.use\(operationalAuditMiddleware\)/);
+  assert.match(auth, /eventType:\s*'SESSION_STARTED'/);
+  assert.match(trace, /TRACE_RETENTION_DAYS = 365/);
+});
+
 test('operational trace API and UI remain exclusive to administrators', async () => {
   const routes = await read('src/routes/api/dashboard.js');
   const health = await read('src/components/modules/OperationalHealth.jsx');
@@ -40,6 +54,7 @@ test('operational trace API and UI remain exclusive to administrators', async ()
   assert.match(health, /<OperationalTracePanel/);
   assert.match(panel, /Trazabilidad operativa/);
   assert.match(panel, /Buscar por tarea/);
-  assert.match(panel, /Última sincronización/);
+  assert.match(panel, /Eventos registrados/);
   assert.match(panel, /queryKey:\s*\['operational-trace'/);
+  assert.doesNotMatch(panel, /Lectura del diagnóstico/);
 });

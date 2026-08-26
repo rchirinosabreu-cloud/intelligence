@@ -9,7 +9,7 @@ export const triggerConfetti = () => {
     particleCount: 50,
     spread: 60,
     origin: { y: 0.8 },
-    colors: ['#8b5cf6', '#10b981', '#ffffff'], // Tailwind purple, emerald, and white
+    colors: ['#009EB9', '#00AC8A', '#ffffff'],
     zIndex: 9999, // Ensure it's above modals
   });
 };

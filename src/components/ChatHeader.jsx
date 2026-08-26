@@ -24,7 +24,7 @@ const ChatHeader = ({ title, onNewChat, apiConfig }) => {
           {apiStatusLabel}
         </span>
         <Button 
-          className="flex gap-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white border-none rounded-full shadow-sm transition-all duration-200 font-medium px-5"
+          className="flex gap-2 bg-[#009EB9] hover:bg-[#00859C] text-white border-none rounded-full shadow-sm transition-all duration-200 font-medium px-5"
           onClick={onNewChat}
         >
           <Plus className="h-4 w-4" />

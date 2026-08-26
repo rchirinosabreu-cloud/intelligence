@@ -8,10 +8,10 @@ export const BRAIN_COLORS = [
     "#3B82F6", // Blue 500
     "#10B981", // Emerald 500
     "#E11D48", // Rose 600
-    "#8B5CF6", // Violet 500
+    "#009EB9",
     "#06B6D4", // Cyan 500
     "#EC4899", // Pink 500
-    "#6366F1", // Indigo 500
+    "#00AC8A",
     "#14B8A6", // Teal 500
     "#F43F5E", // Rose 500
 ];

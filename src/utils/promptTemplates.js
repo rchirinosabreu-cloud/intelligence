@@ -61,7 +61,7 @@ REGLAS CRÍTICAS DE PROCESAMIENTO:
 2. SISTEMA VISUAL: Usa exclusivamente el estilo Bento Grid con tarjetas (.card) y clases de expansión (.span-2, .span-4).
 3. PALETA DE COLORES:
    - Fondo general: #F5F6FA
-   - Púrpura estratégico: #635bff (texto blanco, usar en Estrategia y Acción)
+   - Azul Brainstudio: #009EB9 (texto blanco, usar en Estrategia y Acción)
    - Aqua Neón: #66FFED (texto oscuro, usar en Contexto y Temas)
    - Texto oscuro: #0C111C
 4. TIPOGRAFÍA: Usa 'Plus Jakarta Sans' vía Google Fonts.

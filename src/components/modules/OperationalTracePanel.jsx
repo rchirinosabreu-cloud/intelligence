@@ -8,7 +8,6 @@ import {
   Activity,
   Bell,
   CheckCircle2,
-  Clock,
   Edit2,
   Eye,
   List,
@@ -25,7 +24,9 @@ const eventConfig = {
   TASK_OPENED: { label: 'Tarea abierta', icon: Eye, tone: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-300' },
   TASK_LIST_SYNCED: { label: 'Gestión sincronizada', icon: RefreshCw, tone: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-300' },
   NOTIFICATION_CREATED: { label: 'Notificación emitida', icon: Bell, tone: 'text-fuchsia-600 bg-fuchsia-50 dark:bg-fuchsia-500/10 dark:text-fuchsia-300' },
-  NOTIFICATION_READ: { label: 'Notificación leída', icon: CheckCircle2, tone: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-300' }
+  NOTIFICATION_READ: { label: 'Notificación leída', icon: CheckCircle2, tone: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-300' },
+  SESSION_STARTED: { label: 'Inicio de sesión', icon: User, tone: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-500/10 dark:text-cyan-300' },
+  PLATFORM_MUTATION: { label: 'Acción registrada', icon: Activity, tone: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-300' }
 };
 
 const formatDateTime = (value) => value
@@ -76,7 +77,7 @@ const OperationalTracePanel = () => {
             </div>
             <h2 className="mt-2 text-xl font-bold text-zinc-950 dark:text-white">Trazabilidad operativa</h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-              Línea de tiempo de sincronización, asignación, apertura y actualización de tareas.
+              Línea de tiempo de inicios de sesión y cambios realizados en todos los módulos de la plataforma.
             </p>
           </div>
 
@@ -145,10 +146,10 @@ const OperationalTracePanel = () => {
         <>
           <div className="grid grid-cols-2 border-b border-zinc-100 dark:border-zinc-800 lg:grid-cols-5">
             {[
-              ['Última sincronización', formatDateTime(data?.summary.lastSyncAt)],
-              ['Sincronizaciones', data?.summary.syncs || 0],
+              ['Eventos registrados', data?.summary.totalEvents || 0],
+              ['Inicios de sesión', data?.summary.sessionStarts || 0],
               ['Tareas abiertas', data?.summary.taskOpens || 0],
-              ['Cambios registrados', data?.summary.taskMutations || 0],
+              ['Cambios en plataforma', data?.summary.platformMutations || 0],
               ['Notificaciones leídas', data?.summary.notificationReads || 0]
             ].map(([label, value], index) => (
               <div key={label} className={cn('min-w-0 p-4 sm:p-5', index > 0 && 'border-l border-zinc-100 dark:border-zinc-800')}>
@@ -158,7 +159,7 @@ const OperationalTracePanel = () => {
             ))}
           </div>
 
-          <div className="grid min-h-[360px] grid-cols-1 xl:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="min-h-[360px]">
             <div className="max-h-[560px] overflow-y-auto">
               {(data?.timeline || []).length === 0 ? (
                 <div className="flex min-h-[360px] flex-col items-center justify-center p-6 text-center">
@@ -189,17 +190,6 @@ const OperationalTracePanel = () => {
               })}
             </div>
 
-            <aside className="border-t border-zinc-100 p-5 dark:border-zinc-800 xl:border-l xl:border-t-0">
-              <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Lectura del diagnóstico</h3>
-              <div className="mt-5 space-y-5 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-                <div className="flex gap-3"><Clock className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" /><p>Una sincronización confirma que Gestión consultó tareas para ese usuario.</p></div>
-                <div className="flex gap-3"><Eye className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" /><p>Una apertura confirma que la persona ingresó al detalle de la tarea.</p></div>
-                <div className="flex gap-3"><Bell className="mt-0.5 h-4 w-4 shrink-0 text-fuchsia-500" /><p>Emisión y lectura permiten separar entrega técnica de atención humana.</p></div>
-              </div>
-              <p className="mt-6 border-t border-zinc-100 pt-4 text-[11px] leading-5 text-zinc-400 dark:border-zinc-800">
-                Retención: {data?.retentionDays || 90} días. No se almacenan contenidos, contraseñas ni direcciones IP.
-              </p>
-            </aside>
           </div>
         </>
       )}
