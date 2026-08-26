@@ -105,16 +105,26 @@
     .task-filter-grid {
       grid-column: 1 / -1;
     }
+
+    .task-toolbar-actions {
+      grid-column: 2;
+      grid-row: 1;
+    }
   }
 
   @media (min-width: 1536px) {
     .task-toolbar-grid {
-      grid-template-columns: auto auto minmax(0, 1fr);
+      grid-template-columns: auto minmax(0, 1fr) auto;
       align-items: center;
     }
 
     .task-filter-grid {
-      grid-column: auto;
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .task-toolbar-actions {
+      grid-column: 3;
     }
   }
 }

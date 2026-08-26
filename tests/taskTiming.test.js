@@ -4,6 +4,11 @@ import {
   formatElapsedTime,
   getTaskElapsedMs,
   findConflictingActiveTask,
+  getTaskTimingTutorialStorageKey,
+  hasSeenTaskTimingTutorial,
+  markTaskTimingTutorialAfternoonSeen,
+  markTaskTimingTutorialSeen,
+  shouldShowTaskTimingTutorialAgain,
   REOPEN_REASONS,
 } from '../src/lib/taskTiming.js';
 
@@ -44,4 +49,24 @@ test('findConflictingActiveTask only finds another active task for the same assi
 test('reopening taxonomy includes client correction and scope change', () => {
   assert.ok(REOPEN_REASONS.some(reason => reason.value === 'CLIENT_CORRECTION'));
   assert.ok(REOPEN_REASONS.some(reason => reason.value === 'SCOPE_CHANGE'));
+});
+
+test('task timing tutorial acknowledgement is versioned per user', () => {
+  const values = new Map();
+  const storage = {
+    getItem: key => values.get(key) || null,
+    setItem: (key, value) => values.set(key, value),
+  };
+  const key = getTaskTimingTutorialStorageKey('rodny');
+
+  assert.equal(hasSeenTaskTimingTutorial(storage, 'rodny'), false);
+  const morning = new Date(2026, 7, 26, 10, 0, 0);
+  const afternoon = new Date(2026, 7, 26, 14, 0, 0);
+  markTaskTimingTutorialSeen(storage, 'rodny', morning);
+  assert.ok(values.get(key).includes('seenAt'));
+  assert.equal(hasSeenTaskTimingTutorial(storage, 'rodny'), true);
+  assert.equal(hasSeenTaskTimingTutorial(storage, 'melissa'), false);
+  assert.equal(shouldShowTaskTimingTutorialAgain(storage, 'rodny', afternoon), true);
+  markTaskTimingTutorialAfternoonSeen(storage, 'rodny', afternoon);
+  assert.equal(shouldShowTaskTimingTutorialAgain(storage, 'rodny', afternoon), false);
 });

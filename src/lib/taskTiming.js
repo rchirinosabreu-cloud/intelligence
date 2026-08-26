@@ -8,6 +8,56 @@ export const REOPEN_REASONS = [
   { value: 'OTHER', label: 'Otro motivo' },
 ];
 
+export const TASK_TIMING_TUTORIAL_VERSION = 'v2';
+
+export function getTaskTimingTutorialStorageKey(userId = 'guest') {
+  return `brainstudio:task-timing-tutorial:${TASK_TIMING_TUTORIAL_VERSION}:${userId}`;
+}
+
+export function hasSeenTaskTimingTutorial(storage, userId) {
+  const value = storage?.getItem?.(getTaskTimingTutorialStorageKey(userId));
+  if (!value) return false;
+  if (value === 'seen') return true;
+  try {
+    return Boolean(JSON.parse(value)?.seenAt);
+  } catch {
+    return false;
+  }
+}
+
+export function markTaskTimingTutorialSeen(storage, userId, now = new Date()) {
+  storage?.setItem?.(getTaskTimingTutorialStorageKey(userId), JSON.stringify({
+    seenAt: now.toISOString(),
+    afternoonSeenAt: null,
+  }));
+}
+
+export function shouldShowTaskTimingTutorialAgain(storage, userId, now = new Date()) {
+  const value = storage?.getItem?.(getTaskTimingTutorialStorageKey(userId));
+  if (!value || value === 'seen') return false;
+  try {
+    const state = JSON.parse(value);
+    if (!state?.seenAt || state.afternoonSeenAt) return false;
+    const firstSeen = new Date(state.seenAt);
+    const sameDay = firstSeen.getFullYear() === now.getFullYear()
+      && firstSeen.getMonth() === now.getMonth()
+      && firstSeen.getDate() === now.getDate();
+    return sameDay && firstSeen.getHours() < 14 && now.getHours() >= 14;
+  } catch {
+    return false;
+  }
+}
+
+export function markTaskTimingTutorialAfternoonSeen(storage, userId, now = new Date()) {
+  const key = getTaskTimingTutorialStorageKey(userId);
+  try {
+    const state = JSON.parse(storage?.getItem?.(key) || '{}');
+    storage?.setItem?.(key, JSON.stringify({ ...state, afternoonSeenAt: now.toISOString() }));
+  } catch {
+    markTaskTimingTutorialSeen(storage, userId, now);
+  }
+}
+
 const asNonNegativeNumber = (value) => {
   const number = Number(value || 0);
   return Number.isFinite(number) && number > 0 ? number : 0;

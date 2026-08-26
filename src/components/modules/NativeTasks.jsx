@@ -1,6 +1,6 @@
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import UserAvatarPopover from "../../components/ui/UserAvatarPopover";
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
@@ -25,6 +25,7 @@ import {
     Trash2,
     Zap,
     ClipboardList,
+    HelpCircle,
     Plus,
     RefreshCw
 } from '@/components/ui/icons';
@@ -47,7 +48,14 @@ import ClientAvatar from "../../components/ui/ClientAvatar";
 import TaskSidePanel from './TaskSidePanel';
 import { triggerConfetti } from '@/utils/confetti';
 import TaskTimerBadge from './TaskTimerBadge';
-import { findConflictingActiveTask, REOPEN_REASONS } from '@/lib/taskTiming';
+import {
+    findConflictingActiveTask,
+    hasSeenTaskTimingTutorial,
+    markTaskTimingTutorialAfternoonSeen,
+    markTaskTimingTutorialSeen,
+    shouldShowTaskTimingTutorialAgain,
+    REOPEN_REASONS
+} from '@/lib/taskTiming';
 
 // --- DATE HELPERS ---
 
@@ -117,14 +125,6 @@ const formatTaskCardDate = (dateStr) => {
     return `${day} ${monthLabels[taskDate.getMonth()]}`;
 };
 
-const formatLastSyncTime = (timestamp) => {
-    if (!timestamp) return 'Pendiente';
-    return new Intl.DateTimeFormat('es-CO', {
-        hour: 'numeric',
-        minute: '2-digit'
-    }).format(new Date(timestamp));
-};
-
 // --- STYLES ---
 
 const CLIENT_COLORS = {
@@ -168,8 +168,8 @@ const NativeTasks = () => {
     const queryClient = useQueryClient();
     const { toast } = useToast();
 
-    const [responsibleFilter, setResponsibleFilter] = useState('Todos');
-    const [dateFilter, setDateFilter] = useState('Todos');
+    const [responsibleFilter, setResponsibleFilter] = useState(currentUser?.name || 'Todos');
+    const [dateFilter, setDateFilter] = useState('Esta Semana');
     const [clientFilter, setClientFilter] = useState('Todos');
     const [searchQuery, setSearchQuery] = useState("");
 
@@ -198,12 +198,67 @@ const NativeTasks = () => {
     const [reopenReason, setReopenReason] = useState('CLIENT_CORRECTION');
     const [reopenNote, setReopenNote] = useState('');
     const [isSubmittingReopen, setIsSubmittingReopen] = useState(false);
+    const [isTimingTutorialOpen, setIsTimingTutorialOpen] = useState(false);
+    const [timingTutorialPresentation, setTimingTutorialPresentation] = useState('initial');
+    const [showTutorialButtonHint, setShowTutorialButtonHint] = useState(false);
+    const [refreshConfirmed, setRefreshConfirmed] = useState(false);
+    const defaultResponsibleValidatedRef = useRef(false);
+    const refreshConfirmationTimerRef = useRef(null);
+    const tutorialHintTimerRef = useRef(null);
+    const tutorialUserId = currentUser?.id || currentUser?.email || 'guest';
+
+    useEffect(() => {
+        if (!currentUser) return undefined;
+        const checkTutorial = () => {
+            if (!hasSeenTaskTimingTutorial(window.localStorage, tutorialUserId)) {
+                setTimingTutorialPresentation('initial');
+                setIsTimingTutorialOpen(true);
+            } else if (shouldShowTaskTimingTutorialAgain(window.localStorage, tutorialUserId)) {
+                setTimingTutorialPresentation('afternoon');
+                setIsTimingTutorialOpen(true);
+            }
+        };
+        const timer = window.setTimeout(checkTutorial, 500);
+        const interval = window.setInterval(checkTutorial, 30_000);
+        return () => {
+            window.clearTimeout(timer);
+            window.clearInterval(interval);
+        };
+    }, [currentUser, tutorialUserId]);
+
+    const closeTimingTutorial = () => {
+        const shouldGuideToHelp = timingTutorialPresentation !== 'manual';
+        if (timingTutorialPresentation === 'afternoon') {
+            markTaskTimingTutorialAfternoonSeen(window.localStorage, tutorialUserId);
+        } else if (!hasSeenTaskTimingTutorial(window.localStorage, tutorialUserId)) {
+            markTaskTimingTutorialSeen(window.localStorage, tutorialUserId);
+        }
+        setIsTimingTutorialOpen(false);
+        if (shouldGuideToHelp) {
+            setShowTutorialButtonHint(true);
+            window.clearTimeout(tutorialHintTimerRef.current);
+            tutorialHintTimerRef.current = window.setTimeout(() => setShowTutorialButtonHint(false), 4000);
+        }
+    };
+
+    useEffect(() => () => {
+        window.clearTimeout(refreshConfirmationTimerRef.current);
+        window.clearTimeout(tutorialHintTimerRef.current);
+    }, []);
+
+    const handleManualRefresh = async () => {
+        setRefreshConfirmed(false);
+        const result = await refetch();
+        if (result.error) return;
+        setRefreshConfirmed(true);
+        window.clearTimeout(refreshConfirmationTimerRef.current);
+        refreshConfirmationTimerRef.current = window.setTimeout(() => setRefreshConfirmed(false), 1400);
+    };
 
     const {
         data: tasks = [],
         isLoading: loadingTasks,
         error: tasksError,
-        dataUpdatedAt,
         isFetching,
         refetch,
     } = useQuery({
@@ -273,6 +328,13 @@ const NativeTasks = () => {
         },
         staleTime: 600000,
     });
+
+    useEffect(() => {
+        if (defaultResponsibleValidatedRef.current || !currentUser?.name || tasks.length === 0) return;
+        const currentUserHasTasks = tasks.some(task => task.assigneeName === currentUser.name);
+        setResponsibleFilter(currentUserHasTasks ? currentUser.name : 'Todos');
+        defaultResponsibleValidatedRef.current = true;
+    }, [currentUser?.name, tasks]);
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -691,29 +753,61 @@ const NativeTasks = () => {
                 layout="stacked"
             >
                 <div className="task-toolbar-grid">
-                    <div className="flex min-h-11 min-w-0 items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 dark:border-zinc-800 dark:bg-zinc-900 sm:justify-start">
-                        <span className="hidden text-xs text-zinc-500 dark:text-zinc-400 lg:inline">
-                            Última actualización
-                        </span>
-                        <span className="min-w-[4.5rem] text-right text-xs font-medium text-zinc-700 dark:text-zinc-200">
-                            {isFetching ? 'Actualizando' : formatLastSyncTime(dataUpdatedAt)}
-                        </span>
+                    <div className="task-toolbar-actions flex min-h-11 items-center justify-end gap-1.5">
                         <button
                             type="button"
-                            onClick={() => refetch()}
+                            onClick={handleManualRefresh}
                             disabled={isFetching}
-                            aria-label="Actualizar tareas"
-                            title="Actualizar tareas"
-                            className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-violet-600 disabled:cursor-wait dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-violet-400"
+                            aria-label={refreshConfirmed ? 'Tareas actualizadas' : 'Actualizar tareas'}
+                            title={refreshConfirmed ? 'Actualizado' : 'Actualizar tareas'}
+                            className={cn(
+                                "flex h-9 w-9 items-center justify-center rounded-lg border bg-white shadow-sm transition-all duration-150 active:scale-90 disabled:cursor-wait dark:bg-zinc-900",
+                                refreshConfirmed
+                                    ? "border-emerald-300 bg-emerald-50 text-emerald-600 ring-2 ring-emerald-500/15 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400"
+                                    : "border-zinc-200 text-zinc-400 hover:border-violet-200 hover:text-violet-600 dark:border-zinc-800 dark:text-zinc-500 dark:hover:border-violet-800 dark:hover:text-violet-400"
+                            )}
                         >
-                            <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+                            {refreshConfirmed
+                                ? <CheckCircle2 className="h-4 w-4" />
+                                : <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />}
                         </button>
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowTutorialButtonHint(false);
+                                    setTimingTutorialPresentation('manual');
+                                    setIsTimingTutorialOpen(true);
+                                }}
+                                aria-label="Cómo funciona el registro de tiempo"
+                                title="Cómo funciona"
+                                className={cn(
+                                    "flex h-9 w-9 items-center justify-center rounded-lg border bg-white shadow-sm transition-all dark:bg-zinc-900",
+                                    showTutorialButtonHint
+                                        ? "scale-105 border-[#009EB9] text-[#009EB9] ring-4 ring-[#009EB9]/15"
+                                        : "border-zinc-200 text-zinc-400 hover:border-[#009EB9]/40 hover:text-[#009EB9] dark:border-zinc-800 dark:text-zinc-500"
+                                )}
+                            >
+                                <HelpCircle className="h-4 w-4" />
+                            </button>
+                            <AnimatePresence>
+                                {showTutorialButtonHint && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: 4, scale: 0.97 }}
+                                        className="absolute right-0 top-12 z-[210] whitespace-nowrap rounded-lg bg-zinc-900 px-3 py-2 text-[11px] font-semibold text-white shadow-xl dark:bg-white dark:text-zinc-900"
+                                    >
+                                        Puedes volver a verlo aquí
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
                     </div>
                     <Button size="lg" onClick={() => setIsCreating(true)} className="min-h-11 w-full sm:w-auto">
                         <Plus className="w-4 h-4 mr-2" />
                         Nueva Tarea
                     </Button>
-
                     <div className="task-filter-grid">
                         <div className="group relative min-w-0">
                             <select
@@ -795,6 +889,44 @@ const NativeTasks = () => {
                 taskData={editingTask}
             />
 
+            <Dialog open={isTimingTutorialOpen} onOpenChange={(open) => !open && closeTimingTutorial()}>
+                <DialogContent
+                    overlayClassName="z-[190]"
+                    className="z-[200] max-h-[calc(100vh-1.5rem)] w-[calc(100%-1.5rem)] overflow-y-auto border-zinc-200 bg-white p-0 dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-xl"
+                >
+                    <div className="relative overflow-hidden bg-gradient-to-br from-[#00AC8A] to-[#009EB9] px-6 py-7 pr-28 text-white">
+                        <img src="/brainstudio-mascot-tip.png" alt="Mascota de Brainstudio" className="absolute -bottom-4 right-2 h-24 w-24 object-contain drop-shadow-xl" />
+                        <DialogHeader className="relative z-10">
+                            <span className="mb-1.5 w-fit rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">Novedad</span>
+                            <DialogTitle className="text-lg text-white sm:whitespace-nowrap">El tiempo de trabajo será visible para ti</DialogTitle>
+                            <DialogDescription className="text-sm leading-relaxed text-indigo-100">
+                                Ahora tenemos una forma más clara de comprender el trabajo de la agencia, aprender de nuestros tiempos para poder planificar mejor.
+                            </DialogDescription>
+                        </DialogHeader>
+                    </div>
+                    <div className="space-y-3 px-6 py-5">
+                        <div className="flex gap-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400"><Clock className="h-4 w-4" /></div>
+                            <div><p className="text-sm font-semibold text-zinc-900 dark:text-white">El cronómetro comenzará con las tareas “En proceso”</p><p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Cada vez que muevas una tarea, podrás ver su cronómetro directamente en la tarjeta.</p></div>
+                        </div>
+                        <div className="flex gap-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400"><AlertTriangle className="h-4 w-4" /></div>
+                            <div><p className="text-sm font-semibold text-zinc-900 dark:text-white">Tú decides si mantienes activa más de una tarea</p><p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Si ya estás registrando tiempo en una tarea, te avisaremos, pero tú decides continuar. Si quieres pausar el cronómetro, puedes regresar la tarea a “Pendiente” y continuar cuando quieras.</p></div>
+                        </div>
+                        <div className="flex gap-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400"><RefreshCw className="h-4 w-4" /></div>
+                            <div><p className="text-sm font-semibold text-zinc-900 dark:text-white">Las tareas pueden reabrirse</p><p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Si una tarea realizada necesita una corrección, no necesitas crear un pendiente nuevo. Puedes buscar la tarea realizada y regresarla a “Pendiente” para conservar el ID de la tarea y su historial. Esto nos garantiza una mejor trazabilidad.</p></div>
+                        </div>
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                            <strong>Antes de comenzar:</strong> Revisa las tareas que ya tenías “En proceso” y devuelve a “Pendiente” las tareas en las que no estés trabajando ahora.
+                        </div>
+                    </div>
+                    <DialogFooter className="border-t border-zinc-100 px-6 py-4 dark:border-zinc-800">
+                        <Button onClick={closeTimingTutorial} className="w-full sm:w-auto">Entendido</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <Dialog open={!!conflictingMove} onOpenChange={(open) => !open && setConflictingMove(null)}>
                 <DialogContent className="sm:max-w-md border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
                     <DialogHeader>
@@ -815,7 +947,7 @@ const NativeTasks = () => {
                                 setConflictingMove(null);
                                 onDragEnd({ ...pending.result, timingConflictConfirmed: true });
                             }}
-                            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                            className="rounded-xl bg-[#009EB9] px-4 py-2 text-sm font-medium text-white hover:bg-[#008CA4]"
                         >
                             Sí, continuar
                         </button>
@@ -827,7 +959,7 @@ const NativeTasks = () => {
                 <DialogContent className="sm:max-w-md border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
-                            <RefreshCw className="h-5 w-5 text-purple-600 dark:text-purple-400" /> Reabrir tarea
+                            <RefreshCw className="h-5 w-5 text-[#009EB9] dark:text-[#29B8CF]" /> Reabrir tarea
                         </DialogTitle>
                         <DialogDescription>
                             <strong>{reopeningTask?.title}</strong> conservará su código, responsable, prioridad e historial.
@@ -836,18 +968,18 @@ const NativeTasks = () => {
                     <div className="space-y-4 py-2">
                         <label className="block space-y-1.5">
                             <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Motivo de reapertura</span>
-                            <select value={reopenReason} onChange={(event) => setReopenReason(event.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:ring-2 focus:ring-purple-500/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white">
+                            <select value={reopenReason} onChange={(event) => setReopenReason(event.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:ring-2 focus:ring-[#009EB9]/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white">
                                 {REOPEN_REASONS.map(reason => <option key={reason.value} value={reason.value}>{reason.label}</option>)}
                             </select>
                         </label>
                         <label className="block space-y-1.5">
                             <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Nota opcional</span>
-                            <textarea value={reopenNote} onChange={(event) => setReopenNote(event.target.value)} placeholder="Describe brevemente la novedad o solicitud." className="min-h-[96px] w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-900 focus:ring-2 focus:ring-purple-500/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" />
+                            <textarea value={reopenNote} onChange={(event) => setReopenNote(event.target.value)} placeholder="Describe brevemente la novedad o solicitud." className="min-h-[96px] w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-900 focus:ring-2 focus:ring-[#009EB9]/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" />
                         </label>
                     </div>
                     <DialogFooter className="gap-3 sm:justify-between">
                         <button onClick={() => setReopeningTask(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button>
-                        <button onClick={handleReopenTask} disabled={isSubmittingReopen} className="flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50">
+                        <button onClick={handleReopenTask} disabled={isSubmittingReopen} className="flex items-center gap-2 rounded-xl bg-[#009EB9] px-4 py-2 text-sm font-medium text-white hover:bg-[#008CA4] disabled:opacity-50">
                             {isSubmittingReopen && <Loader2 className="h-4 w-4 animate-spin" />} Reabrir en pendientes
                         </button>
                     </DialogFooter>
