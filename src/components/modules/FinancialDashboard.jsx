@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import FinancialLedger from './financial/FinancialLedger';
+import BankReconciliationPanel from './financial/BankReconciliationPanel';
 
 const CATEGORY_COLORS = {
     'MEMBRESIA': '#8b5cf6',      // Violet
@@ -1252,6 +1253,8 @@ const FinancialDashboard = () => {
 
                 {activeTab === 'editor' && (
                     <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
+                        <BankReconciliationPanel selectedYear={selectedYear} canApprove={canApproveFinancials} />
+                        <div className="border-t border-zinc-200 pt-5 dark:border-white/10">
                         <div className="flex items-center justify-between gap-4">
                             <div>
                                 <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Conciliación mensual</h2>
@@ -1327,6 +1330,7 @@ const FinancialDashboard = () => {
                                 </div>
                             )}
                         </Card>
+                        </div>
                     </div>
                 )}
 
