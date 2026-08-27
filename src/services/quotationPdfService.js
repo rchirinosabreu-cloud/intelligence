@@ -70,7 +70,13 @@ const setText = (doc, { size = 10, style = 'normal', color = COLORS.ink } = {}) 
 const splitTerms = (value) => String(value || '')
   .split('\n')
   .map((line) => line.replace(/^[●•]\s*/, '').trim())
-  .filter(Boolean);
+  .filter(Boolean)
+  .filter((term, index, terms) => {
+    const normalized = term.replace(/\s+/g, ' ').toLocaleLowerCase('es');
+    return terms.findIndex((candidate) => (
+      candidate.replace(/\s+/g, ' ').toLocaleLowerCase('es') === normalized
+    )) === index;
+  });
 
 const groupScenarios = (items = []) => {
   const grouped = new Map();
@@ -174,51 +180,67 @@ const drawTerms = (doc, terms, y) => {
   const columnGap = 6;
   const columnWidth = (CONTENT_WIDTH - columnGap) / 2;
   const columnStarts = [PAGE.left, PAGE.left + columnWidth + columnGap];
-  const indexedTerms = terms.map((term, index) => ({ term, number: index + 1 }));
-  const columns = splitTermColumns(indexedTerms);
-  const preparedColumns = columns.map((columnTerms) => columnTerms.map(({ term, number }) => {
-      setText(doc, { size: 7.2, color: COLORS.muted });
-      const lines = doc.splitTextToSize(term, columnWidth - 10);
-      const blockHeight = Math.max(8, lines.length * 3.75 + 3.5);
-      return { lines, blockHeight, number };
-  }));
+  const preparedTerms = terms.map((term, index) => {
+    setText(doc, { size: 7.2, color: COLORS.muted });
+    const lines = doc.splitTextToSize(term, columnWidth - 10);
+    const blockHeight = Math.max(8, lines.length * 3.75 + 3.5);
+    return { lines, blockHeight, number: index + 1 };
+  });
   const firstPageCapacity = PAGE.height - PAGE.bottom - y;
   const continuedPageCapacity = PAGE.height - PAGE.bottom - PAGE.top;
-  const chunkColumn = (entries) => {
-    const chunks = [[]];
-    let used = 0;
-    let capacity = firstPageCapacity;
-    entries.forEach((entry) => {
-      if (chunks.at(-1).length > 0 && used + entry.blockHeight > capacity) {
-        chunks.push([]);
-        used = 0;
-        capacity = continuedPageCapacity;
+  const pages = [];
+  let offset = 0;
+  while (offset < preparedTerms.length) {
+    const capacity = pages.length === 0 ? firstPageCapacity : continuedPageCapacity;
+    let bestCount = 1;
+    for (let count = 1; offset + count <= preparedTerms.length; count += 1) {
+      const candidate = preparedTerms.slice(offset, offset + count);
+      const [left, right] = splitTermColumns(candidate);
+      const fits = [left, right].every((column) => (
+        column.reduce((height, entry) => height + entry.blockHeight, 0) <= capacity
+      ));
+      if (!fits) break;
+      bestCount = count;
+    }
+    pages.push(splitTermColumns(preparedTerms.slice(offset, offset + bestCount)));
+    offset += bestCount;
+  }
+  if (pages.length > 1) {
+    const lastIndex = pages.length - 1;
+    const previousEntries = pages[lastIndex - 1].flat();
+    const lastEntries = pages[lastIndex].flat();
+    const columnHeight = (column) => column.reduce((height, entry) => height + entry.blockHeight, 0);
+    for (let moveCount = 1; lastEntries.length + moveCount <= 4 && moveCount < previousEntries.length; moveCount += 1) {
+      const previousCandidate = splitTermColumns(previousEntries.slice(0, -moveCount));
+      const lastCandidate = splitTermColumns([...previousEntries.slice(-moveCount), ...lastEntries]);
+      const previousCapacity = lastIndex - 1 === 0 ? firstPageCapacity : continuedPageCapacity;
+      const previousFits = previousCandidate.every((column) => columnHeight(column) <= previousCapacity);
+      const lastFits = lastCandidate.every((column) => columnHeight(column) <= continuedPageCapacity);
+      if (lastEntries.length + moveCount === 4 && previousFits && lastFits) {
+        pages[lastIndex - 1] = previousCandidate;
+        pages[lastIndex] = lastCandidate;
+        break;
       }
-      chunks.at(-1).push(entry);
-      used += entry.blockHeight;
-    });
-    return chunks;
-  };
-  const columnChunks = preparedColumns.map(chunkColumn);
-  const pageCount = Math.max(...columnChunks.map((chunks) => chunks.length));
+    }
+  }
 
-  for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+  pages.forEach((pageColumns, pageIndex) => {
     if (pageIndex > 0) addPage(doc);
     const pageY = pageIndex === 0 ? y : PAGE.top;
-    columnChunks.forEach((chunks, column) => {
+    pageColumns.forEach((entries, column) => {
       let columnY = pageY;
       const x = columnStarts[column];
-      (chunks[pageIndex] || []).forEach(({ lines, blockHeight, number }) => {
-      doc.setFillColor(...COLORS.brandSoft);
-      doc.roundedRect(x, columnY, 6.5, 6.5, 1.3, 1.3, 'F');
-      setText(doc, { size: 6.5, style: 'bold', color: COLORS.brand });
-      doc.text(String(number), x + 3.25, columnY + 4.45, { align: 'center' });
-      setText(doc, { size: 7.2, color: COLORS.muted });
-      doc.text(lines, x + 9, columnY + 3.4, { lineHeightFactor: 1.22 });
-      columnY += blockHeight;
+      entries.forEach(({ lines, blockHeight, number }) => {
+        doc.setFillColor(...COLORS.brandSoft);
+        doc.roundedRect(x, columnY, 6.5, 6.5, 1.3, 1.3, 'F');
+        setText(doc, { size: 6.5, style: 'bold', color: COLORS.brand });
+        doc.text(String(number), x + 3.25, columnY + 4.45, { align: 'center' });
+        setText(doc, { size: 7.2, color: COLORS.muted });
+        doc.text(lines, x + 9, columnY + 3.4, { lineHeightFactor: 1.22 });
+        columnY += blockHeight;
       });
     });
-  }
+  });
 };
 
 const drawFooters = (doc, issuer) => {
@@ -320,39 +342,40 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
     (quotation.items || []).forEach((item, index) => { y = drawService(doc, item, index, y, formatMoney); });
   }
 
-  y = ensureSpace(doc, y, 58);
-  setText(doc, { size: 7.5, style: 'bold', color: COLORS.subtle });
-  doc.text('CLIENTE', PAGE.left, y + 4);
-  setText(doc, { size: 11, style: 'bold' });
-  doc.text(String(quotation.client_company || quotation.client_name), PAGE.left, y + 11);
-  if (quotation.client_company) {
+  const hasPendingScenarioSelection = scenarios.length > 0 && !selectedScenario;
+  if (!hasPendingScenarioSelection) {
+    y = ensureSpace(doc, y, 58);
+    setText(doc, { size: 7.5, style: 'bold', color: COLORS.subtle });
+    doc.text('CLIENTE', PAGE.left, y + 4);
+    setText(doc, { size: 11, style: 'bold' });
+    doc.text(String(quotation.client_company || quotation.client_name), PAGE.left, y + 11);
+    if (quotation.client_company) {
+      setText(doc, { size: 8.5, color: COLORS.muted });
+      doc.text(`Atención: ${quotation.client_name}`, PAGE.left, y + 17);
+    }
     setText(doc, { size: 8.5, color: COLORS.muted });
-    doc.text(`Atención: ${quotation.client_name}`, PAGE.left, y + 17);
-  }
-  setText(doc, { size: 8.5, color: COLORS.muted });
-  doc.text(String(quotation.client_email || 'No proporcionado'), PAGE.left, y + 25);
-  doc.text(String(quotation.client_phone || 'No proporcionado'), PAGE.left, y + 31);
+    doc.text(String(quotation.client_email || 'No proporcionado'), PAGE.left, y + 25);
+    doc.text(String(quotation.client_phone || 'No proporcionado'), PAGE.left, y + 31);
 
-  doc.setFillColor(...COLORS.brand);
-  doc.roundedRect(105, y, 87, 48, 2, 2, 'F');
-  setText(doc, { size: 8, style: 'bold', color: [221, 214, 254] });
-  doc.text(scenarios.length && !selectedScenario ? 'SELECCIÓN PENDIENTE' : 'INVERSIÓN TOTAL', 112, y + 9);
-  setText(doc, { size: 21, style: 'bold', color: COLORS.white });
-  doc.text(scenarios.length && !selectedScenario ? 'El cliente elegirá una opción' : formatMoney.format(Number(quotation.total_amount || 0)), 112, y + 21);
-  doc.setDrawColor(255, 255, 255);
-  doc.setLineWidth(0.2);
-  doc.line(112, y + 27, 185, y + 27);
-  setText(doc, { size: 8, color: [237, 233, 254] });
-  if (!scenarios.length || selectedScenario) {
+    doc.setFillColor(...COLORS.brand);
+    doc.roundedRect(105, y, 87, 48, 2, 2, 'F');
+    setText(doc, { size: 8, style: 'bold', color: [221, 214, 254] });
+    doc.text('INVERSIÓN TOTAL', 112, y + 9);
+    setText(doc, { size: 21, style: 'bold', color: COLORS.white });
+    doc.text(formatMoney.format(Number(quotation.total_amount || 0)), 112, y + 21);
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(0.2);
+    doc.line(112, y + 27, 185, y + 27);
+    setText(doc, { size: 8, color: [237, 233, 254] });
     doc.text('Subtotal', 112, y + 35);
     doc.text(formatMoney.format(Number(quotation.subtotal || 0)), 185, y + 35, { align: 'right' });
-  }
-  if ((!scenarios.length || selectedScenario) && quotation.currency !== 'USD' && !quotation.is_tax_exempt) {
-    doc.text('IVA (19%)', 112, y + 42);
-    doc.text(formatMoney.format(Number(quotation.tax_amount || 0)), 185, y + 42, { align: 'right' });
+    if (quotation.currency !== 'USD' && !quotation.is_tax_exempt) {
+      doc.text('IVA (19%)', 112, y + 42);
+      doc.text(formatMoney.format(Number(quotation.tax_amount || 0)), 185, y + 42, { align: 'right' });
+    }
   }
 
-  drawTerms(doc, splitTerms(quotation.terms_and_conditions), y + 62);
+  drawTerms(doc, splitTerms(quotation.terms_and_conditions), y + (hasPendingScenarioSelection ? 7 : 62));
   drawFooters(doc, issuer);
   return Buffer.from(doc.output('arraybuffer'));
 };

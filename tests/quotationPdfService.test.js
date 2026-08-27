@@ -6,7 +6,8 @@ import {
   generateQuotationPdfBuffer,
   PDF_LAYOUT,
   splitServiceTime,
-  splitTermColumns
+  splitTermColumns,
+  splitTerms
 } from '../src/services/quotationPdfService.js';
 
 const quotation = {
@@ -66,6 +67,13 @@ test('quotation PDF splits contractual terms evenly by count', () => {
   assert.deepEqual(splitTermColumns(Array.from({ length: 13 }, (_, index) => index)).map((column) => column.length), [6, 7]);
 });
 
+test('quotation PDF removes repeated contractual clauses before rendering', () => {
+  assert.deepEqual(
+    splitTerms('● Una condición.\n•  Una   condición.  \n● Otra condición.'),
+    ['Una condición.', 'Otra condición.']
+  );
+});
+
 test('scenario quotation PDF compares options without inventing a grand total', async () => {
   const scenarioQuotation = {
     ...quotation,
@@ -84,7 +92,8 @@ test('scenario quotation PDF compares options without inventing a grand total', 
   assert.match(text, /ESCENARIOS DISPONIBLES/i);
   assert.match(text, /Reactivación básica/);
   assert.match(text, /Presencia activa/);
-  assert.match(text, /SELECCIÓN PENDIENTE/i);
+  assert.doesNotMatch(text, /SELECCIÓN PENDIENTE/i);
+  assert.doesNotMatch(text, /El cliente elegirá una opción/i);
   assert.doesNotMatch(text, /INVERSIÓN TOTAL\s+\$\s*0/i);
 });
 
