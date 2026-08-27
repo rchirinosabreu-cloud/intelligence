@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 test('quotation form exposes applied terms and sends the reviewed snapshot', async () => {
-  const [form, editor, controller] = await Promise.all([
+  const [form, editor, controller, publicQuotation] = await Promise.all([
     readFile(new URL('../src/components/modules/Quotations/QuotationForm.jsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/modules/Quotations/QuotationTermsEditor.jsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/controllers/quotationController.js', import.meta.url), 'utf8')
+    readFile(new URL('../src/controllers/quotationController.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/public/Quotations/PublicQuotation.jsx', import.meta.url), 'utf8')
   ]);
 
   assert.match(form, /<QuotationTermsEditor/);
@@ -18,4 +19,5 @@ test('quotation form exposes applied terms and sends the reviewed snapshot', asy
   assert.match(controller, /hasExplicitTerms/);
   assert.match(controller, /sanitizeContractTermsText\(terms_and_conditions\)/);
   assert.match(controller, /:\s*existing\.terms_and_conditions/);
+  assert.match(publicQuotation, /parseContractTermsText\(quotation\.terms_and_conditions\)/);
 });

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { jsPDF } from 'jspdf';
+import { parseContractTermsText } from './quotationContractTerms.js';
 
 const PAGE = { width: 210, height: 297, left: 18, right: 18, top: 18, bottom: 20 };
 const CONTENT_WIDTH = PAGE.width - PAGE.left - PAGE.right;
@@ -67,16 +68,7 @@ const setText = (doc, { size = 10, style = 'normal', color = COLORS.ink } = {}) 
   doc.setTextColor(...color);
 };
 
-const splitTerms = (value) => String(value || '')
-  .split('\n')
-  .map((line) => line.replace(/^[●•]\s*/, '').trim())
-  .filter(Boolean)
-  .filter((term, index, terms) => {
-    const normalized = term.replace(/\s+/g, ' ').toLocaleLowerCase('es');
-    return terms.findIndex((candidate) => (
-      candidate.replace(/\s+/g, ' ').toLocaleLowerCase('es') === normalized
-    )) === index;
-  });
+const splitTerms = parseContractTermsText;
 
 const groupScenarios = (items = []) => {
   const grouped = new Map();

@@ -16,6 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { calculateQuotationTotals, groupQuotationScenarios } from '@/services/quotationDomainService';
+import { parseContractTermsText } from '@/services/quotationContractTerms';
 
 const WHATSAPP_NUMBER = '573004329276';
 
@@ -153,10 +154,7 @@ const PublicQuotation = () => {
     const chosenAmounts = chosenScenario
         ? calculateQuotationTotals(chosenScenario.items, quotation.is_tax_exempt || quotation.currency === 'USD')
         : null;
-    const terms = String(quotation.terms_and_conditions || '')
-        .split('\n')
-        .map((line) => line.replace(/^[●•]\s*/, '').trim())
-        .filter(Boolean);
+    const terms = parseContractTermsText(quotation.terms_and_conditions);
 
     return (
         <div className="min-h-screen bg-[#f7f7fa] text-zinc-950 dark:bg-zinc-950 dark:text-white">

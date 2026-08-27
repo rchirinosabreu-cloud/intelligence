@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   CONTRACT_TERM_LIBRARY,
   buildContractTermsText,
+  parseContractTermsText,
   resolveSuggestedContractTermIds,
   sanitizeContractTermsText
 } from '../src/services/quotationContractTerms.js';
@@ -65,4 +66,16 @@ test('selected and custom clauses become a sanitized immutable text snapshot', (
   assert.equal(text.split('\n').length, 3);
   assert.equal(sanitizeContractTermsText('● Uno\n\n• Dos'), '● Uno\n● Dos');
   assert.ok(CONTRACT_TERM_LIBRARY.length > 20);
+});
+
+test('contract terms are deduplicated consistently for storage, HTML and PDF consumers', () => {
+  const duplicated = '● Cada contenido incluye dos ajustes.\n•  cada CONTENIDO incluye dos ajustes!  \n● Otra condición.';
+  assert.deepEqual(parseContractTermsText(duplicated), [
+    'Cada contenido incluye dos ajustes.',
+    'Otra condición.'
+  ]);
+  assert.equal(
+    sanitizeContractTermsText(duplicated),
+    '● Cada contenido incluye dos ajustes.\n● Otra condición.'
+  );
 });

@@ -84,10 +84,27 @@ export const resolveSuggestedContractTermIds = (services = [], context = {}) => 
   return CONTRACT_TERM_LIBRARY.map(({ id }) => id).filter((id) => selected.has(id));
 };
 
-export const sanitizeContractTermsText = (value) => String(value || '')
+const normalizeTermIdentity = (value) => normalizeServiceSearchText(String(value || ''))
+  .replace(/[^a-z0-9\s]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+export const deduplicateContractTerms = (terms = []) => {
+  const identities = new Set();
+  return terms.filter((term) => {
+    const identity = normalizeTermIdentity(term);
+    if (!identity || identities.has(identity)) return false;
+    identities.add(identity);
+    return true;
+  });
+};
+
+export const parseContractTermsText = (value) => deduplicateContractTerms(String(value || '')
   .split(/\r?\n/)
   .map((line) => line.replace(/^[●•]\s*/, '').replace(/\s+/g, ' ').trim())
-  .filter(Boolean)
+  .filter(Boolean));
+
+export const sanitizeContractTermsText = (value) => parseContractTermsText(value)
   .slice(0, 100)
   .map((line) => `● ${line.slice(0, 2000)}`)
   .join('\n');
@@ -99,8 +116,3 @@ export const buildContractTermsText = (selectedIds = [], customTerms = []) => {
     ...customTerms
   ].join('\n'));
 };
-
-export const parseContractTermsText = (value) => String(value || '')
-  .split(/\r?\n/)
-  .map((line) => line.replace(/^[●•]\s*/, '').trim())
-  .filter(Boolean);
