@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { useNavigate, useParams } from 'react-router-dom';
 import SuccessModal from './SuccessModal';
 import QuotationTermsEditor from './QuotationTermsEditor';
+import ServiceCatalogModal from './ServiceCatalogModal';
 import { calculateQuotationEconomics } from '@/services/quotationDomainService';
 import { matchesServiceSearch } from '@/utils/serviceCatalogSearch';
 
@@ -31,6 +32,7 @@ const QuotationForm = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [generatedLink, setGeneratedLink] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
     const [isLoadingData, setIsLoadingData] = useState(false);
     const [wasExpired, setWasExpired] = useState(false);
     const [issuedAt, setIssuedAt] = useState(null);
@@ -357,6 +359,12 @@ const QuotationForm = () => {
                 onClose={() => setIsModalOpen(false)}
                 link={generatedLink}
             />
+            <ServiceCatalogModal
+                open={isServiceModalOpen}
+                onOpenChange={setIsServiceModalOpen}
+                initialName={searchTerm}
+                onSaved={addItem}
+            />
             <div className="flex justify-between items-center">
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" size="icon" onClick={() => navigate('/cotizaciones')} className="rounded-xl">
@@ -526,6 +534,16 @@ const QuotationForm = () => {
                                                 </div>
                                             </button>
                                         ))}
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsServiceModalOpen(true)}
+                                            className="sticky bottom-0 flex w-full items-center gap-2 border-t border-zinc-200 bg-white p-3 text-left text-sm font-bold text-primary transition-colors hover:bg-primary/5 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-primary/10"
+                                        >
+                                            <Plus className="h-4 w-4" />
+                                            {filteredCatalog.length === 0
+                                                ? `Crear “${searchTerm.trim()}” como nuevo servicio`
+                                                : 'Crear un nuevo servicio'}
+                                        </button>
                                     </div>
                                 )}
                             </div>

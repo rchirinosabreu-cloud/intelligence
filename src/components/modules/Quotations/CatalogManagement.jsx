@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/button';
@@ -13,46 +13,19 @@ import {
     LayoutGrid,
     Tag
 } from '@/components/ui/icons';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter
-} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { matchesServiceSearch } from '@/utils/serviceCatalogSearch';
-
-const CATEGORIES = [
-    { id: 'BRANDING', label: 'Branding' },
-    { id: 'DISENO', label: 'Diseño' },
-    { id: 'PRODUCCION_AUDIOVISUAL', label: 'Producción Audiovisual' },
-    { id: 'MARKETING', label: 'Marketing' },
-    { id: 'ADS', label: 'Ads' },
-    { id: 'EDITORIAL', label: 'Editorial' },
-    { id: 'WEB', label: 'Web' },
-    { id: 'DESARROLLO', label: 'Desarrollo' }
-];
+import ServiceCatalogModal, { SERVICE_CATEGORIES as CATEGORIES } from './ServiceCatalogModal';
 
 const CatalogManagement = () => {
     const confirm = useConfirmDialog();
-    const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingService, setEditingService] = useState(null);
 
-    // Form State
-    const [formData, setFormData] = useState({
-        name: '',
-        category: CATEGORIES[0].id,
-        description: '',
-        costo_real_estimado: '',
-        valor_neto: '',
-        valor_neto_actual: ''
-    });
 
     const { data: services = [], isLoading } = useQuery({
         queryKey: ['services-catalog'],
@@ -64,42 +37,6 @@ const CatalogManagement = () => {
             });
             if (!res.ok) throw new Error("Failed to fetch services");
             return await res.json();
-        }
-    });
-
-    const [formError, setFormError] = useState(null);
-
-    const mutation = useMutation({
-        mutationFn: async (data) => {
-            setFormError(null);
-            const url = editingService
-                ? `${getApiBaseUrl()}/api/services/${editingService.id}`
-                : `${getApiBaseUrl()}/api/services`;
-
-            const res = await fetch(url, {
-                method: editingService ? 'PUT' : 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                },
-                body: JSON.stringify(data)
-            });
-
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.error || "Operation failed");
-            }
-
-            return await res.json();
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries(['services-catalog']);
-            toast.success(editingService ? "Servicio actualizado" : "Servicio creado");
-            closeModal();
-        },
-        onError: (error) => {
-            setFormError(error.message);
-            toast.error(error.message);
         }
     });
 
@@ -120,38 +57,13 @@ const CatalogManagement = () => {
     });
 
     const openModal = (service = null) => {
-        if (service) {
-            setEditingService(service);
-            setFormData({
-                name: service.name,
-                category: service.category,
-                description: service.description,
-                costo_real_estimado: service.costo_real_estimado ?? '',
-                valor_neto: service.valor_neto,
-                valor_neto_actual: service.valor_neto_actual
-            });
-        } else {
-            setEditingService(null);
-            setFormData({
-                name: '',
-                category: CATEGORIES[0].id,
-                description: '',
-                costo_real_estimado: '',
-                valor_neto: '',
-                valor_neto_actual: ''
-            });
-        }
+        setEditingService(service);
         setIsModalOpen(true);
     };
 
     const closeModal = () => {
         setIsModalOpen(false);
         setEditingService(null);
-    };
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        mutation.mutate(formData);
     };
 
     const handleDelete = async (serviceId) => {
@@ -180,13 +92,6 @@ const CatalogManagement = () => {
         currency: 'COP',
         minimumFractionDigits: 0
     }).format(Number(value) || 0);
-
-    const formFinalPrice = Number(formData.valor_neto) || 0;
-    const formEstimatedCost = Number(formData.costo_real_estimado) || 0;
-    const formEstimatedProfit = formFinalPrice - formEstimatedCost;
-    const formEstimatedMargin = formFinalPrice > 0
-        ? (formEstimatedProfit / formFinalPrice) * 100
-        : 0;
 
     return (
         <div className="space-y-6">
@@ -318,119 +223,11 @@ const CatalogManagement = () => {
                 )}
             </div>
 
-            {/* CRUD Modal */}
-            <Dialog open={isModalOpen} onOpenChange={closeModal}>
-                <DialogContent className="sm:max-w-lg rounded-2xl">
-                    <DialogHeader>
-                        <DialogTitle className="text-xl font-bold">
-                            {editingService ? 'Editar Servicio' : 'Nuevo Servicio'}
-                        </DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-                        {formError && (
-                            <div className="bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/30 p-3 rounded-xl flex items-start gap-2 animate-in fade-in slide-in-from-top-1">
-                                <Tag className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                                <div className="space-y-1">
-                                    <p className="text-xs font-bold text-red-600 dark:text-red-400">Error de Guardado</p>
-                                    <p className="text-[10px] text-red-500 dark:text-red-400/80 leading-tight">{formError}</p>
-                                </div>
-                            </div>
-                        )}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="col-span-2 space-y-1.5">
-                                <label className="text-xs font-bold uppercase text-zinc-500">Nombre del Servicio</label>
-                                <input
-                                    required
-                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20"
-                                    value={formData.name}
-                                    onChange={e => setFormData({...formData, name: e.target.value})}
-                                    placeholder="Ej: Auditoría de marca"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold uppercase text-zinc-500">Categoría</label>
-                                <select
-                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none"
-                                    value={formData.category}
-                                    onChange={e => setFormData({...formData, category: e.target.value})}
-                                >
-                                    {CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.label}</option>)}
-                                </select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold uppercase text-zinc-500">Costo real estimado</label>
-                                <input
-                                    type="number"
-                                    required
-                                    min="0"
-                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20"
-                                    value={formData.costo_real_estimado}
-                                    onChange={e => setFormData({...formData, costo_real_estimado: e.target.value})}
-                                    placeholder="220000"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold uppercase text-zinc-500">Precio actual</label>
-                                <input
-                                    type="number"
-                                    required
-                                    min="0"
-                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20"
-                                    value={formData.valor_neto_actual}
-                                    onChange={e => setFormData({...formData, valor_neto_actual: e.target.value})}
-                                    placeholder="350000"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold uppercase text-zinc-500">Precio final</label>
-                                <input
-                                    type="number"
-                                    required
-                                    min="0"
-                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20"
-                                    value={formData.valor_neto}
-                                    onChange={e => setFormData({...formData, valor_neto: e.target.value})}
-                                    placeholder="730000"
-                                />
-                            </div>
-                            <div className="col-span-2 grid grid-cols-2 gap-4 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4">
-                                <div>
-                                    <p className="text-[10px] font-bold uppercase text-zinc-400">Ganancia</p>
-                                    <p className={cn(
-                                        "mt-1 text-base font-bold",
-                                        formEstimatedProfit >= 0
-                                            ? "text-emerald-600 dark:text-emerald-400"
-                                            : "text-rose-600 dark:text-rose-400"
-                                    )}>
-                                        {formatCurrency(formEstimatedProfit)}
-                                    </p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-[10px] font-bold uppercase text-zinc-400">Margen estimado</p>
-                                    <p className="mt-1 text-base font-bold text-zinc-800 dark:text-zinc-100">
-                                        {formEstimatedMargin.toFixed(1)}%
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="col-span-2 space-y-1.5">
-                                <label className="text-xs font-bold uppercase text-zinc-500">Descripción Comercial</label>
-                                <textarea
-                                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20 min-h-[100px]"
-                                    value={formData.description}
-                                    onChange={e => setFormData({...formData, description: e.target.value})}
-                                    placeholder="Describe el alcance del servicio..."
-                                />
-                            </div>
-                        </div>
-                        <DialogFooter className="pt-6">
-                            <Button type="button" variant="ghost" onClick={closeModal} className="rounded-xl">Cancelar</Button>
-                            <Button type="submit" disabled={mutation.isLoading} className="rounded-xl px-8">
-                                {mutation.isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (editingService ? 'Guardar Cambios' : 'Crear Servicio')}
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
+            <ServiceCatalogModal
+                open={isModalOpen}
+                onOpenChange={(open) => open ? setIsModalOpen(true) : closeModal()}
+                service={editingService}
+            />
         </div>
     );
 };
