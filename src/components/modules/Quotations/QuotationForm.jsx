@@ -42,6 +42,13 @@ const QuotationForm = () => {
     const [isLoadingRate, setIsLoadingRate] = useState(false);
     const [exchangeRateError, setExchangeRateError] = useState('');
     const [contractTermsText, setContractTermsText] = useState('');
+    const [quotationMode, setQuotationMode] = useState('STANDARD');
+    const [scenarios, setScenarios] = useState([]);
+    const [activeScenarioId, setActiveScenarioId] = useState(null);
+
+    const createScenario = (position, name = `Opción ${position + 1}`) => ({
+        id: crypto.randomUUID(), name, description: '', externalBudget: '', externalBudgetNote: '', order: position
+    });
 
     const fetchQuotation = useCallback(async () => {
         setIsLoadingData(true);
@@ -82,6 +89,23 @@ const QuotationForm = () => {
                 }
             }
             setSelectedItems(Array.isArray(parsedItems) ? parsedItems : []);
+            const scenarioMap = new Map();
+            parsedItems.forEach((item) => {
+                if (item?.scenarioId && !scenarioMap.has(item.scenarioId)) scenarioMap.set(item.scenarioId, {
+                    id: item.scenarioId,
+                    name: item.scenarioName || 'Escenario',
+                    description: item.scenarioDescription || '',
+                    externalBudget: item.scenarioExternalBudget ?? '',
+                    externalBudgetNote: item.scenarioExternalBudgetNote || '',
+                    order: Number(item.scenarioOrder) || 0
+                });
+            });
+            const loadedScenarios = [...scenarioMap.values()].sort((a, b) => a.order - b.order);
+            if (loadedScenarios.length > 0) {
+                setQuotationMode('SCENARIOS');
+                setScenarios(loadedScenarios);
+                setActiveScenarioId(loadedScenarios[0].id);
+            }
         } catch (error) {
             toast.error("No se pudo cargar la cotización");
             navigate('/cotizaciones');
@@ -213,9 +237,47 @@ const QuotationForm = () => {
             quantity: 1,
             note: '',
             estimatedCost: service.costo_real_estimado,
-            catalogFinalPrice: service.valor_neto
+            catalogFinalPrice: service.valor_neto,
+            ...(quotationMode === 'SCENARIOS' ? { scenarioId: activeScenarioId } : {})
         }]);
         setSearchText('');
+    };
+
+    const enableScenarioMode = () => {
+        const initialScenarios = [createScenario(0, 'Opción 1'), createScenario(1, 'Opción 2')];
+        setQuotationMode('SCENARIOS');
+        setScenarios(initialScenarios);
+        setActiveScenarioId(initialScenarios[0].id);
+        setSelectedItems((items) => items.map((item) => ({ ...item, scenarioId: initialScenarios[0].id })));
+    };
+
+    const disableScenarioMode = () => {
+        setQuotationMode('STANDARD');
+        setScenarios([]);
+        setActiveScenarioId(null);
+        setSelectedItems((items) => items.map((item) => {
+            const cleanItem = { ...item };
+            ['scenarioId', 'scenarioName', 'scenarioDescription', 'scenarioExternalBudget', 'scenarioExternalBudgetNote', 'scenarioOrder', 'selectedScenario'].forEach((field) => delete cleanItem[field]);
+            return cleanItem;
+        }));
+    };
+
+    const updateScenario = (id, field, value) => setScenarios((current) => current.map((scenario) => (
+        scenario.id === id ? { ...scenario, [field]: value } : scenario
+    )));
+
+    const addScenario = () => {
+        const scenario = createScenario(scenarios.length, `Opción ${scenarios.length + 1}`);
+        setScenarios((current) => [...current, scenario]);
+        setActiveScenarioId(scenario.id);
+    };
+
+    const removeScenario = (id) => {
+        if (scenarios.length <= 2) return toast.error('La propuesta debe conservar al menos dos escenarios');
+        const remaining = scenarios.filter((scenario) => scenario.id !== id);
+        setScenarios(remaining.map((scenario, order) => ({ ...scenario, order })));
+        setSelectedItems((items) => items.filter((item) => item.scenarioId !== id));
+        if (activeScenarioId === id) setActiveScenarioId(remaining[0].id);
     };
 
     const updateItem = (index, field, value) => {
@@ -265,6 +327,10 @@ const QuotationForm = () => {
             toast.error('Registra una tasa USD/COP válida antes de guardar');
             return;
         }
+        if (targetStatus === 'ACTIVA' && quotationMode === 'SCENARIOS' && scenarios.some((scenario) => !selectedItems.some((item) => item.scenarioId === scenario.id))) {
+            toast.error('Cada escenario debe incluir al menos un servicio');
+            return;
+        }
 
         setIsSaving(true);
         try {
@@ -284,7 +350,18 @@ const QuotationForm = () => {
                     client_email: clientEmail,
                     client_phone: clientPhone,
                     client_type: clientType,
-                    items: selectedItems,
+                    items: selectedItems.map((item) => {
+                        if (quotationMode !== 'SCENARIOS') return item;
+                        const scenario = scenarios.find(({ id: scenarioId }) => scenarioId === item.scenarioId);
+                        return {
+                            ...item,
+                            scenarioName: scenario?.name,
+                            scenarioDescription: scenario?.description,
+                            scenarioExternalBudget: scenario?.externalBudget,
+                            scenarioExternalBudgetNote: scenario?.externalBudgetNote,
+                            scenarioOrder: scenario?.order
+                        };
+                    }),
                     currency,
                     exchange_rate: currency === 'USD' ? Number(exchangeRate) : null,
                     exchange_rate_source: currency === 'USD' ? exchangeRateSource : null,
@@ -335,6 +412,10 @@ const QuotationForm = () => {
     };
 
     const totals = calculateTotals();
+    const activeScenarioItems = quotationMode === 'SCENARIOS'
+        ? selectedItems.filter((item) => item.scenarioId === activeScenarioId)
+        : selectedItems;
+    const activeScenarioSubtotal = activeScenarioItems.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
     const profitabilityAvailable = currency === 'COP' || Number(exchangeRate) > 0;
     const profitability = profitabilityAvailable
         ? calculateQuotationEconomics(selectedItems, { currency, exchangeRate: Number(exchangeRate) })
@@ -500,6 +581,41 @@ const QuotationForm = () => {
                                 </div>
                             </div>
 
+                            <div className="space-y-3 border-t border-zinc-100 pt-6 dark:border-zinc-800">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-zinc-500">Tipo de cotización</label>
+                                        <p className="mt-1 text-xs text-zinc-400">Usa escenarios cuando el cliente deba elegir una sola alternativa.</p>
+                                    </div>
+                                    <div className="flex rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
+                                        <button type="button" onClick={disableScenarioMode} className={cn('rounded-lg px-3 py-2 text-xs font-bold', quotationMode === 'STANDARD' ? 'bg-white shadow-sm dark:bg-zinc-700' : 'text-zinc-500')}>Estándar</button>
+                                        <button type="button" onClick={enableScenarioMode} className={cn('rounded-lg px-3 py-2 text-xs font-bold', quotationMode === 'SCENARIOS' ? 'bg-white text-primary shadow-sm dark:bg-zinc-700' : 'text-zinc-500')}>Por escenarios</button>
+                                    </div>
+                                </div>
+                                {quotationMode === 'SCENARIOS' && (
+                                    <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                                        <div className="flex gap-2 overflow-x-auto pb-3">
+                                            {scenarios.map((scenario, index) => (
+                                                <button key={scenario.id} type="button" onClick={() => setActiveScenarioId(scenario.id)} className={cn('whitespace-nowrap rounded-lg border px-3 py-2 text-xs font-bold', activeScenarioId === scenario.id ? 'border-primary bg-primary text-white' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300')}>{index + 1}. {scenario.name}</button>
+                                            ))}
+                                            <button type="button" onClick={addScenario} className="whitespace-nowrap rounded-lg border border-dashed border-primary/40 px-3 py-2 text-xs font-bold text-primary"><Plus className="mr-1 inline h-3 w-3" />Añadir opción</button>
+                                        </div>
+                                        {scenarios.filter(({ id: scenarioId }) => scenarioId === activeScenarioId).map((scenario) => (
+                                            <div key={scenario.id} className="grid gap-3 md:grid-cols-2">
+                                                <input value={scenario.name} onChange={(e) => updateScenario(scenario.id, 'name', e.target.value)} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-bold outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Nombre de la opción" />
+                                                <input type="number" min="0" value={scenario.externalBudget} onChange={(e) => updateScenario(scenario.id, 'externalBudget', e.target.value)} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Presupuesto externo (opcional)" />
+                                                <textarea value={scenario.description} onChange={(e) => updateScenario(scenario.id, 'description', e.target.value)} className="min-h-[70px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Descripción de esta alternativa" />
+                                                <textarea value={scenario.externalBudgetNote} onChange={(e) => updateScenario(scenario.id, 'externalBudgetNote', e.target.value)} className="min-h-[70px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Ej: pagado directamente por el cliente a Meta" />
+                                                <div className="md:col-span-2 flex justify-between text-xs">
+                                                    <span className="text-zinc-500">Los servicios que agregues ahora pertenecerán a esta opción.</span>
+                                                    <button type="button" onClick={() => removeScenario(scenario.id)} className="font-bold text-rose-500">Eliminar opción</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Service Search */}
                             <div className="space-y-2 relative">
                                 <label className="text-xs font-bold text-zinc-500 uppercase">Buscador de Servicios</label>
@@ -559,6 +675,7 @@ const QuotationForm = () => {
                                 ) : (
                                     <div className="space-y-3">
                                         {(selectedItems || []).map((item, idx) => (
+                                            quotationMode === 'SCENARIOS' && item.scenarioId !== activeScenarioId ? null :
                                             <div key={idx} className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-100 dark:border-zinc-800 space-y-3">
                                                 <div className="flex justify-between items-start">
                                                     <input
@@ -697,7 +814,13 @@ const QuotationForm = () => {
                             </div>
                         )}
 
-                        <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                        {quotationMode === 'SCENARIOS' ? (
+                            <div className="space-y-2 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+                                <p className="text-[10px] font-bold uppercase text-primary">Valor de la opción activa</p>
+                                <div className="flex justify-between text-base font-bold"><span>{scenarios.find(({ id: scenarioId }) => scenarioId === activeScenarioId)?.name}</span><span className="text-primary">{formatCurrency(activeScenarioSubtotal * (currency !== 'USD' && !isTaxExempt ? 1.19 : 1))}</span></div>
+                                <p className="text-[10px] leading-4 text-zinc-500">La propuesta no mostrará un total general. El valor definitivo se calculará cuando el cliente elija una opción.</p>
+                            </div>
+                        ) : <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
                             <div className="flex justify-between text-xs">
                                 <span className="text-zinc-500">Subtotal</span>
                                 <span className="font-medium">{formatCurrency(totals.subtotal)}</span>
@@ -725,7 +848,7 @@ const QuotationForm = () => {
                                 <span>Total</span>
                                 <span className="text-primary">{formatCurrency(totals.total)}</span>
                             </div>
-                        </div>
+                        </div>}
 
                         {selectedItems.length > 0 && (
                             <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">

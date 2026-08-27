@@ -158,6 +158,22 @@ test('public quotation serialization removes internal costs, margins, ids, and d
   assert.equal(result.items[0].price, 700000);
 });
 
+test('scenario metadata survives sanitization and can be grouped without exposing costs', async () => {
+  const domain = await loadQuotationDomain();
+  const items = domain.prepareQuotationItems([{
+    name: 'Plan básico', price: 1000000, quantity: 1, scenarioId: 'option-1',
+    scenarioName: 'Reactivación básica', scenarioDescription: 'Seis contenidos',
+    scenarioExternalBudget: 400000, scenarioExternalBudgetNote: 'Pago directo a Meta', scenarioOrder: 0
+  }]);
+  const scenarios = domain.groupQuotationScenarios(items);
+
+  assert.equal(domain.isScenarioQuotation(items), true);
+  assert.equal(scenarios.length, 1);
+  assert.equal(scenarios[0].name, 'Reactivación básica');
+  assert.equal(scenarios[0].externalBudget, 400000);
+  assert.equal(scenarios[0].items[0].price, 1000000);
+});
+
 test('quotation schema and UI expose the approved financial vocabulary', async () => {
   const [schema, catalog, form] = await Promise.all([
     readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8'),

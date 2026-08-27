@@ -206,6 +206,29 @@ test('public acceptance atomically approves an active quotation and notifies com
   assert.equal(state.notifications.every((item) => item.resourceId === 'quotation-1'), true);
 });
 
+test('accepting a scenario fixes the chosen option and calculates its contractual total', async () => {
+  const acceptance = await loadModule('../src/services/quotationAcceptanceService.js');
+  const { db } = createAcceptanceDb({
+    quotation: {
+      id: 'quotation-scenarios', consecutive: 26, status: 'ACTIVA', client_name: 'Cliente',
+      expires_at: new Date('2026-08-20T15:00:00.000Z'), is_tax_exempt: false,
+      items: [
+        { name: 'Plan A', price: 1000000, quantity: 1, scenarioId: 'a' },
+        { name: 'Plan B', price: 1500000, quantity: 1, scenarioId: 'b' }
+      ]
+    }
+  });
+
+  const result = await acceptance.acceptQuotationBySlug({
+    db, slug: 'token', scenarioId: 'b', now: new Date('2026-08-11T15:00:00.000Z')
+  });
+  assert.equal(result.quotation.subtotal, 1500000);
+  assert.equal(result.quotation.tax_amount, 285000);
+  assert.equal(result.quotation.total_amount, 1785000);
+  assert.equal(result.quotation.items.find((item) => item.scenarioId === 'b').selectedScenario, true);
+  assert.equal(result.quotation.items.find((item) => item.scenarioId === 'a').selectedScenario, false);
+});
+
 test('public acceptance is idempotent and rejects expired quotations', async () => {
   const acceptance = await loadModule('../src/services/quotationAcceptanceService.js');
   assert.equal(typeof acceptance.acceptQuotationBySlug, 'function');

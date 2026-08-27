@@ -20,13 +20,27 @@ const ensureAcceptableQuotation = (quotation, now) => {
   return 'ACCEPTABLE';
 };
 
-export const acceptQuotationBySlug = async ({ db, slug, now = new Date() }) => (
+export const acceptQuotationBySlug = async ({ db, slug, scenarioId, now = new Date() }) => (
   db.$transaction(async (tx) => {
     const quotation = await tx.quotation.findUnique({ where: { uuid_slug: slug } });
     const acceptanceState = ensureAcceptableQuotation(quotation, now);
     if (acceptanceState === 'ALREADY_ACCEPTED') {
       return { quotation, alreadyAccepted: true };
     }
+
+    const scenarioItems = Array.isArray(quotation.items) && quotation.items.some((item) => item?.scenarioId)
+      ? quotation.items.filter((item) => item.scenarioId === scenarioId)
+      : null;
+    if (Array.isArray(scenarioItems) && scenarioItems.length === 0) {
+      throw new QuotationAcceptanceError('Debes seleccionar uno de los escenarios disponibles', 400);
+    }
+    const acceptedItems = scenarioItems
+      ? quotation.items.map((item) => ({ ...item, selectedScenario: item.scenarioId === scenarioId }))
+      : quotation.items;
+    const subtotal = scenarioItems
+      ? scenarioItems.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0)
+      : Number(quotation.subtotal);
+    const taxAmount = quotation.is_tax_exempt ? 0 : Math.round(subtotal * 0.19 * 100) / 100;
 
     const update = await tx.quotation.updateMany({
       where: {
@@ -36,7 +50,11 @@ export const acceptQuotationBySlug = async ({ db, slug, now = new Date() }) => (
       },
       data: {
         status: 'APROBADA',
-        accepted_at: now
+        accepted_at: now,
+        items: acceptedItems,
+        subtotal,
+        tax_amount: taxAmount,
+        total_amount: subtotal + taxAmount
       }
     });
 
@@ -47,7 +65,7 @@ export const acceptQuotationBySlug = async ({ db, slug, now = new Date() }) => (
       throw new QuotationAcceptanceError('No fue posible aprobar la propuesta', 409);
     }
 
-    const approvedQuotation = { ...quotation, status: 'APROBADA', accepted_at: now };
+    const approvedQuotation = { ...quotation, status: 'APROBADA', accepted_at: now, items: acceptedItems, subtotal, tax_amount: taxAmount, total_amount: subtotal + taxAmount };
     const recipients = await tx.user.findMany({
       where: {
         isActive: true,

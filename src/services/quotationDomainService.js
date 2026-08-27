@@ -125,7 +125,16 @@ export const prepareQuotationItems = (items, catalogServices = [], trustedExisti
       quantity,
       note: String(item.note || '').slice(0, 2000),
       estimatedCost,
-      catalogFinalPrice
+      catalogFinalPrice,
+      ...(item?.scenarioId ? {
+        scenarioId: String(item.scenarioId).slice(0, 100),
+        scenarioName: String(item.scenarioName || 'Escenario').slice(0, 200),
+        scenarioDescription: String(item.scenarioDescription || '').slice(0, 2000),
+        scenarioExternalBudget: toOptionalNumber(item.scenarioExternalBudget),
+        scenarioExternalBudgetNote: String(item.scenarioExternalBudgetNote || '').slice(0, 1000),
+        scenarioOrder: Math.max(0, Number.parseInt(item.scenarioOrder, 10) || 0),
+        selectedScenario: Boolean(item.selectedScenario)
+      } : {})
     };
   });
 };
@@ -256,8 +265,38 @@ const serializePublicItem = (item) => ({
   description: String(item?.description || ''),
   price: Number(item?.price) || 0,
   quantity: Number(item?.quantity) || 0,
-  note: String(item?.note || '')
+  note: String(item?.note || ''),
+  ...(item?.scenarioId ? {
+    scenarioId: String(item.scenarioId),
+    scenarioName: String(item.scenarioName || 'Escenario'),
+    scenarioDescription: String(item.scenarioDescription || ''),
+    scenarioExternalBudget: toOptionalNumber(item.scenarioExternalBudget),
+    scenarioExternalBudgetNote: String(item.scenarioExternalBudgetNote || ''),
+    scenarioOrder: Number(item.scenarioOrder) || 0,
+    selectedScenario: Boolean(item.selectedScenario)
+  } : {})
 });
+
+export const isScenarioQuotation = (items = []) => Array.isArray(items) && items.some((item) => item?.scenarioId);
+
+export const groupQuotationScenarios = (items = []) => {
+  const groups = new Map();
+  items.forEach((item) => {
+    if (!item?.scenarioId) return;
+    if (!groups.has(item.scenarioId)) groups.set(item.scenarioId, {
+      id: item.scenarioId,
+      name: item.scenarioName || 'Escenario',
+      description: item.scenarioDescription || '',
+      externalBudget: toOptionalNumber(item.scenarioExternalBudget),
+      externalBudgetNote: item.scenarioExternalBudgetNote || '',
+      order: Number(item.scenarioOrder) || 0,
+      selected: Boolean(item.selectedScenario),
+      items: []
+    });
+    groups.get(item.scenarioId).items.push(item);
+  });
+  return [...groups.values()].sort((a, b) => a.order - b.order);
+};
 
 export const serializePublicQuotation = (quotation) => {
   if (!quotation || !['ACTIVA', 'APROBADA'].includes(quotation.status)) return null;

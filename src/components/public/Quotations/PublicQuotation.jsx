@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { calculateQuotationTotals, groupQuotationScenarios } from '@/services/quotationDomainService';
 
 const WHATSAPP_NUMBER = '573004329276';
 
@@ -29,6 +30,7 @@ const PublicQuotation = () => {
     const queryClient = useQueryClient();
     const confirm = useConfirmDialog();
     const [acceptanceError, setAcceptanceError] = useState('');
+    const [selectedScenarioId, setSelectedScenarioId] = useState('');
 
     const { data: quotation, isLoading, error } = useQuery({
         queryKey: ['public-quotation', slug],
@@ -41,10 +43,11 @@ const PublicQuotation = () => {
     });
 
     const acceptMutation = useMutation({
-        mutationFn: async () => {
+        mutationFn: async (scenarioId) => {
             const res = await fetch(`${getApiBaseUrl()}/api/quotations/public/${slug}/accept`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ scenarioId: scenarioId || undefined })
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || 'No fue posible aceptar la cotización');
@@ -72,16 +75,21 @@ const PublicQuotation = () => {
     };
 
     const handleAccept = async () => {
+        if (scenarios.length > 0 && !selectedScenarioId) {
+            setAcceptanceError('Selecciona primero uno de los escenarios.');
+            return;
+        }
+        const chosenScenario = scenarios.find(({ id }) => id === selectedScenarioId);
         const accepted = await confirm({
             title: 'Aceptar cotización',
-            description: `Confirmas la aprobación de la propuesta ${quotation.consecutive_formatted}. Brainstudio recibirá una notificación para continuar contigo.`,
+            description: `Confirmas la aprobación de la propuesta ${quotation.consecutive_formatted}${chosenScenario ? ` con la opción “${chosenScenario.name}”` : ''}. Brainstudio recibirá una notificación para continuar contigo.`,
             confirmLabel: 'Confirmar aceptación',
             cancelLabel: 'Volver',
             tone: 'primary'
         });
         if (!accepted) return;
         setAcceptanceError('');
-        acceptMutation.mutate();
+        acceptMutation.mutate(selectedScenarioId);
     };
 
     if (isLoading) {
@@ -138,6 +146,13 @@ const PublicQuotation = () => {
 
     const isBrain = quotation.emisor_type === 'BRAIN_STUDIO';
     const isApproved = quotation.status === 'APROBADA';
+    const scenarios = groupQuotationScenarios(quotation.items || []);
+    const approvedScenario = scenarios.find(({ selected }) => selected);
+    const visibleScenarios = isApproved && approvedScenario ? [approvedScenario] : scenarios;
+    const chosenScenario = approvedScenario || scenarios.find(({ id }) => id === selectedScenarioId);
+    const chosenAmounts = chosenScenario
+        ? calculateQuotationTotals(chosenScenario.items, quotation.is_tax_exempt || quotation.currency === 'USD')
+        : null;
     const terms = String(quotation.terms_and_conditions || '')
         .split('\n')
         .map((line) => line.replace(/^[●•]\s*/, '').trim())
@@ -205,9 +220,33 @@ const PublicQuotation = () => {
                         <div className="space-y-8">
                             <div>
                                 <p className="text-xs font-bold uppercase text-violet-700 dark:text-violet-300">Alcance</p>
-                                <h2 className="mt-2 text-2xl font-bold">Servicios incluidos</h2>
+                                <h2 className="mt-2 text-2xl font-bold">{scenarios.length > 0 ? (isApproved ? 'Escenario seleccionado' : 'Escenarios disponibles') : 'Servicios incluidos'}</h2>
                             </div>
-                            <div className="space-y-3">
+                            {scenarios.length > 0 ? (
+                                <div className="grid gap-5 lg:grid-cols-3">
+                                    {visibleScenarios.map((scenario) => {
+                                        const amounts = calculateQuotationTotals(scenario.items, quotation.is_tax_exempt || quotation.currency === 'USD');
+                                        const isSelected = selectedScenarioId === scenario.id || scenario.selected;
+                                        return (
+                                            <article key={scenario.id} className={`flex flex-col rounded-2xl border-2 p-6 transition-all ${isSelected ? 'border-[#00859C] bg-cyan-50/40 shadow-lg dark:bg-cyan-950/10' : 'border-zinc-200 dark:border-zinc-800'}`}>
+                                                <p className="text-xs font-bold uppercase text-[#00859C]">Opción {scenario.order + 1}</p>
+                                                <h3 className="mt-2 text-xl font-bold">{scenario.name}</h3>
+                                                {scenario.description && <p className="mt-3 text-sm leading-6 text-zinc-500">{scenario.description}</p>}
+                                                <div className="mt-5 space-y-4 border-t border-zinc-200 pt-5 dark:border-zinc-800">
+                                                    {scenario.items.map((item, index) => <div key={`${item.name}-${index}`}><p className="text-sm font-bold">{item.name}</p>{item.description && <p className="mt-1 text-xs leading-5 text-zinc-500">{item.description}</p>}</div>)}
+                                                </div>
+                                                <div className="mt-auto pt-6">
+                                                    <p className="text-xs font-bold uppercase text-zinc-400">Valor de esta opción</p>
+                                                    <p className="mt-1 text-2xl font-black">{formatCurrency(amounts.totalAmount)}</p>
+                                                    {!quotation.is_tax_exempt && quotation.currency !== 'USD' && <p className="mt-1 text-xs text-zinc-500">Incluye IVA del 19%</p>}
+                                                    {scenario.externalBudget !== null && <div className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300"><strong>Presupuesto externo: {formatCurrency(scenario.externalBudget)}</strong>{scenario.externalBudgetNote && <p className="mt-1 leading-5">{scenario.externalBudgetNote}</p>}</div>}
+                                                    {!isApproved && <Button type="button" onClick={() => { setSelectedScenarioId(scenario.id); setAcceptanceError(''); }} variant={isSelected ? 'default' : 'outline'} className="mt-5 w-full rounded-lg">{isSelected ? 'Opción seleccionada' : 'Elegir esta opción'}</Button>}
+                                                </div>
+                                            </article>
+                                        );
+                                    })}
+                                </div>
+                            ) : <div className="space-y-3">
                                 {(quotation.items || []).map((item, index) => (
                                     <div key={`${item.name}-${index}`} className="space-y-3">
                                         <article className="rounded-lg border border-zinc-200 p-5 dark:border-zinc-800 sm:p-6">
@@ -235,7 +274,7 @@ const PublicQuotation = () => {
                                         )}
                                     </div>
                                 ))}
-                            </div>
+                            </div>}
                         </div>
                     </div>
                 </section>
@@ -256,12 +295,14 @@ const PublicQuotation = () => {
                         </div>
 
                         <div className="rounded-lg bg-violet-700 p-6 text-white shadow-xl shadow-violet-950/10 dark:bg-violet-800 sm:p-8">
-                            <p className="text-xs font-semibold uppercase text-violet-200">Inversión total</p>
-                            <p className="mt-3 text-4xl font-bold leading-none">{formatCurrency(quotation.total_amount)}</p>
-                            <div className="mt-6 space-y-2 border-t border-white/20 pt-5 text-sm">
-                                <div className="flex justify-between gap-4"><span className="text-violet-100">Subtotal</span><span>{formatCurrency(quotation.subtotal)}</span></div>
-                                {quotation.currency !== 'USD' && !quotation.is_tax_exempt && <div className="flex justify-between gap-4"><span className="text-violet-100">IVA (19%)</span><span>{formatCurrency(quotation.tax_amount)}</span></div>}
-                            </div>
+                            <p className="text-xs font-semibold uppercase text-violet-200">{scenarios.length > 0 ? (chosenScenario ? chosenScenario.name : 'Selecciona un escenario') : 'Inversión total'}</p>
+                            {scenarios.length === 0 || chosenAmounts ? <>
+                                <p className="mt-3 text-4xl font-bold leading-none">{formatCurrency(chosenAmounts?.totalAmount ?? quotation.total_amount)}</p>
+                                <div className="mt-6 space-y-2 border-t border-white/20 pt-5 text-sm">
+                                    <div className="flex justify-between gap-4"><span className="text-violet-100">Subtotal</span><span>{formatCurrency(chosenAmounts?.subtotal ?? quotation.subtotal)}</span></div>
+                                    {quotation.currency !== 'USD' && !quotation.is_tax_exempt && <div className="flex justify-between gap-4"><span className="text-violet-100">IVA (19%)</span><span>{formatCurrency(chosenAmounts?.taxAmount ?? quotation.tax_amount)}</span></div>}
+                                </div>
+                            </> : <p className="mt-3 text-sm leading-6 text-violet-100">Compara las opciones anteriores y elige la que deseas aprobar.</p>}
 
                             {isApproved ? (
                                 <div className="mt-7 rounded-md bg-white/15 p-4 text-white">

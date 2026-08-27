@@ -66,6 +66,28 @@ test('quotation PDF splits contractual terms evenly by count', () => {
   assert.deepEqual(splitTermColumns(Array.from({ length: 13 }, (_, index) => index)).map((column) => column.length), [6, 7]);
 });
 
+test('scenario quotation PDF compares options without inventing a grand total', async () => {
+  const scenarioQuotation = {
+    ...quotation,
+    subtotal: 0,
+    tax_amount: 0,
+    total_amount: 0,
+    items: [
+      { name: 'Plan básico', description: 'Seis contenidos.', quantity: 1, price: 1000000, scenarioId: 'a', scenarioName: 'Reactivación básica', scenarioOrder: 0, scenarioExternalBudget: 400000, scenarioExternalBudgetNote: 'Pago directo a Meta.' },
+      { name: 'Plan activo', description: 'Ocho contenidos.', quantity: 1, price: 1300000, scenarioId: 'b', scenarioName: 'Presencia activa', scenarioOrder: 1 }
+    ]
+  };
+  const parser = new PDFParse({ data: generateQuotationPdfBuffer(scenarioQuotation, issuer) });
+  const { text } = await parser.getText();
+  await parser.destroy();
+
+  assert.match(text, /ESCENARIOS DISPONIBLES/i);
+  assert.match(text, /Reactivación básica/);
+  assert.match(text, /Presencia activa/);
+  assert.match(text, /SELECCIÓN PENDIENTE/i);
+  assert.doesNotMatch(text, /INVERSIÓN TOTAL\s+\$\s*0/i);
+});
+
 test('quotation PDF separates service time so its label can be emphasized', () => {
   assert.deepEqual(
     splitServiceTime('Alcance completo. Tiempo de servicio: 15 días.'),

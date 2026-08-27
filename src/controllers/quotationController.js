@@ -12,6 +12,7 @@ import {
     buildQuotationValidityUpdate,
     calculateQuotationEconomics,
     calculateQuotationTotals,
+    isScenarioQuotation,
     normalizeQuotationTaxForCurrency,
     normalizeQuotationExchangeRate,
     prepareQuotationItems,
@@ -130,10 +131,10 @@ export const createQuotation = async (req, res) => {
         });
 
         // 4. Financial Calculations
-        const { subtotal, taxAmount: tax_amount, totalAmount: total_amount } = calculateQuotationTotals(
-            preparedItems,
-            is_tax_exempt
-        );
+        const scenarioMode = isScenarioQuotation(preparedItems);
+        const { subtotal, taxAmount: tax_amount, totalAmount: total_amount } = scenarioMode
+            ? { subtotal: 0, taxAmount: 0, totalAmount: 0 }
+            : calculateQuotationTotals(preparedItems, is_tax_exempt);
 
         // 5. Terms and Conditions (Immutable + Sanitization)
         const hasExplicitTerms = Object.prototype.hasOwnProperty.call(req.body, 'terms_and_conditions');
@@ -233,10 +234,10 @@ export const updateQuotation = async (req, res) => {
             manualTaxExempt: manual_tax_exempt
         });
 
-        const { subtotal, taxAmount: tax_amount, totalAmount: total_amount } = calculateQuotationTotals(
-            preparedItems,
-            is_tax_exempt
-        );
+        const scenarioMode = isScenarioQuotation(preparedItems);
+        const { subtotal, taxAmount: tax_amount, totalAmount: total_amount } = scenarioMode
+            ? { subtotal: 0, taxAmount: 0, totalAmount: 0 }
+            : calculateQuotationTotals(preparedItems, is_tax_exempt);
 
         const hasExplicitTerms = Object.prototype.hasOwnProperty.call(req.body, 'terms_and_conditions');
         const final_terms = hasExplicitTerms
@@ -314,9 +315,11 @@ export const getPublicQuotation = async (req, res) => {
 
 export const acceptPublicQuotation = async (req, res) => {
     try {
+        const { scenarioId } = req.body || {};
         const { quotation, alreadyAccepted } = await acceptQuotationBySlug({
             db: prisma,
-            slug: req.params.uuid_slug
+            slug: req.params.uuid_slug,
+            scenarioId
         });
         const publicQuotation = serializePublicQuotation(quotation);
         const emisor_data = EMISORES_DATA[quotation.emisor_type] || {};

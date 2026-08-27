@@ -72,6 +72,20 @@ const splitTerms = (value) => String(value || '')
   .map((line) => line.replace(/^[●•]\s*/, '').trim())
   .filter(Boolean);
 
+const groupScenarios = (items = []) => {
+  const grouped = new Map();
+  items.forEach((item) => {
+    if (!item?.scenarioId) return;
+    if (!grouped.has(item.scenarioId)) grouped.set(item.scenarioId, {
+      id: item.scenarioId, name: item.scenarioName || 'Escenario', description: item.scenarioDescription || '',
+      externalBudget: item.scenarioExternalBudget, externalBudgetNote: item.scenarioExternalBudgetNote || '',
+      order: Number(item.scenarioOrder) || 0, selected: Boolean(item.selectedScenario), items: []
+    });
+    grouped.get(item.scenarioId).items.push(item);
+  });
+  return [...grouped.values()].sort((a, b) => a.order - b.order);
+};
+
 export const splitTermColumns = (terms = []) => {
   const firstColumnCount = Math.floor(terms.length / 2);
   return [terms.slice(0, firstColumnCount), terms.slice(firstColumnCount)];
@@ -264,10 +278,47 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
   doc.text(formatDate(quotation.expires_at), PDF_LAYOUT.rightEdge, y + 19, { align: 'right' });
 
   y += 42;
-  y = drawSectionHeading(doc, y, 'Alcance', 'Servicios incluidos');
-  (quotation.items || []).forEach((item, index) => {
-    y = drawService(doc, item, index, y, formatMoney);
-  });
+  const allScenarios = groupScenarios(quotation.items || []);
+  const selectedScenario = allScenarios.find(({ selected }) => selected);
+  const scenarios = selectedScenario ? [selectedScenario] : allScenarios;
+  y = drawSectionHeading(doc, y, 'Alcance', scenarios.length ? (selectedScenario ? 'Escenario seleccionado' : 'Escenarios disponibles') : 'Servicios incluidos');
+  if (scenarios.length) {
+    scenarios.forEach((scenario, scenarioIndex) => {
+      y = ensureSpace(doc, y, 30);
+      setText(doc, { size: 8, style: 'bold', color: COLORS.brand });
+      doc.text(`OPCIÓN ${scenarioIndex + 1}`, PAGE.left, y);
+      setText(doc, { size: 15, style: 'bold' });
+      doc.text(scenario.name, PAGE.left, y + 7);
+      if (scenario.description) {
+        setText(doc, { size: 8.2, color: COLORS.muted });
+        const lines = doc.splitTextToSize(scenario.description, CONTENT_WIDTH);
+        doc.text(lines, PAGE.left, y + 13, { lineHeightFactor: 1.25 });
+        y += lines.length * 3.7;
+      }
+      y += 18;
+      scenario.items.forEach((item, index) => { y = drawService(doc, item, index, y, formatMoney); });
+      const subtotal = scenario.items.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
+      const total = quotation.currency !== 'USD' && !quotation.is_tax_exempt ? subtotal * 1.19 : subtotal;
+      y = ensureSpace(doc, y, scenario.externalBudget !== null && scenario.externalBudget !== undefined ? 26 : 15);
+      setText(doc, { size: 8, style: 'bold', color: COLORS.brand });
+      doc.text('VALOR DE ESTA OPCIÓN', PAGE.left, y);
+      setText(doc, { size: 14, style: 'bold' });
+      doc.text(formatMoney.format(total), PDF_LAYOUT.rightEdge, y, { align: 'right' });
+      y += 8;
+      if (scenario.externalBudget !== null && scenario.externalBudget !== undefined) {
+        setText(doc, { size: 8, style: 'bold', color: COLORS.muted });
+        doc.text(`Presupuesto externo: ${formatMoney.format(Number(scenario.externalBudget))}`, PAGE.left, y);
+        if (scenario.externalBudgetNote) {
+          setText(doc, { size: 7.5, color: COLORS.muted });
+          doc.text(doc.splitTextToSize(scenario.externalBudgetNote, CONTENT_WIDTH - 45), PAGE.left + 45, y);
+        }
+        y += 10;
+      }
+      y += 7;
+    });
+  } else {
+    (quotation.items || []).forEach((item, index) => { y = drawService(doc, item, index, y, formatMoney); });
+  }
 
   y = ensureSpace(doc, y, 58);
   setText(doc, { size: 7.5, style: 'bold', color: COLORS.subtle });
@@ -285,16 +336,18 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
   doc.setFillColor(...COLORS.brand);
   doc.roundedRect(105, y, 87, 48, 2, 2, 'F');
   setText(doc, { size: 8, style: 'bold', color: [221, 214, 254] });
-  doc.text('INVERSIÓN TOTAL', 112, y + 9);
+  doc.text(scenarios.length && !selectedScenario ? 'SELECCIÓN PENDIENTE' : 'INVERSIÓN TOTAL', 112, y + 9);
   setText(doc, { size: 21, style: 'bold', color: COLORS.white });
-  doc.text(formatMoney.format(Number(quotation.total_amount || 0)), 112, y + 21);
+  doc.text(scenarios.length && !selectedScenario ? 'El cliente elegirá una opción' : formatMoney.format(Number(quotation.total_amount || 0)), 112, y + 21);
   doc.setDrawColor(255, 255, 255);
   doc.setLineWidth(0.2);
   doc.line(112, y + 27, 185, y + 27);
   setText(doc, { size: 8, color: [237, 233, 254] });
-  doc.text('Subtotal', 112, y + 35);
-  doc.text(formatMoney.format(Number(quotation.subtotal || 0)), 185, y + 35, { align: 'right' });
-  if (quotation.currency !== 'USD' && !quotation.is_tax_exempt) {
+  if (!scenarios.length || selectedScenario) {
+    doc.text('Subtotal', 112, y + 35);
+    doc.text(formatMoney.format(Number(quotation.subtotal || 0)), 185, y + 35, { align: 'right' });
+  }
+  if ((!scenarios.length || selectedScenario) && quotation.currency !== 'USD' && !quotation.is_tax_exempt) {
     doc.text('IVA (19%)', 112, y + 42);
     doc.text(formatMoney.format(Number(quotation.tax_amount || 0)), 185, y + 42, { align: 'right' });
   }

@@ -195,7 +195,14 @@ const QuotationList = () => {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap font-bold">
-                                            {formatCurrency(q.total_amount, q.currency)}
+                                            <div className="flex flex-col">
+                                                <span>{Array.isArray(q.items) && q.items.some((item) => item?.scenarioId) && q.status !== 'APROBADA'
+                                                    ? `${new Set(q.items.map((item) => item.scenarioId).filter(Boolean)).size} escenarios`
+                                                    : formatCurrency(q.total_amount, q.currency)}</span>
+                                                {q.status === 'APROBADA' && q.items?.find((item) => item.selectedScenario)?.scenarioName && (
+                                                    <span className="mt-1 text-[10px] font-semibold text-[#00859C]">{q.items.find((item) => item.selectedScenario).scenarioName}</span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             {q.status === 'APROBADA' ? (
