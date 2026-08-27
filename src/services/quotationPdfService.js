@@ -68,6 +68,18 @@ const splitTerms = (value) => String(value || '')
   .map((line) => line.replace(/^[●•]\s*/, '').trim())
   .filter(Boolean);
 
+export const splitTermColumns = (terms = []) => {
+  const firstColumnCount = Math.floor(terms.length / 2);
+  return [terms.slice(0, firstColumnCount), terms.slice(firstColumnCount)];
+};
+
+export const splitServiceTime = (description = '') => {
+  const normalized = String(description).replace(/\s+/g, ' ').trim();
+  const match = normalized.match(/^(.*?)(?:\s*)Tiempo de servicio\s*:\s*(.+)$/i);
+  if (!match) return { body: normalized, serviceTime: '' };
+  return { body: match[1].trim(), serviceTime: match[2].trim() };
+};
+
 const drawSectionHeading = (doc, y, eyebrow, title) => {
   setText(doc, { size: 8, style: 'bold', color: COLORS.brand });
   doc.text(eyebrow.toUpperCase(), PAGE.left, y);
@@ -77,11 +89,21 @@ const drawSectionHeading = (doc, y, eyebrow, title) => {
 };
 
 const drawService = (doc, item, index, y, formatMoney) => {
-  const description = String(item.description || '').replace(/\s+/g, ' ').trim();
+  const { body: description, serviceTime } = splitServiceTime(item.description);
   const note = String(item.note || '').trim();
+  setText(doc, { size: 8.1, color: COLORS.muted });
   const descriptionLines = description ? doc.splitTextToSize(description, 126) : [];
+  const serviceTimeLabel = 'Tiempo de servicio:';
+  setText(doc, { size: 8.1, style: 'bold', color: COLORS.muted });
+  const serviceTimeLabelWidth = doc.getTextWidth(serviceTimeLabel);
+  setText(doc, { size: 8.1, color: COLORS.muted });
+  const serviceTimeLines = serviceTime
+    ? doc.splitTextToSize(serviceTime, 126 - serviceTimeLabelWidth - 1.5)
+    : [];
+  setText(doc, { size: 8.5, color: COLORS.muted });
   const noteLines = note ? doc.splitTextToSize(note, CONTENT_WIDTH - 12) : [];
-  const cardHeight = Math.max(25, 17 + descriptionLines.length * 4.1);
+  const descriptionLineCount = descriptionLines.length + serviceTimeLines.length;
+  const cardHeight = Math.max(25, 17 + descriptionLineCount * 4.1);
   const noteHeight = note ? 12 + noteLines.length * 4.8 : 0;
   y = ensureSpace(doc, y, cardHeight + noteHeight + 7);
 
@@ -98,6 +120,13 @@ const drawService = (doc, item, index, y, formatMoney) => {
   if (descriptionLines.length) {
     setText(doc, { size: 8.1, color: COLORS.muted });
     doc.text(descriptionLines, PAGE.left + 19, y + 17.5, { lineHeightFactor: 1.22 });
+  }
+  if (serviceTimeLines.length) {
+    const serviceTimeY = y + 17.5 + descriptionLines.length * 3.5;
+    setText(doc, { size: 8.1, style: 'bold', color: COLORS.muted });
+    doc.text(serviceTimeLabel, PAGE.left + 19, serviceTimeY);
+    setText(doc, { size: 8.1, color: COLORS.muted });
+    doc.text(serviceTimeLines, PAGE.left + 20.5 + serviceTimeLabelWidth, serviceTimeY, { lineHeightFactor: 1.22 });
   }
 
   const quantity = Number(item.quantity || 0);
@@ -124,43 +153,27 @@ const drawTerms = (doc, terms, y) => {
   if (PAGE.height - PAGE.bottom - y < 120) y = addPage(doc);
   else y = ensureSpace(doc, y, 34);
   y = drawSectionHeading(doc, y, 'Información contractual', 'Términos y condiciones');
-  const columnGap = 10;
+  const columnGap = 6;
   const columnWidth = (CONTENT_WIDTH - columnGap) / 2;
   const columnStarts = [PAGE.left, PAGE.left + columnWidth + columnGap];
-  const entries = terms.map((term) => {
-    const lines = doc.splitTextToSize(term, columnWidth - 10);
-    return { lines, blockHeight: Math.max(8, lines.length * 3.75 + 3.5) };
-  });
-  const balancedHeight = entries.reduce((sum, entry) => sum + entry.blockHeight, 0) / 2;
-  let column = 0;
-  let columnY = y;
-  let firstColumnHeight = 0;
+  const indexedTerms = terms.map((term, index) => ({ term, number: index + 1 }));
+  const columns = splitTermColumns(indexedTerms);
 
-  entries.forEach(({ lines, blockHeight }, index) => {
-    if (column === 0 && index > 0 && firstColumnHeight + blockHeight > balancedHeight) {
-      column = 1;
-      columnY = y;
-    }
-    if (columnY + blockHeight > PAGE.height - PAGE.bottom) {
-      if (column === 0) {
-        column = 1;
-        columnY = y;
-      } else {
-        addPage(doc);
-        column = 0;
-        y = PAGE.top;
-        columnY = y;
-      }
-    }
+  columns.forEach((columnTerms, column) => {
+    let columnY = y;
     const x = columnStarts[column];
-    doc.setFillColor(...COLORS.brandSoft);
-    doc.roundedRect(x, columnY, 6.5, 6.5, 1.3, 1.3, 'F');
-    setText(doc, { size: 6.5, style: 'bold', color: COLORS.brand });
-    doc.text(String(index + 1), x + 3.25, columnY + 4.45, { align: 'center' });
-    setText(doc, { size: 7.2, color: COLORS.muted });
-    doc.text(lines, x + 9, columnY + 3.4, { lineHeightFactor: 1.22 });
-    columnY += blockHeight;
-    if (column === 0) firstColumnHeight += blockHeight;
+    columnTerms.forEach(({ term, number }) => {
+      setText(doc, { size: 7.2, color: COLORS.muted });
+      const lines = doc.splitTextToSize(term, columnWidth - 10);
+      const blockHeight = Math.max(8, lines.length * 3.75 + 3.5);
+      doc.setFillColor(...COLORS.brandSoft);
+      doc.roundedRect(x, columnY, 6.5, 6.5, 1.3, 1.3, 'F');
+      setText(doc, { size: 6.5, style: 'bold', color: COLORS.brand });
+      doc.text(String(number), x + 3.25, columnY + 4.45, { align: 'center' });
+      setText(doc, { size: 7.2, color: COLORS.muted });
+      doc.text(lines, x + 9, columnY + 3.4, { lineHeightFactor: 1.22 });
+      columnY += blockHeight;
+    });
   });
 };
 

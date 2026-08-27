@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PDFParse } from 'pdf-parse';
 
-import { generateQuotationPdfBuffer } from '../src/services/quotationPdfService.js';
+import {
+  generateQuotationPdfBuffer,
+  splitServiceTime,
+  splitTermColumns
+} from '../src/services/quotationPdfService.js';
 
 const quotation = {
   consecutive: 42,
@@ -53,4 +57,17 @@ test('quotation PDF preserves service descriptions, notes and all contractual te
   assert.match(text, /Condición contractual\s+18/);
   assert.ok(totalPages >= 2, 'long terms should continue onto another page');
   assert.ok(totalPages <= 2, 'compact two-column terms should avoid an unnecessary third page');
+});
+
+test('quotation PDF splits contractual terms evenly by count', () => {
+  assert.deepEqual(splitTermColumns(Array.from({ length: 9 }, (_, index) => index)).map((column) => column.length), [4, 5]);
+  assert.deepEqual(splitTermColumns(Array.from({ length: 10 }, (_, index) => index)).map((column) => column.length), [5, 5]);
+  assert.deepEqual(splitTermColumns(Array.from({ length: 13 }, (_, index) => index)).map((column) => column.length), [6, 7]);
+});
+
+test('quotation PDF separates service time so its label can be emphasized', () => {
+  assert.deepEqual(
+    splitServiceTime('Alcance completo. Tiempo de servicio: 15 días.'),
+    { body: 'Alcance completo.', serviceTime: '15 días.' }
+  );
 });
