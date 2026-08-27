@@ -3,6 +3,10 @@ import { jsPDF } from 'jspdf';
 
 const PAGE = { width: 210, height: 297, left: 18, right: 18, top: 18, bottom: 20 };
 const CONTENT_WIDTH = PAGE.width - PAGE.left - PAGE.right;
+export const PDF_LAYOUT = {
+  serviceDescriptionWidth: 112,
+  rightEdge: PAGE.width - PAGE.right
+};
 const COLORS = {
   ink: [24, 24, 27],
   muted: [82, 82, 91],
@@ -92,13 +96,13 @@ const drawService = (doc, item, index, y, formatMoney) => {
   const { body: description, serviceTime } = splitServiceTime(item.description);
   const note = String(item.note || '').trim();
   setText(doc, { size: 8.1, color: COLORS.muted });
-  const descriptionLines = description ? doc.splitTextToSize(description, 126) : [];
+  const descriptionLines = description ? doc.splitTextToSize(description, PDF_LAYOUT.serviceDescriptionWidth) : [];
   const serviceTimeLabel = 'Tiempo de servicio:';
   setText(doc, { size: 8.1, style: 'bold', color: COLORS.muted });
   const serviceTimeLabelWidth = doc.getTextWidth(serviceTimeLabel);
   setText(doc, { size: 8.1, color: COLORS.muted });
   const serviceTimeLines = serviceTime
-    ? doc.splitTextToSize(serviceTime, 126 - serviceTimeLabelWidth - 1.5)
+    ? doc.splitTextToSize(serviceTime, PDF_LAYOUT.serviceDescriptionWidth - serviceTimeLabelWidth - 1.5)
     : [];
   setText(doc, { size: 8.5, color: COLORS.muted });
   const noteLines = note ? doc.splitTextToSize(note, CONTENT_WIDTH - 12) : [];
@@ -227,11 +231,11 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
   const intro = doc.splitTextToSize('Reunimos los servicios, alcances e inversión necesarios para avanzar con claridad hacia los objetivos acordados.', 118);
   doc.text(intro, PAGE.left, y + 9, { lineHeightFactor: 1.4 });
   setText(doc, { size: 7.5, style: 'bold', color: COLORS.subtle });
-  doc.text('EMISIÓN', 162, y - 2);
-  doc.text('VIGENCIA', 162, y + 13);
+  doc.text('EMISIÓN', PDF_LAYOUT.rightEdge, y - 2, { align: 'right' });
+  doc.text('VIGENCIA', PDF_LAYOUT.rightEdge, y + 13, { align: 'right' });
   setText(doc, { size: 8.5, style: 'bold' });
-  doc.text(formatDate(quotation.created_at), 162, y + 4);
-  doc.text(formatDate(quotation.expires_at), 162, y + 19);
+  doc.text(formatDate(quotation.created_at), PDF_LAYOUT.rightEdge, y + 4, { align: 'right' });
+  doc.text(formatDate(quotation.expires_at), PDF_LAYOUT.rightEdge, y + 19, { align: 'right' });
 
   y += 42;
   y = drawSectionHeading(doc, y, 'Alcance', 'Servicios incluidos');

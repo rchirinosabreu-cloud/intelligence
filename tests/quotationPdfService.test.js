@@ -4,6 +4,7 @@ import { PDFParse } from 'pdf-parse';
 
 import {
   generateQuotationPdfBuffer,
+  PDF_LAYOUT,
   splitServiceTime,
   splitTermColumns
 } from '../src/services/quotationPdfService.js';
@@ -70,4 +71,9 @@ test('quotation PDF separates service time so its label can be emphasized', () =
     splitServiceTime('Alcance completo. Tiempo de servicio: 15 días.'),
     { body: 'Alcance completo.', serviceTime: '15 días.' }
   );
+});
+
+test('quotation PDF reserves space between descriptions and right-aligned commercial metadata', () => {
+  assert.equal(PDF_LAYOUT.serviceDescriptionWidth, 112);
+  assert.equal(PDF_LAYOUT.rightEdge, 192);
 });
