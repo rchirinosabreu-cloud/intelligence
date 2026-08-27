@@ -52,24 +52,34 @@ const append = (target, ids) => ids.forEach((id) => target.add(id));
 
 export const resolveSuggestedContractTermIds = (services = [], context = {}) => {
   const selected = new Set(GENERAL_IDS);
-  const searchable = normalizeServiceSearchText(services.map((service) => (
-    `${service?.category || ''} ${service?.name || ''} ${service?.description || ''}`
-  )).join(' '));
-  const has = (...patterns) => patterns.some((pattern) => searchable.includes(normalizeServiceSearchText(pattern)));
+  const normalizedServices = services.map((service) => ({
+    category: normalizeServiceSearchText(service?.category || ''),
+    title: normalizeServiceSearchText(service?.name || ''),
+    description: normalizeServiceSearchText(service?.description || '')
+  }));
+  const categoryIs = (category) => normalizedServices.some((service) => (
+    service.category === normalizeServiceSearchText(category)
+  ));
+  const titleHas = (...patterns) => normalizedServices.some(({ title }) => (
+    patterns.some((pattern) => title.includes(normalizeServiceSearchText(pattern)))
+  ));
+  const serviceHas = (...patterns) => normalizedServices.some(({ title, description }) => (
+    patterns.some((pattern) => `${title} ${description}`.includes(normalizeServiceSearchText(pattern)))
+  ));
 
   if (context.currency === 'COP' && context.isTaxExempt) selected.add('billing-electronic');
-  if (has('ADS', 'pauta', 'campaña publicitaria', 'meta ads', 'google ads')) append(selected, idsByGroup('Pauta'));
-  if (has('MARKETING', 'redes sociales', 'social media', 'parrilla', 'contenido')) append(selected, idsByGroup('Marketing'));
-  if (has('PRODUCCION_AUDIOVISUAL', 'produccion audiovisual', 'grabacion', 'jornada')) selected.add('production-session');
-  if (has('edicion de video', 'edicion de vídeo') && !has('jornada', 'grabacion')) selected.add('production-client-material');
-  if (has('produccion de contenido', 'producción de contenido')) selected.add('production-files-only');
-  if (has('BRANDING', 'identidad visual', 'logo', 'marca')) append(selected, idsByGroup('Branding').filter((id) => !['branding-naming', 'branding-slogan', 'branding-rebranding'].includes(id)));
-  if (has('naming', 'creacion de nombre')) selected.add('branding-naming');
-  if (has('slogan')) selected.add('branding-slogan');
-  if (has('rebranding', 'rediseño de marca')) selected.add('branding-rebranding');
-  if (has('WEB', 'sitio web', 'pagina web', 'wordpress', 'landing page')) append(selected, idsByGroup('Web'));
+  if (categoryIs('ADS') || titleHas('pauta', 'campaña publicitaria', 'meta ads', 'google ads')) append(selected, idsByGroup('Pauta'));
+  if (categoryIs('MARKETING') || titleHas('gestión de redes', 'gestion de redes', 'redes sociales', 'social media', 'parrilla de contenido')) append(selected, idsByGroup('Marketing'));
+  if (categoryIs('PRODUCCION_AUDIOVISUAL') || titleHas('produccion audiovisual', 'grabacion', 'jornada')) selected.add('production-session');
+  if (serviceHas('edicion de video', 'edicion de vídeo') && !serviceHas('no incluye edicion', 'no incluye edición', 'sin edicion', 'sin edición')) selected.add('production-client-material');
+  if (serviceHas('solo entrega de archivos', 'unicamente archivos finales', 'únicamente archivos finales', 'publicacion a cargo del cliente', 'publicación a cargo del cliente')) selected.add('production-files-only');
+  if (categoryIs('BRANDING') || titleHas('identidad visual', 'logo', 'marca')) append(selected, idsByGroup('Branding').filter((id) => !['branding-naming', 'branding-slogan', 'branding-rebranding'].includes(id)));
+  if (serviceHas('naming', 'creacion de nombre')) selected.add('branding-naming');
+  if (serviceHas('slogan')) selected.add('branding-slogan');
+  if (serviceHas('rebranding', 'rediseño de marca')) selected.add('branding-rebranding');
+  if (categoryIs('WEB') || titleHas('sitio web', 'pagina web', 'wordpress', 'landing page')) append(selected, idsByGroup('Web'));
   if (context.currency === 'USD') selected.add('international-fees');
-  if (has('actualizacion de brochure', 'actualización de brochure')) selected.add('brochure-update');
+  if (serviceHas('actualizacion de brochure', 'actualización de brochure')) selected.add('brochure-update');
 
   return CONTRACT_TERM_LIBRARY.map(({ id }) => id).filter((id) => selected.has(id));
 };

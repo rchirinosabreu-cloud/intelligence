@@ -43,6 +43,21 @@ test('contract terms detect branding variants, production conditions and interna
   assert.ok(ids.includes('international-fees'));
 });
 
+test('a production session does not infer marketing or editing terms from generic content words', () => {
+  const ids = resolveSuggestedContractTermIds([
+    service({
+      name: 'Jornada de producción New Pueblito',
+      category: 'PRODUCCION_AUDIOVISUAL',
+      description: 'Producción de contenido para redes sociales. La jornada no incluye edición de videos ni publicación.'
+    })
+  ], { currency: 'COP' });
+
+  assert.ok(ids.includes('production-session'));
+  assert.ok(!ids.some((id) => id.startsWith('marketing-')));
+  assert.ok(!ids.includes('production-client-material'));
+  assert.ok(!ids.includes('production-files-only'));
+});
+
 test('selected and custom clauses become a sanitized immutable text snapshot', () => {
   const text = buildContractTermsText(['general-contact', 'web-access'], ['  Cláusula personalizada.  ']);
   assert.match(text, /^● /);
