@@ -5,7 +5,6 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import DatePicker from 'react-datepicker';
-import "react-datepicker/dist/react-datepicker.css";
 import { brainDatePickerProps } from '@/lib/brainDatePicker';
 import {
   Dialog,

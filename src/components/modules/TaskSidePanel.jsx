@@ -14,7 +14,6 @@ import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { triggerConfetti } from '@/utils/confetti';
 import DatePicker from 'react-datepicker';
-import "react-datepicker/dist/react-datepicker.css";
 import { brainDatePickerProps } from '@/lib/brainDatePicker';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { useAuth } from '@/context/AuthContext';

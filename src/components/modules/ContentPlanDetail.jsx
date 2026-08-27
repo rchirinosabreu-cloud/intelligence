@@ -17,7 +17,6 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from '@/components/ui/dialog';
 import DatePicker from 'react-datepicker';
-import "react-datepicker/dist/react-datepicker.css";
 import { brainDatePickerProps } from '@/lib/brainDatePicker';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 

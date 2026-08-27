@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from '@/App';
+import 'react-datepicker/dist/react-datepicker.css';
 import '@/index.css';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
