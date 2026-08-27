@@ -1,7 +1,6 @@
 import prisma from '../lib/prisma.js';
 import crypto from 'crypto';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { generateQuotationPdfBuffer } from '../services/quotationPdfService.js';
 import {
     QuotationValidationError,
     buildNewQuotationValidity,
@@ -417,67 +416,9 @@ export const generateQuotationPDF = async (req, res) => {
         if (!storedQuotation) return res.status(404).json({ error: "Cotización no encontrada" });
         const quotation = normalizeQuotationTaxForCurrency(storedQuotation);
 
-        const doc = new jsPDF();
         const emisor = EMISORES_DATA[quotation.emisor_type];
         const consecutive = `COT-${String(quotation.consecutive).padStart(4, '0')}`;
-
-        // Header
-        doc.setFontSize(20);
-        doc.text(quotation.emisor_type === 'BRAIN_STUDIO' ? 'BRAIN STUDIO' : emisor.nombre, 105, 20, { align: 'center' });
-        doc.setFontSize(10);
-        doc.text(quotation.emisor_type === 'BRAIN_STUDIO' ? `NIT: ${emisor.nit}` : emisor.identificacion, 105, 26, { align: 'center' });
-        doc.text(emisor.email, 105, 31, { align: 'center' });
-
-        doc.setFontSize(14);
-        doc.text(`PROPUESTA COMERCIAL: ${consecutive}`, 20, 45);
-        doc.setFontSize(10);
-        doc.text(`Fecha: ${new Date(quotation.created_at).toLocaleDateString()}`, 20, 52);
-
-        // Client Info
-        doc.setFontSize(12);
-        doc.text('INFORMACIÓN DEL CLIENTE', 20, 65);
-        doc.setFontSize(10);
-        doc.text(`Cliente: ${quotation.client_name}`, 20, 72);
-        if (quotation.client_company) doc.text(`Empresa: ${quotation.client_company}`, 20, 77);
-        doc.text(`Email: ${quotation.client_email}`, 20, 82);
-        doc.text(`Teléfono: ${quotation.client_phone}`, 20, 87);
-
-        // Services Table
-        const tableData = (quotation.items || []).map((item, index) => [
-            index + 1,
-            item.name,
-            item.quantity,
-            new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(item.price),
-            new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(item.price * item.quantity)
-        ]);
-
-        autoTable(doc, {
-            startY: 95,
-            head: [['#', 'Servicio', 'Cant.', 'Precio Unit.', 'Subtotal']],
-            body: tableData,
-            theme: 'grid',
-            headStyles: { fillColor: [79, 70, 229] }
-        });
-
-        // jspdf-autotable uses doc.lastAutoTable to store metadata about the last rendered table
-        const finalY = doc.lastAutoTable.finalY + 10;
-        doc.text(`Subtotal: ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(quotation.subtotal)}`, 140, finalY);
-        if (!quotation.is_tax_exempt) {
-            doc.text(`IVA (19%): ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(quotation.tax_amount)}`, 140, finalY + 5);
-        }
-        doc.setFontSize(12);
-        doc.text(`TOTAL: ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency }).format(quotation.total_amount)}`, 140, finalY + 12);
-
-        // T&C
-        const termsY = finalY + 30;
-        doc.setFontSize(10);
-        doc.text('TÉRMINOS Y CONDICIONES', 20, termsY);
-        const splitTerms = doc.splitTextToSize(quotation.terms_and_conditions, 170);
-        doc.setFontSize(8);
-        doc.text(splitTerms, 20, termsY + 7);
-
-        const pdfOutput = doc.output('arraybuffer');
-        const buffer = Buffer.from(pdfOutput);
+        const buffer = generateQuotationPdfBuffer(quotation, emisor);
 
         res.writeHead(200, {
             'Content-Type': 'application/pdf',
