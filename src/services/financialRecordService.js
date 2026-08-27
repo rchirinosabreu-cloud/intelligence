@@ -1,6 +1,7 @@
 const TYPES = new Set(['INCOME', 'EXPENSE']);
 const CATEGORIES = new Set([
     'MEMBRESIA',
+    'SERVICIO',
     'PAUTA',
     'NOMINA',
     'LOGISTICA',

@@ -4,6 +4,10 @@ import fs from 'node:fs';
 
 const schema = fs.readFileSync(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
 
+test('financial categories include client services', () => {
+    assert.match(schema, /enum FinancialCategory \{[\s\S]*SERVICIO/);
+});
+
 test('financial schema keeps import batches for traceable Excel migrations', () => {
     assert.match(schema, /model FinancialImportBatch \{/);
     assert.match(schema, /sourceFilename\s+String/);

@@ -32,6 +32,7 @@ import BankReconciliationPanel from './financial/BankReconciliationPanel';
 
 const CATEGORY_COLORS = {
     'MEMBRESIA': '#009EB9',
+    'SERVICIO': '#4f46e5',       // Indigo
     'PAUTA': '#06b6d4',          // Cyan
     'NOMINA': '#ec4899',         // Pink
     'LOGISTICA': '#f97316',      // Orange
@@ -43,6 +44,7 @@ const CATEGORY_COLORS = {
 
 const CATEGORY_LABELS = {
     'MEMBRESIA': 'Membresías',
+    'SERVICIO': 'Servicios',
     'PAUTA': 'Pauta',
     'NOMINA': 'Nómina',
     'LOGISTICA': 'Logística',

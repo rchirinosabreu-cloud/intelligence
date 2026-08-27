@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 
 const CATEGORIES = [
     ['MEMBRESIA', 'Membresía'],
+    ['SERVICIO', 'Servicio'],
     ['PAUTA', 'Pauta'],
     ['NOMINA', 'Nómina'],
     ['LOGISTICA', 'Logística'],

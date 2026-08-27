@@ -27,6 +27,19 @@ test('normalizeFinancialRecordInput derives the accounting period and defaults t
     assert.equal(result.date.toISOString(), '2026-08-10T12:00:00.000Z');
 });
 
+test('normalizeFinancialRecordInput accepts service movements', () => {
+    const result = normalizeFinancialRecordInput({
+        amount: '70000',
+        type: 'EXPENSE',
+        category: 'SERVICIO',
+        date: '2026-08-27',
+        accountId: 'account-1',
+        description: 'Renovación de dominio de cliente'
+    });
+
+    assert.equal(result.category, 'SERVICIO');
+});
+
 test('normalizeFinancialRecordInput rejects zero or negative amounts', () => {
     assert.throws(
         () => normalizeFinancialRecordInput({

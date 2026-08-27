@@ -681,7 +681,7 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
         };
 
         // Initialize categories with 0 values
-        const allCategories = ['MEMBRESIA', 'PAUTA', 'NOMINA', 'LOGISTICA', 'ADMINISTRATIVO', 'TAX', 'FINANCIAL', 'OPERATIVO'];
+        const allCategories = ['MEMBRESIA', 'SERVICIO', 'PAUTA', 'NOMINA', 'LOGISTICA', 'ADMINISTRATIVO', 'TAX', 'FINANCIAL', 'OPERATIVO'];
         allCategories.forEach(cat => {
             categoriesDistribution.INCOME[cat] = 0;
             categoriesDistribution.EXPENSE[cat] = 0;

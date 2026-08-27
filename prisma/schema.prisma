@@ -738,6 +738,7 @@ enum ServiceCategory {
 
 enum FinancialCategory {
   MEMBRESIA
+  SERVICIO
   PAUTA
   NOMINA
   LOGISTICA

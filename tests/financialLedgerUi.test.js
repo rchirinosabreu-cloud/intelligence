@@ -45,6 +45,8 @@ test('financial ledger uses canonical record endpoints and server-confirmed muta
     assert.match(ledgerSource, /Reabrir mes/);
     assert.match(ledgerSource, /financialRole === 'ADMIN'/);
     assert.match(ledgerSource, /FINANCIAL_PERIOD_UNRECONCILED|movimientos sin conciliar/);
+    assert.match(ledgerSource, /\['SERVICIO', 'Servicio'\]/);
+    assert.match(ledgerSource, /<DatePicker \{\.\.\.brainDatePickerProps\} selected=\{form\.date/);
 });
 
 test('financial operational payment dates use the shared calendar', () => {
