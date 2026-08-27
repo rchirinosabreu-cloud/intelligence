@@ -50,6 +50,7 @@ test('quotation PDF preserves service descriptions, notes and all contractual te
   assert.match(text, /Diagnóstico, hoja de ruta/);
   assert.match(text, /Incluye una sesión adicional/);
   assert.match(text, /Condición contractual 1/);
-  assert.match(text, /Condición contractual 18/);
+  assert.match(text, /Condición contractual\s+18/);
   assert.ok(totalPages >= 2, 'long terms should continue onto another page');
+  assert.ok(totalPages <= 2, 'compact two-column terms should avoid an unnecessary third page');
 });

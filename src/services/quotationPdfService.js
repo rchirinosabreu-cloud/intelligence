@@ -9,8 +9,8 @@ const COLORS = {
   subtle: [161, 161, 170],
   border: [228, 228, 231],
   surface: [250, 250, 250],
-  violet: [109, 40, 217],
-  violetSoft: [245, 243, 255],
+  brand: [0, 133, 156],
+  brandSoft: [232, 247, 249],
   white: [255, 255, 255]
 };
 
@@ -48,7 +48,7 @@ const formatDate = (value) => value
 
 const addPage = (doc) => {
   doc.addPage();
-  doc.setFillColor(...COLORS.violet);
+  doc.setFillColor(...COLORS.brand);
   doc.rect(0, 0, PAGE.width, 2, 'F');
   return PAGE.top;
 };
@@ -69,7 +69,7 @@ const splitTerms = (value) => String(value || '')
   .filter(Boolean);
 
 const drawSectionHeading = (doc, y, eyebrow, title) => {
-  setText(doc, { size: 8, style: 'bold', color: COLORS.violet });
+  setText(doc, { size: 8, style: 'bold', color: COLORS.brand });
   doc.text(eyebrow.toUpperCase(), PAGE.left, y);
   setText(doc, { size: 17, style: 'bold' });
   doc.text(title, PAGE.left, y + 8);
@@ -77,11 +77,11 @@ const drawSectionHeading = (doc, y, eyebrow, title) => {
 };
 
 const drawService = (doc, item, index, y, formatMoney) => {
-  const description = String(item.description || '').trim();
+  const description = String(item.description || '').replace(/\s+/g, ' ').trim();
   const note = String(item.note || '').trim();
-  const descriptionLines = description ? doc.splitTextToSize(description, 112) : [];
+  const descriptionLines = description ? doc.splitTextToSize(description, 126) : [];
   const noteLines = note ? doc.splitTextToSize(note, CONTENT_WIDTH - 12) : [];
-  const cardHeight = Math.max(27, 18 + descriptionLines.length * 4.8);
+  const cardHeight = Math.max(25, 17 + descriptionLines.length * 4.1);
   const noteHeight = note ? 12 + noteLines.length * 4.8 : 0;
   y = ensureSpace(doc, y, cardHeight + noteHeight + 7);
 
@@ -96,8 +96,8 @@ const drawService = (doc, item, index, y, formatMoney) => {
   setText(doc, { size: 11, style: 'bold' });
   doc.text(String(item.name || 'Servicio'), PAGE.left + 19, y + 11);
   if (descriptionLines.length) {
-    setText(doc, { size: 9, color: COLORS.muted });
-    doc.text(descriptionLines, PAGE.left + 19, y + 18, { lineHeightFactor: 1.35 });
+    setText(doc, { size: 8.1, color: COLORS.muted });
+    doc.text(descriptionLines, PAGE.left + 19, y + 17.5, { lineHeightFactor: 1.22 });
   }
 
   const quantity = Number(item.quantity || 0);
@@ -108,10 +108,10 @@ const drawService = (doc, item, index, y, formatMoney) => {
 
   y += cardHeight;
   if (note) {
-    doc.setDrawColor(...COLORS.violet);
+    doc.setDrawColor(...COLORS.brand);
     doc.setLineWidth(0.7);
     doc.line(PAGE.left + 5, y + 4, PAGE.left + 5, y + noteHeight - 2);
-    setText(doc, { size: 7.5, style: 'bold', color: COLORS.violet });
+    setText(doc, { size: 7.5, style: 'bold', color: COLORS.brand });
     doc.text('NOTA ADICIONAL', PAGE.left + 10, y + 7);
     setText(doc, { size: 8.5, color: COLORS.muted });
     doc.text(noteLines, PAGE.left + 10, y + 13, { lineHeightFactor: 1.35 });
@@ -121,20 +121,46 @@ const drawService = (doc, item, index, y, formatMoney) => {
 };
 
 const drawTerms = (doc, terms, y) => {
-  y = ensureSpace(doc, y, 28);
+  if (PAGE.height - PAGE.bottom - y < 120) y = addPage(doc);
+  else y = ensureSpace(doc, y, 34);
   y = drawSectionHeading(doc, y, 'Información contractual', 'Términos y condiciones');
+  const columnGap = 10;
+  const columnWidth = (CONTENT_WIDTH - columnGap) / 2;
+  const columnStarts = [PAGE.left, PAGE.left + columnWidth + columnGap];
+  const entries = terms.map((term) => {
+    const lines = doc.splitTextToSize(term, columnWidth - 10);
+    return { lines, blockHeight: Math.max(8, lines.length * 3.75 + 3.5) };
+  });
+  const balancedHeight = entries.reduce((sum, entry) => sum + entry.blockHeight, 0) / 2;
+  let column = 0;
+  let columnY = y;
+  let firstColumnHeight = 0;
 
-  terms.forEach((term, index) => {
-    const lines = doc.splitTextToSize(term, CONTENT_WIDTH - 14);
-    const blockHeight = Math.max(10, lines.length * 5 + 4);
-    y = ensureSpace(doc, y, blockHeight);
-    doc.setFillColor(...COLORS.violetSoft);
-    doc.roundedRect(PAGE.left, y, 8, 8, 1.5, 1.5, 'F');
-    setText(doc, { size: 7.5, style: 'bold', color: COLORS.violet });
-    doc.text(String(index + 1), PAGE.left + 4, y + 5.5, { align: 'center' });
-    setText(doc, { size: 9, color: COLORS.muted });
-    doc.text(lines, PAGE.left + 13, y + 4, { lineHeightFactor: 1.4 });
-    y += blockHeight;
+  entries.forEach(({ lines, blockHeight }, index) => {
+    if (column === 0 && index > 0 && firstColumnHeight + blockHeight > balancedHeight) {
+      column = 1;
+      columnY = y;
+    }
+    if (columnY + blockHeight > PAGE.height - PAGE.bottom) {
+      if (column === 0) {
+        column = 1;
+        columnY = y;
+      } else {
+        addPage(doc);
+        column = 0;
+        y = PAGE.top;
+        columnY = y;
+      }
+    }
+    const x = columnStarts[column];
+    doc.setFillColor(...COLORS.brandSoft);
+    doc.roundedRect(x, columnY, 6.5, 6.5, 1.3, 1.3, 'F');
+    setText(doc, { size: 6.5, style: 'bold', color: COLORS.brand });
+    doc.text(String(index + 1), x + 3.25, columnY + 4.45, { align: 'center' });
+    setText(doc, { size: 7.2, color: COLORS.muted });
+    doc.text(lines, x + 9, columnY + 3.4, { lineHeightFactor: 1.22 });
+    columnY += blockHeight;
+    if (column === 0) firstColumnHeight += blockHeight;
   });
 };
 
@@ -162,24 +188,24 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
     author: isBrain ? 'Brainstudio' : issuer.nombre,
     subject: `Cotización para ${quotation.client_company || quotation.client_name}`
   });
-  doc.setFillColor(...COLORS.violet);
-  doc.rect(0, 0, PAGE.width, 2, 'F');
+  doc.setFillColor(...COLORS.brand);
+  doc.rect(0, 0, PAGE.width, 36, 'F');
 
-  let y = PAGE.top;
-  setText(doc, { size: 15, style: 'bold' });
+  let y = 16;
+  setText(doc, { size: 15, style: 'bold', color: COLORS.white });
   doc.text(isBrain ? 'Brainstudio' : issuer.nombre, PAGE.left, y);
-  setText(doc, { size: 8, color: COLORS.muted });
+  setText(doc, { size: 8, color: [213, 241, 245] });
   const identity = isBrain ? `${issuer.razonSocial} · NIT ${issuer.nit}` : issuer.identificacion;
   doc.text(identity || '', PAGE.left, y + 5);
-  setText(doc, { size: 8, style: 'bold', color: COLORS.violet });
+  setText(doc, { size: 8, style: 'bold', color: [213, 241, 245] });
   doc.text('PROPUESTA', PAGE.width - PAGE.right, y - 1, { align: 'right' });
-  setText(doc, { size: 11, style: 'bold' });
+  setText(doc, { size: 11, style: 'bold', color: COLORS.white });
   doc.text(consecutive, PAGE.width - PAGE.right, y + 5, { align: 'right' });
 
-  y += 25;
-  doc.setFillColor(...COLORS.violetSoft);
+  y = 51;
+  doc.setFillColor(...COLORS.brandSoft);
   doc.roundedRect(PAGE.left, y, 42, 8, 1.5, 1.5, 'F');
-  setText(doc, { size: 7.5, style: 'bold', color: COLORS.violet });
+  setText(doc, { size: 7.5, style: 'bold', color: COLORS.brand });
   doc.text('PROPUESTA COMERCIAL', PAGE.left + 21, y + 5.3, { align: 'center' });
   y += 18;
   setText(doc, { size: 25, style: 'bold' });
@@ -213,7 +239,7 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
   doc.text(String(quotation.client_email || 'No proporcionado'), PAGE.left, y + 25);
   doc.text(String(quotation.client_phone || 'No proporcionado'), PAGE.left, y + 31);
 
-  doc.setFillColor(...COLORS.violet);
+  doc.setFillColor(...COLORS.brand);
   doc.roundedRect(105, y, 87, 48, 2, 2, 'F');
   setText(doc, { size: 8, style: 'bold', color: [221, 214, 254] });
   doc.text('INVERSIÓN TOTAL', 112, y + 9);
