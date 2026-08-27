@@ -16,6 +16,7 @@ import { createNotification, processMentionsAndNotifications } from '../services
 import { recordTaskListSync } from '../services/operationalTraceService.js';
 import { traceTaskOpenHandler } from './operationalTraceController.js';
 import { canDeleteTask, canUpdateTask, isManagerRole, pickAllowedTaskUpdates } from '../config/security.js';
+import { listTaskWorkHistory } from '../services/taskWorkSessionService.js';
 
 const COMMENT_MAX_LENGTH = 10_000;
 const taskCommentAuthorSelect = {
@@ -78,6 +79,20 @@ export const getAllTasks = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ error: "Failed to fetch native tasks", details: error.message });
+    }
+};
+
+export const getTaskWorkHistory = async (req, res) => {
+    try {
+        if (!isManagerRole(req.user?.role)) {
+            return res.status(403).json({ error: 'Solo administradores y Project Managers pueden consultar este historial' });
+        }
+        const history = await listTaskWorkHistory(prisma, req.params.taskId);
+        if (!history) return res.status(404).json({ error: 'Task not found' });
+        res.json(history);
+    } catch (error) {
+        console.error('[TaskController] Work history failed:', error?.message || error);
+        res.status(500).json({ error: 'Failed to fetch task work history', details: error.message });
     }
 };
 

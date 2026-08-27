@@ -113,6 +113,7 @@ router.delete('/tasks/:taskId', taskController.deleteExistingTask);
 router.post('/tasks/:taskId/toggle-follow', taskController.toggleFollow);
 router.get('/tasks/:taskId/follow-status', taskController.getFollowStatus);
 router.post('/tasks/:taskId/trace-open', taskController.traceTaskOpen);
+router.get('/tasks/:taskId/work-history', taskController.getTaskWorkHistory);
 router.get('/tasks/:taskId/attachments/:attachmentId/file', taskController.getTaskAttachmentFileProxy);
 router.get('/tasks/:taskId/attachments/:attachmentId/download', taskController.getTaskAttachmentDownloadProxy);
 router.get('/tasks/:taskId/comments', taskController.getTaskComments);

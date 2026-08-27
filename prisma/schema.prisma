@@ -464,12 +464,56 @@ model Task {
   taskComments    TaskComment[]
   followers       TaskFollower[]
   taskAttachments TaskAttachment[]
+  workCycles      TaskWorkCycle[]
+  workSessions    TaskWorkSession[]
 
   @@index([assigneeId, status, dueDate])
   @@index([creatorId, status, createdAt])
   @@index([clientId, status, createdAt])
   @@index([status, completedAt])
   @@index([contentItemId, title])
+}
+
+model TaskWorkCycle {
+  id          String            @id @default(uuid())
+  taskId      String
+  sequence    Int
+  kind        String            @default("INITIAL")
+  reason      String?
+  note        String?
+  openedAt    DateTime          @default(now())
+  openedById  String?
+  closedAt    DateTime?
+  closedById  String?
+  closeReason String?
+  task        Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  sessions    TaskWorkSession[]
+
+  @@unique([taskId, sequence])
+  @@index([taskId, closedAt])
+}
+
+model TaskWorkSession {
+  id            String         @id @default(uuid())
+  taskId        String
+  cycleId       String
+  workerId      String?
+  startedById   String?
+  endedById     String?
+  startedAt     DateTime       @default(now())
+  endedAt       DateTime?
+  durationMs    Float?
+  closeReason   String?
+  isOverlapping Boolean        @default(false)
+  correctedAt   DateTime?
+  correctedById String?
+  correctionReason String?
+  task          Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  cycle         TaskWorkCycle  @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, startedAt])
+  @@index([workerId, endedAt])
+  @@index([cycleId, startedAt])
 }
 
 enum AttachmentCategory {

@@ -41,6 +41,7 @@ import {
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useNavigate } from 'react-router-dom';
 import { parseReopenEventContent } from '@/lib/taskTiming';
+import TaskWorkHistory from './TaskWorkHistory';
 
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
@@ -2492,6 +2493,15 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     </motion.div>
                                 )}
                             </AnimatePresence>
+
+                            {isEdition && ['ADMIN', 'PROJECT_MANAGER'].includes(currentUser?.role) && (
+                                <TaskWorkHistory
+                                    taskId={formData.id}
+                                    status={formData.status}
+                                    startedAt={formData.startedAt}
+                                    accumulatedWorkMs={formData.accumulatedWorkMs || 0}
+                                />
+                            )}
 
                             <div className="flex items-center gap-4 mb-5">
                                 <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />

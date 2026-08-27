@@ -4,6 +4,12 @@ import { recordOperationalTrace } from './operationalTraceService.js';
 import { classifyTaskDeterministically } from './deterministicTaskClassifier.js';
 import { pickAllowedTaskUpdates } from '../config/security.js';
 import { closeTaskWorkSession } from '../lib/taskTiming.js';
+import {
+    closeActiveTaskWorkCycle,
+    closeActiveTaskWorkSession,
+    ensureTaskWorkCycle,
+    openTaskWorkSession
+} from './taskWorkSessionService.js';
 
 const taskContentPlanSelect = {
     id: true,
@@ -724,11 +730,20 @@ export const updateTask = async (id, data, updaterId = null) => {
             const newStatus = updateData.status;
             const oldStatus = currentTask.status;
             const isReopened = oldStatus === 'REALIZADA' && newStatus === 'PENDIENTE';
+            const transitionAt = new Date();
 
             if (oldStatus === 'EN_CURSO' && newStatus !== 'EN_CURSO') {
-                const sessionEndedAt = new Date();
-                updateData.accumulatedWorkMs = closeTaskWorkSession(currentTask, sessionEndedAt);
+                updateData.accumulatedWorkMs = closeTaskWorkSession(currentTask, transitionAt);
                 updateData.startedAt = null;
+                const closeReason = newStatus === 'REALIZADA'
+                    ? 'COMPLETED'
+                    : newStatus === 'DEVUELTA' ? 'RETURNED' : 'PAUSED';
+                await closeActiveTaskWorkSession(tx, {
+                    taskId: id,
+                    actorId: updaterId,
+                    at: transitionAt,
+                    closeReason
+                });
             }
 
             if (isReopened) {
@@ -736,6 +751,14 @@ export const updateTask = async (id, data, updaterId = null) => {
                     throw new Error('Reopening a completed task requires a reason and note');
                 }
                 updateData.startedAt = null;
+                await ensureTaskWorkCycle(tx, {
+                    taskId: id,
+                    actorId: updaterId,
+                    at: transitionAt,
+                    kind: 'REWORK',
+                    reason: reopenReason,
+                    note: reopenNote.trim()
+                });
                 await tx.taskComment.create({
                     data: {
                         taskId: id,
@@ -771,7 +794,29 @@ export const updateTask = async (id, data, updaterId = null) => {
 
             // Radar de Mérito: Initial startedAt logic
             if (newStatus === 'EN_CURSO' && oldStatus !== 'EN_CURSO') {
-                updateData.startedAt = new Date();
+                updateData.startedAt = transitionAt;
+                const cycle = await ensureTaskWorkCycle(tx, {
+                    taskId: id,
+                    actorId: updaterId,
+                    at: transitionAt,
+                    kind: oldStatus === 'DEVUELTA' ? 'REWORK' : 'INITIAL',
+                    reason: oldStatus === 'DEVUELTA' ? 'RETURNED' : null
+                });
+                await openTaskWorkSession(tx, {
+                    task: { ...currentTask, id },
+                    cycleId: cycle.id,
+                    actorId: updaterId,
+                    at: transitionAt
+                });
+            }
+
+            if (newStatus === 'REALIZADA' || newStatus === 'DEVUELTA') {
+                await closeActiveTaskWorkCycle(tx, {
+                    taskId: id,
+                    actorId: updaterId,
+                    at: transitionAt,
+                    closeReason: newStatus === 'REALIZADA' ? 'COMPLETED' : 'RETURNED'
+                });
             }
 
             // --- Lógica de Cierre de Ciclo (Notificación de Corrección) ---
@@ -785,6 +830,14 @@ export const updateTask = async (id, data, updaterId = null) => {
 
             if (isCorrected) {
                 updateData.isReturned = false;
+                await ensureTaskWorkCycle(tx, {
+                    taskId: id,
+                    actorId: updaterId,
+                    at: transitionAt,
+                    kind: 'REWORK',
+                    reason: 'RETURNED',
+                    note: reintegrateReason || null
+                });
             }
 
             // Fix Reintegration: Create system_reintegrate comment using the decoupled reintegrateReason
