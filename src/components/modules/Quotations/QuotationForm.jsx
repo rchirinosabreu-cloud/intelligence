@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { useNavigate, useParams } from 'react-router-dom';
 import SuccessModal from './SuccessModal';
 import { calculateQuotationEconomics } from '@/services/quotationDomainService';
+import { matchesServiceSearch } from '@/utils/serviceCatalogSearch';
 
 const QuotationForm = () => {
     const { id } = useParams();
@@ -137,10 +138,7 @@ const QuotationForm = () => {
         });
     }, [catalog, isLoadingData]);
 
-    const filteredCatalog = catalog.filter(item =>
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredCatalog = catalog.filter((item) => matchesServiceSearch(item, searchTerm));
 
     const roundQuoteAmount = (value, targetCurrency = currency) => (
         targetCurrency === 'USD'

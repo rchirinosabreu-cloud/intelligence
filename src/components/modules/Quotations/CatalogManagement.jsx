@@ -23,6 +23,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { matchesServiceSearch } from '@/utils/serviceCatalogSearch';
 
 const CATEGORIES = [
     { id: 'BRANDING', label: 'Branding' },
@@ -163,8 +164,7 @@ const CatalogManagement = () => {
     };
 
     const filteredServices = services.filter(s => {
-        const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             s.description.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = matchesServiceSearch(s, searchTerm);
         const matchesCategory = selectedCategory === 'All' || s.category === selectedCategory;
         return matchesSearch && matchesCategory;
     });
