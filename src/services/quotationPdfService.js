@@ -162,14 +162,39 @@ const drawTerms = (doc, terms, y) => {
   const columnStarts = [PAGE.left, PAGE.left + columnWidth + columnGap];
   const indexedTerms = terms.map((term, index) => ({ term, number: index + 1 }));
   const columns = splitTermColumns(indexedTerms);
-
-  columns.forEach((columnTerms, column) => {
-    let columnY = y;
-    const x = columnStarts[column];
-    columnTerms.forEach(({ term, number }) => {
+  const preparedColumns = columns.map((columnTerms) => columnTerms.map(({ term, number }) => {
       setText(doc, { size: 7.2, color: COLORS.muted });
       const lines = doc.splitTextToSize(term, columnWidth - 10);
       const blockHeight = Math.max(8, lines.length * 3.75 + 3.5);
+      return { lines, blockHeight, number };
+  }));
+  const firstPageCapacity = PAGE.height - PAGE.bottom - y;
+  const continuedPageCapacity = PAGE.height - PAGE.bottom - PAGE.top;
+  const chunkColumn = (entries) => {
+    const chunks = [[]];
+    let used = 0;
+    let capacity = firstPageCapacity;
+    entries.forEach((entry) => {
+      if (chunks.at(-1).length > 0 && used + entry.blockHeight > capacity) {
+        chunks.push([]);
+        used = 0;
+        capacity = continuedPageCapacity;
+      }
+      chunks.at(-1).push(entry);
+      used += entry.blockHeight;
+    });
+    return chunks;
+  };
+  const columnChunks = preparedColumns.map(chunkColumn);
+  const pageCount = Math.max(...columnChunks.map((chunks) => chunks.length));
+
+  for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+    if (pageIndex > 0) addPage(doc);
+    const pageY = pageIndex === 0 ? y : PAGE.top;
+    columnChunks.forEach((chunks, column) => {
+      let columnY = pageY;
+      const x = columnStarts[column];
+      (chunks[pageIndex] || []).forEach(({ lines, blockHeight, number }) => {
       doc.setFillColor(...COLORS.brandSoft);
       doc.roundedRect(x, columnY, 6.5, 6.5, 1.3, 1.3, 'F');
       setText(doc, { size: 6.5, style: 'bold', color: COLORS.brand });
@@ -177,8 +202,9 @@ const drawTerms = (doc, terms, y) => {
       setText(doc, { size: 7.2, color: COLORS.muted });
       doc.text(lines, x + 9, columnY + 3.4, { lineHeightFactor: 1.22 });
       columnY += blockHeight;
+      });
     });
-  });
+  }
 };
 
 const drawFooters = (doc, issuer) => {

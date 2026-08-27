@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { useNavigate, useParams } from 'react-router-dom';
 import SuccessModal from './SuccessModal';
+import QuotationTermsEditor from './QuotationTermsEditor';
 import { calculateQuotationEconomics } from '@/services/quotationDomainService';
 import { matchesServiceSearch } from '@/utils/serviceCatalogSearch';
 
@@ -38,6 +39,7 @@ const QuotationForm = () => {
     const [exchangeRateDate, setExchangeRateDate] = useState(null);
     const [isLoadingRate, setIsLoadingRate] = useState(false);
     const [exchangeRateError, setExchangeRateError] = useState('');
+    const [contractTermsText, setContractTermsText] = useState('');
 
     const fetchQuotation = useCallback(async () => {
         setIsLoadingData(true);
@@ -63,6 +65,7 @@ const QuotationForm = () => {
             setExchangeRate(data.exchange_rate ? Number(data.exchange_rate) : '');
             setExchangeRateSource(data.exchange_rate_source || null);
             setExchangeRateDate(data.exchange_rate_date || null);
+            setContractTermsText(data.terms_and_conditions || '');
 
             // Robust parsing for items to prevent crash
             let parsedItems = [];
@@ -130,9 +133,10 @@ const QuotationForm = () => {
 
                 const estimatedCost = item.estimatedCost ?? service.costo_real_estimado;
                 const catalogFinalPrice = item.catalogFinalPrice ?? service.valor_neto;
-                if (estimatedCost === item.estimatedCost && catalogFinalPrice === item.catalogFinalPrice) return item;
+                const category = item.category ?? service.category;
+                if (estimatedCost === item.estimatedCost && catalogFinalPrice === item.catalogFinalPrice && category === item.category) return item;
                 changed = true;
-                return { ...item, estimatedCost, catalogFinalPrice };
+                return { ...item, estimatedCost, catalogFinalPrice, category };
             });
             return changed ? enrichedItems : currentItems;
         });
@@ -202,6 +206,7 @@ const QuotationForm = () => {
             serviceId: service.id,
             name: service.name,
             description: service.description,
+            category: service.category,
             price: roundQuoteAmount(quotePrice),
             quantity: 1,
             note: '',
@@ -283,7 +288,8 @@ const QuotationForm = () => {
                     exchange_rate_source: currency === 'USD' ? exchangeRateSource : null,
                     exchange_rate_date: currency === 'USD' ? exchangeRateDate : null,
                     status: targetStatus,
-                    is_tax_exempt: currency === 'USD' ? true : isTaxExempt
+                    is_tax_exempt: currency === 'USD' ? true : isTaxExempt,
+                    terms_and_conditions: contractTermsText
                 })
             });
 
@@ -598,6 +604,15 @@ const QuotationForm = () => {
                                     </div>
                                 )}
                             </div>
+
+                            <QuotationTermsEditor
+                                services={selectedItems}
+                                currency={currency}
+                                isTaxExempt={isTaxExempt}
+                                existingText={contractTermsText}
+                                isEditing={isEditing}
+                                onChange={setContractTermsText}
+                            />
                         </div>
                     </Card>
 

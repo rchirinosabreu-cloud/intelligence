@@ -2,6 +2,11 @@ import prisma from '../lib/prisma.js';
 import crypto from 'crypto';
 import { generateQuotationPdfBuffer } from '../services/quotationPdfService.js';
 import {
+    buildContractTermsText,
+    resolveSuggestedContractTermIds,
+    sanitizeContractTermsText
+} from '../services/quotationContractTerms.js';
+import {
     QuotationValidationError,
     buildNewQuotationValidity,
     buildQuotationValidityUpdate,
@@ -19,16 +24,6 @@ import {
     QuotationAcceptanceError,
     acceptQuotationBySlug
 } from '../services/quotationAcceptanceService.js';
-
-const MANDATORY_TERMS = `● El cliente tendrá un delegado quien será el contacto directo con la empresa prestadora del servicio BRAIN STUDIO, y se encargará de brindar la información necesaria para el desarrollo de los servicios.
-● Las modificaciones de productos deben cumplir con un estándar mínimo de 2 correcciones con el fin de optimizar tiempo y recursos. Si el cliente requiere corregir un contenido luego de estar aprobado tiene un costo adicional.
-● El cliente debe comprometerse a suministrar la información mínima necesaria para poder desarrollar contenidos.
-● El envío de contenidos (textos, guiones, archivos multimedia) y los comentarios sobre estos, se realizan a través de WhatsApp o correo electrónico, con el fin de tener una comunicación más efectiva, clara y con trazabilidad.
-● El método de pago será 50% para iniciar, conforme a las fechas programadas.
-● La inversión de pauta publicitaria será asumida por el cliente.
-● En caso de requerir factura electrónica se debe adicionar el 19% de IVA.
-● El cliente tiene la posibilidad de acceder a cualquier otro producto o servicio ofrecido por Brain Studio fuera de la propuesta, con un valor adicional. (videos, fotografía, aplicación de marca, asesorías, etc).
-● La propuesta tiene una vigencia de 15 días calendario.`;
 
 const EMISORES_DATA = {
     BRAIN_STUDIO: {
@@ -49,20 +44,17 @@ const VALID_EMISORES = new Set(['BRAIN_STUDIO', 'FRANCISCO_VILLA']);
 const VALID_CURRENCIES = new Set(['COP', 'USD']);
 const VALID_STATUSES = new Set(['BORRADOR', 'ACTIVA']);
 
-const buildQuotationTerms = (emisorType, currency) => {
-    let terms = MANDATORY_TERMS;
-    if (currency === 'USD') {
-        terms = terms
-            .split('\n')
-            .filter((line) => !/19% de IVA/i.test(line))
-            .join('\n');
-    }
+const adaptTermsForIssuer = (terms, emisorType) => {
     if (emisorType === 'FRANCISCO_VILLA') {
-        terms = terms.replace(/BRAIN STUDIO/gi, "El Prestador");
-        terms = terms.replace(/Brain Studio/gi, "El Prestador");
+        return terms.replace(/BRAIN STUDIO/gi, 'El Prestador').replace(/Brain Studio/gi, 'El Prestador');
     }
     return terms;
 };
+
+const buildQuotationTerms = ({ services, emisorType, currency, isTaxExempt }) => adaptTermsForIssuer(
+    buildContractTermsText(resolveSuggestedContractTermIds(services, { currency, isTaxExempt })),
+    emisorType
+);
 
 const findCatalogServicesForItems = async (items = []) => {
     const ids = [...new Set(items.map((item) => item?.serviceId).filter(Boolean))];
@@ -104,7 +96,8 @@ export const createQuotation = async (req, res) => {
             exchange_rate,
             exchange_rate_source,
             exchange_rate_date,
-            is_tax_exempt: manual_tax_exempt
+            is_tax_exempt: manual_tax_exempt,
+            terms_and_conditions
         } = req.body;
 
         validateQuotationEnums({ emisorType: emisor_type, currency, status });
@@ -143,7 +136,10 @@ export const createQuotation = async (req, res) => {
         );
 
         // 5. Terms and Conditions (Immutable + Sanitization)
-        const final_terms = buildQuotationTerms(emisor_type, currency);
+        const hasExplicitTerms = Object.prototype.hasOwnProperty.call(req.body, 'terms_and_conditions');
+        const final_terms = hasExplicitTerms
+            ? adaptTermsForIssuer(sanitizeContractTermsText(terms_and_conditions), emisor_type)
+            : buildQuotationTerms({ services: catalogServices, emisorType: emisor_type, currency, isTaxExempt: is_tax_exempt });
 
         // 6. Persistence
         const quotation = await prisma.quotation.create({
@@ -200,7 +196,8 @@ export const updateQuotation = async (req, res) => {
             exchange_rate,
             exchange_rate_source,
             exchange_rate_date,
-            is_tax_exempt: manual_tax_exempt
+            is_tax_exempt: manual_tax_exempt,
+            terms_and_conditions
         } = req.body;
 
         const existing = await prisma.quotation.findUnique({ where: { id } });
@@ -241,7 +238,10 @@ export const updateQuotation = async (req, res) => {
             is_tax_exempt
         );
 
-        const final_terms = buildQuotationTerms(targetEmisor, targetCurrency);
+        const hasExplicitTerms = Object.prototype.hasOwnProperty.call(req.body, 'terms_and_conditions');
+        const final_terms = hasExplicitTerms
+            ? adaptTermsForIssuer(sanitizeContractTermsText(terms_and_conditions), targetEmisor)
+            : existing.terms_and_conditions;
 
         const quotation = await prisma.quotation.update({
             where: { id },
