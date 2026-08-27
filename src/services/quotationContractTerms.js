@@ -9,6 +9,8 @@ export const CONTRACT_TERM_LIBRARY = [
   term('general-contract-data', 'General', 'Información contractual', 'Para elaborar el contrato, el cliente deberá suministrar nombre completo o razón social, NIT o documento de identidad, correo electrónico, dirección y datos de contacto.'),
   term('general-payment', 'General', 'Forma de pago', 'Para iniciar el proyecto, el cliente realizará un abono del 50% del servicio. El saldo se pagará al finalizar la primera etapa o período y los servicios recurrentes se pagarán con la periodicidad acordada.'),
   term('general-extra-services', 'General', 'Servicios adicionales', 'Cualquier producto, pieza, aplicación o servicio que no esté incluido expresamente en la propuesta tendrá un valor adicional.'),
+  term('general-adjustments', 'General', 'Rondas de ajustes', 'Cada entregable incluye hasta dos rondas de ajustes razonables. Los cambios posteriores a su aprobación o un cambio completo de alcance o dirección podrán generar costos y plazos adicionales.'),
+  term('general-client-delays', 'General', 'Información y demoras', 'El cliente entregará oportunamente la información, accesos, aprobaciones y materiales necesarios. Cualquier demora en estos insumos podrá modificar el cronograma acordado.'),
   term('general-validity', 'General', 'Vigencia', 'La propuesta tiene una vigencia de 15 días calendario.'),
   term('billing-electronic', 'Facturación', 'Factura electrónica', 'Los valores presentados no incluyen IVA. En caso de requerir factura electrónica, se adicionará el 19% correspondiente.'),
   term('ads-investment', 'Pauta', 'Inversión publicitaria', 'La inversión publicitaria no está incluida dentro de los honorarios de Brain Studio y será asumida directamente por el cliente.'),
@@ -49,6 +51,15 @@ export const CONTRACT_TERM_LIBRARY = [
 const GENERAL_IDS = CONTRACT_TERM_LIBRARY.filter(({ group }) => group === 'General').map(({ id }) => id);
 const idsByGroup = (group) => CONTRACT_TERM_LIBRARY.filter((entry) => entry.group === group).map(({ id }) => id);
 const append = (target, ids) => ids.forEach((id) => target.add(id));
+const CONSOLIDATED_TERM_IDS = new Set([
+  'marketing-adjustments',
+  'marketing-inputs',
+  'branding-scope',
+  'branding-adjustments',
+  'web-extra-features',
+  'web-adjustments',
+  'web-client-delays'
+]);
 
 export const resolveSuggestedContractTermIds = (services = [], context = {}) => {
   const selected = new Set(GENERAL_IDS);
@@ -80,6 +91,7 @@ export const resolveSuggestedContractTermIds = (services = [], context = {}) => 
   if (categoryIs('WEB') || titleHas('sitio web', 'pagina web', 'wordpress', 'landing page')) append(selected, idsByGroup('Web'));
   if (context.currency === 'USD') selected.add('international-fees');
   if (serviceHas('actualizacion de brochure', 'actualización de brochure')) selected.add('brochure-update');
+  CONSOLIDATED_TERM_IDS.forEach((id) => selected.delete(id));
 
   return CONTRACT_TERM_LIBRARY.map(({ id }) => id).filter((id) => selected.has(id));
 };
@@ -88,6 +100,20 @@ const normalizeTermIdentity = (value) => normalizeServiceSearchText(String(value
   .replace(/[^a-z0-9\s]/g, ' ')
   .replace(/\s+/g, ' ')
   .trim();
+
+const libraryById = new Map(CONTRACT_TERM_LIBRARY.map((entry) => [entry.id, entry]));
+const consolidatedReplacementByIdentity = new Map([
+  ['marketing-adjustments', 'general-adjustments'],
+  ['branding-adjustments', 'general-adjustments'],
+  ['web-adjustments', 'general-adjustments'],
+  ['marketing-inputs', 'general-client-delays'],
+  ['web-client-delays', 'general-client-delays'],
+  ['branding-scope', 'general-extra-services'],
+  ['web-extra-features', 'general-extra-services']
+].map(([sourceId, targetId]) => [
+  normalizeTermIdentity(libraryById.get(sourceId)?.text),
+  libraryById.get(targetId)?.text
+]));
 
 export const deduplicateContractTerms = (terms = []) => {
   const identities = new Set();
@@ -102,7 +128,8 @@ export const deduplicateContractTerms = (terms = []) => {
 export const parseContractTermsText = (value) => deduplicateContractTerms(String(value || '')
   .split(/\r?\n/)
   .map((line) => line.replace(/^[●•]\s*/, '').replace(/\s+/g, ' ').trim())
-  .filter(Boolean));
+  .filter(Boolean)
+  .map((termText) => consolidatedReplacementByIdentity.get(normalizeTermIdentity(termText)) || termText));
 
 export const sanitizeContractTermsText = (value) => parseContractTermsText(value)
   .slice(0, 100)
@@ -110,7 +137,6 @@ export const sanitizeContractTermsText = (value) => parseContractTermsText(value
   .join('\n');
 
 export const buildContractTermsText = (selectedIds = [], customTerms = []) => {
-  const libraryById = new Map(CONTRACT_TERM_LIBRARY.map((entry) => [entry.id, entry]));
   return sanitizeContractTermsText([
     ...selectedIds.map((id) => libraryById.get(id)?.text).filter(Boolean),
     ...customTerms

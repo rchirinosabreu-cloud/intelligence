@@ -36,7 +36,7 @@ test('contract terms detect branding variants, production conditions and interna
     service({ name: 'Jornada de producción audiovisual', category: 'PRODUCCION_AUDIOVISUAL' })
   ], { currency: 'USD' });
 
-  assert.ok(ids.includes('branding-scope'));
+  assert.ok(ids.includes('general-extra-services'));
   assert.ok(ids.includes('branding-naming'));
   assert.ok(ids.includes('branding-slogan'));
   assert.ok(ids.includes('branding-rebranding'));
@@ -78,4 +78,42 @@ test('contract terms are deduplicated consistently for storage, HTML and PDF con
     sanitizeContractTermsText(duplicated),
     '● Cada contenido incluye dos ajustes.\n● Otra condición.'
   );
+});
+
+test('overlapping category clauses are consolidated into shared proposal terms', () => {
+  const ids = resolveSuggestedContractTermIds([
+    service({ category: 'MARKETING', name: 'Gestión de redes' }),
+    service({ category: 'BRANDING', name: 'Identidad visual' }),
+    service({ category: 'WEB', name: 'Sitio web' })
+  ], { currency: 'COP' });
+
+  assert.ok(ids.includes('general-adjustments'));
+  assert.ok(ids.includes('general-client-delays'));
+  assert.ok(ids.includes('general-extra-services'));
+  assert.ok(!ids.includes('marketing-adjustments'));
+  assert.ok(!ids.includes('branding-adjustments'));
+  assert.ok(!ids.includes('web-adjustments'));
+  assert.ok(!ids.includes('marketing-inputs'));
+  assert.ok(!ids.includes('web-client-delays'));
+  assert.ok(!ids.includes('branding-scope'));
+  assert.ok(!ids.includes('web-extra-features'));
+});
+
+test('stored legacy category variants collapse into one clause per shared theme', () => {
+  const textById = new Map(CONTRACT_TERM_LIBRARY.map((entry) => [entry.id, entry.text]));
+  const parsed = parseContractTermsText([
+    textById.get('marketing-adjustments'),
+    textById.get('branding-adjustments'),
+    textById.get('web-adjustments'),
+    textById.get('marketing-inputs'),
+    textById.get('web-client-delays'),
+    textById.get('branding-scope'),
+    textById.get('web-extra-features')
+  ].join('\n'));
+
+  assert.deepEqual(parsed, [
+    textById.get('general-adjustments'),
+    textById.get('general-client-delays'),
+    textById.get('general-extra-services')
+  ]);
 });
