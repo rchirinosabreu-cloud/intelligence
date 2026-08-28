@@ -110,3 +110,12 @@ test('operational calendar fixes current render and role issues', async () => {
   assert.match(activityMap, /role === 'PROJECT_MANAGER'/);
   assert.match(activityStatus, /currentEvent/);
 });
+
+test('multi-day calendar bands show their title once and omit the all-day caption', async () => {
+  const calendar = await read('src/components/modules/Activity/OperationalCalendar.jsx');
+
+  assert.match(calendar, /segmentShowsLabel/);
+  assert.match(calendar, /event\.segmentShowsLabel\s*&&\s*\(/);
+  assert.doesNotMatch(calendar, /isAllDayEvent\(event\)\s*\?\s*'Todo el dia'/);
+  assert.doesNotMatch(calendar, /· Todo el dia/);
+});

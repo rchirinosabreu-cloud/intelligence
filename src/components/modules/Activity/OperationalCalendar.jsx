@@ -171,6 +171,7 @@ const OperationalCalendar = () => {
     for (const event of events) {
       const eventStart = new Date(event.startAt);
       const eventEnd = new Date(event.endAt);
+      let segmentLabelAssigned = false;
       let cursor = new Date(eventStart);
       cursor.setHours(0, 0, 0, 0);
       const finalDay = new Date(eventEnd);
@@ -178,12 +179,15 @@ const OperationalCalendar = () => {
 
       while (cursor <= finalDay) {
         const key = format(cursor, 'yyyy-MM-dd');
+        const isDisplayedWorkday = cursor.getDay() !== 0 && cursor.getDay() !== 6;
         const segment = {
           ...event,
           segmentStartsHere: isSameDay(cursor, eventStart),
-          segmentEndsHere: isSameDay(cursor, eventEnd)
+          segmentEndsHere: isSameDay(cursor, eventEnd),
+          segmentShowsLabel: isDisplayedWorkday && !segmentLabelAssigned
         };
         grouped.set(key, [...(grouped.get(key) || []), segment]);
+        if (isDisplayedWorkday) segmentLabelAssigned = true;
         cursor = addDays(cursor, 1);
       }
     }
@@ -575,7 +579,7 @@ const OperationalCalendar = () => {
                           handleEdit(event);
                         }}
                         className={cn(
-                          'flex w-full items-center gap-1.5 rounded-md border px-2 py-1 text-left text-[11px] font-bold leading-tight shadow-sm transition hover:shadow',
+                          'flex min-h-6 w-full items-center gap-1.5 rounded-md border px-2 py-1 text-left text-[11px] font-bold leading-tight shadow-sm transition hover:shadow',
                           getEventTypeStyles(event.type),
                           !event.segmentStartsHere && '-ml-[9px] w-[calc(100%+9px)] rounded-l-none border-l-0 pl-[17px]',
                           !event.segmentEndsHere && '-mr-[9px] w-[calc(100%+9px)] rounded-r-none border-r-0 pr-[17px]',
@@ -583,9 +587,15 @@ const OperationalCalendar = () => {
                         )}
                         title={event.title}
                       >
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
-                        <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                        <span className="shrink-0 font-medium opacity-80">{isAllDayEvent(event) ? 'Todo el dia' : format(new Date(event.startAt), 'HH:mm')}</span>
+                        {event.segmentShowsLabel && (
+                          <>
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+                            <span className="min-w-0 flex-1 truncate">{event.title}</span>
+                            {!isAllDayEvent(event) && (
+                              <span className="shrink-0 font-medium opacity-80">{format(new Date(event.startAt), 'HH:mm')}</span>
+                            )}
+                          </>
+                        )}
                       </button>
                     ))}
                     {overflow > 0 && (
@@ -625,7 +635,7 @@ const OperationalCalendar = () => {
               <Clock className="h-3.5 w-3.5 text-indigo-500" />
               <span>
                 {isAllDayEvent(hoveredEvent.event)
-                  ? `${format(new Date(hoveredEvent.event.startAt), 'd MMM', { locale: es })} - ${format(new Date(hoveredEvent.event.endAt), 'd MMM', { locale: es })} · Todo el dia`
+                  ? `${format(new Date(hoveredEvent.event.startAt), 'd MMM', { locale: es })} - ${format(new Date(hoveredEvent.event.endAt), 'd MMM', { locale: es })}`
                   : `${format(new Date(hoveredEvent.event.startAt), 'd MMM, HH:mm', { locale: es })} - ${format(new Date(hoveredEvent.event.endAt), 'd MMM, HH:mm', { locale: es })}`}
               </span>
             </div>
@@ -688,9 +698,9 @@ const OperationalCalendar = () => {
                     <span className="block truncate text-sm font-bold">{event.title}</span>
                     <span className="mt-0.5 block text-xs font-medium opacity-75">{getTypeLabel(event.type)}</span>
                   </span>
-                  <span className="shrink-0 text-xs font-bold">
-                    {isAllDayEvent(event) ? 'Todo el dia' : format(new Date(event.startAt), 'HH:mm')}
-                  </span>
+                  {!isAllDayEvent(event) && (
+                    <span className="shrink-0 text-xs font-bold">{format(new Date(event.startAt), 'HH:mm')}</span>
+                  )}
                 </button>
               ))}
             </div>
