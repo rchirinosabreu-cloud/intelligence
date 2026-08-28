@@ -36,6 +36,20 @@ export const getGoogleCalendarAuthUrl = () => {
   });
 };
 
+export const isGoogleOAuthReauthError = (error) => {
+  const payload = error?.response?.data || {};
+  return payload.error === 'invalid_grant' ||
+    error?.code === 'invalid_grant' ||
+    /token has been expired or revoked|invalid_grant/i.test(error?.message || '');
+};
+
+export const markGoogleCalendarReauthRequired = async () => {
+  await prisma.googleCalendarConnection.updateMany({
+    where: { email: CENTRAL_GOOGLE_CALENDAR_EMAIL },
+    data: { isActive: false, syncToken: null }
+  });
+};
+
 export const storeGoogleCalendarOAuthCode = async (code, connectedById = null) => {
   if (!code) throw new Error('Missing Google OAuth code');
 

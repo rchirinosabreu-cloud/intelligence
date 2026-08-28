@@ -186,7 +186,9 @@ const OperationalCalendar = () => {
       });
       if (!res.ok) {
         const error = await res.json().catch(() => ({}));
-        throw new Error(error.details || error.error || 'No se pudo sincronizar Google Calendar');
+        const syncError = new Error(error.details || error.error || 'No se pudo sincronizar Google Calendar');
+        syncError.reconnectRequired = error.reconnectRequired === true;
+        throw syncError;
       }
       return res.json();
     },
@@ -198,6 +200,11 @@ const OperationalCalendar = () => {
     },
     onError: (error) => {
       console.error('Google Calendar sync error:', error);
+      if (error.reconnectRequired) {
+        queryClient.invalidateQueries(['google-calendar-status']);
+        toast.error('La conexion con Google vencio. Pulsa Conectar Google para autorizarla nuevamente.');
+        return;
+      }
       toast.error(error.message || 'No se pudo sincronizar Google Calendar');
     }
   });
@@ -414,6 +421,7 @@ const OperationalCalendar = () => {
         <div className="flex flex-wrap items-center gap-3">
           {isAdmin && (
             googleCalendarStatus?.connected ? (
+              <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => googleCalendarSyncMutation.mutate()}
@@ -423,6 +431,14 @@ const OperationalCalendar = () => {
                 {googleCalendarSyncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarIcon className="h-4 w-4" />}
                 Sincronizar Google
               </button>
+              <button
+                type="button"
+                onClick={connectGoogleCalendar}
+                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-bold text-zinc-700 transition hover:border-indigo-200 hover:text-indigo-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300"
+              >
+                Reconectar Google
+              </button>
+              </div>
             ) : (
               <button
                 type="button"

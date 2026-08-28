@@ -13,7 +13,9 @@ import {
   storeGoogleCalendarOAuthCode,
   getCentralGoogleCalendarConnectionStatus,
   listAccessibleGoogleCalendars,
-  setActiveGoogleCalendar
+  setActiveGoogleCalendar,
+  isGoogleOAuthReauthError,
+  markGoogleCalendarReauthRequired
 } from '../../services/googleCalendarOAuthService.js';
 import { requireManagerRole } from '../../middlewares/authMiddleware.js';
 
@@ -117,6 +119,15 @@ router.post('/google-calendar/sync', requireManagerRole, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('[Activity API] Error syncing Google Calendar:', error.response?.data || error);
+    if (isGoogleOAuthReauthError(error)) {
+      await markGoogleCalendarReauthRequired();
+      return res.status(401).json({
+        error: 'Google Calendar requiere reconexion',
+        code: 'GOOGLE_CALENDAR_REAUTH_REQUIRED',
+        reconnectRequired: true,
+        details: 'La autorizacion de Google vencio o fue revocada. Vuelve a conectar la cuenta.'
+      });
+    }
     res.status(500).json({ error: 'Failed to sync Google Calendar', details: error.message });
   }
 });
