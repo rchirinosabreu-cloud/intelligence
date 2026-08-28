@@ -432,40 +432,40 @@ model DeletedTaskLog {
 }
 
 model Task {
-  id              String           @id @default(uuid())
-  title           String
-  dueDate         DateTime?
-  assigneeId      String?
-  comments        String?
-  clientId        String
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  completedAt     DateTime?
-  creatorId       String?
-  status          TaskStatus       @default(PENDIENTE)
-  isPriority      Boolean          @default(false)
-  priority        TaskPriority?
-  isSpecial       Boolean          @default(false)
-  referenceUrl    String?
-  specialType     String?
-  contentItemId   String?
-  aiCategory      String?
-  aiComplexity    String?
-  returnCount     Int              @default(0)
-  isReturned      Boolean          @default(false)
-  returnedAt      DateTime?
-  startedAt       DateTime?
-  accumulatedWorkMs Float           @default(0)
-  sortOrder       Int?             @default(0)
-  assignee        TeamMember?      @relation(fields: [assigneeId], references: [id])
-  client          Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  contentItem     ContentItem?     @relation(fields: [contentItemId], references: [id])
-  creator         User?            @relation("CreatedTasks", fields: [creatorId], references: [id])
-  taskComments    TaskComment[]
-  followers       TaskFollower[]
-  taskAttachments TaskAttachment[]
-  workCycles      TaskWorkCycle[]
-  workSessions    TaskWorkSession[]
+  id                String            @id @default(uuid())
+  title             String
+  dueDate           DateTime?
+  assigneeId        String?
+  comments          String?
+  clientId          String
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  completedAt       DateTime?
+  creatorId         String?
+  status            TaskStatus        @default(PENDIENTE)
+  isPriority        Boolean           @default(false)
+  priority          TaskPriority?
+  isSpecial         Boolean           @default(false)
+  referenceUrl      String?
+  specialType       String?
+  contentItemId     String?
+  aiCategory        String?
+  aiComplexity      String?
+  returnCount       Int               @default(0)
+  isReturned        Boolean           @default(false)
+  returnedAt        DateTime?
+  startedAt         DateTime?
+  accumulatedWorkMs Float             @default(0)
+  sortOrder         Int?              @default(0)
+  assignee          TeamMember?       @relation(fields: [assigneeId], references: [id])
+  client            Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contentItem       ContentItem?      @relation(fields: [contentItemId], references: [id])
+  creator           User?             @relation("CreatedTasks", fields: [creatorId], references: [id])
+  taskComments      TaskComment[]
+  followers         TaskFollower[]
+  taskAttachments   TaskAttachment[]
+  workCycles        TaskWorkCycle[]
+  workSessions      TaskWorkSession[]
 
   @@index([assigneeId, status, dueDate])
   @@index([creatorId, status, createdAt])
@@ -494,22 +494,22 @@ model TaskWorkCycle {
 }
 
 model TaskWorkSession {
-  id            String         @id @default(uuid())
-  taskId        String
-  cycleId       String
-  workerId      String?
-  startedById   String?
-  endedById     String?
-  startedAt     DateTime       @default(now())
-  endedAt       DateTime?
-  durationMs    Float?
-  closeReason   String?
-  isOverlapping Boolean        @default(false)
-  correctedAt   DateTime?
-  correctedById String?
+  id               String        @id @default(uuid())
+  taskId           String
+  cycleId          String
+  workerId         String?
+  startedById      String?
+  endedById        String?
+  startedAt        DateTime      @default(now())
+  endedAt          DateTime?
+  durationMs       Float?
+  closeReason      String?
+  isOverlapping    Boolean       @default(false)
+  correctedAt      DateTime?
+  correctedById    String?
   correctionReason String?
-  task          Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  cycle         TaskWorkCycle  @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  task             Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  cycle            TaskWorkCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
 
   @@index([taskId, startedAt])
   @@index([workerId, endedAt])
@@ -772,12 +772,14 @@ enum QuotationStatus {
 enum ServiceCategory {
   BRANDING
   DISENO
+  COMUNICACION_CORPORATIVA
   PRODUCCION_AUDIOVISUAL
   MARKETING
   ADS
   EDITORIAL
   WEB
   DESARROLLO
+  MERCHANDISING_IMPRESION
 }
 
 enum FinancialCategory {
@@ -1286,13 +1288,16 @@ model ReceivablePayment {
 }
 
 model ServiceCatalog {
-  id                  String          @id @default(uuid())
-  category            ServiceCategory
-  name                String          @unique
-  description         String
-  costo_real_estimado Decimal?
-  valor_neto          Decimal
-  valor_neto_actual   Decimal
+  id                        String          @id @default(uuid())
+  category                  ServiceCategory
+  name                      String          @unique
+  description               String
+  costo_real_estimado       Decimal?
+  valor_neto                Decimal
+  valor_neto_actual         Decimal
+  precio_comercial_sugerido Decimal?
+  precio_variable           Boolean         @default(false)
+  activo                    Boolean         @default(true)
 
   @@index([category])
 }

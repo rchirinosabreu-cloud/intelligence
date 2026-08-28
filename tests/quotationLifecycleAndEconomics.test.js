@@ -185,11 +185,21 @@ test('quotation schema and UI expose the approved financial vocabulary', async (
   assert.match(schema, /issued_at\s+DateTime\?/);
   assert.match(schema, /reactivated_at\s+DateTime\?/);
   assert.match(schema, /updated_at\s+DateTime\s+@default\(now\(\)\)\s+@updatedAt/);
-  assert.match(catalog, /Precio actual/);
+  assert.match(catalog, /Precio oficial/);
+  assert.match(catalog, /Costo de producción/);
+  assert.doesNotMatch(catalog, /Costo de producir el servicio/);
+  assert.doesNotMatch(catalog, /Precio base anterior/);
   assert.doesNotMatch(catalog, /Precio Actual \(Neto\)/);
-  assert.match(catalog, /Precio final/);
+  assert.match(catalog, /Precio comercial sugerido/);
+  assert.match(catalog, /Valor variable/);
+  assert.match(catalog, /flex flex-wrap gap-2/);
+  assert.match(catalog, /md:w-72/);
   assert.match(catalog, /Ganancia/);
   assert.match(form, /Margen estimado/);
+  assert.match(form, /Costo de producción/);
+  assert.doesNotMatch(form, /Base anterior/);
+  assert.match(form, /Number\(service\.valor_neto\)/);
+  assert.doesNotMatch(form, /quotePrice[\s\S]{0,160}Number\(service\.valor_neto_actual\)/);
 });
 
 test('internal catalog endpoints require authentication and public views avoid client debug logs', async () => {

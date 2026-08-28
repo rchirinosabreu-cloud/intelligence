@@ -10,12 +10,14 @@ import { toast } from 'react-hot-toast';
 export const SERVICE_CATEGORIES = [
     { id: 'BRANDING', label: 'Branding' },
     { id: 'DISENO', label: 'Diseño' },
+    { id: 'COMUNICACION_CORPORATIVA', label: 'Comunicación Corporativa' },
     { id: 'PRODUCCION_AUDIOVISUAL', label: 'Producción Audiovisual' },
     { id: 'MARKETING', label: 'Marketing' },
     { id: 'ADS', label: 'Ads' },
     { id: 'EDITORIAL', label: 'Editorial' },
     { id: 'WEB', label: 'Web' },
-    { id: 'DESARROLLO', label: 'Desarrollo' }
+    { id: 'DESARROLLO', label: 'Desarrollo' },
+    { id: 'MERCHANDISING_IMPRESION', label: 'Merchandising / Impresión' }
 ];
 
 const emptyForm = (initialName = '') => ({

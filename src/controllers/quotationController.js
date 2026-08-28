@@ -444,6 +444,7 @@ export const generateQuotationPDF = async (req, res) => {
 export const getCatalog = async (req, res) => {
     try {
         const catalog = await prisma.serviceCatalog.findMany({
+            where: { activo: true },
             orderBy: [{ category: 'asc' }, { name: 'asc' }]
         });
         res.json(catalog.map(serializeCatalogService));

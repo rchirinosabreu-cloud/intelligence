@@ -34,6 +34,7 @@ router.get('/clients', async (req, res) => {
 router.get('/service-catalog', async (req, res) => {
     try {
         const catalog = await prisma.serviceCatalog.findMany({
+            where: { activo: true },
             orderBy: { category: 'asc' }
         });
         return res.json(catalog);

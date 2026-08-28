@@ -226,8 +226,8 @@ const QuotationForm = () => {
 
     const addItem = (service) => {
         const quotePrice = currency === 'USD' && Number(exchangeRate) > 0
-            ? Number(service.valor_neto_actual) / Number(exchangeRate)
-            : Number(service.valor_neto_actual);
+            ? Number(service.valor_neto) / Number(exchangeRate)
+            : Number(service.valor_neto);
         setSelectedItems([...selectedItems, {
             serviceId: service.id,
             name: service.name,
@@ -640,10 +640,10 @@ const QuotationForm = () => {
                                                 <p className="text-sm font-bold">{service.name}</p>
                                                 <div className="flex justify-between items-center mt-1 gap-3">
                                                     <span className="text-[10px] text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full">{service.category}</span>
-                                                    <span className="text-xs font-semibold text-primary">Actual {formatCatalogPrice(service.valor_neto_actual)}</span>
+                                                    <span className="text-xs font-semibold text-primary">{service.precio_variable ? 'Valor variable' : `Oficial ${formatCatalogPrice(service.valor_neto)}`}</span>
                                                 </div>
                                                 <div className="mt-2 flex justify-end gap-3 text-[10px] text-zinc-400">
-                                                    <span>Final {formatCatalogPrice(service.valor_neto)}</span>
+                                                    <span>Costo de producción {formatCatalogPrice(service.costo_real_estimado)}</span>
                                                     <span className="text-emerald-600 dark:text-emerald-400">
                                                         Ganancia {service.ganancia_estimada === null ? 'sin costo' : formatCop(service.ganancia_estimada)}
                                                     </span>

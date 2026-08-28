@@ -25,7 +25,7 @@
     "test:activity-build": "node --test tests/activityComponentsCompile.test.js"
   },
   "prisma": {
-    "seed": "node scripts/seed_catalog.js"
+    "seed": "node scripts/sync_service_catalog.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1086.0",

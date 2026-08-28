@@ -18,6 +18,7 @@ const parseMoneyField = (value, label, { required = true } = {}) => {
 export const listServices = async (req, res) => {
     try {
         const services = await prisma.serviceCatalog.findMany({
+            where: { activo: true },
             orderBy: [{ category: 'asc' }, { name: 'asc' }]
         });
 
@@ -34,11 +35,11 @@ export const listServices = async (req, res) => {
 /**
  * Creates a new service in the catalog.
  */
-const VALID_CATEGORIES = ['BRANDING', 'DISENO', 'PRODUCCION_AUDIOVISUAL', 'MARKETING', 'ADS', 'EDITORIAL', 'WEB', 'DESARROLLO'];
+const VALID_CATEGORIES = ['BRANDING', 'DISENO', 'COMUNICACION_CORPORATIVA', 'PRODUCCION_AUDIOVISUAL', 'MARKETING', 'ADS', 'EDITORIAL', 'WEB', 'DESARROLLO', 'MERCHANDISING_IMPRESION'];
 
 export const createService = async (req, res) => {
     try {
-        const { category, name, description, costo_real_estimado, valor_neto, valor_neto_actual } = req.body;
+        const { category, name, description, costo_real_estimado, valor_neto, valor_neto_actual, precio_comercial_sugerido, precio_variable } = req.body;
 
         if (!category || !String(name).trim()) {
             return res.status(400).json({ error: "Faltan campos obligatorios" });
@@ -59,7 +60,10 @@ export const createService = async (req, res) => {
                 description: description || "",
                 costo_real_estimado: estimatedCost,
                 valor_neto: finalPrice,
-                valor_neto_actual: currentPrice
+                valor_neto_actual: currentPrice,
+                precio_comercial_sugerido: parseMoneyField(precio_comercial_sugerido, 'El precio comercial sugerido', { required: false }),
+                precio_variable: Boolean(precio_variable),
+                activo: true
             }
         });
 
@@ -85,7 +89,7 @@ export const createService = async (req, res) => {
 export const updateService = async (req, res) => {
     try {
         const { id } = req.params;
-        const { category, name, description, costo_real_estimado, valor_neto, valor_neto_actual } = req.body;
+        const { category, name, description, costo_real_estimado, valor_neto, valor_neto_actual, precio_comercial_sugerido, precio_variable } = req.body;
 
         if (category && !VALID_CATEGORIES.includes(category.toUpperCase())) {
             return res.status(400).json({ error: "Categoría inválida" });
@@ -99,7 +103,9 @@ export const updateService = async (req, res) => {
                 description,
                 costo_real_estimado: parseMoneyField(costo_real_estimado, 'El costo real estimado', { required: false }),
                 valor_neto: parseMoneyField(valor_neto, 'El precio final', { required: false }),
-                valor_neto_actual: parseMoneyField(valor_neto_actual, 'El precio actual', { required: false })
+                valor_neto_actual: parseMoneyField(valor_neto_actual, 'El precio actual', { required: false }),
+                precio_comercial_sugerido: parseMoneyField(precio_comercial_sugerido, 'El precio comercial sugerido', { required: false }),
+                precio_variable: precio_variable === undefined ? undefined : Boolean(precio_variable)
             }
         });
 
@@ -116,7 +122,7 @@ export const updateService = async (req, res) => {
 export const deleteService = async (req, res) => {
     try {
         const { id } = req.params;
-        await prisma.serviceCatalog.delete({ where: { id } });
+        await prisma.serviceCatalog.update({ where: { id }, data: { activo: false } });
         res.json({ success: true });
     } catch (error) {
         console.error("[ServiceController] Delete failed:", error);

@@ -83,6 +83,7 @@ export const serializeCatalogService = (service) => {
     costo_real_estimado: estimatedCost,
     valor_neto_actual: currentPrice,
     valor_neto: finalPrice,
+    precio_comercial_sugerido: toOptionalNumber(service.precio_comercial_sugerido),
     ganancia_estimada: economics.estimatedProfit,
     margen_estimado: economics.estimatedMargin
   };
