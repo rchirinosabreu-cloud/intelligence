@@ -1,2 +1,0 @@
-ALTER TABLE "OperationalEvent"
-ADD COLUMN "allDay" BOOLEAN NOT NULL DEFAULT false;

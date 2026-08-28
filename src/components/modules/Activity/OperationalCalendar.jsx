@@ -85,6 +85,13 @@ const descriptionToPlainText = (value = '') => {
   return (document.body.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
 };
 
+const isAllDayEvent = (event) => {
+  const start = new Date(event.startAt);
+  const end = new Date(event.endAt);
+  return start.getHours() === 0 && start.getMinutes() === 0 &&
+    end.getHours() === 23 && end.getMinutes() === 59;
+};
+
 const OperationalCalendar = () => {
   const { currentUser } = useAuth();
   const queryClient = useQueryClient();
@@ -181,7 +188,7 @@ const OperationalCalendar = () => {
       }
     }
     for (const [key, dayEvents] of grouped.entries()) {
-      grouped.set(key, dayEvents.sort((a, b) => Number(b.allDay) - Number(a.allDay) || new Date(a.startAt) - new Date(b.startAt)));
+      grouped.set(key, dayEvents.sort((a, b) => Number(isAllDayEvent(b)) - Number(isAllDayEvent(a)) || new Date(a.startAt) - new Date(b.startAt)));
     }
     return grouped;
   }, [events]);
@@ -320,7 +327,7 @@ const OperationalCalendar = () => {
       type: event.type,
       startAt: new Date(event.startAt),
       endAt: new Date(event.endAt),
-      allDay: event.allDay === true,
+      allDay: isAllDayEvent(event),
       memberIds: event.memberIds || [],
       recurrence: event.recurrence || 'NONE',
       recurrenceEnd: event.recurrenceEnd ? new Date(event.recurrenceEnd) : null,
@@ -578,7 +585,7 @@ const OperationalCalendar = () => {
                       >
                         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
                         <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                        <span className="shrink-0 font-medium opacity-80">{event.allDay ? 'Todo el dia' : format(new Date(event.startAt), 'HH:mm')}</span>
+                        <span className="shrink-0 font-medium opacity-80">{isAllDayEvent(event) ? 'Todo el dia' : format(new Date(event.startAt), 'HH:mm')}</span>
                       </button>
                     ))}
                     {overflow > 0 && (
@@ -617,7 +624,7 @@ const OperationalCalendar = () => {
             <div className="flex items-center gap-2">
               <Clock className="h-3.5 w-3.5 text-indigo-500" />
               <span>
-                {hoveredEvent.event.allDay
+                {isAllDayEvent(hoveredEvent.event)
                   ? `${format(new Date(hoveredEvent.event.startAt), 'd MMM', { locale: es })} - ${format(new Date(hoveredEvent.event.endAt), 'd MMM', { locale: es })} · Todo el dia`
                   : `${format(new Date(hoveredEvent.event.startAt), 'd MMM, HH:mm', { locale: es })} - ${format(new Date(hoveredEvent.event.endAt), 'd MMM, HH:mm', { locale: es })}`}
               </span>
@@ -682,7 +689,7 @@ const OperationalCalendar = () => {
                     <span className="mt-0.5 block text-xs font-medium opacity-75">{getTypeLabel(event.type)}</span>
                   </span>
                   <span className="shrink-0 text-xs font-bold">
-                    {event.allDay ? 'Todo el dia' : format(new Date(event.startAt), 'HH:mm')}
+                    {isAllDayEvent(event) ? 'Todo el dia' : format(new Date(event.startAt), 'HH:mm')}
                   </span>
                 </button>
               ))}

@@ -69,6 +69,13 @@ const getExclusiveAllDayEndDate = (value) => {
   return formatGoogleDate(nextDay);
 };
 
+const isAllDayRange = (startAt, endAt) => {
+  const start = new Date(startAt);
+  const end = new Date(endAt);
+  return start.getHours() === 0 && start.getMinutes() === 0 &&
+    end.getHours() === 23 && end.getMinutes() === 59;
+};
+
 const getMeetLinkFromGoogleEvent = (event) => {
   if (event.hangoutLink) return event.hangoutLink;
   const videoEntry = event.conferenceData?.entryPoints?.find(entry => entry.entryPointType === 'video');
@@ -90,7 +97,6 @@ const toOperationalEventDataFromGoogle = (event, calendarId) => ({
   description: decodeGoogleDescription(event.description),
   startAt: new Date(event.start?.dateTime || `${event.start?.date}T00:00:00.000-05:00`),
   endAt: event.end?.dateTime ? new Date(event.end.dateTime) : googleAllDayEndToInclusiveDate(event.end?.date),
-  allDay: Boolean(event.start?.date && !event.start?.dateTime),
   memberIds: [],
   recurrence: 'NONE',
   recurrenceEnd: null,
@@ -110,10 +116,10 @@ const toOperationalEventDataFromGoogle = (event, calendarId) => ({
 const toGoogleEventPayload = (event) => ({
   summary: event.title,
   description: event.description || '',
-  start: event.allDay
+  start: isAllDayRange(event.startAt, event.endAt)
     ? { date: formatGoogleDate(event.startAt) }
     : { dateTime: formatGoogleDateTimeInBogota(event.startAt), timeZone: 'America/Bogota' },
-  end: event.allDay
+  end: isAllDayRange(event.startAt, event.endAt)
     ? { date: getExclusiveAllDayEndDate(event.endAt) }
     : { dateTime: formatGoogleDateTimeInBogota(event.endAt), timeZone: 'America/Bogota' },
   extendedProperties: {
@@ -301,7 +307,6 @@ export async function createOperationalEvent(data, createdById = null) {
       description: data.description,
       startAt: new Date(data.startAt),
       endAt: new Date(data.endAt),
-      allDay: data.allDay === true,
       memberIds: data.memberIds || [],
       recurrence: data.recurrence || 'NONE',
       recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
@@ -324,7 +329,6 @@ export async function updateOperationalEvent(id, data) {
       description: data.description,
       startAt: data.startAt ? new Date(data.startAt) : undefined,
       endAt: data.endAt ? new Date(data.endAt) : undefined,
-      allDay: typeof data.allDay === 'boolean' ? data.allDay : undefined,
       memberIds: data.memberIds,
       recurrence: data.recurrence,
       recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
