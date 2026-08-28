@@ -9,6 +9,7 @@ import * as announcementController from '../controllers/announcementController.j
 import * as flowController from '../controllers/flowController.js';
 import * as proxyController from '../controllers/proxyController.js';
 import * as publicController from '../controllers/publicController.js';
+import * as managerTaskAnalyticsController from '../controllers/managerTaskAnalyticsController.js';
 import { authenticateToken, requireManagerRole, requireModulePermission } from '../middlewares/authMiddleware.js';
 import prisma from '../lib/prisma.js';
 import multer from 'multer';
@@ -98,6 +99,14 @@ router.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date
 
 // Chat
 router.post('/chat', requireModulePermission('manager'), chatController.handleChat);
+
+// Manager descriptive task intelligence. Keep this restricted to operational leaders.
+router.get(
+    '/manager/task-analytics',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    managerTaskAnalyticsController.getTaskAnalytics
+);
 
 // Tasks
 router.use('/tasks', requireModulePermission('gestion'));

@@ -19,7 +19,7 @@ const ContentGrids = lazy(() => import('./components/modules/ContentGrids'));
 const ContentPlanDetail = lazy(() => import('./components/modules/ContentPlanDetail'));
 const FinancialDashboard = lazy(() => import('./components/modules/FinancialDashboard'));
 const TalentRadar = lazy(() => import('./components/modules/TalentRadar'));
-const BrainCore = lazy(() => import('./components/modules/BrainCore'));
+const ManagerTaskAnalytics = lazy(() => import('./components/modules/ManagerTaskAnalytics'));
 const Activity = lazy(() => import('./components/modules/Activity'));
 const GoogleCalendarCallback = lazy(() => import('./components/modules/Activity/GoogleCalendarCallback'));
 const Reports = lazy(() => import('./components/modules/Reports'));
@@ -157,7 +157,7 @@ function AppContent() {
                       path="/manager"
                       element={
                         <ModuleGuard module="manager">
-                          <BrainCore />
+                          <ManagerTaskAnalytics />
                         </ModuleGuard>
                       }
                     />
