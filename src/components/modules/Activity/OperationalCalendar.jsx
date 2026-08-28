@@ -75,6 +75,16 @@ const getEventTypeStyles = (type) => {
 
 const getTypeLabel = (type) => EVENT_TYPES.find(item => item.value === type)?.label || type;
 
+const descriptionToPlainText = (value = '') => {
+  if (!value || !value.includes('<')) return value;
+  const parser = new DOMParser();
+  const document = parser.parseFromString(
+    value.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p\s*>/gi, '\n'),
+    'text/html'
+  );
+  return (document.body.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+};
+
 const OperationalCalendar = () => {
   const { currentUser } = useAuth();
   const queryClient = useQueryClient();
@@ -91,6 +101,7 @@ const OperationalCalendar = () => {
     type: 'PRODUCTION',
     startAt: getRoundedBogotaNow(new Date()),
     endAt: addDays(getRoundedBogotaNow(new Date()), 0),
+    allDay: false,
     memberIds: [],
     recurrence: 'NONE',
     recurrenceEnd: null,
@@ -151,11 +162,26 @@ const OperationalCalendar = () => {
   const eventsByDay = useMemo(() => {
     const grouped = new Map();
     for (const event of events) {
-      const key = format(new Date(event.startAt), 'yyyy-MM-dd');
-      grouped.set(key, [...(grouped.get(key) || []), event]);
+      const eventStart = new Date(event.startAt);
+      const eventEnd = new Date(event.endAt);
+      let cursor = new Date(eventStart);
+      cursor.setHours(0, 0, 0, 0);
+      const finalDay = new Date(eventEnd);
+      finalDay.setHours(0, 0, 0, 0);
+
+      while (cursor <= finalDay) {
+        const key = format(cursor, 'yyyy-MM-dd');
+        const segment = {
+          ...event,
+          segmentStartsHere: isSameDay(cursor, eventStart),
+          segmentEndsHere: isSameDay(cursor, eventEnd)
+        };
+        grouped.set(key, [...(grouped.get(key) || []), segment]);
+        cursor = addDays(cursor, 1);
+      }
     }
     for (const [key, dayEvents] of grouped.entries()) {
-      grouped.set(key, dayEvents.sort((a, b) => new Date(a.startAt) - new Date(b.startAt)));
+      grouped.set(key, dayEvents.sort((a, b) => Number(b.allDay) - Number(a.allDay) || new Date(a.startAt) - new Date(b.startAt)));
     }
     return grouped;
   }, [events]);
@@ -271,6 +297,7 @@ const OperationalCalendar = () => {
       type,
       startAt: start,
       endAt: end,
+      allDay: false,
       memberIds: [],
       recurrence: 'NONE',
       recurrenceEnd: null,
@@ -293,11 +320,12 @@ const OperationalCalendar = () => {
       type: event.type,
       startAt: new Date(event.startAt),
       endAt: new Date(event.endAt),
+      allDay: event.allDay === true,
       memberIds: event.memberIds || [],
       recurrence: event.recurrence || 'NONE',
       recurrenceEnd: event.recurrenceEnd ? new Date(event.recurrenceEnd) : null,
       meetingLink: event.meetingLink || '',
-      description: event.description || ''
+      description: descriptionToPlainText(event.description || '')
     });
     setIsModalOpen(true);
   };
@@ -541,13 +569,16 @@ const OperationalCalendar = () => {
                         }}
                         className={cn(
                           'flex w-full items-center gap-1.5 rounded-md border px-2 py-1 text-left text-[11px] font-bold leading-tight shadow-sm transition hover:shadow',
-                          getEventTypeStyles(event.type)
+                          getEventTypeStyles(event.type),
+                          !event.segmentStartsHere && '-ml-[9px] w-[calc(100%+9px)] rounded-l-none border-l-0 pl-[17px]',
+                          !event.segmentEndsHere && '-mr-[9px] w-[calc(100%+9px)] rounded-r-none border-r-0 pr-[17px]',
+                          !event.segmentStartsHere && !event.segmentEndsHere && 'w-[calc(100%+18px)]'
                         )}
                         title={event.title}
                       >
                         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
                         <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                        <span className="shrink-0 font-medium opacity-80">{format(new Date(event.startAt), 'HH:mm')}</span>
+                        <span className="shrink-0 font-medium opacity-80">{event.allDay ? 'Todo el dia' : format(new Date(event.startAt), 'HH:mm')}</span>
                       </button>
                     ))}
                     {overflow > 0 && (
@@ -586,7 +617,9 @@ const OperationalCalendar = () => {
             <div className="flex items-center gap-2">
               <Clock className="h-3.5 w-3.5 text-indigo-500" />
               <span>
-                {format(new Date(hoveredEvent.event.startAt), 'd MMM, HH:mm', { locale: es })} - {format(new Date(hoveredEvent.event.endAt), 'HH:mm')}
+                {hoveredEvent.event.allDay
+                  ? `${format(new Date(hoveredEvent.event.startAt), 'd MMM', { locale: es })} - ${format(new Date(hoveredEvent.event.endAt), 'd MMM', { locale: es })} · Todo el dia`
+                  : `${format(new Date(hoveredEvent.event.startAt), 'd MMM, HH:mm', { locale: es })} - ${format(new Date(hoveredEvent.event.endAt), 'd MMM, HH:mm', { locale: es })}`}
               </span>
             </div>
             {hoveredEvent.event.meetingLink && (
@@ -597,7 +630,7 @@ const OperationalCalendar = () => {
             )}
             {hoveredEvent.event.description && (
               <p className="line-clamp-3 rounded-xl bg-zinc-50 p-3 text-zinc-500 dark:bg-white/5 dark:text-zinc-400">
-                {hoveredEvent.event.description}
+                {descriptionToPlainText(hoveredEvent.event.description)}
               </p>
             )}
           </div>
@@ -649,7 +682,7 @@ const OperationalCalendar = () => {
                     <span className="mt-0.5 block text-xs font-medium opacity-75">{getTypeLabel(event.type)}</span>
                   </span>
                   <span className="shrink-0 text-xs font-bold">
-                    {format(new Date(event.startAt), 'HH:mm')}
+                    {event.allDay ? 'Todo el dia' : format(new Date(event.startAt), 'HH:mm')}
                   </span>
                 </button>
               ))}
@@ -731,6 +764,26 @@ const OperationalCalendar = () => {
                 </div>
               )}
 
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                <input
+                  type="checkbox"
+                  checked={formData.allDay}
+                  onChange={event => {
+                    const allDay = event.target.checked;
+                    const startAt = new Date(formData.startAt);
+                    const endAt = new Date(formData.endAt);
+                    if (allDay) {
+                      startAt.setHours(0, 0, 0, 0);
+                      endAt.setHours(23, 59, 59, 999);
+                      if (endAt < startAt) endAt.setTime(startAt.getTime() + 86399999);
+                    }
+                    setFormData({ ...formData, allDay, startAt, endAt });
+                  }}
+                  className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">Todo el dia</span>
+              </label>
+
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-500">Inicio</label>
@@ -739,13 +792,21 @@ const OperationalCalendar = () => {
                     selected={formData.startAt}
                     onChange={date => {
                       if (!date) return;
+                      if (formData.allDay) {
+                        date.setHours(0, 0, 0, 0);
+                        const durationDays = Math.max(0, Math.round((new Date(formData.endAt).setHours(0, 0, 0, 0) - new Date(formData.startAt).setHours(0, 0, 0, 0)) / 86400000));
+                        const endAt = addDays(date, durationDays);
+                        endAt.setHours(23, 59, 59, 999);
+                        setFormData({ ...formData, startAt: date, endAt });
+                        return;
+                      }
                       const currentDuration = new Date(formData.endAt).getTime() - new Date(formData.startAt).getTime();
                       setFormData({ ...formData, startAt: date, endAt: new Date(date.getTime() + Math.max(currentDuration, 15 * 60 * 1000)) });
                     }}
-                    showTimeSelect
+                    showTimeSelect={!formData.allDay}
                     timeIntervals={15}
                     timeCaption="Hora"
-                    dateFormat="d MMM, HH:mm"
+                    dateFormat={formData.allDay ? 'd MMM, yyyy' : 'd MMM, HH:mm'}
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5"
                     wrapperClassName="w-full"
                   />
@@ -755,11 +816,16 @@ const OperationalCalendar = () => {
                   <DatePicker
                     {...brainDatePickerProps}
                     selected={formData.endAt}
-                    onChange={date => setFormData({ ...formData, endAt: date })}
-                    showTimeSelect
+                    onChange={date => {
+                      if (!date) return;
+                      if (formData.allDay) date.setHours(23, 59, 59, 999);
+                      setFormData({ ...formData, endAt: date });
+                    }}
+                    minDate={formData.startAt}
+                    showTimeSelect={!formData.allDay}
                     timeIntervals={15}
                     timeCaption="Hora"
-                    dateFormat="d MMM, HH:mm"
+                    dateFormat={formData.allDay ? 'd MMM, yyyy' : 'd MMM, HH:mm'}
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5"
                     wrapperClassName="w-full"
                   />

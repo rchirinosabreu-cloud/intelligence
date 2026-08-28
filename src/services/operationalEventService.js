@@ -36,6 +36,39 @@ const formatGoogleDateTimeInBogota = (value) => {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
 };
 
+const formatGoogleDate = (value) => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Bogota',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+}).format(new Date(value));
+
+const decodeGoogleDescription = (value) => {
+  if (!value) return null;
+  return value
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p\s*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim() || null;
+};
+
+const googleAllDayEndToInclusiveDate = (date) => new Date(
+  new Date(`${date}T00:00:00.000-05:00`).getTime() - 1
+);
+
+const getExclusiveAllDayEndDate = (value) => {
+  const nextDay = new Date(value);
+  nextDay.setDate(nextDay.getDate() + 1);
+  return formatGoogleDate(nextDay);
+};
+
 const getMeetLinkFromGoogleEvent = (event) => {
   if (event.hangoutLink) return event.hangoutLink;
   const videoEntry = event.conferenceData?.entryPoints?.find(entry => entry.entryPointType === 'video');
@@ -54,9 +87,10 @@ const mapGoogleEventType = (event) => {
 const toOperationalEventDataFromGoogle = (event, calendarId) => ({
   title: event.summary || 'Evento de Google Calendar',
   type: mapGoogleEventType(event),
-  description: event.description || null,
+  description: decodeGoogleDescription(event.description),
   startAt: new Date(event.start?.dateTime || `${event.start?.date}T00:00:00.000-05:00`),
-  endAt: new Date(event.end?.dateTime || `${event.end?.date}T23:59:59.000-05:00`),
+  endAt: event.end?.dateTime ? new Date(event.end.dateTime) : googleAllDayEndToInclusiveDate(event.end?.date),
+  allDay: Boolean(event.start?.date && !event.start?.dateTime),
   memberIds: [],
   recurrence: 'NONE',
   recurrenceEnd: null,
@@ -76,8 +110,12 @@ const toOperationalEventDataFromGoogle = (event, calendarId) => ({
 const toGoogleEventPayload = (event) => ({
   summary: event.title,
   description: event.description || '',
-  start: { dateTime: formatGoogleDateTimeInBogota(event.startAt), timeZone: 'America/Bogota' },
-  end: { dateTime: formatGoogleDateTimeInBogota(event.endAt), timeZone: 'America/Bogota' },
+  start: event.allDay
+    ? { date: formatGoogleDate(event.startAt) }
+    : { dateTime: formatGoogleDateTimeInBogota(event.startAt), timeZone: 'America/Bogota' },
+  end: event.allDay
+    ? { date: getExclusiveAllDayEndDate(event.endAt) }
+    : { dateTime: formatGoogleDateTimeInBogota(event.endAt), timeZone: 'America/Bogota' },
   extendedProperties: {
     private: {
       brainOperationalEventId: event.id,
@@ -263,6 +301,7 @@ export async function createOperationalEvent(data, createdById = null) {
       description: data.description,
       startAt: new Date(data.startAt),
       endAt: new Date(data.endAt),
+      allDay: data.allDay === true,
       memberIds: data.memberIds || [],
       recurrence: data.recurrence || 'NONE',
       recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
@@ -285,6 +324,7 @@ export async function updateOperationalEvent(id, data) {
       description: data.description,
       startAt: data.startAt ? new Date(data.startAt) : undefined,
       endAt: data.endAt ? new Date(data.endAt) : undefined,
+      allDay: typeof data.allDay === 'boolean' ? data.allDay : undefined,
       memberIds: data.memberIds,
       recurrence: data.recurrence,
       recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,

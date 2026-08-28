@@ -17,6 +17,7 @@ test('operational calendar is ready for central Google Calendar OAuth sync', asy
   assert.match(schema, /googleEventId\s+String\?/);
   assert.match(schema, /googleCalendarId\s+String\?/);
   assert.match(schema, /googleMeetAccessType\s+String\?/);
+  assert.match(schema, /allDay\s+Boolean\s+@default\(false\)/);
   assert.match(schema, /@@index\(\[googleCalendarId, googleEventId\]\)/);
 
   assert.match(oauthService, /google\.auth\.OAuth2/);
@@ -41,6 +42,9 @@ test('operational calendar is ready for central Google Calendar OAuth sync', asy
   assert.match(eventService, /reason === 'deleted'/);
   assert.match(eventService, /extendedProperties\?\.\private\?\.brainOperationalEventId/);
   assert.match(eventService, /formatGoogleDateTimeInBogota/);
+  assert.match(eventService, /allDay:\s*Boolean\(event\.start\?\.date/);
+  assert.match(eventService, /event\.allDay[\s\S]*\{ date:/);
+  assert.match(eventService, /decodeGoogleDescription/);
   assert.match(eventService, /timeZone:\s*'America\/Bogota'/);
   assert.doesNotMatch(eventService, /start:\s*\{\s*dateTime:\s*new Date\(event\.startAt\)\.toISOString\(\)/);
 });
@@ -75,6 +79,11 @@ test('operational calendar fixes current render and role issues', async () => {
   assert.match(calendar, /google-calendar\/sync/);
   assert.match(calendar, /monthCalendarDays/);
   assert.match(calendar, /eventsByDay/);
+  assert.match(calendar, /segmentStartsHere/);
+  assert.match(calendar, /segmentEndsHere/);
+  assert.match(calendar, /descriptionToPlainText/);
+  assert.match(calendar, /checked=\{formData\.allDay\}/);
+  assert.match(calendar, /showTimeSelect=\{!formData\.allDay\}/);
   assert.match(calendar, /getRoundedBogotaNow/);
   assert.match(calendar, /data-operational-calendar="traditional-month-grid"/);
   assert.match(calendar, /grid-cols-5/);

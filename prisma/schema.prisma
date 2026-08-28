@@ -361,6 +361,7 @@ model OperationalEvent {
   description          String?
   startAt              DateTime
   endAt                DateTime
+  allDay               Boolean   @default(false)
   memberIds            String[]  @default([]) // IDs of TeamMembers involved
   recurrence           String? // NONE, WEEKLY
   recurrenceEnd        DateTime?
