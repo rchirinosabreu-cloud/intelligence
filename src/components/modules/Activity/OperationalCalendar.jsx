@@ -84,6 +84,7 @@ const OperationalCalendar = () => {
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [hoveredEvent, setHoveredEvent] = useState(null);
   const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const [expandedDay, setExpandedDay] = useState(null);
   const hoverCloseTimerRef = useRef(null);
   const [formData, setFormData] = useState({
     title: '',
@@ -552,10 +553,10 @@ const OperationalCalendar = () => {
                     {overflow > 0 && (
                       <button
                         type="button"
-                        onClick={() => handleEmptyDayClick(day)}
+                        onClick={() => setExpandedDay({ day, events: dayEvents })}
                         className="px-2 text-[11px] font-medium text-zinc-500 hover:text-indigo-600"
                       >
-                        {overflow} mas...
+                        +{overflow} mas...
                       </button>
                     )}
                   </div>
@@ -599,6 +600,60 @@ const OperationalCalendar = () => {
                 {hoveredEvent.event.description}
               </p>
             )}
+          </div>
+        </div>
+      )}
+
+      {expandedDay && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setExpandedDay(null);
+          }}
+        >
+          <div className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-bold text-zinc-950 dark:text-white">
+                  Eventos del {format(expandedDay.day, 'd MMMM yyyy', { locale: es })}
+                </h3>
+                <p className="mt-1 text-sm text-zinc-500">{expandedDay.events.length} eventos</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExpandedDay(null)}
+                className="rounded-full p-2 text-zinc-400 transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                aria-label="Cerrar lista de eventos"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {expandedDay.events.map(event => (
+                <button
+                  key={event.id}
+                  type="button"
+                  onClick={() => {
+                    setExpandedDay(null);
+                    handleEdit(event);
+                  }}
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition hover:shadow-md',
+                    getEventTypeStyles(event.type)
+                  )}
+                >
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-current" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold">{event.title}</span>
+                    <span className="mt-0.5 block text-xs font-medium opacity-75">{getTypeLabel(event.type)}</span>
+                  </span>
+                  <span className="shrink-0 text-xs font-bold">
+                    {format(new Date(event.startAt), 'HH:mm')}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

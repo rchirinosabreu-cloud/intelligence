@@ -84,6 +84,9 @@ test('operational calendar fixes current render and role issues', async () => {
   assert.match(calendar, /bg-\[#009EB9\] px-4 py-2\.5/);
   assert.match(calendar, /bg-\[#009EB9\] py-3[\s\S]*text-white shadow-lg/);
   assert.match(calendar, /handleEmptyDayClick/);
+  assert.match(calendar, /setExpandedDay\(\{ day, events: dayEvents \}\)/);
+  assert.match(calendar, /expandedDay\.events\.map/);
+  assert.doesNotMatch(calendar, /overflow > 0[\s\S]{0,300}onClick=\{\(\) => handleEmptyDayClick\(day\)\}/);
   assert.match(calendar, /getEventTypeStyles/);
   assert.match(calendar, /hoveredEvent/);
   assert.match(calendar, /data-operational-event-popover="preview"/);
