@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { getNotificationDisplayParts } from '@/utils/notificationUtils';
 import PushNotificationControl from '@/components/notifications/PushNotificationControl';
+import ExcessiveTaskAlertDialog from '@/components/tasks/ExcessiveTaskAlertDialog';
 
 const AppLayout = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -58,6 +59,8 @@ const AppLayout = ({ children }) => {
   }, [userData]);
 
   const displayUser = userData || currentUser;
+  const canUseTaskManagement = displayUser?.role === 'ADMIN'
+    || displayUser?.modulePermissions?.gestion === true;
 
   // --- REACT QUERY: NOTIFICATIONS ---
   const {
@@ -178,6 +181,7 @@ const AppLayout = ({ children }) => {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-primary/20 relative transition-colors duration-300 font-sans">
       {/* Sidebar - z-[60] (Internal) */}
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <ExcessiveTaskAlertDialog userId={displayUser?.id} userName={displayUser?.name} enabled={canUseTaskManagement} />
 
       {/* Header - z-50 */}
       <header className="h-16 lg:pl-64 fixed top-0 left-0 right-0 z-50 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 transition-all">
