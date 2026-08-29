@@ -152,8 +152,19 @@ const PublicQuotation = () => {
     const visibleScenarios = isApproved && approvedScenario ? [approvedScenario] : scenarios;
     const chosenScenario = approvedScenario || scenarios.find(({ id }) => id === selectedScenarioId);
     const chosenAmounts = chosenScenario
-        ? calculateQuotationTotals(chosenScenario.items, quotation.is_tax_exempt || quotation.currency === 'USD')
+        ? calculateQuotationTotals(chosenScenario.items, quotation.is_tax_exempt || quotation.currency === 'USD', {
+            durationMonths: quotation.duration_months || 1,
+            discountType: chosenScenario.discountType,
+            discountValue: chosenScenario.discountValue
+        })
         : null;
+    const quotationAmounts = calculateQuotationTotals(quotation.items || [], quotation.is_tax_exempt || quotation.currency === 'USD', {
+        durationMonths: quotation.duration_months || 1,
+        discountType: quotation.discount_type,
+        discountValue: quotation.discount_value
+    });
+    const displayedAmounts = chosenAmounts || quotationAmounts;
+    const displayedDiscountLabel = chosenScenario?.discountLabel || quotation.discount_label || 'Descuento';
     const terms = parseContractTermsText(quotation.terms_and_conditions);
 
     return (
@@ -209,6 +220,10 @@ const PublicQuotation = () => {
                                 <dt className="flex items-center gap-2 text-xs font-semibold uppercase text-zinc-400"><Clock className="h-4 w-4" /> Vigencia</dt>
                                 <dd className="mt-1.5 text-sm font-semibold">{formatDate(quotation.expires_at)}</dd>
                             </div>
+                            <div>
+                                <dt className="flex items-center gap-2 text-xs font-semibold uppercase text-zinc-400"><Calendar className="h-4 w-4" /> Duración del servicio</dt>
+                                <dd className="mt-1.5 text-sm font-semibold">{quotation.duration_months || 1} {Number(quotation.duration_months || 1) === 1 ? 'mes' : 'meses'}</dd>
+                            </div>
                         </dl>
                     </div>
                 </section>
@@ -223,7 +238,11 @@ const PublicQuotation = () => {
                             {scenarios.length > 0 ? (
                                 <div className="grid gap-5 lg:grid-cols-3">
                                     {visibleScenarios.map((scenario) => {
-                                        const amounts = calculateQuotationTotals(scenario.items, quotation.is_tax_exempt || quotation.currency === 'USD');
+                                        const amounts = calculateQuotationTotals(scenario.items, quotation.is_tax_exempt || quotation.currency === 'USD', {
+                                            durationMonths: quotation.duration_months || 1,
+                                            discountType: scenario.discountType,
+                                            discountValue: scenario.discountValue
+                                        });
                                         const isSelected = selectedScenarioId === scenario.id || scenario.selected;
                                         return (
                                             <article key={scenario.id} className={`flex flex-col rounded-2xl border-2 p-6 transition-all ${isSelected ? 'border-[#00859C] bg-cyan-50/40 shadow-lg dark:bg-cyan-950/10' : 'border-zinc-200 dark:border-zinc-800'}`}>
@@ -231,11 +250,18 @@ const PublicQuotation = () => {
                                                 <h3 className="mt-2 text-xl font-bold">{scenario.name}</h3>
                                                 {scenario.description && <p className="mt-3 text-sm leading-6 text-zinc-500">{scenario.description}</p>}
                                                 <div className="mt-5 space-y-4 border-t border-zinc-200 pt-5 dark:border-zinc-800">
-                                                    {scenario.items.map((item, index) => <div key={`${item.name}-${index}`}><p className="text-sm font-bold">{item.name}</p>{item.description && <p className="mt-1 text-xs leading-5 text-zinc-500">{item.description}</p>}</div>)}
+                                                    {scenario.items.map((item, index) => <div key={`${item.name}-${index}`}><div className="flex items-start justify-between gap-3"><p className="text-sm font-bold">{item.name}</p><span className="shrink-0 text-[10px] font-bold uppercase text-zinc-400">{item.billingType === 'ONE_TIME' ? 'Pago único' : 'Pago mensual'}</span></div>{item.description && <p className="mt-1 text-xs leading-5 text-zinc-500">{item.description}</p>}</div>)}
                                                 </div>
                                                 <div className="mt-auto pt-6">
                                                     <p className="text-xs font-bold uppercase text-zinc-400">Valor de esta opción</p>
                                                     <p className="mt-1 text-2xl font-black">{formatCurrency(amounts.totalAmount)}</p>
+                                                    <div className="mt-4 space-y-1.5 border-t border-zinc-200 pt-3 text-xs dark:border-zinc-800">
+                                                        <div className="flex justify-between"><span className="text-zinc-500">Mensual</span><span>{formatCurrency(amounts.monthlySubtotal)}</span></div>
+                                                        {amounts.durationMonths > 1 && <div className="flex justify-between"><span className="text-zinc-500">{amounts.durationMonths} meses × mensualidad</span><span>{formatCurrency(amounts.monthlySubtotal * amounts.durationMonths)}</span></div>}
+                                                        {amounts.oneTimeSubtotal > 0 && <div className="flex justify-between"><span className="text-zinc-500">Pagos únicos</span><span>{formatCurrency(amounts.oneTimeSubtotal)}</span></div>}
+                                                        {amounts.discountAmount > 0 && <div className="flex justify-between text-violet-700 dark:text-violet-300"><span>{scenario.discountLabel || 'Descuento'}</span><span>-{formatCurrency(amounts.discountAmount)}</span></div>}
+                                                        <div className="flex justify-between font-semibold"><span>Subtotal contractual</span><span>{formatCurrency(amounts.subtotal)}</span></div>
+                                                    </div>
                                                     {!quotation.is_tax_exempt && quotation.currency !== 'USD' && <p className="mt-1 text-xs text-zinc-500">Incluye IVA del 19%</p>}
                                                     {scenario.externalBudget !== null && <div className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300"><strong>Presupuesto externo: {formatCurrency(scenario.externalBudget)}</strong>{scenario.externalBudgetNote && <p className="mt-1 leading-5">{scenario.externalBudgetNote}</p>}</div>}
                                                     {!isApproved && <Button type="button" onClick={() => { setSelectedScenarioId(scenario.id); setAcceptanceError(''); }} variant={isSelected ? 'default' : 'outline'} className="mt-5 w-full rounded-lg">{isSelected ? 'Opción seleccionada' : 'Elegir esta opción'}</Button>}
@@ -261,6 +287,7 @@ const PublicQuotation = () => {
                                                 <div className="border-t border-zinc-100 pt-4 text-left sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0 sm:text-right dark:border-zinc-800">
                                                     <p className="text-xs font-semibold uppercase text-zinc-400">{Number(item.quantity)} {Number(item.quantity) === 1 ? 'unidad' : 'unidades'}</p>
                                                     <p className="mt-1 text-xl font-bold">{formatCurrency(Number(item.price) * Number(item.quantity))}</p>
+                                                    <p className="mt-1 text-[10px] font-bold uppercase text-zinc-400">{item.billingType === 'ONE_TIME' ? 'Pago único' : 'Pago mensual'}</p>
                                                 </div>
                                             </div>
                                         </article>
@@ -295,10 +322,14 @@ const PublicQuotation = () => {
                         <div className="rounded-lg bg-violet-700 p-6 text-white shadow-xl shadow-violet-950/10 dark:bg-violet-800 sm:p-8">
                             <p className="text-xs font-semibold uppercase text-violet-200">{scenarios.length > 0 ? (chosenScenario ? chosenScenario.name : 'Selecciona un escenario') : 'Inversión total'}</p>
                             {scenarios.length === 0 || chosenAmounts ? <>
-                                <p className="mt-3 text-4xl font-bold leading-none">{formatCurrency(chosenAmounts?.totalAmount ?? quotation.total_amount)}</p>
+                                <p className="mt-3 text-4xl font-bold leading-none">{formatCurrency(displayedAmounts.totalAmount)}</p>
                                 <div className="mt-6 space-y-2 border-t border-white/20 pt-5 text-sm">
-                                    <div className="flex justify-between gap-4"><span className="text-violet-100">Subtotal</span><span>{formatCurrency(chosenAmounts?.subtotal ?? quotation.subtotal)}</span></div>
-                                    {quotation.currency !== 'USD' && !quotation.is_tax_exempt && <div className="flex justify-between gap-4"><span className="text-violet-100">IVA (19%)</span><span>{formatCurrency(chosenAmounts?.taxAmount ?? quotation.tax_amount)}</span></div>}
+                                    <div className="flex justify-between gap-4"><span className="text-violet-100">Inversión mensual</span><span>{formatCurrency(displayedAmounts.monthlySubtotal)}</span></div>
+                                    {displayedAmounts.durationMonths > 1 && <div className="flex justify-between gap-4"><span className="text-violet-100">{displayedAmounts.durationMonths} meses × mensualidad</span><span>{formatCurrency(displayedAmounts.monthlySubtotal * displayedAmounts.durationMonths)}</span></div>}
+                                    {displayedAmounts.oneTimeSubtotal > 0 && <div className="flex justify-between gap-4"><span className="text-violet-100">Servicios de pago único</span><span>{formatCurrency(displayedAmounts.oneTimeSubtotal)}</span></div>}
+                                    {displayedAmounts.discountAmount > 0 && <div className="flex justify-between gap-4"><span className="text-violet-100">{displayedDiscountLabel}</span><span>-{formatCurrency(displayedAmounts.discountAmount)}</span></div>}
+                                    <div className="flex justify-between gap-4 font-semibold"><span className="text-violet-100">Subtotal contractual</span><span>{formatCurrency(displayedAmounts.subtotal)}</span></div>
+                                    {quotation.currency !== 'USD' && !quotation.is_tax_exempt && <div className="flex justify-between gap-4"><span className="text-violet-100">IVA (19%)</span><span>{formatCurrency(displayedAmounts.taxAmount)}</span></div>}
                                 </div>
                             </> : <p className="mt-3 text-sm leading-6 text-violet-100">Compara las opciones anteriores y elige la que deseas aprobar.</p>}
 

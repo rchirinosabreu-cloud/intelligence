@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { jsPDF } from 'jspdf';
 import { parseContractTermsText } from './quotationContractTerms.js';
+import { calculateQuotationTotals, groupQuotationScenarios } from './quotationDomainService.js';
 
 const PAGE = { width: 210, height: 297, left: 18, right: 18, top: 18, bottom: 20 };
 const CONTENT_WIDTH = PAGE.width - PAGE.left - PAGE.right;
@@ -20,6 +21,7 @@ const COLORS = {
 };
 
 let cachedFonts;
+let cachedBrainstudioWordmark;
 
 const getFonts = () => {
   if (!cachedFonts) {
@@ -38,6 +40,15 @@ const registerFonts = (doc) => {
   doc.addFileToVFS('WorkSans-Bold.ttf', fonts.bold);
   doc.addFont('WorkSans-Bold.ttf', 'WorkSans', 'bold');
   doc.setFont('WorkSans', 'normal');
+};
+
+const getBrainstudioWordmark = () => {
+  if (!cachedBrainstudioWordmark) {
+    cachedBrainstudioWordmark = `data:image/png;base64,${readFileSync(
+      new URL('../../public/brainstudio-wordmark-white.png', import.meta.url)
+    ).toString('base64')}`;
+  }
+  return cachedBrainstudioWordmark;
 };
 
 const moneyFormatter = (currency) => new Intl.NumberFormat('es-CO', {
@@ -69,20 +80,6 @@ const setText = (doc, { size = 10, style = 'normal', color = COLORS.ink } = {}) 
 };
 
 const splitTerms = parseContractTermsText;
-
-const groupScenarios = (items = []) => {
-  const grouped = new Map();
-  items.forEach((item) => {
-    if (!item?.scenarioId) return;
-    if (!grouped.has(item.scenarioId)) grouped.set(item.scenarioId, {
-      id: item.scenarioId, name: item.scenarioName || 'Escenario', description: item.scenarioDescription || '',
-      externalBudget: item.scenarioExternalBudget, externalBudgetNote: item.scenarioExternalBudgetNote || '',
-      order: Number(item.scenarioOrder) || 0, selected: Boolean(item.selectedScenario), items: []
-    });
-    grouped.get(item.scenarioId).items.push(item);
-  });
-  return [...grouped.values()].sort((a, b) => a.order - b.order);
-};
 
 export const splitTermColumns = (terms = []) => {
   const firstColumnCount = Math.floor(terms.length / 2);
@@ -147,7 +144,8 @@ const drawService = (doc, item, index, y, formatMoney) => {
 
   const quantity = Number(item.quantity || 0);
   setText(doc, { size: 7.5, style: 'bold', color: COLORS.subtle });
-  doc.text(`${quantity} ${quantity === 1 ? 'UNIDAD' : 'UNIDADES'}`, PAGE.width - PAGE.right - 5, y + 9, { align: 'right' });
+  const billingLabel = item.billingType === 'ONE_TIME' ? 'PAGO ÚNICO' : 'MENSUAL';
+  doc.text(`${quantity} ${quantity === 1 ? 'UNIDAD' : 'UNIDADES'} · ${billingLabel}`, PAGE.width - PAGE.right - 5, y + 9, { align: 'right' });
   setText(doc, { size: 12, style: 'bold' });
   doc.text(formatMoney.format(Number(item.price || 0) * quantity), PAGE.width - PAGE.right - 5, y + 17, { align: 'right' });
 
@@ -263,11 +261,15 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
   doc.rect(0, 0, PAGE.width, 36, 'F');
 
   let y = 16;
-  setText(doc, { size: 15, style: 'bold', color: COLORS.white });
-  doc.text(isBrain ? 'Brainstudio' : issuer.nombre, PAGE.left, y);
+  if (isBrain) {
+    doc.addImage(getBrainstudioWordmark(), 'PNG', PAGE.left, 5.5, 66, 19.8, undefined, 'FAST');
+  } else {
+    setText(doc, { size: 15, style: 'bold', color: COLORS.white });
+    doc.text(issuer.nombre, PAGE.left, y);
+  }
   setText(doc, { size: 8, color: [213, 241, 245] });
   const identity = isBrain ? `${issuer.razonSocial} · NIT ${issuer.nit}` : issuer.identificacion;
-  doc.text(identity || '', PAGE.left, y + 5);
+  doc.text(identity || '', PAGE.left, isBrain ? 31 : y + 5);
   setText(doc, { size: 8, style: 'bold', color: [213, 241, 245] });
   doc.text('PROPUESTA', PAGE.width - PAGE.right, y - 1, { align: 'right' });
   setText(doc, { size: 11, style: 'bold', color: COLORS.white });
@@ -292,7 +294,7 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
   doc.text(formatDate(quotation.expires_at), PDF_LAYOUT.rightEdge, y + 19, { align: 'right' });
 
   y += 42;
-  const allScenarios = groupScenarios(quotation.items || []);
+  const allScenarios = groupQuotationScenarios(quotation.items || []);
   const selectedScenario = allScenarios.find(({ selected }) => selected);
   const scenarios = selectedScenario ? [selectedScenario] : allScenarios;
   y = drawSectionHeading(doc, y, 'Alcance', scenarios.length ? (selectedScenario ? 'Escenario seleccionado' : 'Escenarios disponibles') : 'Servicios incluidos');
@@ -311,14 +313,32 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
       }
       y += 18;
       scenario.items.forEach((item, index) => { y = drawService(doc, item, index, y, formatMoney); });
-      const subtotal = scenario.items.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
-      const total = quotation.currency !== 'USD' && !quotation.is_tax_exempt ? subtotal * 1.19 : subtotal;
-      y = ensureSpace(doc, y, scenario.externalBudget !== null && scenario.externalBudget !== undefined ? 26 : 15);
+      const amounts = calculateQuotationTotals(scenario.items, quotation.is_tax_exempt || quotation.currency === 'USD', {
+        durationMonths: quotation.duration_months || 1,
+        discountType: scenario.discountType,
+        discountValue: scenario.discountValue
+      });
+      const commercialLines = [
+        ['Inversión mensual', amounts.monthlySubtotal],
+        ...(amounts.durationMonths > 1 ? [[`${amounts.durationMonths} meses × mensualidad`, amounts.monthlySubtotal * amounts.durationMonths]] : []),
+        ...(amounts.oneTimeSubtotal > 0 ? [['Servicios de pago único', amounts.oneTimeSubtotal]] : []),
+        ...(amounts.discountAmount > 0 ? [[scenario.discountLabel || 'Descuento', -amounts.discountAmount]] : []),
+        ['Subtotal contractual', amounts.subtotal],
+        ...(quotation.currency !== 'USD' && !quotation.is_tax_exempt ? [['IVA (19%)', amounts.taxAmount]] : [])
+      ];
+      const summaryHeight = 13 + commercialLines.length * 5;
+      y = ensureSpace(doc, y, summaryHeight + (scenario.externalBudget !== null && scenario.externalBudget !== undefined ? 18 : 5));
       setText(doc, { size: 8, style: 'bold', color: COLORS.brand });
       doc.text('VALOR DE ESTA OPCIÓN', PAGE.left, y);
       setText(doc, { size: 14, style: 'bold' });
-      doc.text(formatMoney.format(total), PDF_LAYOUT.rightEdge, y, { align: 'right' });
-      y += 8;
+      doc.text(formatMoney.format(amounts.totalAmount), PDF_LAYOUT.rightEdge, y, { align: 'right' });
+      y += 7;
+      commercialLines.forEach(([label, amount]) => {
+        setText(doc, { size: 7.5, color: COLORS.muted });
+        doc.text(label, PAGE.left, y);
+        doc.text(formatMoney.format(amount), PDF_LAYOUT.rightEdge, y, { align: 'right' });
+        y += 5;
+      });
       if (scenario.externalBudget !== null && scenario.externalBudget !== undefined) {
         setText(doc, { size: 8, style: 'bold', color: COLORS.muted });
         doc.text(`Presupuesto externo: ${formatMoney.format(Number(scenario.externalBudget))}`, PAGE.left, y);
@@ -336,7 +356,22 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
 
   const hasPendingScenarioSelection = scenarios.length > 0 && !selectedScenario;
   if (!hasPendingScenarioSelection) {
-    y = ensureSpace(doc, y, 58);
+    const summaryItems = selectedScenario ? selectedScenario.items : (quotation.items || []);
+    const amounts = calculateQuotationTotals(summaryItems, quotation.is_tax_exempt || quotation.currency === 'USD', {
+      durationMonths: quotation.duration_months || 1,
+      discountType: quotation.discount_type,
+      discountValue: quotation.discount_value
+    });
+    const summaryLines = [
+      ['Inversión mensual', amounts.monthlySubtotal],
+      ...(amounts.durationMonths > 1 ? [[`${amounts.durationMonths} meses × mensualidad`, amounts.monthlySubtotal * amounts.durationMonths]] : []),
+      ...(amounts.oneTimeSubtotal > 0 ? [['Servicios de pago único', amounts.oneTimeSubtotal]] : []),
+      ...(amounts.discountAmount > 0 ? [[quotation.discount_label || 'Descuento', -amounts.discountAmount]] : []),
+      ['Subtotal contractual', amounts.subtotal],
+      ...(quotation.currency !== 'USD' && !quotation.is_tax_exempt ? [['IVA (19%)', amounts.taxAmount]] : [])
+    ];
+    const investmentHeight = 32 + summaryLines.length * 5;
+    y = ensureSpace(doc, y, investmentHeight + 12);
     setText(doc, { size: 7.5, style: 'bold', color: COLORS.subtle });
     doc.text('CLIENTE', PAGE.left, y + 4);
     setText(doc, { size: 11, style: 'bold' });
@@ -350,24 +385,32 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
     doc.text(String(quotation.client_phone || 'No proporcionado'), PAGE.left, y + 31);
 
     doc.setFillColor(...COLORS.brand);
-    doc.roundedRect(105, y, 87, 48, 2, 2, 'F');
+    doc.roundedRect(105, y, 87, investmentHeight, 2, 2, 'F');
     setText(doc, { size: 8, style: 'bold', color: [221, 214, 254] });
     doc.text('INVERSIÓN TOTAL', 112, y + 9);
     setText(doc, { size: 21, style: 'bold', color: COLORS.white });
-    doc.text(formatMoney.format(Number(quotation.total_amount || 0)), 112, y + 21);
+    doc.text(formatMoney.format(amounts.totalAmount), 112, y + 21);
     doc.setDrawColor(255, 255, 255);
     doc.setLineWidth(0.2);
     doc.line(112, y + 27, 185, y + 27);
-    setText(doc, { size: 8, color: [237, 233, 254] });
-    doc.text('Subtotal', 112, y + 35);
-    doc.text(formatMoney.format(Number(quotation.subtotal || 0)), 185, y + 35, { align: 'right' });
-    if (quotation.currency !== 'USD' && !quotation.is_tax_exempt) {
-      doc.text('IVA (19%)', 112, y + 42);
-      doc.text(formatMoney.format(Number(quotation.tax_amount || 0)), 185, y + 42, { align: 'right' });
-    }
+    let summaryY = y + 35;
+    setText(doc, { size: 7.5, color: [237, 233, 254] });
+    summaryLines.forEach(([label, amount]) => {
+      doc.text(label, 112, summaryY);
+      doc.text(formatMoney.format(amount), 185, summaryY, { align: 'right' });
+      summaryY += 5;
+    });
   }
 
-  drawTerms(doc, splitTerms(quotation.terms_and_conditions), y + (hasPendingScenarioSelection ? 7 : 62));
+  const normalSummaryHeight = hasPendingScenarioSelection ? 0 : 32 + [
+    1,
+    Number(quotation.duration_months || 1) > 1 ? 1 : 0,
+    (quotation.items || []).some((item) => item.billingType === 'ONE_TIME') ? 1 : 0,
+    Number(quotation.discount_amount || 0) > 0 ? 1 : 0,
+    1,
+    quotation.currency !== 'USD' && !quotation.is_tax_exempt ? 1 : 0
+  ].reduce((sum, value) => sum + value, 0) * 5;
+  drawTerms(doc, splitTerms(quotation.terms_and_conditions), y + (hasPendingScenarioSelection ? 7 : normalSummaryHeight + 14));
   drawFooters(doc, issuer);
   return Buffer.from(doc.output('arraybuffer'));
 };

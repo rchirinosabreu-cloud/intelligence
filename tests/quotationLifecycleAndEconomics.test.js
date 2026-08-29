@@ -121,6 +121,86 @@ test('quotation economics reflect the edited selling price and report incomplete
   });
 });
 
+test('quotation totals multiply monthly services by duration and charge one-time services once', async () => {
+  const domain = await loadQuotationDomain();
+
+  assert.deepEqual(domain.calculateQuotationTotals([
+    { price: 1000000, quantity: 1, billingType: 'MONTHLY' },
+    { price: 500000, quantity: 1, billingType: 'ONE_TIME' }
+  ], false, { durationMonths: 3 }), {
+    durationMonths: 3,
+    monthlySubtotal: 1000000,
+    oneTimeSubtotal: 500000,
+    grossSubtotal: 3500000,
+    discountAmount: 0,
+    subtotal: 3500000,
+    taxAmount: 665000,
+    totalAmount: 4165000
+  });
+});
+
+test('quotation discounts apply before tax and cannot exceed the contractual gross subtotal', async () => {
+  const domain = await loadQuotationDomain();
+  const items = [{ price: 1000000, quantity: 1, billingType: 'MONTHLY' }];
+
+  assert.equal(domain.calculateQuotationTotals(items, false, {
+    durationMonths: 3,
+    discountType: 'PERCENTAGE',
+    discountValue: 10
+  }).totalAmount, 3213000);
+  assert.deepEqual(domain.calculateQuotationTotals(items, true, {
+    durationMonths: 2,
+    discountType: 'FIXED',
+    discountValue: 2500000
+  }), {
+    durationMonths: 2,
+    monthlySubtotal: 1000000,
+    oneTimeSubtotal: 0,
+    grossSubtotal: 2000000,
+    discountAmount: 2000000,
+    subtotal: 0,
+    taxAmount: 0,
+    totalAmount: 0
+  });
+});
+
+test('commercial configuration validates duration, billing type and discount values', async () => {
+  const domain = await loadQuotationDomain();
+
+  assert.equal(domain.normalizeQuotationDuration(6), 6);
+  assert.throws(() => domain.normalizeQuotationDuration(0), /duraci[oó]n/i);
+  assert.throws(() => domain.normalizeQuotationDuration(2.5), /duraci[oó]n/i);
+  assert.throws(
+    () => domain.prepareQuotationItems([{ name: 'Servicio', price: 10, quantity: 1, billingType: 'WEEKLY' }]),
+    /periodicidad/i
+  );
+  assert.throws(
+    () => domain.normalizeQuotationDiscount({ type: 'PERCENTAGE', value: 101 }),
+    /descuento/i
+  );
+});
+
+test('quotation economics account for duration, one-time costs and the commercial discount', async () => {
+  const domain = await loadQuotationDomain();
+
+  assert.deepEqual(domain.calculateQuotationEconomics([
+    { price: 1000000, quantity: 1, estimatedCost: 400000, billingType: 'MONTHLY' },
+    { price: 500000, quantity: 1, estimatedCost: 200000, billingType: 'ONE_TIME' }
+  ], {
+    durationMonths: 3,
+    discountType: 'PERCENTAGE',
+    discountValue: 10
+  }), {
+    revenue: 3150000,
+    estimatedCost: 1400000,
+    estimatedProfit: 1750000,
+    estimatedMargin: 55.6,
+    pricedItems: 2,
+    totalItems: 2,
+    hasCompleteCostData: true
+  });
+});
+
 test('public quotation serialization removes internal costs, margins, ids, and drafts', async () => {
   const domain = await loadQuotationDomain();
   assert.equal(typeof domain.serializePublicQuotation, 'function');
@@ -174,6 +254,30 @@ test('scenario metadata survives sanitization and can be grouped without exposin
   assert.equal(scenarios[0].items[0].price, 1000000);
 });
 
+test('scenario commercial metadata survives sanitization and remains independent per option', async () => {
+  const domain = await loadQuotationDomain();
+  const items = domain.prepareQuotationItems([
+    {
+      name: 'Plan A', price: 1000000, quantity: 1, billingType: 'MONTHLY', scenarioId: 'a',
+      scenarioName: 'Base', scenarioOrder: 0, scenarioDiscountType: 'PERCENTAGE',
+      scenarioDiscountValue: 10, scenarioDiscountLabel: 'Descuento de lanzamiento'
+    },
+    {
+      name: 'Plan B', price: 1500000, quantity: 1, billingType: 'MONTHLY', scenarioId: 'b',
+      scenarioName: 'Pro', scenarioOrder: 1, scenarioDiscountType: 'FIXED',
+      scenarioDiscountValue: 200000, scenarioDiscountLabel: 'Beneficio comercial'
+    }
+  ]);
+  const scenarios = domain.groupQuotationScenarios(items);
+
+  assert.equal(scenarios[0].discountType, 'PERCENTAGE');
+  assert.equal(scenarios[0].discountValue, 10);
+  assert.equal(scenarios[0].discountLabel, 'Descuento de lanzamiento');
+  assert.equal(scenarios[1].discountType, 'FIXED');
+  assert.equal(scenarios[1].discountValue, 200000);
+  assert.equal(items[0].billingType, 'MONTHLY');
+});
+
 test('quotation schema and UI expose the approved financial vocabulary', async () => {
   const [schema, catalog, form] = await Promise.all([
     readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8'),
@@ -200,6 +304,14 @@ test('quotation schema and UI expose the approved financial vocabulary', async (
   assert.doesNotMatch(form, /Base anterior/);
   assert.match(form, /Number\(service\.valor_neto\)/);
   assert.doesNotMatch(form, /quotePrice[\s\S]{0,160}Number\(service\.valor_neto_actual\)/);
+  assert.match(schema, /duration_months\s+Int\s+@default\(1\)/);
+  assert.match(schema, /discount_type\s+QuotationDiscountType\?/);
+  assert.match(schema, /discount_value\s+Decimal\s+@default\(0\)/);
+  assert.match(schema, /discount_amount\s+Decimal\s+@default\(0\)/);
+  assert.match(form, /Duraci[oó]n de la propuesta/i);
+  assert.match(form, /Pago mensual/i);
+  assert.match(form, /Pago [uú]nico/i);
+  assert.match(form, /Aplicar a todos los escenarios/i);
 });
 
 test('internal catalog endpoints require authentication and public views avoid client debug logs', async () => {

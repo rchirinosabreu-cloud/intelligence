@@ -1,3 +1,5 @@
+import { calculateQuotationTotals } from './quotationDomainService.js';
+
 export class QuotationAcceptanceError extends Error {
   constructor(message, statusCode) {
     super(message);
@@ -37,10 +39,28 @@ export const acceptQuotationBySlug = async ({ db, slug, scenarioId, now = new Da
     const acceptedItems = scenarioItems
       ? quotation.items.map((item) => ({ ...item, selectedScenario: item.scenarioId === scenarioId }))
       : quotation.items;
-    const subtotal = scenarioItems
-      ? scenarioItems.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0)
-      : Number(quotation.subtotal);
-    const taxAmount = quotation.is_tax_exempt ? 0 : Math.round(subtotal * 0.19 * 100) / 100;
+    const selectedScenarioItem = scenarioItems?.[0];
+    const discountType = scenarioItems
+      ? selectedScenarioItem?.scenarioDiscountType || null
+      : quotation.discount_type || null;
+    const discountValue = scenarioItems
+      ? Number(selectedScenarioItem?.scenarioDiscountValue) || 0
+      : Number(quotation.discount_value) || 0;
+    const discountLabel = scenarioItems
+      ? String(selectedScenarioItem?.scenarioDiscountLabel || '')
+      : quotation.discount_label || null;
+    const totals = scenarioItems
+      ? calculateQuotationTotals(scenarioItems, quotation.is_tax_exempt, {
+        durationMonths: quotation.duration_months || 1,
+        discountType,
+        discountValue
+      })
+      : {
+        subtotal: Number(quotation.subtotal),
+        discountAmount: Number(quotation.discount_amount) || 0,
+        taxAmount: Number(quotation.tax_amount),
+        totalAmount: Number(quotation.total_amount)
+      };
 
     const update = await tx.quotation.updateMany({
       where: {
@@ -52,9 +72,14 @@ export const acceptQuotationBySlug = async ({ db, slug, scenarioId, now = new Da
         status: 'APROBADA',
         accepted_at: now,
         items: acceptedItems,
-        subtotal,
-        tax_amount: taxAmount,
-        total_amount: subtotal + taxAmount
+        duration_months: quotation.duration_months || 1,
+        discount_type: discountType,
+        discount_value: discountValue,
+        discount_label: discountLabel || null,
+        discount_amount: totals.discountAmount,
+        subtotal: totals.subtotal,
+        tax_amount: totals.taxAmount,
+        total_amount: totals.totalAmount
       }
     });
 
@@ -65,7 +90,20 @@ export const acceptQuotationBySlug = async ({ db, slug, scenarioId, now = new Da
       throw new QuotationAcceptanceError('No fue posible aprobar la propuesta', 409);
     }
 
-    const approvedQuotation = { ...quotation, status: 'APROBADA', accepted_at: now, items: acceptedItems, subtotal, tax_amount: taxAmount, total_amount: subtotal + taxAmount };
+    const approvedQuotation = {
+      ...quotation,
+      status: 'APROBADA',
+      accepted_at: now,
+      items: acceptedItems,
+      duration_months: quotation.duration_months || 1,
+      discount_type: discountType,
+      discount_value: discountValue,
+      discount_label: discountLabel || null,
+      discount_amount: totals.discountAmount,
+      subtotal: totals.subtotal,
+      tax_amount: totals.taxAmount,
+      total_amount: totals.totalAmount
+    };
     const recipients = await tx.user.findMany({
       where: {
         isActive: true,

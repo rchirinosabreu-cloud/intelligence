@@ -229,6 +229,35 @@ test('accepting a scenario fixes the chosen option and calculates its contractua
   assert.equal(result.quotation.items.find((item) => item.scenarioId === 'a').selectedScenario, false);
 });
 
+test('accepting a scenario recalculates duration, one-time services and that scenario discount', async () => {
+  const acceptance = await loadModule('../src/services/quotationAcceptanceService.js');
+  const { db, state } = createAcceptanceDb({
+    quotation: {
+      id: 'quotation-duration', consecutive: 27, status: 'ACTIVA', client_name: 'Cliente',
+      expires_at: new Date('2026-08-20T15:00:00.000Z'), is_tax_exempt: false,
+      duration_months: 3,
+      items: [
+        { name: 'Retainer', price: 1000000, quantity: 1, billingType: 'MONTHLY', scenarioId: 'a', scenarioDiscountType: 'PERCENTAGE', scenarioDiscountValue: 10, scenarioDiscountLabel: 'Lanzamiento' },
+        { name: 'Setup', price: 500000, quantity: 1, billingType: 'ONE_TIME', scenarioId: 'a', scenarioDiscountType: 'PERCENTAGE', scenarioDiscountValue: 10, scenarioDiscountLabel: 'Lanzamiento' },
+        { name: 'Alternativa', price: 2000000, quantity: 1, billingType: 'MONTHLY', scenarioId: 'b' }
+      ]
+    }
+  });
+
+  const result = await acceptance.acceptQuotationBySlug({
+    db, slug: 'token', scenarioId: 'a', now: new Date('2026-08-11T15:00:00.000Z')
+  });
+
+  assert.equal(result.quotation.subtotal, 3150000);
+  assert.equal(result.quotation.discount_type, 'PERCENTAGE');
+  assert.equal(result.quotation.discount_value, 10);
+  assert.equal(result.quotation.discount_amount, 350000);
+  assert.equal(result.quotation.tax_amount, 598500);
+  assert.equal(result.quotation.total_amount, 3748500);
+  assert.equal(state.quotation.duration_months, 3);
+  assert.equal(state.quotation.discount_label, 'Lanzamiento');
+});
+
 test('public acceptance is idempotent and rejects expired quotations', async () => {
   const acceptance = await loadModule('../src/services/quotationAcceptanceService.js');
   assert.equal(typeof acceptance.acceptQuotationBySlug, 'function');
@@ -306,6 +335,19 @@ test('public proposal keeps its commercial content in a simplified single-column
   assert.doesNotMatch(publicView, /lg:grid-cols-\[minmax\(0,1fr\)_420px\]/);
   assert.doesNotMatch(publicView, /rounded-lg bg-zinc-950 p-6 text-white/);
   assert.match(publicView, /rounded-lg bg-violet-(?:700|800|900) p-6 text-white/);
+});
+
+test('public proposal explains duration, billing cadence and discounts before acceptance', async () => {
+  const publicView = await readFile(
+    new URL('../src/components/public/Quotations/PublicQuotation.jsx', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(publicView, /duration_months/);
+  assert.match(publicView, /Pago mensual/i);
+  assert.match(publicView, /Pago [uú]nico/i);
+  assert.match(publicView, /Subtotal contractual/i);
+  assert.match(publicView, /discountAmount/);
 });
 
 test('quotation UI removes the identity preview and presents USD and service notes correctly', async () => {

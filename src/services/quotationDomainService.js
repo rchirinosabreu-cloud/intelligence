@@ -2,6 +2,9 @@ export const QUOTATION_VALIDITY_DAYS = 15;
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const MAX_QUOTATION_ITEMS = 100;
+const MAX_QUOTATION_DURATION_MONTHS = 60;
+const BILLING_TYPES = new Set(['MONTHLY', 'ONE_TIME']);
+const DISCOUNT_TYPES = new Set(['PERCENTAGE', 'FIXED']);
 
 export class QuotationValidationError extends Error {
   constructor(message) {
@@ -27,6 +30,37 @@ const toOptionalNumber = (value) => {
 
 const roundMoney = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 const roundPercentage = (value) => Math.round((value + Number.EPSILON) * 10) / 10;
+
+export const normalizeQuotationDuration = (value = 1) => {
+  const durationMonths = Number(value ?? 1);
+  if (!Number.isInteger(durationMonths) || durationMonths < 1 || durationMonths > MAX_QUOTATION_DURATION_MONTHS) {
+    throw new QuotationValidationError('Duración de la propuesta invalida');
+  }
+  return durationMonths;
+};
+
+export const normalizeQuotationDiscount = ({ type, value, label } = {}) => {
+  if (!type || value === null || value === undefined || value === '') {
+    return { discountType: null, discountValue: 0, discountLabel: '' };
+  }
+  const discountType = String(type).toUpperCase();
+  if (!DISCOUNT_TYPES.has(discountType)) {
+    throw new QuotationValidationError('Tipo de descuento invalido');
+  }
+  const discountValue = toFiniteNumber(value, 'Valor del descuento');
+  if (discountType === 'PERCENTAGE' && discountValue > 100) {
+    throw new QuotationValidationError('El descuento porcentual no puede superar 100%');
+  }
+  return {
+    discountType,
+    discountValue,
+    discountLabel: String(label || '').trim().slice(0, 200)
+  };
+};
+
+const getBillingMultiplier = (item, durationMonths) => (
+  (item?.billingType || 'MONTHLY') === 'ONE_TIME' ? 1 : durationMonths
+);
 
 export const addQuotationValidityDays = (date) => (
   new Date(new Date(date).getTime() + QUOTATION_VALIDITY_DAYS * DAY_IN_MS)
@@ -117,6 +151,18 @@ export const prepareQuotationItems = (items, catalogServices = [], trustedExisti
     const catalogFinalPrice = toOptionalNumber(
       catalogService?.valor_neto ?? existingItem?.catalogFinalPrice
     );
+    const billingType = String(item?.billingType || existingItem?.billingType || 'MONTHLY').toUpperCase();
+    if (!BILLING_TYPES.has(billingType)) {
+      throw new QuotationValidationError(`Periodicidad del servicio ${index + 1} invalida`);
+    }
+
+    const scenarioDiscount = item?.scenarioId
+      ? normalizeQuotationDiscount({
+        type: item.scenarioDiscountType,
+        value: item.scenarioDiscountValue,
+        label: item.scenarioDiscountLabel
+      })
+      : null;
 
     return {
       ...(serviceId ? { serviceId } : {}),
@@ -127,6 +173,7 @@ export const prepareQuotationItems = (items, catalogServices = [], trustedExisti
       note: String(item.note || '').slice(0, 2000),
       estimatedCost,
       catalogFinalPrice,
+      billingType,
       ...(item?.scenarioId ? {
         scenarioId: String(item.scenarioId).slice(0, 100),
         scenarioName: String(item.scenarioName || 'Escenario').slice(0, 200),
@@ -134,7 +181,10 @@ export const prepareQuotationItems = (items, catalogServices = [], trustedExisti
         scenarioExternalBudget: toOptionalNumber(item.scenarioExternalBudget),
         scenarioExternalBudgetNote: String(item.scenarioExternalBudgetNote || '').slice(0, 1000),
         scenarioOrder: Math.max(0, Number.parseInt(item.scenarioOrder, 10) || 0),
-        selectedScenario: Boolean(item.selectedScenario)
+        selectedScenario: Boolean(item.selectedScenario),
+        scenarioDiscountType: scenarioDiscount.discountType,
+        scenarioDiscountValue: scenarioDiscount.discountValue,
+        scenarioDiscountLabel: scenarioDiscount.discountLabel
       } : {})
     };
   });
@@ -169,17 +219,45 @@ export const normalizeQuotationTaxForCurrency = (quotation) => {
   return normalized;
 };
 
-export const calculateQuotationTotals = (items, isTaxExempt) => {
-  const subtotal = roundMoney(items.reduce(
-    (sum, item) => sum + Number(item.price) * Number(item.quantity),
-    0
-  ));
+export const calculateQuotationTotals = (items = [], isTaxExempt, options = {}) => {
+  const durationMonths = normalizeQuotationDuration(options.durationMonths ?? 1);
+  const { discountType, discountValue } = normalizeQuotationDiscount({
+    type: options.discountType,
+    value: options.discountValue,
+    label: options.discountLabel
+  });
+  const monthlySubtotal = roundMoney(items.reduce((sum, item) => (
+    (item?.billingType || 'MONTHLY') === 'ONE_TIME'
+      ? sum
+      : sum + Number(item.price) * Number(item.quantity)
+  ), 0));
+  const oneTimeSubtotal = roundMoney(items.reduce((sum, item) => (
+    item?.billingType === 'ONE_TIME'
+      ? sum + Number(item.price) * Number(item.quantity)
+      : sum
+  ), 0));
+  const grossSubtotal = roundMoney(monthlySubtotal * durationMonths + oneTimeSubtotal);
+  const rawDiscount = discountType === 'PERCENTAGE'
+    ? grossSubtotal * (discountValue / 100)
+    : discountType === 'FIXED' ? discountValue : 0;
+  const discountAmount = roundMoney(Math.min(grossSubtotal, rawDiscount));
+  const subtotal = roundMoney(grossSubtotal - discountAmount);
   const taxAmount = isTaxExempt ? 0 : roundMoney(subtotal * 0.19);
-  return { subtotal, taxAmount, totalAmount: roundMoney(subtotal + taxAmount) };
+  return {
+    durationMonths,
+    monthlySubtotal,
+    oneTimeSubtotal,
+    grossSubtotal,
+    discountAmount,
+    subtotal,
+    taxAmount,
+    totalAmount: roundMoney(subtotal + taxAmount)
+  };
 };
 
 export const calculateQuotationEconomics = (items = [], options = {}) => {
   const currency = options.currency || 'COP';
+  const durationMonths = normalizeQuotationDuration(options.durationMonths ?? 1);
   const rawExchangeRate = Number(options.exchangeRate);
   if (currency === 'USD' && (!Number.isFinite(rawExchangeRate) || rawExchangeRate <= 0)) {
     let estimatedCost = 0;
@@ -188,7 +266,7 @@ export const calculateQuotationEconomics = (items = [], options = {}) => {
       const unitCost = toOptionalNumber(item.estimatedCost);
       if (unitCost === null) return;
       pricedItems += 1;
-      estimatedCost += unitCost * (Number(item.quantity) || 0);
+      estimatedCost += unitCost * (Number(item.quantity) || 0) * getBillingMultiplier(item, durationMonths);
     });
     return {
       revenue: null,
@@ -210,23 +288,31 @@ export const calculateQuotationEconomics = (items = [], options = {}) => {
   let pricedItems = 0;
 
   items.forEach((item) => {
-    const quotedRevenue = (Number(item.price) || 0) * (Number(item.quantity) || 0);
+    const quotedRevenue = (Number(item.price) || 0) * (Number(item.quantity) || 0) * getBillingMultiplier(item, durationMonths);
     const lineRevenue = quotedRevenue * exchangeRate;
     revenue += lineRevenue;
     const unitCost = toOptionalNumber(item.estimatedCost);
     if (unitCost === null) return;
     pricedItems += 1;
     pricedRevenue += lineRevenue;
-    estimatedCost += unitCost * (Number(item.quantity) || 0);
+    estimatedCost += unitCost * (Number(item.quantity) || 0) * getBillingMultiplier(item, durationMonths);
   });
 
-  const estimatedProfit = roundMoney(pricedRevenue - estimatedCost);
+  const totals = calculateQuotationTotals(items, true, {
+    durationMonths,
+    discountType: options.discountType,
+    discountValue: options.discountValue
+  });
+  const netRevenue = totals.subtotal * exchangeRate;
+  const pricedShare = revenue > 0 ? pricedRevenue / revenue : 0;
+  const pricedNetRevenue = netRevenue * pricedShare;
+  const estimatedProfit = roundMoney(pricedNetRevenue - estimatedCost);
   return {
-    revenue: roundMoney(revenue),
+    revenue: roundMoney(netRevenue),
     estimatedCost: roundMoney(estimatedCost),
     estimatedProfit,
-    estimatedMargin: pricedRevenue > 0
-      ? roundPercentage((estimatedProfit / pricedRevenue) * 100)
+    estimatedMargin: pricedNetRevenue > 0
+      ? roundPercentage((estimatedProfit / pricedNetRevenue) * 100)
       : 0,
     pricedItems,
     totalItems: items.length,
@@ -267,6 +353,7 @@ const serializePublicItem = (item) => ({
   price: Number(item?.price) || 0,
   quantity: Number(item?.quantity) || 0,
   note: String(item?.note || ''),
+  billingType: item?.billingType === 'ONE_TIME' ? 'ONE_TIME' : 'MONTHLY',
   ...(item?.scenarioId ? {
     scenarioId: String(item.scenarioId),
     scenarioName: String(item.scenarioName || 'Escenario'),
@@ -274,7 +361,10 @@ const serializePublicItem = (item) => ({
     scenarioExternalBudget: toOptionalNumber(item.scenarioExternalBudget),
     scenarioExternalBudgetNote: String(item.scenarioExternalBudgetNote || ''),
     scenarioOrder: Number(item.scenarioOrder) || 0,
-    selectedScenario: Boolean(item.selectedScenario)
+    selectedScenario: Boolean(item.selectedScenario),
+    scenarioDiscountType: DISCOUNT_TYPES.has(item.scenarioDiscountType) ? item.scenarioDiscountType : null,
+    scenarioDiscountValue: toOptionalNumber(item.scenarioDiscountValue) ?? 0,
+    scenarioDiscountLabel: String(item.scenarioDiscountLabel || '')
   } : {})
 });
 
@@ -292,6 +382,9 @@ export const groupQuotationScenarios = (items = []) => {
       externalBudgetNote: item.scenarioExternalBudgetNote || '',
       order: Number(item.scenarioOrder) || 0,
       selected: Boolean(item.selectedScenario),
+      discountType: DISCOUNT_TYPES.has(item.scenarioDiscountType) ? item.scenarioDiscountType : null,
+      discountValue: toOptionalNumber(item.scenarioDiscountValue) ?? 0,
+      discountLabel: item.scenarioDiscountLabel || '',
       items: []
     });
     groups.get(item.scenarioId).items.push(item);
@@ -312,6 +405,11 @@ export const serializePublicQuotation = (quotation) => {
     'client_email',
     'client_phone',
     'is_tax_exempt',
+    'duration_months',
+    'discount_type',
+    'discount_value',
+    'discount_label',
+    'discount_amount',
     'currency',
     'exchange_rate',
     'exchange_rate_source',

@@ -15,6 +15,8 @@ import {
     isScenarioQuotation,
     normalizeQuotationTaxForCurrency,
     normalizeQuotationExchangeRate,
+    normalizeQuotationDiscount,
+    normalizeQuotationDuration,
     prepareQuotationItems,
     resolveQuotationTaxExemption,
     serializeCatalogService,
@@ -98,6 +100,10 @@ export const createQuotation = async (req, res) => {
             exchange_rate_source,
             exchange_rate_date,
             is_tax_exempt: manual_tax_exempt,
+            duration_months = 3,
+            discount_type,
+            discount_value,
+            discount_label,
             terms_and_conditions
         } = req.body;
 
@@ -110,6 +116,12 @@ export const createQuotation = async (req, res) => {
         const rawItems = Array.isArray(items) ? items : [];
         const catalogServices = await findCatalogServicesForItems(rawItems);
         const preparedItems = prepareQuotationItems(rawItems, catalogServices);
+        const durationMonths = normalizeQuotationDuration(duration_months);
+        const discount = normalizeQuotationDiscount({
+            type: discount_type,
+            value: discount_value,
+            label: discount_label
+        });
         const exchangeRateSnapshot = normalizeQuotationExchangeRate({
             currency,
             exchangeRate: exchange_rate,
@@ -132,9 +144,13 @@ export const createQuotation = async (req, res) => {
 
         // 4. Financial Calculations
         const scenarioMode = isScenarioQuotation(preparedItems);
-        const { subtotal, taxAmount: tax_amount, totalAmount: total_amount } = scenarioMode
-            ? { subtotal: 0, taxAmount: 0, totalAmount: 0 }
-            : calculateQuotationTotals(preparedItems, is_tax_exempt);
+        const totals = scenarioMode
+            ? { subtotal: 0, discountAmount: 0, taxAmount: 0, totalAmount: 0 }
+            : calculateQuotationTotals(preparedItems, is_tax_exempt, {
+                durationMonths,
+                discountType: discount.discountType,
+                discountValue: discount.discountValue
+            });
 
         // 5. Terms and Conditions (Immutable + Sanitization)
         const hasExplicitTerms = Object.prototype.hasOwnProperty.call(req.body, 'terms_and_conditions');
@@ -154,11 +170,16 @@ export const createQuotation = async (req, res) => {
                 client_phone: client_phone || '',
                 is_tax_exempt,
                 items: preparedItems,
+                duration_months: durationMonths,
+                discount_type: scenarioMode ? null : discount.discountType,
+                discount_value: scenarioMode ? 0 : discount.discountValue,
+                discount_label: scenarioMode ? null : (discount.discountLabel || null),
+                discount_amount: totals.discountAmount,
                 currency,
                 ...exchangeRateSnapshot,
-                subtotal,
-                tax_amount,
-                total_amount,
+                subtotal: totals.subtotal,
+                tax_amount: totals.taxAmount,
+                total_amount: totals.totalAmount,
                 terms_and_conditions: final_terms,
                 created_at,
                 ...validity
@@ -198,6 +219,10 @@ export const updateQuotation = async (req, res) => {
             exchange_rate_source,
             exchange_rate_date,
             is_tax_exempt: manual_tax_exempt,
+            duration_months,
+            discount_type,
+            discount_value,
+            discount_label,
             terms_and_conditions
         } = req.body;
 
@@ -220,6 +245,12 @@ export const updateQuotation = async (req, res) => {
 
         const catalogServices = await findCatalogServicesForItems(rawItems);
         const preparedItems = prepareQuotationItems(rawItems, catalogServices, existing.items || []);
+        const durationMonths = normalizeQuotationDuration(duration_months ?? existing.duration_months ?? 1);
+        const discount = normalizeQuotationDiscount({
+            type: discount_type ?? existing.discount_type,
+            value: discount_value ?? existing.discount_value,
+            label: discount_label ?? existing.discount_label
+        });
         const exchangeRateSnapshot = normalizeQuotationExchangeRate({
             currency: targetCurrency,
             exchangeRate: exchange_rate ?? existing.exchange_rate,
@@ -235,9 +266,13 @@ export const updateQuotation = async (req, res) => {
         });
 
         const scenarioMode = isScenarioQuotation(preparedItems);
-        const { subtotal, taxAmount: tax_amount, totalAmount: total_amount } = scenarioMode
-            ? { subtotal: 0, taxAmount: 0, totalAmount: 0 }
-            : calculateQuotationTotals(preparedItems, is_tax_exempt);
+        const totals = scenarioMode
+            ? { subtotal: 0, discountAmount: 0, taxAmount: 0, totalAmount: 0 }
+            : calculateQuotationTotals(preparedItems, is_tax_exempt, {
+                durationMonths,
+                discountType: discount.discountType,
+                discountValue: discount.discountValue
+            });
 
         const hasExplicitTerms = Object.prototype.hasOwnProperty.call(req.body, 'terms_and_conditions');
         const final_terms = hasExplicitTerms
@@ -255,11 +290,16 @@ export const updateQuotation = async (req, res) => {
                 client_phone,
                 is_tax_exempt,
                 items: preparedItems,
+                duration_months: durationMonths,
+                discount_type: scenarioMode ? null : discount.discountType,
+                discount_value: scenarioMode ? 0 : discount.discountValue,
+                discount_label: scenarioMode ? null : (discount.discountLabel || null),
+                discount_amount: totals.discountAmount,
                 currency: targetCurrency,
                 ...exchangeRateSnapshot,
-                subtotal,
-                tax_amount,
-                total_amount,
+                subtotal: totals.subtotal,
+                tax_amount: totals.taxAmount,
+                total_amount: totals.totalAmount,
                 terms_and_conditions: final_terms,
                 ...buildQuotationValidityUpdate(existing, targetStatus)
             }
@@ -377,7 +417,10 @@ export const getQuotation = async (req, res) => {
             isExpired: quotation.status === 'ACTIVA' && new Date() > quotation.expires_at,
             profitability: calculateQuotationEconomics(quotation.items || [], {
                 currency: quotation.currency,
-                exchangeRate: quotation.exchange_rate
+                exchangeRate: quotation.exchange_rate,
+                durationMonths: quotation.duration_months,
+                discountType: quotation.discount_type,
+                discountValue: quotation.discount_value
             })
         });
     } catch (error) {

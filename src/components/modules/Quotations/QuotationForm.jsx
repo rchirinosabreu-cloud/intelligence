@@ -10,7 +10,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import SuccessModal from './SuccessModal';
 import QuotationTermsEditor from './QuotationTermsEditor';
 import ServiceCatalogModal from './ServiceCatalogModal';
-import { calculateQuotationEconomics } from '@/services/quotationDomainService';
+import { calculateQuotationEconomics, calculateQuotationTotals } from '@/services/quotationDomainService';
 import { matchesServiceSearch } from '@/utils/serviceCatalogSearch';
 
 const QuotationForm = () => {
@@ -27,6 +27,10 @@ const QuotationForm = () => {
     const [clientType, setClientType] = useState('EMPRESA');
     const [currency, setCurrency] = useState('COP');
     const [isTaxExempt, setIsTaxExempt] = useState(false);
+    const [durationMonths, setDurationMonths] = useState(3);
+    const [discountType, setDiscountType] = useState('');
+    const [discountValue, setDiscountValue] = useState('');
+    const [discountLabel, setDiscountLabel] = useState('');
     const [selectedItems, setSelectedItems] = useState([]);
     const [searchTerm, setSearchText] = useState('');
     const [isSaving, setIsSaving] = useState(false);
@@ -47,7 +51,8 @@ const QuotationForm = () => {
     const [activeScenarioId, setActiveScenarioId] = useState(null);
 
     const createScenario = (position, name = `Opción ${position + 1}`) => ({
-        id: crypto.randomUUID(), name, description: '', externalBudget: '', externalBudgetNote: '', order: position
+        id: crypto.randomUUID(), name, description: '', externalBudget: '', externalBudgetNote: '', order: position,
+        discountType: '', discountValue: '', discountLabel: ''
     });
 
     const fetchQuotation = useCallback(async () => {
@@ -69,6 +74,10 @@ const QuotationForm = () => {
             setClientType(data.client_company ? 'EMPRESA' : 'PERSONA_NATURAL');
             setCurrency(data.currency);
             setIsTaxExempt(data.is_tax_exempt);
+            setDurationMonths(Number(data.duration_months) || 1);
+            setDiscountType(data.discount_type || '');
+            setDiscountValue(data.discount_value ? Number(data.discount_value) : '');
+            setDiscountLabel(data.discount_label || '');
             setWasExpired(Boolean(data.isExpired));
             setIssuedAt(data.issued_at || data.created_at);
             setExchangeRate(data.exchange_rate ? Number(data.exchange_rate) : '');
@@ -97,7 +106,10 @@ const QuotationForm = () => {
                     description: item.scenarioDescription || '',
                     externalBudget: item.scenarioExternalBudget ?? '',
                     externalBudgetNote: item.scenarioExternalBudgetNote || '',
-                    order: Number(item.scenarioOrder) || 0
+                    order: Number(item.scenarioOrder) || 0,
+                    discountType: item.scenarioDiscountType || '',
+                    discountValue: Number(item.scenarioDiscountValue) || '',
+                    discountLabel: item.scenarioDiscountLabel || ''
                 });
             });
             const loadedScenarios = [...scenarioMap.values()].sort((a, b) => a.order - b.order);
@@ -238,6 +250,7 @@ const QuotationForm = () => {
             note: '',
             estimatedCost: service.costo_real_estimado,
             catalogFinalPrice: service.valor_neto,
+            billingType: 'MONTHLY',
             ...(quotationMode === 'SCENARIOS' ? { scenarioId: activeScenarioId } : {})
         }]);
         setSearchText('');
@@ -257,7 +270,7 @@ const QuotationForm = () => {
         setActiveScenarioId(null);
         setSelectedItems((items) => items.map((item) => {
             const cleanItem = { ...item };
-            ['scenarioId', 'scenarioName', 'scenarioDescription', 'scenarioExternalBudget', 'scenarioExternalBudgetNote', 'scenarioOrder', 'selectedScenario'].forEach((field) => delete cleanItem[field]);
+            ['scenarioId', 'scenarioName', 'scenarioDescription', 'scenarioExternalBudget', 'scenarioExternalBudgetNote', 'scenarioOrder', 'selectedScenario', 'scenarioDiscountType', 'scenarioDiscountValue', 'scenarioDiscountLabel'].forEach((field) => delete cleanItem[field]);
             return cleanItem;
         }));
     };
@@ -270,6 +283,17 @@ const QuotationForm = () => {
         const scenario = createScenario(scenarios.length, `Opción ${scenarios.length + 1}`);
         setScenarios((current) => [...current, scenario]);
         setActiveScenarioId(scenario.id);
+    };
+
+    const applyActiveDiscountToAllScenarios = () => {
+        const active = scenarios.find(({ id: scenarioId }) => scenarioId === activeScenarioId);
+        if (!active) return;
+        setScenarios((current) => current.map((scenario) => ({
+            ...scenario,
+            discountType: active.discountType,
+            discountValue: active.discountValue,
+            discountLabel: active.discountLabel
+        })));
     };
 
     const removeScenario = (id) => {
@@ -291,9 +315,12 @@ const QuotationForm = () => {
     };
 
     const calculateTotals = () => {
-        const subtotal = selectedItems.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
-        const tax = currency === 'USD' || isTaxExempt ? 0 : subtotal * 0.19;
-        return { subtotal, tax, total: subtotal + tax };
+        const result = calculateQuotationTotals(selectedItems, currency === 'USD' || isTaxExempt, {
+            durationMonths,
+            discountType,
+            discountValue
+        });
+        return { ...result, tax: result.taxAmount, total: result.totalAmount };
     };
 
     const formatCurrency = (val) => {
@@ -359,10 +386,17 @@ const QuotationForm = () => {
                             scenarioDescription: scenario?.description,
                             scenarioExternalBudget: scenario?.externalBudget,
                             scenarioExternalBudgetNote: scenario?.externalBudgetNote,
-                            scenarioOrder: scenario?.order
+                            scenarioOrder: scenario?.order,
+                            scenarioDiscountType: scenario?.discountType || null,
+                            scenarioDiscountValue: Number(scenario?.discountValue) || 0,
+                            scenarioDiscountLabel: scenario?.discountLabel || ''
                         };
                     }),
                     currency,
+                    duration_months: Number(durationMonths),
+                    discount_type: quotationMode === 'STANDARD' ? (discountType || null) : null,
+                    discount_value: quotationMode === 'STANDARD' ? (Number(discountValue) || 0) : 0,
+                    discount_label: quotationMode === 'STANDARD' ? discountLabel : '',
                     exchange_rate: currency === 'USD' ? Number(exchangeRate) : null,
                     exchange_rate_source: currency === 'USD' ? exchangeRateSource : null,
                     exchange_rate_date: currency === 'USD' ? exchangeRateDate : null,
@@ -415,10 +449,21 @@ const QuotationForm = () => {
     const activeScenarioItems = quotationMode === 'SCENARIOS'
         ? selectedItems.filter((item) => item.scenarioId === activeScenarioId)
         : selectedItems;
-    const activeScenarioSubtotal = activeScenarioItems.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
+    const activeScenario = scenarios.find(({ id: scenarioId }) => scenarioId === activeScenarioId);
+    const activeScenarioTotals = calculateQuotationTotals(activeScenarioItems, currency === 'USD' || isTaxExempt, {
+        durationMonths,
+        discountType: activeScenario?.discountType,
+        discountValue: activeScenario?.discountValue
+    });
     const profitabilityAvailable = currency === 'COP' || Number(exchangeRate) > 0;
     const profitability = profitabilityAvailable
-        ? calculateQuotationEconomics(selectedItems, { currency, exchangeRate: Number(exchangeRate) })
+        ? calculateQuotationEconomics(activeScenarioItems, {
+            currency,
+            exchangeRate: Number(exchangeRate),
+            durationMonths,
+            discountType: quotationMode === 'SCENARIOS' ? activeScenario?.discountType : discountType,
+            discountValue: quotationMode === 'SCENARIOS' ? activeScenario?.discountValue : discountValue
+        })
         : null;
     const displayIssueDate = wasExpired ? new Date() : new Date(issuedAt || Date.now());
 
@@ -606,9 +651,19 @@ const QuotationForm = () => {
                                                 <input type="number" min="0" value={scenario.externalBudget} onChange={(e) => updateScenario(scenario.id, 'externalBudget', e.target.value)} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Presupuesto externo (opcional)" />
                                                 <textarea value={scenario.description} onChange={(e) => updateScenario(scenario.id, 'description', e.target.value)} className="min-h-[70px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Descripción de esta alternativa" />
                                                 <textarea value={scenario.externalBudgetNote} onChange={(e) => updateScenario(scenario.id, 'externalBudgetNote', e.target.value)} className="min-h-[70px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Ej: pagado directamente por el cliente a Meta" />
+                                                <select value={scenario.discountType} onChange={(e) => updateScenario(scenario.id, 'discountType', e.target.value)} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900">
+                                                    <option value="">Sin descuento</option>
+                                                    <option value="PERCENTAGE">Descuento porcentual</option>
+                                                    <option value="FIXED">Descuento fijo</option>
+                                                </select>
+                                                <input type="number" min="0" max={scenario.discountType === 'PERCENTAGE' ? 100 : undefined} value={scenario.discountValue} onChange={(e) => updateScenario(scenario.id, 'discountValue', e.target.value)} disabled={!scenario.discountType} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900" placeholder={scenario.discountType === 'PERCENTAGE' ? 'Porcentaje (ej. 10)' : 'Valor del descuento'} />
+                                                <input value={scenario.discountLabel} onChange={(e) => updateScenario(scenario.id, 'discountLabel', e.target.value)} disabled={!scenario.discountType} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 md:col-span-2" placeholder="Etiqueta visible (ej. Descuento de lanzamiento)" />
                                                 <div className="md:col-span-2 flex justify-between text-xs">
                                                     <span className="text-zinc-500">Los servicios que agregues ahora pertenecerán a esta opción.</span>
-                                                    <button type="button" onClick={() => removeScenario(scenario.id)} className="font-bold text-rose-500">Eliminar opción</button>
+                                                    <div className="flex flex-wrap justify-end gap-3">
+                                                        <button type="button" onClick={applyActiveDiscountToAllScenarios} className="font-bold text-primary">Aplicar a todos los escenarios</button>
+                                                        <button type="button" onClick={() => removeScenario(scenario.id)} className="font-bold text-rose-500">Eliminar opción</button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
@@ -703,6 +758,17 @@ const QuotationForm = () => {
                                                 </div>
                                                 <div className="flex items-center gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/50">
                                                     <div className="flex items-center gap-2">
+                                                        <span className="text-[10px] font-bold text-zinc-400 uppercase">Cobro</span>
+                                                        <select
+                                                            value={item.billingType || 'MONTHLY'}
+                                                            onChange={(e) => updateItem(idx, 'billingType', e.target.value)}
+                                                            className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-800 dark:bg-zinc-950"
+                                                        >
+                                                            <option value="MONTHLY">Pago mensual</option>
+                                                            <option value="ONE_TIME">Pago único</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
                                                         <span className="text-[10px] font-bold text-zinc-400 uppercase">Cant.</span>
                                                         <input
                                                             type="number"
@@ -770,6 +836,39 @@ const QuotationForm = () => {
                             </div>
                         </div>
 
+                        <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+                            <div>
+                                <p className="text-[10px] font-bold uppercase text-zinc-500">Duración de la propuesta</p>
+                                <p className="mt-1 text-[11px] leading-4 text-zinc-400">Periodo del servicio. La vigencia para aceptar la cotización sigue siendo de 15 días.</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {[1, 2, 3, 6].map((months) => (
+                                    <button key={months} type="button" onClick={() => setDurationMonths(months)} className={cn('rounded-lg border px-3 py-2 text-xs font-bold', Number(durationMonths) === months ? 'border-primary bg-primary text-white' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300')}>
+                                        {months} {months === 1 ? 'mes' : 'meses'}
+                                    </button>
+                                ))}
+                                <label className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950">
+                                    Otro
+                                    <input type="number" min="1" max="60" value={durationMonths} onChange={(e) => setDurationMonths(Math.max(1, Math.min(60, Number(e.target.value) || 1)))} className="w-12 bg-transparent text-right font-bold text-zinc-900 outline-none dark:text-zinc-100" aria-label="Meses de duración" />
+                                </label>
+                            </div>
+                        </div>
+
+                        {quotationMode === 'STANDARD' && (
+                            <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/60 p-4 dark:border-violet-900/50 dark:bg-violet-950/20">
+                                <p className="text-[10px] font-bold uppercase text-violet-700 dark:text-violet-300">Descuento comercial</p>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    <select value={discountType} onChange={(e) => { setDiscountType(e.target.value); if (!e.target.value) setDiscountValue(''); }} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs outline-none dark:border-violet-800 dark:bg-zinc-950">
+                                        <option value="">Sin descuento</option>
+                                        <option value="PERCENTAGE">Porcentaje</option>
+                                        <option value="FIXED">Valor fijo</option>
+                                    </select>
+                                    <input type="number" min="0" max={discountType === 'PERCENTAGE' ? 100 : undefined} value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} disabled={!discountType} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-right text-xs outline-none disabled:opacity-50 dark:border-violet-800 dark:bg-zinc-950" placeholder={discountType === 'PERCENTAGE' ? 'Porcentaje' : 'Valor'} />
+                                </div>
+                                <input value={discountLabel} onChange={(e) => setDiscountLabel(e.target.value)} disabled={!discountType} className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs outline-none disabled:opacity-50 dark:border-violet-800 dark:bg-zinc-950" placeholder="Etiqueta visible en la propuesta" />
+                            </div>
+                        )}
+
                         {currency === 'USD' && (
                             <div className="rounded-lg border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/50 dark:bg-violet-950/20">
                                 <div className="flex items-start justify-between gap-3">
@@ -815,16 +914,28 @@ const QuotationForm = () => {
                         )}
 
                         {quotationMode === 'SCENARIOS' ? (
-                            <div className="space-y-2 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+                            <div className="space-y-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
                                 <p className="text-[10px] font-bold uppercase text-primary">Valor de la opción activa</p>
-                                <div className="flex justify-between text-base font-bold"><span>{scenarios.find(({ id: scenarioId }) => scenarioId === activeScenarioId)?.name}</span><span className="text-primary">{formatCurrency(activeScenarioSubtotal * (currency !== 'USD' && !isTaxExempt ? 1.19 : 1))}</span></div>
+                                <div className="flex justify-between text-base font-bold"><span>{activeScenario?.name}</span><span className="text-primary">{formatCurrency(activeScenarioTotals.totalAmount)}</span></div>
+                                <div className="space-y-2 border-t border-zinc-100 pt-3 text-xs dark:border-zinc-800">
+                                    <div className="flex justify-between"><span className="text-zinc-500">Mensual</span><span>{formatCurrency(activeScenarioTotals.monthlySubtotal)}</span></div>
+                                    {durationMonths > 1 && <div className="flex justify-between"><span className="text-zinc-500">{durationMonths} meses × mensualidad</span><span>{formatCurrency(activeScenarioTotals.monthlySubtotal * durationMonths)}</span></div>}
+                                    {activeScenarioTotals.oneTimeSubtotal > 0 && <div className="flex justify-between"><span className="text-zinc-500">Pagos únicos</span><span>{formatCurrency(activeScenarioTotals.oneTimeSubtotal)}</span></div>}
+                                    {activeScenarioTotals.discountAmount > 0 && <div className="flex justify-between text-violet-700 dark:text-violet-300"><span>{activeScenario?.discountLabel || 'Descuento'}</span><span>-{formatCurrency(activeScenarioTotals.discountAmount)}</span></div>}
+                                    <div className="flex justify-between font-semibold"><span>Subtotal contractual</span><span>{formatCurrency(activeScenarioTotals.subtotal)}</span></div>
+                                    {currency !== 'USD' && !isTaxExempt && <div className="flex justify-between"><span className="text-zinc-500">IVA (19%)</span><span>{formatCurrency(activeScenarioTotals.taxAmount)}</span></div>}
+                                </div>
                                 <p className="text-[10px] leading-4 text-zinc-500">La propuesta no mostrará un total general. El valor definitivo se calculará cuando el cliente elija una opción.</p>
                             </div>
                         ) : <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
                             <div className="flex justify-between text-xs">
-                                <span className="text-zinc-500">Subtotal</span>
-                                <span className="font-medium">{formatCurrency(totals.subtotal)}</span>
+                                <span className="text-zinc-500">Inversión mensual</span>
+                                <span className="font-medium">{formatCurrency(totals.monthlySubtotal)}</span>
                             </div>
+                            {durationMonths > 1 && <div className="flex justify-between text-xs"><span className="text-zinc-500">{durationMonths} meses × mensualidad</span><span className="font-medium">{formatCurrency(totals.monthlySubtotal * durationMonths)}</span></div>}
+                            {totals.oneTimeSubtotal > 0 && <div className="flex justify-between text-xs"><span className="text-zinc-500">Servicios de pago único</span><span className="font-medium">{formatCurrency(totals.oneTimeSubtotal)}</span></div>}
+                            {totals.discountAmount > 0 && <div className="flex justify-between text-xs text-violet-700 dark:text-violet-300"><span>{discountLabel || 'Descuento'}</span><span className="font-medium">-{formatCurrency(totals.discountAmount)}</span></div>}
+                            <div className="flex justify-between border-t border-zinc-100 pt-3 text-xs dark:border-zinc-800"><span className="text-zinc-500">Subtotal contractual</span><span className="font-medium">{formatCurrency(totals.subtotal)}</span></div>
                             {currency !== 'USD' && (
                                 <div className="flex justify-between items-center text-xs">
                                     <div className="flex items-center gap-2">

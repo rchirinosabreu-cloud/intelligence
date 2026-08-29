@@ -108,3 +108,52 @@ test('quotation PDF reserves space between descriptions and right-aligned commer
   assert.equal(PDF_LAYOUT.serviceDescriptionWidth, 112);
   assert.equal(PDF_LAYOUT.rightEdge, 192);
 });
+
+test('quotation PDF explains monthly, one-time and discounted contractual totals', async () => {
+  const commercialQuotation = {
+    ...quotation,
+    duration_months: 3,
+    discount_type: 'PERCENTAGE',
+    discount_value: 10,
+    discount_label: 'Descuento de lanzamiento',
+    discount_amount: 350000,
+    subtotal: 3150000,
+    tax_amount: 598500,
+    total_amount: 3748500,
+    items: [
+      { name: 'Acompañamiento', description: 'Gestión continua.', quantity: 1, price: 1000000, billingType: 'MONTHLY' },
+      { name: 'Configuración inicial', description: 'Implementación.', quantity: 1, price: 500000, billingType: 'ONE_TIME' }
+    ]
+  };
+  const parser = new PDFParse({ data: generateQuotationPdfBuffer(commercialQuotation, issuer) });
+  const { text } = await parser.getText();
+  await parser.destroy();
+
+  assert.match(text, /3 meses/i);
+  assert.match(text, /mensual/i);
+  assert.match(text, /pago [uú]nico/i);
+  assert.match(text, /Descuento de lanzamiento/i);
+  assert.match(text, /Subtotal contractual/i);
+});
+
+test('scenario PDF shows each discounted three-month option independently', async () => {
+  const scenarioQuotation = {
+    ...quotation,
+    duration_months: 3,
+    subtotal: 0,
+    tax_amount: 0,
+    total_amount: 0,
+    items: [
+      { name: 'Plan A', quantity: 1, price: 1000000, billingType: 'MONTHLY', scenarioId: 'a', scenarioName: 'Base', scenarioOrder: 0, scenarioDiscountType: 'PERCENTAGE', scenarioDiscountValue: 10, scenarioDiscountLabel: 'Lanzamiento' },
+      { name: 'Plan B', quantity: 1, price: 1500000, billingType: 'MONTHLY', scenarioId: 'b', scenarioName: 'Pro', scenarioOrder: 1, scenarioDiscountType: 'FIXED', scenarioDiscountValue: 200000, scenarioDiscountLabel: 'Beneficio comercial' }
+    ]
+  };
+  const parser = new PDFParse({ data: generateQuotationPdfBuffer(scenarioQuotation, issuer) });
+  const { text } = await parser.getText();
+  await parser.destroy();
+
+  assert.match(text, /Lanzamiento/);
+  assert.match(text, /Beneficio comercial/);
+  assert.match(text, /3 meses/i);
+  assert.doesNotMatch(text, /INVERSIÓN TOTAL\s+\$\s*0/i);
+});

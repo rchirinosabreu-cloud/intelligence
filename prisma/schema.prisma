@@ -769,6 +769,11 @@ enum QuotationStatus {
   APROBADA
 }
 
+enum QuotationDiscountType {
+  PERCENTAGE
+  FIXED
+}
+
 enum ServiceCategory {
   BRANDING
   DISENO
@@ -1314,6 +1319,11 @@ model Quotation {
   client_phone         String          @default("")
   is_tax_exempt        Boolean         @default(false)
   items                Json
+  duration_months      Int             @default(1)
+  discount_type        QuotationDiscountType?
+  discount_value       Decimal         @default(0)
+  discount_label       String?
+  discount_amount      Decimal         @default(0)
   currency             CurrencyType    @default(COP)
   exchange_rate        Decimal?
   exchange_rate_source String?
