@@ -121,6 +121,30 @@ test('quotation economics reflect the edited selling price and report incomplete
   });
 });
 
+test('quotation product titles are normalized to title case at the domain boundary', async () => {
+  const domain = await loadQuotationDomain();
+
+  assert.equal(
+    domain.normalizeQuotationItemTitle('  EVOLUCIÓN INTEGRAL DE IDENTIDAD VISUAL Y APLICACIONES DE MARCA  '),
+    'Evolución Integral De Identidad Visual Y Aplicaciones De Marca'
+  );
+  assert.equal(domain.normalizeQuotationItemTitle('DISEÑO WEB - E-COMMERCE'), 'Diseño Web - E-Commerce');
+  assert.equal(
+    domain.prepareQuotationItems([{ name: 'MARKETING ESTÁNDAR', price: 100, quantity: 1 }])[0].name,
+    'Marketing Estándar'
+  );
+});
+
+test('quotation editor normalizes manually edited product titles when leaving the field', async () => {
+  const form = await readFile(
+    new URL('../src/components/modules/Quotations/QuotationForm.jsx', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(form, /normalizeQuotationItemTitle/);
+  assert.match(form, /onBlur=\{\(\) => updateItem\(idx, 'name', normalizeQuotationItemTitle\(item\.name\)\)\}/);
+});
+
 test('quotation totals multiply monthly services by duration and charge one-time services once', async () => {
   const domain = await loadQuotationDomain();
 
@@ -340,6 +364,19 @@ test('historical catalog cost backfill is additive and only targets missing cost
 
   assert.match(script, /costo_real_estimado:\s*null/);
   assert.match(script, /costo_real_estimado:\s*costByName\.get/);
+  assert.doesNotMatch(script, /deleteMany|delete\(/);
+});
+
+test('quotation title normalization script updates catalog and stored JSON without destructive writes', async () => {
+  const script = await readFile(
+    new URL('../scripts/normalize-quotation-titles.js', import.meta.url),
+    'utf8'
+  ).catch(() => '');
+
+  assert.match(script, /serviceCatalog\.findMany/);
+  assert.match(script, /quotation\.findMany/);
+  assert.match(script, /normalizeQuotationItemTitle/);
+  assert.match(script, /\$transaction/);
   assert.doesNotMatch(script, /deleteMany|delete\(/);
 });
 

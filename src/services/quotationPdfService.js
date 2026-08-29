@@ -7,6 +7,7 @@ const PAGE = { width: 210, height: 297, left: 18, right: 18, top: 18, bottom: 20
 const CONTENT_WIDTH = PAGE.width - PAGE.left - PAGE.right;
 export const PDF_LAYOUT = {
   serviceDescriptionWidth: 112,
+  serviceTitleWidth: 94,
   rightEdge: PAGE.width - PAGE.right
 };
 const COLORS = {
@@ -17,6 +18,8 @@ const COLORS = {
   surface: [250, 250, 250],
   brand: [0, 133, 156],
   brandSoft: [232, 247, 249],
+  discount: [4, 120, 87],
+  discountSoft: [220, 252, 231],
   white: [255, 255, 255]
 };
 
@@ -93,6 +96,14 @@ export const splitServiceTime = (description = '') => {
   return { body: match[1].trim(), serviceTime: match[2].trim() };
 };
 
+export const limitServiceTitleLines = (lines = [], maxLines = 2) => {
+  const normalized = lines.map((line) => String(line));
+  if (normalized.length <= maxLines) return normalized;
+  const visible = normalized.slice(0, maxLines);
+  visible[maxLines - 1] = `${visible[maxLines - 1].replace(/[.…]+$/u, '').trimEnd()}…`;
+  return visible;
+};
+
 const drawSectionHeading = (doc, y, eyebrow, title) => {
   setText(doc, { size: 8, style: 'bold', color: COLORS.brand });
   doc.text(eyebrow.toUpperCase(), PAGE.left, y);
@@ -104,6 +115,10 @@ const drawSectionHeading = (doc, y, eyebrow, title) => {
 const drawService = (doc, item, index, y, formatMoney) => {
   const { body: description, serviceTime } = splitServiceTime(item.description);
   const note = String(item.note || '').trim();
+  setText(doc, { size: 11, style: 'bold' });
+  const titleLines = limitServiceTitleLines(
+    doc.splitTextToSize(String(item.name || 'Servicio'), PDF_LAYOUT.serviceTitleWidth)
+  );
   setText(doc, { size: 8.1, color: COLORS.muted });
   const descriptionLines = description ? doc.splitTextToSize(description, PDF_LAYOUT.serviceDescriptionWidth) : [];
   const serviceTimeLabel = 'Tiempo de servicio:';
@@ -116,7 +131,9 @@ const drawService = (doc, item, index, y, formatMoney) => {
   setText(doc, { size: 8.5, color: COLORS.muted });
   const noteLines = note ? doc.splitTextToSize(note, CONTENT_WIDTH - 12) : [];
   const descriptionLineCount = descriptionLines.length + serviceTimeLines.length;
-  const cardHeight = Math.max(25, 17 + descriptionLineCount * 4.1);
+  const extraTitleHeight = Math.max(0, titleLines.length - 1) * 5;
+  const descriptionY = y + 17.5 + extraTitleHeight;
+  const cardHeight = Math.max(25 + extraTitleHeight, 17 + extraTitleHeight + descriptionLineCount * 4.1);
   const noteHeight = note ? 12 + noteLines.length * 4.8 : 0;
   y = ensureSpace(doc, y, cardHeight + noteHeight + 7);
 
@@ -129,13 +146,13 @@ const drawService = (doc, item, index, y, formatMoney) => {
   doc.text(String(index + 1), PAGE.left + 9.5, y + 12.2, { align: 'center' });
 
   setText(doc, { size: 11, style: 'bold' });
-  doc.text(String(item.name || 'Servicio'), PAGE.left + 19, y + 11);
+  doc.text(titleLines, PAGE.left + 19, y + 11, { lineHeightFactor: 1.12 });
   if (descriptionLines.length) {
     setText(doc, { size: 8.1, color: COLORS.muted });
-    doc.text(descriptionLines, PAGE.left + 19, y + 17.5, { lineHeightFactor: 1.22 });
+    doc.text(descriptionLines, PAGE.left + 19, descriptionY, { lineHeightFactor: 1.22 });
   }
   if (serviceTimeLines.length) {
-    const serviceTimeY = y + 17.5 + descriptionLines.length * 3.5;
+    const serviceTimeY = descriptionY + descriptionLines.length * 3.5;
     setText(doc, { size: 8.1, style: 'bold', color: COLORS.muted });
     doc.text(serviceTimeLabel, PAGE.left + 19, serviceTimeY);
     setText(doc, { size: 8.1, color: COLORS.muted });
@@ -319,12 +336,12 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
         discountValue: scenario.discountValue
       });
       const commercialLines = [
-        ['Inversión mensual', amounts.monthlySubtotal],
-        ...(amounts.durationMonths > 1 ? [[`${amounts.durationMonths} meses × mensualidad`, amounts.monthlySubtotal * amounts.durationMonths]] : []),
-        ...(amounts.oneTimeSubtotal > 0 ? [['Servicios de pago único', amounts.oneTimeSubtotal]] : []),
-        ...(amounts.discountAmount > 0 ? [[scenario.discountLabel || 'Descuento', -amounts.discountAmount]] : []),
-        ['Subtotal contractual', amounts.subtotal],
-        ...(quotation.currency !== 'USD' && !quotation.is_tax_exempt ? [['IVA (19%)', amounts.taxAmount]] : [])
+        { label: 'Inversión mensual', amount: amounts.monthlySubtotal },
+        ...(amounts.durationMonths > 1 ? [{ label: `${amounts.durationMonths} meses × mensualidad`, amount: amounts.monthlySubtotal * amounts.durationMonths }] : []),
+        ...(amounts.oneTimeSubtotal > 0 ? [{ label: 'Servicios de pago único', amount: amounts.oneTimeSubtotal }] : []),
+        ...(amounts.discountAmount > 0 ? [{ label: scenario.discountLabel || 'Descuento', amount: -amounts.discountAmount, isDiscount: true }] : []),
+        { label: 'Subtotal contractual', amount: amounts.subtotal },
+        ...(quotation.currency !== 'USD' && !quotation.is_tax_exempt ? [{ label: 'IVA (19%)', amount: amounts.taxAmount }] : [])
       ];
       const summaryHeight = 13 + commercialLines.length * 5;
       y = ensureSpace(doc, y, summaryHeight + (scenario.externalBudget !== null && scenario.externalBudget !== undefined ? 18 : 5));
@@ -333,9 +350,13 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
       setText(doc, { size: 14, style: 'bold' });
       doc.text(formatMoney.format(amounts.totalAmount), PDF_LAYOUT.rightEdge, y, { align: 'right' });
       y += 7;
-      commercialLines.forEach(([label, amount]) => {
-        setText(doc, { size: 7.5, color: COLORS.muted });
-        doc.text(label, PAGE.left, y);
+      commercialLines.forEach(({ label, amount, isDiscount }) => {
+        if (isDiscount) {
+          doc.setFillColor(...COLORS.discountSoft);
+          doc.roundedRect(PAGE.left - 2, y - 3.7, CONTENT_WIDTH + 4, 5.2, 1, 1, 'F');
+        }
+        setText(doc, { size: 7.5, style: isDiscount ? 'bold' : 'normal', color: isDiscount ? COLORS.discount : COLORS.muted });
+        doc.text(isDiscount ? `AHORRO · ${label}` : label, PAGE.left, y);
         doc.text(formatMoney.format(amount), PDF_LAYOUT.rightEdge, y, { align: 'right' });
         y += 5;
       });
@@ -363,12 +384,12 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
       discountValue: quotation.discount_value
     });
     const summaryLines = [
-      ['Inversión mensual', amounts.monthlySubtotal],
-      ...(amounts.durationMonths > 1 ? [[`${amounts.durationMonths} meses × mensualidad`, amounts.monthlySubtotal * amounts.durationMonths]] : []),
-      ...(amounts.oneTimeSubtotal > 0 ? [['Servicios de pago único', amounts.oneTimeSubtotal]] : []),
-      ...(amounts.discountAmount > 0 ? [[quotation.discount_label || 'Descuento', -amounts.discountAmount]] : []),
-      ['Subtotal contractual', amounts.subtotal],
-      ...(quotation.currency !== 'USD' && !quotation.is_tax_exempt ? [['IVA (19%)', amounts.taxAmount]] : [])
+      { label: 'Inversión mensual', amount: amounts.monthlySubtotal },
+      ...(amounts.durationMonths > 1 ? [{ label: `${amounts.durationMonths} meses × mensualidad`, amount: amounts.monthlySubtotal * amounts.durationMonths }] : []),
+      ...(amounts.oneTimeSubtotal > 0 ? [{ label: 'Servicios de pago único', amount: amounts.oneTimeSubtotal }] : []),
+      ...(amounts.discountAmount > 0 ? [{ label: quotation.discount_label || 'Descuento', amount: -amounts.discountAmount, isDiscount: true }] : []),
+      { label: 'Subtotal contractual', amount: amounts.subtotal },
+      ...(quotation.currency !== 'USD' && !quotation.is_tax_exempt ? [{ label: 'IVA (19%)', amount: amounts.taxAmount }] : [])
     ];
     const investmentHeight = 32 + summaryLines.length * 5;
     y = ensureSpace(doc, y, investmentHeight + 12);
@@ -395,8 +416,15 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
     doc.line(112, y + 27, 185, y + 27);
     let summaryY = y + 35;
     setText(doc, { size: 7.5, color: [237, 233, 254] });
-    summaryLines.forEach(([label, amount]) => {
-      doc.text(label, 112, summaryY);
+    summaryLines.forEach(({ label, amount, isDiscount }) => {
+      if (isDiscount) {
+        doc.setFillColor(...COLORS.discount);
+        doc.roundedRect(110, summaryY - 3.6, 77, 5.2, 1, 1, 'F');
+        setText(doc, { size: 7.5, style: 'bold', color: COLORS.white });
+      } else {
+        setText(doc, { size: 7.5, color: [237, 233, 254] });
+      }
+      doc.text(isDiscount ? `AHORRO · ${label}` : label, 112, summaryY);
       doc.text(formatMoney.format(amount), 185, summaryY, { align: 'right' });
       summaryY += 5;
     });

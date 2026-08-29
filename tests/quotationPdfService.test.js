@@ -109,6 +109,31 @@ test('quotation PDF reserves space between descriptions and right-aligned commer
   assert.equal(PDF_LAYOUT.rightEdge, 192);
 });
 
+test('quotation PDF limits long service titles to two lines without invading commercial metadata', async () => {
+  const pdf = await import('../src/services/quotationPdfService.js');
+  assert.equal(typeof pdf.limitServiceTitleLines, 'function');
+  assert.deepEqual(
+    pdf.limitServiceTitleLines(['Evolución Integral De Identidad', 'Visual Y Aplicaciones De Marca']),
+    ['Evolución Integral De Identidad', 'Visual Y Aplicaciones De Marca']
+  );
+  assert.deepEqual(
+    pdf.limitServiceTitleLines(['Primera línea', 'Segunda línea', 'Tercera línea']),
+    ['Primera línea', 'Segunda línea…']
+  );
+  assert.ok(PDF_LAYOUT.serviceTitleWidth < PDF_LAYOUT.serviceDescriptionWidth);
+});
+
+test('quotation PDF renders discount labels as highlighted commercial rows', async () => {
+  const source = await import('node:fs/promises').then(({ readFile }) => readFile(
+    new URL('../src/services/quotationPdfService.js', import.meta.url),
+    'utf8'
+  ));
+
+  assert.match(source, /isDiscount/);
+  assert.match(source, /COLORS\.discount/);
+  assert.match(source, /COLORS\.discountSoft/);
+});
+
 test('quotation PDF explains monthly, one-time and discounted contractual totals', async () => {
   const commercialQuotation = {
     ...quotation,

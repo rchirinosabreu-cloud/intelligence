@@ -350,6 +350,18 @@ test('public proposal explains duration, billing cadence and discounts before ac
   assert.match(publicView, /discountAmount/);
 });
 
+test('public scenario grid expands two options and highlights savings', async () => {
+  const publicView = await readFile(
+    new URL('../src/components/public/Quotations/PublicQuotation.jsx', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(publicView, /visibleScenarios\.length === 2/);
+  assert.match(publicView, /lg:grid-cols-2/);
+  assert.match(publicView, /bg-emerald-/);
+  assert.match(publicView, /Ahorro/i);
+});
+
 test('quotation UI removes the identity preview and presents USD and service notes correctly', async () => {
   const [form, publicView, controller] = await Promise.all([
     readFile(new URL('../src/components/modules/Quotations/QuotationForm.jsx', import.meta.url), 'utf8'),

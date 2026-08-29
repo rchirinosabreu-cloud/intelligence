@@ -10,7 +10,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import SuccessModal from './SuccessModal';
 import QuotationTermsEditor from './QuotationTermsEditor';
 import ServiceCatalogModal from './ServiceCatalogModal';
-import { calculateQuotationEconomics, calculateQuotationTotals } from '@/services/quotationDomainService';
+import { calculateQuotationEconomics, calculateQuotationTotals, normalizeQuotationItemTitle } from '@/services/quotationDomainService';
 import { matchesServiceSearch } from '@/utils/serviceCatalogSearch';
 
 const QuotationForm = () => {
@@ -737,6 +737,7 @@ const QuotationForm = () => {
                                                         className="flex-1 bg-transparent font-bold text-sm outline-none border-b border-transparent focus:border-primary/20"
                                                         value={item.name}
                                                         onChange={(e) => updateItem(idx, 'name', e.target.value)}
+                                                        onBlur={() => updateItem(idx, 'name', normalizeQuotationItemTitle(item.name))}
                                                     />
                                                     <button onClick={() => removeItem(idx)} className="text-zinc-400 hover:text-red-500 transition-colors">
                                                         <Trash2 className="w-4 h-4" />

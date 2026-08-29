@@ -62,6 +62,16 @@ const getBillingMultiplier = (item, durationMonths) => (
   (item?.billingType || 'MONTHLY') === 'ONE_TIME' ? 1 : durationMonths
 );
 
+export const normalizeQuotationItemTitle = (value = '') => (
+  String(value)
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('es-CO')
+    .replace(/(^|[\s/\-–—])(\p{L})/gu, (_match, separator, letter) => (
+      `${separator}${letter.toLocaleUpperCase('es-CO')}`
+    ))
+);
+
 export const addQuotationValidityDays = (date) => (
   new Date(new Date(date).getTime() + QUOTATION_VALIDITY_DAYS * DAY_IN_MS)
 );
@@ -135,7 +145,7 @@ export const prepareQuotationItems = (items, catalogServices = [], trustedExisti
   );
 
   return items.map((item, index) => {
-    const name = String(item?.name || '').trim();
+    const name = normalizeQuotationItemTitle(item?.name);
     if (!name) throw new QuotationValidationError(`El servicio ${index + 1} no tiene nombre`);
 
     const price = toFiniteNumber(item.price, `Precio del servicio ${index + 1}`);
