@@ -157,6 +157,37 @@ test('quotation PDF keeps descriptions visible when a service moves to a new pag
   assert.match(text, /DESCRIPCIÓN VISIBLE DESPUÉS DEL SALTO DE PÁGINA/);
 });
 
+test('quotation PDF calculates compact service cards from the rendered line height', async () => {
+  const pdf = await import('../src/services/quotationPdfService.js');
+  assert.equal(typeof pdf.calculateServiceCardHeight, 'function');
+  assert.equal(pdf.calculateServiceCardHeight({ titleLineCount: 1, descriptionLineCount: 0 }), 25);
+  assert.equal(pdf.calculateServiceCardHeight({ titleLineCount: 1, descriptionLineCount: 10 }), 53.5);
+  assert.equal(pdf.calculateServiceCardHeight({ titleLineCount: 2, descriptionLineCount: 15 }), 76);
+});
+
+test('quotation PDF starts every later scenario on a clean page with its first service', async () => {
+  const scenarioQuotation = {
+    ...quotation,
+    subtotal: 0,
+    tax_amount: 0,
+    total_amount: 0,
+    items: [
+      { name: 'Servicio Web Principal', description: 'Alcance del primer escenario.', quantity: 1, price: 2400000, scenarioId: 'one', scenarioName: 'Escenario Editorial Uno', scenarioOrder: 0 },
+      { name: 'Primer Servicio Del Segundo Escenario', description: 'Alcance del segundo escenario.', quantity: 1, price: 1580600, scenarioId: 'two', scenarioName: 'Escenario Editorial Dos', scenarioOrder: 1 }
+    ]
+  };
+  const parser = new PDFParse({ data: generateQuotationPdfBuffer(scenarioQuotation, issuer) });
+  const result = await parser.getText();
+  await parser.destroy();
+
+  const firstHeadingPage = result.pages.find(({ text }) => text.includes('Escenario Editorial Uno'))?.num;
+  const headingPage = result.pages.find(({ text }) => text.includes('Escenario Editorial Dos'))?.num;
+  const firstServicePage = result.pages.find(({ text }) => text.includes('Primer Servicio Del Segundo Escenario'))?.num;
+  assert.ok(headingPage, 'the second scenario heading must be rendered');
+  assert.ok(headingPage > firstHeadingPage, 'the second scenario must start on a clean page');
+  assert.equal(headingPage, firstServicePage, 'the scenario heading cannot be orphaned from its first service');
+});
+
 test('quotation PDF renders discount labels as highlighted commercial rows', async () => {
   const source = await import('node:fs/promises').then(({ readFile }) => readFile(
     new URL('../src/services/quotationPdfService.js', import.meta.url),

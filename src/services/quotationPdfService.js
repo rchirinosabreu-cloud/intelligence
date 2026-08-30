@@ -112,6 +112,17 @@ export const getServiceTextLayout = (y, titleLineCount = 1) => {
   };
 };
 
+export const calculateServiceCardHeight = ({
+  titleLineCount = 1,
+  descriptionLineCount = 0
+} = {}) => {
+  const extraTitleHeight = Math.max(0, titleLineCount - 1) * 5;
+  const renderedDescriptionHeight = descriptionLineCount > 0
+    ? 22 + (descriptionLineCount - 1) * 3.5
+    : 0;
+  return Math.max(25 + extraTitleHeight, renderedDescriptionHeight + extraTitleHeight);
+};
+
 const drawSectionHeading = (doc, y, eyebrow, title) => {
   setText(doc, { size: 8, style: 'bold', color: COLORS.brand });
   doc.text(eyebrow.toUpperCase(), PAGE.left, y);
@@ -139,8 +150,10 @@ const drawService = (doc, item, index, y, formatMoney) => {
   setText(doc, { size: 8.5, color: COLORS.muted });
   const noteLines = note ? doc.splitTextToSize(note, CONTENT_WIDTH - 12) : [];
   const descriptionLineCount = descriptionLines.length + serviceTimeLines.length;
-  const { extraTitleHeight } = getServiceTextLayout(y, titleLines.length);
-  const cardHeight = Math.max(25 + extraTitleHeight, 17 + extraTitleHeight + descriptionLineCount * 4.1);
+  const cardHeight = calculateServiceCardHeight({
+    titleLineCount: titleLines.length,
+    descriptionLineCount
+  });
   const noteHeight = note ? 12 + noteLines.length * 4.8 : 0;
   y = ensureSpace(doc, y, cardHeight + noteHeight + 7);
   const { descriptionY } = getServiceTextLayout(y, titleLines.length);
@@ -325,7 +338,7 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
   y = drawSectionHeading(doc, y, 'Alcance', scenarios.length ? (selectedScenario ? 'Escenario seleccionado' : 'Escenarios disponibles') : 'Servicios incluidos');
   if (scenarios.length) {
     scenarios.forEach((scenario, scenarioIndex) => {
-      y = ensureSpace(doc, y, 30);
+      y = scenarioIndex > 0 ? addPage(doc) : ensureSpace(doc, y, 30);
       setText(doc, { size: 8, style: 'bold', color: COLORS.brand });
       doc.text(`OPCIÓN ${scenarioIndex + 1}`, PAGE.left, y);
       setText(doc, { size: 15, style: 'bold' });
