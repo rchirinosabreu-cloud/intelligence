@@ -384,9 +384,6 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
         y += 5;
       });
       y += 3;
-      doc.setDrawColor(...COLORS.border);
-      doc.setLineWidth(0.25);
-      doc.line(PAGE.left, y - 2.5, PDF_LAYOUT.rightEdge, y - 2.5);
       setText(doc, { size: 8, style: 'bold', color: COLORS.brand });
       doc.text(amounts.discountAmount > 0 ? 'VALOR FINAL CON DESCUENTO' : 'VALOR DE ESTA OPCIÓN', PAGE.left, y);
       setText(doc, { size: amounts.discountAmount > 0 ? 16 : 14, style: 'bold' });
@@ -460,9 +457,6 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
       }
       summaryY += 5;
     });
-    doc.setDrawColor(255, 255, 255);
-    doc.setLineWidth(0.2);
-    doc.line(112, summaryY + 1, 185, summaryY + 1);
     setText(doc, { size: 8, style: 'bold', color: [221, 214, 254] });
     doc.text(amounts.discountAmount > 0 ? 'VALOR FINAL CON DESCUENTO' : 'INVERSIÓN TOTAL', 112, summaryY + 7);
     setText(doc, { size: amounts.discountAmount > 0 ? 23 : 21, style: 'bold', color: COLORS.white });

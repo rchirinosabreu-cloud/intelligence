@@ -197,6 +197,7 @@ test('quotation PDF renders discount labels as highlighted commercial rows', asy
   assert.match(source, /isDiscount/);
   assert.match(source, /COLORS\.discount/);
   assert.match(source, /COLORS\.discountSoft/);
+  assert.doesNotMatch(source, /doc\.line\(PAGE\.left, y - 2\.5, PDF_LAYOUT\.rightEdge, y - 2\.5\)/);
 });
 
 test('quotation PDF explains monthly, one-time and discounted contractual totals', async () => {

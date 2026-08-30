@@ -260,7 +260,7 @@ const PublicQuotation = () => {
                                                         {amounts.discountAmount > 0 && <div className="flex justify-between gap-3 font-semibold text-zinc-500 dark:text-zinc-400"><span>Valor antes del descuento</span><span className="line-through decoration-2">{formatCurrency(amounts.grossSubtotal)}</span></div>}
                                                         {amounts.discountAmount > 0 && <div className="flex justify-between gap-3 rounded-md bg-emerald-100 px-3 py-2 font-bold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300"><span>Ahorro · {scenario.discountLabel || 'Descuento'}</span><span>-{formatCurrency(amounts.discountAmount)}</span></div>}
                                                     </div>
-                                                    <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+                                                    <div className="mt-4 pt-4">
                                                         <p className="text-xs font-bold uppercase text-zinc-400">{amounts.discountAmount > 0 ? 'Valor final con descuento' : 'Valor de esta opción'}</p>
                                                         <p className="mt-1 text-3xl font-black">{formatCurrency(amounts.totalAmount)}</p>
                                                     </div>
@@ -332,7 +332,7 @@ const PublicQuotation = () => {
                                     {displayedAmounts.discountAmount > 0 && <div className="flex justify-between gap-4 rounded-md bg-emerald-400/20 px-3 py-2 font-bold text-emerald-50"><span>Ahorro · {displayedDiscountLabel}</span><span>-{formatCurrency(displayedAmounts.discountAmount)}</span></div>}
                                     {quotation.currency !== 'USD' && !quotation.is_tax_exempt && <div className="flex justify-between gap-4"><span className="text-violet-100">IVA (19%)</span><span>{formatCurrency(displayedAmounts.taxAmount)}</span></div>}
                                 </div>
-                                <div className="mt-5 border-t border-white/20 pt-5">
+                                <div className="mt-5 pt-5">
                                     <p className="text-xs font-bold uppercase text-emerald-200">{displayedAmounts.discountAmount > 0 ? 'Valor final con descuento' : 'Inversión total'}</p>
                                     <p className="mt-3 text-4xl font-bold leading-none sm:text-5xl">{formatCurrency(displayedAmounts.totalAmount)}</p>
                                 </div>
