@@ -223,7 +223,9 @@ test('quotation PDF explains monthly, one-time and discounted contractual totals
   assert.match(text, /mensual/i);
   assert.match(text, /pago [uú]nico/i);
   assert.match(text, /Descuento de lanzamiento/i);
-  assert.match(text, /Subtotal contractual/i);
+  assert.match(text, /Valor antes del descuento/i);
+  assert.match(text, /Valor final con descuento/i);
+  assert.doesNotMatch(text, /Subtotal contractual/i);
 });
 
 test('scenario PDF shows each discounted three-month option independently', async () => {

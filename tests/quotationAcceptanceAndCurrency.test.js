@@ -346,7 +346,12 @@ test('public proposal explains duration, billing cadence and discounts before ac
   assert.match(publicView, /duration_months/);
   assert.match(publicView, /Pago mensual/i);
   assert.match(publicView, /Pago [uú]nico/i);
-  assert.match(publicView, /Subtotal contractual/i);
+  assert.match(publicView, /Valor antes del descuento/i);
+  assert.match(publicView, /Valor final con descuento/i);
+  assert.match(publicView, /grossSubtotal/);
+  assert.match(publicView, /text-3xl font-black/);
+  assert.match(publicView, /sm:text-5xl/);
+  assert.doesNotMatch(publicView, /Subtotal contractual/i);
   assert.match(publicView, /discountAmount/);
 });
 

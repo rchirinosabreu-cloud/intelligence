@@ -360,25 +360,32 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
         { label: 'Inversión mensual', amount: amounts.monthlySubtotal },
         ...(amounts.durationMonths > 1 ? [{ label: `${amounts.durationMonths} meses × mensualidad`, amount: amounts.monthlySubtotal * amounts.durationMonths }] : []),
         ...(amounts.oneTimeSubtotal > 0 ? [{ label: 'Servicios de pago único', amount: amounts.oneTimeSubtotal }] : []),
+        ...(amounts.discountAmount > 0 ? [{ label: 'Valor antes del descuento', amount: amounts.grossSubtotal, isOriginal: true }] : []),
         ...(amounts.discountAmount > 0 ? [{ label: scenario.discountLabel || 'Descuento', amount: -amounts.discountAmount, isDiscount: true }] : []),
-        { label: 'Subtotal contractual', amount: amounts.subtotal },
         ...(quotation.currency !== 'USD' && !quotation.is_tax_exempt ? [{ label: 'IVA (19%)', amount: amounts.taxAmount }] : [])
       ];
       const summaryHeight = 13 + commercialLines.length * 5;
       y = ensureSpace(doc, y, summaryHeight + (scenario.externalBudget !== null && scenario.externalBudget !== undefined ? 18 : 5));
       setText(doc, { size: 8, style: 'bold', color: COLORS.brand });
-      doc.text('VALOR DE ESTA OPCIÓN', PAGE.left, y);
-      setText(doc, { size: 14, style: 'bold' });
+      doc.text(amounts.discountAmount > 0 ? 'VALOR FINAL CON DESCUENTO' : 'VALOR DE ESTA OPCIÓN', PAGE.left, y);
+      setText(doc, { size: amounts.discountAmount > 0 ? 16 : 14, style: 'bold' });
       doc.text(formatMoney.format(amounts.totalAmount), PDF_LAYOUT.rightEdge, y, { align: 'right' });
       y += 7;
-      commercialLines.forEach(({ label, amount, isDiscount }) => {
+      commercialLines.forEach(({ label, amount, isDiscount, isOriginal }) => {
         if (isDiscount) {
           doc.setFillColor(...COLORS.discountSoft);
           doc.roundedRect(PAGE.left - 2, y - 3.7, CONTENT_WIDTH + 4, 5.2, 1, 1, 'F');
         }
-        setText(doc, { size: 7.5, style: isDiscount ? 'bold' : 'normal', color: isDiscount ? COLORS.discount : COLORS.muted });
+        setText(doc, { size: 7.5, style: isDiscount || isOriginal ? 'bold' : 'normal', color: isDiscount ? COLORS.discount : COLORS.muted });
         doc.text(isDiscount ? `AHORRO · ${label}` : label, PAGE.left, y);
-        doc.text(formatMoney.format(amount), PDF_LAYOUT.rightEdge, y, { align: 'right' });
+        const formattedAmount = formatMoney.format(amount);
+        doc.text(formattedAmount, PDF_LAYOUT.rightEdge, y, { align: 'right' });
+        if (isOriginal) {
+          const amountWidth = doc.getTextWidth(formattedAmount);
+          doc.setDrawColor(...COLORS.subtle);
+          doc.setLineWidth(0.25);
+          doc.line(PDF_LAYOUT.rightEdge - amountWidth, y - 1, PDF_LAYOUT.rightEdge, y - 1);
+        }
         y += 5;
       });
       if (scenario.externalBudget !== null && scenario.externalBudget !== undefined) {
@@ -408,8 +415,8 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
       { label: 'Inversión mensual', amount: amounts.monthlySubtotal },
       ...(amounts.durationMonths > 1 ? [{ label: `${amounts.durationMonths} meses × mensualidad`, amount: amounts.monthlySubtotal * amounts.durationMonths }] : []),
       ...(amounts.oneTimeSubtotal > 0 ? [{ label: 'Servicios de pago único', amount: amounts.oneTimeSubtotal }] : []),
+      ...(amounts.discountAmount > 0 ? [{ label: 'Valor antes del descuento', amount: amounts.grossSubtotal, isOriginal: true }] : []),
       ...(amounts.discountAmount > 0 ? [{ label: quotation.discount_label || 'Descuento', amount: -amounts.discountAmount, isDiscount: true }] : []),
-      { label: 'Subtotal contractual', amount: amounts.subtotal },
       ...(quotation.currency !== 'USD' && !quotation.is_tax_exempt ? [{ label: 'IVA (19%)', amount: amounts.taxAmount }] : [])
     ];
     const investmentHeight = 32 + summaryLines.length * 5;
@@ -429,15 +436,15 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
     doc.setFillColor(...COLORS.brand);
     doc.roundedRect(105, y, 87, investmentHeight, 2, 2, 'F');
     setText(doc, { size: 8, style: 'bold', color: [221, 214, 254] });
-    doc.text('INVERSIÓN TOTAL', 112, y + 9);
-    setText(doc, { size: 21, style: 'bold', color: COLORS.white });
+    doc.text(amounts.discountAmount > 0 ? 'VALOR FINAL CON DESCUENTO' : 'INVERSIÓN TOTAL', 112, y + 9);
+    setText(doc, { size: amounts.discountAmount > 0 ? 23 : 21, style: 'bold', color: COLORS.white });
     doc.text(formatMoney.format(amounts.totalAmount), 112, y + 21);
     doc.setDrawColor(255, 255, 255);
     doc.setLineWidth(0.2);
     doc.line(112, y + 27, 185, y + 27);
     let summaryY = y + 35;
     setText(doc, { size: 7.5, color: [237, 233, 254] });
-    summaryLines.forEach(({ label, amount, isDiscount }) => {
+    summaryLines.forEach(({ label, amount, isDiscount, isOriginal }) => {
       if (isDiscount) {
         doc.setFillColor(...COLORS.discount);
         doc.roundedRect(110, summaryY - 3.6, 77, 5.2, 1, 1, 'F');
@@ -446,7 +453,14 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
         setText(doc, { size: 7.5, color: [237, 233, 254] });
       }
       doc.text(isDiscount ? `AHORRO · ${label}` : label, 112, summaryY);
-      doc.text(formatMoney.format(amount), 185, summaryY, { align: 'right' });
+      const formattedAmount = formatMoney.format(amount);
+      doc.text(formattedAmount, 185, summaryY, { align: 'right' });
+      if (isOriginal) {
+        const amountWidth = doc.getTextWidth(formattedAmount);
+        doc.setDrawColor(237, 233, 254);
+        doc.setLineWidth(0.25);
+        doc.line(185 - amountWidth, summaryY - 1, 185, summaryY - 1);
+      }
       summaryY += 5;
     });
   }
