@@ -226,6 +226,9 @@ test('quotation PDF explains monthly, one-time and discounted contractual totals
   assert.match(text, /Valor antes del descuento/i);
   assert.match(text, /Valor final con descuento/i);
   assert.doesNotMatch(text, /Subtotal contractual/i);
+  assert.ok(text.indexOf('Inversión mensual') < text.indexOf('Valor antes del descuento'));
+  assert.ok(text.indexOf('Valor antes del descuento') < text.indexOf('AHORRO · Descuento de lanzamiento'));
+  assert.ok(text.indexOf('AHORRO · Descuento de lanzamiento') < text.indexOf('VALOR FINAL CON DESCUENTO'));
 });
 
 test('scenario PDF shows each discounted three-month option independently', async () => {

@@ -353,6 +353,8 @@ test('public proposal explains duration, billing cadence and discounts before ac
   assert.match(publicView, /sm:text-5xl/);
   assert.doesNotMatch(publicView, /Subtotal contractual/i);
   assert.match(publicView, /discountAmount/);
+  assert.match(publicView, /amounts\.grossSubtotal[\s\S]*Ahorro[\s\S]*text-3xl font-black/);
+  assert.match(publicView, /displayedAmounts\.grossSubtotal[\s\S]*Ahorro[\s\S]*sm:text-5xl/);
 });
 
 test('public scenario grid expands two options and highlights savings', async () => {

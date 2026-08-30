@@ -253,14 +253,16 @@ const PublicQuotation = () => {
                                                     {scenario.items.map((item, index) => <div key={`${item.name}-${index}`}><div className="flex items-start justify-between gap-3"><p className="min-w-0 text-sm font-bold leading-5">{item.name}</p><span className="shrink-0 text-[10px] font-bold uppercase text-zinc-400">{item.billingType === 'ONE_TIME' ? 'Pago único' : 'Pago mensual'}</span></div>{item.description && <p className="mt-1 text-xs leading-5 text-zinc-500">{item.description}</p>}</div>)}
                                                 </div>
                                                 <div className="mt-auto pt-6">
-                                                    <p className="text-xs font-bold uppercase text-zinc-400">{amounts.discountAmount > 0 ? 'Valor final con descuento' : 'Valor de esta opción'}</p>
-                                                    <p className="mt-1 text-3xl font-black">{formatCurrency(amounts.totalAmount)}</p>
-                                                    <div className="mt-4 space-y-1.5 border-t border-zinc-200 pt-3 text-xs dark:border-zinc-800">
+                                                    <div className="space-y-1.5 border-t border-zinc-200 pt-3 text-xs dark:border-zinc-800">
                                                         <div className="flex justify-between"><span className="text-zinc-500">Mensual</span><span>{formatCurrency(amounts.monthlySubtotal)}</span></div>
                                                         {amounts.durationMonths > 1 && <div className="flex justify-between"><span className="text-zinc-500">{amounts.durationMonths} meses × mensualidad</span><span>{formatCurrency(amounts.monthlySubtotal * amounts.durationMonths)}</span></div>}
                                                         {amounts.oneTimeSubtotal > 0 && <div className="flex justify-between"><span className="text-zinc-500">Pagos únicos</span><span>{formatCurrency(amounts.oneTimeSubtotal)}</span></div>}
                                                         {amounts.discountAmount > 0 && <div className="flex justify-between gap-3 font-semibold text-zinc-500 dark:text-zinc-400"><span>Valor antes del descuento</span><span className="line-through decoration-2">{formatCurrency(amounts.grossSubtotal)}</span></div>}
                                                         {amounts.discountAmount > 0 && <div className="flex justify-between gap-3 rounded-md bg-emerald-100 px-3 py-2 font-bold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300"><span>Ahorro · {scenario.discountLabel || 'Descuento'}</span><span>-{formatCurrency(amounts.discountAmount)}</span></div>}
+                                                    </div>
+                                                    <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+                                                        <p className="text-xs font-bold uppercase text-zinc-400">{amounts.discountAmount > 0 ? 'Valor final con descuento' : 'Valor de esta opción'}</p>
+                                                        <p className="mt-1 text-3xl font-black">{formatCurrency(amounts.totalAmount)}</p>
                                                     </div>
                                                     {!quotation.is_tax_exempt && quotation.currency !== 'USD' && <p className="mt-1 text-xs text-zinc-500">Incluye IVA del 19%</p>}
                                                     {scenario.externalBudget !== null && <div className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-300"><strong>Presupuesto externo: {formatCurrency(scenario.externalBudget)}</strong>{scenario.externalBudgetNote && <p className="mt-1 leading-5">{scenario.externalBudgetNote}</p>}</div>}
@@ -322,15 +324,17 @@ const PublicQuotation = () => {
                         <div className="rounded-lg bg-violet-700 p-6 text-white shadow-xl shadow-violet-950/10 dark:bg-violet-800 sm:p-8">
                             <p className="text-xs font-semibold uppercase text-violet-200">{scenarios.length > 0 ? (chosenScenario ? chosenScenario.name : 'Selecciona un escenario') : 'Inversión total'}</p>
                             {scenarios.length === 0 || chosenAmounts ? <>
-                                {displayedAmounts.discountAmount > 0 && <p className="mt-2 text-xs font-bold uppercase text-emerald-200">Valor final con descuento</p>}
-                                <p className="mt-3 text-4xl font-bold leading-none sm:text-5xl">{formatCurrency(displayedAmounts.totalAmount)}</p>
-                                <div className="mt-6 space-y-2 border-t border-white/20 pt-5 text-sm">
+                                <div className="mt-5 space-y-2 border-t border-white/20 pt-5 text-sm">
                                     <div className="flex justify-between gap-4"><span className="text-violet-100">Inversión mensual</span><span>{formatCurrency(displayedAmounts.monthlySubtotal)}</span></div>
                                     {displayedAmounts.durationMonths > 1 && <div className="flex justify-between gap-4"><span className="text-violet-100">{displayedAmounts.durationMonths} meses × mensualidad</span><span>{formatCurrency(displayedAmounts.monthlySubtotal * displayedAmounts.durationMonths)}</span></div>}
                                     {displayedAmounts.oneTimeSubtotal > 0 && <div className="flex justify-between gap-4"><span className="text-violet-100">Servicios de pago único</span><span>{formatCurrency(displayedAmounts.oneTimeSubtotal)}</span></div>}
                                     {displayedAmounts.discountAmount > 0 && <div className="flex justify-between gap-4 font-semibold text-violet-100"><span>Valor antes del descuento</span><span className="line-through decoration-2">{formatCurrency(displayedAmounts.grossSubtotal)}</span></div>}
                                     {displayedAmounts.discountAmount > 0 && <div className="flex justify-between gap-4 rounded-md bg-emerald-400/20 px-3 py-2 font-bold text-emerald-50"><span>Ahorro · {displayedDiscountLabel}</span><span>-{formatCurrency(displayedAmounts.discountAmount)}</span></div>}
                                     {quotation.currency !== 'USD' && !quotation.is_tax_exempt && <div className="flex justify-between gap-4"><span className="text-violet-100">IVA (19%)</span><span>{formatCurrency(displayedAmounts.taxAmount)}</span></div>}
+                                </div>
+                                <div className="mt-5 border-t border-white/20 pt-5">
+                                    <p className="text-xs font-bold uppercase text-emerald-200">{displayedAmounts.discountAmount > 0 ? 'Valor final con descuento' : 'Inversión total'}</p>
+                                    <p className="mt-3 text-4xl font-bold leading-none sm:text-5xl">{formatCurrency(displayedAmounts.totalAmount)}</p>
                                 </div>
                             </> : <p className="mt-3 text-sm leading-6 text-violet-100">Compara las opciones anteriores y elige la que deseas aprobar.</p>}
 
