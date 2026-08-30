@@ -123,6 +123,40 @@ test('quotation PDF limits long service titles to two lines without invading com
   assert.ok(PDF_LAYOUT.serviceTitleWidth < PDF_LAYOUT.serviceDescriptionWidth);
 });
 
+test('quotation PDF keeps descriptions visible when a service moves to a new page', async () => {
+  const pdf = await import('../src/services/quotationPdfService.js');
+  assert.equal(typeof pdf.getServiceTextLayout, 'function');
+  assert.deepEqual(
+    pdf.getServiceTextLayout(18, 2),
+    { descriptionY: 40.5, extraTitleHeight: 5 }
+  );
+
+  const pageBreakQuotation = {
+    ...quotation,
+    items: [
+      {
+        name: 'Servicio Inicial Extenso',
+        description: Array.from({ length: 34 }, () => 'Alcance detallado del primer servicio.').join(' '),
+        quantity: 1,
+        price: 1000000,
+        billingType: 'ONE_TIME'
+      },
+      {
+        name: 'Marketing Estándar – 12 Contenidos',
+        description: 'DESCRIPCIÓN VISIBLE DESPUÉS DEL SALTO DE PÁGINA.',
+        quantity: 1,
+        price: 1580600,
+        billingType: 'MONTHLY'
+      }
+    ]
+  };
+  const parser = new PDFParse({ data: generateQuotationPdfBuffer(pageBreakQuotation, issuer) });
+  const { text } = await parser.getText();
+  await parser.destroy();
+
+  assert.match(text, /DESCRIPCIÓN VISIBLE DESPUÉS DEL SALTO DE PÁGINA/);
+});
+
 test('quotation PDF renders discount labels as highlighted commercial rows', async () => {
   const source = await import('node:fs/promises').then(({ readFile }) => readFile(
     new URL('../src/services/quotationPdfService.js', import.meta.url),

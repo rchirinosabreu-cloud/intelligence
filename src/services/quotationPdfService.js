@@ -104,6 +104,14 @@ export const limitServiceTitleLines = (lines = [], maxLines = 2) => {
   return visible;
 };
 
+export const getServiceTextLayout = (y, titleLineCount = 1) => {
+  const extraTitleHeight = Math.max(0, titleLineCount - 1) * 5;
+  return {
+    descriptionY: y + 17.5 + extraTitleHeight,
+    extraTitleHeight
+  };
+};
+
 const drawSectionHeading = (doc, y, eyebrow, title) => {
   setText(doc, { size: 8, style: 'bold', color: COLORS.brand });
   doc.text(eyebrow.toUpperCase(), PAGE.left, y);
@@ -131,11 +139,11 @@ const drawService = (doc, item, index, y, formatMoney) => {
   setText(doc, { size: 8.5, color: COLORS.muted });
   const noteLines = note ? doc.splitTextToSize(note, CONTENT_WIDTH - 12) : [];
   const descriptionLineCount = descriptionLines.length + serviceTimeLines.length;
-  const extraTitleHeight = Math.max(0, titleLines.length - 1) * 5;
-  const descriptionY = y + 17.5 + extraTitleHeight;
+  const { extraTitleHeight } = getServiceTextLayout(y, titleLines.length);
   const cardHeight = Math.max(25 + extraTitleHeight, 17 + extraTitleHeight + descriptionLineCount * 4.1);
   const noteHeight = note ? 12 + noteLines.length * 4.8 : 0;
   y = ensureSpace(doc, y, cardHeight + noteHeight + 7);
+  const { descriptionY } = getServiceTextLayout(y, titleLines.length);
 
   doc.setFillColor(...COLORS.white);
   doc.setDrawColor(...COLORS.border);
