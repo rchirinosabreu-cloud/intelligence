@@ -461,41 +461,45 @@ test('report creation stores the selected reporting period for narrative generat
   assert.match(route, /end:\s*parsedEndDate\.toISOString\(\)\.slice\(0,\s*10\)/);
 });
 
-test('AI narrative provider falls back to Gemini when OpenAI narrative generation fails', async () => {
+test('AI narrative provider reports the OpenAI failure without silently falling back to Gemini', async () => {
   const { generateNarrativeWithAIProvider } = await import('../src/services/reportVisionService.js');
   const calls = [];
-  const result = await generateNarrativeWithAIProvider({}, [], 'Cliente Demo', {
-    openaiGenerator: async () => {
-      calls.push('openai');
-      throw new Error('openai unavailable');
-    },
-    geminiGenerator: async () => {
-      calls.push('gemini');
-      return { headline: 'gemini fallback', summaryPoints: [], keyAchievements: '', actionPlan: [], logrosYAvances: [], contenidoTopAnalisis: '', oportunidadesYAprendizajes: [], recomendacionesEstrategicas: [], sections: [], granularNarratives: [] };
-    },
-    env: { OPENAI_API_KEY: 'openai-key', GEMINI_API_KEY: 'gemini-key' }
-  });
-
-  assert.equal(result.headline, 'gemini fallback');
-  assert.deepEqual(calls, ['openai', 'gemini']);
-});
-
-test('AI narrative provider preserves Gemini rawContent for downstream JSON repair', async () => {
-  const { generateNarrativeWithAIProvider } = await import('../src/services/reportVisionService.js');
-  const geminiError = new Error('gemini invalid json');
-  geminiError.rawContent = '{"headline":"roto"';
-
   await assert.rejects(
     () => generateNarrativeWithAIProvider({}, [], 'Cliente Demo', {
-      openaiGenerator: async () => { throw new Error('openai unavailable'); },
-      geminiGenerator: async () => { throw geminiError; },
+      openaiGenerator: async () => {
+        calls.push('openai');
+        throw new Error('openai unavailable');
+      },
+      geminiGenerator: async () => calls.push('gemini'),
       env: { OPENAI_API_KEY: 'openai-key', GEMINI_API_KEY: 'gemini-key' }
     }),
-    (error) => {
-      assert.equal(error.rawContent, geminiError.rawContent);
-      return true;
-    }
+    /openai unavailable/
   );
+  assert.deepEqual(calls, ['openai']);
+});
+
+test('AI narrative provider requires OpenAI configuration even when Gemini is configured', async () => {
+  const { generateNarrativeWithAIProvider } = await import('../src/services/reportVisionService.js');
+  await assert.rejects(
+    () => generateNarrativeWithAIProvider({}, [], 'Cliente Demo', {
+      env: { GEMINI_API_KEY: 'gemini-key' }
+    }),
+    /Missing OPENAI_API_KEY/
+  );
+});
+
+test('active reports and minutes flows use OpenAI and deterministic HTML', async () => {
+  const reportsRoute = await fs.readFile('src/routes/api/reports.js', 'utf8');
+  const summary = await fs.readFile('src/components/modules/Minutes/GeneralSummary.jsx', 'utf8');
+  const analysis = await fs.readFile('src/components/modules/Minutes/CompleteAnalysis.jsx', 'utf8');
+  assert.match(reportsRoute, /extractMetricsWithOpenAI/);
+  assert.doesNotMatch(reportsRoute, /extractMetricsWithGemini/);
+  assert.match(summary, /frontendApiService\.generateCompletion/);
+  assert.match(summary, /generateSummaryHTML/);
+  assert.doesNotMatch(summary, /generateGemini/);
+  assert.match(analysis, /frontendApiService\.generateCompletion/);
+  assert.match(analysis, /generateAnalysisHTML/);
+  assert.doesNotMatch(analysis, /generateGemini/);
 });
 
 test('OpenAI narrative request omits unsupported temperature parameter', async () => {

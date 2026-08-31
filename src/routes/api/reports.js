@@ -1,11 +1,9 @@
 import express from 'express';
 import multer from 'multer';
 import prisma from '../../lib/prisma.js';
-import { GoogleGenAI } from '@google/genai';
 import { uploadClientFile, getSignedUrl, getClientFileStream } from '../../services/storageService.js';
-import { parseJsonResponse, extractModelText } from '../../services/aiService.js';
 import {
-    extractMetricsWithGemini,
+    extractMetricsWithOpenAI,
     generateNarrativeWithAIProvider,
     generatePublishableNarrative,
     validateAndCleanSourceExtraction,
@@ -19,13 +17,18 @@ import { v4 as uuidv4 } from 'uuid';
 import { buildScopedReportData, normalizeAdsTableRows, orderReportSections } from '../../lib/reportStructure.js';
 import { sanitizeNarrativeForReport } from '../../lib/reportPresentation.js';
 import { isSafeStoragePath } from '../../config/security.js';
+import {
+    buildReportExtractionPrompt,
+    parseAndValidateReportExtraction,
+    toLegacyReportAnalysis
+} from '../../services/reportExtractionService.js';
 
 const router = express.Router();
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 20 * 1024 * 1024, files: 12 }
 });
-const REPORT_PIPELINE_VERSION = 'vision-2026-08-03.4';
+const REPORT_PIPELINE_VERSION = 'openai-vision-2026-08-30.1';
 const REPORT_DEPLOY_COMMIT = process.env.REPORT_DEPLOY_COMMIT || 'development';
 
 export { buildNarrativeFailureUpdate };
@@ -38,21 +41,7 @@ export function getReportPipelineStatus() {
     };
 }
 
-// Initialize AI
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
-
-let genAI;
-try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
-        genAI = new GoogleGenAI({ apiKey });
-        console.log("[Reports API] Google Generative AI initialized.");
-    } else {
-        console.warn("[Reports API] GEMINI_API_KEY is missing.");
-    }
-} catch (e) {
-    console.error("[Reports API] Failed to initialize AI client:", e);
-}
+console.log('[Reports API] OpenAI report pipeline initialized.');
 
 router.get('/pipeline-status', (_req, res) => {
     res.json(getReportPipelineStatus());
@@ -183,17 +172,6 @@ router.post('/generate', upload.any(), async (req, res) => {
 
         const transparencyLog = `Análisis multimodal basado en ${organicData.length + adsData.length} imágenes procesadas con IA.`;
 
-        // 3. Multimodal AI Analysis
-        if (!genAI) {
-            return res.status(500).json({ error: 'AI Service not available' });
-        }
-
-        // Prepare prompt and image parts
-        // We send all images in sequence: first all Organic, then all Ads.
-        const imageParts = [];
-        organicData.forEach(img => imageParts.push({ inlineData: { data: img.buffer.toString('base64'), mimeType: img.mimeType } }));
-        adsData.forEach(img => imageParts.push({ inlineData: { data: img.buffer.toString('base64'), mimeType: img.mimeType } }));
-
         const promptText = buildReportExtractionPrompt({
             clientName: client.name,
             currency,
@@ -201,19 +179,35 @@ router.post('/generate', upload.any(), async (req, res) => {
             adsSources: adsData.map(({ sourceId, originalname }) => ({ sourceId, filename: originalname }))
         });
 
-        const result = await genAI.models.generateContent({
-            model: MODEL_NAME,
-            contents: [{
-                role: 'user',
-                parts: [
-                    { text: promptText },
-                    ...imageParts
-                ]
-            }],
-            config: buildReportGenerationConfig()
-        });
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey) return res.status(500).json({ error: 'OpenAI service not configured' });
 
-        const rawText = extractModelText(result);
+        const imageParts = [...organicData, ...adsData].map(img => ({
+            type: 'input_image',
+            image_url: `data:${img.mimeType};base64,${img.buffer.toString('base64')}`,
+            detail: 'high'
+        }));
+        const aiResponse = await fetch('https://api.openai.com/v1/responses', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+                'User-Agent': 'BrainStudioIntelligence/2.0'
+            },
+            body: JSON.stringify({
+                model: process.env.OPENAI_MODEL_VISION || process.env.OPENAI_MODEL || 'gpt-5',
+                instructions: 'Extrae datos visuales con precisión. No inventes valores y devuelve solo JSON válido.',
+                input: [{ role: 'user', content: [{ type: 'input_text', text: promptText }, ...imageParts] }],
+                text: { format: { type: 'json_object' } },
+                max_output_tokens: 16384
+            })
+        });
+        const responsePayload = await aiResponse.json();
+        if (!aiResponse.ok) throw new Error(`OpenAI report analysis failed (${aiResponse.status})`);
+        const rawText = responsePayload.output_text || (responsePayload.output || [])
+            .flatMap(item => item.content || [])
+            .map(item => item.text || '')
+            .join('');
         const reportData = parseAndValidateReportExtraction(rawText, { currency });
 
         // 4. Preserve source traceability with stable IDs instead of array positions
@@ -271,7 +265,7 @@ router.post('/extract-metrics', upload.any(), async (req, res) => {
             const uploadResult = await uploadClientFile(file, client.name);
 
             // 2. Vision analysis
-            const extracted = await extractMetricsWithGemini(file.buffer, file.mimetype);
+            const extracted = await extractMetricsWithOpenAI(file.buffer, file.mimetype);
 
             // 3. Validation and cleaning by Source
             const cleaned = validateAndCleanSourceExtraction({
@@ -624,7 +618,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
             );
         } catch (generationError) {
             timeoutContext.cancelled = true;
-            if (/Missing GEMINI_API_KEY/i.test(generationError?.message || '')) throw generationError;
+            if (/Missing OPENAI_API_KEY/i.test(generationError?.message || '')) throw generationError;
 
             const loggedError = buildNarrativeErrorLog(generationError, null, { step: 'withTimeout', reportId, isFatal: false });
             console.error('[Reports API] Narrative generation did not produce publishable content:', loggedError);

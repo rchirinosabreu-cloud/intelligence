@@ -491,6 +491,60 @@ export const extractMetricsWithGemini = async (imageBuffer, mimeType = 'image/jp
 };
 
 /**
+ * Analyzes a report screenshot with OpenAI Responses API and Structured Outputs.
+ */
+export const extractMetricsWithOpenAI = async (imageBuffer, mimeType = 'image/jpeg') => {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        const error = new Error('Missing OPENAI_API_KEY in server configuration');
+        error.isAIUnavailable = true;
+        throw error;
+    }
+
+    const model = process.env.OPENAI_MODEL_VISION || process.env.OPENAI_MODEL || 'gpt-5';
+    console.log(`[Vision Service] Sending image to OpenAI using model ${model}...`);
+
+    const response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'User-Agent': 'BrainStudioIntelligence/2.0'
+        },
+        body: JSON.stringify({
+            model,
+            instructions: SYSTEM_PROMPT.replace(' using Google Generative AI (Gemini)', ''),
+            input: [{
+                role: 'user',
+                content: [
+                    { type: 'input_text', text: 'Extrae las métricas visibles de esta captura. No inventes datos y devuelve únicamente el objeto solicitado.' },
+                    { type: 'input_image', image_url: `data:${mimeType};base64,${imageBuffer.toString('base64')}`, detail: 'high' }
+                ]
+            }],
+            text: {
+                format: {
+                    type: 'json_schema',
+                    name: 'report_metrics_extraction',
+                    schema: visionExtractionSchema,
+                    strict: false
+                }
+            },
+            max_output_tokens: 16384
+        })
+    });
+
+    const payloadText = await response.text();
+    if (!response.ok) {
+        const error = new Error(`OpenAI vision extraction failed (${response.status}): ${payloadText.slice(0, 500)}`);
+        error.isAIUnavailable = response.status >= 500 || response.status === 429 || response.status === 401 || response.status === 403;
+        throw error;
+    }
+
+    const content = extractOpenAIResponseText(JSON.parse(payloadText));
+    return parseJsonResponse(content);
+};
+
+/**
  * Paso 2: Desacoplamiento de Validación por Fuente
  * Evaluates the parsed payload of a single screenshot and cleans it, returning if it is usable.
  */
@@ -1023,31 +1077,8 @@ export const generateNarrativeWithOpenAI = async (normalizedMetrics, sections = 
 export const generateNarrativeWithAIProvider = async (normalizedMetrics, sections = [], clientName = 'el cliente', deps = {}) => {
     const env = deps.env || process.env;
     const openaiGenerator = deps.openaiGenerator || generateNarrativeWithOpenAI;
-    const geminiGenerator = deps.geminiGenerator || generateNarrativeWithGemini;
-    const errors = [];
-
-    if (env.OPENAI_API_KEY) {
-        try {
-            return await openaiGenerator(normalizedMetrics, sections, clientName);
-        } catch (error) {
-            errors.push(`OpenAI: ${error.message}`);
-            console.warn('[Vision Service] OpenAI narrative generation failed. Falling back to Gemini:', error.message);
-        }
-    }
-
-    if (env.GEMINI_API_KEY) {
-        try {
-            return await geminiGenerator(normalizedMetrics, sections, clientName);
-        } catch (error) {
-            errors.push(`Gemini: ${error.message}`);
-            if (error.rawContent) {
-                error.providerErrors = errors;
-                throw error;
-            }
-        }
-    }
-
-    throw new Error(errors.length ? `All narrative providers failed. ${errors.join(' | ')}` : 'No narrative AI provider configured');
+    if (!env.OPENAI_API_KEY) throw new Error('Missing OPENAI_API_KEY in server configuration');
+    return await openaiGenerator(normalizedMetrics, sections, clientName);
 };
 
 /**
@@ -1351,7 +1382,7 @@ const findInvalidNarrativeSections = (narrativeSections = [], sourceSections = [
 
 const parseNarrativeCandidate = (candidate, sections = [], clientName = 'el cliente') => typeof candidate === 'string' ? parseNarrativeResponse(candidate, sections, clientName) : candidate;
 
-const isFatalNarrativeDependencyError = (error) => /Missing GEMINI_API_KEY/i.test(error?.message || '');
+const isFatalNarrativeDependencyError = (error) => /Missing OPENAI_API_KEY/i.test(error?.message || '');
 
 const mergeRegeneratedSections = (narrative, regeneratedSections = []) => {
     const replacements = new Map(regeneratedSections.map(section => [section.sectionId, section]));

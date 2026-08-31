@@ -2,11 +2,36 @@ import test from 'node:test';
 import assert from 'node:assert';
 import {
     extractMetricsWithGemini,
+    extractMetricsWithOpenAI,
     filterExtractedTopContentRows,
     validateAndCleanSourceExtraction,
     mergeSourceMetricsIntoAccumulator,
     finalizeNormalizedMetrics
 } from '../src/services/reportVisionService.js';
+
+test('OpenAI vision extraction sends image input and structured output schema', async () => {
+    const originalFetch = globalThis.fetch;
+    const originalApiKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = 'mock-openai-key';
+    let requestBody;
+    globalThis.fetch = async (_url, options) => {
+        requestBody = JSON.parse(options.body);
+        return new Response(JSON.stringify({
+            output_text: JSON.stringify({ metrics: [], screenType: 'UNKNOWN' })
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    try {
+        const result = await extractMetricsWithOpenAI(Buffer.from('mock-image'), 'image/png');
+        assert.deepEqual(result.metrics, []);
+        assert.strictEqual(requestBody.text.format.type, 'json_schema');
+        assert.match(requestBody.input[0].content[1].image_url, /^data:image\/png;base64,/);
+        assert.strictEqual(requestBody.input[0].content[1].type, 'input_image');
+    } finally {
+        globalThis.fetch = originalFetch;
+        process.env.OPENAI_API_KEY = originalApiKey;
+    }
+});
 
 // We can mock the fetch call to Gemini to test the vision service
 test('Vision Extraction Service - Gemini Mock and Math Validation', async (t) => {

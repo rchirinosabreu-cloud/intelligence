@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { Brain, Loader2, AlertTriangle, CheckCircle, ExternalLink } from '@/components/ui/icons';
 import { Button } from './ui/button';
 import frontendApiService from '../../../services/frontendApiService';
-import { buildAnalysisReportContent } from '../../../utils/reportContent';
 import { downloadHTML } from '../../../utils/downloadUtils';
 import { generateAnalysisPDF } from '../../../utils/pdfExport';
+import { generateAnalysisHTML } from '../../../utils/htmlExport';
 import { toast } from 'react-hot-toast';
-import { ANALYSIS_PROMPT_TEMPLATE, GEMINI_BENTO_PROMPT_TEMPLATE } from '../../../utils/promptTemplates';
+import { ANALYSIS_PROMPT_TEMPLATE } from '../../../utils/promptTemplates';
 import { parseJsonFromAiResponse } from '../../../utils/jsonParser';
 
 const CompleteAnalysis = ({ files, content, reportMeta }) => {
@@ -14,6 +14,7 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [htmlLoading, setHtmlLoading] = useState(false);
+  const sourceTitle = reportMeta?.title || files?.[0]?.title || 'Minuta de reunión';
 
   const handleGenerate = async () => {
     if ((!files || files.length === 0) && !content) return;
@@ -32,7 +33,7 @@ const CompleteAnalysis = ({ files, content, reportMeta }) => {
        // Use the template from utils
        const prompt = ANALYSIS_PROMPT_TEMPLATE.replace('{{CONTENT}}', combinedPrompt);
 
-      console.log(`[CompleteAnalysis] Sending prompt to Gemini. Total length: ${prompt.length}`);
+      console.log(`[CompleteAnalysis] Sending prompt to OpenAI. Total length: ${prompt.length}`);
 
       const systemPrompt = `Actúa como un Consultor Estratégico Senior de Brainstudio. Transforma la transcripción en un Análisis Estratégico de alta fidelidad.
 Es obligatorio responder en JSON siguiendo estrictamente la estructura solicitada, profundizando en:
@@ -47,7 +48,7 @@ Es obligatorio responder en JSON siguiendo estrictamente la estructura solicitad
 REGLA DE ORO: No resumas de forma perezosa. Si se discutieron ejemplos específicos (como el caso "dulce vs salado") o nombres de clientes previos, inclúyelos para dar contexto real.
 IMPORTANTE: Todos los valores de los campos JSON deben ser Strings o Arrays de Strings. Prohibido usar objetos anidados dentro de los campos. Responde SIEMPRE en Español.`;
 
-      const resultString = await frontendApiService.generateGeminiCompletion(prompt, systemPrompt);
+      const resultString = await frontendApiService.generateCompletion(prompt, systemPrompt);
       const result = parseJsonFromAiResponse(resultString);
       setAnalysisData(result);
 
@@ -64,18 +65,16 @@ IMPORTANTE: Todos los valores de los campos JSON deben ser Strings o Arrays de S
 
   const handleDownloadHTML = async () => {
     if (!analysisData) return;
-    const toastId = toast.loading("Generando HTML con Gemini...");
+    const toastId = toast.loading("Preparando reporte HTML...");
     setHtmlLoading(true);
     try {
-      const reportContent = buildAnalysisReportContent(analysisData, reportMeta);
-      const prompt = GEMINI_BENTO_PROMPT_TEMPLATE.replace('{{CONTENT}}', reportContent);
-      const htmlContent = await frontendApiService.generateGeminiHtmlReport(prompt);
+      const htmlContent = generateAnalysisHTML(analysisData, sourceTitle, reportMeta);
       const filename = `Analisis_BrainStudio_${Date.now()}.html`;
       downloadHTML(htmlContent, filename);
       toast.success("Descargando reporte HTML...", { id: toastId });
     } catch (err) {
       console.error(err);
-      toast.error(err.message || "Error al generar el HTML con Gemini", { id: toastId });
+      toast.error(err.message || "Error al generar el HTML", { id: toastId });
     } finally {
       setHtmlLoading(false);
     }

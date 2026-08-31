@@ -5,6 +5,10 @@ const getBaseUrl = () => getApiBaseUrl();
 const getOpenAiUrl = () => `${getBaseUrl()}/api/openai/v1/chat/completions`;
 const getFirefliesUrl = () => `${getBaseUrl()}/api/fireflies/graphql`;
 const getGeminiUrl = () => `${getBaseUrl()}/api/gemini/v1beta/models/gemini-3.5-flash:generateContent`;
+const getAuthHeaders = () => ({
+  'Content-Type': 'application/json',
+  Authorization: `Bearer ${localStorage.getItem('authToken')}`
+});
 
 // Helper for delay
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -36,15 +40,14 @@ const frontendApiService = {
       try {
         const response = await fetch(getOpenAiUrl(), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
-            model: "gpt-4o",
+            model: "gpt-5",
             messages: [
               { role: "system", content: finalSystemMessage },
               { role: "user", content: prompt }
             ],
-            stream: true, // Request streaming from OpenAI
-            temperature: 0.7
+            stream: true
           })
         });
 
