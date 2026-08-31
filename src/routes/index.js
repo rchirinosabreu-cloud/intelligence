@@ -32,6 +32,7 @@ import quotationsRouter from './api/quotations.js';
 import operativeIntelligenceRouter from './api/operativeIntelligence.js';
 import financialsRouter from './api/financials.js';
 import dashboardRouter from './api/dashboard.js';
+import reportPdfRouter from './api/reportPdf.js';
 import { getUpcomingEvents } from '../services/calendarService.js';
 
 const router = express.Router();
@@ -197,6 +198,7 @@ router.get('/calendar/upcoming', async (req, res) => {
 // Proxies
 router.post('/openai/v1/chat/completions', requireModulePermission('manager'), proxyController.openaiProxy);
 router.post('/fireflies/graphql', requireModulePermission('minutas'), proxyController.firefliesProxy);
+router.use('/report-pdf', requireModulePermission('minutas'), reportPdfRouter);
 
 // Re-mount existing routers
 router.use('/user', userRouter);

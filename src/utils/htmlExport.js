@@ -35,7 +35,7 @@ const sharedStyles = `
   @media print{.cover{min-height:210mm;padding:16mm}.content{padding:10mm 12mm}.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.editorial-grid,.signal-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.prose-list{columns:2}.footer{margin:0 12mm 8mm}}
   @media print{.report{position:relative;padding-bottom:14mm}.footer{position:absolute;left:12mm;right:12mm;bottom:0;margin:0}}
   @media print{.footer{position:fixed}}
-  @media print{.report{padding-bottom:0}.footer{display:none}}
+  @media print{.report{padding-bottom:0}.footer{display:none}section{margin-bottom:18px;padding:24px;break-inside:auto;page-break-inside:auto}.section-heading{margin-bottom:16px;padding-bottom:12px;break-after:avoid-page;page-break-after:avoid}.section-heading,.editorial-card,.signal,.metric,.prose-list li,.action-table tr{break-inside:avoid;page-break-inside:avoid}.editorial-card{min-height:0;padding:14px 16px}.editorial-card .item-index{margin-bottom:8px}.editorial-card p{font-size:12px;line-height:1.45}.action-table thead{display:table-header-group}.table-shell{overflow:visible}.metrics-2{grid-template-columns:repeat(2,minmax(0,1fr))}}
 `;
 
 const heading = (icon, title) => `<div class="section-heading"><span class="section-icon">${icon}</span><h2>${esc(title)}</h2></div>`;
@@ -74,8 +74,12 @@ export const generateSummaryHTML = (data = {}, sourceTitle, reportMeta = {}) => 
   const topics = array(data.meeting_topics);
   const details = array(data.discussion_details);
   const agreements = array(data.agreements);
-  const metrics = [participants.length ? `<div class="metric"><div class="metric-label">Participantes</div><div class="metric-value">${participants.length}</div><div class="metric-note">${esc(participants.slice(0,3).join(', '))}</div></div>` : '', data.meeting_duration ? `<div class="metric"><div class="metric-label">Duración</div><div class="metric-value">${esc(data.meeting_duration)}</div><div class="metric-note">Tiempo total reportado</div></div>` : '', topics.length ? `<div class="metric"><div class="metric-label">Temas tratados</div><div class="metric-value">${topics.length}</div><div class="metric-note">Frentes principales de conversación</div></div>` : ''].join('');
-  const body = `${metrics ? `<section>${heading(ICONS.users,'Contexto de la reunión')}<div class="metrics">${metrics}</div></section>` : ''}<section>${heading(ICONS.target,'Temas tratados')}${topics.length ? cards(topics) : '<div class="empty">Sin temas identificados.</div>'}</section><section>${heading(ICONS.lightning,'Puntos clave')}${details.length ? list(details) : '<div class="empty">Sin puntos clave identificados.</div>'}</section><section>${heading(ICONS.bulb,'Acuerdos y compromisos')}${agreements.length ? cards(agreements) : '<div class="empty">Sin acuerdos explícitos en el material.</div>'}</section><section>${heading(ICONS.calendar,'Próximos pasos')}${renderActions(data.action_items)}</section>`;
+  const durationText = text(data.meeting_duration);
+  const durationMatch = durationText.match(/^([^()]+?)\s*\(([^)]+)\)\s*$/);
+  const durationValue = durationMatch?.[1]?.trim() || durationText;
+  const durationNote = durationMatch?.[2]?.trim() || 'Tiempo total reportado';
+  const metrics = [participants.length ? `<div class="metric"><div class="metric-label">Participantes</div><div class="metric-value">${participants.length}</div><div class="metric-note">${esc(participants.slice(0,3).join(', '))}</div></div>` : '', durationValue ? `<div class="metric"><div class="metric-label">Duración</div><div class="metric-value">${esc(durationValue)}</div><div class="metric-note">${esc(durationNote)}</div></div>` : ''].filter(Boolean);
+  const body = `${metrics.length ? `<section>${heading(ICONS.users,'Contexto de la reunión')}<div class="metrics metrics-${metrics.length}">${metrics.join('')}</div></section>` : ''}<section>${heading(ICONS.target,'Temas tratados')}${topics.length ? cards(topics) : '<div class="empty">Sin temas identificados.</div>'}</section><section>${heading(ICONS.lightning,'Puntos clave')}${details.length ? list(details) : '<div class="empty">Sin puntos clave identificados.</div>'}</section><section>${heading(ICONS.bulb,'Acuerdos y compromisos')}${agreements.length ? cards(agreements) : '<div class="empty">Sin acuerdos explícitos en el material.</div>'}</section><section>${heading(ICONS.calendar,'Próximos pasos')}${renderActions(data.action_items)}</section>`;
   return shell({title,type:'Resumen general',coverHtml:cover({type:'Resumen general',title,subtitle,date,duration:data.meeting_duration}),body});
 };
 

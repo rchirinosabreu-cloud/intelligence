@@ -5,7 +5,9 @@ FROM node:22-slim
 WORKDIR /app
 
 # Instalar dependencias necesarias para Prisma y otras herramientas
-RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends openssl chromium fonts-liberation && rm -rf /var/lib/apt/lists/*
+
+ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Copiar archivos de dependencias
 COPY package*.json ./

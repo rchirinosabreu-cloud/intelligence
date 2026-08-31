@@ -622,6 +622,7 @@ test('minutes HTML logo uses the supplied transparent white asset without a whit
 test('minutes reports use the BrainStudio palette and never render undefined fields', () => {
   const summary = generateSummaryHTML({
     meeting_topics: ['Tema comercial'],
+    meeting_duration: '2 horas (bloque 11:00–13:00 mencionado)',
     action_items: ['Tarea: Enviar propuesta - Prioridad: Alta - Responsable: Camila'],
   }, 'Reunión comercial');
   const analysis = generateAnalysisHTML({
@@ -635,15 +636,29 @@ test('minutes reports use the BrainStudio palette and never render undefined fie
   assert.doesNotMatch(summary, /background:#0D0D0D/i);
   assert.match(summary, /Enviar propuesta/);
   assert.match(summary, /Camila/);
+  assert.match(summary, /class="metric-value">2 horas<\/div>/);
+  assert.match(summary, /class="metric-note">bloque 11:00–13:00 mencionado<\/div>/);
+  assert.doesNotMatch(summary, /class="metric-label">Temas tratados<\/div>/);
   assert.match(analysis, /Crecimiento digital/);
   assert.match(analysis, /Instrumentar métricas/);
+  assert.match(analysis, /brainstudio-logo-white\.png/);
+  assert.match(analysis, /linear-gradient\(145deg,#fff 0%,#fbfdfc 100%\)/);
+  assert.match(analysis, /border-radius:12px/);
   assert.doesNotMatch(`${summary}${analysis}`, />undefined</i);
   assert.equal((summary.match(/alt="BrainStudio"/g) || []).length, 1);
+  assert.equal((analysis.match(/alt="BrainStudio"/g) || []).length, 1);
 });
 
-test('minutes PDF export prints the exact generated HTML instead of rasterizing a second layout', async () => {
+test('minutes PDF export downloads a server-rendered PDF without opening print', async () => {
   const exporter = await fs.readFile('src/utils/pdfExport.js', 'utf8');
-  assert.match(exporter, /frame\.srcdoc\s*=\s*htmlString/);
-  assert.match(exporter, /frameWindow\.print\(\)/);
-  assert.doesNotMatch(exporter, /html2canvas|jsPDF/);
+  const route = await fs.readFile('src/routes/api/reportPdf.js', 'utf8');
+  const renderer = await fs.readFile('src/services/pdfRenderer.js', 'utf8');
+  assert.match(exporter, /\/api\/report-pdf\/render/);
+  assert.match(exporter, /response\.blob\(\)/);
+  assert.match(exporter, /anchor\.download\s*=\s*filename/);
+  assert.doesNotMatch(exporter, /\.print\(|iframe|html2canvas|jsPDF/);
+  assert.match(route, /Content-Type', 'application\/pdf/);
+  assert.match(renderer, /page\.pdf\(/);
+  assert.match(renderer, /printBackground:\s*true/);
+  assert.match(renderer, /preferCSSPageSize:\s*true/);
 });
