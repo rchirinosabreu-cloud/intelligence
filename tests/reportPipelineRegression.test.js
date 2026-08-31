@@ -12,6 +12,7 @@ import {
   validateSectionNarratives,
   generateFallbackNarrative
 } from '../src/services/reportVisionService.js';
+import { getBrainStudioLogoSVG } from '../src/utils/reportStyling.js';
 import { adaptDatasetForChart, hasReadableChartData } from '../src/lib/reportChartData.js';
 
 test('report pipeline regressions', async (t) => {
@@ -609,4 +610,10 @@ test('reports route never writes NARRATIVE_FAILED as Prisma status', async () =>
   assert.doesNotMatch(route, /status:\s*'NARRATIVE_FAILED'/);
   assert.match(route, /generationMode:\s*'NARRATIVE_FAILED'/);
   assert.match(route, /status:\s*'REVIEW'/);
+});
+
+test('minutes HTML logo includes a self-contained fallback without throwing', () => {
+  const logo = getBrainStudioLogoSVG();
+  assert.match(logo, /data:image\/svg\+xml/);
+  assert.match(logo, /BrainStudio/);
 });

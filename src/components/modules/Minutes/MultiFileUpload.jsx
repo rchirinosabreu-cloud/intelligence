@@ -110,7 +110,7 @@ const MultiFileUpload = ({ onFilesAdded }) => {
              <p className="text-zinc-500 dark:text-zinc-400 text-sm max-w-xs mb-4">
                Soporta audio (MP3, WAV, M4A) y documentos (PDF, DOCX, CSV)
              </p>
-             <span className="inline-block px-3 py-1 bg-black/30 text-xs text-gray-500 rounded-full border border-white/10">
+             <span className="inline-block px-3 py-1 bg-zinc-100 dark:bg-zinc-800 text-xs text-zinc-600 dark:text-zinc-300 rounded-full border border-zinc-200 dark:border-zinc-700">
                Máx 25MB por archivo
              </span>
            </>

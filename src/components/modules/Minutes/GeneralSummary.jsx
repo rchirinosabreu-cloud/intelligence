@@ -147,7 +147,7 @@ IMPORTANTE: Todos los valores de los campos JSON deben ser Strings o Arrays de S
             </div>
           </div>
 
-          <div className="text-left text-sm text-gray-300 space-y-2">
+          <div className="text-left text-sm text-zinc-700 dark:text-zinc-300 space-y-2">
             <p><strong className="text-muted-foreground">Temas:</strong> {summaryData.meeting_topics?.join(", ")}</p>
             {summaryData.participants?.length > 0 && (
                  <p><strong className="text-muted-foreground">Participantes:</strong> {summaryData.participants.length}</p>

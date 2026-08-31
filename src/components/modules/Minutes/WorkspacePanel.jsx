@@ -57,7 +57,7 @@ const WorkspacePanel = ({ selectedSource, analysisReady }) => {
               <div className="bg-white dark:bg-zinc-900 rounded-xl p-4 border border-border flex items-start gap-3">
                   <Info className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="text-sm font-bold text-gray-300 mb-1">Contexto de Análisis</h4>
+                    <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-1">Contexto de Análisis</h4>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       Se analizarán {fileCount} archivo(s) conjuntamente. La IA integrará la información de todas las fuentes para generar reportes unificados.
                     </p>

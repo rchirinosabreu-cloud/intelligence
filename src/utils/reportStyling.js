@@ -122,6 +122,19 @@ export const formatListAsCards = (items) => {
   `;
 };
 
+const getLogoDataUri = () => {
+  const fallbackLogo = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="460" height="92" viewBox="0 0 460 92">
+      <rect width="460" height="92" rx="18" fill="#ffffff"/>
+      <circle cx="46" cy="46" r="28" fill="#009EB9"/>
+      <path d="M34 48h24M46 36v24" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+      <text x="88" y="58" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="#131127">BrainStudio</text>
+    </svg>
+  `;
+
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(fallbackLogo)}`;
+};
+
 export const getBrainStudioLogoSVG = (variant = 'default') => {
   const width = variant === 'small' ? '140px' : '220px';
   const logoUrl = 'https://brainstudioagencia.com/wp-content/uploads/2026/01/Recurso-1.svg';

@@ -35,8 +35,8 @@ const FileList = ({ files, onRemove }) => {
                    {getIcon(file.type, file.title)}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-200 truncate">{file.title}</p>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{file.title}</p>
+                  <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                     <span className="capitalize">{file.type === 'meeting' ? 'Reunión' : file.type}</span>
                     {file.size && <span>• {(file.size / 1024 / 1024).toFixed(2)} MB</span>}
                   </div>

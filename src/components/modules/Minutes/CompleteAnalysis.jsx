@@ -136,7 +136,7 @@ IMPORTANTE: Todos los valores de los campos JSON deben ser Strings o Arrays de S
                <Button
                 onClick={handleDownloadHTML}
                 disabled={htmlLoading || loading || !analysisData}
-                className="flex-1 bg-muted/50 hover:bg-primary/30 text-primary-foreground border border-border"
+                className="flex-1 bg-muted hover:bg-muted/80 text-foreground border border-border"
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
                 {htmlLoading ? 'Generando HTML...' : 'Descargar HTML'}
@@ -144,7 +144,7 @@ IMPORTANTE: Todos los valores de los campos JSON deben ser Strings o Arrays de S
             </div>
           </div>
 
-          <div className="text-left text-sm text-gray-300 space-y-2">
+          <div className="text-left text-sm text-zinc-700 dark:text-zinc-300 space-y-2">
              <p>
                <strong className="text-primary">Insight:</strong>
                {typeof analysisData?.consulting_insights?.[0] === 'string'
