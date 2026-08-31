@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { getContentPlanMonthName } from '@/lib/contentPlanPeriod';
 import {
   Plus, Calendar, Filter, Search, MoreHorizontal,
   ChevronRight, ChevronDown, Loader2, Trash2, Eye,
@@ -57,12 +58,6 @@ const ContentGrids = () => {
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
-
-  const getMonthName = (monthNumber) => {
-    const date = new Date();
-    date.setMonth(monthNumber - 1);
-    return date.toLocaleString('es-ES', { month: 'long' });
-  };
 
   const toggleClient = (clientId) => {
     setActiveClientId(prev => (prev === clientId ? null : clientId));
@@ -124,7 +119,7 @@ const ContentGrids = () => {
       const clientName = group.client?.name?.toLowerCase() || '';
       const matchesClient = clientName.includes(term);
       const matchesPlan = group.plans.some(p =>
-        getMonthName(p.month).toLowerCase().includes(term) ||
+        getContentPlanMonthName(p.month).includes(term) ||
         p.year.toString().includes(term)
       );
       return matchesClient || matchesPlan;
@@ -256,7 +251,7 @@ const ContentGrids = () => {
                               </div>
                               <div className="flex flex-col">
                                 <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 capitalize">
-                                  {getMonthName(plan.month)} {plan.year}
+                                  {getContentPlanMonthName(plan.month)} {plan.year}
                                 </span>
                                 <span className={`text-[9px] font-bold uppercase tracking-widest mt-0.5 ${
                                   plan.status === 'FINALIZADO' ? 'text-emerald-500' : 'text-zinc-400'

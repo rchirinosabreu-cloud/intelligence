@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { formatContentPlanDate, getContentPlanMonthName } from '@/lib/contentPlanPeriod';
 import {
   CheckCircle2, Clock, AlertCircle, Loader2, Calendar,
   Video, Image as ImageIcon, MessageSquare, Check, X, Send,
@@ -195,12 +196,6 @@ const SharedContentPlan = () => {
     );
   }
 
-  const getMonthName = (monthNumber) => {
-    const date = new Date();
-    date.setMonth(monthNumber - 1);
-    return date.toLocaleString('es-ES', { month: 'long' });
-  };
-
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-20">
       {/* Client Header */}
@@ -213,7 +208,7 @@ const SharedContentPlan = () => {
                 {plan.client.name}
               </h1>
               <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest">
-                Parrilla {getMonthName(plan.month)} {plan.year}
+                Parrilla {getContentPlanMonthName(plan.month)} {plan.year}
               </p>
             </div>
           </div>
@@ -286,7 +281,7 @@ const SharedContentPlan = () => {
                           <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] block">Publicación Estimada</label>
                           <div className="flex items-center gap-2 text-sm font-black text-indigo-600 dark:text-indigo-400">
                             <Calendar className="w-4 h-4" />
-                            {item.publishDate ? new Date(item.publishDate).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Pendiente'}
+                            {item.publishDate ? formatContentPlanDate(item.publishDate) : 'Pendiente'}
                           </div>
                         </div>
 

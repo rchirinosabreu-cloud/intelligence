@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { getContentPlanMonthName } from '@/lib/contentPlanPeriod';
 import {
   ChevronLeft, Plus, Send, ExternalLink, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
@@ -875,12 +876,6 @@ const ContentPlanDetail = () => {
     }
   });
 
-  const getMonthName = (monthNumber) => {
-    const date = new Date();
-    date.setMonth(monthNumber - 1);
-    return date.toLocaleString('es-ES', { month: 'long' });
-  };
-
   const handleAddItem = () => {
     createItemMutation.mutate({
       objective: 'Nuevo Objetivo',
@@ -946,7 +941,7 @@ const ContentPlanDetail = () => {
   return (
     <div className="space-y-8 pb-20 animate-in fade-in duration-500">
       <PageHeader
-        title={`${getMonthName(plan.month)} ${plan.year}`}
+        title={`${getContentPlanMonthName(plan.month)} ${plan.year}`}
         subtitle="Planificación estratégica de contenidos digitales."
 
         breadcrumbs={[
