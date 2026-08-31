@@ -613,10 +613,10 @@ test('reports route never writes NARRATIVE_FAILED as Prisma status', async () =>
   assert.match(route, /status:\s*'REVIEW'/);
 });
 
-test('minutes HTML logo includes a self-contained fallback without throwing', () => {
+test('minutes HTML logo uses the supplied transparent white asset without a white container', () => {
   const logo = getBrainStudioLogoSVG();
-  assert.match(logo, /data:image\/svg\+xml/);
-  assert.match(logo, /BrainStudio/);
+  assert.match(logo, /brainstudio-logo-white\.png/);
+  assert.doesNotMatch(logo, /background:\s*(?:#fff|white)/i);
 });
 
 test('minutes reports use the BrainStudio palette and never render undefined fields', () => {
@@ -631,10 +631,19 @@ test('minutes reports use the BrainStudio palette and never render undefined fie
 
   assert.match(summary, /#0D97A6/);
   assert.match(summary, /#12A6A6/);
+  assert.match(summary, /background:#075D64/);
+  assert.doesNotMatch(summary, /background:#0D0D0D/i);
   assert.match(summary, /Enviar propuesta/);
   assert.match(summary, /Camila/);
   assert.match(analysis, /Crecimiento digital/);
   assert.match(analysis, /Instrumentar métricas/);
   assert.doesNotMatch(`${summary}${analysis}`, />undefined</i);
   assert.equal((summary.match(/alt="BrainStudio"/g) || []).length, 1);
+});
+
+test('minutes PDF export prints the exact generated HTML instead of rasterizing a second layout', async () => {
+  const exporter = await fs.readFile('src/utils/pdfExport.js', 'utf8');
+  assert.match(exporter, /frame\.srcdoc\s*=\s*htmlString/);
+  assert.match(exporter, /frameWindow\.print\(\)/);
+  assert.doesNotMatch(exporter, /html2canvas|jsPDF/);
 });

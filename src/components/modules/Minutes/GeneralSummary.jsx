@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Loader2, AlertTriangle, CheckCircle, ExternalLink } from '@/components/ui/icons';
+import { FileText, Loader2, AlertTriangle, CheckCircle, ExternalLink, Download } from '@/components/ui/icons';
 import { Button } from './ui/button';
 import frontendApiService from '../../../services/frontendApiService';
 import { downloadHTML } from '../../../utils/downloadUtils';
@@ -143,6 +143,10 @@ IMPORTANTE: Respeta exactamente los nombres de campos y la estructura JSON solic
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
                 {htmlLoading ? 'Generando HTML...' : 'Descargar HTML'}
+              </Button>
+              <Button onClick={handleDownloadPDF} disabled={htmlLoading || loading || !summaryData} className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground border border-primary">
+                <Download className="w-4 h-4 mr-2" />
+                Descargar PDF
               </Button>
             </div>
           </div>

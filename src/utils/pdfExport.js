@@ -1,110 +1,56 @@
+import { generateSummaryHTML, generateAnalysisHTML } from './htmlExport.js';
 
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import { generateSummaryHTML, generateAnalysisHTML } from './htmlExport';
-import { STYLES } from './reportStyling';
+const waitForFrame = (frame) => new Promise((resolve, reject) => {
+  const timeout = window.setTimeout(() => reject(new Error('El reporte tardó demasiado en cargar.')), 15000);
+  frame.onload = () => { window.clearTimeout(timeout); resolve(); };
+});
 
-const generatePDFFromHTML = async (htmlString, filename) => {
-  // Create a container for the HTML
-  // We use a container to render the HTML content off-screen but visible to the DOM
-  const container = document.createElement('div');
+const waitForImages = async (documentNode) => Promise.all(Array.from(documentNode.images || []).map((image) => image.complete
+  ? Promise.resolve()
+  : new Promise((resolve) => { image.onload = resolve; image.onerror = resolve; })));
 
-  // Apply body styles from reportStyling to the container to ensure consistent look
-  // We append essential positioning styles to keep it off-screen but renderable
-  container.style.cssText = `
-    ${STYLES.body}
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 1400px;
-    opacity: 0;
-    pointer-events: none;
-    z-index: -1;
-  `;
-
-  // Inject HTML
-  // Parse the HTML to extract styles and body content to avoid nesting <html> tags.
-  const parsedDoc = new DOMParser().parseFromString(htmlString, 'text/html');
-  const styleTags = parsedDoc.querySelectorAll('style');
-  container.innerHTML = parsedDoc.body.innerHTML;
-  styleTags.forEach((styleTag) => {
-    container.prepend(styleTag.cloneNode(true));
-  });
-
-  document.body.appendChild(container);
+export const printPDFFromHTML = async (htmlString, filename) => {
+  const frame = document.createElement('iframe');
+  frame.setAttribute('aria-hidden', 'true');
+  frame.style.cssText = 'position:fixed;left:-100000px;top:0;width:1400px;height:100vh;border:0;opacity:0;pointer-events:none;';
+  document.body.appendChild(frame);
 
   try {
-    // Wait for images and fonts to settle
-    await new Promise(resolve => setTimeout(resolve, 300));
-    if (document.fonts?.ready) {
-      await document.fonts.ready;
-    }
-    const images = Array.from(container.querySelectorAll('img'));
-    await Promise.all(images.map((img) => (img.complete
-      ? Promise.resolve()
-      : new Promise((resolve) => {
-        img.onload = resolve;
-        img.onerror = resolve;
-      })
-    )));
+    const loaded = waitForFrame(frame);
+    frame.srcdoc = htmlString;
+    await loaded;
+    const frameDocument = frame.contentDocument;
+    const frameWindow = frame.contentWindow;
+    if (!frameDocument || !frameWindow) throw new Error('No fue posible preparar el documento para impresión.');
 
-    // Convert DOM to canvas
-    const canvas = await html2canvas(container, {
-      scale: 2, // 2x scale for better resolution (Retina-like)
-      useCORS: true, // Allow cross-origin images
-      logging: false,
-      backgroundColor: '#f8faf5',
-      windowWidth: 1400
-    });
+    frameDocument.title = filename.replace(/\.pdf$/i, '');
+    if (frameDocument.fonts?.ready) await frameDocument.fonts.ready;
+    await waitForImages(frameDocument);
+    await new Promise((resolve) => window.setTimeout(resolve, 150));
 
-    const imgData = canvas.toDataURL('image/png');
-
-    // Initialize PDF (A4 Landscape)
-    const pdf = new jsPDF('l', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-
-    // Calculate dimensions to fit A4 width
-    const imgProps = pdf.getImageProperties(imgData);
-    const imgWidth = pdfWidth;
-    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-
-    let heightLeft = imgHeight;
-    let position = 0;
-
-    // Add first page
-    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pdfHeight;
-
-    // Add subsequent pages if content overflows
-    while (heightLeft > 0) {
-      position -= pdfHeight; // Move the image up to show the next section
-      pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-    }
-
-    pdf.save(filename);
-
+    let removed = false;
+    const cleanup = () => {
+      if (removed) return;
+      removed = true;
+      if (document.body.contains(frame)) document.body.removeChild(frame);
+    };
+    frameWindow.addEventListener('afterprint', cleanup, { once: true });
+    window.setTimeout(cleanup, 60000);
+    frameWindow.focus();
+    frameWindow.print();
   } catch (error) {
-    console.error("PDF Generation Error:", error);
-    throw new Error("Hubo un error generando el PDF. Por favor intenta nuevamente.");
-  } finally {
-    // Cleanup
-    if (document.body.contains(container)) {
-      document.body.removeChild(container);
-    }
+    if (document.body.contains(frame)) document.body.removeChild(frame);
+    console.error('PDF Generation Error:', error);
+    throw new Error('Hubo un error preparando el PDF. Por favor intenta nuevamente.');
   }
 };
 
-export const generateSummaryPDF = (data, sourceTitle, reportMeta) => {
-  const htmlContent = generateSummaryHTML(data, sourceTitle, reportMeta);
-  const filename = `Resumen_BrainStudio_${Date.now()}.pdf`;
-  return generatePDFFromHTML(htmlContent, filename);
-};
+export const generateSummaryPDF = (data, sourceTitle, reportMeta) => printPDFFromHTML(
+  generateSummaryHTML(data, sourceTitle, reportMeta),
+  `Resumen_BrainStudio_${Date.now()}.pdf`,
+);
 
-export const generateAnalysisPDF = (data, sourceTitle, reportMeta) => {
-  const htmlContent = generateAnalysisHTML(data, sourceTitle, reportMeta);
-  const filename = `Analisis_BrainStudio_${Date.now()}.pdf`;
-  return generatePDFFromHTML(htmlContent, filename);
-};
+export const generateAnalysisPDF = (data, sourceTitle, reportMeta) => printPDFFromHTML(
+  generateAnalysisHTML(data, sourceTitle, reportMeta),
+  `Analisis_BrainStudio_${Date.now()}.pdf`,
+);

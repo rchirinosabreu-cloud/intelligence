@@ -1,6 +1,6 @@
 export const COLORS = {
   primary: '#12A6A6', primaryDeep: '#0D97A6', secondary: '#21A698', accent: '#2DA683',
-  ink: '#0D0D0D', dark: '#0D0D0D', textDark: '#0D0D0D', title: '#0D0D0D',
+  ink: '#0D0D0D', dark: '#075D64', deepSurface: '#075D64', textDark: '#0D0D0D', title: '#0D0D0D',
   text: '#202827', textLight: '#60706D', border: '#D9E5E2', bg: '#F2F7F6', white: '#FFFFFF',
   mist: '#E8F4F2', cardGradient: '#E8F4F2', accentLavender: '#E8F4F2',
   accentPurple: '#0D97A6', accentBlue: '#DDF2F1', accentLime: '#2DA683',
@@ -62,14 +62,13 @@ export const formatListAsCards = (items) => {
   return values.length ? `<div class="editorial-grid">${values.map((item,index) => `<article class="editorial-card"><span class="item-index">${String(index + 1).padStart(2,'0')}</span><p>${escapeHtml(typeof item === 'string' ? item : item.description || item.title || '')}</p></article>`).join('')}</div>` : '';
 };
 
-const getLogoDataUri = () => {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="460" height="92"><rect width="460" height="92" rx="18" fill="white"/><circle cx="46" cy="46" r="28" fill="#0D97A6"/><path d="M34 48h24M46 36v24" stroke="white" stroke-width="7" stroke-linecap="round"/><text x="88" y="58" font-family="Arial" font-size="34" font-weight="700" fill="#0D0D0D">BrainStudio</text></svg>`;
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
-};
-
 export const getBrainStudioLogoSVG = (variant = 'default') => {
-  const width = variant === 'small' ? '132px' : '196px';
-  return `<img src="https://brainstudioagencia.com/wp-content/uploads/2026/01/Recurso-1.svg" alt="BrainStudio" style="display:block;width:${width};height:auto;background:#fff;padding:10px 12px;" onerror="this.onerror=null;this.src='${getLogoDataUri()}';"/>`;
+  const width = variant === 'small' ? '170px' : '280px';
+  const origin = typeof globalThis !== 'undefined' && globalThis.location?.origin && globalThis.location.origin !== 'null'
+    ? globalThis.location.origin
+    : 'https://labs.brainstudioagencia.com';
+  const logoUrl = `${origin}/assets/brainstudio-logo-white.png`;
+  return `<img src="${logoUrl}" alt="BrainStudio" style="display:block;width:${width};height:auto;object-fit:contain;" onerror="this.onerror=null;this.outerHTML='<strong style=&quot;color:white;font-size:20px;letter-spacing:.12em&quot;>BRAIN STUDIO</strong>';"/>`;
 };
 
 const icon = (path) => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0D97A6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
