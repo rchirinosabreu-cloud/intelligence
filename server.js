@@ -7,11 +7,10 @@ import fs from 'fs';
 import prisma from './src/lib/prisma.js';
 import { initTaskClassificationCron } from './src/services/taskClassificationService.js';
 import { initGoogleCalendarSyncScheduler } from './src/services/googleCalendarSyncScheduler.js';
+import { getAIHealth } from './src/services/aiService.js';
 import { loggerMiddleware } from './src/middlewares/logger.js';
 import { operationalAuditMiddleware } from './src/middlewares/operationalAuditMiddleware.js';
 import apiRouter from './src/routes/index.js';
-import { geminiProxy } from './src/controllers/proxyController.js';
-import { authenticateToken, requireManagerRole } from './src/middlewares/authMiddleware.js';
 import {
   configureSecurityHeaders,
   createRateLimiter,
@@ -53,12 +52,19 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.get('/api/health', (_req, res) => res.json({
+  status: 'ok',
+  timestamp: new Date().toISOString(),
+  ai: getAIHealth()
+}));
+app.get('/api/health/ai', (_req, res) => {
+  const health = getAIHealth();
+  res.status(health.status === 'healthy' ? 200 : 503).json(health);
+});
 app.use('/api/login', authRateLimiter);
 app.use('/api/password-reset', authRateLimiter);
 app.use('/api/public', publicRateLimiter);
 app.use('/api/quotations/public', publicRateLimiter);
-app.use('/api/gemini', aiRateLimiter);
 app.use('/api/openai', aiRateLimiter);
 app.use('/api/fireflies', aiRateLimiter);
 app.use('/api', apiRateLimiter);
@@ -72,8 +78,6 @@ app.use(loggerMiddleware);
 app.use(operationalAuditMiddleware);
 
 // --- ROUTES ---
-// Gemini proxy must be mounted before common API router if it has special body restreaming needs
-app.use('/api/gemini', authenticateToken, requireManagerRole, geminiProxy);
 app.use('/api', apiRouter);
 
 // --- STATIC FILES & SPA ---
@@ -133,7 +137,7 @@ async function bootstrap() {
     validateSecurityEnvironment(process.env);
 
     // 1. System Checklist & Configuration
-    const ESSENTIAL_KEYS = ['DATABASE_URL', 'JWT_SECRET', 'GEMINI_API_KEY', 'MODEL_NAME'];
+    const ESSENTIAL_KEYS = ['DATABASE_URL', 'JWT_SECRET', 'OPENAI_API_KEY'];
     const missingKeys = ESSENTIAL_KEYS.filter(key => !process.env[key]);
 
     if (missingKeys.length > 0) {
@@ -155,8 +159,15 @@ async function bootstrap() {
     // 3. AI Service Initialization (Non-blocking)
     try {
         const { initialize } = await import('./src/services/aiService.js');
-        await initialize();
-        console.log("[Service: AI] Google GenAI iniciado correctamente.");
+        const client = await initialize();
+        if (client) {
+            const health = getAIHealth();
+            console.log(`[Service: AI] OpenAI operativo (${health.model}, ${health.latencyMs}ms).`);
+        } else {
+            const health = getAIHealth();
+            console.warn(`[Service: AI] OpenAI no está operativo (${health.error || health.status}).`);
+            console.info("[Service: AI] El servidor continuará sin capacidades de IA activas.");
+        }
     } catch (aiError) {
         console.error("[Service: AI] ADVERTENCIA: No se pudo inicializar el servicio de IA:", aiError.message);
         console.info("[Service: AI] El servidor continuará sin capacidades de IA activas.");

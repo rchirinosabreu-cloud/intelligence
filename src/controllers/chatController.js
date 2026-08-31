@@ -12,13 +12,13 @@ const __dirname = path.dirname(__filename);
 export const handleChat = async (req, res) => {
     try {
         const { messages } = req.body;
-        const genAI = getAIInstance();
+        const aiClient = getAIInstance();
 
-        if (!genAI) {
-            console.error("CRITICAL: Google Generative AI not initialized.");
+        if (!aiClient) {
+            console.error("CRITICAL: OpenAI no está disponible.");
             if (!res.headersSent) {
-                res.status(500);
-                res.write("Error: Google Generative AI not initialized.");
+                res.status(503);
+                res.write("Error: El servicio de IA no está disponible.");
             }
             return res.end();
         }
@@ -80,7 +80,7 @@ export const handleChat = async (req, res) => {
                 parts: [{ text: msg.content }]
             }));
 
-        const streamResult = await sendMessageStreamWithRetry(genAI, {
+        const streamResult = await sendMessageStreamWithRetry(aiClient, {
             model: MODEL_NAME,
             systemInstruction: finalSystemPrompt,
             contents: [...history, { role: 'user', parts: [{ text: lastMessageContent }] }],
@@ -113,7 +113,7 @@ export const handleChat = async (req, res) => {
                 }
 
                 if (functionResponseContent) {
-                    const streamResult2 = await sendMessageStreamWithRetry(genAI, {
+                    const streamResult2 = await sendMessageStreamWithRetry(aiClient, {
                         model: MODEL_NAME,
                         systemInstruction: finalSystemPrompt,
                         contents: [

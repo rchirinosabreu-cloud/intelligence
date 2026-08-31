@@ -4,7 +4,6 @@ const getBaseUrl = () => getApiBaseUrl();
 
 const getOpenAiUrl = () => `${getBaseUrl()}/api/openai/v1/chat/completions`;
 const getFirefliesUrl = () => `${getBaseUrl()}/api/fireflies/graphql`;
-const getGeminiUrl = () => `${getBaseUrl()}/api/gemini/v1beta/models/gemini-3.5-flash:generateContent`;
 const getAuthHeaders = () => ({
   'Content-Type': 'application/json',
   Authorization: `Bearer ${localStorage.getItem('authToken')}`
@@ -12,19 +11,6 @@ const getAuthHeaders = () => ({
 
 // Helper for delay
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-const parseReferenceImages = () =>
-  GEMINI_REFERENCE_IMAGES.split(',').map((value) => value.trim()).filter(Boolean);
-
-const blobToBase64 = async (blob) => {
-  const buffer = await blob.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-  return btoa(binary);
-};
 
 const frontendApiService = {
   // OpenAI API Call with retry and SSE streaming logic
@@ -135,106 +121,12 @@ const frontendApiService = {
 
     files.forEach((file, index) => {
       parts.push(`--- FUENTE ${index + 1}: ${file.title} (${file.type}) ---\n`);
-      // No truncation for Gemini context window
+      // No truncation: el backend controla el contexto del proveedor.
       parts.push(file.text);
       parts.push(' \n\n');
     });
 
     return parts.join('');
-  },
-
-  generateGeminiHtmlReport: async (prompt) => {
-    try {
-      const response = await fetch(getGeminiUrl(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: prompt }]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.2
-          }
-        })
-      });
-
-      if (!response.ok) throw new Error(`Gemini HTTP Error: ${response.status}`);
-
-      const data = await response.json();
-      let text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text).join('')?.trim();
-
-      if (!text) {
-        throw new Error("Gemini response was empty.");
-      }
-
-      // Clean up markdown wrapper from Gemini HTML if it exists
-      if (text.startsWith("```html")) {
-          text = text.replace(/^```html\n?/, "").replace(/\n?```$/, "");
-      }
-
-      return text;
-    } catch (error) {
-      console.error("Gemini API Error:", error);
-      if (error.message === 'Network Error' && !error.response) {
-        throw new Error("Network Error: La llamada a Gemini necesita un proxy/servidor para evitar CORS. Configura el backend /api/gemini o VITE_API_BASE_URL.");
-      }
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        throw new Error("No autorizado para Gemini. Verifica la configuración del API Key en el backend.");
-      }
-      if (error.response?.status === 502) {
-        throw new Error("El proxy de Gemini no respondió correctamente (502). Verifica el backend o el API Key.");
-      }
-      throw new Error(error.response?.data?.error?.message || error.message || "Failed to generate HTML from Gemini");
-    }
-  },
-
-  generateGeminiCompletion: async (prompt, systemMessage = "You are a helpful assistant.") => {
-    try {
-      console.log(`[Gemini API] Preparing payload for completion. Prompt length: ${prompt.length}`);
-
-      const payload = {
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: `${systemMessage}\n\n${prompt}` }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          topP: 0.95,
-          topK: 40
-        }
-      };
-
-      const response = await fetch(getGeminiUrl(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Gemini HTTP Error: ${response.status} - ${errorData.error?.message || response.statusText}`);
-      }
-
-      const data = await response.json();
-      const text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text).join('')?.trim();
-
-      if (!text) {
-        throw new Error("Gemini response was empty.");
-      }
-
-      return text;
-    } catch (error) {
-      console.error("Gemini API Error (Completion):", error);
-      if (error.message.includes('401') || error.message.includes('403')) {
-        throw new Error("Error de autenticación con la IA. Verifica la API Key.");
-      }
-      throw new Error(error.message || "Failed to generate completion from Gemini");
-    }
   },
 
   // Fireflies GraphQL Call

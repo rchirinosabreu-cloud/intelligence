@@ -1,4 +1,6 @@
-const TRIAGE_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+import { AI_MODELS } from '../config/aiConfig.js';
+
+const TRIAGE_MODEL = AI_MODELS.fast;
 
 const TRIAGE_SCHEMA = {
   type: 'object',
@@ -31,7 +33,7 @@ export const normalizeModelJson = (rawText) => {
   }
 };
 
-const classifyEmail = async (email, genAI) => {
+const classifyEmail = async (email, aiClient) => {
   const prompt = `Actúa como un Analista de Operaciones Senior de Brainstudio.
   Tu misión es realizar un triaje profundo y filtrado de ruido para la bandeja de entrada ejecutiva.
 
@@ -60,7 +62,7 @@ const classifyEmail = async (email, genAI) => {
   Snippet: ${email.snippet || ''}`;
 
   try {
-    const result = await genAI.models.generateContent({
+    const result = await aiClient.models.generateContent({
       model: TRIAGE_MODEL,
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
@@ -99,11 +101,11 @@ const classifyEmail = async (email, genAI) => {
   }
 };
 
-export const triageEmailsWithAI = async (emails, genAI) => {
+export const triageEmailsWithAI = async (emails, aiClient) => {
   if (!Array.isArray(emails) || emails.length === 0) return [];
 
   try {
-    const triaged = await Promise.all(emails.map((email) => classifyEmail(email, genAI)));
+    const triaged = await Promise.all(emails.map((email) => classifyEmail(email, aiClient)));
     return triaged.filter((email) => email.triage?.shouldDisplay === true);
   } catch (err) {
     console.error('[EmailTriage] Deep Batch processing failed:', err.message);

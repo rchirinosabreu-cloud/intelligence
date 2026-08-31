@@ -1,41 +1,23 @@
-import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import prisma from '../lib/prisma.js';
 import { readGoogleSheet, getRecentEmails, readGoogleSlides, DEFAULT_IMPERSONATED_EMAIL } from './googleWorkspaceService.js';
 import { triageEmailsWithAI } from './emailTriageService.js';
-import { parseJsonResponse, extractModelText } from './aiService.js';
+import { parseJsonResponse, extractModelText, getAIInstance } from './aiService.js';
+import { AI_MODELS } from '../config/aiConfig.js';
 
 dotenv.config();
 
-const EMBEDDING_MODEL = "gemini-embedding-2";
-const CHAT_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
-
-let genAI;
-try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
-        genAI = new GoogleGenAI({ apiKey });
-        console.log("[BrainCoreService] Google Generative AI initialized with API Key.");
-    } else {
-        console.warn("[BrainCoreService] GEMINI_API_KEY is missing.");
-    }
-} catch (e) {
-    console.error("[BrainCoreService] Failed to initialize Google Generative AI client:", e);
-}
+const CHAT_MODEL = AI_MODELS.chat;
 
 /**
  * Generates embeddings for a given text.
  */
 export const generateEmbedding = async (text) => {
-    if (!genAI) return null;
+    const ai = getAIInstance();
+    if (!ai) return null;
     try {
-        const response = await genAI.models.embedContent({
-            model: EMBEDDING_MODEL,
-            contents: [{ parts: [{ text }] }],
-        });
-
-        const embeddingValues = response?.embedding?.values || response?.embeddings?.[0]?.values;
+        const embeddingValues = await ai.embed(text, { dimensions: 3072 });
 
         if (!embeddingValues) {
             console.error("⚠️ Alerta BrainCore: Estructura de embedding no reconocida:", response);
@@ -50,10 +32,11 @@ export const generateEmbedding = async (text) => {
 };
 
 /**
- * Performs OCR and extraction using Gemini.
+ * Performs OCR and extraction using the configured OpenAI vision model.
  */
 export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
-    if (!genAI) return null;
+    const ai = getAIInstance();
+    if (!ai) return null;
     try {
         const promptText = `Analiza esta captura de pantalla de WhatsApp u otra imagen de la agencia.
         Detecta el sentimiento, extrae preferencias del cliente, lo que odia, lo que aprueba y cualquier instrucción crítica.
@@ -63,8 +46,8 @@ export const performAdvancedExtraction = async (imageBuffer, mimeType) => {
 
         const imagePart = { inlineData: { data: imageBuffer.toString('base64'), mimeType } };
 
-        const result = await genAI.models.generateContent({
-            model: CHAT_MODEL,
+        const result = await ai.models.generateContent({
+            model: AI_MODELS.vision,
             contents: [{ role: 'user', parts: [{ text: promptText }, imagePart] }],
             config: {
                 responseMimeType: 'application/json'
@@ -220,7 +203,8 @@ export const getIntelligenceFeed = async (statusFilter = 'APPROVED') => {
  * Algorithm to detect bottleneck risks and generate pro-active alerts.
  */
 const generateOperationalPredictions = async (activeTasks, overdueTasks, triagedEmails) => {
-    if (!genAI) return [];
+    const ai = getAIInstance();
+    if (!ai) return [];
 
     const criticalChanges = triagedEmails.filter(e =>
         e.triage.intent?.toLowerCase().includes('cambio') ||
@@ -246,8 +230,8 @@ const generateOperationalPredictions = async (activeTasks, overdueTasks, triaged
     { "id": "pred_uuid", "type": "AMENAZA", "title": "Título de riesgo", "content": "Análisis y sugerencia", "severity": "critical", "timestamp": "ISO Date" }`;
 
     try {
-        const result = await genAI.models.generateContent({
-            model: CHAT_MODEL,
+        const result = await ai.models.generateContent({
+            model: AI_MODELS.fast,
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
             config: {
                 responseMimeType: 'application/json'
@@ -263,7 +247,8 @@ const generateOperationalPredictions = async (activeTasks, overdueTasks, triaged
 };
 
 const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory, predictions) => {
-    if (!genAI) return [];
+    const ai = getAIInstance();
+    if (!ai) return [];
 
     const promptText = `Eres el Brain Core de Brainstudio. Tu misión es cruzar tareas activas con la memoria de la agencia.
 
@@ -288,8 +273,8 @@ const generateStructuredFeedWithAI = async (meaningfulTasks, recentHistory, pred
     { "id": "uuid", "contextId": "id del AgencyContext original", "type": "ALERTA/INSIGHT/RECOMENDACIÓN/HISTORIAL", "title": "Título corto y directo", "content": "Cuerpo conciso", "severity": "critical/warning/info", "timestamp": "ISO Date" }`;
 
     try {
-        const result = await genAI.models.generateContent({
-            model: CHAT_MODEL,
+        const result = await ai.models.generateContent({
+            model: AI_MODELS.fast,
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
             config: {
                 responseMimeType: 'application/json'
@@ -342,7 +327,8 @@ export const getMemoryStats = async () => {
  * Synthesizes a response to a natural language question using available memory and Google Workspace tools.
  */
 export const askBrainCore = async (question, clientId = null) => {
-    if (!genAI) return { content: "Brain Core fuera de línea." };
+    const ai = getAIInstance();
+    if (!ai) return { content: "Brain Core fuera de línea." };
 
     const sources = await prisma.agencyIntegration.findMany({
         where: { isActive: true, externalId: { not: null } }
@@ -365,7 +351,7 @@ export const askBrainCore = async (question, clientId = null) => {
     3. Responde de forma ejecutiva y profesional.`;
 
     try {
-        let result = await genAI.models.generateContent({
+        let result = await ai.models.generateContent({
             model: CHAT_MODEL,
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
             config: {
@@ -412,7 +398,7 @@ export const askBrainCore = async (question, clientId = null) => {
                 toolResult = await getRecentEmails(call.args.maxResults || 5, call.args.query || 'is:unread', DEFAULT_IMPERSONATED_EMAIL);
             }
 
-            const finalResult = await genAI.models.generateContent({
+            const finalResult = await ai.models.generateContent({
                 model: CHAT_MODEL,
                 contents: [
                     { role: 'user', parts: [{ text: promptText }] },
@@ -457,7 +443,8 @@ export const getClientProfileFromMemory = async (clientId) => {
 
     if (contexts.length === 0) return null;
 
-    if (!genAI) return null;
+    const ai = getAIInstance();
+    if (!ai) return null;
     const promptText = `Analiza estas notas de la agencia sobre un cliente específico y construye su 'Ficha Mental'.
     Notas: ${contexts.map(c => c.content).join('\n')}
 
@@ -465,8 +452,8 @@ export const getClientProfileFromMemory = async (clientId) => {
     { "preferences": [], "dislikes": [], "approvals": [], "sentiment": "Evolución del sentimiento" }`;
 
     try {
-        const result = await genAI.models.generateContent({
-            model: CHAT_MODEL,
+        const result = await ai.models.generateContent({
+            model: AI_MODELS.fast,
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
             config: {
                 responseMimeType: 'application/json'

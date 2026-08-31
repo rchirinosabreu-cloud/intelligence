@@ -46,13 +46,14 @@ test('authentication code contains no fallback JWT or login-time admin bootstrap
   assert.doesNotMatch(controller, /password123/);
 });
 
-test('synchronization and Gemini proxy are authenticated and manager-only', async () => {
+test('synchronization and the only AI proxy are authenticated and manager-only', async () => {
   const routes = await read('src/routes/index.js');
   const server = await read('server.js');
 
   assert.match(routes, /router\.post\('\/sync-users',\s*requireManagerRole,\s*authController\.syncUsers\)/);
   assert.doesNotMatch(routes, /router\.get\('\/sync-users'/);
-  assert.match(server, /app\.use\('\/api\/gemini',\s*authenticateToken,\s*requireManagerRole,\s*geminiProxy\)/);
+  assert.match(routes, /router\.post\('\/openai\/v1\/chat\/completions',\s*requireModulePermission\('manager'\),\s*proxyController\.openaiProxy\)/);
+  assert.doesNotMatch(server, /\/api\/gemini|geminiProxy/);
 });
 
 test('the current-user endpoint has a real Prisma dependency', async () => {

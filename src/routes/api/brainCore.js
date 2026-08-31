@@ -1,10 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { GoogleGenAI } from '@google/genai';
-import { parseJsonResponse, extractModelText } from '../../services/aiService.js';
 import { addAgencyContext, performAdvancedExtraction, getIntelligenceFeed, getClientProfileFromMemory, searchContext, updateAgencyContext, deleteAgencyContext, getMemoryStats, askBrainCore } from '../../services/brainCoreService.js';
-import { getRecentEmails, readGoogleSheet, DEFAULT_IMPERSONATED_EMAIL } from '../../services/googleWorkspaceService.js';
-import { triageEmailsWithAI, onlyBasecampEmails } from '../../services/emailTriageService.js';
 import prisma from '../../lib/prisma.js';
 
 const router = express.Router();

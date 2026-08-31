@@ -599,7 +599,7 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
                                 ) : (
                                     <div className="p-10 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl flex flex-col items-center justify-center text-center opacity-50">
                                         <Sparkles className="w-8 h-8 text-zinc-300 mb-3" />
-                                        <p className="text-[10px] max-w-[200px]">Haz clic en Generar para que Gemini analice las devoluciones del mes.</p>
+                                        <p className="text-[10px] max-w-[200px]">Haz clic en Generar para que Brain analice las devoluciones del mes.</p>
                                     </div>
                                 )}
                             </div>

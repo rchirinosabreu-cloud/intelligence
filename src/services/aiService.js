@@ -1,10 +1,19 @@
-import { GoogleGenAI } from '@google/genai';
 import aiConfig from '../config/aiConfig.js';
+import { createOpenAIClient } from './openAIClient.js';
 
-let genAI = null;
+let aiClient = null;
+let aiHealth = {
+    provider: 'openai',
+    model: aiConfig.models.chat,
+    status: aiConfig.apiKey ? 'unchecked' : 'unavailable',
+    checkedAt: null,
+    latencyMs: null,
+    requestId: null,
+    error: aiConfig.apiKey ? null : 'OPENAI_NOT_CONFIGURED'
+};
 
 /**
- * BrainstudioAI Adapter - Encapsulates Google GenAI SDK logic and provides a stable interface.
+ * Adaptador estable de Brainstudio sobre OpenAI.
  */
 export const BrainstudioAI = {
     isReady: aiConfig.isReady,
@@ -13,29 +22,45 @@ export const BrainstudioAI = {
      * Initializes the underlying SDK client.
      */
     async initialize() {
-        if (genAI) return genAI;
+        if (aiClient && aiHealth.status === 'healthy') return aiClient;
         if (!aiConfig.apiKey) {
-            console.error("[BrainstudioAI] CRITICAL: GEMINI_API_KEY is missing.");
+            console.error("[BrainstudioAI] CRITICAL: OPENAI_API_KEY no está configurada.");
             this.isReady = false;
+            aiHealth = { ...aiHealth, status: 'unavailable', checkedAt: new Date().toISOString(), error: 'OPENAI_NOT_CONFIGURED' };
             return null;
         }
 
         try {
-            genAI = new GoogleGenAI({ apiKey: aiConfig.apiKey });
+            aiClient = createOpenAIClient({ apiKey: aiConfig.apiKey, models: aiConfig.models });
+            console.log(`[BrainstudioAI] Verificando OpenAI con el modelo rápido ${aiConfig.models.fast}...`);
+            const health = await aiClient.healthCheck();
+            if (!health.ok) throw new Error('OpenAI no devolvió contenido en la comprobación.');
 
-            // Bootstrap Sanity Check (Ping)
-            console.log(`[BrainstudioAI] Performing sanity check with model: ${aiConfig.modelName}...`);
-            await genAI.models.generateContent({
-                model: aiConfig.modelName,
-                contents: [{ role: 'user', parts: [{ text: "ping" }] }]
-            });
-
-            console.log(`[BrainstudioAI] Client initialized successfully with model: ${aiConfig.modelName}`);
+            aiHealth = {
+                ...health,
+                status: 'healthy',
+                checkedAt: new Date().toISOString(),
+                error: null
+            };
             this.isReady = true;
-            return genAI;
+            return aiClient;
         } catch (e) {
-            console.error("[BrainstudioAI] CRITICAL: Initialization or Sanity Check failed:", e.message);
+            console.error("[BrainstudioAI] CRITICAL: Falló la comprobación real de OpenAI:", {
+                message: e.message,
+                code: e.code,
+                status: e.status,
+                requestId: e.requestId
+            });
             this.isReady = false;
+            aiHealth = {
+                provider: 'openai',
+                model: aiConfig.models.fast,
+                status: 'degraded',
+                checkedAt: new Date().toISOString(),
+                latencyMs: null,
+                requestId: e.requestId || null,
+                error: e.code || `HTTP_${e.status || 'ERROR'}`
+            };
             return null;
         }
     },
@@ -44,14 +69,14 @@ export const BrainstudioAI = {
      * Safe wrapper to generate content with structured config and error handling.
      */
     async generateStructuredContent(prompt, systemInstruction, schema) {
-        if (!this.isReady && !genAI) {
+        if (!this.isReady && !aiClient) {
             const initialized = await this.initialize();
             if (!initialized) throw new Error("IA_DESACTIVADA: Service not ready.");
         }
 
         try {
             // SDK v2.7.0 Unified Signature - systemInstruction inside config
-            const result = await genAI.models.generateContent({
+            const result = await aiClient.models.generateContent({
                 model: aiConfig.modelName,
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 config: {
@@ -71,6 +96,7 @@ export const BrainstudioAI = {
 // Legacy compatibility exports (mapped to the new adapter)
 export const isInitialized = () => BrainstudioAI.isReady;
 export const initialize = () => BrainstudioAI.initialize();
+export const getAIHealth = () => ({ ...aiHealth });
 export const MODEL_NAME = aiConfig.modelName;
 
 export const systemPrompt = `Eres Brain Core, la Copywriter Senior y Analista de Datos experta de Brainstudio (Brain OS).
@@ -215,7 +241,7 @@ export const parseJsonResponse = (text) => {
         try {
             return JSON.parse(cleanText);
         } catch (parseError) {
-            // Gemini occasionally exhausts its output while emitting a needlessly long
+            // Un proveedor puede agotar su salida mientras emite un decimal muy largo.
             // decimal. Only repair this narrow, deterministic truncation shape; never
             // fabricate missing strings, arrays, keys, or values.
             const withoutFence = text.replace(/```json|```/gi, '').trim();
@@ -267,7 +293,7 @@ export function isGenAIRateLimitError(error) {
     return message.includes('429') || message.includes('RESOURCE_EXHAUSTED');
 }
 
-export async function sendMessageStreamWithRetry(genAIInstance, payload, maxAttempts = 3) {
+export async function sendMessageStreamWithRetry(aiInstance, payload, maxAttempts = 3) {
     let attempt = 0;
     let lastError;
     while (attempt < maxAttempts) {
@@ -279,7 +305,7 @@ export async function sendMessageStreamWithRetry(genAIInstance, payload, maxAtte
                 systemInstruction: payload.systemInstruction
             };
 
-            return await genAIInstance.models.generateContentStream({
+            return await aiInstance.models.generateContentStream({
                 model: payload.model,
                 contents: payload.contents,
                 config: unifiedConfig
@@ -290,7 +316,7 @@ export async function sendMessageStreamWithRetry(genAIInstance, payload, maxAtte
                 throw error;
             }
             const delayMs = 500 * Math.pow(2, attempt - 1);
-            console.warn(`[GoogleGenAI] Rate limited. Retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts})`);
+            console.warn(`[OpenAI] Límite de solicitudes. Reintento en ${delayMs}ms (${attempt}/${maxAttempts})`);
             await new Promise(resolve => setTimeout(resolve, delayMs));
         }
     }
@@ -366,7 +392,7 @@ export const extractModelText = (result) => {
     if (!result) throw new Error("Null result provided to text extractor");
 
     try {
-        // In @google/genai, result.text() is the standard way to get text
+        // Contrato normalizado: texto directo o función text().
         if (typeof result.text === 'function') {
             const text = result.text();
             if (text && String(text).trim()) return text;
@@ -399,4 +425,4 @@ export const extractModelText = (result) => {
     throw new Error('Empty or malformed AI response');
 };
 
-export const getAIInstance = () => genAI;
+export const getAIInstance = () => aiClient;

@@ -2,10 +2,11 @@ import express from 'express';
 import prisma from '../../lib/prisma.js';
 import { uploadAvatar, deleteFileFromGCS, getClientFileStream } from '../../services/storageService.js';
 import multer from 'multer';
-import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { requireManagerRole } from '../../middlewares/authMiddleware.js';
 import { isSafeStoragePath } from '../../config/security.js';
+import { getAIInstance } from '../../services/aiService.js';
+import { AI_MODELS } from '../../config/aiConfig.js';
 
 dotenv.config();
 
@@ -15,7 +16,7 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024, files: 1 }
 });
 
-const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+const MODEL_NAME = AI_MODELS.fast;
 
 const MASTER_CATEGORIES = [
     "Estratégico",
@@ -255,10 +256,8 @@ router.post('/member/:memberId/ai-insights', requireManagerRole, async (req, res
 
         const returnedTasks = allTasks.filter(t => (t.returnCount || 0) > 0);
 
-        // Initialize AI
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
-        const genAI = new GoogleGenAI({ apiKey });
+        const aiClient = getAIInstance();
+        if (!aiClient) return res.status(503).json({ error: "OPENAI_NOT_AVAILABLE" });
 
         // Aggregate metrics for dynamic analysis
         const categoryStats = allTasks.reduce((acc, t) => {
@@ -297,7 +296,7 @@ TAREA DE ANÁLISIS V2:
 
 Responde directamente con el análisis (máximo 2 párrafos). NO incluyas introducciones como "Aquí tienes el análisis...".`;
 
-        const result = await genAI.models.generateContent({
+        const result = await aiClient.models.generateContent({
             model: MODEL_NAME,
             contents: [{ role: 'user', parts: [{ text: prompt }] }]
         });
