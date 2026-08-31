@@ -28,7 +28,6 @@ const frontendApiService = {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
-            model: "gpt-5",
             messages: [
               { role: "system", content: finalSystemMessage },
               { role: "user", content: prompt }

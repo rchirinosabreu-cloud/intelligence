@@ -134,3 +134,14 @@ test('Phase 0 selects OpenAI in every active Brain runtime and reports real AI h
   assert.match(server, /getAIHealth/);
   assert.match(server, /OPENAI_API_KEY/);
 });
+
+test('the browser proxy cannot bypass the centrally configured OpenAI chat model', async () => {
+  const [proxy, frontend] = await Promise.all([
+    readFile('src/controllers/proxyController.js', 'utf8'),
+    readFile('src/services/frontendApiService.js', 'utf8')
+  ]);
+
+  assert.match(proxy, /import \{ AI_MODELS \} from ['"]\.\.\/config\/aiConfig\.js['"]/);
+  assert.match(proxy, /requestBody\s*=\s*\{\s*\.\.\.req\.body,\s*model:\s*AI_MODELS\.chat,\s*stream:\s*true\s*\}/);
+  assert.doesNotMatch(frontend, /model:\s*['"]gpt-5['"]/);
+});

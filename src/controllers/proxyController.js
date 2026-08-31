@@ -1,3 +1,5 @@
+import { AI_MODELS } from '../config/aiConfig.js';
+
 const sendUpstreamError = (res, provider, response) => {
     const requestId = response.headers.get('x-request-id') || response.headers.get('fly-request-id');
     console.error(`[${provider} Proxy] Upstream request failed`, {
@@ -16,7 +18,7 @@ export const openaiProxy = async (req, res) => {
         const apiKey = process.env.OPENAI_API_KEY;
         if (!apiKey) return res.status(500).json({ error: "Missing OpenAI API Key" });
 
-        const requestBody = { ...req.body, stream: true };
+        const requestBody = { ...req.body, model: AI_MODELS.chat, stream: true };
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
