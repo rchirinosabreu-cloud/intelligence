@@ -54,6 +54,14 @@ router.post('/events', async (req, res) => {
     res.json(event);
   } catch (error) {
     console.error('[Activity API] Error creating event:', error.response?.data || error);
+    if (isGoogleOAuthReauthError(error)) {
+      return res.status(401).json({
+        error: 'Google Calendar requiere reconexión',
+        code: 'GOOGLE_CALENDAR_REAUTH_REQUIRED',
+        reconnectRequired: true,
+        details: error.message
+      });
+    }
     res.status(500).json({ error: 'Failed to create event', details: error.message });
   }
 });
@@ -65,6 +73,15 @@ router.post('/events/generate-meet', async (req, res) => {
     if (!meeting?.meetingLink) throw new Error('No se pudo generar el enlace');
     res.json(meeting);
   } catch (error) {
+    console.error('[Activity API] Error generating Meet link:', error.response?.data || error);
+    if (isGoogleOAuthReauthError(error)) {
+      return res.status(401).json({
+        error: 'Google Calendar requiere reconexión',
+        code: 'GOOGLE_CALENDAR_REAUTH_REQUIRED',
+        reconnectRequired: true,
+        details: error.message
+      });
+    }
     res.status(500).json({ error: 'Failed to generate Meet link', details: error.message });
   }
 });

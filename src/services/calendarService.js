@@ -1,7 +1,12 @@
 import { google } from 'googleapis';
 import { JWT } from 'google-auth-library';
 import crypto from 'crypto';
-import { createOpenGoogleMeetSpace, getAuthorizedGoogleOAuthClient } from './googleCalendarOAuthService.js';
+import {
+    createOpenGoogleMeetSpace,
+    getAuthorizedGoogleOAuthClient,
+    isGoogleOAuthReauthError,
+    markGoogleCalendarReauthRequired
+} from './googleCalendarOAuthService.js';
 
 let calendarClient;
 let authClient;
@@ -128,15 +133,15 @@ export async function createMeetEvent(title, startAt, endAt, description = '', c
         console.log(`[CalendarService] Created event with link: ${meetLink}`);
         return { meetingLink: meetLink, googleMeetSpaceName: null };
     } catch (error) {
-        console.error("[CalendarService] Failed to create Meet event:", error.message);
-        // Fallback or return null so the UI can handle it
-        return null;
+        console.error("[CalendarService] Failed to create Meet event:", error.response?.data || error.message);
+        throw error;
     }
 }
 
 async function createCentralOAuthMeetEvent(_title, _startAt, _endAt, _description = '', connectionId = null) {
+    let auth = null;
     try {
-        const auth = await getAuthorizedGoogleOAuthClient(connectionId);
+        auth = await getAuthorizedGoogleOAuthClient(connectionId);
         if (!auth) return null;
 
         const meetSpace = await createOpenGoogleMeetSpace(connectionId);
@@ -145,6 +150,9 @@ async function createCentralOAuthMeetEvent(_title, _startAt, _endAt, _descriptio
             : null;
     } catch (error) {
         console.error("[CalendarService] Central OAuth Meet creation failed:", error.response?.data || error.message);
-        return null;
+        if (auth?.connection && isGoogleOAuthReauthError(error)) {
+            await markGoogleCalendarReauthRequired(auth.connection);
+        }
+        throw error;
     }
 }

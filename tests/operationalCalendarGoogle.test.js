@@ -22,7 +22,7 @@ test('operational calendar is ready for central Google Calendar OAuth sync', asy
   assert.match(oauthService, /google\.auth\.OAuth2/);
   assert.match(oauthService, /coordinadorbrainstudio@gmail\.com/);
   assert.match(oauthService, /encrypt\(JSON\.stringify\(mergedTokens\)\)/);
-  assert.match(oauthService, /decrypt\(connection\.encryptedTokens\)/);
+  assert.match(oauthService, /decryptTokens\(connection\.encryptedTokens\)/);
   assert.match(oauthService, /listAccessibleGoogleCalendars/);
   assert.match(oauthService, /setActiveGoogleCalendar/);
 
@@ -35,7 +35,7 @@ test('operational calendar is ready for central Google Calendar OAuth sync', asy
   assert.match(eventService, /syncOperationalEventToGoogle/);
   assert.match(eventService, /syncGoogleCalendarToOperationalEvents/);
   assert.match(eventService, /getGoogleErrorDetails/);
-  assert.match(eventService, /throw new Error\(`Google Calendar sync failed:/);
+  assert.match(eventService, /new Error\(`Google Calendar sync failed:/);
   assert.match(eventService, /isGoogleEventAlreadyDeleted/);
   assert.match(eventService, /status === 404 \|\| status === 410/);
   assert.match(eventService, /reason === 'deleted'/);

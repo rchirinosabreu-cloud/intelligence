@@ -32,14 +32,53 @@ export const isGoogleOAuthReauthError = (error) => {
   const payload = error?.response?.data || {};
   return payload.error === 'invalid_grant' ||
     error?.code === 'invalid_grant' ||
-    /token has been expired or revoked|invalid_grant/i.test(error?.message || '');
+    error?.code === 'GOOGLE_CALENDAR_REAUTH_REQUIRED' ||
+    /token has been expired or revoked|invalid_grant/i.test(error?.message || '') ||
+    (error?.cause ? isGoogleOAuthReauthError(error.cause) : false);
 };
 
-export const markGoogleCalendarReauthRequired = async (connectionId = null) => {
-  await prisma.googleCalendarConnection.updateMany({
-    where: connectionId ? { id: connectionId } : { isActive: true },
+export const markGoogleCalendarReauthRequired = async (connection = null, prismaClient = prisma) => {
+  const connectionId = typeof connection === 'string' ? connection : connection?.id;
+  await prismaClient.googleCalendarConnection.updateMany({
+    where: connectionId ? { id: connectionId } : { email: CENTRAL_GOOGLE_CALENDAR_EMAIL },
     data: { isActive: false, syncToken: null }
   });
+};
+
+const ACTIVE_CONNECTION_ORDER = [
+  { lastSyncedAt: { sort: 'desc', nulls: 'last' } },
+  { connectedAt: 'desc' }
+];
+
+const createGoogleCalendarReauthError = (cause) => {
+  const error = new Error('La autorización de Google venció o fue revocada. Vuelve a conectar la cuenta.', { cause });
+  error.code = 'GOOGLE_CALENDAR_REAUTH_REQUIRED';
+  error.reconnectRequired = true;
+  return error;
+};
+
+export const authorizeGoogleCalendarConnections = async (connections, {
+  createOAuthClient = () => getOAuthClient(),
+  decryptTokens = decrypt,
+  markReauthRequired = markGoogleCalendarReauthRequired
+} = {}) => {
+  let lastReauthError = null;
+
+  for (const connection of connections) {
+    const oauth2Client = createOAuthClient(connection);
+    oauth2Client.setCredentials(JSON.parse(decryptTokens(connection.encryptedTokens)));
+    try {
+      await oauth2Client.getAccessToken();
+      return { oauth2Client, connection };
+    } catch (error) {
+      if (!isGoogleOAuthReauthError(error)) throw error;
+      lastReauthError = error;
+      await markReauthRequired(connection);
+    }
+  }
+
+  if (lastReauthError) throw createGoogleCalendarReauthError(lastReauthError);
+  return null;
 };
 
 export const getGoogleCalendarAuthUrl = (requestedEmail = null) => {
@@ -123,43 +162,46 @@ export const storeGoogleCalendarOAuthCode = async (code, connectedById = null, r
 
 export const getCentralGoogleCalendarConnection = async () => {
   return await prisma.googleCalendarConnection.findFirst({
-    where: {
-      isActive: true
-    },
-    orderBy: { connectedAt: 'asc' }
+    where: { isActive: true },
+    orderBy: ACTIVE_CONNECTION_ORDER
   });
 };
 
 export const getGoogleCalendarConnections = async () => prisma.googleCalendarConnection.findMany({
   where: { isActive: true },
-  orderBy: { connectedAt: 'asc' },
+  orderBy: ACTIVE_CONNECTION_ORDER,
   select: { id: true, email: true, calendarId: true, scopes: true, isActive: true, connectedAt: true, lastSyncedAt: true }
 });
 
 export const getAuthorizedGoogleOAuthClient = async (connectionId = null) => {
-  const connection = connectionId
-    ? await prisma.googleCalendarConnection.findFirst({ where: { id: connectionId, isActive: true } })
-    : await getCentralGoogleCalendarConnection();
-  if (!connection) return null;
-
-  const oauth2Client = getOAuthClient();
-  oauth2Client.setCredentials(JSON.parse(decrypt(connection.encryptedTokens)));
-  return { oauth2Client, connection };
+  const connections = await prisma.googleCalendarConnection.findMany({
+    where: connectionId ? { id: connectionId, isActive: true } : { isActive: true },
+    orderBy: ACTIVE_CONNECTION_ORDER
+  });
+  return await authorizeGoogleCalendarConnections(connections);
 };
 
 export const getAuthorizedGoogleOAuthClients = async () => {
-  const connections = await prisma.googleCalendarConnection.findMany({ where: { isActive: true } });
-  return connections.map(connection => {
-    const oauth2Client = getOAuthClient();
-    oauth2Client.setCredentials(JSON.parse(decrypt(connection.encryptedTokens)));
-    return { oauth2Client, connection };
+  const connections = await prisma.googleCalendarConnection.findMany({
+    where: { isActive: true },
+    orderBy: ACTIVE_CONNECTION_ORDER
   });
+  const authorized = [];
+  for (const connection of connections) {
+    try {
+      const auth = await authorizeGoogleCalendarConnections([connection]);
+      if (auth) authorized.push(auth);
+    } catch (error) {
+      if (!isGoogleOAuthReauthError(error)) throw error;
+    }
+  }
+  return authorized;
 };
 
 export const getCentralGoogleCalendarConnectionStatus = async () => {
   const rawConnections = await prisma.googleCalendarConnection.findMany({
     where: { isActive: true },
-    orderBy: { connectedAt: 'asc' },
+    orderBy: ACTIVE_CONNECTION_ORDER,
     select: {
       id: true,
       email: true,
