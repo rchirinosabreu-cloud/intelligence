@@ -1,6 +1,11 @@
 import prisma from '../lib/prisma.js';
 import { google } from 'googleapis';
-import { getAuthorizedGoogleOAuthClient, CENTRAL_GOOGLE_CALENDAR_EMAIL } from './googleCalendarOAuthService.js';
+import {
+  getAuthorizedGoogleOAuthClient,
+  CENTRAL_GOOGLE_CALENDAR_EMAIL,
+  isGoogleOAuthReauthError,
+  markGoogleCalendarReauthRequired
+} from './googleCalendarOAuthService.js';
 
 const getGoogleErrorDetails = (error) => {
   const data = error.response?.data || error.errors || error.message || error;
@@ -205,14 +210,15 @@ export async function syncOperationalEventToGoogle(event) {
   } catch (error) {
     const details = getGoogleErrorDetails(error);
     console.error(`[OperationalEventService] Google Calendar sync failed: ${details}`);
-    await prisma.operationalEvent.update({
-      where: { id: event.id },
-      data: {
-        googleSyncStatus: 'ERROR',
-        googleLastSyncedAt: new Date()
-      }
-    });
-    throw new Error(`Google Calendar sync failed: ${details}`);
+    if (isGoogleOAuthReauthError(error)) {
+      await markGoogleCalendarReauthRequired(auth.connection);
+    }
+    const syncError = new Error(`Google Calendar sync failed: ${details}`, { cause: error });
+    if (isGoogleOAuthReauthError(error)) {
+      syncError.code = 'GOOGLE_CALENDAR_REAUTH_REQUIRED';
+      syncError.reconnectRequired = true;
+    }
+    throw syncError;
   }
 }
 
@@ -299,25 +305,45 @@ async function deleteGoogleEventIfLinked(event) {
   }
 }
 
-export async function createOperationalEvent(data, createdById = null) {
-  const event = await prisma.operationalEvent.create({
-    data: {
-      title: data.title,
-      type: data.type,
-      description: data.description,
-      startAt: new Date(data.startAt),
-      endAt: new Date(data.endAt),
-      memberIds: data.memberIds || [],
-      recurrence: data.recurrence || 'NONE',
-      recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
-      meetingLink: data.meetingLink || null,
-      source: data.source || 'BRAIN',
-      createdById,
-      googleMeetAccessType: data.googleMeetAccessType || (data.type === 'MEETING' ? 'OPEN' : null)
+export const createSyncedOperationalEvent = async ({
+  createLocalEvent,
+  syncToGoogle,
+  deleteLocalEvent
+}) => {
+  const event = await createLocalEvent();
+  try {
+    return await syncToGoogle(event);
+  } catch (error) {
+    try {
+      await deleteLocalEvent(event.id);
+    } catch (cleanupError) {
+      console.error('[OperationalEventService] Failed to rollback local event:', cleanupError?.response?.data || cleanupError);
     }
-  });
+    throw error;
+  }
+};
 
-  return await syncOperationalEventToGoogle(event);
+export async function createOperationalEvent(data, createdById = null) {
+  return await createSyncedOperationalEvent({
+    createLocalEvent: () => prisma.operationalEvent.create({
+      data: {
+        title: data.title,
+        type: data.type,
+        description: data.description,
+        startAt: new Date(data.startAt),
+        endAt: new Date(data.endAt),
+        memberIds: data.memberIds || [],
+        recurrence: data.recurrence || 'NONE',
+        recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
+        meetingLink: data.meetingLink || null,
+        source: data.source || 'BRAIN',
+        createdById,
+        googleMeetAccessType: data.googleMeetAccessType || (data.type === 'MEETING' ? 'OPEN' : null)
+      }
+    }),
+    syncToGoogle: syncOperationalEventToGoogle,
+    deleteLocalEvent: (id) => prisma.operationalEvent.delete({ where: { id } })
+  });
 }
 
 export async function updateOperationalEvent(id, data) {
