@@ -13,6 +13,7 @@ import {
   generateFallbackNarrative
 } from '../src/services/reportVisionService.js';
 import { getBrainStudioLogoSVG } from '../src/utils/reportStyling.js';
+import { generateSummaryHTML, generateAnalysisHTML } from '../src/utils/htmlExport.js';
 import { adaptDatasetForChart, hasReadableChartData } from '../src/lib/reportChartData.js';
 
 test('report pipeline regressions', async (t) => {
@@ -616,4 +617,24 @@ test('minutes HTML logo includes a self-contained fallback without throwing', ()
   const logo = getBrainStudioLogoSVG();
   assert.match(logo, /data:image\/svg\+xml/);
   assert.match(logo, /BrainStudio/);
+});
+
+test('minutes reports use the BrainStudio palette and never render undefined fields', () => {
+  const summary = generateSummaryHTML({
+    meeting_topics: ['Tema comercial'],
+    action_items: ['Tarea: Enviar propuesta - Prioridad: Alta - Responsable: Camila'],
+  }, 'Reunión comercial');
+  const analysis = generateAnalysisHTML({
+    opportunities: ['Título: Crecimiento digital - Descripción: Activar un canal medible'],
+    recommendations: [{ title: 'Instrumentar métricas', description: 'Definir KPIs semanales', priority: 'Alta' }],
+  }, 'Reunión comercial');
+
+  assert.match(summary, /#0D97A6/);
+  assert.match(summary, /#12A6A6/);
+  assert.match(summary, /Enviar propuesta/);
+  assert.match(summary, /Camila/);
+  assert.match(analysis, /Crecimiento digital/);
+  assert.match(analysis, /Instrumentar métricas/);
+  assert.doesNotMatch(`${summary}${analysis}`, />undefined</i);
+  assert.equal((summary.match(/alt="BrainStudio"/g) || []).length, 1);
 });

@@ -49,7 +49,7 @@ Es obligatorio responder en JSON siguiendo estrictamente la estructura solicitad
 5. Acciones: En el campo action_items, genera una lista detallada con Tarea, Prioridad y Responsable.
 
 REGLA DE ORO: No resumas de forma perezosa. Si se discutieron ejemplos específicos (como el caso "dulce vs salado") o nombres de clientes previos, inclúyelos para dar contexto real.
-IMPORTANTE: Todos los valores de los campos JSON deben ser Strings o Arrays de Strings. Prohibido usar objetos anidados dentro de los campos. Responde SIEMPRE en Español.`;
+IMPORTANTE: Respeta exactamente los nombres de campos y la estructura JSON solicitada, incluyendo los objetos dentro de action_items. No devuelvas datos como texto etiquetado. Responde SIEMPRE en Español.`;
 
       const resultString = await frontendApiService.generateCompletion(prompt, systemPrompt);
       const result = parseJsonFromAiResponse(resultString);
