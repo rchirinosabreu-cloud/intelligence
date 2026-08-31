@@ -361,12 +361,18 @@ model OperationalEvent {
   description          String?
   startAt              DateTime
   endAt                DateTime
+  isAllDay             Boolean   @default(false)
+  captureWithFireflies Boolean   @default(false)
   memberIds            String[]  @default([]) // IDs of TeamMembers involved
   recurrence           String? // NONE, WEEKLY
   recurrenceEnd        DateTime?
   meetingLink          String?
   source               String    @default("BRAIN")
   organizerEmail       String?
+  attendeeEmails       String[]  @default([])
+  attendeeResponses    Json?
+  googleConnectionId   String?
+  googleConnection     GoogleCalendarConnection? @relation(fields: [googleConnectionId], references: [id], onDelete: SetNull)
   googleCalendarId     String?
   googleEventId        String?
   googleICalUID        String?
@@ -374,16 +380,21 @@ model OperationalEvent {
   googleHtmlLink       String?
   googleMeetSpaceName  String?
   googleMeetAccessType String?
+  googleMeetOnlyBotSince DateTime?
+  googleMeetEndedAt      DateTime?
   googleSyncStatus     String?
+  googleSyncError      String?
   googleLastSyncedAt   DateTime?
   googleUpdatedAt      DateTime?
   createdById          String?
   createdBy            User?     @relation("OperationalEventCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  googleLinks          GoogleCalendarEventLink[]
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
   @@index([startAt])
   @@index([googleCalendarId, googleEventId])
+  @@index([googleConnectionId, googleCalendarId, googleEventId])
   @@index([createdById, createdAt])
 }
 
@@ -401,8 +412,29 @@ model GoogleCalendarConnection {
   createdAt       DateTime                    @default(now())
   updatedAt       DateTime                    @updatedAt
   channels        GoogleCalendarSyncChannel[]
+  events          OperationalEvent[]
+  eventLinks      GoogleCalendarEventLink[]
 
   @@index([isActive])
+}
+
+model GoogleCalendarEventLink {
+  id                 String                   @id @default(uuid())
+  operationalEventId String
+  connectionId       String
+  calendarId         String
+  googleEventId      String
+  googleICalUID      String?
+  googleEtag         String?
+  isOrganizer        Boolean                  @default(false)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  operationalEvent   OperationalEvent         @relation(fields: [operationalEventId], references: [id], onDelete: Cascade)
+  connection         GoogleCalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, calendarId, googleEventId])
+  @@index([operationalEventId])
+  @@index([googleICalUID])
 }
 
 model GoogleCalendarSyncChannel {

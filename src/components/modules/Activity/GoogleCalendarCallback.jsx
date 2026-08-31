@@ -12,7 +12,8 @@ const GoogleCalendarCallback = () => {
 
   useEffect(() => {
     const code = searchParams.get('code');
-    if (!code) {
+    const oauthState = searchParams.get('state');
+    if (!code || !oauthState) {
       setStatus('error');
       setMessage('Google no devolvio un codigo de autorizacion.');
       return;
@@ -26,7 +27,10 @@ const GoogleCalendarCallback = () => {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${localStorage.getItem('authToken')}`
           },
-          body: JSON.stringify({ code })
+          body: JSON.stringify({
+            code,
+            state: oauthState
+          })
         });
 
         if (!res.ok) {
@@ -35,6 +39,7 @@ const GoogleCalendarCallback = () => {
         }
 
         setStatus('success');
+        sessionStorage.removeItem('googleCalendarRequestedEmail');
         setMessage('Google Calendar conectado correctamente.');
         toast.success('Google Calendar conectado');
         setTimeout(() => navigate('/actividad'), 900);
