@@ -464,7 +464,11 @@ export async function syncAllGoogleCalendars(options = {}) {
 
 export async function getOperationalEventReconciliationPreview(limit = 20) {
   const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 20);
-  const where = { source: 'BRAIN', googleLinks: { none: {} } };
+  const where = {
+    source: 'BRAIN',
+    googleLinks: { none: {} },
+    googleSyncStatus: { not: 'DISMISSED' }
+  };
   const [total, events] = await Promise.all([
     prisma.operationalEvent.count({ where }),
     prisma.operationalEvent.findMany({
@@ -477,6 +481,20 @@ export async function getOperationalEventReconciliationPreview(limit = 20) {
   return { total, events };
 }
 
+export async function dismissOperationalEventGoogleError(id, prismaClient = prisma) {
+  return await prismaClient.operationalEvent.updateMany({
+    where: { id, googleSyncError: { not: null } },
+    data: { googleSyncError: null }
+  });
+}
+
+export async function dismissOperationalEventReconciliation(id, prismaClient = prisma) {
+  return await prismaClient.operationalEvent.updateMany({
+    where: { id, source: 'BRAIN', googleLinks: { none: {} } },
+    data: { googleSyncStatus: 'DISMISSED', googleSyncError: null }
+  });
+}
+
 export async function reconcilePendingOperationalEvents({ eventIds = [], connectionId } = {}) {
   if (!Array.isArray(eventIds) || eventIds.length === 0) throw new Error('Selecciona al menos un evento');
   if (eventIds.length > 20) throw new Error('Solo se pueden reconciliar hasta 20 eventos por operación');
@@ -485,7 +503,12 @@ export async function reconcilePendingOperationalEvents({ eventIds = [], connect
   if (!auth) throw new Error('La cuenta organizadora de Google no está disponible');
 
   const events = await prisma.operationalEvent.findMany({
-    where: { id: { in: [...new Set(eventIds)] }, source: 'BRAIN', googleLinks: { none: {} } }
+    where: {
+      id: { in: [...new Set(eventIds)] },
+      source: 'BRAIN',
+      googleLinks: { none: {} },
+      googleSyncStatus: { not: 'DISMISSED' }
+    }
   });
   const results = [];
   for (const event of events) {

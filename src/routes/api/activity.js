@@ -7,7 +7,9 @@ import {
   syncGoogleCalendarToOperationalEvents,
   syncAllGoogleCalendars,
   getOperationalEventReconciliationPreview,
-  reconcilePendingOperationalEvents
+  reconcilePendingOperationalEvents,
+  dismissOperationalEventGoogleError,
+  dismissOperationalEventReconciliation
 } from '../../services/operationalEventService.js';
 import { getTeamActivityStatus } from '../../services/activityStatusService.js';
 import { createMeetEvent } from '../../services/calendarService.js';
@@ -181,6 +183,28 @@ router.post('/google-calendar/reconciliation', requireManagerRole, async (req, r
   } catch (error) {
     console.error('[Activity API] Error reconciliando Google Calendar:', error.response?.data || error);
     res.status(400).json({ error: 'No se pudieron reconciliar los eventos', details: error.message });
+  }
+});
+
+router.patch('/google-calendar/errors/:id/dismiss', requireManagerRole, async (req, res) => {
+  try {
+    const result = await dismissOperationalEventGoogleError(req.params.id);
+    if (!result.count) return res.status(404).json({ error: 'El error ya no está disponible' });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Activity API] Error descartando diagnóstico de Google Calendar:', error.response?.data || error);
+    res.status(500).json({ error: 'No se pudo descartar el error', details: error.message });
+  }
+});
+
+router.patch('/google-calendar/reconciliation/:id/dismiss', requireManagerRole, async (req, res) => {
+  try {
+    const result = await dismissOperationalEventReconciliation(req.params.id);
+    if (!result.count) return res.status(404).json({ error: 'El evento ya no está pendiente de conciliación' });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Activity API] Error descartando conciliación de Google Calendar:', error.response?.data || error);
+    res.status(500).json({ error: 'No se pudo descartar de conciliación', details: error.message });
   }
 });
 

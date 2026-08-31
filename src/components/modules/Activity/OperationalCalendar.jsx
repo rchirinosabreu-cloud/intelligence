@@ -278,6 +278,61 @@ const OperationalCalendar = () => {
     }
   });
 
+  const dismissGoogleErrorMutation = useMutation({
+    mutationFn: async eventId => {
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/errors/${eventId}/dismiss`, {
+        method: 'PATCH',
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.details || error.error || 'No se pudo descartar el error');
+      }
+      return res.json();
+    },
+    onSuccess: (_result, eventId) => {
+      setGoogleErrorConnection(current => {
+        if (!current) return null;
+        const syncErrors = (current.syncErrors || []).filter(event => event.id !== eventId);
+        return syncErrors.length ? { ...current, syncErrors, errorCount: Math.max(0, (current.errorCount || 0) - 1) } : null;
+      });
+      queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
+      toast.success('Error descartado');
+    },
+    onError: error => {
+      console.error('Google Calendar error dismissal failed:', error);
+      toast.error(error.message || 'No se pudo descartar el error');
+    }
+  });
+
+  const dismissReconciliationMutation = useMutation({
+    mutationFn: async eventId => {
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/reconciliation/${eventId}/dismiss`, {
+        method: 'PATCH',
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.details || error.error || 'No se pudo descartar de conciliación');
+      }
+      return res.json();
+    },
+    onSuccess: (_result, eventId) => {
+      setSelectedReconciliationIds(current => current.filter(id => id !== eventId));
+      setReconciliationPreview(current => {
+        if (!current) return null;
+        const events = current.events.filter(event => event.id !== eventId);
+        return events.length ? { ...current, events, total: Math.max(0, current.total - 1) } : null;
+      });
+      queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
+      toast.success('Evento descartado de conciliación');
+    },
+    onError: error => {
+      console.error('Google Calendar reconciliation dismissal failed:', error);
+      toast.error(error.message || 'No se pudo descartar de conciliación');
+    }
+  });
+
   const manualSyncMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() } });
@@ -816,9 +871,14 @@ const OperationalCalendar = () => {
                 ) : (
                   <p className="mt-2 text-xs text-red-700 dark:text-red-200">Aún no hay diagnóstico guardado. Pulsa Reintentar para obtener la causa actual de Google.</p>
                 )}
-                <button type="button" onClick={() => reconciliationMutation.mutate({ eventIds: [event.id], connectionId: googleErrorConnection.id })} disabled={reconciliationMutation.isPending} className="brain-danger-button mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-xs font-bold disabled:opacity-60">
-                  {reconciliationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Reintentar
-                </button>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => reconciliationMutation.mutate({ eventIds: [event.id], connectionId: googleErrorConnection.id })} disabled={reconciliationMutation.isPending} className="brain-danger-button inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-xs font-bold disabled:opacity-60">
+                    {reconciliationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Reintentar
+                  </button>
+                  <button type="button" onClick={() => dismissGoogleErrorMutation.mutate(event.id)} disabled={dismissGoogleErrorMutation.isPending} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 text-xs font-bold text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10">
+                    {dismissGoogleErrorMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} Descartar
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -844,13 +904,19 @@ const OperationalCalendar = () => {
             </label>
             <div className="mt-4 space-y-2">
               {reconciliationPreview.events.map(event => (
-                <label key={event.id} className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-200 p-3 hover:bg-zinc-50 dark:border-white/10 dark:hover:bg-white/5">
-                  <input type="checkbox" className="mt-1 h-4 w-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-600" checked={selectedReconciliationIds.includes(event.id)} onChange={input => setSelectedReconciliationIds(input.target.checked ? [...selectedReconciliationIds, event.id] : selectedReconciliationIds.filter(id => id !== event.id))} />
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-bold text-zinc-900 dark:text-white">{event.title}</span>
-                    <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{format(new Date(event.startAt), 'd MMM yyyy, HH:mm', { locale: es })}{event.attendeeEmails?.length ? ` · ${event.attendeeEmails.length} invitado(s)` : ''}</span>
-                  </span>
-                </label>
+                <div key={event.id} className="flex items-center gap-2 rounded-xl border border-zinc-200 p-3 hover:bg-zinc-50 dark:border-white/10 dark:hover:bg-white/5">
+                  <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
+                    <input type="checkbox" className="mt-1 h-4 w-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-600" checked={selectedReconciliationIds.includes(event.id)} onChange={input => setSelectedReconciliationIds(input.target.checked ? [...selectedReconciliationIds, event.id] : selectedReconciliationIds.filter(id => id !== event.id))} />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-bold text-zinc-900 dark:text-white">{event.title}</span>
+                      <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{format(new Date(event.startAt), 'd MMM yyyy, HH:mm', { locale: es })}{event.attendeeEmails?.length ? ` · ${event.attendeeEmails.length} invitado(s)` : ''}</span>
+                    </span>
+                  </label>
+                  <button type="button" onClick={() => dismissReconciliationMutation.mutate(event.id)} disabled={dismissReconciliationMutation.isPending} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-bold text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-60 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white" aria-label={`Descartar ${event.title} de conciliación`} title="Descartar de conciliación">
+                    {dismissReconciliationMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                    <span className="hidden sm:inline">Descartar de conciliación</span>
+                  </button>
+                </div>
               ))}
             </div>
             <button type="button" onClick={() => reconciliationMutation.mutate()} disabled={!selectedReconciliationIds.length || !reconciliationConnectionId || reconciliationMutation.isPending} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-violet-700 disabled:opacity-50">

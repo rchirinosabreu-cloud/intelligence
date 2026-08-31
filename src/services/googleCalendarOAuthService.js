@@ -221,7 +221,11 @@ export const getCentralGoogleCalendarConnectionStatus = async () => {
     }
   });
   const connections = await Promise.all(rawConnections.map(async ({ syncToken, channels, _count, ...connection }) => {
-    const errorWhere = { googleConnectionId: connection.id, googleSyncStatus: 'ERROR' };
+    const errorWhere = {
+      googleConnectionId: connection.id,
+      googleSyncStatus: 'ERROR',
+      googleSyncError: { not: null }
+    };
     const [errorCount, syncErrors] = await Promise.all([
       prisma.operationalEvent.count({ where: errorWhere }),
       prisma.operationalEvent.findMany({ where: errorWhere, orderBy: { googleLastSyncedAt: 'desc' }, take: 10, select: { id: true, title: true, startAt: true, googleLastSyncedAt: true, googleSyncError: true } })
@@ -229,8 +233,8 @@ export const getCentralGoogleCalendarConnectionStatus = async () => {
     return { ...connection, incrementalSyncReady: Boolean(syncToken), channelExpiresAt: channels[0]?.expiresAt || null, linkedEventCount: _count.eventLinks, errorCount, syncErrors };
   }));
   const [pendingCount, errorCount] = await Promise.all([
-    prisma.operationalEvent.count({ where: { source: 'BRAIN', googleLinks: { none: {} } } }),
-    prisma.operationalEvent.count({ where: { source: 'BRAIN', googleSyncStatus: 'ERROR' } })
+    prisma.operationalEvent.count({ where: { source: 'BRAIN', googleLinks: { none: {} }, googleSyncStatus: { not: 'DISMISSED' } } }),
+    prisma.operationalEvent.count({ where: { source: 'BRAIN', googleSyncStatus: 'ERROR', googleSyncError: { not: null } } })
   ]);
   return { connected: connections.length > 0, connections, reconciliation: { pendingCount, errorCount } };
 };
