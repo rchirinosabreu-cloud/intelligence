@@ -288,7 +288,7 @@ export const createOpenAIClient = ({
         maxOutputTokens: 16
       });
       return {
-        ok: Boolean(result.text),
+        ok: Boolean(result.id),
         provider: 'openai',
         model: result.model,
         requestId: result.requestId,

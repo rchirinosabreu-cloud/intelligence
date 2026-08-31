@@ -86,6 +86,34 @@ test('OpenAI embeddings keep the existing PostgreSQL vector dimension', async ()
   assert.equal(requests[0].body.dimensions, 3072);
 });
 
+test('OpenAI health accepts a successful authenticated response even when the tiny ping has no output text', async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ 'x-request-id': 'req_health' }),
+    async json() {
+      return {
+        id: 'resp_health',
+        model: 'gpt-5',
+        output: [{ type: 'reasoning', summary: [] }]
+      };
+    }
+  });
+
+  const { createOpenAIClient } = await import('../src/services/openAIClient.js');
+  const client = createOpenAIClient({
+    apiKey: 'test-key',
+    fetchImpl,
+    models: { fast: 'gpt-5' }
+  });
+
+  const health = await client.healthCheck();
+  assert.equal(health.ok, true);
+  assert.equal(health.provider, 'openai');
+  assert.equal(health.model, 'gpt-5');
+  assert.equal(health.requestId, 'req_health');
+});
+
 test('Phase 0 selects OpenAI in every active Brain runtime and reports real AI health', async () => {
   const [config, aiService, brainCore, talentRadar, proxy, server] = await Promise.all([
     readFile('src/config/aiConfig.js', 'utf8'),
