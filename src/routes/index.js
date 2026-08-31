@@ -34,6 +34,7 @@ import financialsRouter from './api/financials.js';
 import dashboardRouter from './api/dashboard.js';
 import reportPdfRouter from './api/reportPdf.js';
 import { getUpcomingEvents } from '../services/calendarService.js';
+import { handleGoogleCalendarWebhook } from '../services/operationalEventService.js';
 
 const router = express.Router();
 const upload = multer({
@@ -57,6 +58,17 @@ router.post('/login', authController.login);
 router.post('/password-reset/request', authController.sendPasswordReset);
 router.post('/password-reset/confirm', authController.resetPasswordWithCode);
 router.post('/users', authenticateToken, authController.createUser);
+
+router.post('/activity/google-calendar/webhook', async (req, res) => {
+    try {
+        const result = await handleGoogleCalendarWebhook(req.headers);
+        if (!result.accepted) return res.status(404).json({ accepted: false });
+        return res.status(202).json({ accepted: true });
+    } catch (error) {
+        console.error('[GoogleCalendarWebhook] Error procesando notificación:', error.response?.data || error);
+        return res.status(500).json({ accepted: false });
+    }
+});
 
 // --- Protected Routes ---
 router.use(authenticateToken);
