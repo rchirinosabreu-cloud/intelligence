@@ -2,9 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertCircle,
+  Bot,
   CheckCircle2,
   Clock,
   Database,
+  Eye,
   RefreshCw,
   Target,
   Users,
@@ -109,6 +111,30 @@ const QualityItem = ({ value, label, goodWhenZero = true }) => {
   );
 };
 
+const SIGNAL_STYLES = {
+  critical: 'border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/25',
+  warning: 'border-amber-200 bg-amber-50/70 dark:border-amber-900/60 dark:bg-amber-950/20',
+  attention: 'border-violet-200 bg-violet-50/70 dark:border-violet-900/60 dark:bg-violet-950/20',
+  info: 'border-sky-200 bg-sky-50/70 dark:border-sky-900/60 dark:bg-sky-950/20',
+  positive: 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20',
+};
+
+const SignalCard = ({ signal }) => (
+  <article className={cn('rounded-2xl border p-4', SIGNAL_STYLES[signal.severity] || SIGNAL_STYLES.info)}>
+    <div className="flex items-start gap-3">
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/80 text-[#009EB9] shadow-sm dark:bg-zinc-900">
+        {signal.severity === 'positive'
+          ? <CheckCircle2 className="h-4 w-4 text-[#00AC8A]" />
+          : <AlertCircle className="h-4 w-4" />}
+      </span>
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{signal.title}</h3>
+        <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-300">{signal.evidence}</p>
+      </div>
+    </div>
+  </article>
+);
+
 export default function ManagerTaskAnalytics() {
   const [periodDays, setPeriodDays] = useState(30);
   const [analytics, setAnalytics] = useState(null);
@@ -156,17 +182,23 @@ export default function ManagerTaskAnalytics() {
             <div className="max-w-3xl">
               <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#009EB9]">
                 <Activity className="h-4 w-4" />
-                Manager · Inteligencia operativa
+                Manager · Bria
               </div>
               <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-3xl">
-                Centro descriptivo de tareas
+                Observer operativo
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                Una lectura del esfuerzo, los ciclos y la calidad de nuestros datos para comprender el trabajo, no vigilar personas.
+                Centro descriptivo de tareas: Bria convierte esfuerzo, ciclos y calidad de datos en señales explicables para comprender el trabajo, no vigilar personas.
               </p>
-              <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#00AC8A]/10 px-3 py-1.5 text-xs font-medium text-[#007D6B] dark:text-[#68E0C8]">
-                <Users className="h-3.5 w-3.5" />
-                No compara velocidad individual
+              <div className="mt-4 flex flex-wrap gap-2">
+                <div className="inline-flex items-center gap-2 rounded-full bg-[#00AC8A]/10 px-3 py-1.5 text-xs font-medium text-[#007D6B] dark:text-[#68E0C8]">
+                  <Users className="h-3.5 w-3.5" />
+                  No compara velocidad individual
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full bg-[#009EB9]/10 px-3 py-1.5 text-xs font-medium text-[#007D92] dark:text-[#74D9EA]">
+                  <Eye className="h-3.5 w-3.5" />
+                  Observa y explica; no ejecuta acciones
+                </div>
               </div>
             </div>
             <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
@@ -200,6 +232,29 @@ export default function ManagerTaskAnalytics() {
           </div>
         </header>
 
+        <nav aria-label="Modos de Bria" className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800">
+          <button
+            data-bria-tab="observer"
+            type="button"
+            aria-current="page"
+            className="inline-flex items-center gap-2 border-b-2 border-[#009EB9] px-3 py-3 text-sm font-semibold text-zinc-950 dark:text-white"
+          >
+            <Eye className="h-4 w-4" />
+            Observer
+          </button>
+          <button
+            data-bria-tab="copilot"
+            type="button"
+            disabled
+            title="Copilot será la próxima etapa de Bria"
+            className="inline-flex cursor-not-allowed items-center gap-2 px-3 py-3 text-sm font-medium text-zinc-400 dark:text-zinc-600"
+          >
+            <Bot className="h-4 w-4" />
+            Copilot
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-900 dark:text-zinc-500">Próxima etapa</span>
+          </button>
+        </nav>
+
         {error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
             <div className="flex items-center gap-2 font-medium"><AlertCircle className="h-4 w-4" /> No pudimos cargar el panel</div>
@@ -213,6 +268,37 @@ export default function ManagerTaskAnalytics() {
           </div>
         ) : overview ? (
           <>
+            <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Eye className="h-4 w-4 text-[#009EB9]" />
+                    <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Señales observadas</h2>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                    Desviaciones y vacíos ordenados por prioridad, siempre acompañados por su evidencia.
+                  </p>
+                </div>
+                {analytics.observer?.sample && (
+                  <span className={cn(
+                    'w-fit rounded-full px-3 py-1.5 text-xs font-medium',
+                    analytics.observer.sample.readyForPrediction
+                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                      : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400'
+                  )}>
+                    {analytics.observer.sample.readyForPrediction
+                      ? 'Base comparativa inicial disponible'
+                      : 'Muestra insuficiente para predecir'}
+                  </span>
+                )}
+              </div>
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {(analytics.observer?.signals || []).map((signal) => (
+                  <SignalCard key={signal.code} signal={signal} />
+                ))}
+              </div>
+            </section>
+
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard icon={Clock} label="Esfuerzo registrado" value={formatDuration(overview.totalWorkMs)} detail={`${overview.sessionCount} sesiones dentro del periodo`} accent />
               <MetricCard icon={Target} label="Mediana por sesión" value={formatDuration(overview.medianSessionMs)} detail={`El 75 % no supera ${formatDuration(overview.p75SessionMs)}`} />

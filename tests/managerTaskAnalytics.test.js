@@ -79,3 +79,51 @@ test('analytics excludes sessions outside the selected period', () => {
   assert.equal(result.overview.totalWorkMs, 0);
   assert.equal(result.overview.sessionCount, 0);
 });
+
+test('Bria Observer turns operational gaps into prioritized, evidence-based signals', () => {
+  const result = buildManagerTaskAnalytics({
+    now,
+    periodDays: 30,
+    tasks: [
+      { id: 'task-active', title: 'Preparar campaña', status: 'EN_CURSO', aiCategory: null, aiComplexity: null, client: { name: 'Aristea' }, assignee: { name: 'Sara' } },
+      { id: 'task-rework', title: 'Ajustar campaña', status: 'REALIZADA', completedAt: '2026-08-27T18:00:00.000Z', aiCategory: 'CONTENIDO', aiComplexity: 'MEDIA', client: { name: 'Aristea' }, assignee: { name: 'Sara' } },
+    ],
+    cycles: [
+      { id: 'cycle-rework', taskId: 'task-rework', kind: 'REWORK' },
+    ],
+    sessions: [
+      { id: 's1', taskId: 'task-rework', cycleId: 'cycle-rework', startedAt: '2026-08-27T15:00:00.000Z', endedAt: '2026-08-27T16:00:00.000Z', durationMs: 3_600_000, isOverlapping: true },
+    ],
+  });
+
+  assert.equal(result.observer.mode, 'OBSERVE_ONLY');
+  assert.equal(result.observer.sample.readyForPrediction, false);
+  assert.deepEqual(
+    result.observer.signals.map((signal) => signal.code),
+    ['OVERLAPPING_SESSIONS', 'ACTIVE_WITHOUT_SESSION', 'UNCLASSIFIED_TASKS', 'HIGH_REWORK', 'LIMITED_SAMPLE']
+  );
+  assert.equal(result.observer.signals[0].severity, 'critical');
+  assert.match(result.observer.signals[0].evidence, /1 sesi[oó]n/i);
+});
+
+test('Bria Observer reports a calm baseline when no actionable deviations exist', () => {
+  const sessions = Array.from({ length: 10 }, (_, index) => ({
+    id: `session-${index}`,
+    taskId: 'task-1',
+    cycleId: 'cycle-1',
+    startedAt: `2026-08-${String(10 + index).padStart(2, '0')}T10:00:00.000Z`,
+    endedAt: `2026-08-${String(10 + index).padStart(2, '0')}T11:00:00.000Z`,
+    durationMs: 3_600_000,
+  }));
+  const result = buildManagerTaskAnalytics({
+    now,
+    tasks: [{ id: 'task-1', status: 'REALIZADA', completedAt: '2026-08-20T12:00:00.000Z', aiCategory: 'CONTENIDO', aiComplexity: 'MEDIA', client: { name: 'Aristea' }, assignee: { name: 'Sara' } }],
+    cycles: [{ id: 'cycle-1', taskId: 'task-1', kind: 'INITIAL' }],
+    sessions,
+  });
+
+  assert.equal(result.observer.sample.readyForPrediction, true);
+  assert.equal(result.observer.signals.length, 1);
+  assert.equal(result.observer.signals[0].code, 'STABLE_BASELINE');
+  assert.equal(result.observer.signals[0].severity, 'positive');
+});

@@ -37,3 +37,20 @@ test('panel fetches the authenticated Manager analytics endpoint', async () => {
   assert.match(panel, /Authorization/);
   assert.match(panel, /authToken/);
 });
+
+test('Manager presents Bria with Observer and Copilot tabs while keeping Observer passive', async () => {
+  const panel = await readPanel();
+  assert.match(panel, /Bria/);
+  assert.match(panel, /data-bria-tab="observer"/);
+  assert.match(panel, /data-bria-tab="copilot"/);
+  assert.match(panel, /Observa y explica; no ejecuta acciones/i);
+  assert.match(panel, /Copilot[\s\S]*Pr[oó]xima etapa/i);
+});
+
+test('Bria Observer renders prioritized signals and their evidence', async () => {
+  const panel = await readPanel();
+  assert.match(panel, /Señales observadas/);
+  assert.match(panel, /analytics\.observer\?\.signals/);
+  assert.match(panel, /signal\.evidence/);
+  assert.match(panel, /Muestra insuficiente para predecir/i);
+});

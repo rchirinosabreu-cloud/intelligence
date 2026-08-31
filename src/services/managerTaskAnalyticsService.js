@@ -55,6 +55,71 @@ const groupSessions = ({ sessions, tasksById, durationBySession, labelFor }) => 
     .sort((a, b) => b.workMs - a.workMs || a.label.localeCompare(b.label));
 };
 
+const buildObserverSnapshot = ({ overview, dataQuality }) => {
+  const signals = [];
+  const addSignal = (code, severity, title, evidence) => signals.push({ code, severity, title, evidence });
+
+  if (dataQuality.overlappingSessions > 0) {
+    addSignal(
+      'OVERLAPPING_SESSIONS',
+      'critical',
+      'Hay sesiones de trabajo simultáneas',
+      `${dataQuality.overlappingSessions} ${dataQuality.overlappingSessions === 1 ? 'sesión aparece' : 'sesiones aparecen'} superpuesta${dataQuality.overlappingSessions === 1 ? '' : 's'} en el periodo.`
+    );
+  }
+  if (dataQuality.inProgressWithoutSession > 0) {
+    addSignal(
+      'ACTIVE_WITHOUT_SESSION',
+      'warning',
+      'Hay trabajo en curso sin trazabilidad activa',
+      `${dataQuality.inProgressWithoutSession} ${dataQuality.inProgressWithoutSession === 1 ? 'tarea está' : 'tareas están'} en curso sin una sesión abierta.`
+    );
+  }
+  if (dataQuality.unclassifiedTasks > 0) {
+    addSignal(
+      'UNCLASSIFIED_TASKS',
+      'warning',
+      'Falta contexto para interpretar parte del trabajo',
+      `${dataQuality.unclassifiedTasks} ${dataQuality.unclassifiedTasks === 1 ? 'tarea no tiene' : 'tareas no tienen'} categoría o complejidad completa.`
+    );
+  }
+  if (overview.reworkRate >= 0.25 && overview.reworkMs > 0) {
+    addSignal(
+      'HIGH_REWORK',
+      'attention',
+      'El retrabajo merece revisión contextual',
+      `${Math.round(overview.reworkRate * 100)} % del esfuerzo registrado ocurrió después del ciclo inicial.`
+    );
+  }
+  if (overview.sessionCount < 10) {
+    addSignal(
+      'LIMITED_SAMPLE',
+      'info',
+      'Muestra insuficiente para predecir',
+      `Bria observa ${overview.sessionCount} ${overview.sessionCount === 1 ? 'sesión' : 'sesiones'}; necesita al menos 10 para habilitar una base comparativa inicial.`
+    );
+  }
+  if (signals.length === 0) {
+    addSignal(
+      'STABLE_BASELINE',
+      'positive',
+      'No hay desviaciones operativas evidentes',
+      `${overview.sessionCount} sesiones forman una base descriptiva sin alertas de calidad ni retrabajo elevado.`
+    );
+  }
+
+  return {
+    mode: 'OBSERVE_ONLY',
+    generatedFrom: 'task_work_sessions',
+    sample: {
+      sessionCount: overview.sessionCount,
+      minimumSessions: 10,
+      readyForPrediction: overview.sessionCount >= 10,
+    },
+    signals,
+  };
+};
+
 export const buildManagerTaskAnalytics = ({
   tasks = [],
   cycles = [],
@@ -109,25 +174,33 @@ export const buildManagerTaskAnalytics = ({
       };
     });
 
+  const overview = {
+    totalWorkMs,
+    initialWorkMs: Math.max(0, totalWorkMs - reworkMs),
+    reworkMs,
+    reworkRate: totalWorkMs > 0 ? reworkMs / totalWorkMs : 0,
+    medianSessionMs: percentile(durations, 0.5),
+    p75SessionMs: percentile(durations, 0.75),
+    completedTasks,
+    activeTasks: activeTasks.length,
+    openSessions: periodSessions.filter((session) => !session.endedAt).length,
+    sessionCount: periodSessions.length,
+    taskCount: new Set(periodSessions.map((session) => session.taskId)).size,
+  };
+  const dataQuality = {
+    inProgressWithoutSession: activeTasks.filter((task) => !openSessionTaskIds.has(task.id)).length,
+    unclassifiedTasks: tasks.filter((task) => !task.aiCategory || !task.aiComplexity).length,
+    sessionsWithoutTask: periodSessions.filter((session) => !tasksById.has(session.taskId)).length,
+    overlappingSessions: periodSessions.filter((session) => session.isOverlapping).length,
+  };
+
   return {
     period: {
       days: safePeriodDays,
       from: new Date(cutoffMs).toISOString(),
       to: new Date(nowMs).toISOString(),
     },
-    overview: {
-      totalWorkMs,
-      initialWorkMs: Math.max(0, totalWorkMs - reworkMs),
-      reworkMs,
-      reworkRate: totalWorkMs > 0 ? reworkMs / totalWorkMs : 0,
-      medianSessionMs: percentile(durations, 0.5),
-      p75SessionMs: percentile(durations, 0.75),
-      completedTasks,
-      activeTasks: activeTasks.length,
-      openSessions: periodSessions.filter((session) => !session.endedAt).length,
-      sessionCount: periodSessions.length,
-      taskCount: new Set(periodSessions.map((session) => session.taskId)).size,
-    },
+    overview,
     byCategory: groupSessions({
       sessions: periodSessions,
       tasksById,
@@ -152,12 +225,8 @@ export const buildManagerTaskAnalytics = ({
       durationBySession,
       labelFor: (task) => task?.assignee?.name || 'Sin responsable',
     }),
-    dataQuality: {
-      inProgressWithoutSession: activeTasks.filter((task) => !openSessionTaskIds.has(task.id)).length,
-      unclassifiedTasks: tasks.filter((task) => !task.aiCategory || !task.aiComplexity).length,
-      sessionsWithoutTask: periodSessions.filter((session) => !tasksById.has(session.taskId)).length,
-      overlappingSessions: periodSessions.filter((session) => session.isOverlapping).length,
-    },
+    dataQuality,
+    observer: buildObserverSnapshot({ overview, dataQuality }),
     recentSessions,
   };
 };
