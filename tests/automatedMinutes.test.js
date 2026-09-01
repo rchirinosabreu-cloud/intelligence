@@ -130,6 +130,29 @@ test('automatic synchronization does not retry an exhausted failed meeting', asy
   assert.equal(detailCalls, 0);
 });
 
+test('manual and scheduled synchronization share one in-flight execution', async () => {
+  let listCalls = 0;
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const options = {
+    db: { meetingMinute: { findUnique: async () => null } },
+    fireflies: {
+      listTranscripts: async () => { listCalls += 1; await pending; return []; }
+    },
+    ai: {},
+    storage: {},
+    logger: { info() {}, error() {} }
+  };
+
+  const scheduled = syncFirefliesMinutes(options);
+  await Promise.resolve();
+  const manual = syncFirefliesMinutes(options);
+  assert.equal(listCalls, 1);
+  release();
+  const [scheduledResult, manualResult] = await Promise.all([scheduled, manual]);
+  assert.deepEqual(manualResult, scheduledResult);
+});
+
 test('minute archive returns newest records without the full transcript payload', async () => {
   let query;
   const rows = [{ id: 'm1', title: 'Reunión', meetingAt: new Date('2026-08-31T15:00:00Z'), status: 'READY' }];

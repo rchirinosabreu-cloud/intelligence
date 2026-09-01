@@ -188,7 +188,9 @@ const processTranscript = async ({ summary, db, fireflies, ai, storage }) => {
   }
 };
 
-export const syncFirefliesMinutes = async ({
+let activeMinutesSync = null;
+
+const runFirefliesMinutesSync = async ({
   db = prisma,
   fireflies = firefliesClient,
   ai = getDefaultAi(),
@@ -216,4 +218,12 @@ export const syncFirefliesMinutes = async ({
   }
   logger.info(`[AutomatedMinutes] Sincronización: ${result.processed} procesadas, ${result.skipped} omitidas, ${result.failed} fallidas.`);
   return result;
+};
+
+export const syncFirefliesMinutes = (options = {}) => {
+  if (activeMinutesSync) return activeMinutesSync;
+  activeMinutesSync = runFirefliesMinutesSync(options).finally(() => {
+    activeMinutesSync = null;
+  });
+  return activeMinutesSync;
 };
