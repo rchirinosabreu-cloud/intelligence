@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, ChevronRight, Download, Edit, Eye, File, FileText, Folder, FolderOpen,
-  Loader2, Plus, RefreshCcw, Search, Trash2, Upload, X
+  Loader2, Plus, RefreshCcw, RotateCcw, Search, Trash2, Upload, X
 } from '@/components/ui/icons';
 import frontendApiService from '../../../services/frontendApiService';
 import { toast } from 'react-hot-toast';
 import PageHeader from '@/components/ui/PageHeader';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const formatDate = value => value
   ? new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
@@ -111,6 +112,7 @@ const PreviewDialog = ({ file, preview, loading, onClose, onDownload }) => {
 };
 
 const DriveLayout = () => {
+  const confirm = useConfirmDialog();
   const [contents, setContents] = useState({ folders: [], files: [] });
   const [history, setHistory] = useState([]);
   const [query, setQuery] = useState('');
@@ -126,6 +128,7 @@ const DriveLayout = () => {
   const [previewFile, setPreviewFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [busyId, setBusyId] = useState(null);
   const fileInputRef = useRef(null);
   const previewUrlRef = useRef(null);
 
@@ -268,24 +271,64 @@ const DriveLayout = () => {
   };
 
   const sendToTrash = async (item, type) => {
+    const isBriaArtifact = type === 'file' && (item.kind === 'MINUTE' || item.kind === 'TRANSCRIPT');
+    if (isBriaArtifact) {
+      const accepted = await confirm({
+        title: `Enviar reunión “${item.title}” a papelera`,
+        description: 'La minuta y su transcripción dejarán de formar parte del contexto de Bria. Podrás restaurarlas después.',
+        confirmLabel: 'Enviar a Papelera'
+      });
+      if (!accepted) return;
+    }
+    setBusyId(item.id);
     try {
       if (type === 'folder') await frontendApiService.trashDriveFolder(item.id);
+      else if (isBriaArtifact) await frontendApiService.trashAutomatedMinute(item.meetingId);
       else await frontendApiService.trashDriveFile(item.id);
-      await load(); toast.success('Elemento enviado a la Papelera.');
+      await load();
+      toast.success(isBriaArtifact ? 'Reunión enviada a la Papelera y excluida de Bria.' : 'Elemento enviado a la Papelera.');
     } catch (requestError) {
       console.error('[Drive] Error enviando a papelera:', requestError);
       toast.error(requestError.message);
+    } finally {
+      setBusyId(null);
     }
   };
 
   const restoreItem = async (item, type) => {
+    const isBriaArtifact = type === 'file' && (item.kind === 'MINUTE' || item.kind === 'TRANSCRIPT');
+    setBusyId(item.id);
     try {
       if (type === 'folder') await frontendApiService.restoreDriveFolder(item.id);
+      else if (isBriaArtifact) await frontendApiService.restoreAutomatedMinute(item.meetingId);
       else await frontendApiService.restoreDriveFile(item.id);
-      await load(); toast.success('Elemento restaurado en Drive.');
+      await load();
+      toast.success(isBriaArtifact ? 'Reunión restaurada y disponible para Bria.' : 'Elemento restaurado en Drive.');
     } catch (requestError) {
       console.error('[Drive] Error restaurando elemento:', requestError);
       toast.error(requestError.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const deletePermanently = async (item) => {
+    const accepted = await confirm({
+      title: `Eliminar reunión “${item.title}” permanentemente`,
+      description: 'Se borrarán del bucket la minuta y la transcripción. Fireflies no volverá a importarlas y esta acción no se puede deshacer.',
+      confirmLabel: 'Eliminar permanentemente'
+    });
+    if (!accepted) return;
+    setBusyId(item.id);
+    try {
+      await frontendApiService.permanentlyDeleteAutomatedMinute(item.meetingId);
+      await load();
+      toast.success('Minuta y transcripción eliminadas permanentemente.');
+    } catch (requestError) {
+      console.error('[Drive] Error eliminando reunión permanentemente:', requestError);
+      toast.error(requestError.message);
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -346,10 +389,11 @@ const DriveLayout = () => {
                     <span className="min-w-0 flex-1"><span className="block line-clamp-2 text-sm font-semibold leading-5 text-zinc-900 dark:text-white">{file.name}</span><span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{formatDate(file.meetingAt || file.updatedAt || file.createdAt)} · {formatSize(file.sizeBytes)}</span></span>
                   </button>
                   <div className="mt-3 flex items-center justify-end gap-1 border-t border-zinc-200 pt-2 dark:border-zinc-800">
-                    <button type="button" onClick={() => openPreview(file)} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Ver ${file.name}`}><Eye className="h-4 w-4" /></button>
-                    <button type="button" onClick={() => downloadFile(file)} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Descargar ${file.name}`}><Download className="h-4 w-4" /></button>
+                    {!trash && <><button type="button" onClick={() => openPreview(file)} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Ver ${file.name}`}><Eye className="h-4 w-4" /></button><button type="button" onClick={() => downloadFile(file)} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Descargar ${file.name}`}><Download className="h-4 w-4" /></button></>}
+                    {(file.kind === 'MINUTE' || file.kind === 'TRANSCRIPT') && !trash && <button type="button" disabled={busyId === file.id} onClick={() => sendToTrash(file, 'file')} className="rounded-lg p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/30 dark:hover:text-red-300" aria-label={`Enviar ${file.name} a papelera`}><Trash2 className="h-4 w-4" /></button>}
                     {file.kind === 'UPLOAD' && !trash && <><button type="button" onClick={() => beginEdit(file, 'file')} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Renombrar ${file.name}`}><Edit className="h-4 w-4" /></button>{activeFolderId && <button type="button" onClick={() => moveToRoot(file)} className="rounded-lg px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Mover a raíz</button>}<button type="button" onClick={() => sendToTrash(file, 'file')} className="rounded-lg p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-300" aria-label={`Enviar ${file.name} a papelera`}><Trash2 className="h-4 w-4" /></button></>}
-                    {file.kind === 'UPLOAD' && trash && <button type="button" onClick={() => restoreItem(file, 'file')} className="rounded-lg px-3 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-950/30">Restaurar</button>}
+                    {file.kind === 'UPLOAD' && trash && <button type="button" disabled={busyId === file.id} onClick={() => restoreItem(file, 'file')} className="rounded-lg px-3 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300 dark:hover:bg-violet-950/30">Restaurar</button>}
+                    {(file.kind === 'MINUTE' || file.kind === 'TRANSCRIPT') && trash && <><button type="button" disabled={busyId === file.id} onClick={() => restoreItem(file, 'file')} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300 dark:hover:bg-violet-950/30"><RotateCcw className="h-3.5 w-3.5" /> Restaurar</button><button type="button" disabled={busyId === file.id} onClick={() => deletePermanently(file)} className="rounded-lg p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/30 dark:hover:text-red-300" aria-label={`Eliminar ${file.name} permanentemente`}><Trash2 className="h-4 w-4" /></button></>}
                   </div>
                 </article>
               ))}

@@ -63,18 +63,19 @@ const projectFile = (meeting, kindName) => {
     mimeType: 'application/json',
     meetingAt: meeting.meetingAt,
     processedAt: meeting.processedAt,
-    organizerEmail: meeting.organizerEmail
+    organizerEmail: meeting.organizerEmail,
+    deletedAt: meeting.deletedAt
   };
 };
 
-export const listDriveFiles = async ({ db = prisma, query = '', kind, limit = 100 } = {}) => {
+export const listDriveFiles = async ({ db = prisma, query = '', kind, limit = 100, includeTrash = false } = {}) => {
   const normalizedQuery = String(query || '').trim().slice(0, 120);
   const normalizedKind = String(kind || '').toLowerCase();
   const take = Math.min(Math.max(Number(limit) || 100, 1), 100);
   const meetings = await db.meetingMinute.findMany({
     where: {
       status: 'READY',
-      deletedAt: null,
+      deletedAt: includeTrash ? { not: null } : null,
       ...(normalizedQuery ? { title: { contains: normalizedQuery, mode: 'insensitive' } } : {})
     },
     orderBy: { meetingAt: 'desc' },
@@ -85,6 +86,7 @@ export const listDriveFiles = async ({ db = prisma, query = '', kind, limit = 10
       meetingAt: true,
       processedAt: true,
       organizerEmail: true,
+      deletedAt: true,
       minuteStorageKey: true,
       transcriptStorageKey: true
     }
@@ -142,7 +144,7 @@ export const listDriveContents = async ({ db = prisma, folderId = null, query = 
   const normalizedQuery = String(query || '').trim().slice(0, 120);
   const deletedAt = includeTrash ? { not: null } : null;
   const nameFilter = normalizedQuery ? { contains: normalizedQuery, mode: 'insensitive' } : undefined;
-  const [folders, files] = await Promise.all([
+  const [folders, files, briaTrashFiles] = await Promise.all([
     db.driveFolder.findMany({
       where: { parentId: folderId || null, deletedAt, ...(nameFilter ? { name: nameFilter } : {}) },
       orderBy: { name: 'asc' },
@@ -155,14 +157,15 @@ export const listDriveContents = async ({ db = prisma, folderId = null, query = 
         id: true, name: true, subtitle: true, mimeType: true, sizeBytes: true, source: true,
         category: true, folderId: true, createdAt: true, updatedAt: true, deletedAt: true
       }
-    })
+    }),
+    includeTrash ? listDriveFiles({ db, query, includeTrash: true }) : Promise.resolve([])
   ]);
 
   return {
     currentFolder: folderId ? folders.find(folder => folder.id === folderId) || { id: folderId } : null,
     breadcrumbs: [],
     folders: folderId || includeTrash ? folders : [BRIA_MINUTES_FOLDER, ...folders],
-    files: files.map(publicManagedFile)
+    files: [...briaTrashFiles, ...files.map(publicManagedFile)]
   };
 };
 

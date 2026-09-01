@@ -74,6 +74,36 @@ test('Drive projects each ready meeting as a minute and transcript without leaki
   assert.ok(files.every(file => file.storageKey === undefined));
 });
 
+test('Drive trash projects Bria minute artifacts so they can be restored or deleted permanently', async () => {
+  const driveService = await import('../src/services/driveService.js').catch(() => ({}));
+  const deletedAt = new Date('2026-08-31T18:00:00Z');
+  const files = await driveService.listDriveFiles({
+    includeTrash: true,
+    db: {
+      meetingMinute: {
+        findMany: async (args) => {
+          assert.equal(args.where.status, 'READY');
+          assert.deepEqual(args.where.deletedAt, { not: null });
+          return [{
+            id: 'm-trash',
+            title: 'Devocional Alabanza',
+            meetingAt: new Date('2026-03-06T19:05:00Z'),
+            processedAt: new Date('2026-03-06T20:00:00Z'),
+            organizerEmail: 'social@brainstudio.com',
+            deletedAt,
+            transcriptStorageKey: 'private/transcript.json',
+            minuteStorageKey: 'private/minute.json'
+          }];
+        }
+      }
+    }
+  });
+
+  assert.equal(files.length, 2);
+  assert.ok(files.every(file => file.meetingId === 'm-trash'));
+  assert.ok(files.every(file => file.deletedAt === deletedAt));
+});
+
 test('Drive reads only a known artifact kind through private storage', async () => {
   const driveService = await import('../src/services/driveService.js').catch(() => ({}));
   assert.equal(typeof driveService.readDriveFile, 'function');
@@ -212,6 +242,9 @@ test('Drive is wired as a protected platform module with search, filters and fil
   assert.match(apiRoutes, /router\.delete\('\/files\/:id'/);
   assert.match(service, /getDriveFiles/);
   assert.match(service, /getDriveFile/);
+  assert.match(service, /trashAutomatedMinute/);
+  assert.match(service, /restoreAutomatedMinute/);
+  assert.match(service, /permanentlyDeleteAutomatedMinute/);
   assert.match(drive, /Brainstudio Drive/);
   assert.match(drive, /<PageHeader/);
   assert.doesNotMatch(drive, /Biblioteca documental/);
@@ -222,5 +255,11 @@ test('Drive is wired as a protected platform module with search, filters and fil
   assert.match(drive, /Nueva carpeta/);
   assert.match(drive, /Subir archivos/);
   assert.match(drive, /Papelera/);
+  assert.match(drive, /useConfirmDialog/);
+  assert.match(drive, /trashAutomatedMinute\(item\.meetingId\)/);
+  assert.match(drive, /restoreAutomatedMinute\(item\.meetingId\)/);
+  assert.match(drive, /permanentlyDeleteAutomatedMinute\(item\.meetingId\)/);
+  assert.match(drive, /Enviar reunión .* a papelera/);
+  assert.match(drive, /Eliminar reunión .* permanentemente/);
   assert.match(drive, /role="dialog"/);
 });
