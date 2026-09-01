@@ -4,15 +4,35 @@ import { documentStorage } from './documentStorageService.js';
 import { validateUploadFile } from '../config/security.js';
 
 const FILE_KINDS = {
+  'summary-pdf': {
+    kind: 'SUMMARY_PDF',
+    keyField: 'summaryPdfStorageKey',
+    prefix: 'Resumen',
+    extension: 'pdf',
+    mimeType: 'application/pdf',
+    binary: true
+  },
+  'analysis-pdf': {
+    kind: 'ANALYSIS_PDF',
+    keyField: 'analysisPdfStorageKey',
+    prefix: 'Análisis',
+    extension: 'pdf',
+    mimeType: 'application/pdf',
+    binary: true
+  },
   minute: {
     kind: 'MINUTE',
     keyField: 'minuteStorageKey',
-    prefix: 'Minuta'
+    prefix: 'Minuta',
+    extension: 'json',
+    mimeType: 'application/json'
   },
   transcript: {
     kind: 'TRANSCRIPT',
     keyField: 'transcriptStorageKey',
-    prefix: 'Transcripción'
+    prefix: 'Transcripción',
+    extension: 'json',
+    mimeType: 'application/json'
   }
 };
 
@@ -58,9 +78,9 @@ const projectFile = (meeting, kindName) => {
     id: `${meeting.id}:${kindName}`,
     meetingId: meeting.id,
     kind: definition.kind,
-    name: `${definition.prefix} · ${meeting.title}.json`,
+    name: `${definition.prefix} · ${meeting.title}.${definition.extension}`,
     title: meeting.title,
-    mimeType: 'application/json',
+    mimeType: definition.mimeType,
     meetingAt: meeting.meetingAt,
     processedAt: meeting.processedAt,
     organizerEmail: meeting.organizerEmail,
@@ -88,19 +108,17 @@ export const listDriveFiles = async ({ db = prisma, query = '', kind, limit = 10
       organizerEmail: true,
       deletedAt: true,
       minuteStorageKey: true,
-      transcriptStorageKey: true
+      transcriptStorageKey: true,
+      summaryPdfStorageKey: true,
+      analysisPdfStorageKey: true
     }
   });
 
   return meetings.flatMap(meeting => {
-    const files = [];
-    if (meeting.minuteStorageKey && (!normalizedKind || normalizedKind === 'minute')) {
-      files.push(projectFile(meeting, 'minute'));
-    }
-    if (meeting.transcriptStorageKey && (!normalizedKind || normalizedKind === 'transcript')) {
-      files.push(projectFile(meeting, 'transcript'));
-    }
-    return files;
+    return Object.entries(FILE_KINDS).flatMap(([kindName, definition]) => {
+      const matchesKind = !normalizedKind || normalizedKind === kindName || normalizedKind === definition.kind.toLowerCase();
+      return meeting[definition.keyField] && matchesKind ? [projectFile(meeting, kindName)] : [];
+    });
   });
 };
 
@@ -120,7 +138,9 @@ export const readDriveFile = async ({ meetingId, kind, db = prisma, storage = do
       status: true,
       deletedAt: true,
       minuteStorageKey: true,
-      transcriptStorageKey: true
+      transcriptStorageKey: true,
+      summaryPdfStorageKey: true,
+      analysisPdfStorageKey: true
     }
   });
   if (!meeting) throw createDriveError('DRIVE_FILE_NOT_FOUND', 'El archivo solicitado no existe.');
@@ -128,6 +148,10 @@ export const readDriveFile = async ({ meetingId, kind, db = prisma, storage = do
     throw createDriveError('DRIVE_FILE_UNAVAILABLE', 'El archivo todavía no está disponible.');
   }
 
+  if (definition.binary) {
+    const artifact = await storage.downloadBuffer({ key: meeting[definition.keyField] });
+    return { ...projectFile(meeting, normalizedKind), ...artifact };
+  }
   const content = await storage.downloadJson({ key: meeting[definition.keyField] });
   return {
     ...projectFile(meeting, normalizedKind),

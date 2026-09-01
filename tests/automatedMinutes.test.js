@@ -43,7 +43,7 @@ test('ready minutes are editorially complete only with titles and brief subtitle
   }), true);
 });
 
-test('Fireflies synchronization persists searchable data and two Railway artifacts', async () => {
+test('Fireflies synchronization persists searchable data, JSON and two PDF artifacts', async () => {
   const writes = [];
   const uploads = [];
   const records = new Map();
@@ -87,19 +87,27 @@ test('Fireflies synchronization persists searchable data and two Railway artifac
     uploadJson: async ({ key, value }) => {
       uploads.push({ key, value });
       return { key, size: Buffer.byteLength(JSON.stringify(value)), mimeType: 'application/json' };
+    },
+    uploadBuffer: async ({ key, body, mimeType }) => {
+      uploads.push({ key, body, mimeType });
+      return { key, size: body.length, mimeType };
     }
   };
 
   const result = await syncFirefliesMinutes({ db, fireflies, ai, storage, limit: 10, logger: { info() {}, error() {} } });
 
   assert.deepEqual(result, { discovered: 1, processed: 1, skipped: 0, failed: 0 });
-  assert.equal(uploads.length, 2);
+  assert.equal(uploads.length, 4);
   assert.match(uploads[0].key, /transcript\.json$/);
   assert.match(uploads[1].key, /minute\.json$/);
+  assert.match(uploads[2].key, /summary\.pdf$/);
+  assert.match(uploads[3].key, /analysis\.pdf$/);
   assert.equal(writes.at(-1).data.status, 'READY');
   assert.equal(writes.at(-1).data.executiveSummary, 'Se acordó publicar el viernes.');
   assert.equal(writes.at(-1).data.aiModel, 'gpt-5.6-luna');
   assert.equal(writes.at(-1).data.storageProvider, 'RAILWAY');
+  assert.match(writes.at(-1).data.summaryPdfStorageKey, /summary\.pdf$/);
+  assert.match(writes.at(-1).data.analysisPdfStorageKey, /analysis\.pdf$/);
 });
 
 test('Fireflies synchronization is idempotent for ready meetings', async () => {
@@ -211,6 +219,7 @@ test('the default minute archive excludes trash and permanent-exclusion tombston
 
 test('minutes can move to recoverable trash and return without changing their processing status', async () => {
   const writes = [];
+  const memoryEvents = [];
   const db = {
     meetingMinute: {
       update: async ({ where, data }) => {
@@ -220,13 +229,18 @@ test('minutes can move to recoverable trash and return without changing their pr
     }
   };
 
-  const trashed = await trashMeetingMinute({ id: 'minute-1', db });
+  const memory = {
+    exclude: async (id) => memoryEvents.push(`exclude:${id}`),
+    reindex: async (id) => memoryEvents.push(`reindex:${id}`)
+  };
+  const trashed = await trashMeetingMinute({ id: 'minute-1', db, memory });
   assert.ok(trashed.deletedAt instanceof Date);
   assert.equal(writes[0].data.status, undefined);
 
-  const restored = await restoreMeetingMinute({ id: 'minute-1', db });
+  const restored = await restoreMeetingMinute({ id: 'minute-1', db, memory });
   assert.equal(restored.deletedAt, null);
   assert.equal(writes[1].data.status, undefined);
+  assert.deepEqual(memoryEvents, ['exclude:minute-1', 'reindex:minute-1']);
 });
 
 test('permanent minute deletion removes both bucket objects and leaves only an exclusion tombstone', async () => {
@@ -253,7 +267,8 @@ test('permanent minute deletion removes both bucket objects and leaves only an e
   const result = await permanentlyDeleteMeetingMinute({
     id: record.id,
     db,
-    storage: { deleteMany: async ({ keys }) => { deletedKeys.push(...keys); } }
+    storage: { deleteMany: async ({ keys }) => { deletedKeys.push(...keys); } },
+    memory: { forget: async (id) => writes.push({ operation: 'forget-memory', id }) }
   });
 
   assert.deepEqual(deletedKeys, [record.transcriptStorageKey, record.minuteStorageKey]);
@@ -263,8 +278,10 @@ test('permanent minute deletion removes both bucket objects and leaves only an e
   assert.equal(result.transcriptStorageKey, null);
   assert.equal(result.minuteStorageKey, null);
   assert.equal(result.deletedAt, null);
-  assert.equal(writes.at(-1).data.analysis, null);
-  assert.equal(writes.at(-1).data.observerSignals, null);
+  const tombstoneWrite = writes.find((entry) => entry.data?.status === 'EXCLUDED');
+  assert.equal(tombstoneWrite.data.analysis, null);
+  assert.equal(tombstoneWrite.data.observerSignals, null);
+  assert.ok(writes.some((entry) => entry.operation === 'forget-memory' && entry.id === record.id));
 });
 
 test('Fireflies synchronization never reimports trashed or permanently excluded meetings', async () => {

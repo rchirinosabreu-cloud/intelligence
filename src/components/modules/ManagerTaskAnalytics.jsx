@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/icons';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
+import BriaMemoryPanel from './BriaMemoryPanel';
 
 const PERIODS = [7, 30, 90];
 
@@ -136,6 +137,7 @@ const SignalCard = ({ signal }) => (
 );
 
 export default function ManagerTaskAnalytics() {
+  const [activeTab, setActiveTab] = useState('observer');
   const [periodDays, setPeriodDays] = useState(30);
   const [analytics, setAnalytics] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -185,12 +187,14 @@ export default function ManagerTaskAnalytics() {
                 Manager · Bria
               </div>
               <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-3xl">
-                Observer operativo
+                {activeTab === 'memory' ? 'Memoria de Bria' : 'Observer operativo'}
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                Centro descriptivo de tareas: Bria convierte esfuerzo, ciclos y calidad de datos en señales explicables para comprender el trabajo, no vigilar personas.
+                {activeTab === 'memory'
+                  ? 'Centro de conocimiento trazable: convierte documentos y datos autorizados en evidencia recuperable, auditable y lista para Bria.'
+                  : 'Centro descriptivo de tareas: Bria convierte esfuerzo, ciclos y calidad de datos en señales explicables para comprender el trabajo, no vigilar personas.'}
               </p>
-              <div className="mt-4 flex flex-wrap gap-2">
+              {activeTab === 'observer' && <div className="mt-4 flex flex-wrap gap-2">
                 <div className="inline-flex items-center gap-2 rounded-full bg-[#00AC8A]/10 px-3 py-1.5 text-xs font-medium text-[#007D6B] dark:text-[#68E0C8]">
                   <Users className="h-3.5 w-3.5" />
                   No compara velocidad individual
@@ -199,9 +203,9 @@ export default function ManagerTaskAnalytics() {
                   <Eye className="h-3.5 w-3.5" />
                   Observa y explica; no ejecuta acciones
                 </div>
-              </div>
+              </div>}
             </div>
-            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+            {activeTab === 'observer' && <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
               <div className="inline-flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900">
                 {PERIODS.map((days) => (
                   <button
@@ -228,7 +232,7 @@ export default function ManagerTaskAnalytics() {
                 <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
                 Actualizar
               </button>
-            </div>
+            </div>}
           </div>
         </header>
 
@@ -236,11 +240,28 @@ export default function ManagerTaskAnalytics() {
           <button
             data-bria-tab="observer"
             type="button"
-            aria-current="page"
-            className="inline-flex items-center gap-2 border-b-2 border-[#009EB9] px-3 py-3 text-sm font-semibold text-zinc-950 dark:text-white"
+            onClick={() => setActiveTab('observer')}
+            aria-current={activeTab === 'observer' ? 'page' : undefined}
+            className={cn(
+              'inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold',
+              activeTab === 'observer' ? 'border-[#009EB9] text-zinc-950 dark:text-white' : 'border-transparent text-zinc-500 dark:text-zinc-400'
+            )}
           >
             <Eye className="h-4 w-4" />
             Observer
+          </button>
+          <button
+            data-bria-tab="memory"
+            type="button"
+            onClick={() => setActiveTab('memory')}
+            aria-current={activeTab === 'memory' ? 'page' : undefined}
+            className={cn(
+              'inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold',
+              activeTab === 'memory' ? 'border-[#009EB9] text-zinc-950 dark:text-white' : 'border-transparent text-zinc-500 dark:text-zinc-400'
+            )}
+          >
+            <Database className="h-4 w-4" />
+            Memoria
           </button>
           <button
             data-bria-tab="copilot"
@@ -255,6 +276,7 @@ export default function ManagerTaskAnalytics() {
           </button>
         </nav>
 
+        {activeTab === 'memory' ? <BriaMemoryPanel /> : <>
         {error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
             <div className="flex items-center gap-2 font-medium"><AlertCircle className="h-4 w-4" /> No pudimos cargar el panel</div>
@@ -354,6 +376,7 @@ export default function ManagerTaskAnalytics() {
             </section>
           </>
         ) : null}
+        </>}
       </div>
     </div>
   );

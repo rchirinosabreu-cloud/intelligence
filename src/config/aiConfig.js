@@ -8,7 +8,8 @@ export const AI_MODELS = Object.freeze({
     chat: process.env.OPENAI_MODEL_CHAT || process.env.OPENAI_MODEL || 'gpt-5.6-terra',
     fast: process.env.OPENAI_MODEL_FAST || process.env.OPENAI_MODEL || 'gpt-5.6-luna',
     vision: process.env.OPENAI_MODEL_VISION || process.env.OPENAI_MODEL || 'gpt-5.6-terra',
-    embedding: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large'
+    embedding: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large',
+    memoryEmbedding: process.env.OPENAI_MEMORY_EMBEDDING_MODEL || 'text-embedding-3-small'
 });
 
 export const FINAL_MODEL_NAME = AI_MODELS.chat;

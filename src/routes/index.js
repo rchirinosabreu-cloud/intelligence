@@ -10,6 +10,7 @@ import * as flowController from '../controllers/flowController.js';
 import * as proxyController from '../controllers/proxyController.js';
 import * as publicController from '../controllers/publicController.js';
 import * as managerTaskAnalyticsController from '../controllers/managerTaskAnalyticsController.js';
+import * as briaMemoryController from '../controllers/briaMemoryController.js';
 import { authenticateToken, requireManagerRole, requireModulePermission } from '../middlewares/authMiddleware.js';
 import prisma from '../lib/prisma.js';
 import multer from 'multer';
@@ -121,6 +122,24 @@ router.get(
     requireModulePermission('manager'),
     requireManagerRole,
     managerTaskAnalyticsController.getTaskAnalytics
+);
+router.get(
+    '/manager/bria-memory',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    briaMemoryController.overview
+);
+router.get(
+    '/manager/bria-memory/search',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    briaMemoryController.search
+);
+router.post(
+    '/manager/bria-memory/sync',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    briaMemoryController.sync
 );
 
 // Tasks

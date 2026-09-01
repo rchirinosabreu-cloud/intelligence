@@ -347,6 +347,16 @@ const frontendApiService = {
     return response.json();
   },
 
+  getDriveArtifactBlob: async (meetingId, kind, { download = false } = {}) => {
+    const params = download ? '?download=true' : '';
+    const response = await fetch(`${getBaseUrl()}/api/drive/files/${encodeURIComponent(meetingId)}/${encodeURIComponent(String(kind).toLowerCase().replace(/_/g, '-'))}${params}`, { headers: getAuthHeaders() });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `No fue posible abrir el documento (${response.status})`);
+    }
+    return response.blob();
+  },
+
   createDriveFolder: async ({ name, parentId }) => {
     const response = await fetch(`${getBaseUrl()}/api/drive/folders`, {
       method: 'POST',

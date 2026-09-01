@@ -12,8 +12,8 @@ const formatDate = value => value
   ? new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
   : 'Sin fecha';
 
-const formatSize = bytes => {
-  if (!Number.isFinite(Number(bytes))) return 'JSON';
+const formatSize = (bytes, mimeType) => {
+  if (!Number.isFinite(Number(bytes))) return mimeType === 'application/pdf' ? 'PDF' : 'JSON';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -29,6 +29,9 @@ const triggerDownload = (blob, name) => {
   anchor.remove();
   URL.revokeObjectURL(url);
 };
+
+const BRIA_ARTIFACT_KINDS = new Set(['MINUTE', 'TRANSCRIPT', 'SUMMARY_PDF', 'ANALYSIS_PDF']);
+const BRIA_PDF_KINDS = new Set(['SUMMARY_PDF', 'ANALYSIS_PDF']);
 
 const JsonList = ({ title, items, renderItem = item => String(item) }) => {
   if (!Array.isArray(items) || items.length === 0) return null;
@@ -88,7 +91,7 @@ const PreviewDialog = ({ file, preview, loading, onClose, onDownload }) => {
         <header className="flex items-center justify-between gap-4 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
           <div className="min-w-0">
             <h2 id="drive-preview-title" className="truncate font-semibold text-zinc-950 dark:text-white">{file.name}</h2>
-            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{file.kind === 'TRANSCRIPT' ? 'Transcripción' : file.kind === 'MINUTE' ? 'Minuta de Bria' : file.mimeType}</p>
+            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{file.kind === 'TRANSCRIPT' ? 'Transcripción' : file.kind === 'MINUTE' ? 'Datos estructurados de Bria' : file.kind === 'SUMMARY_PDF' ? 'Resumen ejecutivo en PDF' : file.kind === 'ANALYSIS_PDF' ? 'Análisis operativo en PDF' : file.mimeType}</p>
           </div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={onDownload} className="inline-flex h-10 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900">
@@ -174,7 +177,10 @@ const DriveLayout = () => {
     setPreview(null);
     setPreviewLoading(true);
     try {
-      if (file.kind === 'MINUTE' || file.kind === 'TRANSCRIPT') {
+      if (BRIA_PDF_KINDS.has(file.kind)) {
+        const blob = await frontendApiService.getDriveArtifactBlob(file.meetingId, file.kind);
+        const url = URL.createObjectURL(blob); previewUrlRef.current = url; setPreview({ type: 'pdf', url });
+      } else if (file.kind === 'MINUTE' || file.kind === 'TRANSCRIPT') {
         const result = await frontendApiService.getDriveFile(file.meetingId, file.kind);
         setPreview({ type: file.kind === 'MINUTE' ? 'minute' : 'transcript', content: result.file.content });
       } else {
@@ -201,7 +207,9 @@ const DriveLayout = () => {
   const downloadFile = async file => {
     try {
       let blob;
-      if (file.kind === 'MINUTE' || file.kind === 'TRANSCRIPT') {
+      if (BRIA_PDF_KINDS.has(file.kind)) {
+        blob = await frontendApiService.getDriveArtifactBlob(file.meetingId, file.kind, { download: true });
+      } else if (file.kind === 'MINUTE' || file.kind === 'TRANSCRIPT') {
         const result = await frontendApiService.getDriveFile(file.meetingId, file.kind);
         blob = new Blob([JSON.stringify(result.file.content, null, 2)], { type: 'application/json' });
       } else {
@@ -271,11 +279,11 @@ const DriveLayout = () => {
   };
 
   const sendToTrash = async (item, type) => {
-    const isBriaArtifact = type === 'file' && (item.kind === 'MINUTE' || item.kind === 'TRANSCRIPT');
+    const isBriaArtifact = type === 'file' && BRIA_ARTIFACT_KINDS.has(item.kind);
     if (isBriaArtifact) {
       const accepted = await confirm({
         title: `Enviar reunión “${item.title}” a papelera`,
-        description: 'La minuta y su transcripción dejarán de formar parte del contexto de Bria. Podrás restaurarlas después.',
+        description: 'El resumen, el análisis, la minuta y su transcripción dejarán de formar parte del contexto de Bria. Podrás restaurarlos después.',
         confirmLabel: 'Enviar a Papelera'
       });
       if (!accepted) return;
@@ -296,7 +304,7 @@ const DriveLayout = () => {
   };
 
   const restoreItem = async (item, type) => {
-    const isBriaArtifact = type === 'file' && (item.kind === 'MINUTE' || item.kind === 'TRANSCRIPT');
+    const isBriaArtifact = type === 'file' && BRIA_ARTIFACT_KINDS.has(item.kind);
     setBusyId(item.id);
     try {
       if (type === 'folder') await frontendApiService.restoreDriveFolder(item.id);
@@ -315,7 +323,7 @@ const DriveLayout = () => {
   const deletePermanently = async (item) => {
     const accepted = await confirm({
       title: `Eliminar reunión “${item.title}” permanentemente`,
-      description: 'Se borrarán del bucket la minuta y la transcripción. Fireflies no volverá a importarlas y esta acción no se puede deshacer.',
+      description: 'Se borrarán del bucket el resumen PDF, el análisis PDF, la minuta y la transcripción. Fireflies no volverá a importarlos y esta acción no se puede deshacer.',
       confirmLabel: 'Eliminar permanentemente'
     });
     if (!accepted) return;
@@ -323,7 +331,7 @@ const DriveLayout = () => {
     try {
       await frontendApiService.permanentlyDeleteAutomatedMinute(item.meetingId);
       await load();
-      toast.success('Minuta y transcripción eliminadas permanentemente.');
+      toast.success('Documentos de la reunión eliminados permanentemente.');
     } catch (requestError) {
       console.error('[Drive] Error eliminando reunión permanentemente:', requestError);
       toast.error(requestError.message);
@@ -364,7 +372,7 @@ const DriveLayout = () => {
           </div>
         </div>
 
-        {isBriaFolder && <div className="flex flex-wrap gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">{[['ALL', 'Todos'], ['MINUTE', 'Minutas de Bria'], ['TRANSCRIPT', 'Transcripciones']].map(([value, label]) => <button key={value} type="button" onClick={() => setFilter(value)} className={`rounded-full px-3 py-1.5 text-xs font-medium ${filter === value ? 'bg-violet-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'}`}>{label}</button>)}</div>}
+        {isBriaFolder && <div className="flex flex-wrap gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">{[['ALL', 'Todos'], ['SUMMARY_PDF', 'Resúmenes PDF'], ['ANALYSIS_PDF', 'Análisis PDF'], ['MINUTE', 'Datos JSON'], ['TRANSCRIPT', 'Transcripciones']].map(([value, label]) => <button key={value} type="button" onClick={() => setFilter(value)} className={`rounded-full px-3 py-1.5 text-xs font-medium ${filter === value ? 'bg-violet-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'}`}>{label}</button>)}</div>}
 
         <div className="min-h-[28rem] p-4 sm:p-5">
           {error && <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"><AlertCircle className="h-4 w-4" /> {error}</div>}
@@ -385,15 +393,15 @@ const DriveLayout = () => {
               {visibleFiles.map(file => (
                 <article key={file.id} className="group flex flex-col rounded-2xl border border-zinc-200 bg-white p-4 transition hover:border-cyan-300 hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-950/50 dark:hover:border-cyan-800">
                   <button type="button" onClick={() => openPreview(file)} className="flex flex-1 items-start gap-3 text-left">
-                    <span className={`rounded-xl p-2.5 ${file.kind === 'MINUTE' ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300' : file.kind === 'TRANSCRIPT' ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'}`}><FileText className="h-5 w-5" /></span>
-                    <span className="min-w-0 flex-1"><span className="block line-clamp-2 text-sm font-semibold leading-5 text-zinc-900 dark:text-white">{file.name}</span><span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{formatDate(file.meetingAt || file.updatedAt || file.createdAt)} · {formatSize(file.sizeBytes)}</span></span>
+                    <span className={`rounded-xl p-2.5 ${BRIA_PDF_KINDS.has(file.kind) ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300' : file.kind === 'TRANSCRIPT' ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'}`}><FileText className="h-5 w-5" /></span>
+                    <span className="min-w-0 flex-1"><span className="block line-clamp-2 text-sm font-semibold leading-5 text-zinc-900 dark:text-white">{file.name}</span><span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{formatDate(file.meetingAt || file.updatedAt || file.createdAt)} · {formatSize(file.sizeBytes, file.mimeType)}</span></span>
                   </button>
                   <div className="mt-3 flex items-center justify-end gap-1 border-t border-zinc-200 pt-2 dark:border-zinc-800">
                     {!trash && <><button type="button" onClick={() => openPreview(file)} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Ver ${file.name}`}><Eye className="h-4 w-4" /></button><button type="button" onClick={() => downloadFile(file)} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Descargar ${file.name}`}><Download className="h-4 w-4" /></button></>}
-                    {(file.kind === 'MINUTE' || file.kind === 'TRANSCRIPT') && !trash && <button type="button" disabled={busyId === file.id} onClick={() => sendToTrash(file, 'file')} className="rounded-lg p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/30 dark:hover:text-red-300" aria-label={`Enviar ${file.name} a papelera`}><Trash2 className="h-4 w-4" /></button>}
+                    {BRIA_ARTIFACT_KINDS.has(file.kind) && !trash && <button type="button" disabled={busyId === file.id} onClick={() => sendToTrash(file, 'file')} className="rounded-lg p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/30 dark:hover:text-red-300" aria-label={`Enviar ${file.name} a papelera`}><Trash2 className="h-4 w-4" /></button>}
                     {file.kind === 'UPLOAD' && !trash && <><button type="button" onClick={() => beginEdit(file, 'file')} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200" aria-label={`Renombrar ${file.name}`}><Edit className="h-4 w-4" /></button>{activeFolderId && <button type="button" onClick={() => moveToRoot(file)} className="rounded-lg px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Mover a raíz</button>}<button type="button" onClick={() => sendToTrash(file, 'file')} className="rounded-lg p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-300" aria-label={`Enviar ${file.name} a papelera`}><Trash2 className="h-4 w-4" /></button></>}
                     {file.kind === 'UPLOAD' && trash && <button type="button" disabled={busyId === file.id} onClick={() => restoreItem(file, 'file')} className="rounded-lg px-3 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300 dark:hover:bg-violet-950/30">Restaurar</button>}
-                    {(file.kind === 'MINUTE' || file.kind === 'TRANSCRIPT') && trash && <><button type="button" disabled={busyId === file.id} onClick={() => restoreItem(file, 'file')} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300 dark:hover:bg-violet-950/30"><RotateCcw className="h-3.5 w-3.5" /> Restaurar</button><button type="button" disabled={busyId === file.id} onClick={() => deletePermanently(file)} className="rounded-lg p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/30 dark:hover:text-red-300" aria-label={`Eliminar ${file.name} permanentemente`}><Trash2 className="h-4 w-4" /></button></>}
+                    {BRIA_ARTIFACT_KINDS.has(file.kind) && trash && <><button type="button" disabled={busyId === file.id} onClick={() => restoreItem(file, 'file')} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300 dark:hover:bg-violet-950/30"><RotateCcw className="h-3.5 w-3.5" /> Restaurar</button><button type="button" disabled={busyId === file.id} onClick={() => deletePermanently(file)} className="rounded-lg p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/30 dark:hover:text-red-300" aria-label={`Eliminar ${file.name} permanentemente`}><Trash2 className="h-4 w-4" /></button></>}
                   </div>
                 </article>
               ))}

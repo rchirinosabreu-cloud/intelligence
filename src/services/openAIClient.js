@@ -3,7 +3,8 @@ const DEFAULT_MODELS = Object.freeze({
   chat: 'gpt-5.6-terra',
   fast: 'gpt-5.6-luna',
   vision: 'gpt-5.6-terra',
-  embedding: 'text-embedding-3-large'
+  embedding: 'text-embedding-3-large',
+  memoryEmbedding: 'text-embedding-3-small'
 });
 
 const normalizeSchema = (value) => {
@@ -246,9 +247,9 @@ export const createOpenAIClient = ({
     };
   };
 
-  const embed = async (text, { dimensions = 3072 } = {}) => {
+  const embed = async (text, { dimensions = 3072, model = selectedModels.embedding } = {}) => {
     const { payload } = await request('/embeddings', {
-      model: selectedModels.embedding,
+      model,
       input: text,
       dimensions,
       encoding_format: 'float'

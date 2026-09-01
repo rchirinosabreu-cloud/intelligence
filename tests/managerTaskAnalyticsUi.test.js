@@ -47,6 +47,20 @@ test('Manager presents Bria with Observer and Copilot tabs while keeping Observe
   assert.match(panel, /Copilot[\s\S]*Pr[oó]xima etapa/i);
 });
 
+test('Bria exposes a real Memory tab with coverage, sources and traceable retrieval', async () => {
+  const panel = await readPanel();
+  const memoryPanel = await readFile('src/components/modules/BriaMemoryPanel.jsx', 'utf8');
+
+  assert.match(panel, /data-bria-tab="memory"/);
+  assert.match(panel, /setActiveTab\('memory'\)/);
+  assert.match(panel, /<BriaMemoryPanel/);
+  assert.match(memoryPanel, /Memoria utilizable/);
+  assert.match(memoryPanel, /Cobertura de fuentes/);
+  assert.match(memoryPanel, /Probar recuperación/);
+  assert.match(memoryPanel, /\/api\/manager\/bria-memory/);
+  assert.match(memoryPanel, /sourceUrl/);
+});
+
 test('Bria Observer renders prioritized signals and their evidence', async () => {
   const panel = await readPanel();
   assert.match(panel, /Señales observadas/);

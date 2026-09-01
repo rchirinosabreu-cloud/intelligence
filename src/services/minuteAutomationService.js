@@ -4,6 +4,11 @@ import { createOpenAIClient } from './openAIClient.js';
 import { documentStorage } from './documentStorageService.js';
 import { firefliesClient } from './firefliesService.js';
 import { parseJsonFromAiResponse } from '../utils/jsonParser.js';
+import {
+  permanentlyForgetMeetingMinute,
+  syncMeetingMinuteMemoryById
+} from './briaMemoryService.js';
+import { createMinutePdfArtifacts } from './minutePdfService.js';
 
 const MINUTE_RESPONSE_SCHEMA = {
   type: 'object',
@@ -35,6 +40,12 @@ export const MAX_AUTOMATIC_MINUTE_RETRIES = 3;
 const createMinuteError = (code, message) => Object.assign(new Error(message), { code });
 
 const isExcludedFromBria = (record) => Boolean(record?.deletedAt) || record?.status === 'EXCLUDED';
+
+const defaultMemoryLifecycle = {
+  exclude: (id) => syncMeetingMinuteMemoryById({ id }),
+  reindex: (id) => syncMeetingMinuteMemoryById({ id }),
+  forget: (id) => permanentlyForgetMeetingMinute({ id })
+};
 
 const normalizeDate = (value) => {
   const date = value ? new Date(value) : new Date();
@@ -128,27 +139,35 @@ export const getMeetingMinuteById = async ({ db = prisma, id }) => db.meetingMin
   }
 });
 
-export const trashMeetingMinute = async ({ db = prisma, id }) => db.meetingMinute.update({
-  where: { id },
-  data: { deletedAt: new Date() }
-});
+export const trashMeetingMinute = async ({ db = prisma, id, memory = db === prisma ? defaultMemoryLifecycle : null }) => {
+  const minute = await db.meetingMinute.update({
+    where: { id },
+    data: { deletedAt: new Date() }
+  });
+  await memory?.exclude?.(id);
+  return minute;
+};
 
-export const restoreMeetingMinute = async ({ db = prisma, id }) => db.meetingMinute.update({
-  where: { id },
-  data: { deletedAt: null }
-});
+export const restoreMeetingMinute = async ({ db = prisma, id, memory = db === prisma ? defaultMemoryLifecycle : null }) => {
+  const minute = await db.meetingMinute.update({
+    where: { id },
+    data: { deletedAt: null }
+  });
+  await memory?.reindex?.(id);
+  return minute;
+};
 
-export const permanentlyDeleteMeetingMinute = async ({ db = prisma, storage = documentStorage, id }) => {
+export const permanentlyDeleteMeetingMinute = async ({ db = prisma, storage = documentStorage, id, memory = db === prisma ? defaultMemoryLifecycle : null }) => {
   const record = await db.meetingMinute.findFirst({
     where: { id, deletedAt: { not: null } },
-    select: { id: true, transcriptStorageKey: true, minuteStorageKey: true }
+    select: { id: true, transcriptStorageKey: true, minuteStorageKey: true, summaryPdfStorageKey: true, analysisPdfStorageKey: true }
   });
   if (!record) {
     throw createMinuteError('MINUTE_NOT_IN_TRASH', 'La minuta debe estar en la Papelera antes de eliminarla permanentemente.');
   }
 
-  await storage.deleteMany({ keys: [record.transcriptStorageKey, record.minuteStorageKey] });
-  return db.meetingMinute.update({
+  await storage.deleteMany({ keys: [record.transcriptStorageKey, record.minuteStorageKey, record.summaryPdfStorageKey, record.analysisPdfStorageKey].filter(Boolean) });
+  const tombstone = await db.meetingMinute.update({
     where: { id: record.id },
     data: {
       title: 'Reunión excluida',
@@ -168,16 +187,20 @@ export const permanentlyDeleteMeetingMinute = async ({ db = prisma, storage = do
       aiRequestId: null,
       transcriptStorageKey: null,
       minuteStorageKey: null,
+      summaryPdfStorageKey: null,
+      analysisPdfStorageKey: null,
       processedAt: null,
       deletedAt: null,
       lastSeenAt: new Date()
     }
   });
+  await memory?.forget?.(id);
+  return tombstone;
 };
 
 const getDefaultAi = () => createOpenAIClient({ models: AI_MODELS });
 
-const processTranscript = async ({ summary, db, fireflies, ai, storage }) => {
+const processTranscript = async ({ summary, db, fireflies, ai, storage, memory }) => {
   let record = await db.meetingMinute.findUnique({ where: { externalId: summary.id } });
   if (isExcludedFromBria(record) || (record?.status === 'READY' && hasEditorialMinuteMetadata(record.analysis))) return { skipped: true };
 
@@ -221,15 +244,31 @@ const processTranscript = async ({ summary, db, fireflies, ai, storage }) => {
       key: buildMinuteStorageKey({ ...storageBase, fileName: 'minute.json' }),
       value: analysis
     });
+    const meetingAt = normalizeDate(transcript.date || summary.date);
+    const participants = transcript.participants || analysis.participants || [];
+    const pdfArtifacts = await createMinutePdfArtifacts({
+      minute: {
+        id: record.id,
+        externalId: summary.id,
+        title: transcript.title || summary.title || 'Reunión sin título',
+        meetingAt,
+        participants,
+        executiveSummary: analysis.executiveSummary,
+        actionItems: analysis.actionItems || [],
+        observerSignals: analysis.observerSignals || []
+      },
+      analysis,
+      storage
+    });
 
     await db.meetingMinute.update({
       where: { id: record.id },
       data: {
         title: transcript.title || summary.title || 'Reunión sin título',
-        meetingAt: normalizeDate(transcript.date || summary.date),
+        meetingAt,
         durationSeconds: transcript.duration ? Math.round(Number(transcript.duration)) : null,
         organizerEmail: transcript.organizer_email || summary.organizer_email || null,
-        participants: transcript.participants || analysis.participants || [],
+        participants,
         transcriptText,
         sourceSummary: transcript.summary || {},
         executiveSummary: analysis.executiveSummary,
@@ -243,10 +282,17 @@ const processTranscript = async ({ summary, db, fireflies, ai, storage }) => {
         storageProvider: 'RAILWAY',
         transcriptStorageKey: transcriptArtifact.key,
         minuteStorageKey: minuteArtifact.key,
+        summaryPdfStorageKey: pdfArtifacts.summary.key,
+        analysisPdfStorageKey: pdfArtifacts.analysis.key,
         processedAt: new Date(),
         lastSeenAt: new Date()
       }
     });
+    try {
+      await memory?.reindex?.(record.id);
+    } catch (memoryError) {
+      console.error(`[AutomatedMinutes] La minuta ${record.id} quedó lista, pero su memoria se conciliará después:`, memoryError.response?.data || memoryError.message || memoryError);
+    }
     return { processed: true };
   } catch (error) {
     await db.meetingMinute.update({
@@ -265,7 +311,8 @@ const runFirefliesMinutesSync = async ({
   ai = getDefaultAi(),
   storage = documentStorage,
   limit = 50,
-  logger = console
+  logger = console,
+  memory = db === prisma ? defaultMemoryLifecycle : null
 } = {}) => {
   const result = { discovered: 0, processed: 0, skipped: 0, failed: 0 };
   const transcripts = await fireflies.listTranscripts(limit, 0);
@@ -277,7 +324,7 @@ const runFirefliesMinutesSync = async ({
       continue;
     }
     try {
-      const item = await processTranscript({ summary, db, fireflies, ai, storage });
+      const item = await processTranscript({ summary, db, fireflies, ai, storage, memory });
       if (item.skipped) result.skipped += 1;
       if (item.processed) result.processed += 1;
     } catch (error) {

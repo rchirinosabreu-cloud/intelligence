@@ -31,6 +31,8 @@ try {
       "storageProvider" TEXT NOT NULL DEFAULT 'RAILWAY',
       "transcriptStorageKey" TEXT,
       "minuteStorageKey" TEXT,
+      "summaryPdfStorageKey" TEXT,
+      "analysisPdfStorageKey" TEXT,
       "processedAt" TIMESTAMP(3),
       "deletedAt" TIMESTAMP(3),
       "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -48,6 +50,10 @@ try {
       ON "MeetingMinute"("organizerEmail");
     ALTER TABLE "MeetingMinute"
       ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3);
+    ALTER TABLE "MeetingMinute"
+      ADD COLUMN IF NOT EXISTS "summaryPdfStorageKey" TEXT;
+    ALTER TABLE "MeetingMinute"
+      ADD COLUMN IF NOT EXISTS "analysisPdfStorageKey" TEXT;
     CREATE INDEX IF NOT EXISTS "MeetingMinute_deletedAt_meetingAt_idx"
       ON "MeetingMinute"("deletedAt", "meetingAt");
   `);

@@ -43,7 +43,7 @@ test('private document storage can permanently delete a bounded set of object ke
   ]);
 });
 
-test('Drive projects each ready meeting as a minute and transcript without leaking storage keys', async () => {
+test('Drive projects each ready meeting as JSON, transcript and two human-readable PDFs without leaking storage keys', async () => {
   const driveService = await import('../src/services/driveService.js').catch(() => ({}));
   assert.equal(typeof driveService.listDriveFiles, 'function');
 
@@ -61,15 +61,17 @@ test('Drive projects each ready meeting as a minute and transcript without leaki
           processedAt: new Date('2026-08-31T16:00:00Z'),
           organizerEmail: 'social@brainstudio.com',
           transcriptStorageKey: 'private/transcript.json',
-          minuteStorageKey: 'private/minute.json'
+          minuteStorageKey: 'private/minute.json',
+          summaryPdfStorageKey: 'private/summary.pdf',
+          analysisPdfStorageKey: 'private/analysis.pdf'
           }];
         }
       }
     }
   });
 
-  assert.equal(files.length, 2);
-  assert.deepEqual(files.map(file => file.kind), ['MINUTE', 'TRANSCRIPT']);
+  assert.equal(files.length, 4);
+  assert.deepEqual(files.map(file => file.kind), ['SUMMARY_PDF', 'ANALYSIS_PDF', 'MINUTE', 'TRANSCRIPT']);
   assert.ok(files.every(file => file.meetingId === 'm-1'));
   assert.ok(files.every(file => file.storageKey === undefined));
 });
@@ -138,6 +140,20 @@ test('Drive reads only a known artifact kind through private storage', async () 
     () => driveService.readDriveFile({ meetingId: 'm-1', kind: 'secret', db, storage }),
     error => error.code === 'DRIVE_FILE_KIND_INVALID'
   );
+});
+
+test('Drive streams generated minute PDFs through authenticated private storage', async () => {
+  const driveService = await import('../src/services/driveService.js');
+  const pdf = Buffer.from('%PDF-1.4 test');
+  const file = await driveService.readDriveFile({
+    meetingId: 'm-1',
+    kind: 'summary-pdf',
+    db: { meetingMinute: { findUnique: async () => ({ id: 'm-1', title: 'Campaña', meetingAt: new Date(), status: 'READY', deletedAt: null, summaryPdfStorageKey: 'private/summary.pdf' }) } },
+    storage: { downloadBuffer: async ({ key }) => ({ body: pdf, mimeType: 'application/pdf', size: pdf.length, key }) }
+  });
+  assert.equal(file.kind, 'SUMMARY_PDF');
+  assert.equal(file.mimeType, 'application/pdf');
+  assert.equal(file.body, pdf);
 });
 
 test('Drive supports folders, uploads, rename, move and recoverable trash', async () => {
@@ -242,6 +258,7 @@ test('Drive is wired as a protected platform module with search, filters and fil
   assert.match(apiRoutes, /router\.delete\('\/files\/:id'/);
   assert.match(service, /getDriveFiles/);
   assert.match(service, /getDriveFile/);
+  assert.match(service, /getDriveArtifactBlob/);
   assert.match(service, /trashAutomatedMinute/);
   assert.match(service, /restoreAutomatedMinute/);
   assert.match(service, /permanentlyDeleteAutomatedMinute/);
@@ -249,8 +266,10 @@ test('Drive is wired as a protected platform module with search, filters and fil
   assert.match(drive, /<PageHeader/);
   assert.doesNotMatch(drive, /Biblioteca documental/);
   assert.match(drive, /Buscar archivos/);
-  assert.match(drive, /Minutas de Bria/);
+  assert.match(drive, /Resúmenes PDF/);
+  assert.match(drive, /Análisis PDF/);
   assert.match(drive, /Transcripciones/);
+  assert.match(drive, /BRIA_ARTIFACT_KINDS/);
   assert.match(drive, /Descargar/);
   assert.match(drive, /Nueva carpeta/);
   assert.match(drive, /Subir archivos/);

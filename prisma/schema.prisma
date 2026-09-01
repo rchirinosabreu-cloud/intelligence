@@ -73,33 +73,35 @@ model User {
 }
 
 model MeetingMinute {
-  id                   String    @id @default(uuid())
-  source               String    @default("FIREFLIES")
-  externalId           String    @unique
-  title                String
-  meetingAt            DateTime
-  durationSeconds      Int?
-  organizerEmail       String?
-  participants         Json?
-  transcriptText       String
-  sourceSummary        Json?
-  executiveSummary     String?
-  analysis             Json?
-  actionItems          Json?
-  observerSignals      Json?
-  status               String    @default("DISCOVERED")
-  errorMessage         String?
-  retryCount           Int       @default(0)
-  aiModel              String?
-  aiRequestId          String?
-  storageProvider      String    @default("RAILWAY")
-  transcriptStorageKey String?
-  minuteStorageKey     String?
-  processedAt          DateTime?
-  deletedAt            DateTime?
-  lastSeenAt           DateTime  @default(now())
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id                    String    @id @default(uuid())
+  source                String    @default("FIREFLIES")
+  externalId            String    @unique
+  title                 String
+  meetingAt             DateTime
+  durationSeconds       Int?
+  organizerEmail        String?
+  participants          Json?
+  transcriptText        String
+  sourceSummary         Json?
+  executiveSummary      String?
+  analysis              Json?
+  actionItems           Json?
+  observerSignals       Json?
+  status                String    @default("DISCOVERED")
+  errorMessage          String?
+  retryCount            Int       @default(0)
+  aiModel               String?
+  aiRequestId           String?
+  storageProvider       String    @default("RAILWAY")
+  transcriptStorageKey  String?
+  minuteStorageKey      String?
+  summaryPdfStorageKey  String?
+  analysisPdfStorageKey String?
+  processedAt           DateTime?
+  deletedAt             DateTime?
+  lastSeenAt            DateTime  @default(now())
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@index([status, meetingAt])
   @@index([deletedAt, meetingAt])
@@ -269,6 +271,7 @@ model Client {
   integrations        Integration[]
   nativeTasks         Task[]
   agencyContexts      AgencyContext[]
+  briaMemorySources   BriaMemorySource[]
   boards              Board[]
   healthRecords       ClientHealth[]
   responsibleId       String?
@@ -774,6 +777,49 @@ model AgencyContext {
   maxStreak        Int?                         @default(0)
   createdAt        DateTime                     @default(now())
   client           Client?                      @relation(fields: [clientId], references: [id])
+}
+
+model BriaMemorySource {
+  id              String            @id @default(uuid())
+  sourceKind      String
+  sourceRecordId  String
+  title           String
+  subtitle        String?
+  sourceUrl       String?
+  status          String            @default("PENDING")
+  contentHash     String?
+  clientId        String?
+  sourceUpdatedAt DateTime?
+  indexedAt       DateTime?
+  deletedAt       DateTime?
+  metadata        Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  client          Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  chunks          BriaMemoryChunk[]
+
+  @@unique([sourceKind, sourceRecordId])
+  @@index([status, deletedAt, indexedAt])
+  @@index([clientId, deletedAt])
+  @@index([sourceKind, sourceUpdatedAt])
+}
+
+model BriaMemoryChunk {
+  id             String                       @id @default(uuid())
+  sourceId       String
+  position       Int
+  section        String
+  content        String
+  contentHash    String
+  tokenEstimate  Int
+  embeddingModel String
+  embedding      Unsupported("vector(1536)")?
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+  source         BriaMemorySource             @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, position])
+  @@index([sourceId, section])
 }
 
 model SystemStreak {

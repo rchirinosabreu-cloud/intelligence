@@ -36,6 +36,13 @@ export const list = async (req, res) => {
 export const detail = async (req, res) => {
   try {
     const file = await readDriveFile({ meetingId: req.params.meetingId, kind: req.params.kind });
+    if (file.body) {
+      const encodedName = encodeURIComponent(file.name);
+      res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+      res.setHeader('Content-Length', String(file.size || file.body.length));
+      if (req.query.download === 'true') res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedName}`);
+      return res.send(file.body);
+    }
     if (req.query.download === 'true') {
       const encodedName = encodeURIComponent(file.name);
       res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedName}`);
