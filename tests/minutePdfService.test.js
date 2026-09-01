@@ -34,9 +34,10 @@ const analysis = {
   observerSignals: minute.observerSignals
 };
 
-test('Bria generates separate readable PDF files for the summary and analysis', () => {
-  const summary = buildSummaryPdf({ minute, analysis });
-  const detailedAnalysis = buildAnalysisPdf({ minute, analysis });
+test('Bria generates separate readable PDF files for the summary and analysis', async () => {
+  const renderPdf = async (html) => Buffer.from(`%PDF ${html}`);
+  const summary = await buildSummaryPdf({ minute, analysis, renderPdf });
+  const detailedAnalysis = await buildAnalysisPdf({ minute, analysis, renderPdf });
 
   assert.ok(Buffer.isBuffer(summary));
   assert.ok(Buffer.isBuffer(detailedAnalysis));
@@ -44,6 +45,52 @@ test('Bria generates separate readable PDF files for the summary and analysis', 
   assert.equal(detailedAnalysis.subarray(0, 4).toString(), '%PDF');
   assert.ok(summary.length > 1500);
   assert.ok(detailedAnalysis.length > 1500);
+});
+
+test('automatic minute PDFs use the same editorial HTML system as manual reports', async () => {
+  const service = await import('../src/services/minutePdfService.js');
+
+  assert.equal(typeof service.buildSummaryHtml, 'function');
+  assert.equal(typeof service.buildAnalysisHtml, 'function');
+
+  const summaryHtml = service.buildSummaryHtml({ minute, analysis });
+  const analysisHtml = service.buildAnalysisHtml({ minute, analysis });
+
+  for (const html of [summaryHtml, analysisHtml]) {
+    assert.match(html, /class="cover"/);
+    assert.match(html, /Brainstudio Intelligence/);
+    assert.match(html, /Plus Jakarta Sans/);
+    assert.match(html, /class="section-heading"/);
+  }
+  assert.match(summaryHtml, /Campaña aprobada/);
+  assert.match(summaryHtml, /Aprobar la línea creativa/);
+  assert.match(analysisHtml, /Decisión creativa y control financiero/);
+  assert.match(analysisHtml, /Retraso por presupuesto/);
+});
+
+test('stored automatic PDFs render the shared editorial HTML before upload', async () => {
+  const renderedHtml = [];
+  const uploads = [];
+  const result = await createMinutePdfArtifacts({
+    minute,
+    analysis,
+    renderPdf: async (html) => {
+      renderedHtml.push(html);
+      return Buffer.from(`%PDF editorial ${renderedHtml.length}`);
+    },
+    storage: {
+      uploadBuffer: async (artifact) => {
+        uploads.push(artifact);
+        return { key: artifact.key, size: artifact.body.length, mimeType: artifact.mimeType };
+      }
+    }
+  });
+
+  assert.equal(renderedHtml.length, 2);
+  assert.ok(renderedHtml.every(html => html.includes('class="cover"')));
+  assert.ok(uploads.every(upload => upload.body.toString().startsWith('%PDF editorial')));
+  assert.equal(result.summary.key, uploads[0].key);
+  assert.equal(result.analysis.key, uploads[1].key);
 });
 
 test('PDF artifacts are stored in the meeting folder with stable names', async () => {

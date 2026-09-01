@@ -24,6 +24,8 @@ test('Drive uses the shared dialog primitive for every file and folder modal', a
   assert.match(drive, /sm:h-\[92dvh\]/);
   assert.match(drive, /<Dialog open=\{newFolderOpen\}/);
   assert.match(drive, /<Dialog open=\{!!editTarget\}/);
+  assert.doesNotMatch(drive, /(?:title|alt)=\{file\.name\}/);
+  assert.match(drive, /setPreviewFile\(null\);\s*setPreview\(null\)/);
   assert.doesNotMatch(drive, /role="dialog" aria-modal="true"/);
 });
 

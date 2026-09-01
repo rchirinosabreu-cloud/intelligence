@@ -108,8 +108,8 @@ const PreviewDialog = ({ file, preview, loading, onClose, onDownload }) => {
           {loading && <div className="flex h-72 items-center justify-center gap-2 text-sm text-zinc-500"><Loader2 className="h-5 w-5 animate-spin" /> Abriendo archivo...</div>}
           {!loading && preview?.type === 'minute' && <div className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-sm dark:bg-zinc-950 sm:p-9"><MinuteDocument content={preview.content} /></div>}
           {!loading && preview?.type === 'transcript' && <div className="mx-auto max-w-3xl"><TranscriptDocument content={preview.content} /></div>}
-          {!loading && preview?.type === 'image' && <img src={preview.url} alt={file.name} className="mx-auto max-h-[68vh] rounded-xl object-contain" />}
-          {!loading && preview?.type === 'pdf' && <iframe title={file.name} src={preview.url} className="h-[68vh] w-full rounded-xl bg-white" />}
+          {!loading && preview?.type === 'image' && <img src={preview.url} alt={file?.name || 'Vista previa'} className="mx-auto max-h-[68vh] rounded-xl object-contain" />}
+          {!loading && preview?.type === 'pdf' && <iframe title={file?.name || 'Vista previa del PDF'} src={preview.url} className="h-[68vh] w-full rounded-xl bg-white" />}
           {!loading && preview?.type === 'text' && <pre className="mx-auto max-w-4xl whitespace-pre-wrap rounded-2xl bg-white p-6 text-sm leading-6 text-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">{preview.text}</pre>}
           {!loading && preview?.type === 'unsupported' && <div className="flex h-72 flex-col items-center justify-center text-center"><File className="h-10 w-10 text-zinc-400" /><p className="mt-3 font-medium text-zinc-800 dark:text-zinc-100">Vista previa no disponible</p><p className="mt-1 text-sm text-zinc-500">Puedes descargar el archivo para abrirlo en tu dispositivo.</p></div>}
         </div>
@@ -434,7 +434,7 @@ const DriveLayout = () => {
           </form>
         </DialogContent>
       </Dialog>
-      <PreviewDialog file={previewFile} preview={preview} loading={previewLoading} onClose={() => setPreviewFile(null)} onDownload={() => downloadFile(previewFile)} />
+      <PreviewDialog file={previewFile} preview={preview} loading={previewLoading} onClose={() => { setPreviewFile(null); setPreview(null); }} onDownload={() => downloadFile(previewFile)} />
     </div>
   );
 };
