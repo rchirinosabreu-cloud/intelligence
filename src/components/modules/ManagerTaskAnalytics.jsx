@@ -14,6 +14,7 @@ import {
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
 import BriaMemoryPanel from './BriaMemoryPanel';
+import BriaObserverInbox from './BriaObserverInbox';
 
 const PERIODS = [7, 30, 90];
 
@@ -112,30 +113,6 @@ const QualityItem = ({ value, label, goodWhenZero = true }) => {
   );
 };
 
-const SIGNAL_STYLES = {
-  critical: 'border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/25',
-  warning: 'border-amber-200 bg-amber-50/70 dark:border-amber-900/60 dark:bg-amber-950/20',
-  attention: 'border-violet-200 bg-violet-50/70 dark:border-violet-900/60 dark:bg-violet-950/20',
-  info: 'border-sky-200 bg-sky-50/70 dark:border-sky-900/60 dark:bg-sky-950/20',
-  positive: 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20',
-};
-
-const SignalCard = ({ signal }) => (
-  <article className={cn('rounded-2xl border p-4', SIGNAL_STYLES[signal.severity] || SIGNAL_STYLES.info)}>
-    <div className="flex items-start gap-3">
-      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/80 text-[#009EB9] shadow-sm dark:bg-zinc-900">
-        {signal.severity === 'positive'
-          ? <CheckCircle2 className="h-4 w-4 text-[#00AC8A]" />
-          : <AlertCircle className="h-4 w-4" />}
-      </span>
-      <div className="min-w-0">
-        <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{signal.title}</h3>
-        <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-300">{signal.evidence}</p>
-      </div>
-    </div>
-  </article>
-);
-
 export default function ManagerTaskAnalytics() {
   const [activeTab, setActiveTab] = useState('observer');
   const [periodDays, setPeriodDays] = useState(30);
@@ -213,7 +190,7 @@ export default function ManagerTaskAnalytics() {
                     type="button"
                     onClick={() => setPeriodDays(days)}
                     className={cn(
-                      'rounded-lg px-3 py-2 text-xs font-medium transition-colors',
+                      'min-h-11 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
                       periodDays === days
                         ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-white'
                         : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100'
@@ -227,7 +204,7 @@ export default function ManagerTaskAnalytics() {
                 type="button"
                 onClick={loadAnalytics}
                 disabled={isLoading}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#009EB9] px-4 text-xs font-semibold text-white transition-transform active:scale-95 disabled:opacity-60"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#009EB9] px-4 text-xs font-semibold text-white transition-transform active:scale-95 disabled:opacity-60"
               >
                 <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
                 Actualizar
@@ -272,7 +249,7 @@ export default function ManagerTaskAnalytics() {
           >
             <Bot className="h-4 w-4" />
             Copilot
-            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-900 dark:text-zinc-500">Próxima etapa</span>
+            <span className="hidden sm:inline rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-900 dark:text-zinc-500">Próxima etapa</span>
           </button>
         </nav>
 
@@ -290,36 +267,7 @@ export default function ManagerTaskAnalytics() {
           </div>
         ) : overview ? (
           <>
-            <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Eye className="h-4 w-4 text-[#009EB9]" />
-                    <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Señales observadas</h2>
-                  </div>
-                  <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-                    Desviaciones y vacíos ordenados por prioridad, siempre acompañados por su evidencia.
-                  </p>
-                </div>
-                {analytics.observer?.sample && (
-                  <span className={cn(
-                    'w-fit rounded-full px-3 py-1.5 text-xs font-medium',
-                    analytics.observer.sample.readyForPrediction
-                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                      : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400'
-                  )}>
-                    {analytics.observer.sample.readyForPrediction
-                      ? 'Base comparativa inicial disponible'
-                      : 'Muestra insuficiente para predecir'}
-                  </span>
-                )}
-              </div>
-              <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                {(analytics.observer?.signals || []).map((signal) => (
-                  <SignalCard key={signal.code} signal={signal} />
-                ))}
-              </div>
-            </section>
+            <BriaObserverInbox />
 
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard icon={Clock} label="Esfuerzo registrado" value={formatDuration(overview.totalWorkMs)} detail={`${overview.sessionCount} sesiones dentro del periodo`} accent />

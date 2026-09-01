@@ -11,6 +11,7 @@ import * as proxyController from '../controllers/proxyController.js';
 import * as publicController from '../controllers/publicController.js';
 import * as managerTaskAnalyticsController from '../controllers/managerTaskAnalyticsController.js';
 import * as briaMemoryController from '../controllers/briaMemoryController.js';
+import * as briaObserverController from '../controllers/briaObserverController.js';
 import { authenticateToken, requireManagerRole, requireModulePermission } from '../middlewares/authMiddleware.js';
 import prisma from '../lib/prisma.js';
 import multer from 'multer';
@@ -140,6 +141,24 @@ router.post(
     requireModulePermission('manager'),
     requireManagerRole,
     briaMemoryController.sync
+);
+router.get(
+    '/manager/observer-signals',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    briaObserverController.inbox
+);
+router.post(
+    '/manager/observer-signals/sync',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    briaObserverController.sync
+);
+router.patch(
+    '/manager/observer-signals/:id',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    briaObserverController.transition
 );
 
 // Tasks

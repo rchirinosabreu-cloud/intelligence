@@ -27,7 +27,6 @@ import {
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { brainDatePickerProps } from '@/lib/brainDatePicker';
 import { useAuth } from '@/context/AuthContext';

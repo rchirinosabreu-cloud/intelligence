@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const activityMap = readFileSync(new URL('../src/components/modules/Activity/ActivityMap.jsx', import.meta.url), 'utf8');
 const operationalCalendar = readFileSync(new URL('../src/components/modules/Activity/OperationalCalendar.jsx', import.meta.url), 'utf8');
+const calendarPresentation = readFileSync(new URL('../src/components/modules/Activity/calendarPresentation.js', import.meta.url), 'utf8');
 
 test('activity map hover cards use the member detail portal without legacy ownership', () => {
   assert.match(activityMap, /activeCardData && createPortal/);
@@ -26,5 +27,6 @@ test('floating cards compute viewport-aware positions', () => {
   assert.match(activityMap, /getFloatingCardPosition/);
   assert.match(activityMap, /getBoundingClientRect\(\)/);
   assert.match(operationalCalendar, /getBoundingClientRect\(\)/);
-  assert.match(operationalCalendar, /window\.innerWidth - width - 16/);
+  assert.match(operationalCalendar, /getCalendarPopoverPosition\(rect,/);
+  assert.match(calendarPresentation, /viewport\.width - dimensions\.width - margin/);
 });

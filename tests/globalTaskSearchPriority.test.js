@@ -15,7 +15,7 @@ test('completed history search is global and its card action stays icon-only', a
   assert.match(service, /buildCompletedTaskWhere\(dateString,\s*searchTerm\)/);
 
   assert.match(modal, /aria-label="Regresar al tablero"/);
-  assert.match(modal, /<RotateCcw[^>]*\/>/);
+  assert.match(modal, /<TaskReintegrateIcon[^>]*\/>/);
   assert.doesNotMatch(modal, />\s*Regresar al tablero\s*</);
 });
 

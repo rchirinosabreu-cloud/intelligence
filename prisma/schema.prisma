@@ -822,6 +822,38 @@ model BriaMemoryChunk {
   @@index([sourceId, section])
 }
 
+model BriaObserverSignal {
+  id              String   @id @default(uuid())
+  dedupeKey       String   @unique
+  detectorKey     String
+  sourceKind      String
+  sourceRecordId  String?
+  sourceUrl       String?
+  clientId        String?
+  category        String
+  severity        String
+  title           String
+  evidence        String
+  suggestedAction String?
+  confidence      Float?
+  status          String   @default("OPEN")
+  metadata        Json?
+  firstDetectedAt DateTime @default(now())
+  lastDetectedAt  DateTime @default(now())
+  reviewedAt      DateTime?
+  snoozedUntil    DateTime?
+  dismissedAt     DateTime?
+  resolvedAt      DateTime?
+  lastActionById  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, severity, lastDetectedAt])
+  @@index([detectorKey, status])
+  @@index([sourceKind, sourceRecordId])
+  @@index([clientId, status])
+}
+
 model SystemStreak {
   id                String    @id @default("global")
   currentStreak     Int       @default(0)

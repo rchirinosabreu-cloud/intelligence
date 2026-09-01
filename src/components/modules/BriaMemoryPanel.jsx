@@ -179,9 +179,14 @@ export default function BriaMemoryPanel() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
-          <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Probar recuperación</h2>
-          <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Verifica qué evidencia encontraría Bria antes de habilitar respuestas o acciones.</p>
+        <details className="group rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-semibold text-zinc-950 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#009EB9]/30 dark:text-zinc-50">
+            <span>Auditoría de recuperación</span>
+            <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">Herramienta técnica</span>
+          </summary>
+          <div className="border-t border-zinc-200 p-5 dark:border-zinc-800">
+          <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Herramienta de auditoría</h2>
+          <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Comprueba manualmente qué evidencia recuperaría Bria. Esta herramienta no reemplaza la observación automática.</p>
           <form onSubmit={searchMemory} className="mt-4 flex flex-col gap-2 sm:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
@@ -211,7 +216,8 @@ export default function BriaMemoryPanel() {
             ))}
             {hasSearched && !isSearching && results.length === 0 && <p className="rounded-xl border border-dashed border-zinc-200 p-5 text-center text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">No encontramos evidencia utilizable para esa consulta.</p>}
           </div>
-        </div>
+          </div>
+        </details>
       </section>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">

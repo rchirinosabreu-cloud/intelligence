@@ -56,17 +56,19 @@ test('Bria exposes a real Memory tab with coverage, sources and traceable retrie
   assert.match(panel, /<BriaMemoryPanel/);
   assert.match(memoryPanel, /Memoria utilizable/);
   assert.match(memoryPanel, /Cobertura de fuentes/);
-  assert.match(memoryPanel, /Probar recuperación/);
+  assert.match(memoryPanel, /Auditoría de recuperación/);
   assert.match(memoryPanel, /\/api\/manager\/bria-memory/);
   assert.match(memoryPanel, /sourceUrl/);
 });
 
 test('Bria Observer renders prioritized signals and their evidence', async () => {
   const panel = await readPanel();
-  assert.match(panel, /Señales observadas/);
-  assert.match(panel, /analytics\.observer\?\.signals/);
-  assert.match(panel, /signal\.evidence/);
-  assert.match(panel, /Muestra insuficiente para predecir/i);
+  const inbox = await readFile('src/components/modules/BriaObserverInbox.jsx', 'utf8');
+  assert.match(panel, /<BriaObserverInbox/);
+  assert.match(inbox, /Bandeja del Observer/);
+  assert.match(inbox, /signal\.evidence/);
+  assert.match(inbox, /Filtrar señales por estado/);
+  assert.match(inbox, /Descartar/);
 });
 
 test('Bria labels simultaneous sessions as a live metric', async () => {
