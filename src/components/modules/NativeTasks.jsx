@@ -126,6 +126,13 @@ const formatTaskCardDate = (dateStr) => {
     return `${day} ${monthLabels[taskDate.getMonth()]}`;
 };
 
+const matchesTaskSearch = (task, normalizedSearch) => {
+    const matchesTitle = task.title?.toLowerCase().includes(normalizedSearch);
+    const matchesClient = task.clientName?.toLowerCase().includes(normalizedSearch);
+    const matchesAssignee = task.assigneeName?.toLowerCase().includes(normalizedSearch);
+    return matchesTitle || matchesClient || matchesAssignee;
+};
+
 // --- STYLES ---
 
 const CLIENT_COLORS = {
@@ -480,6 +487,11 @@ const NativeTasks = () => {
 
     const filteredTasks = useMemo(() => {
         let filtered = tasks.filter(task => {
+            const normalizedSearch = searchQuery.trim().toLowerCase();
+            if (normalizedSearch !== '') {
+                return matchesTaskSearch(task, normalizedSearch);
+            }
+
             const columnId = getColumnId(task.status);
             if (columnId === 'realizado') {
                 if (!task.completedAt) return false;
@@ -491,15 +503,6 @@ const NativeTasks = () => {
             }
             if (responsibleFilter !== 'Todos' && (task.assigneeName || "Desconocido") !== responsibleFilter) return false;
             if (clientFilter !== 'Todos' && (task.clientName || "Desconocido") !== clientFilter) return false;
-
-            // Global Search Filter
-            if (searchQuery.trim() !== '') {
-                const query = searchQuery.toLowerCase();
-                const matchesTitle = task.title?.toLowerCase().includes(query);
-                const matchesClient = task.clientName?.toLowerCase().includes(query);
-                const matchesAssignee = task.assigneeName?.toLowerCase().includes(query);
-                if (!matchesTitle && !matchesClient && !matchesAssignee) return false;
-            }
 
             if (dateFilter === 'Todos') return true;
             if (dateFilter === 'Hoy + Vencidos') return isTodayOrOverdue(task.dueDateFormatted);
@@ -633,6 +636,8 @@ const NativeTasks = () => {
         }
         const visibleTasksInDestColumn = newTasks.filter(task => {
             if (getColumnId(task.status) !== destinationColumnId) return false;
+            const normalizedSearch = searchQuery.trim().toLowerCase();
+            if (normalizedSearch !== '') return matchesTaskSearch(task, normalizedSearch);
             if (responsibleFilter !== 'Todos' && (task.assigneeName || "Desconocido") !== responsibleFilter) return false;
             if (clientFilter !== 'Todos' && (task.clientName || "Desconocido") !== clientFilter) return false;
             if (dateFilter === 'Hoy + Vencidos' && !isTodayOrOverdue(task.dueDateFormatted)) return false;

@@ -65,7 +65,7 @@ export const getStreak = async (req, res) => {
 
 export const getCompleted = async (req, res) => {
     try {
-        const tasks = await getCompletedTasks(req.query.date);
+        const tasks = await getCompletedTasks(req.query.date, req.query.search);
         res.json(tasks);
     } catch (error) {
         res.status(500).json({ error: "Failed to fetch completed tasks", details: error.message });

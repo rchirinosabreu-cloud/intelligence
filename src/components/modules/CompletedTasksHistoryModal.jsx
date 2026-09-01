@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { X, Search, Filter, Loader2, CalendarDays, RefreshCw } from '@/components/ui/icons';
+import { X, Search, Filter, Loader2, CalendarDays, RefreshCw, RotateCcw } from '@/components/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
 import TeamAvatar from '@/components/ui/TeamAvatar';
@@ -20,11 +20,25 @@ import {
   REOPEN_REASONS,
 } from '@/lib/taskTiming';
 
+const matchesTaskSearch = (task, searchTerm) => {
+  const query = searchTerm.trim().toLowerCase();
+  if (!query) return true;
+  return task.title?.toLowerCase().includes(query)
+    || task.client?.name?.toLowerCase().includes(query)
+    || task.assignee?.name?.toLowerCase().includes(query);
+};
+
+const filterCompletedHistoryTasks = (tasks, searchTerm, selectedUser) => {
+  if (searchTerm.trim()) return tasks.filter(task => matchesTaskSearch(task, searchTerm));
+  return tasks.filter(task => selectedUser === 'all' || task.assigneeId === selectedUser);
+};
+
 const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
   const { currentUser } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState('all');
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +57,12 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
   }, []);
 
   const [selectedDate, setSelectedDate] = useState(todayStr);
+  const isGlobalSearchActive = searchTerm.trim() !== '';
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearchTerm(searchTerm), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
 
   useEffect(() => {
     if (!isOpen) setReopeningTask(null);
@@ -50,25 +70,33 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     if (!isOpen) return;
+    const requestController = new AbortController();
 
-    const fetchTasksByDate = async () => {
+    const fetchCompletedTasks = async () => {
       try {
         setLoading(true);
         const baseUrl = getApiBaseUrl();
-        // Option B: Fetch directly from backend passing the selected date
-        const response = await fetch(`${baseUrl}/api/tasks/completed?date=${selectedDate}`);
+        const params = new URLSearchParams();
+        const normalizedSearch = debouncedSearchTerm.trim();
+        if (normalizedSearch) params.set('search', normalizedSearch);
+        else params.set('date', selectedDate);
+        const response = await fetch(`${baseUrl}/api/tasks/completed?${params.toString()}`, {
+          signal: requestController.signal
+        });
         if (!response.ok) throw new Error('Network response was not ok');
         const data = await response.json();
         setTasks(Array.isArray(data) ? data : []);
       } catch (error) {
+        if (error.name === 'AbortError') return;
         console.error('Error fetching completed tasks history:', error);
       } finally {
-        setLoading(false);
+        if (!requestController.signal.aborted) setLoading(false);
       }
     };
 
-    fetchTasksByDate();
-  }, [isOpen, selectedDate]);
+    fetchCompletedTasks();
+    return () => requestController.abort();
+  }, [isOpen, selectedDate, debouncedSearchTerm]);
 
   // Helper to group tasks by User
   // Since we are fetching by a specific day, grouping by date is no longer strictly necessary,
@@ -76,13 +104,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
   const groupedTasks = useMemo(() => {
     if (!tasks || tasks.length === 0) return {};
 
-    // Filter tasks based on search and user selection locally
-    const filteredTasks = tasks.filter(task => {
-        const matchesSearch = task.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              task.client?.name?.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesUser = selectedUser === 'all' || task.assigneeId === selectedUser;
-        return matchesSearch && matchesUser;
-    });
+    const filteredTasks = filterCompletedHistoryTasks(tasks, searchTerm, selectedUser);
 
     const groupedByUser = {};
 
@@ -212,8 +234,9 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                         type="date"
                         value={selectedDate}
                         onChange={(e) => setSelectedDate(e.target.value)}
+                        disabled={isGlobalSearchActive}
                         max={todayStr}
-                        className="w-full pl-9 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:text-white"
+                        className="w-full pl-9 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:text-white disabled:cursor-not-allowed disabled:opacity-45"
                     />
                 </div>
 
@@ -222,7 +245,8 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                     <select
                         value={selectedUser}
                         onChange={(e) => setSelectedUser(e.target.value)}
-                        className="w-full pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:text-white"
+                        disabled={isGlobalSearchActive}
+                        className="w-full pl-9 pr-8 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:text-white disabled:cursor-not-allowed disabled:opacity-45"
                     >
                         <option value="all">Todos los miembros</option>
                         {uniqueUsers.map(u => (
@@ -269,7 +293,18 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                         {/* Task Cards Grid */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-2 sm:pl-11">
                             {userGroup.items.map(task => (
-                                <Card key={task.id} className="p-3 border-zinc-200 dark:border-zinc-800 hover:border-emerald-200 dark:hover:border-emerald-900/50 transition-colors group">
+                                <Card key={task.id} className="relative p-3 pr-11 border-zinc-200 dark:border-zinc-800 hover:border-emerald-200 dark:hover:border-emerald-900/50 transition-colors group">
+                                    {canReopenTasks && (
+                                      <button
+                                          type="button"
+                                          onClick={() => setReopeningTask(task)}
+                                          aria-label="Regresar al tablero"
+                                          title="Regresar al tablero"
+                                          className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-[#009EB9]/10 hover:text-[#009EB9] focus:outline-none focus:ring-2 focus:ring-[#009EB9]/30 dark:text-zinc-500"
+                                      >
+                                          <RotateCcw className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
                                     <div className="flex items-start gap-3">
                                         <div className="mt-0.5">
                                             <div className="w-4 h-4 rounded-full bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-500 flex items-center justify-center">
@@ -293,16 +328,6 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                                             </div>
                                         </div>
                                     </div>
-                                    {canReopenTasks && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setReopeningTask(task)}
-                                        className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm font-medium text-zinc-700 transition-colors hover:border-[#009EB9]/40 hover:bg-[#009EB9]/5 hover:text-[#007F95] focus:outline-none focus:ring-2 focus:ring-[#009EB9]/20 dark:border-zinc-700 dark:text-zinc-200 dark:hover:border-[#29B8CF]/50 dark:hover:bg-[#009EB9]/10 dark:hover:text-[#54C8DB] sm:w-auto"
-                                      >
-                                        <RefreshCw className="h-4 w-4" />
-                                        Regresar al tablero
-                                      </button>
-                                    )}
                                 </Card>
                             ))}
                         </div>

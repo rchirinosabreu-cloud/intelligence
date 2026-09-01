@@ -586,37 +586,51 @@ export const createTask = async ({
     }
 };
 
-export const getCompletedTasks = async (dateString) => {
-    try {
-        // Fix Timezone Offset (America/Bogota UTC-5)
-        let targetDateStr = dateString;
+export const buildCompletedTaskWhere = (dateString, searchTerm) => {
+    const normalizedSearch = String(searchTerm || '').trim();
 
-        if (!targetDateStr) {
-            // If no date provided, get "today" in UTC-5
-            const formatter = new Intl.DateTimeFormat('en-CA', {
-                timeZone: 'America/Bogota',
-                year: 'numeric', month: '2-digit', day: '2-digit'
-            });
-            targetDateStr = formatter.format(new Date()); // Returns YYYY-MM-DD
+    if (normalizedSearch) {
+        return {
+            status: 'REALIZADA',
+            completedAt: { not: null },
+            OR: [
+                { title: { contains: normalizedSearch, mode: 'insensitive' } },
+                { client: { name: { contains: normalizedSearch, mode: 'insensitive' } } },
+                { assignee: { name: { contains: normalizedSearch, mode: 'insensitive' } } }
+            ]
+        };
+    }
+
+    // Fix Timezone Offset (America/Bogota UTC-5)
+    let targetDateStr = dateString;
+
+    if (!targetDateStr) {
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Bogota',
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        });
+        targetDateStr = formatter.format(new Date());
+    }
+
+    const startOfDay = new Date(`${targetDateStr}T05:00:00.000Z`);
+    const endOfDay = new Date(startOfDay.getTime() + (24 * 60 * 60 * 1000) - 1);
+
+    return {
+        status: 'REALIZADA',
+        completedAt: {
+            not: null,
+            gte: startOfDay,
+            lte: endOfDay
         }
+    };
+};
 
-        // Construct the boundaries in strict UTC to match Prisma's stored values
-        // A day in Bogota (e.g. 2026-03-03) starts at 2026-03-03T05:00:00.000Z
-        // and ends at 2026-03-04T04:59:59.999Z
-        const startOfDay = new Date(`${targetDateStr}T05:00:00.000Z`);
-
-        // To get the end of the day, add 24 hours and subtract 1 millisecond
-        const endOfDay = new Date(startOfDay.getTime() + (24 * 60 * 60 * 1000) - 1);
+export const getCompletedTasks = async (dateString, searchTerm) => {
+    try {
+        const where = buildCompletedTaskWhere(dateString, searchTerm);
 
         const tasks = await prisma.task.findMany({
-            where: {
-                status: 'REALIZADA',
-                completedAt: {
-                    not: null,
-                    gte: startOfDay,
-                    lte: endOfDay
-                }
-            },
+            where,
             include: {
                 client: {
                     select: { name: true, logoUrl: true }
