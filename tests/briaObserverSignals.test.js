@@ -6,6 +6,8 @@ import {
   BRIA_OBSERVER_INTERVAL_MS,
   buildMinuteObserverDetections,
   buildTaskAnalyticsObserverDetections,
+  getObserverInbox,
+  initializeObserverDetectorBaseline,
   reconcileObserverDetections,
   transitionObserverSignal
 } from '../src/services/briaObserverService.js';
@@ -27,23 +29,74 @@ test('Observer converts operational findings into traceable persistent detection
   assert.match(detections[0].evidence, /activas ahora/i);
 });
 
-test('Observer promotes minute findings with their meeting as evidence', () => {
-  const detections = buildMinuteObserverDetections({
+test('Observer promotes only explicit post-activation minute alerts while retaining historical context outside the inbox', () => {
+  const activatedAt = new Date('2026-09-01T12:00:00.000Z');
+  const actionableMinute = {
     id: 'minute-1',
     title: 'Seguimiento Aristea',
+    meetingAt: new Date('2026-09-01T13:00:00.000Z'),
     status: 'READY',
     deletedAt: null,
     observerSignals: [
-      { type: 'RISK', severity: 'warning', description: 'Falta aprobación', evidence: 'La fecha de publicación no fue aprobada.' }
+      { type: 'RISK', severity: 'warning', description: 'Falta aprobación', evidence: 'La fecha de publicación no fue aprobada.', actionable: true, suggestedAction: 'Solicitar aprobación hoy.' }
     ]
-  });
+  };
+  const detections = buildMinuteObserverDetections(actionableMinute, { activatedAt });
 
   assert.equal(detections.length, 1);
   assert.equal(detections[0].sourceKind, 'MEETING_MINUTE');
   assert.equal(detections[0].sourceRecordId, 'minute-1');
   assert.equal(detections[0].sourceUrl, '/minutas?minute=minute-1');
   assert.match(detections[0].dedupeKey, /^MINUTE_SIGNAL:minute-1:/);
+  assert.equal(detections[0].suggestedAction, 'Solicitar aprobación hoy.');
+  assert.equal(buildMinuteObserverDetections({ ...actionableMinute, meetingAt: new Date('2026-08-31T13:00:00.000Z') }, { activatedAt }).length, 0);
+  assert.equal(buildMinuteObserverDetections({ ...actionableMinute, observerSignals: [{ ...actionableMinute.observerSignals[0], actionable: false }] }, { activatedAt }).length, 0);
   assert.equal(buildMinuteObserverDetections({ id: 'minute-1', status: 'EXCLUDED', observerSignals: [{}] }).length, 0);
+});
+
+test('Observer establishes one durable baseline and archives pre-existing minute alerts without deleting their memory', async () => {
+  const calls = [];
+  const now = new Date('2026-09-01T12:00:00.000Z');
+  const repository = {
+    ensureDetectorState: async (detectorKey, activatedAt) => {
+      calls.push(['ensure', detectorKey, activatedAt]);
+      return { detectorKey, activatedAt, baselineArchivedAt: null };
+    },
+    archiveExistingSignals: async (detectorKey, archivedAt) => {
+      calls.push(['archive', detectorKey, archivedAt]);
+      return { count: 284 };
+    },
+    markBaselineArchived: async (detectorKey, archivedAt) => {
+      calls.push(['mark', detectorKey, archivedAt]);
+      return { detectorKey, activatedAt: now, baselineArchivedAt: archivedAt };
+    }
+  };
+
+  const result = await initializeObserverDetectorBaseline({ detectorKey: 'MINUTE_SIGNAL', repository, now });
+
+  assert.equal(result.activatedAt, now);
+  assert.equal(result.archived, 284);
+  assert.deepEqual(calls.map(([operation]) => operation), ['ensure', 'archive', 'mark']);
+});
+
+test('Observer inbox reports the real scan time and counts archived baseline as memory rather than active work', async () => {
+  const scannedAt = new Date('2026-09-01T15:30:00.000Z');
+  const result = await getObserverInbox({
+    db: {
+      briaObserverSignal: {
+        findMany: async () => [],
+        groupBy: async () => [{ status: 'ARCHIVED', _count: { _all: 284 } }],
+        findFirst: async () => ({ lastDetectedAt: new Date('2026-08-20T12:00:00.000Z') })
+      },
+      briaObserverDetectorState: {
+        findFirst: async () => ({ lastScannedAt: scannedAt })
+      }
+    }
+  });
+
+  assert.equal(result.summary.active, 0);
+  assert.equal(result.summary.historical, 284);
+  assert.equal(result.summary.lastScannedAt, scannedAt);
 });
 
 test('reconciliation is idempotent and resolves findings that disappeared', async () => {
@@ -85,11 +138,15 @@ test('Observer schema, protected API and non-overlapping scheduler are wired', (
   const schemaBootstrap = readFileSync('scripts/ensure-bria-observer-schema.js', 'utf8');
 
   assert.match(schema, /model BriaObserverSignal/);
+  assert.match(schema, /model BriaObserverDetectorState/);
   assert.match(schema, /dedupeKey\s+String\s+@unique/);
+  assert.match(schema, /archivedAt\s+DateTime\?/);
   assert.match(routes, /\/manager\/observer-signals/);
   assert.match(routes, /requireManagerRole/);
   assert.match(server, /initBriaObserverScheduler\(\)/);
   assert.match(packageJson, /ensure-bria-observer-schema\.js/);
   assert.match(schemaBootstrap, /CREATE TABLE IF NOT EXISTS "BriaObserverSignal"/);
+  assert.match(schemaBootstrap, /CREATE TABLE IF NOT EXISTS "BriaObserverDetectorState"/);
+  assert.match(schemaBootstrap, /ADD COLUMN IF NOT EXISTS "archivedAt"/);
   assert.equal(BRIA_OBSERVER_INTERVAL_MS, 10 * 60 * 1000);
 });

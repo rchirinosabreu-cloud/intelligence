@@ -120,6 +120,11 @@ export default function BriaObserverInbox() {
             <p aria-live="polite" className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
               {summary.active || 0} activas · último escaneo {formatDate(summary.lastScannedAt)}
             </p>
+            {(summary.historical || 0) > 0 && (
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                {summary.historical} antecedentes integrados en la memoria, sin generar tareas pendientes.
+              </p>
+            )}
           </div>
           <button type="button" onClick={scanNow} disabled={isScanning} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#009EB9] px-4 text-xs font-semibold text-white transition-transform active:scale-95 disabled:opacity-60 sm:w-auto">
             <RefreshCw className={cn('h-4 w-4', isScanning && 'animate-spin')} />

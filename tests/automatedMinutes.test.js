@@ -24,6 +24,18 @@ test('minute analysis accepts JSON wrapped in markdown fences', () => {
   );
 });
 
+test('future minute analysis separates durable knowledge from genuinely actionable Observer alerts', async () => {
+  const automationSource = await read('src/services/minuteAutomationService.js');
+
+  assert.match(automationSource, /knowledgeItems/);
+  assert.match(automationSource, /CLIENT_PREFERENCE/);
+  assert.match(automationSource, /BRAND_RULE/);
+  assert.match(automationSource, /actionable/);
+  assert.match(automationSource, /suggestedAction/);
+  assert.match(automationSource, /Solo marca actionable como true/i);
+  assert.match(automationSource, /conocimiento histórico/i);
+});
+
 test('minute artifacts use a stable Bria Drive path', () => {
   assert.equal(
     buildMinuteStorageKey({ meetingId: 'meeting/123', meetingAt: '2026-08-31T15:00:00.000Z', fileName: 'minute.json' }),

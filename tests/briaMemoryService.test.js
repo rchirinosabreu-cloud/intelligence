@@ -25,7 +25,10 @@ const readyMinute = {
     topics: ['Campaña de septiembre'],
     decisions: ['Aprobar la línea creativa'],
     risks: ['Demora en la aprobación del presupuesto'],
-    opportunities: ['Extender la campaña a octubre']
+    opportunities: ['Extender la campaña a octubre'],
+    knowledgeItems: [
+      { type: 'CLIENT_PREFERENCE', content: 'La cliente prefiere aprobar las piezas antes de programarlas.', evidence: 'Lina pidió revisar cada pieza antes de publicación.', confidence: 0.95 }
+    ]
   },
   actionItems: [{ task: 'Ajustar presupuesto', owner: 'Rodny', dueDate: '2026-09-02', priority: 'ALTA' }],
   observerSignals: [{ type: 'RISK', description: 'Presupuesto pendiente', evidence: 'Falta aprobación final', severity: 'warning' }],
@@ -55,6 +58,8 @@ test('a ready minute becomes a traceable summary plus transcript memory', () => 
   assert.equal(document.sourceUrl, `/minutas?minute=${readyMinute.id}`);
   assert.ok(document.contentHash.length >= 32);
   assert.ok(document.chunks.some((chunk) => chunk.section === 'SUMMARY' && /Aprobar la línea creativa/.test(chunk.content)));
+  assert.ok(document.chunks.some((chunk) => chunk.section === 'SUMMARY' && /CONOCIMIENTO CANÓNICO/.test(chunk.content)));
+  assert.ok(document.chunks.some((chunk) => chunk.section === 'SUMMARY' && /prefiere aprobar las piezas/.test(chunk.content)));
   assert.ok(document.chunks.some((chunk) => chunk.section === 'TRANSCRIPT' && /Ajustaré el presupuesto/.test(chunk.content)));
   assert.ok(document.chunks.every((chunk, index) => chunk.position === index));
 });

@@ -844,6 +844,8 @@ model BriaObserverSignal {
   snoozedUntil    DateTime?
   dismissedAt     DateTime?
   resolvedAt      DateTime?
+  archivedAt      DateTime? @db.Timestamptz(3)
+  archiveReason   String?
   lastActionById  String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -852,6 +854,17 @@ model BriaObserverSignal {
   @@index([detectorKey, status])
   @@index([sourceKind, sourceRecordId])
   @@index([clientId, status])
+}
+
+model BriaObserverDetectorState {
+  detectorKey        String    @id
+  activatedAt        DateTime  @db.Timestamptz(3)
+  baselineArchivedAt DateTime? @db.Timestamptz(3)
+  lastScannedAt      DateTime? @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([lastScannedAt])
 }
 
 model SystemStreak {

@@ -47,6 +47,13 @@ const actionText = (item = {}) => [
   item.priority ? `Prioridad: ${item.priority}` : null
 ].filter(Boolean).join(' · ');
 
+const knowledgeText = (item = {}) => [
+  item.type || 'FACT',
+  item.content || 'Conocimiento sin descripción',
+  item.evidence ? `Evidencia: ${item.evidence}` : null,
+  Number.isFinite(Number(item.confidence)) ? `Confianza: ${Math.round(Number(item.confidence) * 100)}%` : null
+].filter(Boolean).join(' · ');
+
 export const buildMeetingMinuteMemoryDocument = (minute) => {
   if (!minute?.id) throw new Error('BRIA_MEMORY_MINUTE_ID_REQUIRED');
   const analysis = minute.analysis && typeof minute.analysis === 'object' ? minute.analysis : {};
@@ -62,6 +69,7 @@ export const buildMeetingMinuteMemoryDocument = (minute) => {
     `ACCIONES PROPUESTAS:\n${listText(minute.actionItems, actionText)}`,
     `RIESGOS:\n${listText(analysis.risks)}`,
     `OPORTUNIDADES:\n${listText(analysis.opportunities)}`,
+    `CONOCIMIENTO CANÓNICO:\n${listText(analysis.knowledgeItems, knowledgeText)}`,
     `SEÑALES DEL OBSERVER:\n${listText(minute.observerSignals, (item) => [item?.type, item?.description, item?.evidence].filter(Boolean).join(' — '))}`
   ].filter(Boolean).join('\n\n');
 

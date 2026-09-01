@@ -24,16 +24,47 @@ const MINUTE_RESPONSE_SCHEMA = {
     actionItems: { type: 'array', items: { type: 'object', properties: { task: { type: 'string' }, owner: { type: ['string', 'null'] }, dueDate: { type: ['string', 'null'] }, priority: { type: 'string' } }, required: ['task', 'owner', 'dueDate', 'priority'] } },
     risks: { type: 'array', items: { type: 'string' } },
     opportunities: { type: 'array', items: { type: 'string' } },
-    observerSignals: { type: 'array', items: { type: 'object', properties: { type: { type: 'string' }, description: { type: 'string' }, evidence: { type: 'string' }, severity: { type: 'string' } }, required: ['type', 'description', 'evidence', 'severity'] } }
+    knowledgeItems: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['DECISION', 'CLIENT_PREFERENCE', 'BRAND_RULE', 'PROCESS', 'COMMITMENT', 'FACT'] },
+          content: { type: 'string' },
+          evidence: { type: 'string' },
+          confidence: { type: 'number' }
+        },
+        required: ['type', 'content', 'evidence', 'confidence']
+      }
+    },
+    observerSignals: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string' },
+          description: { type: 'string' },
+          evidence: { type: 'string' },
+          severity: { type: 'string' },
+          actionable: { type: 'boolean' },
+          suggestedAction: { type: ['string', 'null'] },
+          owner: { type: ['string', 'null'] },
+          dueDate: { type: ['string', 'null'] }
+        },
+        required: ['type', 'description', 'evidence', 'severity', 'actionable', 'suggestedAction', 'owner', 'dueDate']
+      }
+    }
   },
-  required: ['summaryTitle', 'summarySubtitle', 'analysisTitle', 'analysisSubtitle', 'executiveSummary', 'participants', 'topics', 'decisions', 'actionItems', 'risks', 'opportunities', 'observerSignals']
+  required: ['summaryTitle', 'summarySubtitle', 'analysisTitle', 'analysisSubtitle', 'executiveSummary', 'participants', 'topics', 'decisions', 'actionItems', 'risks', 'opportunities', 'knowledgeItems', 'observerSignals']
 };
 
 const minuteInstructions = `Eres Bria, observadora operativa de Brainstudio. Genera una minuta ejecutiva fiel y accionable en español.
 No inventes participantes, fechas, responsables ni decisiones. Separa claramente decisiones de propuestas.
 Genera un título y un subtítulo breve para el resumen, y otro título y subtítulo breve para el análisis; deben estar basados en el contenido real, no limitarse a repetir el nombre de la reunión.
 Los actionItems son propuestas para revisión humana: no declares que fueron creados como tareas.
-Cada señal del Observer debe incluir evidencia textual concreta de la reunión.`;
+Extrae en knowledgeItems el conocimiento histórico duradero: decisiones, preferencias del cliente, reglas de marca, procesos, compromisos y hechos. Todo debe conservar evidencia textual y no implica una alerta.
+Cada señal del Observer debe incluir evidencia textual concreta de la reunión. Solo marca actionable como true si describe una condición vigente, verificable y con una acción humana concreta; una observación, posibilidad o conversación pasada pertenece a la memoria y no a la bandeja.
+No conviertas el conocimiento histórico ni los actionItems generales en alertas. Si actionable es false, suggestedAction, owner y dueDate deben ser null.`;
 
 export const MAX_AUTOMATIC_MINUTE_RETRIES = 3;
 

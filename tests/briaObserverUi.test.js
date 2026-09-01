@@ -14,6 +14,7 @@ test('Bria opens with a proactive Observer inbox instead of a search experience'
   assert.match(inbox, /Descartar/);
   assert.match(inbox, /Resolver/);
   assert.match(inbox, /aria-live="polite"/);
+  assert.match(inbox, /antecedentes integrados en la memoria/i);
   assert.match(inbox, /min-h-11/);
   assert.match(manager, /hidden sm:inline[^>]*>Próxima etapa/);
   assert.match(manager, /min-h-11[^>]*periodDays === days/);
