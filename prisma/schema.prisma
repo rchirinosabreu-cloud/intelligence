@@ -72,6 +72,39 @@ model User {
   teamMember                  TeamMember?
 }
 
+model MeetingMinute {
+  id                   String    @id @default(uuid())
+  source               String    @default("FIREFLIES")
+  externalId           String    @unique
+  title                String
+  meetingAt            DateTime
+  durationSeconds      Int?
+  organizerEmail       String?
+  participants         Json?
+  transcriptText       String
+  sourceSummary        Json?
+  executiveSummary     String?
+  analysis             Json?
+  actionItems          Json?
+  observerSignals      Json?
+  status               String    @default("DISCOVERED")
+  errorMessage         String?
+  retryCount           Int       @default(0)
+  aiModel              String?
+  aiRequestId          String?
+  storageProvider      String    @default("RAILWAY")
+  transcriptStorageKey String?
+  minuteStorageKey     String?
+  processedAt          DateTime?
+  lastSeenAt           DateTime  @default(now())
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([status, meetingAt])
+  @@index([meetingAt])
+  @@index([organizerEmail])
+}
+
 model PasswordResetCode {
   id        String    @id @default(uuid())
   userId    String

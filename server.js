@@ -7,6 +7,7 @@ import fs from 'fs';
 import prisma from './src/lib/prisma.js';
 import { initTaskClassificationCron } from './src/services/taskClassificationService.js';
 import { initGoogleCalendarSyncScheduler } from './src/services/googleCalendarSyncScheduler.js';
+import { initAutomatedMinutesScheduler } from './src/services/automatedMinutesScheduler.js';
 import { getAIHealth } from './src/services/aiService.js';
 import { loggerMiddleware } from './src/middlewares/logger.js';
 import { operationalAuditMiddleware } from './src/middlewares/operationalAuditMiddleware.js';
@@ -177,6 +178,7 @@ async function bootstrap() {
     try {
         initTaskClassificationCron();
         initGoogleCalendarSyncScheduler();
+        initAutomatedMinutesScheduler();
         console.log("[Service: Cron] Tareas en segundo plano inicializadas.");
     } catch (cronError) {
         console.error("[Service: Cron] Fallo al iniciar tareas programadas:", cronError.message);

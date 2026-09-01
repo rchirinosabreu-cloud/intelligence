@@ -250,6 +250,29 @@ const frontendApiService = {
       }
     `;
     return frontendApiService.fetchFirefliesData(query, { id });
+  },
+
+  getAutomatedMinutes: async (limit = 50) => {
+    const response = await fetch(`${getBaseUrl()}/api/minutes?limit=${encodeURIComponent(limit)}`, {
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `No fue posible cargar las minutas (${response.status})`);
+    }
+    return response.json();
+  },
+
+  syncAutomatedMinutes: async () => {
+    const response = await fetch(`${getBaseUrl()}/api/minutes/sync`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `No fue posible sincronizar Fireflies (${response.status})`);
+    }
+    return response.json();
   }
 };
 
