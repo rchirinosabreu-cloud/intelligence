@@ -105,6 +105,45 @@ model MeetingMinute {
   @@index([organizerEmail])
 }
 
+model DriveFolder {
+  id          String        @id @default(uuid())
+  name        String
+  parentId    String?
+  createdById String?
+  deletedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  parent      DriveFolder?  @relation("DriveFolderTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children    DriveFolder[] @relation("DriveFolderTree")
+  files       DriveFile[]
+
+  @@index([parentId, deletedAt, name])
+  @@index([deletedAt, updatedAt])
+}
+
+model DriveFile {
+  id              String       @id @default(uuid())
+  name            String
+  subtitle        String?
+  mimeType        String
+  sizeBytes       Int
+  storageProvider String       @default("RAILWAY")
+  storageKey      String       @unique
+  source          String       @default("UPLOAD")
+  category        String       @default("GENERAL")
+  metadata        Json?
+  folderId        String?
+  uploadedById    String?
+  deletedAt       DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  folder          DriveFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  @@index([folderId, deletedAt, name])
+  @@index([deletedAt, updatedAt])
+  @@index([source, category])
+}
+
 model PasswordResetCode {
   id        String    @id @default(uuid())
   userId    String
@@ -388,42 +427,42 @@ model TeamMember {
 }
 
 model OperationalEvent {
-  id                   String    @id @default(uuid())
-  title                String
-  type                 String // PRODUCTION, ABSENCE, PROJECT, MEETING
-  description          String?
-  startAt              DateTime
-  endAt                DateTime
-  isAllDay             Boolean   @default(false)
-  captureWithFireflies Boolean   @default(false)
-  memberIds            String[]  @default([]) // IDs of TeamMembers involved
-  recurrence           String? // NONE, WEEKLY
-  recurrenceEnd        DateTime?
-  meetingLink          String?
-  source               String    @default("BRAIN")
-  organizerEmail       String?
-  attendeeEmails       String[]  @default([])
-  attendeeResponses    Json?
-  googleConnectionId   String?
-  googleConnection     GoogleCalendarConnection? @relation(fields: [googleConnectionId], references: [id], onDelete: SetNull)
-  googleCalendarId     String?
-  googleEventId        String?
-  googleICalUID        String?
-  googleEtag           String?
-  googleHtmlLink       String?
-  googleMeetSpaceName  String?
-  googleMeetAccessType String?
+  id                     String                    @id @default(uuid())
+  title                  String
+  type                   String // PRODUCTION, ABSENCE, PROJECT, MEETING
+  description            String?
+  startAt                DateTime
+  endAt                  DateTime
+  isAllDay               Boolean                   @default(false)
+  captureWithFireflies   Boolean                   @default(false)
+  memberIds              String[]                  @default([]) // IDs of TeamMembers involved
+  recurrence             String? // NONE, WEEKLY
+  recurrenceEnd          DateTime?
+  meetingLink            String?
+  source                 String                    @default("BRAIN")
+  organizerEmail         String?
+  attendeeEmails         String[]                  @default([])
+  attendeeResponses      Json?
+  googleConnectionId     String?
+  googleConnection       GoogleCalendarConnection? @relation(fields: [googleConnectionId], references: [id], onDelete: SetNull)
+  googleCalendarId       String?
+  googleEventId          String?
+  googleICalUID          String?
+  googleEtag             String?
+  googleHtmlLink         String?
+  googleMeetSpaceName    String?
+  googleMeetAccessType   String?
   googleMeetOnlyBotSince DateTime?
   googleMeetEndedAt      DateTime?
-  googleSyncStatus     String?
-  googleSyncError      String?
-  googleLastSyncedAt   DateTime?
-  googleUpdatedAt      DateTime?
-  createdById          String?
-  createdBy            User?     @relation("OperationalEventCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  googleLinks          GoogleCalendarEventLink[]
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  googleSyncStatus       String?
+  googleSyncError        String?
+  googleLastSyncedAt     DateTime?
+  googleUpdatedAt        DateTime?
+  createdById            String?
+  createdBy              User?                     @relation("OperationalEventCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  googleLinks            GoogleCalendarEventLink[]
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
 
   @@index([startAt])
   @@index([googleCalendarId, googleEventId])
@@ -1373,23 +1412,23 @@ model ServiceCatalog {
 }
 
 model Quotation {
-  id                   String          @id @default(uuid())
-  consecutive          Int             @default(autoincrement())
-  uuid_slug            String          @unique
+  id                   String                 @id @default(uuid())
+  consecutive          Int                    @default(autoincrement())
+  uuid_slug            String                 @unique
   emisor_type          EmisorType
-  status               QuotationStatus @default(ACTIVA)
+  status               QuotationStatus        @default(ACTIVA)
   client_name          String
   client_company       String?
   client_email         String
-  client_phone         String          @default("")
-  is_tax_exempt        Boolean         @default(false)
+  client_phone         String                 @default("")
+  is_tax_exempt        Boolean                @default(false)
   items                Json
-  duration_months      Int             @default(1)
+  duration_months      Int                    @default(1)
   discount_type        QuotationDiscountType?
-  discount_value       Decimal         @default(0)
+  discount_value       Decimal                @default(0)
   discount_label       String?
-  discount_amount      Decimal         @default(0)
-  currency             CurrencyType    @default(COP)
+  discount_amount      Decimal                @default(0)
+  currency             CurrencyType           @default(COP)
   exchange_rate        Decimal?
   exchange_rate_source String?
   exchange_rate_date   DateTime?
@@ -1397,12 +1436,12 @@ model Quotation {
   tax_amount           Decimal
   total_amount         Decimal
   terms_and_conditions String
-  created_at           DateTime        @default(now())
+  created_at           DateTime               @default(now())
   issued_at            DateTime?
   reactivated_at       DateTime?
   accepted_at          DateTime?
   expires_at           DateTime
-  updated_at           DateTime        @default(now()) @updatedAt
+  updated_at           DateTime               @default(now()) @updatedAt
 }
 
 enum MetricPeriodKind {

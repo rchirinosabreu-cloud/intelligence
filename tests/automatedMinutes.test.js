@@ -28,6 +28,18 @@ test('minute artifacts use a stable Bria Drive path', () => {
   );
 });
 
+test('ready minutes are editorially complete only with titles and brief subtitles', async () => {
+  const automation = await import('../src/services/minuteAutomationService.js');
+  assert.equal(typeof automation.hasEditorialMinuteMetadata, 'function');
+  assert.equal(automation.hasEditorialMinuteMetadata({ executiveSummary: 'Resumen anterior' }), false);
+  assert.equal(automation.hasEditorialMinuteMetadata({
+    summaryTitle: 'Decisiones de campaña',
+    summarySubtitle: 'Acuerdos clave para el próximo lanzamiento',
+    analysisTitle: 'Ritmo y dependencias',
+    analysisSubtitle: 'La ejecución depende de validar el material final'
+  }), true);
+});
+
 test('Fireflies synchronization persists searchable data and two Railway artifacts', async () => {
   const writes = [];
   const uploads = [];
@@ -91,7 +103,13 @@ test('Fireflies synchronization is idempotent for ready meetings', async () => {
   let detailCalls = 0;
   const db = {
     meetingMinute: {
-      findUnique: async () => ({ id: 'minute-1', externalId: 'ff-1', status: 'READY' })
+      findUnique: async () => ({
+        id: 'minute-1', externalId: 'ff-1', status: 'READY',
+        analysis: {
+          summaryTitle: 'Campaña aprobada', summarySubtitle: 'Próximo lanzamiento',
+          analysisTitle: 'Lectura operativa', analysisSubtitle: 'Ejecución preparada'
+        }
+      })
     }
   };
   const result = await syncFirefliesMinutes({

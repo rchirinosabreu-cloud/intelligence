@@ -273,6 +273,139 @@ const frontendApiService = {
       throw new Error(error.message || `No fue posible sincronizar Fireflies (${response.status})`);
     }
     return response.json();
+  },
+
+  getDriveContents: async ({ folderId, query, trash = false } = {}) => {
+    const params = new URLSearchParams();
+    if (folderId) params.set('folderId', folderId);
+    if (query) params.set('query', query);
+    if (trash) params.set('trash', 'true');
+    const response = await fetch(`${getBaseUrl()}/api/drive/contents?${params}`, { headers: getAuthHeaders() });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `No fue posible cargar Drive (${response.status})`);
+    }
+    return response.json();
+  },
+
+  getDriveFiles: async ({ query, kind } = {}) => {
+    const params = new URLSearchParams();
+    if (query) params.set('query', query);
+    if (kind) params.set('kind', kind);
+    const response = await fetch(`${getBaseUrl()}/api/drive/files?${params}`, { headers: getAuthHeaders() });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `No fue posible cargar los archivos (${response.status})`);
+    }
+    return response.json();
+  },
+
+  getDriveFile: async (meetingId, kind) => {
+    const response = await fetch(`${getBaseUrl()}/api/drive/files/${encodeURIComponent(meetingId)}/${encodeURIComponent(String(kind).toLowerCase())}`, { headers: getAuthHeaders() });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `No fue posible abrir el archivo (${response.status})`);
+    }
+    return response.json();
+  },
+
+  createDriveFolder: async ({ name, parentId }) => {
+    const response = await fetch(`${getBaseUrl()}/api/drive/folders`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ name, parentId })
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'No fue posible crear la carpeta.');
+    }
+    return response.json();
+  },
+
+  uploadDriveFile: async ({ file, folderId, subtitle }) => {
+    const body = new FormData();
+    body.append('file', file);
+    if (folderId) body.append('folderId', folderId);
+    if (subtitle) body.append('subtitle', subtitle);
+    const response = await fetch(`${getBaseUrl()}/api/drive/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
+      body
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `No fue posible subir el archivo (${response.status})`);
+    }
+    return response.json();
+  },
+
+  updateDriveFile: async (id, updates) => {
+    const response = await fetch(`${getBaseUrl()}/api/drive/files/${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: getAuthHeaders(), body: JSON.stringify(updates)
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'No fue posible actualizar el archivo.');
+    }
+    return response.json();
+  },
+
+  updateDriveFolder: async (id, updates) => {
+    const response = await fetch(`${getBaseUrl()}/api/drive/folders/${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: getAuthHeaders(), body: JSON.stringify(updates)
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'No fue posible actualizar la carpeta.');
+    }
+    return response.json();
+  },
+
+  trashDriveFile: async (id) => {
+    const response = await fetch(`${getBaseUrl()}/api/drive/files/${encodeURIComponent(id)}`, { method: 'DELETE', headers: getAuthHeaders() });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'No fue posible enviar el archivo a la papelera.');
+    }
+    return response.json();
+  },
+
+  trashDriveFolder: async (id) => {
+    const response = await fetch(`${getBaseUrl()}/api/drive/folders/${encodeURIComponent(id)}`, { method: 'DELETE', headers: getAuthHeaders() });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'No fue posible enviar la carpeta a la papelera.');
+    }
+    return response.json();
+  },
+
+  restoreDriveFile: async (id) => {
+    const response = await fetch(`${getBaseUrl()}/api/drive/files/${encodeURIComponent(id)}/restore`, { method: 'PATCH', headers: getAuthHeaders() });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'No fue posible restaurar el archivo.');
+    }
+    return response.json();
+  },
+
+  restoreDriveFolder: async (id) => {
+    const response = await fetch(`${getBaseUrl()}/api/drive/folders/${encodeURIComponent(id)}/restore`, { method: 'PATCH', headers: getAuthHeaders() });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'No fue posible restaurar la carpeta.');
+    }
+    return response.json();
+  },
+
+  getManagedDriveFile: async (id, { download = false } = {}) => {
+    const response = await fetch(`${getBaseUrl()}/api/drive/managed-files/${encodeURIComponent(id)}/content${download ? '?download=true' : ''}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'No fue posible abrir el archivo.');
+    }
+    return response.blob();
   }
 };
 

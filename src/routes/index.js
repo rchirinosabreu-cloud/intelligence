@@ -34,6 +34,7 @@ import financialsRouter from './api/financials.js';
 import dashboardRouter from './api/dashboard.js';
 import reportPdfRouter from './api/reportPdf.js';
 import minutesRouter from './api/minutes.js';
+import driveRouter from './api/drive.js';
 import { getUpcomingEvents } from '../services/calendarService.js';
 import { handleGoogleCalendarWebhook } from '../services/operationalEventService.js';
 
@@ -213,6 +214,7 @@ router.post('/openai/v1/chat/completions', requireModulePermission('manager'), p
 router.post('/fireflies/graphql', requireModulePermission('minutas'), proxyController.firefliesProxy);
 router.use('/report-pdf', requireModulePermission('minutas'), reportPdfRouter);
 router.use('/minutes', requireModulePermission('minutas'), minutesRouter);
+router.use('/drive', requireModulePermission('minutas'), driveRouter);
 
 // Re-mount existing routers
 router.use('/user', userRouter);

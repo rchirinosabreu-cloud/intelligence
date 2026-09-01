@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign } from '@/components/ui/icons';
+import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, FolderOpen, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
@@ -24,6 +24,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { id: 'moodboard', label: 'Inspiración', icon: Palette, path: '/moodboard', moduleKey: 'inspiracion' },
     { id: 'content-grids', label: 'Parrillas', icon: LayoutGrid, path: '/parrillas', moduleKey: 'parrillas' },
     { id: 'minutes', label: 'Minutas', icon: FileText, path: '/minutas', moduleKey: 'minutas' },
+    { id: 'drive', label: 'Drive', icon: FolderOpen, path: '/drive', moduleKey: 'minutas' },
     { id: 'quotations', label: 'Cotizaciones', icon: DollarSign, path: '/cotizaciones', moduleKey: 'cotizaciones' },
     { id: 'financials', label: 'Financiero', icon: DollarSign, path: '/financiero', moduleKey: 'financiero' },
     { id: 'radar', label: 'Radar de Mérito', icon: Zap, path: '/radar', moduleKey: 'radar' },

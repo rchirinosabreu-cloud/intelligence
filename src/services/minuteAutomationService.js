@@ -8,6 +8,10 @@ import { parseJsonFromAiResponse } from '../utils/jsonParser.js';
 const MINUTE_RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
+    summaryTitle: { type: 'string' },
+    summarySubtitle: { type: 'string' },
+    analysisTitle: { type: 'string' },
+    analysisSubtitle: { type: 'string' },
     executiveSummary: { type: 'string' },
     participants: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, role: { type: ['string', 'null'] } }, required: ['name', 'role'] } },
     topics: { type: 'array', items: { type: 'string' } },
@@ -17,11 +21,12 @@ const MINUTE_RESPONSE_SCHEMA = {
     opportunities: { type: 'array', items: { type: 'string' } },
     observerSignals: { type: 'array', items: { type: 'object', properties: { type: { type: 'string' }, description: { type: 'string' }, evidence: { type: 'string' }, severity: { type: 'string' } }, required: ['type', 'description', 'evidence', 'severity'] } }
   },
-  required: ['executiveSummary', 'participants', 'topics', 'decisions', 'actionItems', 'risks', 'opportunities', 'observerSignals']
+  required: ['summaryTitle', 'summarySubtitle', 'analysisTitle', 'analysisSubtitle', 'executiveSummary', 'participants', 'topics', 'decisions', 'actionItems', 'risks', 'opportunities', 'observerSignals']
 };
 
 const minuteInstructions = `Eres Bria, observadora operativa de Brainstudio. Genera una minuta ejecutiva fiel y accionable en español.
 No inventes participantes, fechas, responsables ni decisiones. Separa claramente decisiones de propuestas.
+Genera un título y un subtítulo breve para el resumen, y otro título y subtítulo breve para el análisis; deben estar basados en el contenido real, no limitarse a repetir el nombre de la reunión.
 Los actionItems son propuestas para revisión humana: no declares que fueron creados como tareas.
 Cada señal del Observer debe incluir evidencia textual concreta de la reunión.`;
 
@@ -37,6 +42,13 @@ const sanitizeSegment = (value) => String(value || 'unknown')
   .slice(0, 120);
 
 export const parseMinuteAnalysis = (text) => parseJsonFromAiResponse(String(text || ''));
+
+export const hasEditorialMinuteMetadata = (analysis) => [
+  analysis?.summaryTitle,
+  analysis?.summarySubtitle,
+  analysis?.analysisTitle,
+  analysis?.analysisSubtitle
+].every(value => typeof value === 'string' && value.trim().length > 0);
 
 export const buildMinuteStorageKey = ({ meetingId, meetingAt, fileName }) => {
   const year = normalizeDate(meetingAt).getUTCFullYear();
@@ -110,7 +122,7 @@ const getDefaultAi = () => createOpenAIClient({ models: AI_MODELS });
 
 const processTranscript = async ({ summary, db, fireflies, ai, storage }) => {
   let record = await db.meetingMinute.findUnique({ where: { externalId: summary.id } });
-  if (record?.status === 'READY') return { skipped: true };
+  if (record?.status === 'READY' && hasEditorialMinuteMetadata(record.analysis)) return { skipped: true };
 
   if (!record) {
     record = await db.meetingMinute.create({
@@ -195,7 +207,7 @@ const runFirefliesMinutesSync = async ({
   fireflies = firefliesClient,
   ai = getDefaultAi(),
   storage = documentStorage,
-  limit = 25,
+  limit = 50,
   logger = console
 } = {}) => {
   const result = { discovered: 0, processed: 0, skipped: 0, failed: 0 };
@@ -203,7 +215,7 @@ const runFirefliesMinutesSync = async ({
   for (const summary of transcripts) {
     const existing = await db.meetingMinute.findUnique({ where: { externalId: summary.id } });
     if (!existing) result.discovered += 1;
-    if (existing?.status === 'READY' || (existing?.status === 'FAILED' && existing.retryCount >= MAX_AUTOMATIC_MINUTE_RETRIES)) {
+    if ((existing?.status === 'READY' && hasEditorialMinuteMetadata(existing.analysis)) || (existing?.status === 'FAILED' && existing.retryCount >= MAX_AUTOMATIC_MINUTE_RETRIES)) {
       result.skipped += 1;
       continue;
     }

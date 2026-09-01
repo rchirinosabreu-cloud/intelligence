@@ -32,6 +32,7 @@ const QuotationForm = lazy(() => import('./components/modules/Quotations/Quotati
 const QuotationsLayout = lazy(() => import('./components/modules/Quotations/QuotationsLayout'));
 const PublicQuotation = lazy(() => import('./components/public/Quotations/PublicQuotation'));
 const MinutesLayout = lazy(() => import('./components/modules/Minutes/MinutesLayout'));
+const DriveLayout = lazy(() => import('./components/modules/Drive/DriveLayout'));
 const OperationalHealth = lazy(() => import('./components/modules/OperationalHealth'));
 
 const AppLoader = () => (
@@ -222,6 +223,14 @@ function AppContent() {
                       element={
                         <ModuleGuard module="minutas">
                           <MinutesLayout />
+                        </ModuleGuard>
+                      }
+                    />
+                    <Route
+                      path="/drive"
+                      element={
+                        <ModuleGuard module="minutas">
+                          <DriveLayout />
                         </ModuleGuard>
                       }
                     />
