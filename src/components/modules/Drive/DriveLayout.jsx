@@ -5,6 +5,7 @@ import {
 } from '@/components/ui/icons';
 import frontendApiService from '../../../services/frontendApiService';
 import { toast } from 'react-hot-toast';
+import PageHeader from '@/components/ui/PageHeader';
 
 const formatDate = value => value
   ? new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
@@ -290,12 +291,10 @@ const DriveLayout = () => {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 pb-10">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-medium text-violet-700 dark:text-violet-300"><FolderOpen className="h-4 w-4" /> Biblioteca documental</div>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-white">Brainstudio Drive</h1>
-          <p className="mt-2 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">Organiza archivos de la agencia y consulta los documentos que Bria genera automáticamente.</p>
-        </div>
+      <PageHeader
+        title="Brainstudio Drive"
+        subtitle="Organiza archivos de la agencia y consulta los documentos que Bria genera automáticamente."
+      >
         {!trash && !isBriaFolder && (
           <div className="flex flex-wrap gap-2">
             <input ref={fileInputRef} type="file" multiple className="hidden" onChange={uploadFiles} />
@@ -303,7 +302,7 @@ const DriveLayout = () => {
             <button type="button" disabled={uploading} onClick={() => fileInputRef.current?.click()} className="inline-flex h-11 items-center gap-2 rounded-xl bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-60"><Upload className="h-4 w-4" /> {uploading ? 'Subiendo...' : 'Subir archivos'}</button>
           </div>
         )}
-      </header>
+      </PageHeader>
 
       <section className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex flex-col gap-3 border-b border-zinc-200 p-4 dark:border-zinc-800 md:flex-row md:items-center">

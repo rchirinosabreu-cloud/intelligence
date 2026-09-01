@@ -32,6 +32,10 @@ Cada señal del Observer debe incluir evidencia textual concreta de la reunión.
 
 export const MAX_AUTOMATIC_MINUTE_RETRIES = 3;
 
+const createMinuteError = (code, message) => Object.assign(new Error(message), { code });
+
+const isExcludedFromBria = (record) => Boolean(record?.deletedAt) || record?.status === 'EXCLUDED';
+
 const normalizeDate = (value) => {
   const date = value ? new Date(value) : new Date();
   return Number.isNaN(date.getTime()) ? new Date() : date;
@@ -59,10 +63,14 @@ export const buildTranscriptText = (transcript) => (transcript?.sentences || [])
   .map(sentence => `[${sentence.speaker_name || 'Desconocido'}]: ${sentence.text || sentence.raw_text || ''}`)
   .join('\n');
 
-export const getMeetingMinutes = async ({ db = prisma, status, limit = 50 } = {}) => {
+export const getMeetingMinutes = async ({ db = prisma, status, limit = 50, includeTrash = false } = {}) => {
   const take = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const safeStatus = status && status !== 'EXCLUDED' ? String(status) : null;
   return db.meetingMinute.findMany({
-    where: status ? { status } : undefined,
+    where: {
+      deletedAt: includeTrash ? { not: null } : null,
+      status: safeStatus || { not: 'EXCLUDED' }
+    },
     orderBy: { meetingAt: 'desc' },
     take,
     select: {
@@ -84,14 +92,15 @@ export const getMeetingMinutes = async ({ db = prisma, status, limit = 50 } = {}
       aiModel: true,
       storageProvider: true,
       processedAt: true,
+      deletedAt: true,
       createdAt: true,
       updatedAt: true
     }
   });
 };
 
-export const getMeetingMinuteById = async ({ db = prisma, id }) => db.meetingMinute.findUnique({
-  where: { id },
+export const getMeetingMinuteById = async ({ db = prisma, id }) => db.meetingMinute.findFirst({
+  where: { id, deletedAt: null, status: { not: 'EXCLUDED' } },
   select: {
     id: true,
     source: true,
@@ -113,16 +122,64 @@ export const getMeetingMinuteById = async ({ db = prisma, id }) => db.meetingMin
     aiModel: true,
     storageProvider: true,
     processedAt: true,
+    deletedAt: true,
     createdAt: true,
     updatedAt: true
   }
 });
 
+export const trashMeetingMinute = async ({ db = prisma, id }) => db.meetingMinute.update({
+  where: { id },
+  data: { deletedAt: new Date() }
+});
+
+export const restoreMeetingMinute = async ({ db = prisma, id }) => db.meetingMinute.update({
+  where: { id },
+  data: { deletedAt: null }
+});
+
+export const permanentlyDeleteMeetingMinute = async ({ db = prisma, storage = documentStorage, id }) => {
+  const record = await db.meetingMinute.findFirst({
+    where: { id, deletedAt: { not: null } },
+    select: { id: true, transcriptStorageKey: true, minuteStorageKey: true }
+  });
+  if (!record) {
+    throw createMinuteError('MINUTE_NOT_IN_TRASH', 'La minuta debe estar en la Papelera antes de eliminarla permanentemente.');
+  }
+
+  await storage.deleteMany({ keys: [record.transcriptStorageKey, record.minuteStorageKey] });
+  return db.meetingMinute.update({
+    where: { id: record.id },
+    data: {
+      title: 'Reunión excluida',
+      durationSeconds: null,
+      organizerEmail: null,
+      participants: null,
+      transcriptText: '',
+      sourceSummary: null,
+      executiveSummary: null,
+      analysis: null,
+      actionItems: null,
+      observerSignals: null,
+      status: 'EXCLUDED',
+      errorMessage: null,
+      retryCount: 0,
+      aiModel: null,
+      aiRequestId: null,
+      transcriptStorageKey: null,
+      minuteStorageKey: null,
+      processedAt: null,
+      deletedAt: null,
+      lastSeenAt: new Date()
+    }
+  });
+};
+
 const getDefaultAi = () => createOpenAIClient({ models: AI_MODELS });
 
 const processTranscript = async ({ summary, db, fireflies, ai, storage }) => {
   let record = await db.meetingMinute.findUnique({ where: { externalId: summary.id } });
-  if (record?.status === 'READY' && hasEditorialMinuteMetadata(record.analysis)) return { skipped: true };
+  if (isExcludedFromBria(record) || (record?.status === 'READY' && hasEditorialMinuteMetadata(record.analysis))) return { skipped: true };
 
   if (!record) {
     record = await db.meetingMinute.create({
@@ -215,7 +272,7 @@ const runFirefliesMinutesSync = async ({
   for (const summary of transcripts) {
     const existing = await db.meetingMinute.findUnique({ where: { externalId: summary.id } });
     if (!existing) result.discovered += 1;
-    if ((existing?.status === 'READY' && hasEditorialMinuteMetadata(existing.analysis)) || (existing?.status === 'FAILED' && existing.retryCount >= MAX_AUTOMATIC_MINUTE_RETRIES)) {
+    if (isExcludedFromBria(existing) || (existing?.status === 'READY' && hasEditorialMinuteMetadata(existing.analysis)) || (existing?.status === 'FAILED' && existing.retryCount >= MAX_AUTOMATIC_MINUTE_RETRIES)) {
       result.skipped += 1;
       continue;
     }

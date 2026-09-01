@@ -5,6 +5,9 @@ import {
   buildMinuteStorageKey,
   getMeetingMinutes,
   parseMinuteAnalysis,
+  permanentlyDeleteMeetingMinute,
+  restoreMeetingMinute,
+  trashMeetingMinute,
   syncFirefliesMinutes
 } from '../src/services/minuteAutomationService.js';
 import {
@@ -185,10 +188,105 @@ test('minute archive returns newest records without the full transcript payload'
   });
 
   assert.equal(query.where.status, 'READY');
+  assert.equal(query.where.deletedAt, null);
   assert.deepEqual(query.orderBy, { meetingAt: 'desc' });
   assert.equal(query.take, 20);
   assert.equal(query.select.transcriptText, undefined);
   assert.deepEqual(result, rows);
+});
+
+test('the default minute archive excludes trash and permanent-exclusion tombstones', async () => {
+  let query;
+  await getMeetingMinutes({
+    db: {
+      meetingMinute: {
+        findMany: async (args) => { query = args; return []; }
+      }
+    }
+  });
+
+  assert.equal(query.where.deletedAt, null);
+  assert.deepEqual(query.where.status, { not: 'EXCLUDED' });
+});
+
+test('minutes can move to recoverable trash and return without changing their processing status', async () => {
+  const writes = [];
+  const db = {
+    meetingMinute: {
+      update: async ({ where, data }) => {
+        writes.push({ where, data });
+        return { id: where.id, status: 'READY', ...data };
+      }
+    }
+  };
+
+  const trashed = await trashMeetingMinute({ id: 'minute-1', db });
+  assert.ok(trashed.deletedAt instanceof Date);
+  assert.equal(writes[0].data.status, undefined);
+
+  const restored = await restoreMeetingMinute({ id: 'minute-1', db });
+  assert.equal(restored.deletedAt, null);
+  assert.equal(writes[1].data.status, undefined);
+});
+
+test('permanent minute deletion removes both bucket objects and leaves only an exclusion tombstone', async () => {
+  const writes = [];
+  const deletedKeys = [];
+  const record = {
+    id: 'minute-1',
+    externalId: 'ff-private',
+    title: 'Devocional alabanza',
+    deletedAt: new Date('2026-08-31T12:00:00Z'),
+    transcriptStorageKey: 'bria/minutes/2026/ff-private/transcript.json',
+    minuteStorageKey: 'bria/minutes/2026/ff-private/minute.json'
+  };
+  const db = {
+    meetingMinute: {
+      findFirst: async ({ where }) => where.id === record.id && where.deletedAt?.not === null ? record : null,
+      update: async ({ where, data }) => {
+        writes.push({ where, data });
+        return { ...record, ...data };
+      }
+    }
+  };
+
+  const result = await permanentlyDeleteMeetingMinute({
+    id: record.id,
+    db,
+    storage: { deleteMany: async ({ keys }) => { deletedKeys.push(...keys); } }
+  });
+
+  assert.deepEqual(deletedKeys, [record.transcriptStorageKey, record.minuteStorageKey]);
+  assert.equal(result.status, 'EXCLUDED');
+  assert.equal(result.title, 'Reunión excluida');
+  assert.equal(result.transcriptText, '');
+  assert.equal(result.transcriptStorageKey, null);
+  assert.equal(result.minuteStorageKey, null);
+  assert.equal(result.deletedAt, null);
+  assert.equal(writes.at(-1).data.analysis, null);
+  assert.equal(writes.at(-1).data.observerSignals, null);
+});
+
+test('Fireflies synchronization never reimports trashed or permanently excluded meetings', async () => {
+  for (const record of [
+    { id: 'minute-1', externalId: 'ff-1', status: 'READY', deletedAt: new Date() },
+    { id: 'minute-2', externalId: 'ff-1', status: 'EXCLUDED', deletedAt: null }
+  ]) {
+    let detailCalls = 0;
+    const result = await syncFirefliesMinutes({
+      db: { meetingMinute: { findUnique: async () => record } },
+      fireflies: {
+        listTranscripts: async () => [{ id: 'ff-1' }],
+        getTranscript: async () => { detailCalls += 1; }
+      },
+      ai: {},
+      storage: {},
+      logger: { info() {}, error() {} }
+    });
+
+    assert.equal(result.skipped, 1);
+    assert.equal(detailCalls, 0);
+  }
 });
 
 test('automatic minutes poll Fireflies every ten minutes without overlapping runs', async () => {
@@ -243,4 +341,27 @@ test('Minutes UI presents an automatic Bria archive', async () => {
   assert.match(archive, /Archivo automático de Bria/);
   assert.match(archive, /Sincronizar ahora/);
   assert.match(archive, /getAutomatedMinutes/);
+  assert.match(archive, /aria-expanded=/);
+  assert.match(archive, /Mostrar archivo/);
+  assert.match(archive, /Papelera/);
+  assert.match(archive, /trashAutomatedMinute/);
+  assert.match(archive, /restoreAutomatedMinute/);
+  assert.match(archive, /permanentlyDeleteAutomatedMinute/);
+});
+
+test('minutes API exposes manager-only trash, restore and permanent deletion actions', async () => {
+  const [routes, controller, api] = await Promise.all([
+    read('src/routes/api/minutes.js'),
+    read('src/controllers/minutesController.js'),
+    read('src/services/frontendApiService.js')
+  ]);
+
+  assert.match(routes, /router\.delete\('\/:id',\s*requireManagerRole,\s*minutesController\.trash/);
+  assert.match(routes, /router\.patch\('\/:id\/restore',\s*requireManagerRole,\s*minutesController\.restore/);
+  assert.match(routes, /router\.delete\('\/:id\/permanent',\s*requireManagerRole,\s*minutesController\.removePermanently/);
+  assert.match(routes, /router\.get\('\/trash',\s*requireManagerRole,\s*minutesController\.listTrash/);
+  assert.match(controller, /permanentlyDeleteMeetingMinute/);
+  assert.match(api, /trashAutomatedMinute/);
+  assert.match(api, /restoreAutomatedMinute/);
+  assert.match(api, /permanentlyDeleteAutomatedMinute/);
 });

@@ -252,8 +252,10 @@ const frontendApiService = {
     return frontendApiService.fetchFirefliesData(query, { id });
   },
 
-  getAutomatedMinutes: async (limit = 50) => {
-    const response = await fetch(`${getBaseUrl()}/api/minutes?limit=${encodeURIComponent(limit)}`, {
+  getAutomatedMinutes: async (limit = 50, { trash = false } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    const collection = trash ? 'minutes/trash' : 'minutes';
+    const response = await fetch(`${getBaseUrl()}/api/${collection}?${params}`, {
       headers: getAuthHeaders()
     });
     if (!response.ok) {
@@ -271,6 +273,42 @@ const frontendApiService = {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       throw new Error(error.message || `No fue posible sincronizar Fireflies (${response.status})`);
+    }
+    return response.json();
+  },
+
+  trashAutomatedMinute: async (id) => {
+    const response = await fetch(`${getBaseUrl()}/api/minutes/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `No fue posible enviar la minuta a la Papelera (${response.status})`);
+    }
+    return response.json();
+  },
+
+  restoreAutomatedMinute: async (id) => {
+    const response = await fetch(`${getBaseUrl()}/api/minutes/${encodeURIComponent(id)}/restore`, {
+      method: 'PATCH',
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `No fue posible restaurar la minuta (${response.status})`);
+    }
+    return response.json();
+  },
+
+  permanentlyDeleteAutomatedMinute: async (id) => {
+    const response = await fetch(`${getBaseUrl()}/api/minutes/${encodeURIComponent(id)}/permanent`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `No fue posible eliminar la minuta permanentemente (${response.status})`);
     }
     return response.json();
   },

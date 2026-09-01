@@ -26,6 +26,23 @@ test('private document storage can read a JSON artifact by key', async () => {
   assert.equal(commands[0].input.Key, 'bria/minutes/2026/m-1/minute.json');
 });
 
+test('private document storage can permanently delete a bounded set of object keys', async () => {
+  const commands = [];
+  const storage = createDocumentStorage({
+    bucketName: 'private-files',
+    client: { send: async (command) => { commands.push(command); return {}; } }
+  });
+
+  await storage.deleteMany({ keys: ['private/transcript.json', '', 'private/minute.json'] });
+
+  assert.equal(commands.length, 1);
+  assert.equal(commands[0].input.Bucket, 'private-files');
+  assert.deepEqual(commands[0].input.Delete.Objects, [
+    { Key: 'private/transcript.json' },
+    { Key: 'private/minute.json' }
+  ]);
+});
+
 test('Drive projects each ready meeting as a minute and transcript without leaking storage keys', async () => {
   const driveService = await import('../src/services/driveService.js').catch(() => ({}));
   assert.equal(typeof driveService.listDriveFiles, 'function');
@@ -34,7 +51,10 @@ test('Drive projects each ready meeting as a minute and transcript without leaki
     query: 'campaña',
     db: {
       meetingMinute: {
-        findMany: async () => [{
+        findMany: async (args) => {
+          assert.equal(args.where.status, 'READY');
+          assert.equal(args.where.deletedAt, null);
+          return [{
           id: 'm-1',
           title: 'Reunión de campaña',
           meetingAt: new Date('2026-08-31T15:00:00Z'),
@@ -42,7 +62,8 @@ test('Drive projects each ready meeting as a minute and transcript without leaki
           organizerEmail: 'social@brainstudio.com',
           transcriptStorageKey: 'private/transcript.json',
           minuteStorageKey: 'private/minute.json'
-        }]
+          }];
+        }
       }
     }
   });
@@ -64,6 +85,7 @@ test('Drive reads only a known artifact kind through private storage', async () 
         title: 'Reunión de campaña',
         meetingAt: new Date('2026-08-31T15:00:00Z'),
         status: 'READY',
+        deletedAt: null,
         transcriptStorageKey: 'private/transcript.json',
         minuteStorageKey: 'private/minute.json'
       })
@@ -191,6 +213,8 @@ test('Drive is wired as a protected platform module with search, filters and fil
   assert.match(service, /getDriveFiles/);
   assert.match(service, /getDriveFile/);
   assert.match(drive, /Brainstudio Drive/);
+  assert.match(drive, /<PageHeader/);
+  assert.doesNotMatch(drive, /Biblioteca documental/);
   assert.match(drive, /Buscar archivos/);
   assert.match(drive, /Minutas de Bria/);
   assert.match(drive, /Transcripciones/);

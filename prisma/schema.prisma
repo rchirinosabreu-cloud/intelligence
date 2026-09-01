@@ -96,11 +96,13 @@ model MeetingMinute {
   transcriptStorageKey String?
   minuteStorageKey     String?
   processedAt          DateTime?
+  deletedAt            DateTime?
   lastSeenAt           DateTime  @default(now())
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
   @@index([status, meetingAt])
+  @@index([deletedAt, meetingAt])
   @@index([meetingAt])
   @@index([organizerEmail])
 }

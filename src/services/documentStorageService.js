@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectsCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 const getStorageConfig = () => ({
   endpoint: process.env.BRIA_STORAGE_ENDPOINT || process.env.AWS_ENDPOINT_URL,
@@ -70,6 +70,25 @@ export const createDocumentStorage = ({ client, bucketName } = {}) => {
         mimeType: response.ContentType || 'application/octet-stream',
         size: Number(response.ContentLength || bytes.length)
       };
+    },
+    async deleteMany({ keys = [] }) {
+      if (!resolvedClient || !resolvedBucket) throw new Error('BRIA_STORAGE_NOT_CONFIGURED');
+      const normalizedKeys = [...new Set(keys
+        .map(key => String(key || '').trim())
+        .filter(Boolean))];
+      let deleted = 0;
+      for (let index = 0; index < normalizedKeys.length; index += 1000) {
+        const batch = normalizedKeys.slice(index, index + 1000);
+        const response = await resolvedClient.send(new DeleteObjectsCommand({
+          Bucket: resolvedBucket,
+          Delete: { Objects: batch.map(Key => ({ Key })), Quiet: true }
+        }));
+        if (response.Errors?.length) {
+          throw new Error(`BRIA_STORAGE_DELETE_FAILED:${response.Errors.map(item => item.Key).filter(Boolean).join(',')}`);
+        }
+        deleted += batch.length;
+      }
+      return { deleted };
     }
   };
 };

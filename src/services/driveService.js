@@ -74,6 +74,7 @@ export const listDriveFiles = async ({ db = prisma, query = '', kind, limit = 10
   const meetings = await db.meetingMinute.findMany({
     where: {
       status: 'READY',
+      deletedAt: null,
       ...(normalizedQuery ? { title: { contains: normalizedQuery, mode: 'insensitive' } } : {})
     },
     orderBy: { meetingAt: 'desc' },
@@ -115,12 +116,13 @@ export const readDriveFile = async ({ meetingId, kind, db = prisma, storage = do
       processedAt: true,
       organizerEmail: true,
       status: true,
+      deletedAt: true,
       minuteStorageKey: true,
       transcriptStorageKey: true
     }
   });
   if (!meeting) throw createDriveError('DRIVE_FILE_NOT_FOUND', 'El archivo solicitado no existe.');
-  if (meeting.status !== 'READY' || !meeting[definition.keyField]) {
+  if (meeting.status !== 'READY' || meeting.deletedAt || !meeting[definition.keyField]) {
     throw createDriveError('DRIVE_FILE_UNAVAILABLE', 'El archivo todavía no está disponible.');
   }
 

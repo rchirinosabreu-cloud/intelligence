@@ -32,6 +32,7 @@ try {
       "transcriptStorageKey" TEXT,
       "minuteStorageKey" TEXT,
       "processedAt" TIMESTAMP(3),
+      "deletedAt" TIMESTAMP(3),
       "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -45,6 +46,10 @@ try {
       ON "MeetingMinute"("meetingAt");
     CREATE INDEX IF NOT EXISTS "MeetingMinute_organizerEmail_idx"
       ON "MeetingMinute"("organizerEmail");
+    ALTER TABLE "MeetingMinute"
+      ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3);
+    CREATE INDEX IF NOT EXISTS "MeetingMinute_deletedAt_meetingAt_idx"
+      ON "MeetingMinute"("deletedAt", "meetingAt");
   `);
   await client.query('COMMIT');
   console.log('[MeetingMinute schema] Automatic minutes storage ready.');
