@@ -95,6 +95,12 @@ app.use(express.static(path.join(__dirname, 'dist'), {
   }
 }));
 
+// Never disguise a missing build asset as index.html. Stale browser tabs can
+// then detect the failed dynamic import and recover to the current deployment.
+app.get('/assets/*', (_req, res) => {
+    res.status(404).type('text/plain').send('Asset not found');
+});
+
 app.get('*', (req, res) => {
     if (req.originalUrl.startsWith('/api')) return res.status(404).json({ error: "API endpoint not found" });
     const indexPath = path.join(__dirname, 'dist', 'index.html');

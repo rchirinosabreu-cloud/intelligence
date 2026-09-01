@@ -7,7 +7,11 @@ import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { isTrustedApiRequest } from '@/lib/trustedRequest';
 import { ConfirmDialogProvider } from '@/components/ui/ConfirmDialog';
+import ApplicationErrorBoundary from '@/components/errors/ApplicationErrorBoundary';
 import { registerBrainstudioServiceWorker } from '@/pwa/registerServiceWorker';
+import { installVitePreloadRecovery } from '@/pwa/preloadRecovery';
+
+installVitePreloadRecovery();
 
 const apiBaseUrl = getApiBaseUrl();
 const pageOrigin = window.location.origin;
@@ -135,9 +139,11 @@ window.fetch = async (...args) => {
 
 // React.StrictMode disabled to prevent drag and drop issues in development
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <ConfirmDialogProvider>
-    <App />
-  </ConfirmDialogProvider>
+  <ApplicationErrorBoundary>
+    <ConfirmDialogProvider>
+      <App />
+    </ConfirmDialogProvider>
+  </ApplicationErrorBoundary>
 );
 
 registerBrainstudioServiceWorker();
