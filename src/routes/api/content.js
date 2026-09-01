@@ -21,6 +21,7 @@ import {
   deleteContentItemFinalAssetById
 } from '../../services/contentService.js';
 import { getFromS3Stream } from '../../services/s3Service.js';
+import { reviewContentPlanWithBria } from '../../services/briaContentPlanReviewService.js';
 
 const router = express.Router();
 const upload = multer({
@@ -65,6 +66,25 @@ router.get('/plans/:id', async (req, res) => {
   } catch (error) {
     console.error('[API] Error fetching content plan:', error);
     return res.status(500).json({ error: 'Failed to fetch content plan', details: error.message });
+  }
+});
+
+router.post('/plans/:id/bria-review', async (req, res) => {
+  try {
+    const result = await reviewContentPlanWithBria({ planId: req.params.id });
+    return res.json(result);
+  } catch (error) {
+    console.error('[API] Bria content-plan review failed:', error.response?.data || error.message || error);
+    if (error.code === 'CONTENT_PLAN_NOT_FOUND') {
+      return res.status(404).json({ error: error.message, code: error.code });
+    }
+    const upstreamUnavailable = error.code === 'OPENAI_NOT_CONFIGURED' || Number(error.status) >= 400;
+    return res.status(upstreamUnavailable ? 502 : 500).json({
+      error: upstreamUnavailable
+        ? 'Bria no pudo completar la revisión en este momento.'
+        : 'No fue posible revisar esta parrilla.',
+      code: error.code || 'BRIA_CONTENT_PLAN_REVIEW_FAILED'
+    });
   }
 });
 

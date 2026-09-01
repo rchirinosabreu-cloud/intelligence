@@ -20,6 +20,7 @@ import {
 import DatePicker from 'react-datepicker';
 import { brainDatePickerProps } from '@/lib/brainDatePicker';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import BriaContentPlanReview from '@/components/modules/ContentPlan/BriaContentPlanReview';
 
 const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }) => {
   const [links, setLinks] = useState(Array.isArray(values) ? values : (values ? [values] : []));
@@ -1037,6 +1038,8 @@ const ContentPlanDetail = () => {
           className="w-full min-h-[116px] bg-zinc-50/80 dark:bg-white/5 border border-zinc-200/70 dark:border-white/10 rounded-2xl p-4 text-sm text-zinc-800 dark:text-zinc-200 focus:ring-4 focus:ring-indigo-600/10 outline-none transition-all"
         />
       </div>
+
+      <BriaContentPlanReview planId={currentPlanId} planUpdatedAt={plan.updatedAt} />
 
       {/* Internal Notes Panel */}
       <div className="bg-white/40 dark:bg-zinc-900/30 border border-zinc-200/60 dark:border-white/5 rounded-3xl overflow-hidden">

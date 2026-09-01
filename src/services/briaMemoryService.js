@@ -263,7 +263,7 @@ export const getBriaMemoryOverview = async ({ db = prisma } = {}) => {
   };
 };
 
-export const searchBriaMemory = async ({ query, db = prisma, limit = 6, embedText = getDefaultEmbedder() } = {}) => {
+export const searchBriaMemory = async ({ query, db = prisma, limit = 6, clientId = null, includeUnscoped = false, embedText = getDefaultEmbedder() } = {}) => {
   const normalizedQuery = normalizeText(query);
   if (!normalizedQuery) return [];
   const embedding = await embedText(normalizedQuery, {
@@ -274,13 +274,14 @@ export const searchBriaMemory = async ({ query, db = prisma, limit = 6, embedTex
     throw new Error('BRIA_MEMORY_EMBEDDING_DIMENSION_INVALID');
   }
   const rows = await db.$queryRawUnsafe(
-    `SELECT c."id", c."section", c."content", s."title", s."subtitle", s."sourceKind", s."sourceRecordId", s."sourceUrl", s."indexedAt",
+    `SELECT c."id", c."section", c."content", s."title", s."subtitle", s."sourceKind", s."sourceRecordId", s."sourceUrl", s."clientId", s."indexedAt",
       (1 - (c."embedding" <=> $1::vector))::double precision AS "semanticScore",
       ts_rank_cd(to_tsvector('spanish', c."content"), plainto_tsquery('spanish', $2))::double precision AS "lexicalScore",
       ((1 - (c."embedding" <=> $1::vector)) * 0.85 + ts_rank_cd(to_tsvector('spanish', c."content"), plainto_tsquery('spanish', $2)) * 0.15)::double precision AS "score"
      FROM "BriaMemoryChunk" c
      INNER JOIN "BriaMemorySource" s ON s."id" = c."sourceId"
      WHERE c."embedding" IS NOT NULL AND s."status" = 'READY' AND s."deletedAt" IS NULL
+       AND ($4::text IS NULL OR s."clientId" = $4 OR ($5::boolean = TRUE AND s."clientId" IS NULL))
        AND (s."sourceKind" <> 'MEETING_MINUTE' OR EXISTS (
          SELECT 1 FROM "MeetingMinute" m
          WHERE m."id" = s."sourceRecordId" AND m."status" = 'READY' AND m."deletedAt" IS NULL
@@ -289,7 +290,9 @@ export const searchBriaMemory = async ({ query, db = prisma, limit = 6, embedTex
      LIMIT $3`,
     `[${embedding.join(',')}]`,
     normalizedQuery,
-    Math.min(Math.max(Number(limit) || 6, 1), 20)
+    Math.min(Math.max(Number(limit) || 6, 1), 20),
+    clientId || null,
+    Boolean(includeUnscoped)
   );
   return rows.map((row) => ({ ...row, score: Number(row.score || 0), semanticScore: Number(row.semanticScore || 0), lexicalScore: Number(row.lexicalScore || 0) }));
 };
