@@ -326,7 +326,7 @@ export default function ManagerTaskAnalytics() {
                 <p className="mb-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Estas alertas deben resolverse antes de convertir los datos en predicciones.</p>
                 <QualityItem value={analytics.dataQuality.inProgressWithoutSession} label="Tareas en proceso sin sesión abierta" />
                 <QualityItem value={analytics.dataQuality.unclassifiedTasks} label="Tareas sin categoría o complejidad" />
-                <QualityItem value={analytics.dataQuality.overlappingSessions} label="Sesiones simultáneas registradas" goodWhenZero={false} />
+                <QualityItem value={analytics.dataQuality.overlappingSessions} label="Sesiones simultáneas activas ahora" />
                 <QualityItem value={analytics.dataQuality.sessionsWithoutTask} label="Sesiones sin tarea asociada" />
               </div>
 

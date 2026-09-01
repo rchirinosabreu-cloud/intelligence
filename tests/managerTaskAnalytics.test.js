@@ -80,7 +80,7 @@ test('analytics excludes sessions outside the selected period', () => {
   assert.equal(result.overview.sessionCount, 0);
 });
 
-test('Bria Observer turns operational gaps into prioritized, evidence-based signals', () => {
+test('Bria Observer does not present historical overlap flags as current concurrency', () => {
   const result = buildManagerTaskAnalytics({
     now,
     periodDays: 30,
@@ -98,12 +98,36 @@ test('Bria Observer turns operational gaps into prioritized, evidence-based sign
 
   assert.equal(result.observer.mode, 'OBSERVE_ONLY');
   assert.equal(result.observer.sample.readyForPrediction, false);
+  assert.equal(result.dataQuality.overlappingSessions, 0);
+  assert.equal(result.dataQuality.historicalOverlappingSessions, 1);
   assert.deepEqual(
     result.observer.signals.map((signal) => signal.code),
-    ['OVERLAPPING_SESSIONS', 'ACTIVE_WITHOUT_SESSION', 'UNCLASSIFIED_TASKS', 'HIGH_REWORK', 'LIMITED_SAMPLE']
+    ['ACTIVE_WITHOUT_SESSION', 'UNCLASSIFIED_TASKS', 'HIGH_REWORK', 'LIMITED_SAMPLE']
   );
-  assert.equal(result.observer.signals[0].severity, 'critical');
-  assert.match(result.observer.signals[0].evidence, /1 sesi[oó]n/i);
+});
+
+test('Bria Observer reports only sessions that are concurrent now', () => {
+  const result = buildManagerTaskAnalytics({
+    now,
+    periodDays: 30,
+    tasks: [
+      { id: 'task-1', title: 'Diseñar pieza', status: 'EN_CURSO', aiCategory: 'DISEÑO', aiComplexity: 'MEDIA', client: null, assignee: { id: 'worker-1', name: 'Sara' } },
+      { id: 'task-2', title: 'Editar reel', status: 'EN_CURSO', aiCategory: 'VIDEO', aiComplexity: 'MEDIA', client: null, assignee: { id: 'worker-1', name: 'Sara' } },
+    ],
+    cycles: [
+      { id: 'cycle-1', taskId: 'task-1', kind: 'INITIAL' },
+      { id: 'cycle-2', taskId: 'task-2', kind: 'INITIAL' },
+    ],
+    sessions: [
+      { id: 's1', taskId: 'task-1', cycleId: 'cycle-1', workerId: 'worker-1', startedAt: '2026-08-28T13:00:00.000Z', endedAt: null },
+      { id: 's2', taskId: 'task-2', cycleId: 'cycle-2', workerId: 'worker-1', startedAt: '2026-08-28T14:00:00.000Z', endedAt: null },
+    ],
+  });
+
+  assert.equal(result.dataQuality.overlappingSessions, 2);
+  assert.equal(result.dataQuality.historicalOverlappingSessions, 0);
+  assert.equal(result.observer.signals[0].code, 'OVERLAPPING_SESSIONS');
+  assert.match(result.observer.signals[0].evidence, /activas ahora/i);
 });
 
 test('Bria Observer reports a calm baseline when no actionable deviations exist', () => {

@@ -54,3 +54,9 @@ test('Bria Observer renders prioritized signals and their evidence', async () =>
   assert.match(panel, /signal\.evidence/);
   assert.match(panel, /Muestra insuficiente para predecir/i);
 });
+
+test('Bria labels simultaneous sessions as a live metric', async () => {
+  const panel = await readPanel();
+  assert.match(panel, /Sesiones simultáneas activas ahora/);
+  assert.doesNotMatch(panel, /Sesiones simultáneas registradas/);
+});

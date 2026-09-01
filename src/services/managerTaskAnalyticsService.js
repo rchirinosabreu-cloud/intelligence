@@ -64,7 +64,7 @@ const buildObserverSnapshot = ({ overview, dataQuality }) => {
       'OVERLAPPING_SESSIONS',
       'critical',
       'Hay sesiones de trabajo simultáneas',
-      `${dataQuality.overlappingSessions} ${dataQuality.overlappingSessions === 1 ? 'sesión aparece' : 'sesiones aparecen'} superpuesta${dataQuality.overlappingSessions === 1 ? '' : 's'} en el periodo.`
+      `${dataQuality.overlappingSessions} ${dataQuality.overlappingSessions === 1 ? 'sesión está activa' : 'sesiones están activas'} ahora para una misma persona.`
     );
   }
   if (dataQuality.inProgressWithoutSession > 0) {
@@ -147,6 +147,15 @@ export const buildManagerTaskAnalytics = ({
   }
 
   const openSessionTaskIds = new Set(periodSessions.filter((session) => !session.endedAt).map((session) => session.taskId));
+  const openSessionsByWorker = new Map();
+  for (const session of periodSessions.filter((item) => !item.endedAt && item.workerId)) {
+    const workerSessions = openSessionsByWorker.get(session.workerId) || [];
+    workerSessions.push(session.id);
+    openSessionsByWorker.set(session.workerId, workerSessions);
+  }
+  const currentOverlappingSessionIds = new Set(
+    [...openSessionsByWorker.values()].filter((sessionIds) => sessionIds.length > 1).flat()
+  );
   const completedTasks = tasks.filter((task) => {
     const completedAt = asDateMs(task.completedAt);
     return completedAt !== null && completedAt >= cutoffMs && completedAt <= nowMs;
@@ -191,7 +200,8 @@ export const buildManagerTaskAnalytics = ({
     inProgressWithoutSession: activeTasks.filter((task) => !openSessionTaskIds.has(task.id)).length,
     unclassifiedTasks: tasks.filter((task) => !task.aiCategory || !task.aiComplexity).length,
     sessionsWithoutTask: periodSessions.filter((session) => !tasksById.has(session.taskId)).length,
-    overlappingSessions: periodSessions.filter((session) => session.isOverlapping).length,
+    overlappingSessions: currentOverlappingSessionIds.size,
+    historicalOverlappingSessions: periodSessions.filter((session) => session.isOverlapping).length,
   };
 
   return {
