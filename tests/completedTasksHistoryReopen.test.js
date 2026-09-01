@@ -35,3 +35,21 @@ test('achievement history exposes an admin-only server-confirmed return action',
   assert.match(source, /invalidateQueries\(\{ queryKey: \['nativeTasks'\] \}\)/);
   assert.match(source, /min-h-11/);
 });
+
+test('task lifecycle actions use semantic return and reintegration icons consistently', () => {
+  const icons = readFileSync('src/components/ui/icons.jsx', 'utf8');
+  const history = readFileSync('src/components/modules/CompletedTasksHistoryModal.jsx', 'utf8');
+  const kanban = readFileSync('src/components/modules/NativeTasks.jsx', 'utf8');
+  const sidePanel = readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');
+
+  assert.match(icons, /TaskReturnIcon\s*=\s*createIcon\(RefreshIconData/);
+  assert.match(icons, /TaskReintegrateIcon\s*=\s*createIcon\(RedoIconData/);
+
+  assert.match(history, /TaskReintegrateIcon/);
+  assert.doesNotMatch(history, /\bRefreshCw\b/);
+
+  assert.match(kanban, /TaskReintegrateIcon[\s\S]{0,180}Reabrir tarea/);
+  assert.match(kanban, /TaskReturnIcon[\s\S]{0,180}Devolver tarea/);
+  assert.match(sidePanel, /isReturn\s*\?\s*<TaskReturnIcon[\s\S]*:\s*isReopen\s*\?\s*<TaskReintegrateIcon[\s\S]*:\s*<CheckCircle2/);
+  assert.match(sidePanel, /<TaskReintegrateIcon[^>]*\/>\s*Reintegrar Tarea/);
+});

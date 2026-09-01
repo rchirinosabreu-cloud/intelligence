@@ -20,7 +20,8 @@ import {
     MessageSquare,
     Edit2,
     X,
-    RotateCcw,
+    TaskReintegrateIcon,
+    TaskReturnIcon,
     Send,
     Trash2,
     Zap,
@@ -926,7 +927,7 @@ const NativeTasks = () => {
                             <div><p className="text-sm font-semibold text-zinc-900 dark:text-white">Tú decides si mantienes activa más de una tarea</p><p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Si ya estás registrando tiempo en una tarea, te avisaremos, pero tú decides continuar. Si quieres pausar el cronómetro, puedes regresar la tarea a “Pendiente” y continuar cuando quieras.</p></div>
                         </div>
                         <div className="flex gap-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400"><RefreshCw className="h-4 w-4" /></div>
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400"><TaskReintegrateIcon className="h-4 w-4" /></div>
                             <div><p className="text-sm font-semibold text-zinc-900 dark:text-white">Las tareas pueden reabrirse</p><p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Si una tarea realizada necesita una corrección, no necesitas crear un pendiente nuevo. Puedes buscar la tarea realizada y regresarla a “Pendiente” para conservar el ID de la tarea y su historial. Esto nos garantiza una mejor trazabilidad.</p></div>
                         </div>
                         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
@@ -971,7 +972,7 @@ const NativeTasks = () => {
                 <DialogContent className="sm:max-w-md border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
-                            <RefreshCw className="h-5 w-5 text-[#009EB9] dark:text-[#29B8CF]" /> Reabrir tarea
+                            <TaskReintegrateIcon className="h-5 w-5 text-[#009EB9] dark:text-[#29B8CF]" /> Reabrir tarea
                         </DialogTitle>
                         <DialogDescription>
                             <strong>{reopeningTask?.title}</strong> conservará su código, responsable, prioridad e historial.
@@ -1002,7 +1003,7 @@ const NativeTasks = () => {
                 <DialogContent className="sm:max-w-md dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-red-600">
-                            <RotateCcw className="w-5 h-5" /> Devolver tarea
+                            <TaskReturnIcon className="w-5 h-5" /> Devolver tarea
                         </DialogTitle>
                         <DialogDescription>
                             Por favor, explica por qué estás devolviendo la tarea: <strong>{returningTask?.title}</strong>
@@ -1096,7 +1097,7 @@ const NativeTasks = () => {
                         <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
                             <div className="flex flex-col">
                                 <h3 className="text-lg font-bold text-red-600 flex items-center gap-2">
-                                    <RotateCcw className="w-5 h-5" /> Tareas devueltas
+                                    <TaskReturnIcon className="w-5 h-5" /> Tareas devueltas
                                 </h3>
                                 <p className="text-xs text-zinc-500 mt-1 font-medium">Estas tareas requieren tu atención inmediata.</p>
                             </div>
@@ -1155,7 +1156,7 @@ const NativeTasks = () => {
                                                 onClick={() => setIsReturnedSidebarOpen(true)}
                                                 className="group/returned relative flex items-center gap-1.5 px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-all border border-red-100 dark:border-red-900/30 shadow-sm"
                                             >
-                                                <RotateCcw className="w-3.5 h-3.5 animate-pulse" />
+                                                <TaskReturnIcon className="w-3.5 h-3.5 animate-pulse" />
                                                 <span className="text-[10px] font-black uppercase tracking-tighter">
                                                     {returnedTasks.length} Devueltas
                                                 </span>
@@ -1272,7 +1273,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                                         </span>
                                         {isReturned && (
                                             <span className="text-[9px] font-black text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 rounded flex items-center gap-1 uppercase tracking-tight">
-                                                <RotateCcw className="w-2.5 h-2.5" /> Devuelto
+                                                <TaskReturnIcon className="w-2.5 h-2.5" /> Devuelto
                                             </span>
                                         )}
                                     </div>
@@ -1314,7 +1315,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                                                 title="Reabrir tarea"
                                                 aria-label="Reabrir tarea"
                                             >
-                                                <RefreshCw className="w-3.5 h-3.5" />
+                                                <TaskReintegrateIcon className="w-3.5 h-3.5" />
                                             </button>
                                         ) : !isReturned && (
                                             <button
@@ -1323,7 +1324,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                                                 title="Devolver tarea"
                                                 aria-label="Devolver tarea"
                                             >
-                                                <RotateCcw className="w-3.5 h-3.5" />
+                                                <TaskReturnIcon className="w-3.5 h-3.5" />
                                             </button>
                                         )}
                                         <button

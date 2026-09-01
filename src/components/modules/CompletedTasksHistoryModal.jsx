@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { X, Search, Filter, Loader2, CalendarDays, RefreshCw, RotateCcw } from '@/components/ui/icons';
+import { X, Search, Filter, Loader2, CalendarDays, TaskReintegrateIcon } from '@/components/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
 import TeamAvatar from '@/components/ui/TeamAvatar';
@@ -302,7 +302,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                                           title="Regresar al tablero"
                                           className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-[#009EB9]/10 hover:text-[#009EB9] focus:outline-none focus:ring-2 focus:ring-[#009EB9]/30 dark:text-zinc-500"
                                       >
-                                          <RotateCcw className="h-3.5 w-3.5" />
+                                          <TaskReintegrateIcon className="h-3.5 w-3.5" />
                                       </button>
                                     )}
                                     <div className="flex items-start gap-3">
@@ -345,7 +345,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
         >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
-              <RefreshCw className="h-5 w-5 text-[#009EB9] dark:text-[#29B8CF]" />
+              <TaskReintegrateIcon className="h-5 w-5 text-[#009EB9] dark:text-[#29B8CF]" />
               Regresar tarea al tablero
             </DialogTitle>
             <DialogDescription>

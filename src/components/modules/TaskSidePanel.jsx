@@ -3,10 +3,10 @@ import { createPortal } from 'react-dom';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
     Loader2, Zap, Star, Link as LinkIcon, ExternalLink,
-    X, Send, MessageSquare, RotateCcw, CheckCircle2, Bell,
+    X, Send, MessageSquare, TaskReintegrateIcon, TaskReturnIcon, CheckCircle2, Bell,
     LayoutGrid, Calendar, User, Trash2, Plus, ClipboardList,
     FileText, Database, Paperclip, ImageIcon, Eye, Download, Check,
-    MoreHorizontal, ChevronDown, RefreshCw
+    MoreHorizontal, ChevronDown
 } from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -1454,7 +1454,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 ? "bg-cyan-100 text-[#009EB9] dark:bg-cyan-950 dark:text-cyan-300"
                                 : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400"
                     )}>
-                        {isReturn ? <RotateCcw size={13} /> : isReopen ? <RefreshCw size={13} /> : <CheckCircle2 size={13} />}
+                        {isReturn ? <TaskReturnIcon size={13} /> : isReopen ? <TaskReintegrateIcon size={13} /> : <CheckCircle2 size={13} />}
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
@@ -1806,7 +1806,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 onClick={() => setShowReintegratePrompt(true)}
                                 className="flex items-center gap-2 px-3 py-1.5 bg-[#009EB9] text-white rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-[#008CA4] transition-all shadow-md shadow-[#009EB9]/20"
                             >
-                                <RotateCcw size={11} /> Reintegrar Tarea
+                                <TaskReintegrateIcon size={11} /> Reintegrar Tarea
                             </button>
                         )}
 
@@ -1874,7 +1874,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             >
                                 <div className="flex items-center gap-2 mb-3">
                                     <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center rounded-full text-emerald-600">
-                                        <RotateCcw size={14} />
+                                        <TaskReintegrateIcon size={14} />
                                     </div>
                                     <div>
                                         <h4 className="text-[11px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Reintegración de Tarea</h4>
