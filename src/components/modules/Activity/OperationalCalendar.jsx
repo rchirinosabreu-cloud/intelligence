@@ -901,7 +901,7 @@ const OperationalCalendar = () => {
               </select>
             </label>
             <div className="mt-4 space-y-2">
-              {reconciliationPreview.events.map(event => (
+              {(reconciliationPreview?.events || []).map(event => (
                 <div key={event.id} className="flex items-center gap-2 rounded-xl border border-zinc-200 p-3 hover:bg-zinc-50 dark:border-white/10 dark:hover:bg-white/5">
                   <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
                     <input type="checkbox" className="mt-1 h-4 w-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-600" checked={selectedReconciliationIds.includes(event.id)} onChange={input => setSelectedReconciliationIds(input.target.checked ? [...selectedReconciliationIds, event.id] : selectedReconciliationIds.filter(id => id !== event.id))} />
@@ -1229,7 +1229,7 @@ const OperationalCalendar = () => {
             <div className="mb-5">
               <DialogTitle className="text-lg font-bold text-zinc-950 dark:text-white">Eliminar evento</DialogTitle>
               <DialogDescription className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                Esta acción eliminará “{deleteCandidate.title || 'este evento'}” del calendario operativo.
+                Esta acción eliminará “{deleteCandidate?.title || 'este evento'}” del calendario operativo.
               </DialogDescription>
             </div>
             <div className="flex gap-3">
