@@ -80,11 +80,11 @@ test('Fireflies synchronization persists searchable data, JSON and two PDF artif
   const fireflies = {
     listTranscripts: async () => [{
       id: 'ff-1', title: 'Reunión de campaña', date: '2026-08-31T15:00:00.000Z',
-      duration: 3600, organizer_email: 'social@brainstudio.com'
+      duration: 60, organizer_email: 'social@brainstudio.com'
     }],
     getTranscript: async () => ({
       id: 'ff-1', title: 'Reunión de campaña', date: '2026-08-31T15:00:00.000Z',
-      duration: 3600, organizer_email: 'social@brainstudio.com',
+      duration: 60, organizer_email: 'social@brainstudio.com',
       participants: ['Ana'], sentences: [{ speaker_name: 'Ana', text: 'Publicamos el viernes.' }]
     })
   };
@@ -115,6 +115,7 @@ test('Fireflies synchronization persists searchable data, JSON and two PDF artif
   assert.match(uploads[2].key, /summary\.pdf$/);
   assert.match(uploads[3].key, /analysis\.pdf$/);
   assert.equal(writes.at(-1).data.status, 'READY');
+  assert.equal(writes.at(-1).data.durationSeconds, 3600);
   assert.equal(writes.at(-1).data.executiveSummary, 'Se acordó publicar el viernes.');
   assert.equal(writes.at(-1).data.aiModel, 'gpt-5.6-luna');
   assert.equal(writes.at(-1).data.storageProvider, 'RAILWAY');

@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast';
 import PageHeader from '@/components/ui/PageHeader';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import PdfDocumentPreview from './PdfDocumentPreview';
 
 const formatDate = value => value
   ? new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
@@ -109,7 +110,7 @@ const PreviewDialog = ({ file, preview, loading, onClose, onDownload }) => {
           {!loading && preview?.type === 'minute' && <div className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-sm dark:bg-zinc-950 sm:p-9"><MinuteDocument content={preview.content} /></div>}
           {!loading && preview?.type === 'transcript' && <div className="mx-auto max-w-3xl"><TranscriptDocument content={preview.content} /></div>}
           {!loading && preview?.type === 'image' && <img src={preview.url} alt={file?.name || 'Vista previa'} className="mx-auto max-h-[68vh] rounded-xl object-contain" />}
-          {!loading && preview?.type === 'pdf' && <iframe title={file?.name || 'Vista previa del PDF'} src={preview.url} className="h-[68vh] w-full rounded-xl bg-white" />}
+          {!loading && preview?.type === 'pdf' && <PdfDocumentPreview data={preview.data} name={file?.name} />}
           {!loading && preview?.type === 'text' && <pre className="mx-auto max-w-4xl whitespace-pre-wrap rounded-2xl bg-white p-6 text-sm leading-6 text-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">{preview.text}</pre>}
           {!loading && preview?.type === 'unsupported' && <div className="flex h-72 flex-col items-center justify-center text-center"><File className="h-10 w-10 text-zinc-400" /><p className="mt-3 font-medium text-zinc-800 dark:text-zinc-100">Vista previa no disponible</p><p className="mt-1 text-sm text-zinc-500">Puedes descargar el archivo para abrirlo en tu dispositivo.</p></div>}
         </div>
@@ -183,7 +184,7 @@ const DriveLayout = () => {
     try {
       if (BRIA_PDF_KINDS.has(file.kind)) {
         const blob = await frontendApiService.getDriveArtifactBlob(file.meetingId, file.kind);
-        const url = URL.createObjectURL(blob); previewUrlRef.current = url; setPreview({ type: 'pdf', url });
+        setPreview({ type: 'pdf', data: await blob.arrayBuffer() });
       } else if (file.kind === 'MINUTE' || file.kind === 'TRANSCRIPT') {
         const result = await frontendApiService.getDriveFile(file.meetingId, file.kind);
         setPreview({ type: file.kind === 'MINUTE' ? 'minute' : 'transcript', content: result.file.content });
@@ -192,7 +193,7 @@ const DriveLayout = () => {
         if (file.mimeType?.startsWith('image/')) {
           const url = URL.createObjectURL(blob); previewUrlRef.current = url; setPreview({ type: 'image', url });
         } else if (file.mimeType === 'application/pdf') {
-          const url = URL.createObjectURL(blob); previewUrlRef.current = url; setPreview({ type: 'pdf', url });
+          setPreview({ type: 'pdf', data: await blob.arrayBuffer() });
         } else if (file.mimeType?.startsWith('text/') || file.mimeType?.includes('json')) {
           setPreview({ type: 'text', text: await blob.text() });
         } else {

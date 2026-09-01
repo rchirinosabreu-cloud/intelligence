@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from '../lib/apiBaseUrl';
+import { firefliesMinutesToSeconds, formatMeetingDuration } from '../utils/meetingDuration';
 
 const getBaseUrl = () => getApiBaseUrl();
 
@@ -120,6 +121,10 @@ const frontendApiService = {
 
     files.forEach((file, index) => {
       parts.push(`--- FUENTE ${index + 1}: ${file.title} (${file.type}) ---\n`);
+      const reportedDuration = file.type === 'meeting'
+        ? formatMeetingDuration(firefliesMinutesToSeconds(file.duration))
+        : '';
+      if (reportedDuration) parts.push(`Duración reportada: ${reportedDuration}\n`);
       // No truncation: el backend controla el contexto del proveedor.
       parts.push(file.text);
       parts.push(' \n\n');

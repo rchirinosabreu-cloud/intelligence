@@ -1,4 +1,5 @@
 import { generateAnalysisHTML, generateSummaryHTML } from '../utils/htmlExport.js';
+import { formatMeetingDuration } from '../utils/meetingDuration.js';
 import { renderReportPDF } from './pdfRenderer.js';
 
 const printable = (value) => String(value ?? '')
@@ -14,18 +15,9 @@ const participantLabel = (participant) => {
   return [participant?.name, participant?.role].filter(Boolean).map(printable).join(': ');
 };
 
-const formatDuration = (seconds) => {
-  const totalSeconds = Number(seconds);
-  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return '';
-  const totalMinutes = Math.max(1, Math.round(totalSeconds / 60));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return [hours ? `${hours} h` : '', minutes ? `${minutes} min` : ''].filter(Boolean).join(' ');
-};
-
 const summaryData = ({ minute, analysis }) => ({
   meeting_title: minute.title,
-  meeting_duration: formatDuration(minute.durationSeconds),
+  meeting_duration: formatMeetingDuration(minute.durationSeconds),
   participants: asList(analysis.participants || minute.participants).map(participantLabel).filter(Boolean),
   meeting_topics: asList(analysis.topics),
   discussion_details: [analysis.executiveSummary || minute.executiveSummary, ...asList(analysis.risks)].filter(Boolean),
@@ -39,7 +31,7 @@ const summaryData = ({ minute, analysis }) => ({
 });
 
 const analysisData = ({ minute, analysis }) => ({
-  meeting_duration: formatDuration(minute.durationSeconds),
+  meeting_duration: formatMeetingDuration(minute.durationSeconds),
   meeting_topics: asList(analysis.topics),
   consulting_insights: [analysis.executiveSummary || minute.executiveSummary, ...asList(analysis.decisions)].filter(Boolean),
   observations: asList(analysis.risks),

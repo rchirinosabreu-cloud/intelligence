@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Video, Calendar, Clock, Loader2, AlertCircle, RefreshCcw } from '@/components/ui/icons';
 import frontendApiService from '../../../services/frontendApiService';
 import { Button } from './ui/button';
+import { firefliesMinutesToSeconds, formatMeetingDuration } from '../../../utils/meetingDuration';
 
 const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
   const [meetings, setMeetings] = useState([]);
@@ -38,6 +39,7 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
           id: meeting.id,
           title: meeting.title,
           date: meeting.date,
+          duration: meeting.duration,
           text: "Cargando transcripción completa...",
           sentences: []
       });
@@ -80,6 +82,7 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
 
           onSelectMeeting({
               ...meeting,
+              duration: transcriptData.duration ?? meeting.duration,
               sentences: sentences,
               text: fullText
           });
@@ -167,7 +170,7 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
                   {meeting.duration && (
                     <div className="flex items-center gap-1">
                       <Clock className="w-3 h-3 text-muted-foreground" />
-                      <span>{Math.round(meeting.duration / 60)} min</span>
+                      <span>{formatMeetingDuration(firefliesMinutesToSeconds(meeting.duration))}</span>
                     </div>
                   )}
                 </div>

@@ -8,6 +8,7 @@ import { generateSummaryHTML } from '../../../utils/htmlExport';
 import { toast } from 'react-hot-toast';
 import { SUMMARY_PROMPT_TEMPLATE } from '../../../utils/promptTemplates';
 import { parseJsonFromAiResponse } from '../../../utils/jsonParser';
+import { getReportedMeetingDuration } from '../../../utils/meetingDuration';
 
 const GeneralSummary = ({ files, content, reportMeta }) => {
   const [summaryData, setSummaryData] = useState(null);
@@ -53,7 +54,8 @@ IMPORTANTE: Respeta exactamente los nombres de campos y la estructura JSON solic
 
       const resultString = await frontendApiService.generateCompletion(prompt, systemPrompt);
       const result = parseJsonFromAiResponse(resultString);
-      setSummaryData(result);
+      const reportedDuration = getReportedMeetingDuration(files);
+      setSummaryData(reportedDuration ? { ...result, meeting_duration: reportedDuration } : result);
 
       toast.success("✅ Resumen unificado listo");
 

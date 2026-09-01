@@ -55,6 +55,7 @@ const SourcePanel = ({ onSelectSource, selectedSource, analysisReady, onStartAna
         title: meeting.title || 'Reunión Fireflies',
         type: 'meeting',
         text: meeting.text, // Assuming text is available in the object passed back
+        duration: meeting.duration,
         uploadedAt: new Date().toISOString(),
         size: 0 // Metadata
     };

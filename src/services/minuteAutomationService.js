@@ -9,6 +9,7 @@ import {
   syncMeetingMinuteMemoryById
 } from './briaMemoryService.js';
 import { createMinutePdfArtifacts } from './minutePdfService.js';
+import { firefliesMinutesToSeconds, formatMeetingDuration } from '../utils/meetingDuration.js';
 
 const MINUTE_RESPONSE_SCHEMA = {
   type: 'object',
@@ -242,7 +243,7 @@ const processTranscript = async ({ summary, db, fireflies, ai, storage, memory }
         externalId: summary.id,
         title: summary.title || 'Reunión sin título',
         meetingAt: normalizeDate(summary.date),
-        durationSeconds: summary.duration ? Math.round(Number(summary.duration)) : null,
+        durationSeconds: firefliesMinutesToSeconds(summary.duration),
         organizerEmail: summary.organizer_email || null,
         transcriptText: '',
         status: 'DISCOVERED',
@@ -257,11 +258,12 @@ const processTranscript = async ({ summary, db, fireflies, ai, storage, memory }
     const transcript = await fireflies.getTranscript(summary.id);
     const transcriptText = buildTranscriptText(transcript);
     if (!transcriptText.trim()) throw new Error('FIREFLIES_TRANSCRIPT_EMPTY');
+    const durationSeconds = firefliesMinutesToSeconds(transcript.duration ?? summary.duration);
 
     const aiResult = await ai.generate({
       model: AI_MODELS.fast,
       instructions: minuteInstructions,
-      prompt: `Analiza esta reunión y devuelve únicamente el JSON solicitado.\n\nTítulo: ${transcript.title || summary.title || 'Sin título'}\nFecha: ${transcript.date || summary.date || ''}\nResumen de Fireflies: ${JSON.stringify(transcript.summary || {})}\n\nTRANSCRIPCIÓN:\n${transcriptText}`,
+      prompt: `Analiza esta reunión y devuelve únicamente el JSON solicitado.\n\nTítulo: ${transcript.title || summary.title || 'Sin título'}\nFecha: ${transcript.date || summary.date || ''}\nDuración reportada por Fireflies: ${formatMeetingDuration(durationSeconds) || 'No disponible'}\nResumen de Fireflies: ${JSON.stringify(transcript.summary || {})}\n\nTRANSCRIPCIÓN:\n${transcriptText}`,
       responseSchema: MINUTE_RESPONSE_SCHEMA,
       maxOutputTokens: 5000
     });
@@ -283,6 +285,7 @@ const processTranscript = async ({ summary, db, fireflies, ai, storage, memory }
         externalId: summary.id,
         title: transcript.title || summary.title || 'Reunión sin título',
         meetingAt,
+        durationSeconds,
         participants,
         executiveSummary: analysis.executiveSummary,
         actionItems: analysis.actionItems || [],
@@ -297,7 +300,7 @@ const processTranscript = async ({ summary, db, fireflies, ai, storage, memory }
       data: {
         title: transcript.title || summary.title || 'Reunión sin título',
         meetingAt,
-        durationSeconds: transcript.duration ? Math.round(Number(transcript.duration)) : null,
+        durationSeconds,
         organizerEmail: transcript.organizer_email || summary.organizer_email || null,
         participants,
         transcriptText,
