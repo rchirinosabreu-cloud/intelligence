@@ -8,6 +8,21 @@ export const REOPEN_REASONS = [
   { value: 'OTHER', label: 'Otro motivo' },
 ];
 
+export function canReturnCompletedTaskToBoard(user) {
+  return String(user?.role || '').toUpperCase() === 'ADMIN';
+}
+
+export function buildCompletedTaskReopenPayload(reason, note) {
+  const reopenReason = String(reason || '').trim();
+  const reopenNote = String(note || '').trim();
+  if (!reopenReason || !reopenNote) return null;
+  return {
+    status: 'PENDIENTE',
+    reopenReason,
+    reopenNote,
+  };
+}
+
 export function parseReopenEventContent(content = '') {
   const text = String(content || '').trim();
   const bracketMatch = text.match(/^\[([^\]]+)\]\s*\n?([\s\S]*)$/);

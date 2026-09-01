@@ -1,15 +1,38 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { X, Search, Filter, Loader2, CalendarDays } from '@/components/ui/icons';
+import { X, Search, Filter, Loader2, CalendarDays, RefreshCw } from '@/components/ui/icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/components/ui/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  buildCompletedTaskReopenPayload,
+  canReturnCompletedTaskToBoard,
+  REOPEN_REASONS,
+} from '@/lib/taskTiming';
 
 const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
+  const { currentUser } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState('all');
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [reopeningTask, setReopeningTask] = useState(null);
+  const [reopenReason, setReopenReason] = useState('CLIENT_CORRECTION');
+  const [reopenNote, setReopenNote] = useState('');
+  const [isSubmittingReopen, setIsSubmittingReopen] = useState(false);
+  const canReopenTasks = canReturnCompletedTaskToBoard(currentUser);
 
   // Default to today's date in YYYY-MM-DD format based on America/Bogota timezone
   const todayStr = useMemo(() => {
@@ -20,6 +43,10 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
   }, []);
 
   const [selectedDate, setSelectedDate] = useState(todayStr);
+
+  useEffect(() => {
+    if (!isOpen) setReopeningTask(null);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -91,12 +118,64 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
       return users;
   }, [tasks]);
 
+  const closeReopenDialog = (force = false) => {
+    if (isSubmittingReopen && !force) return;
+    setReopeningTask(null);
+    setReopenReason('CLIENT_CORRECTION');
+    setReopenNote('');
+  };
+
+  const handleReopenTask = async () => {
+    if (!reopeningTask || isSubmittingReopen || !canReopenTasks) return;
+    const payload = buildCompletedTaskReopenPayload(reopenReason, reopenNote);
+    if (!payload) return;
+
+    try {
+      setIsSubmittingReopen(true);
+      const baseUrl = getApiBaseUrl();
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${baseUrl}/api/tasks/${reopeningTask.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+        body: JSON.stringify(payload),
+      });
+      const responseBody = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(responseBody?.details || responseBody?.error || `Error ${response.status}`);
+
+      setTasks(current => current.filter(task => task.id !== reopeningTask.id));
+      await Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: ['nativeTasks'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] }),
+        queryClient.invalidateQueries({ queryKey: ['quality-streak'] }),
+        queryClient.invalidateQueries({ queryKey: ['personalDashboard'] }),
+      ]);
+      toast({
+        title: 'Tarea regresada al tablero',
+        description: 'Ahora aparece en Pendiente y conserva todo su historial.',
+      });
+      closeReopenDialog(true);
+    } catch (error) {
+      console.error('Error reopening completed task from achievement history:', error);
+      toast({
+        variant: 'destructive',
+        title: 'No se pudo regresar la tarea',
+        description: 'La tarea permanece en el historial de logros.',
+      });
+    } finally {
+      setIsSubmittingReopen(false);
+    }
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={open => { if (!open) onClose(); }}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex max-h-[calc(100dvh-1rem)] max-w-4xl flex-col gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 sm:max-h-[90dvh]"
-      >
+    <>
+      <Dialog open={isOpen} onOpenChange={open => { if (!open) onClose(); }}>
+        <DialogContent
+          showCloseButton={false}
+          className="flex max-h-[calc(100dvh-1rem)] max-w-4xl flex-col gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 sm:max-h-[90dvh]"
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
             <div>
@@ -214,6 +293,16 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                                             </div>
                                         </div>
                                     </div>
+                                    {canReopenTasks && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setReopeningTask(task)}
+                                        className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm font-medium text-zinc-700 transition-colors hover:border-[#009EB9]/40 hover:bg-[#009EB9]/5 hover:text-[#007F95] focus:outline-none focus:ring-2 focus:ring-[#009EB9]/20 dark:border-zinc-700 dark:text-zinc-200 dark:hover:border-[#29B8CF]/50 dark:hover:bg-[#009EB9]/10 dark:hover:text-[#54C8DB] sm:w-auto"
+                                      >
+                                        <RefreshCw className="h-4 w-4" />
+                                        Regresar al tablero
+                                      </button>
+                                    )}
                                 </Card>
                             ))}
                         </div>
@@ -221,8 +310,66 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                 ))
             )}
           </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!reopeningTask} onOpenChange={open => { if (!open) closeReopenDialog(); }}>
+        <DialogContent
+          overlayClassName="z-[90]"
+          className="z-[91] border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-md"
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
+              <RefreshCw className="h-5 w-5 text-[#009EB9] dark:text-[#29B8CF]" />
+              Regresar tarea al tablero
+            </DialogTitle>
+            <DialogDescription>
+              <strong>{reopeningTask?.title}</strong> volverá a Pendiente y conservará responsable, prioridad y bitácora.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Motivo</span>
+              <select
+                value={reopenReason}
+                onChange={event => setReopenReason(event.target.value)}
+                className="min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#009EB9]/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
+              >
+                {REOPEN_REASONS.map(reason => <option key={reason.value} value={reason.value}>{reason.label}</option>)}
+              </select>
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Nota de corrección</span>
+              <textarea
+                value={reopenNote}
+                onChange={event => setReopenNote(event.target.value)}
+                placeholder="Explica brevemente qué debe corregirse."
+                className="min-h-[112px] w-full resize-y rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#009EB9]/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
+              />
+            </label>
+          </div>
+          <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+            <button
+              type="button"
+              onClick={() => closeReopenDialog()}
+              disabled={isSubmittingReopen}
+              className="min-h-11 rounded-xl px-4 text-sm font-medium text-zinc-600 hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleReopenTask}
+              disabled={isSubmittingReopen || !reopenNote.trim()}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#009EB9] px-4 text-sm font-medium text-white hover:bg-[#008CA4] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmittingReopen && <Loader2 className="h-4 w-4 animate-spin" />}
+              Regresar a Pendiente
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
