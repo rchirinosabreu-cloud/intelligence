@@ -11,5 +11,6 @@ export const triggerConfetti = () => {
     origin: { y: 0.8 },
     colors: ['#009EB9', '#00AC8A', '#ffffff'],
     zIndex: 9999, // Ensure it's above modals
+    disableForReducedMotion: true,
   });
 };

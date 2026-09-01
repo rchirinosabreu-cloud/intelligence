@@ -7,6 +7,7 @@ import frontendApiService from '../../../services/frontendApiService';
 import { toast } from 'react-hot-toast';
 import PageHeader from '@/components/ui/PageHeader';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 
 const formatDate = value => value
   ? new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
@@ -84,23 +85,26 @@ const TranscriptDocument = ({ content }) => (
 );
 
 const PreviewDialog = ({ file, preview, loading, onClose, onDownload }) => {
-  if (!file) return null;
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-zinc-950/55 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-labelledby="drive-preview-title">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
+    <Dialog open={!!file} onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="z-[80] bg-zinc-950/55"
+        className="z-[81] flex h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-5xl flex-col gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 sm:h-[92dvh] sm:w-[calc(100vw-3rem)]"
+      >
         <header className="flex items-center justify-between gap-4 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
           <div className="min-w-0">
-            <h2 id="drive-preview-title" className="truncate font-semibold text-zinc-950 dark:text-white">{file.name}</h2>
-            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{file.kind === 'TRANSCRIPT' ? 'Transcripción' : file.kind === 'MINUTE' ? 'Datos estructurados de Bria' : file.kind === 'SUMMARY_PDF' ? 'Resumen ejecutivo en PDF' : file.kind === 'ANALYSIS_PDF' ? 'Análisis operativo en PDF' : file.mimeType}</p>
+            <DialogTitle className="truncate font-semibold text-zinc-950 dark:text-white">{file?.name}</DialogTitle>
+            <DialogDescription className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{file?.kind === 'TRANSCRIPT' ? 'Transcripción' : file?.kind === 'MINUTE' ? 'Datos estructurados de Bria' : file?.kind === 'SUMMARY_PDF' ? 'Resumen ejecutivo en PDF' : file?.kind === 'ANALYSIS_PDF' ? 'Análisis operativo en PDF' : file?.mimeType}</DialogDescription>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={onDownload} className="inline-flex h-10 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900">
+            <button type="button" onClick={onDownload} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900">
               <Download className="h-4 w-4" /> Descargar
             </button>
-            <button type="button" onClick={onClose} aria-label="Cerrar visor" className="flex h-10 w-10 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"><X className="h-5 w-5" /></button>
+            <button type="button" onClick={onClose} aria-label="Cerrar visor" className="flex h-11 w-11 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"><X className="h-5 w-5" /></button>
           </div>
         </header>
-        <div className="min-h-[24rem] flex-1 overflow-auto bg-zinc-50 p-5 dark:bg-zinc-900/50 sm:p-8">
+        <div className="min-h-0 flex-1 overflow-auto overscroll-contain bg-zinc-50 p-4 dark:bg-zinc-900/50 sm:min-h-[24rem] sm:p-8">
           {loading && <div className="flex h-72 items-center justify-center gap-2 text-sm text-zinc-500"><Loader2 className="h-5 w-5 animate-spin" /> Abriendo archivo...</div>}
           {!loading && preview?.type === 'minute' && <div className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-sm dark:bg-zinc-950 sm:p-9"><MinuteDocument content={preview.content} /></div>}
           {!loading && preview?.type === 'transcript' && <div className="mx-auto max-w-3xl"><TranscriptDocument content={preview.content} /></div>}
@@ -109,8 +113,8 @@ const PreviewDialog = ({ file, preview, loading, onClose, onDownload }) => {
           {!loading && preview?.type === 'text' && <pre className="mx-auto max-w-4xl whitespace-pre-wrap rounded-2xl bg-white p-6 text-sm leading-6 text-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">{preview.text}</pre>}
           {!loading && preview?.type === 'unsupported' && <div className="flex h-72 flex-col items-center justify-center text-center"><File className="h-10 w-10 text-zinc-400" /><p className="mt-3 font-medium text-zinc-800 dark:text-zinc-100">Vista previa no disponible</p><p className="mt-1 text-sm text-zinc-500">Puedes descargar el archivo para abrirlo en tu dispositivo.</p></div>}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
@@ -410,8 +414,26 @@ const DriveLayout = () => {
         </div>
       </section>
 
-      {newFolderOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-zinc-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="new-folder-title"><form onSubmit={createFolder} className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950"><div className="flex items-center justify-between"><h2 id="new-folder-title" className="font-semibold text-zinc-950 dark:text-white">Nueva carpeta</h2><button type="button" onClick={() => setNewFolderOpen(false)} aria-label="Cerrar" className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"><X className="h-4 w-4" /></button></div><label className="mt-5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Nombre<input autoFocus value={folderName} onChange={event => setFolderName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 outline-none focus:border-violet-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" /></label><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setNewFolderOpen(false)} className="h-10 rounded-xl px-4 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900">Cancelar</button><button type="submit" className="h-10 rounded-xl bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700">Crear carpeta</button></div></form></div>}
-      {editTarget && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-zinc-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="rename-title"><form onSubmit={saveEdit} className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950"><div className="flex items-center justify-between"><h2 id="rename-title" className="font-semibold text-zinc-950 dark:text-white">Renombrar</h2><button type="button" onClick={() => setEditTarget(null)} aria-label="Cerrar" className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"><X className="h-4 w-4" /></button></div><label className="mt-5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Nombre<input autoFocus value={editName} onChange={event => setEditName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 outline-none focus:border-violet-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" /></label><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setEditTarget(null)} className="h-10 rounded-xl px-4 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900">Cancelar</button><button type="submit" className="h-10 rounded-xl bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700">Guardar</button></div></form></div>}
+      <Dialog open={newFolderOpen} onOpenChange={setNewFolderOpen}>
+        <DialogContent overlayClassName="z-[80]" className="z-[81] max-w-md rounded-2xl border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
+          <form onSubmit={createFolder}>
+            <DialogTitle className="font-semibold text-zinc-950 dark:text-white">Nueva carpeta</DialogTitle>
+            <DialogDescription className="sr-only">Crea una carpeta nueva en la ubicación actual.</DialogDescription>
+            <label className="mt-5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Nombre<input autoFocus value={folderName} onChange={event => setFolderName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 outline-none focus:border-violet-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" /></label>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setNewFolderOpen(false)} className="min-h-11 rounded-xl px-4 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900">Cancelar</button><button type="submit" className="min-h-11 rounded-xl bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700">Crear carpeta</button></div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!editTarget} onOpenChange={open => { if (!open) setEditTarget(null); }}>
+        <DialogContent overlayClassName="z-[80]" className="z-[81] max-w-md rounded-2xl border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
+          <form onSubmit={saveEdit}>
+            <DialogTitle className="font-semibold text-zinc-950 dark:text-white">Renombrar</DialogTitle>
+            <DialogDescription className="sr-only">Cambia el nombre del archivo o carpeta seleccionado.</DialogDescription>
+            <label className="mt-5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Nombre<input autoFocus value={editName} onChange={event => setEditName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 outline-none focus:border-violet-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" /></label>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setEditTarget(null)} className="min-h-11 rounded-xl px-4 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900">Cancelar</button><button type="submit" className="min-h-11 rounded-xl bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700">Guardar</button></div>
+          </form>
+        </DialogContent>
+      </Dialog>
       <PreviewDialog file={previewFile} preview={preview} loading={previewLoading} onClose={() => setPreviewFile(null)} onDownload={() => downloadFile(previewFile)} />
     </div>
   );

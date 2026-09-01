@@ -11,6 +11,7 @@ import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, 
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 
 const Card = ({ children, className }) => (
     <div className={cn("bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden", className)}>
@@ -834,26 +835,14 @@ const Profile = () => {
                 </TabsContent>
             </Tabs>
 
-            {/* Avatar Upload Modal */}
-            <AnimatePresence>
-                {isAvatarModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setIsAvatarModalOpen(false)}
-                            className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm"
-                        />
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="relative w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl overflow-hidden border border-zinc-200 dark:border-white/5"
-                        >
+            <Dialog open={isAvatarModalOpen} onOpenChange={setIsAvatarModalOpen}>
+                <DialogContent showCloseButton={false} className="max-w-md gap-0 overflow-hidden rounded-3xl border-zinc-200 bg-white p-0 shadow-2xl dark:border-white/5 dark:bg-zinc-900">
                             <div className="p-6 border-b border-zinc-100 dark:border-white/5 flex justify-between items-center">
-                                <h3 className="font-bold">Actualizar Foto</h3>
-                                <button onClick={() => setIsAvatarModalOpen(false)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors">
+                                <div>
+                                    <DialogTitle className="font-bold">Actualizar foto</DialogTitle>
+                                    <DialogDescription className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Selecciona y ajusta una nueva imagen de perfil.</DialogDescription>
+                                </div>
+                                <button type="button" aria-label="Cerrar actualización de foto" onClick={() => setIsAvatarModalOpen(false)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800">
                                     <X className="w-5 h-5" />
                                 </button>
                             </div>
@@ -867,10 +856,8 @@ const Profile = () => {
                                     }}
                                 />
                             </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

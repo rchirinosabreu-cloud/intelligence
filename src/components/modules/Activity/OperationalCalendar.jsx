@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Calendar as CalendarIcon,
@@ -885,13 +884,13 @@ const OperationalCalendar = () => {
         </DialogContent>
       </Dialog>
 
-      {reconciliationPreview && (
-        <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) setReconciliationPreview(null); }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="reconciliation-title" className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-zinc-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-zinc-900">
+      <Dialog open={!!reconciliationPreview} onOpenChange={open => { if (!open) setReconciliationPreview(null); }}>
+        <DialogContent showCloseButton={false} overlayClassName="z-[115]" className="z-[116] max-h-[calc(100dvh-1rem)] max-w-2xl gap-0 overflow-y-auto rounded-3xl border-zinc-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-zinc-900 sm:max-h-[85dvh] sm:p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-300">Reconciliación controlada</p>
-                <h3 id="reconciliation-title" className="mt-1 text-lg font-bold text-zinc-950 dark:text-white">Eventos pendientes de Google Calendar</h3>
+                <DialogTitle className="mt-1 text-lg font-bold text-zinc-950 dark:text-white">Eventos pendientes de Google Calendar</DialogTitle>
+                <DialogDescription className="sr-only">Selecciona los eventos vigentes que deben sincronizarse con Google Calendar.</DialogDescription>
               </div>
               <button type="button" onClick={() => setReconciliationPreview(null)} className="flex h-11 w-11 items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/10" aria-label="Cerrar reconciliación"><X className="h-5 w-5" /></button>
             </div>
@@ -923,9 +922,8 @@ const OperationalCalendar = () => {
               {reconciliationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Confirmar y sincronizar
             </button>
-          </section>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {isModalOpen && (
         <Dialog open={isModalOpen} onOpenChange={open => { if (!open) closeModal(); }}>
@@ -1220,20 +1218,20 @@ const OperationalCalendar = () => {
         </Dialog>
       )}
 
-      {deleteCandidate && createPortal(
-        <div
+      <Dialog open={!!deleteCandidate} onOpenChange={open => { if (!open && !deleteMutation.isPending) handleCancelDelete(); }}>
+        <DialogContent
           data-operational-delete-dialog="event"
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) handleCancelDelete();
-          }}
+          showCloseButton={false}
+          overlayClassName="z-[120]"
+          className="z-[121] max-w-sm gap-0 rounded-3xl border-zinc-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-zinc-900"
+          onEscapeKeyDown={event => { if (deleteMutation.isPending) event.preventDefault(); }}
+          onPointerDownOutside={event => { if (deleteMutation.isPending) event.preventDefault(); }}
         >
-          <div className="w-full max-w-sm rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-zinc-900">
             <div className="mb-5">
-              <h3 className="text-lg font-bold text-zinc-950 dark:text-white">Eliminar evento</h3>
-              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+              <DialogTitle className="text-lg font-bold text-zinc-950 dark:text-white">Eliminar evento</DialogTitle>
+              <DialogDescription className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
                 Esta acción eliminará “{deleteCandidate.title || 'este evento'}” del calendario operativo.
-              </p>
+              </DialogDescription>
             </div>
             <div className="flex gap-3">
               <button
@@ -1253,9 +1251,8 @@ const OperationalCalendar = () => {
                 Eliminar
               </button>
             </div>
-          </div>
-        </div>
-      , document.body)}
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

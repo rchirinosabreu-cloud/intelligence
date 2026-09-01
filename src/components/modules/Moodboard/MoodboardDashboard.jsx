@@ -17,6 +17,7 @@ import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import PageHeader from '@/components/ui/PageHeader';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 
 const MoodboardDashboard = () => {
   const confirm = useConfirmDialog();
@@ -189,17 +190,16 @@ const MoodboardDashboard = () => {
         </div>
       )}
 
-      {/* Create Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent overlayClassName="z-[100]" className="z-[101] max-w-md rounded-3xl border-zinc-200 bg-white p-0 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
           <form
             onSubmit={handleCreateBoard}
-            className="relative w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl p-8 shadow-2xl border border-zinc-200 dark:border-zinc-800 animate-in zoom-in-95 duration-200"
+            className="p-5 sm:p-8"
           >
-            <h2 className="text-2xl font-black text-zinc-900 dark:text-zinc-100 mb-6 tracking-tighter">
+            <DialogTitle className="mb-2 pr-10 text-2xl font-black tracking-tighter text-zinc-900 dark:text-zinc-100">
               Nuevo Tablero
-            </h2>
+            </DialogTitle>
+            <DialogDescription className="mb-6 text-sm text-zinc-500 dark:text-zinc-400">Organiza referencias visuales para la agencia o un cliente.</DialogDescription>
 
             <div className="space-y-4">
               <div>
@@ -230,25 +230,25 @@ const MoodboardDashboard = () => {
               </div>
             </div>
 
-            <div className="flex gap-3 mt-8">
+            <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row">
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="flex-1 px-6 py-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-bold rounded-xl hover:bg-zinc-200 transition-colors"
+                className="min-h-11 flex-1 rounded-xl bg-zinc-100 px-6 py-3 font-bold text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300"
               >
                 Cancelar
               </button>
               <button
                 disabled={creating}
                 type="submit"
-                className="flex-1 px-6 py-3 bg-[#009EB9] text-white font-bold rounded-xl hover:bg-[#008CA4] transition-all shadow-lg shadow-[#009EB9]/20 disabled:opacity-50"
+                className="min-h-11 flex-1 rounded-xl bg-[#009EB9] px-6 py-3 font-bold text-white shadow-lg shadow-[#009EB9]/20 transition-all hover:bg-[#008CA4] disabled:opacity-50"
               >
                 {creating ? 'Creando...' : 'Crear Tablero'}
               </button>
             </div>
           </form>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

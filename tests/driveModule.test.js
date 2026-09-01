@@ -280,5 +280,6 @@ test('Drive is wired as a protected platform module with search, filters and fil
   assert.match(drive, /permanentlyDeleteAutomatedMinute\(item\.meetingId\)/);
   assert.match(drive, /Enviar reunión .* a papelera/);
   assert.match(drive, /Eliminar reunión .* permanentemente/);
-  assert.match(drive, /role="dialog"/);
+  assert.match(drive, /<Dialog open=\{!!file\}/);
+  assert.match(drive, /<DialogContent/);
 });

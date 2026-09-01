@@ -1,9 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, Filter, Loader2, CalendarDays } from '@/components/ui/icons';
 import { Card } from '@/components/ui/Card';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 
 const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -91,41 +91,30 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
       return users;
   }, [tasks]);
 
-  if (!isOpen) return null;
-
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm"
-          onClick={onClose}
-        />
-
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          className="relative w-full max-w-4xl bg-white dark:bg-zinc-950 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col max-h-[90vh]"
-        >
+    <Dialog open={isOpen} onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent
+        showCloseButton={false}
+        className="flex max-h-[calc(100dvh-1rem)] max-w-4xl flex-col gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 sm:max-h-[90dvh]"
+      >
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
             <div>
-                <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Historial de logros</h2>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">Registro detallado de tareas completadas</p>
+                <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-white">Historial de logros</DialogTitle>
+                <DialogDescription className="text-sm text-zinc-500 dark:text-zinc-400">Registro detallado de tareas completadas</DialogDescription>
             </div>
             <button
+              type="button"
               onClick={onClose}
-              className="p-2 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              aria-label="Cerrar historial de logros"
+              className="flex h-11 w-11 items-center justify-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Filters */}
-          <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row gap-4 bg-zinc-50 dark:bg-zinc-900/50">
+          <div className="flex flex-col gap-4 border-b border-zinc-200 bg-zinc-50 px-4 py-4 dark:border-zinc-800 dark:bg-zinc-900/50 sm:px-6 lg:flex-row">
             <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                 <input
@@ -137,7 +126,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                 />
             </div>
 
-            <div className="flex gap-4 min-w-[320px]">
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:min-w-[320px]">
                 <div className="relative flex-1">
                     <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                     <input
@@ -232,9 +221,8 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                 ))
             )}
           </div>
-        </motion.div>
-      </div>
-    </AnimatePresence>
+      </DialogContent>
+    </Dialog>
   );
 };
 

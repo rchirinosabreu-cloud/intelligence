@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 
 const DeliverablesWidget = ({ clientId }) => {
     const confirm = useConfirmDialog();
@@ -444,40 +445,43 @@ const DeliverablesWidget = ({ clientId }) => {
                 )}
             </div>
 
-            {previewFile && (
-                <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/80 backdrop-blur-xl p-4 md:p-10 animate-in fade-in duration-300">
-                    <div className="absolute inset-0" onClick={() => setPreviewFile(null)} />
-                    <div className="w-full h-full max-w-6xl flex flex-col z-[65] relative animate-in zoom-in-95 duration-300">
-                        <div className="flex items-center justify-between mb-4 bg-zinc-900/50 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl">
-                            <div className="flex items-center gap-3 pl-2">
+            <Dialog open={!!previewFile} onOpenChange={open => { if (!open) setPreviewFile(null); }}>
+                <DialogContent
+                    showCloseButton={false}
+                    overlayClassName="z-[60] bg-zinc-950/80 backdrop-blur-xl"
+                    className="z-[65] flex h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-6xl flex-col gap-0 overflow-hidden border-0 bg-transparent p-0 shadow-none sm:h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)]"
+                >
+                        <div className="mb-3 flex items-center justify-between gap-2 rounded-2xl border border-white/10 bg-zinc-900/70 p-2.5 shadow-2xl backdrop-blur-md sm:mb-4 sm:p-3">
+                            <div className="flex min-w-0 items-center gap-2 pl-1 sm:gap-3 sm:pl-2">
                                 <div className="p-2 bg-emerald-500/20 rounded-xl">
-                                    {React.createElement(getFileIcon(previewFile.mimeType), { className: "w-4 h-4 text-emerald-500" })}
+                                    {previewFile && React.createElement(getFileIcon(previewFile.mimeType), { className: "w-4 h-4 text-emerald-500" })}
                                 </div>
-                                <div className="flex flex-col">
-                                    <span className="text-sm font-bold text-white truncate max-w-[300px]">{previewFile.name}</span>
-                                    <span className="text-[10px] text-zinc-400 font-medium uppercase tracking-tighter">{formatSize(previewFile.size)} • {formatDate(previewFile.createdAt)}</span>
+                                <div className="flex min-w-0 flex-col">
+                                    <DialogTitle className="max-w-[45vw] truncate text-sm font-bold text-white sm:max-w-[300px]">{previewFile?.name}</DialogTitle>
+                                    <DialogDescription className="truncate text-[10px] font-medium uppercase tracking-tighter text-zinc-400">{previewFile ? `${formatSize(previewFile.size)} • ${formatDate(previewFile.createdAt)}` : ''}</DialogDescription>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                                 <button
                                     onClick={(e) => forceDownload(e, previewFile.id, previewFile.name)}
-                                    className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-xl text-white text-xs font-bold transition-all shadow-lg"
+                                    aria-label="Descargar archivo"
+                                    className="flex min-h-11 items-center gap-2 rounded-xl bg-emerald-500 px-3 text-xs font-bold text-white shadow-lg transition-all hover:bg-emerald-600 sm:px-4"
                                 >
                                     <Download className="w-3.5 h-3.5" />
-                                    DESCARGAR
+                                    <span className="hidden sm:inline">DESCARGAR</span>
                                 </button>
                                 <button
                                     onClick={() => setPreviewFile(null)}
-                                    className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all border border-white/10"
-                                    title="Cerrar"
+                                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-white transition-all hover:bg-white/20"
+                                    aria-label="Cerrar visor"
                                 >
                                     <X className="w-5 h-5" />
                                 </button>
                             </div>
                         </div>
 
-                        <div className="flex-1 bg-white/5 dark:bg-zinc-900/50 rounded-2xl border border-white/5 overflow-hidden shadow-2xl relative">
-                            {previewFile.mimeType.startsWith('image/') && (
+                        <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/5 bg-white/5 shadow-2xl dark:bg-zinc-900/50">
+                            {previewFile?.mimeType.startsWith('image/') && (
                                 <div className="w-full h-full flex items-center justify-center p-4">
                                     <img
                                         src={previewFile.url}
@@ -486,7 +490,7 @@ const DeliverablesWidget = ({ clientId }) => {
                                     />
                                 </div>
                             )}
-                            {previewFile.mimeType.startsWith('video/') && (
+                            {previewFile?.mimeType.startsWith('video/') && (
                                 <div className="w-full h-full flex items-center justify-center bg-black">
                                     <video
                                         src={previewFile.url}
@@ -496,7 +500,7 @@ const DeliverablesWidget = ({ clientId }) => {
                                     />
                                 </div>
                             )}
-                            {previewFile.mimeType === 'application/pdf' && (
+                            {previewFile?.mimeType === 'application/pdf' && (
                                 <div className="w-full h-full bg-zinc-100 dark:bg-zinc-800 flex flex-col">
                                     <iframe
                                         src={`${previewFile.url}#toolbar=0&navpanes=0&view=FitH`}
@@ -506,9 +510,8 @@ const DeliverablesWidget = ({ clientId }) => {
                                 </div>
                             )}
                         </div>
-                    </div>
-                </div>
-            )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 

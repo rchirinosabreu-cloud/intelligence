@@ -619,6 +619,8 @@ const NativeTasks = () => {
             destinationColumnId === 'en-proceso' ? 'EN_CURSO' :
             destinationColumnId === 'devuelto' ? 'DEVUELTA' : 'REALIZADA';
         movedTask.status = newStatusEnum;
+        if (newStatusEnum === 'REALIZADA') movedTask.completedAt = new Date().toISOString();
+        if (newStatusEnum !== 'REALIZADA') movedTask.completedAt = null;
         if (sourceColumnId === 'en-proceso' && newStatusEnum !== 'EN_CURSO') {
             movedTask.accumulatedWorkMs = closeTaskWorkSession(movedTask);
             movedTask.startedAt = null;
@@ -653,7 +655,6 @@ const NativeTasks = () => {
         if (insertionIndexInGlobal !== -1) newTasks.splice(insertionIndexInGlobal, 0, movedTask);
         else newTasks.push(movedTask);
         queryClient.setQueryData(['nativeTasks'], newTasks);
-        if (sourceColumnId !== 'realizado' && destinationColumnId === 'realizado') triggerConfetti();
         const newStatusForDB =
             destinationColumnId === 'pendiente' ? 'PENDIENTE' :
             destinationColumnId === 'en-proceso' ? 'EN_CURSO' :
@@ -675,6 +676,7 @@ const NativeTasks = () => {
                 body: JSON.stringify(payload)
             });
             if (!response.ok) throw new Error("Failed to update status in backend");
+            if (sourceColumnId !== 'realizado' && destinationColumnId === 'realizado') triggerConfetti();
             await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
             queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
             queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
