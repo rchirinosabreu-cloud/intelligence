@@ -160,8 +160,8 @@ const AutomaticMinutesPanel = () => {
           )}
 
           {error && (
-            <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
-              <AlertCircle className="h-4 w-4 shrink-0" />
+            <div className="brain-alert-surface mt-4 flex items-center gap-2 rounded-xl p-3 text-sm">
+              <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
               {error}
             </div>
           )}
@@ -194,7 +194,7 @@ const AutomaticMinutesPanel = () => {
                       )}
                     </button>
                     {!trashView && (
-                      <button type="button" disabled={busy} onClick={() => moveToTrash(minute)} className="rounded-lg p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/30 dark:hover:text-red-300" aria-label={`Enviar ${minute.title} a la Papelera`}>
+                      <button type="button" disabled={busy} onClick={() => moveToTrash(minute)} className="brain-danger-button-icon rounded-lg p-2" aria-label={`Enviar ${minute.title} a la Papelera`}>
                         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                       </button>
                     )}
@@ -205,7 +205,7 @@ const AutomaticMinutesPanel = () => {
                       <button type="button" disabled={busy} onClick={() => restoreMinute(minute)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-zinc-200 px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800">
                         <RotateCcw className="h-3.5 w-3.5" /> Restaurar
                       </button>
-                      <button type="button" disabled={busy} onClick={() => deletePermanently(minute)} className="inline-flex h-9 items-center gap-2 rounded-lg bg-red-600 px-3 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50">
+                      <button type="button" disabled={busy} onClick={() => deletePermanently(minute)} className="brain-danger-button inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-medium">
                         {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Eliminar permanentemente
                       </button>
                     </div>
@@ -226,7 +226,7 @@ const AutomaticMinutesPanel = () => {
                           </ul>
                         </div>
                       )}
-                      {minute.errorMessage && <p className="mt-3 text-red-700 dark:text-red-300">{minute.errorMessage}</p>}
+                      {minute.errorMessage && <p className="mt-3 text-destructive">{minute.errorMessage}</p>}
                     </div>
                   )}
                 </article>

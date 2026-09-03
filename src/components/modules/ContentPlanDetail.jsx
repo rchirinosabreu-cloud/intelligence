@@ -85,7 +85,7 @@ const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }) => {
           />
           <button
             onClick={() => handleRemoveLink(i)}
-            className="p-2 text-zinc-400 hover:text-red-500 transition-colors"
+            className="brain-danger-button-icon p-2"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -492,11 +492,11 @@ const ContentItemCard = ({
                   isRealizado
                     ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600'
                     : isDevuelto
-                    ? 'bg-red-500/5 border-red-500/20 text-red-600'
+                    ? 'border-destructive/20 bg-destructive/5 text-destructive'
                     : 'bg-indigo-600/5 border-indigo-600/20 text-indigo-600'
                 }`}>
                   <div className="flex items-center gap-2">
-                    {isRealizado ? <CheckCircle2 className="w-4 h-4" /> : isDevuelto ? <AlertCircle className="w-4 h-4" /> : <Clock className="w-4 h-4 animate-pulse" />}
+                    {isRealizado ? <CheckCircle2 className="w-4 h-4" /> : isDevuelto ? <AlertCircle className="h-4 w-4 text-destructive" /> : <Clock className="w-4 h-4 animate-pulse" />}
                     <span className="text-[10px] font-black uppercase tracking-widest">
                       {isRealizado ? 'Realizado' : isDevuelto ? 'Devuelto' : 'En Producción'}
                     </span>
@@ -539,7 +539,7 @@ const ContentItemCard = ({
 
                 <button
                   onClick={() => onDelete(item.id)}
-                  className="p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-xl transition-all"
+                  className="brain-danger-button-icon rounded-xl p-2"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -1073,7 +1073,7 @@ const ContentPlanDetail = () => {
                     <button
                       type="button"
                       onClick={() => handleRemovePlanInternalNote(index)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-400 hover:text-red-500 rounded-lg transition-all"
+                      className="brain-danger-button-icon rounded-lg p-1.5 opacity-0 group-hover:opacity-100"
                       aria-label="Eliminar nota interna"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

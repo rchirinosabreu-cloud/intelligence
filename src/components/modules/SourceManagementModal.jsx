@@ -153,7 +153,7 @@ const SourceManagementModal = ({ isOpen, onClose, onRefresh }) => {
                                             </div>
                                             <button
                                                 onClick={() => handleDelete(source.id)}
-                                                className="p-2 hover:bg-red-50 text-zinc-300 hover:text-red-500 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                                className="brain-danger-button-icon rounded-lg p-2 opacity-0 group-hover:opacity-100"
                                             >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>

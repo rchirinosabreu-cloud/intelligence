@@ -414,7 +414,7 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
                 {isLoading ? (
                     <div className="flex items-center justify-center gap-2 py-16 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Cargando movimientos...</div>
                 ) : error ? (
-                    <div className="flex items-center justify-center gap-2 py-16 text-sm text-rose-600"><AlertCircle className="h-4 w-4" /> No fue posible cargar el libro.</div>
+                    <div className="flex items-center justify-center gap-2 py-16 text-sm text-destructive"><AlertCircle className="h-4 w-4 text-destructive" /> No fue posible cargar el libro.</div>
                 ) : records.length === 0 ? (
                     <div className="py-16 text-center"><Search className="mx-auto h-7 w-7 text-zinc-300" /><p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">No hay movimientos con estos filtros</p></div>
                 ) : (

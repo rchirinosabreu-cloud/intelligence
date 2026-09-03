@@ -16,7 +16,9 @@ test('new platform dialog supports both themes and the destructive token', async
 
   assert.match(source, /bg-white/);
   assert.match(source, /dark:bg-slate-900/);
-  assert.match(source, /#E11D48/);
+  assert.match(source, /bg-destructive/);
+  assert.match(source, /text-destructive/);
+  assert.doesNotMatch(source, /#[Ee]11[Dd]48/, 'Shared dialogs must consume the global token instead of duplicating its hex value.');
 });
 
 test('DM Sans is loaded once through the document head', async () => {

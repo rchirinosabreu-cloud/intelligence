@@ -76,6 +76,22 @@
 }
 
 @layer components {
+  .brain-danger-button {
+    @apply bg-destructive text-destructive-foreground shadow-sm shadow-destructive/20 transition-colors hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .brain-danger-button-outline {
+    @apply border-destructive/30 text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/30 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .brain-danger-button-icon {
+    @apply text-zinc-400 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/30 disabled:pointer-events-none disabled:opacity-50 dark:text-zinc-500 dark:hover:text-destructive;
+  }
+
+  .brain-alert-surface {
+    @apply border border-destructive/20 bg-destructive/10 text-destructive dark:border-destructive/30 dark:bg-destructive/10;
+  }
+
   .task-toolbar-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr);

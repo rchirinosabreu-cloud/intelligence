@@ -287,7 +287,7 @@ const ClientTasksWidget = ({ clientId }) => {
                                         e.stopPropagation();
                                         setDeletingTask(task);
                                     }}
-                                    className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-400 hover:text-red-500 transition-all absolute top-2 right-2"
+                                    className="brain-danger-button-icon absolute right-2 top-2 p-1.5 opacity-0 group-hover:opacity-100"
                                 >
                                     <Trash2 className="w-4 h-4" />
                                 </button>
@@ -337,7 +337,7 @@ const ClientTasksWidget = ({ clientId }) => {
                             value={deleteReason}
                             onChange={(e) => setDeleteReason(e.target.value)}
                             placeholder="Ej: Es un duplicado, el cliente canceló..."
-                            className="w-full min-h-[120px] bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none dark:text-white"
+                            className="min-h-[120px] w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-destructive/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
                             autoFocus
                             required
                         />
@@ -353,7 +353,7 @@ const ClientTasksWidget = ({ clientId }) => {
                         <button
                             onClick={() => handleDeleteTask()}
                             disabled={!deleteReason.trim() || isSubmittingDelete}
-                            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                            className="brain-danger-button flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium disabled:bg-zinc-200 dark:disabled:bg-zinc-800"
                         >
                             {isSubmittingDelete ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                             Eliminar Tarea

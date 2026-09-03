@@ -39,7 +39,7 @@ const PdfPage = ({ document, pageNumber, name }) => {
   }, [document, pageNumber]);
 
   if (error) {
-    return <div className="flex min-h-64 items-center justify-center rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">{error}</div>;
+    return <div className="brain-alert-surface flex min-h-64 items-center justify-center rounded-xl p-6 text-sm">{error}</div>;
   }
 
   return (
@@ -94,8 +94,8 @@ const PdfDocumentPreview = ({ data, name }) => {
 
   if (error) {
     return (
-      <div role="alert" className="mx-auto flex min-h-72 max-w-2xl flex-col items-center justify-center rounded-2xl border border-red-200 bg-white p-6 text-center dark:border-red-900/60 dark:bg-zinc-950">
-        <AlertCircle className="h-9 w-9 text-red-500" />
+      <div role="alert" className="brain-alert-surface mx-auto flex min-h-72 max-w-2xl flex-col items-center justify-center rounded-2xl bg-white p-6 text-center dark:bg-zinc-950">
+        <AlertCircle className="h-9 w-9 text-destructive" />
         <p className="mt-3 font-medium text-zinc-900 dark:text-zinc-100">Vista previa no disponible</p>
         <p className="mt-1 text-sm leading-6 text-zinc-500 dark:text-zinc-400">{error.message}</p>
         {import.meta.env.DEV && <code className="mt-3 max-w-full break-words text-xs text-zinc-400">{error.technical}</code>}

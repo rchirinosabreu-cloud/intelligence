@@ -47,19 +47,19 @@ const statConfig = [
   { key: 'active', label: 'Activas', icon: CircleDot, tone: 'text-sky-600 dark:text-sky-400', surface: 'bg-sky-50 dark:bg-sky-500/10' },
   { key: 'dueToday', label: 'Para hoy', icon: CalendarClock, tone: 'text-violet-600 dark:text-violet-400', surface: 'bg-violet-50 dark:bg-violet-500/10' },
   { key: 'overdue', label: 'Vencidas', icon: AlertTriangle, tone: 'text-amber-600 dark:text-amber-400', surface: 'bg-amber-50 dark:bg-amber-500/10' },
-  { key: 'returned', label: 'Devueltas', icon: MessageSquareText, tone: 'text-rose-600 dark:text-rose-400', surface: 'bg-rose-50 dark:bg-rose-500/10' },
+  { key: 'returned', label: 'Devueltas', icon: MessageSquareText, tone: 'text-destructive', surface: 'bg-destructive/10' },
   { key: 'completedToday', label: 'Logros hoy', icon: Trophy, tone: 'text-emerald-600 dark:text-emerald-400', surface: 'bg-emerald-50 dark:bg-emerald-500/10' }
 ];
 
 const cardTone = {
-  critical: 'border-l-rose-500',
+  critical: 'border-l-destructive',
   warning: 'border-l-amber-500',
   info: 'border-l-sky-500',
   success: 'border-l-emerald-500'
 };
 
 const focusIconTone = {
-  critical: 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300',
+  critical: 'bg-destructive/10 text-destructive',
   warning: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300',
   info: 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300',
   success: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300'
@@ -328,7 +328,7 @@ const Dashboard = () => {
         </div>
       ) : error ? (
         <Card className="p-8 text-center">
-          <AlertTriangle className="w-10 h-10 mx-auto text-amber-500 mb-4" />
+          <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-destructive" />
           <h3 className="text-xl font-black text-zinc-900 dark:text-zinc-100">No se pudo cargar el dashboard</h3>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">{error.message}</p>
         </Card>
@@ -671,7 +671,7 @@ const Dashboard = () => {
                   </select>
                 </div>
                 {assignClientMutation.error && (
-                  <p className="text-xs font-semibold text-rose-600 dark:text-rose-400 mt-3">{assignClientMutation.error.message}</p>
+                  <p className="mt-3 text-xs font-semibold text-destructive">{assignClientMutation.error.message}</p>
                 )}
                 <Button
                   className="gap-2 mt-4 rounded-lg"

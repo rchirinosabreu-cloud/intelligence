@@ -8,6 +8,57 @@ export const REOPEN_REASONS = [
   { value: 'OTHER', label: 'Otro motivo' },
 ];
 
+export const RETURN_REASONS = [
+  { value: 'INCOMPLETE_DELIVERABLE', label: 'Entregable incompleto' },
+  { value: 'BRIEF_MISMATCH', label: 'No cumple con el brief o alcance' },
+  { value: 'MISSING_INPUTS', label: 'Faltan insumos o referencias' },
+  { value: 'VISUAL_IDENTITY_ADJUSTMENT', label: 'Ajustes de diseño o identidad visual' },
+  { value: 'COPY_OR_LANGUAGE_CORRECTION', label: 'Corrección de copy, gramática u ortografía' },
+  { value: 'TECHNICAL_QUALITY_ISSUE', label: 'Error técnico o de calidad' },
+  { value: 'OTHER', label: 'Otro motivo' },
+];
+
+const findReturnReason = (value) => RETURN_REASONS.find(reason => reason.value === value);
+
+export function buildTaskReturnPayload(reason, note) {
+  const returnReason = String(reason || '').trim();
+  const returnNote = String(note || '').trim();
+  if (!findReturnReason(returnReason) || !returnNote) return null;
+  return {
+    status: 'DEVUELTA',
+    isReturned: true,
+    returnReason,
+    returnNote,
+  };
+}
+
+export function formatTaskReturnEventContent(reason, note) {
+  const returnReason = String(reason || '').trim();
+  const returnNote = String(note || '').trim();
+  if (findReturnReason(returnReason) && returnNote) {
+    return `[${returnReason}]\n${returnNote}`;
+  }
+  if (returnReason && !returnNote) {
+    return `[OTHER]\n${returnReason}`;
+  }
+  return null;
+}
+
+export function parseTaskReturnEventContent(content = '') {
+  const text = String(content || '').trim();
+  const structuredMatch = text.match(/^\[([^\]]+)\]\s*\n?([\s\S]*)$/);
+  if (!structuredMatch) {
+    return { reasonValue: null, reasonLabel: 'Motivo de devolución', note: text };
+  }
+  const reasonValue = structuredMatch[1];
+  const note = structuredMatch[2].trim();
+  return {
+    reasonValue,
+    reasonLabel: findReturnReason(reasonValue)?.label || 'Otro motivo',
+    note,
+  };
+}
+
 export function canReturnCompletedTaskToBoard(user) {
   return String(user?.role || '').toUpperCase() === 'ADMIN';
 }
@@ -31,6 +82,33 @@ export function parseReopenEventContent(content = '') {
   const note = (bracketMatch?.[2] || legacyMatch?.[2] || text).trim();
   const reason = REOPEN_REASONS.find(item => item.value === reasonValue);
   return { reasonValue, reasonLabel: reason?.label || 'Otro motivo', note };
+}
+
+export function getTaskLifecycleAction(status) {
+  const normalizedStatus = String(status || '').trim().toUpperCase();
+  if (normalizedStatus === 'REALIZADA' || normalizedStatus === 'REALIZADO') return 'reintegrate';
+  if (
+    normalizedStatus === 'PENDIENTE'
+    || normalizedStatus === 'EN_CURSO'
+    || normalizedStatus === 'EN PROCESO'
+  ) return 'return';
+  return null;
+}
+
+export function getTaskSystemEventPresentation(type, content = '') {
+  const note = String(content || '').trim();
+  if (type === 'system_reopen') {
+    const reopenEvent = parseReopenEventContent(note);
+    return { badgeLabel: reopenEvent.reasonLabel, note: reopenEvent.note };
+  }
+  if (type === 'system_return') {
+    const returnEvent = parseTaskReturnEventContent(note);
+    return { badgeLabel: returnEvent.reasonLabel, note: returnEvent.note };
+  }
+  if (type === 'system_reintegrate') {
+    return { badgeLabel: 'Nota de reintegración', note };
+  }
+  return { badgeLabel: 'Actualización', note };
 }
 
 export const TASK_TIMING_TUTORIAL_VERSION = 'v2';

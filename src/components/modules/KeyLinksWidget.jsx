@@ -202,7 +202,7 @@ const KeyLinksWidget = ({ clientId }) => {
 
                             <button
                                 onClick={() => handleDeleteLink(link.id)}
-                                className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl opacity-0 group-hover:opacity-100 transition-all"
+                                className="brain-danger-button-icon rounded-xl p-2 opacity-0 group-hover:opacity-100"
                                 title="Eliminar"
                             >
                                 <Trash2 className="w-4 h-4" />

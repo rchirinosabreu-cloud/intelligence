@@ -417,7 +417,7 @@ const DeliverablesWidget = ({ clientId }) => {
                                                         <button
                                                             onClick={(e) => handleDelete(e, file.id)}
                                                             disabled={isDeleting === file.id}
-                                                            className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
+                                                            className="brain-danger-button-icon rounded-xl p-2"
                                                             title="Eliminar permanentemente"
                                                         >
                                                             {isDeleting === file.id ? (

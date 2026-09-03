@@ -165,10 +165,10 @@ const IssueList = ({ issues }) => {
     <section className={cn(panelClass, 'p-5')}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase text-rose-600 dark:text-rose-400">Atención requerida</p>
+          <p className="text-xs font-bold uppercase text-destructive">Atención requerida</p>
           <h2 className="mt-1 text-lg font-bold text-zinc-950 dark:text-white">Incidencias accionables</h2>
         </div>
-        <AlertCircle className="h-5 w-5 text-rose-500" />
+        <AlertCircle className="h-5 w-5 text-destructive" />
       </div>
 
       <div className="mt-5 divide-y divide-zinc-100 border-y border-zinc-100 dark:divide-zinc-800 dark:border-zinc-800">
@@ -260,7 +260,7 @@ const OperationalHealth = () => {
     return (
       <div className="flex min-h-[520px] items-center justify-center">
         <div className={cn(panelClass, 'max-w-md p-6 text-center')}>
-          <AlertCircle className="mx-auto h-6 w-6 text-rose-500" />
+          <AlertCircle className="mx-auto h-6 w-6 text-destructive" />
           <h1 className="mt-3 text-lg font-bold text-zinc-950 dark:text-white">No pudimos calcular la salud operativa</h1>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{error?.message}</p>
           <button type="button" onClick={() => refetch()} className="mt-5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700">

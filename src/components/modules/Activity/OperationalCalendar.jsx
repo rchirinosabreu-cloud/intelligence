@@ -596,7 +596,7 @@ const OperationalCalendar = () => {
                     const health = getGoogleConnectionHealth(connection);
                     return (
                       <button type="button" key={connection.id} onClick={() => { if (health.status === 'error') { setGoogleRetryError(''); setGoogleErrorConnection(connection); } }} disabled={health.status !== 'error'} title={connection.lastSyncedAt ? `Última actualización: ${format(new Date(connection.lastSyncedAt), 'd MMM, HH:mm', { locale: es })}` : 'Sin sincronización registrada'} className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-[10px] font-bold text-zinc-600 transition hover:bg-zinc-200 disabled:cursor-default dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15">
-                        <span className={cn('h-2 w-2 rounded-full', health.status === 'healthy' ? 'bg-emerald-500' : health.status === 'error' ? 'bg-red-500' : 'bg-amber-500')} />
+                        <span className={cn('h-2 w-2 rounded-full', health.status === 'healthy' ? 'bg-emerald-500' : health.status === 'error' ? 'bg-destructive' : 'bg-amber-500')} />
                         {connection.email.split('@')[0]} · {health.label}
                       </button>
                     );
@@ -867,13 +867,13 @@ const OperationalCalendar = () => {
                     </details>
                   </div>
                 ) : (
-                  <p className="mt-2 text-xs text-red-700 dark:text-red-200">Aún no hay diagnóstico guardado. Pulsa Reintentar para obtener la causa actual de Google.</p>
+                  <p className="mt-2 text-xs text-destructive">Aún no hay diagnóstico guardado. Pulsa Reintentar para obtener la causa actual de Google.</p>
                 )}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button type="button" onClick={() => reconciliationMutation.mutate({ eventIds: [event.id], connectionId: googleErrorConnection.id })} disabled={reconciliationMutation.isPending} className="brain-danger-button inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-xs font-bold disabled:opacity-60">
                     {reconciliationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Reintentar
                   </button>
-                  <button type="button" onClick={() => dismissGoogleErrorMutation.mutate(event.id)} disabled={dismissGoogleErrorMutation.isPending} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 text-xs font-bold text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200 dark:hover:bg-white/10">
+                  <button type="button" onClick={() => dismissGoogleErrorMutation.mutate(event.id)} disabled={dismissGoogleErrorMutation.isPending} className="brain-danger-button-outline inline-flex min-h-10 items-center gap-2 rounded-xl border bg-white px-3 text-xs font-bold disabled:opacity-60 dark:bg-white/5">
                     {dismissGoogleErrorMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} Descartar
                   </button>
                 </div>
@@ -1081,7 +1081,7 @@ const OperationalCalendar = () => {
                   {formData.attendeeEmails.map(email => (
                     <span key={email} className="inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-lg bg-violet-100 px-2 py-1 text-xs font-medium text-violet-700 dark:bg-violet-500/15 dark:text-violet-200">
                       <span className="truncate">{email}</span>
-                      <button type="button" onClick={() => removeExternalEmailTag(email)} className="rounded p-0.5 text-violet-500 transition hover:bg-violet-200 hover:text-violet-800 dark:hover:bg-violet-500/20 dark:hover:text-white" aria-label={`Eliminar invitado ${email}`}><X className="h-3 w-3" /></button>
+                      <button type="button" onClick={() => removeExternalEmailTag(email)} className="brain-danger-button-icon rounded p-0.5" aria-label={`Eliminar invitado ${email}`}><X className="h-3 w-3" /></button>
                     </span>
                   ))}
                   <input

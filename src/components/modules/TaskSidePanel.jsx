@@ -40,8 +40,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useNavigate } from 'react-router-dom';
-import { parseReopenEventContent } from '@/lib/taskTiming';
+import { getTaskSystemEventPresentation } from '@/lib/taskTiming';
 import TaskWorkHistory from './TaskWorkHistory';
+import TaskLifecycleDialog from './TaskLifecycleDialog';
 
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
@@ -113,7 +114,7 @@ const taskCreateFieldClass = taskComposerFieldClass;
 const taskCreateSectionClass = taskComposerSectionClass;
 const taskPriorityOptions = [
     { value: 'NONE', label: 'Sin prioridad', className: 'bg-zinc-700 text-white border-zinc-600 dark:bg-zinc-200 dark:text-zinc-900 dark:border-zinc-100' },
-    { value: 'URGENTE', label: 'Urgente', className: 'bg-red-600 text-white border-red-500' },
+    { value: 'URGENTE', label: 'Urgente', className: 'border-destructive bg-destructive text-destructive-foreground' },
     { value: 'ALTA', label: 'Alta', className: 'bg-amber-500 text-white border-amber-500' },
     { value: 'NORMAL', label: 'Normal', className: 'bg-blue-600 text-white border-blue-500' }
 ];
@@ -961,9 +962,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 })
             });
 
-            if (!statusRes.ok) throw new Error("Failed to update status");
+            if (!statusRes.ok) {
+                const errorBody = await statusRes.json().catch(() => ({}));
+                throw new Error(errorBody?.error || `Reintegration failed with status ${statusRes.status}`);
+            }
 
             toast({ title: 'Tarea reintegrada', description: 'El estado se cambió a PENDIENTE.' });
+            setShowReintegratePrompt(false);
+            setReintegrateReason('');
             onSuccess();
             onClose();
         } catch (err) {
@@ -1481,13 +1487,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             const isReturn = comment.type === 'system_return';
             const isReopen = comment.type === 'system_reopen';
             const cleanContent = cleanSystemMessage(comment.content);
-            const reopenEvent = isReopen ? parseReopenEventContent(comment.content) : null;
+            const eventPresentation = getTaskSystemEventPresentation(comment.type, cleanContent);
 
             return (
                 <div key={comment.id} className={cn(
                     "p-3.5 rounded-2xl mb-3 border flex gap-3.5 items-start shadow-sm",
                     isReturn
-                        ? "bg-red-50/40 border-red-100 dark:bg-red-900/10 dark:border-red-900/20"
+                        ? "border-destructive/20 bg-destructive/5"
                         : isReopen
                             ? "bg-cyan-50/50 border-cyan-100 dark:bg-cyan-950/20 dark:border-cyan-900/30"
                             : "bg-emerald-50/40 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900/20"
@@ -1495,7 +1501,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     <div className={cn(
                         "w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-sm",
                         isReturn
-                            ? "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400"
+                            ? "bg-destructive/10 text-destructive"
                             : isReopen
                                 ? "bg-cyan-100 text-[#009EB9] dark:bg-cyan-950 dark:text-cyan-300"
                                 : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400"
@@ -1504,26 +1510,27 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                            <span className={cn("text-[10px] font-black uppercase tracking-wider", isReturn ? "text-red-600" : isReopen ? "text-[#009EB9]" : "text-emerald-600")}>
+                            <span className={cn("text-[10px] font-black uppercase tracking-wider", isReturn ? "text-destructive" : isReopen ? "text-[#009EB9]" : "text-emerald-600")}>
                                 {isReturn ? "Evento: Devolución" : isReopen ? "Evento: Reapertura" : "Evento: Reintegración"}
                             </span>
                             <span className="text-[10px] text-zinc-400">•</span>
                             <span className="text-[10px] text-zinc-400 font-medium">{new Date(comment.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short'})}</span>
                         </div>
-                        {isReopen ? (
-                            <div className="space-y-2">
-                                <span className="inline-flex rounded-full border border-cyan-200 bg-cyan-100/70 px-2.5 py-1 text-[10px] font-bold text-cyan-800 dark:border-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-200">
-                                    {reopenEvent.reasonLabel}
-                                </span>
-                                <div className="text-sm font-medium leading-relaxed text-zinc-700 dark:text-zinc-300">
-                                    <RichCommentContent content={reopenEvent.note} contextData={contextData} onImageClick={handleImagePreview} />
-                                </div>
+                        <div className="space-y-2">
+                            <span className={cn(
+                                "inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold",
+                                isReturn
+                                    ? "border-destructive/20 bg-destructive/10 text-destructive"
+                                    : isReopen
+                                        ? "border-cyan-200 bg-cyan-100/70 text-cyan-800 dark:border-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-200"
+                                        : "border-emerald-200 bg-emerald-100/70 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+                            )}>
+                                {eventPresentation.badgeLabel}
+                            </span>
+                            <div className="text-sm font-medium leading-relaxed text-zinc-700 dark:text-zinc-300">
+                                <RichCommentContent content={eventPresentation.note} contextData={contextData} onImageClick={handleImagePreview} />
                             </div>
-                        ) : (
-                            <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300 leading-relaxed italic">
-                                "<RichCommentContent content={cleanContent} contextData={contextData} onImageClick={handleImagePreview} />"
-                            </div>
-                        )}
+                        </div>
                     </div>
                 </div>
             );
@@ -1705,7 +1712,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                                             handleDeleteComment(comment.id);
                                                                             setCommentPopover({ commentId: null, view: null });
                                                                         }}
-                                                                        className="w-full text-left px-2.5 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg text-xs font-bold text-red-600 flex items-center gap-2"
+                                                                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-bold text-destructive hover:bg-destructive/10"
                                                                     >
                                                                         Eliminar comentario
                                                                     </button>
@@ -1912,45 +1919,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     {/* TaskCreateComposerV2 */}
                     <div className="w-full flex flex-col gap-5 border-b border-zinc-200/70 dark:border-zinc-800/70 pb-6">
 
-                        {showReintegratePrompt && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-900/30 rounded-2xl shadow-xl"
-                            >
-                                <div className="flex items-center gap-2 mb-3">
-                                    <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center rounded-full text-emerald-600">
-                                        <TaskReintegrateIcon size={14} />
-                                    </div>
-                                    <div>
-                                        <h4 className="text-[11px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Reintegración de Tarea</h4>
-                                        <p className="text-[9px] text-emerald-600/70 font-medium">Explica brevemente el motivo para el responsable</p>
-                                    </div>
-                                </div>
-                                <textarea
-                                    autoFocus
-                                    value={reintegrateReason}
-                                    onChange={e => setReintegrateReason(e.target.value)}
-                                    placeholder="Ej: Ya se corrigieron los artes solicitados..."
-                                    className="w-full bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 text-[11px] font-medium focus:ring-2 ring-emerald-500/20 outline-none resize-none h-24 mb-3"
-                                />
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => setShowReintegratePrompt(false)}
-                                        className="flex-1 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition-all"
-                                    >
-                                        Cancelar
-                                    </button>
-                                    <button
-                                        onClick={handleReintegrate}
-                                        className="flex-[2] bg-[#009EB9] text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#009EB9]/20 hover:bg-[#008CA4] active:scale-[0.98] transition-all"
-                                    >
-                                        Confirmar Reintegración
-                                    </button>
-                                </div>
-                            </motion.div>
-                        )}
-
                         {/* Title Section */}
                         <div className="space-y-2">
                             <label className={taskComposerLabelClass}>
@@ -2131,7 +2099,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 <label className={taskComposerLabelClass}>Estado actual</label>
                                 <select
                                     value={formData.status}
-                                    onChange={e => setFormData({...formData, status: e.target.value})}
+                                    onChange={(event) => {
+                                        const nextStatus = event.target.value;
+                                        if (formData.originalStatus === 'DEVUELTA' && nextStatus !== 'DEVUELTA') {
+                                            setShowReintegratePrompt(true);
+                                            return;
+                                        }
+                                        setFormData({ ...formData, status: nextStatus });
+                                    }}
                                     className={`${taskComposerFieldClass} h-12 sm:h-[38px] cursor-pointer`}
                                 >
                                     <option value="PENDIENTE">PENDIENTE</option>
@@ -2146,7 +2121,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 <label className={taskComposerLabelClass}>Prioridad</label>
                                 <div className={cn(
                                     "relative rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-transparent transition-colors",
-                                    formData.isPriority && "border-red-500/30 bg-red-500/5"
+                                    formData.isPriority && "border-destructive/30 bg-destructive/5"
                                 )}>
                                     <button
                                         data-task-priority-trigger
@@ -2158,7 +2133,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         className={cn(
                                             "flex h-12 w-full items-center justify-between gap-2 rounded-lg px-4 py-2 text-base transition-colors sm:h-[38px] sm:justify-center sm:px-3 sm:text-sm",
                                             formData.isPriority
-                                                ? "text-red-600 font-semibold"
+                                                ? "font-semibold text-destructive"
                                                 : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/60"
                                         )}
                                     >
@@ -2281,7 +2256,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                             {item.id !== 'ref-legacy' && (
                                                             <button onClick={() => item.source === 'content'
                                                                 ? handleDeleteContentLink('REFERENCIA', item.url)
-                                                                : handleDeleteAttachment(item.id)} className="text-zinc-400 hover:text-red-500" aria-label="Eliminar referencia">
+                                                                : handleDeleteAttachment(item.id)} className="brain-danger-button-icon rounded p-0.5" aria-label="Eliminar referencia">
                                                                     <X size={10} />
                                                                 </button>
                                                             )}
@@ -2341,7 +2316,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                             </button>
                                                             <button onClick={() => item.source === 'content'
                                                                 ? handleDeleteContentLink('INSUMO', item.url)
-                                                                : handleDeleteAttachment(item.id)} className="text-zinc-400 hover:text-red-500" aria-label="Eliminar insumo">
+                                                                : handleDeleteAttachment(item.id)} className="brain-danger-button-icon rounded p-0.5" aria-label="Eliminar insumo">
                                                                     <X size={10} />
                                                                 </button>
                                                         </div>
@@ -2406,7 +2381,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                     <button
                                                         type="button"
                                                         onClick={() => setTempReferences(prev => prev.filter((_, i) => i !== index))}
-                                                        className="text-zinc-400 hover:text-red-500 transition-colors"
+                                                        className="brain-danger-button-icon rounded p-0.5"
                                                     >
                                                         <X size={12} />
                                                     </button>
@@ -2466,7 +2441,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                     <button
                                                         type="button"
                                                         onClick={() => setTempInputs(prev => prev.filter((_, i) => i !== index))}
-                                                        className="text-zinc-400 hover:text-red-500 transition-colors"
+                                                        className="brain-danger-button-icon rounded p-0.5"
                                                     >
                                                         <X size={12} />
                                                     </button>
@@ -2485,7 +2460,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 <button
                                     onClick={clearDraft}
                                     type="button"
-                                    className="flex-1 px-4 py-2.5 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors"
+                                    className="brain-danger-button-outline flex-1 rounded-lg px-4 py-2.5 text-xs font-medium"
                                 >
                                     Descartar borrador
                                 </button>
@@ -2678,7 +2653,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                         <button
                                                             type="button"
                                                             onClick={() => setTempAttachments(prev => prev.filter((_, idx) => idx !== i))}
-                                                            className="p-1 hover:bg-red-50 dark:hover:bg-red-900/10 rounded text-red-500 shrink-0"
+                                                            className="brain-danger-button-icon shrink-0 rounded p-1"
                                                             aria-label="Quitar adjunto del borrador"
                                                         >
                                                             <X size={12} />
@@ -2788,6 +2763,25 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
             </DialogContent>
 
+            <TaskLifecycleDialog
+                open={showReintegratePrompt}
+                onOpenChange={(open) => {
+                    setShowReintegratePrompt(open);
+                    if (!open) setReintegrateReason('');
+                }}
+                icon={TaskReintegrateIcon}
+                title="Reintegrar tarea"
+                description={<><strong>{formData.title}</strong> volverá a Pendiente conservando responsable, prioridad e historial.</>}
+                tone="emerald"
+                noteLabel="Nota de reintegración"
+                noteValue={reintegrateReason}
+                onNoteChange={setReintegrateReason}
+                notePlaceholder="Explica brevemente qué se corrigió para continuar el trabajo."
+                submitLabel="Reintegrar en pendientes"
+                onSubmit={handleReintegrate}
+                isSubmitting={isSubmitting}
+            />
+
             {/* Media Viewer Lightbox wrapped in an inner controlled Radix Dialog overlay */}
             <MediaPreviewModal
                 isOpen={!!previewImage}
@@ -2816,12 +2810,12 @@ class ErrorBoundary extends React.Component {
     render() {
         if (this.state.hasError) {
             return (
-                <div className="p-6 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-2xl flex flex-col gap-2">
-                    <h3 className="text-sm font-bold text-red-700 dark:text-red-400">Algo salió mal al cargar el panel de tareas</h3>
-                    <p className="text-xs text-red-600/80 dark:text-red-400/80">{this.state.error?.message}</p>
+                <div className="brain-alert-surface flex flex-col gap-2 rounded-2xl p-6">
+                    <h3 className="text-sm font-bold text-destructive">Algo salió mal al cargar el panel de tareas</h3>
+                    <p className="text-xs text-destructive/80">{this.state.error?.message}</p>
                     <button
                         onClick={() => this.setState({ hasError: false, error: null })}
-                        className="mt-2 self-start px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/20 dark:hover:bg-red-900/30 dark:text-red-400 rounded-lg text-xs font-bold transition-all"
+                        className="brain-danger-button-outline mt-2 self-start rounded-lg px-3 py-1.5 text-xs font-bold"
                     >
                         Reintentar
                     </button>

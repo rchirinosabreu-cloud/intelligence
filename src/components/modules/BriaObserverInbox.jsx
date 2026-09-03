@@ -18,7 +18,7 @@ const FILTERS = [
 ];
 
 const SEVERITY = {
-  critical: { label: 'Crítica', className: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300' },
+  critical: { label: 'Crítica', className: 'bg-destructive/10 text-destructive' },
   warning: { label: 'Advertencia', className: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' },
   attention: { label: 'Atención', className: 'bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300' },
   info: { label: 'Informativa', className: 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300' }
@@ -111,7 +111,7 @@ export default function BriaObserverInbox() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#009EB9]/10 text-[#00839A] dark:text-[#74D9EA]"><AlertCircle className="h-4 w-4" /></span>
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-destructive/10 text-destructive"><AlertCircle className="h-4 w-4 text-destructive" /></span>
               <div>
                 <h2 id="observer-inbox-title" className="text-base font-semibold text-zinc-950 dark:text-zinc-50">Bandeja del Observer</h2>
                 <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">Bria revisa las fuentes automáticamente y conserva evidencia de cada hallazgo.</p>
@@ -142,7 +142,7 @@ export default function BriaObserverInbox() {
       </div>
 
       <div className="p-4 sm:p-6">
-        {error && <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">{error}</div>}
+        {error && <div role="alert" className="brain-alert-surface mb-4 rounded-xl p-4 text-sm">{error}</div>}
         {isLoading ? (
           <div className="space-y-3" aria-label="Cargando señales">{[0, 1].map((item) => <div key={item} className="h-40 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />)}</div>
         ) : signals.length === 0 ? (
@@ -180,7 +180,7 @@ export default function BriaObserverInbox() {
                     ) : <>
                       {signal.status !== 'REVIEWED' && <button type="button" disabled={isBusy} onClick={() => transition(signal, 'REVIEW')} className="min-h-11 rounded-xl border border-zinc-200 px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900">Revisar</button>}
                       <button type="button" disabled={isBusy} onClick={() => transition(signal, 'SNOOZE')} className="min-h-11 rounded-xl border border-zinc-200 px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900">Aplazar 7 días</button>
-                      <button type="button" disabled={isBusy} onClick={() => transition(signal, 'DISMISS')} className="min-h-11 rounded-xl border border-zinc-200 px-3 text-xs font-medium text-zinc-500 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900">Descartar</button>
+                      <button type="button" disabled={isBusy} onClick={() => transition(signal, 'DISMISS')} className="brain-danger-button-outline min-h-11 rounded-xl border px-3 text-xs font-medium">Descartar</button>
                       <button type="button" disabled={isBusy} onClick={() => transition(signal, 'RESOLVE')} className="min-h-11 rounded-xl bg-[#00AC8A] px-3 text-xs font-semibold text-white hover:bg-[#008F74] disabled:opacity-50">Resolver</button>
                     </>}
                   </div>

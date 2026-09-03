@@ -141,8 +141,8 @@ export default function BriaMemoryPanel() {
       </section>
 
       {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
-          <div className="flex items-center gap-2 font-medium"><AlertCircle className="h-4 w-4" /> {error}</div>
+        <div className="brain-alert-surface rounded-2xl p-4 text-sm">
+          <div className="flex items-center gap-2 font-medium"><AlertCircle className="h-4 w-4 text-destructive" /> {error}</div>
         </div>
       )}
 

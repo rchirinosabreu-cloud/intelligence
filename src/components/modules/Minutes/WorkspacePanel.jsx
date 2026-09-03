@@ -97,7 +97,7 @@ const WorkspacePanel = ({ selectedSource, analysisReady }) => {
 
               {!analysisReady ? (
                 <div className="bg-white dark:bg-zinc-900 rounded-xl p-5 border border-border flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-muted-foreground mt-0.5" />
+                  <AlertCircle className="mt-0.5 h-5 w-5 text-destructive" />
                   <div>
                     <p className="text-sm font-semibold text-zinc-900 dark:text-white">Confirma el inicio del análisis</p>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">

@@ -115,19 +115,19 @@ const FirefliesPanel = ({ onSelectMeeting, selectedMeeting }) => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="flex flex-col gap-2 p-3 bg-red-900/20 border border-red-500/30 rounded-xl text-red-300 text-sm"
+            className="brain-alert-surface flex flex-col gap-2 rounded-xl p-3 text-sm"
           >
             <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <AlertCircle className="h-4 w-4 flex-shrink-0 text-destructive" />
                 <span>Error cargando reuniones</span>
             </div>
             <p className="text-xs opacity-80">{error}</p>
             {error.includes("CORS") && (
-                <p className="text-xs mt-1 bg-red-900/40 p-1 rounded">
+                <p className="mt-1 rounded bg-destructive/10 p-1 text-xs">
                     Nota: La API de Fireflies puede bloquear solicitudes directas.
                 </p>
             )}
-            <Button size="sm" variant="outline" className="text-xs h-6 mt-1 border-red-500/50 hover:bg-red-900/30 text-red-200" onClick={handleRetry}>
+            <Button size="sm" variant="outline" className="mt-1 h-6 border-destructive/50 text-xs text-destructive hover:bg-destructive/10" onClick={handleRetry}>
                 Reintentar
             </Button>
           </motion.div>

@@ -75,7 +75,7 @@ const MemberActivityCard = ({
               {isAdmin && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onDeleteEvent(currentEvent.id); }}
-                  className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg"
+                  className="brain-danger-button-icon rounded-lg p-1.5"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>

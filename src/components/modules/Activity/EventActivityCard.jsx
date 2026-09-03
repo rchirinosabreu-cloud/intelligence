@@ -64,7 +64,7 @@ const EventActivityCard = ({
           {isAdmin && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(event.id); }}
-              className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+              className="brain-danger-button-icon rounded-xl p-2"
             >
               <Trash2 className="w-4 h-4" />
             </button>

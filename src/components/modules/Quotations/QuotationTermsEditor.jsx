@@ -120,7 +120,7 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
                             </div>
                             <p className="mt-1 text-[11px] leading-5 text-zinc-500">{entry.text}</p>
                         </div>
-                        <button type="button" onClick={() => removeLibraryTerm(entry.id)} className="rounded-md p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30" aria-label={`Quitar ${entry.title}`}>
+                        <button type="button" onClick={() => removeLibraryTerm(entry.id)} className="brain-danger-button-icon rounded-md p-1.5" aria-label={`Quitar ${entry.title}`}>
                             <Trash2 className="h-3.5 w-3.5" />
                         </button>
                     </div>
@@ -149,7 +149,7 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
                                     setCustomTerms((current) => current.filter((_, termIndex) => termIndex !== customIndex));
                                 }
                             }}
-                            className="rounded-md p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30"
+                            className="brain-danger-button-icon rounded-md p-1.5"
                             aria-label="Quitar cláusula personalizada"
                         >
                             <Trash2 className="h-3.5 w-3.5" />

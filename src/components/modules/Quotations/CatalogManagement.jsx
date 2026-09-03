@@ -174,7 +174,7 @@ const CatalogManagement = () => {
                                                     </button>
                                                     <button
                                                         onClick={() => handleDelete(item.id)}
-                                                        className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-zinc-500 hover:text-red-500 transition-colors"
+                                                        className="brain-danger-button-icon rounded-lg p-1.5"
                                                     >
                                                         <Trash2 className="w-3.5 h-3.5" />
                                                     </button>

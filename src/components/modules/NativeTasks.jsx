@@ -22,7 +22,6 @@ import {
     X,
     TaskReintegrateIcon,
     TaskReturnIcon,
-    Send,
     Trash2,
     Zap,
     ClipboardList,
@@ -49,13 +48,17 @@ import ClientAvatar from "../../components/ui/ClientAvatar";
 import TaskSidePanel from './TaskSidePanel';
 import { triggerConfetti } from '@/utils/confetti';
 import TaskTimerBadge from './TaskTimerBadge';
+import TaskLifecycleDialog from './TaskLifecycleDialog';
 import {
+    buildTaskReturnPayload,
     closeTaskWorkSession,
     findConflictingActiveTask,
     hasSeenTaskTimingTutorial,
     markTaskTimingTutorialAfternoonSeen,
     markTaskTimingTutorialSeen,
     shouldShowTaskTimingTutorialAgain,
+    getTaskLifecycleAction,
+    RETURN_REASONS,
     REOPEN_REASONS
 } from '@/lib/taskTiming';
 
@@ -156,7 +159,7 @@ const CATEGORY_COLORS = {
 };
 
 const taskPriorityBadgeConfig = {
-    URGENTE: 'bg-red-600 border-red-500 text-white',
+    URGENTE: 'border-destructive bg-destructive text-destructive-foreground',
     ALTA: 'bg-amber-500 border-amber-500 text-white',
     NORMAL: 'bg-blue-600 border-blue-500 text-white'
 };
@@ -191,7 +194,8 @@ const NativeTasks = () => {
     }, []);
 
     const [returningTask, setReturningTask] = useState(null);
-    const [returnReason, setReturnReason] = useState('');
+    const [returnReason, setReturnReason] = useState(RETURN_REASONS[0].value);
+    const [returnNote, setReturnNote] = useState('');
     const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
 
     const [deletingTask, setDeletingTask] = useState(null);
@@ -207,6 +211,9 @@ const NativeTasks = () => {
     const [reopenReason, setReopenReason] = useState('CLIENT_CORRECTION');
     const [reopenNote, setReopenNote] = useState('');
     const [isSubmittingReopen, setIsSubmittingReopen] = useState(false);
+    const [reintegratingTask, setReintegratingTask] = useState(null);
+    const [reintegrateNote, setReintegrateNote] = useState('');
+    const [isSubmittingReintegration, setIsSubmittingReintegration] = useState(false);
     const [isTimingTutorialOpen, setIsTimingTutorialOpen] = useState(false);
     const [timingTutorialPresentation, setTimingTutorialPresentation] = useState('initial');
     const [showTutorialButtonHint, setShowTutorialButtonHint] = useState(false);
@@ -384,26 +391,20 @@ const NativeTasks = () => {
     }, [location.search, tasks, navigate, location.pathname]);
 
     const handleReturnTask = async () => {
-        if (!returningTask || !returnReason.trim() || isSubmittingReturn) return;
-        const previousTasks = [...tasks];
+        const payload = buildTaskReturnPayload(returnReason, returnNote);
+        if (!returningTask || !payload || isSubmittingReturn) return;
         try {
             setIsSubmittingReturn(true);
             const baseUrl = getApiBaseUrl();
-
-            queryClient.setQueryData(['nativeTasks'], prev => prev?.map(t =>
-                t.id === returningTask.id
-                    ? { ...t, status: 'DEVUELTA', isReturned: true }
-                    : t
-            ));
+            const token = localStorage.getItem('authToken');
 
             const response = await fetch(`${baseUrl}/api/tasks/${returningTask.id}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    status: 'DEVUELTA',
-                    isReturned: true,
-                    returnReason: returnReason
-                })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify(payload)
             });
 
             if (response.ok) {
@@ -412,16 +413,17 @@ const NativeTasks = () => {
                     description: "Se ha cambiado el estado a Devuelto y se añadió el comentario.",
                 });
                 setReturningTask(null);
-                setReturnReason('');
+                setReturnReason(RETURN_REASONS[0].value);
+                setReturnNote('');
                 queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
                 queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
                 queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
             } else {
-                throw new Error("Failed to return task");
+                const errorBody = await response.json().catch(() => ({}));
+                throw new Error(errorBody?.error || `Return failed with status ${response.status}`);
             }
         } catch (err) {
             console.error("Error returning task:", err);
-            queryClient.setQueryData(['nativeTasks'], previousTasks);
             toast({
                 title: "Error",
                 description: "No se pudo devolver la tarea.",
@@ -429,6 +431,40 @@ const NativeTasks = () => {
             });
         } finally {
             setIsSubmittingReturn(false);
+        }
+    };
+
+    const handleReintegrateTask = async () => {
+        if (!reintegratingTask || !reintegrateNote.trim() || isSubmittingReintegration) return;
+        try {
+            setIsSubmittingReintegration(true);
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const response = await fetch(`${baseUrl}/api/tasks/${reintegratingTask.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({
+                    status: 'PENDIENTE',
+                    reintegrateReason: reintegrateNote.trim()
+                })
+            });
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({}));
+                throw new Error(errorBody?.error || `Reintegration failed with status ${response.status}`);
+            }
+            toast({ title: 'Tarea reintegrada', description: 'La tarea volvió a Pendiente para continuar la corrección.' });
+            setReintegratingTask(null);
+            setReintegrateNote('');
+            await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+        } catch (err) {
+            console.error('Error reintegrating task:', err);
+            toast({ title: 'Error', description: 'No se pudo reintegrar la tarea.', variant: 'destructive' });
+        } finally {
+            setIsSubmittingReintegration(false);
         }
     };
 
@@ -554,6 +590,11 @@ const NativeTasks = () => {
 
         if (sourceColumnId === 'realizado' && destinationColumnId !== 'realizado') {
             setReopeningTask(targetTask);
+            return;
+        }
+
+        if (sourceColumnId === 'devuelto' && destinationColumnId !== 'devuelto') {
+            setReintegratingTask(targetTask);
             return;
         }
 
@@ -741,8 +782,8 @@ const NativeTasks = () => {
     if (tasksError && tasks.length === 0) {
         return (
             <div className="h-full flex flex-col items-center justify-center space-y-4">
-                <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
-                    <AlertCircle className="w-6 h-6 text-red-500" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+                    <AlertCircle className="h-6 w-6 text-destructive" />
                 </div>
                 <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">No pudimos cargar tus tareas</h3>
                 <p className="text-zinc-500 dark:text-zinc-400 text-sm max-w-sm text-center">
@@ -861,7 +902,7 @@ const NativeTasks = () => {
                                 className={cn(
                                     "min-h-11 w-full min-w-0 appearance-none rounded-xl border py-2 pl-9 pr-8 text-sm font-medium shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 dark:bg-zinc-900",
                                     dateFilter === 'Solo Vencidos'
-                                        ? "border-red-200 text-red-600 bg-red-50 dark:bg-red-900/10 dark:text-red-400 dark:border-red-900/30"
+                                        ? "border-destructive/30 bg-destructive/10 text-destructive"
                                         : "border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-zinc-700"
                                 )}
                             >
@@ -871,7 +912,7 @@ const NativeTasks = () => {
                                 <option value="Todos">Todos</option>
                             </select>
                             {dateFilter === 'Solo Vencidos' ? (
-                                <AlertTriangle className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-red-500" />
+                                <AlertTriangle className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-destructive" />
                             ) : (
                                 <Calendar className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-zinc-400" />
                             )}
@@ -923,7 +964,7 @@ const NativeTasks = () => {
                             <div><p className="text-sm font-semibold text-zinc-900 dark:text-white">El cronómetro comenzará con las tareas “En proceso”</p><p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Cada vez que muevas una tarea, podrás ver su cronómetro directamente en la tarjeta.</p></div>
                         </div>
                         <div className="flex gap-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400"><AlertTriangle className="h-4 w-4" /></div>
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive"><AlertTriangle className="h-4 w-4 text-destructive" /></div>
                             <div><p className="text-sm font-semibold text-zinc-900 dark:text-white">Tú decides si mantienes activa más de una tarea</p><p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Si ya estás registrando tiempo en una tarea, te avisaremos, pero tú decides continuar. Si quieres pausar el cronómetro, puedes regresar la tarea a “Pendiente” y continuar cuando quieras.</p></div>
                         </div>
                         <div className="flex gap-3 rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800">
@@ -968,74 +1009,78 @@ const NativeTasks = () => {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={!!reopeningTask} onOpenChange={(open) => !open && setReopeningTask(null)}>
-                <DialogContent className="sm:max-w-md border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
-                            <TaskReintegrateIcon className="h-5 w-5 text-[#009EB9] dark:text-[#29B8CF]" /> Reabrir tarea
-                        </DialogTitle>
-                        <DialogDescription>
-                            <strong>{reopeningTask?.title}</strong> conservará su código, responsable, prioridad e historial.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-2">
-                        <label className="block space-y-1.5">
-                            <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Motivo de reapertura</span>
-                            <select value={reopenReason} onChange={(event) => setReopenReason(event.target.value)} className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:ring-2 focus:ring-[#009EB9]/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white">
-                                {REOPEN_REASONS.map(reason => <option key={reason.value} value={reason.value}>{reason.label}</option>)}
-                            </select>
-                        </label>
-                        <label className="block space-y-1.5">
-                            <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Nota de reapertura</span>
-                            <textarea value={reopenNote} onChange={(event) => setReopenNote(event.target.value)} placeholder="Describe brevemente la novedad o solicitud." className="min-h-[96px] w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-900 focus:ring-2 focus:ring-[#009EB9]/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" />
-                        </label>
-                    </div>
-                    <DialogFooter className="gap-3 sm:justify-between">
-                        <button onClick={() => setReopeningTask(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button>
-                        <button onClick={handleReopenTask} disabled={isSubmittingReopen || !reopenNote.trim()} className="flex items-center gap-2 rounded-xl bg-[#009EB9] px-4 py-2 text-sm font-medium text-white hover:bg-[#008CA4] disabled:opacity-50">
-                            {isSubmittingReopen && <Loader2 className="h-4 w-4 animate-spin" />} Reabrir en pendientes
-                        </button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <TaskLifecycleDialog
+                open={!!reopeningTask}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setReopeningTask(null);
+                        setReopenReason('CLIENT_CORRECTION');
+                        setReopenNote('');
+                    }
+                }}
+                icon={TaskReintegrateIcon}
+                title="Reabrir tarea"
+                description={<><strong>{reopeningTask?.title}</strong> conservará su código, responsable, prioridad e historial.</>}
+                tone="cyan"
+                reasons={REOPEN_REASONS}
+                reasonLabel="Motivo de reapertura"
+                reasonValue={reopenReason}
+                onReasonChange={setReopenReason}
+                noteLabel="Nota de reapertura"
+                noteValue={reopenNote}
+                onNoteChange={setReopenNote}
+                notePlaceholder="Describe brevemente la novedad o solicitud."
+                submitLabel="Reabrir en pendientes"
+                onSubmit={handleReopenTask}
+                isSubmitting={isSubmittingReopen}
+            />
 
-            <Dialog open={!!returningTask} onOpenChange={(open) => !open && setReturningTask(null)}>
-                <DialogContent className="sm:max-w-md dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-red-600">
-                            <TaskReturnIcon className="w-5 h-5" /> Devolver tarea
-                        </DialogTitle>
-                        <DialogDescription>
-                            Por favor, explica por qué estás devolviendo la tarea: <strong>{returningTask?.title}</strong>
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4">
-                        <textarea
-                            value={returnReason}
-                            onChange={(e) => setReturnReason(e.target.value)}
-                            placeholder="Ej: Faltan los assets de diseño, el copy no es claro..."
-                            className="w-full min-h-[120px] bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none dark:text-white"
-                            autoFocus
-                        />
-                    </div>
-                    <DialogFooter className="flex sm:justify-between gap-3">
-                        <button
-                            onClick={() => setReturningTask(null)}
-                            className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            onClick={() => handleReturnTask()}
-                            disabled={!returnReason.trim() || isSubmittingReturn}
-                            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
-                        >
-                            {isSubmittingReturn ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                            Devolver ahora
-                        </button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <TaskLifecycleDialog
+                open={!!returningTask}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setReturningTask(null);
+                        setReturnReason(RETURN_REASONS[0].value);
+                        setReturnNote('');
+                    }
+                }}
+                icon={TaskReturnIcon}
+                title="Devolver tarea"
+                description={<>Selecciona el motivo y explica qué debe corregirse en <strong>{returningTask?.title}</strong>.</>}
+                tone="red"
+                reasons={RETURN_REASONS}
+                reasonLabel="Motivo de devolución"
+                reasonValue={returnReason}
+                onReasonChange={setReturnReason}
+                noteLabel="Nota de devolución"
+                noteValue={returnNote}
+                onNoteChange={setReturnNote}
+                notePlaceholder="Describe con claridad qué debe corregirse antes de reintegrar la tarea."
+                submitLabel="Devolver ahora"
+                onSubmit={handleReturnTask}
+                isSubmitting={isSubmittingReturn}
+            />
+
+            <TaskLifecycleDialog
+                open={!!reintegratingTask}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setReintegratingTask(null);
+                        setReintegrateNote('');
+                    }
+                }}
+                icon={TaskReintegrateIcon}
+                title="Reintegrar tarea"
+                description={<><strong>{reintegratingTask?.title}</strong> volverá a Pendiente conservando todo su historial.</>}
+                tone="emerald"
+                noteLabel="Nota de reintegración"
+                noteValue={reintegrateNote}
+                onNoteChange={setReintegrateNote}
+                notePlaceholder="Explica brevemente qué se corrigió para continuar el trabajo."
+                submitLabel="Reintegrar en pendientes"
+                onSubmit={handleReintegrateTask}
+                isSubmitting={isSubmittingReintegration}
+            />
 
             <Dialog open={!!deletingTask} onOpenChange={(open) => !open && setDeletingTask(null)}>
                 <DialogContent className="sm:max-w-md dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
@@ -1052,7 +1097,7 @@ const NativeTasks = () => {
                             value={deleteReason}
                             onChange={(e) => setDeleteReason(e.target.value)}
                             placeholder="Ej: Es un duplicado, el cliente canceló..."
-                            className="w-full min-h-[120px] bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none dark:text-white"
+                            className="min-h-[120px] w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-destructive/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
                             autoFocus
                             required
                         />
@@ -1096,7 +1141,7 @@ const NativeTasks = () => {
                     )}>
                         <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
                             <div className="flex flex-col">
-                                <h3 className="text-lg font-bold text-red-600 flex items-center gap-2">
+                                <h3 className="flex items-center gap-2 text-lg font-bold text-destructive">
                                     <TaskReturnIcon className="w-5 h-5" /> Tareas devueltas
                                 </h3>
                                 <p className="text-xs text-zinc-500 mt-1 font-medium">Estas tareas requieren tu atención inmediata.</p>
@@ -1113,7 +1158,7 @@ const NativeTasks = () => {
                                 <div
                                     {...provided.droppableProps}
                                     ref={provided.innerRef}
-                                    className={cn("flex-1 p-6 overflow-y-auto space-y-4", snapshot.isDraggingOver && "bg-red-50/20 dark:bg-red-900/5")}
+                                    className={cn("flex-1 space-y-4 overflow-y-auto p-6", snapshot.isDraggingOver && "bg-destructive/5")}
                                 >
                                     {returnedTasks.length === 0 ? (
                                         <div className="h-40 flex flex-col items-center justify-center text-zinc-400 border-2 border-dashed border-zinc-100 dark:border-zinc-800 rounded-2xl">
@@ -1154,7 +1199,7 @@ const NativeTasks = () => {
                                         {col.id === 'pendiente' && returnedTasks.length > 0 && (
                                             <button
                                                 onClick={() => setIsReturnedSidebarOpen(true)}
-                                                className="group/returned relative flex items-center gap-1.5 px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-all border border-red-100 dark:border-red-900/30 shadow-sm"
+                                                className="group/returned relative flex items-center gap-1.5 rounded-xl border border-destructive/20 bg-destructive/10 px-2 py-1 text-destructive shadow-sm transition-all hover:bg-destructive/15"
                                             >
                                                 <TaskReturnIcon className="w-3.5 h-3.5 animate-pulse" />
                                                 <span className="text-[10px] font-black uppercase tracking-tighter">
@@ -1211,13 +1256,14 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
     const columnId = getColumnId(task.status);
     const isDone = columnId === 'realizado';
     const isReturned = columnId === 'devuelto';
+    const lifecycleAction = getTaskLifecycleAction(task.status);
     const overdue = !isDone && isOverdue(task.dueDateFormatted);
     const daysOverdue = overdue ? getDaysOverdue(task.dueDateFormatted) : 0;
     const priorityBadgeClass = task.priority ? taskPriorityBadgeConfig[task.priority] : null;
     const taskCardFooterBadges = [
         overdue && {
             key: 'overdue',
-            className: 'min-w-[74px] justify-center text-red-600 bg-red-50 dark:bg-red-900/30 border-red-100 dark:border-red-800',
+            className: 'min-w-[74px] justify-center border-destructive/20 bg-destructive/10 text-destructive',
             label: `Vencido (+${daysOverdue}d)`
         },
         !isReturned && task.priority && priorityBadgeClass && {
@@ -1245,16 +1291,16 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                         "group cursor-pointer relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm transition-shadow",
                         "transition-all duration-700 ease-in-out",
                         snapshot.isDragging ? "ring-2 ring-indigo-600 shadow-xl z-50 opacity-90 rotate-2 scale-105" : "",
-                        !snapshot.isDragging && isHighlighted ? "ring-2 ring-red-500 scale-[1.02] z-10" : "ring-2 ring-transparent",
+                        !snapshot.isDragging && isHighlighted ? "z-10 scale-[1.02] ring-2 ring-destructive" : "ring-2 ring-transparent",
                         !snapshot.isDragging && !isHighlighted && task.isSpecial ? "border-purple-500/70 ring-1 ring-purple-500/15" : "",
-                        !snapshot.isDragging && !isHighlighted && overdue && !task.isSpecial ? "border-red-500/50 ring-1 ring-red-500/20" : "",
+                        !snapshot.isDragging && !isHighlighted && overdue && !task.isSpecial ? "border-destructive/50 ring-1 ring-destructive/20" : "",
                         !snapshot.isDragging && !isHighlighted && !overdue && !task.isSpecial ? (
-                            task.priority === 'URGENTE' ? "border-red-500/40 dark:border-red-500/30" :
+                            task.priority === 'URGENTE' ? "border-destructive/40" :
                             task.priority === 'ALTA' ? "border-amber-500/40 dark:border-amber-500/30" :
                             task.priority === 'NORMAL' ? "border-blue-500/40 dark:border-blue-500/30" :
                             "border-zinc-200 dark:border-zinc-800"
                         ) : "",
-                        isReturned && !isHighlighted && "border-red-500/30 bg-red-50/20 dark:bg-red-900/10 shadow-[inset_0_0_12px_rgba(239,68,68,0.05)]"
+                        isReturned && !isHighlighted && "border-destructive/30 bg-destructive/5 shadow-inner shadow-destructive/5"
                     )}>
                         <div className="flex flex-col gap-3 p-4">
                             <div className="flex justify-between items-start">
@@ -1272,7 +1318,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                                             {task.clientName}
                                         </span>
                                         {isReturned && (
-                                            <span className="text-[9px] font-black text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 rounded flex items-center gap-1 uppercase tracking-tight">
+                                            <span className="flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-tight text-destructive">
                                                 <TaskReturnIcon className="w-2.5 h-2.5" /> Devuelto
                                             </span>
                                         )}
@@ -1292,7 +1338,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                                                 <span className="w-1 h-1 rounded-full bg-zinc-200" />
                                                 <span className={cn(
                                                     "text-[9px] font-bold uppercase tracking-tighter",
-                                                    task.aiComplexity === 'ALTA' ? 'text-red-500' : task.aiComplexity === 'MEDIA' ? 'text-indigo-500' : 'text-emerald-500'
+                                                    task.aiComplexity === 'ALTA' ? 'text-destructive' : task.aiComplexity === 'MEDIA' ? 'text-indigo-500' : 'text-emerald-500'
                                                 )}>
                                                     {task.aiComplexity}
                                                 </span>
@@ -1308,28 +1354,30 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                                 </div>
                                 <div className="flex flex-col items-end gap-1">
                                     <div className="flex items-center gap-1">
-                                        {isDone ? (
+                                        {lifecycleAction === 'reintegrate' ? (
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); onReopen(task); }}
-                                                className="p-1 text-zinc-400 hover:text-[#009EB9] hover:bg-[#009EB9]/10 rounded-xl transition-colors"
-                                                title="Reabrir tarea"
-                                                aria-label="Reabrir tarea"
+                                                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 text-zinc-400 transition-colors hover:bg-[#009EB9]/10 hover:text-[#009EB9] sm:min-h-8 sm:min-w-8"
+                                                title="Reintegrar tarea"
+                                                aria-label="Reintegrar tarea"
                                             >
                                                 <TaskReintegrateIcon className="w-3.5 h-3.5" />
                                             </button>
-                                        ) : !isReturned && (
+                                        ) : lifecycleAction === 'return' ? (
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); onReturn(task); }}
-                                                className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-500 rounded-xl transition-colors group/btn"
+                                                className="brain-danger-button-icon group/btn inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 sm:min-h-8 sm:min-w-8"
                                                 title="Devolver tarea"
                                                 aria-label="Devolver tarea"
                                             >
                                                 <TaskReturnIcon className="w-3.5 h-3.5" />
                                             </button>
-                                        )}
+                                        ) : null}
                                         <button
                                             onClick={(e) => { e.stopPropagation(); onDelete(task); }}
-                                            className="p-1 text-slate-400 hover:text-red-500 rounded-xl transition-colors group/btn"
+                                            className="brain-danger-button-icon group/btn inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 sm:min-h-8 sm:min-w-8"
+                                            aria-label="Eliminar tarea"
+                                            title="Eliminar tarea"
                                         >
                                             <Trash2 className="w-3.5 h-3.5" />
                                         </button>
@@ -1350,10 +1398,10 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                                     title={task.dueDateFormatted || "Sin fecha"}
                                     className={cn(
                                     "flex items-center gap-1.5 text-xs font-medium transition-colors shrink-0",
-                                    overdue ? "text-red-600 font-bold animate-pulse" : "text-zinc-400 dark:text-zinc-500"
+                                    overdue ? "animate-pulse font-bold text-destructive" : "text-zinc-400 dark:text-zinc-500"
                                     )}
                                 >
-                                    <Calendar className={cn("w-3.5 h-3.5", overdue && "text-red-600")} />
+                                    <Calendar className={cn("w-3.5 h-3.5", overdue && "text-destructive")} />
                                     {formatTaskCardDate(task.dueDateFormatted)}
                                 </div>
                                 <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">

@@ -105,7 +105,7 @@ const QualityItem = ({ value, label, goodWhenZero = true }) => {
       <div className="flex items-center gap-2.5">
         {isGood
           ? <CheckCircle2 className="h-4 w-4 text-[#00AC8A]" />
-          : <AlertCircle className="h-4 w-4 text-amber-500" />}
+          : <AlertCircle className="h-4 w-4 text-destructive" />}
         <span className="text-sm text-zinc-700 dark:text-zinc-200">{label}</span>
       </div>
       <span className="text-sm font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{value}</span>
@@ -255,8 +255,8 @@ export default function ManagerTaskAnalytics() {
 
         {activeTab === 'memory' ? <BriaMemoryPanel /> : <>
         {error && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
-            <div className="flex items-center gap-2 font-medium"><AlertCircle className="h-4 w-4" /> No pudimos cargar el panel</div>
+          <div className="brain-alert-surface rounded-2xl p-4 text-sm">
+            <div className="flex items-center gap-2 font-medium"><AlertCircle className="h-4 w-4 text-destructive" /> No pudimos cargar el panel</div>
             <p className="mt-1 pl-6">{error}</p>
           </div>
         )}

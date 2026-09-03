@@ -108,7 +108,7 @@ const ChatHistory = ({
                     e.stopPropagation();
                     onDeleteChat(chat.id);
                   }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-xl opacity-0 group-hover:opacity-100 hover:bg-red-50 text-red-400 hover:text-red-500 transition-all"
+                  className="brain-danger-button-icon absolute right-2 top-1/2 -translate-y-1/2 rounded-xl p-1.5 opacity-0 group-hover:opacity-100"
                   title="Eliminar chat"
                 >
                   <Trash2 className="h-3.5 w-3.5" />

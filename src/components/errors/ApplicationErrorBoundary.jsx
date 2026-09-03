@@ -28,7 +28,7 @@ class ApplicationErrorBoundary extends React.Component {
         role="alert"
       >
         <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-8">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
             <AlertTriangle aria-hidden="true" className="size-6" />
           </div>
           <h1 className="mt-5 text-xl font-semibold tracking-tight sm:text-2xl">

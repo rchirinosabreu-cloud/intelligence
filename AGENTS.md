@@ -15,6 +15,7 @@ Este archivo contiene las reglas y el contexto inmutable del proyecto para evita
 - **Obligatorio:** Todos los componentes, modales y tarjetas deben soportar ambos temas usando las utilidades de Tailwind (ej. `bg-white dark:bg-slate-900` y `text-slate-900 dark:text-slate-50`).
 - **Prohibido:** NUNCA usar colores estáticos o fijos (`bg-white` sin su contraparte `dark:`, o `bg-black`) que rompan la legibilidad si el usuario cambia de tema.
 - **Identidad de Marca:** Respetar los acentos en tonos morados/violetas corporativos (ej. botones principales).
+- **Color destructivo global:** `#E11D48` es el único color para acciones de eliminación y alertas en toda la plataforma. Debe consumirse mediante los tokens semánticos de Tailwind (`text-destructive`, `bg-destructive`, `border-destructive`, sus variantes de opacidad) o los componentes compartidos; nunca mediante utilidades `red-*`/`rose-*` ni hexadecimales locales. Los estados hover, focus, bordes, iconos, mensajes y superficies suaves deben derivar del mismo token y conservar contraste AA en light/dark mode.
 
 ## 4. Componentes y UI Elements
 - **Boring Avatars:** Se utiliza la librería `boring-avatars` para los avatares en toda la aplicación (Dashboard, CampfireWidget, Tasks). Siempre respeta su importación y uso en los componentes en lugar de depender exclusivamente de imágenes estáticas, a menos que se especifique lo contrario.

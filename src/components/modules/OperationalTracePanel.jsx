@@ -141,7 +141,7 @@ const OperationalTracePanel = () => {
           <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Consultando eventos...
         </div>
       ) : error ? (
-        <div className="p-6 text-sm text-rose-600 dark:text-rose-400">{error.message}</div>
+        <div className="p-6 text-sm text-destructive">{error.message}</div>
       ) : (
         <>
           <div className="grid grid-cols-2 border-b border-zinc-100 dark:border-zinc-800 lg:grid-cols-5">

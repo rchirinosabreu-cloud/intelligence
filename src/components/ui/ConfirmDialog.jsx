@@ -47,7 +47,7 @@ export const ConfirmDialogProvider = ({ children }) => {
           <AlertDialog.Overlay className="fixed inset-0 z-[100] bg-slate-950/45 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:fade-in" />
           <AlertDialog.Content className="fixed left-1/2 top-1/2 z-[101] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-slate-200 bg-white p-6 shadow-2xl outline-none dark:border-slate-700 dark:bg-slate-900">
             <div className="flex items-start gap-4">
-              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${request?.tone === 'danger' ? 'bg-rose-50 text-[#E11D48] dark:bg-rose-500/10' : 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300'}`}>
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${request?.tone === 'danger' ? 'bg-destructive/10 text-destructive' : 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300'}`}>
                 <DialogIcon className="h-5 w-5" aria-hidden="true" />
               </div>
               <div className="min-w-0 flex-1">
@@ -72,7 +72,7 @@ export const ConfirmDialogProvider = ({ children }) => {
               <AlertDialog.Action asChild>
                 <button
                   type="button"
-                  className={`min-h-11 rounded-md px-4 text-sm font-semibold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${request?.tone === 'danger' ? 'bg-[#E11D48] hover:bg-[#BE123C] focus-visible:ring-rose-500' : 'bg-[#009EB9] hover:bg-[#008CA4] focus-visible:ring-[#009EB9]'}`}
+                  className={`min-h-11 rounded-md px-4 text-sm font-semibold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${request?.tone === 'danger' ? 'bg-destructive hover:bg-destructive/90 focus-visible:ring-destructive' : 'bg-[#009EB9] hover:bg-[#008CA4] focus-visible:ring-[#009EB9]'}`}
                   onClick={() => closeDialog(true)}
                 >
                   {request?.confirmLabel}

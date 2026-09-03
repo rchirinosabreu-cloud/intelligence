@@ -133,6 +133,7 @@ const TASK_UPDATE_FIELDS = new Set([
   'newAttachment',
   'deleteAttachmentId',
   'returnReason',
+  'returnNote',
   'reintegrateReason',
   'reopenReason',
   'reopenNote'

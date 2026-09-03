@@ -662,7 +662,7 @@ const QuotationForm = () => {
                                                     <span className="text-zinc-500">Los servicios que agregues ahora pertenecerán a esta opción.</span>
                                                     <div className="flex flex-wrap justify-end gap-3">
                                                         <button type="button" onClick={applyActiveDiscountToAllScenarios} className="font-bold text-primary">Aplicar a todos los escenarios</button>
-                                                        <button type="button" onClick={() => removeScenario(scenario.id)} className="font-bold text-rose-500">Eliminar opción</button>
+                                                        <button type="button" onClick={() => removeScenario(scenario.id)} className="font-bold text-destructive hover:text-destructive/80">Eliminar opción</button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -739,7 +739,7 @@ const QuotationForm = () => {
                                                         onChange={(e) => updateItem(idx, 'name', e.target.value)}
                                                         onBlur={() => updateItem(idx, 'name', normalizeQuotationItemTitle(item.name))}
                                                     />
-                                                    <button onClick={() => removeItem(idx)} className="text-zinc-400 hover:text-red-500 transition-colors">
+                                                    <button onClick={() => removeItem(idx)} className="brain-danger-button-icon rounded-lg p-1">
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
                                                 </div>
@@ -909,7 +909,7 @@ const QuotationForm = () => {
                                     <span className="text-xs font-semibold text-zinc-500">COP</span>
                                 </div>
                                 {exchangeRateError && (
-                                    <p className="mt-2 text-[11px] leading-5 text-[#E11D48]">{exchangeRateError}</p>
+                                    <p className="mt-2 text-[11px] leading-5 text-destructive">{exchangeRateError}</p>
                                 )}
                             </div>
                         )}

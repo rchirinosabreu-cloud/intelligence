@@ -109,7 +109,7 @@ const PublicQuotation = () => {
             <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-6 dark:bg-zinc-950">
                 <div className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-8 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-[#E11D48] dark:bg-rose-500/10">
-                        <AlertCircle className="h-6 w-6" />
+                        <AlertCircle className="h-6 w-6 text-destructive" />
                     </div>
                     <h1 className="mt-5 text-xl font-bold text-zinc-950 dark:text-white">Propuesta no disponible</h1>
                     <p className="mt-2 text-sm leading-6 text-zinc-500">El enlace no existe o la propuesta todavía no ha sido emitida.</p>
@@ -363,7 +363,7 @@ const PublicQuotation = () => {
                                 Contactar por WhatsApp
                             </Button>
 
-                            {acceptanceError && <p className="mt-3 text-sm leading-6 text-rose-100">{acceptanceError}</p>}
+                            {acceptanceError && <p className="mt-3 text-sm font-medium leading-6 text-destructive">{acceptanceError}</p>}
                         </div>
                     </div>
                 </section>

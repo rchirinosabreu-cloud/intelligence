@@ -3,7 +3,7 @@ import { createNotification, processMentionsAndNotifications } from './notificat
 import { recordOperationalTrace } from './operationalTraceService.js';
 import { classifyTaskDeterministically } from './deterministicTaskClassifier.js';
 import { pickAllowedTaskUpdates } from '../config/security.js';
-import { closeTaskWorkSession } from '../lib/taskTiming.js';
+import { closeTaskWorkSession, formatTaskReturnEventContent } from '../lib/taskTiming.js';
 import {
     buildContentTaskTitle,
     buildContentItemUpdateFromTask,
@@ -708,8 +708,9 @@ export const updateTask = async (id, data, updaterId = null) => {
         const updateData = pickAllowedTaskUpdates(data);
 
         // Extract and isolate returnReason and reintegrateReason
-        const { returnReason, reintegrateReason, reopenReason, reopenNote } = updateData;
+        const { returnReason, returnNote, reintegrateReason, reopenReason, reopenNote } = updateData;
         delete updateData.returnReason;
+        delete updateData.returnNote;
         delete updateData.reintegrateReason;
         delete updateData.reopenReason;
         delete updateData.reopenNote;
@@ -874,23 +875,24 @@ export const updateTask = async (id, data, updaterId = null) => {
 
             // Radar de Mérito: Increment returnCount on transition to DEVUELTA
             if (isReturned) {
+                const returnEventContent = formatTaskReturnEventContent(returnReason, returnNote);
+                if (!returnEventContent) {
+                    throw new Error('Returning a task requires a reason and note');
+                }
                 updateData.returnCount = (currentTask.returnCount || 0) + 1;
                 updateData.isReturned = true;
                 updateData.returnedAt = new Date();
 
                 await resetSystemStreak(tx);
 
-                // Create System Comment for Return using the decoupled returnReason
-                if (returnReason) {
-                    await tx.taskComment.create({
-                        data: {
-                            taskId: id,
-                            authorId: updaterId,
-                            content: returnReason,
-                            type: 'system_return'
-                        }
-                    });
-                }
+                await tx.taskComment.create({
+                    data: {
+                        taskId: id,
+                        authorId: updaterId,
+                        content: returnEventContent,
+                        type: 'system_return'
+                    }
+                });
             }
 
             // Radar de Mérito: Initial startedAt logic
@@ -930,6 +932,9 @@ export const updateTask = async (id, data, updaterId = null) => {
                               (newStatus === 'PENDIENTE' || newStatus === 'EN_CURSO');
 
             if (isCorrected) {
+                if (!reintegrateReason?.trim()) {
+                    throw new Error('Reintegrating a returned task requires a note');
+                }
                 updateData.isReturned = false;
                 await ensureTaskWorkCycle(tx, {
                     taskId: id,

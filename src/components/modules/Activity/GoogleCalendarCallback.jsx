@@ -60,7 +60,7 @@ const GoogleCalendarCallback = () => {
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
           {status === 'loading' && <Loader2 className="h-6 w-6 animate-spin" />}
           {status === 'success' && <CheckCircle2 className="h-6 w-6" />}
-          {status === 'error' && <AlertCircle className="h-6 w-6 text-red-500" />}
+          {status === 'error' && <AlertCircle className="h-6 w-6 text-destructive" />}
         </div>
         <h1 className="text-xl font-bold text-zinc-900 dark:text-white">Google Calendar</h1>
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{message}</p>

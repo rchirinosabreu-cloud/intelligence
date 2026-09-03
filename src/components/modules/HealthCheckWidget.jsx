@@ -33,8 +33,8 @@ const HealthCheckWidget = () => {
                 return {
                     label: 'Crítico',
                     Icon: AlertTriangle,
-                    badgeClass: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/50 dark:text-red-200 dark:border-red-800',
-                    rowClass: 'bg-red-50/30 hover:bg-red-50/50 dark:bg-red-900/10 dark:hover:bg-red-900/20'
+                    badgeClass: 'border-destructive/20 bg-destructive/10 text-destructive',
+                    rowClass: 'bg-destructive/5 hover:bg-destructive/10'
                 };
             case 'ok':
                 return {
@@ -82,7 +82,7 @@ const HealthCheckWidget = () => {
                     <Activity className="w-5 h-5 text-zinc-400" />
                     <h3 className="font-semibold text-zinc-700 dark:text-zinc-200 text-sm">Salud de clientes</h3>
                 </div>
-                <div className="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-100 dark:border-red-900/30">
+                <div className="brain-alert-surface rounded p-2 text-xs">
                     No se pudo cargar el estado de los clientes.
                 </div>
             </Card>
@@ -124,7 +124,7 @@ const HealthCheckWidget = () => {
                             >
                                 <span className={cn(
                                     "text-sm font-medium transition-colors truncate flex-1 mr-2",
-                                    client.status === 'critical' ? "text-red-700 dark:text-red-400 font-bold" : "text-zinc-700 dark:text-zinc-300"
+                                    client.status === 'critical' ? "font-bold text-destructive" : "text-zinc-700 dark:text-zinc-300"
                                 )}>
                                     {client.name}
                                 </span>

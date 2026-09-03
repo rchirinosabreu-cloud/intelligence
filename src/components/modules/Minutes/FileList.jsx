@@ -47,7 +47,7 @@ const FileList = ({ files, onRemove }) => {
                 variant="ghost"
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); onRemove(file.id); }}
-                className="text-gray-500 hover:text-red-400 hover:bg-red-900/20 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="brain-danger-button-icon h-8 w-8 opacity-0 group-hover:opacity-100"
               >
                 <Trash2 className="w-4 h-4" />
               </Button>

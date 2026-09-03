@@ -639,7 +639,7 @@ const FinancialDashboard = () => {
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[400px] text-center p-6 bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-white/10">
-                <AlertCircle className="w-12 h-12 text-red-500 mb-4 animate-bounce" />
+                <AlertCircle className="mb-4 h-12 w-12 text-destructive" />
                 <h3 className="text-lg font-bold">Error al cargar datos financieros</h3>
                 <p className="text-sm text-zinc-500 max-w-sm mt-1">
                     Hubo un problema de conexión con el servidor financiero seguro de la agencia. Intente nuevamente.
@@ -711,8 +711,8 @@ const FinancialDashboard = () => {
             </PageHeader>
 
             {importError && (
-                <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-950/30 dark:text-red-200">
-                    <AlertCircle className="w-5 h-5 shrink-0" />
+                <div className="brain-alert-surface flex items-start gap-3 rounded-2xl p-4 text-sm">
+                    <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
                     <p>{importError}</p>
                 </div>
             )}
@@ -780,8 +780,8 @@ const FinancialDashboard = () => {
                 <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm relative overflow-hidden group">
                     <div className="flex justify-between items-center mb-4">
                         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Cartera en Mora</span>
-                        <div className="p-2 bg-amber-500/10 rounded-xl">
-                            <AlertCircle className="w-4 h-4 text-amber-500" />
+                        <div className="rounded-xl bg-destructive/10 p-2">
+                            <AlertCircle className="h-4 w-4 text-destructive" />
                         </div>
                     </div>
                     <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
@@ -1450,7 +1450,7 @@ const FinancialDashboard = () => {
                                 </div>
                                 {isIntegrityAuditLoading ? <Loader2 className="h-5 w-5 animate-spin text-violet-600" /> : <span className={cn('rounded-full px-3 py-1.5 text-xs font-semibold', integrityAudit?.ready ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300')}>{integrityAudit?.ready ? 'Lista para operar' : `${integrityAudit?.issues?.length || 0} puntos por resolver`}</span>}
                             </div>
-                            {!isIntegrityAuditLoading && integrityAudit?.issues?.length > 0 && <div className="mt-5 divide-y divide-zinc-100 border-y border-zinc-100 dark:divide-white/5 dark:border-white/5">{integrityAudit.issues.map((item) => <div key={item.code} className="flex items-start gap-3 py-3"><span className={cn('mt-0.5 h-2 w-2 shrink-0 rounded-full', item.severity === 'ERROR' ? 'bg-red-500' : 'bg-amber-500')} /><div><p className="text-sm font-medium text-zinc-900 dark:text-white">{item.message}</p><p className="mt-0.5 text-xs text-zinc-500">{item.count} {item.count === 1 ? 'registro' : 'registros'} · {item.severity === 'ERROR' ? 'Bloquea una conciliación confiable' : 'Requiere revisión'}</p></div></div>)}</div>}
+                            {!isIntegrityAuditLoading && integrityAudit?.issues?.length > 0 && <div className="mt-5 divide-y divide-zinc-100 border-y border-zinc-100 dark:divide-white/5 dark:border-white/5">{integrityAudit.issues.map((item) => <div key={item.code} className="flex items-start gap-3 py-3"><span className={cn('mt-0.5 h-2 w-2 shrink-0 rounded-full', item.severity === 'ERROR' ? 'bg-destructive' : 'bg-amber-500')} /><div><p className="text-sm font-medium text-zinc-900 dark:text-white">{item.message}</p><p className="mt-0.5 text-xs text-zinc-500">{item.count} {item.count === 1 ? 'registro' : 'registros'} · {item.severity === 'ERROR' ? 'Bloquea una conciliación confiable' : 'Requiere revisión'}</p></div></div>)}</div>}
                             {!isIntegrityAuditLoading && integrityAudit?.ready && <div className="mt-5 flex items-center gap-3 border-y border-emerald-100 py-4 text-sm text-emerald-700 dark:border-emerald-500/20 dark:text-emerald-300"><CheckCircle2 className="h-5 w-5" /> No se detectaron bloqueos de integridad.</div>}
                         </Card>
                         {!importPreview ? (
@@ -1499,10 +1499,10 @@ const FinancialDashboard = () => {
                                             <div className={cn(
                                                 "inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-widest",
                                                 importPreview.warnings?.length > 0
-                                                    ? "bg-amber-500/10 text-amber-600"
+                                                    ? "bg-destructive/10 text-destructive"
                                                     : "bg-emerald-500/10 text-emerald-600"
                                             )}>
-                                                {importPreview.warnings?.length > 0 ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                                                {importPreview.warnings?.length > 0 ? <AlertTriangle className="h-4 w-4 text-destructive" /> : <CheckCircle2 className="w-4 h-4" />}
                                                 {importPreview.warnings?.length || 0} alertas
                                             </div>
                                             <button

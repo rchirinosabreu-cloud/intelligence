@@ -90,7 +90,7 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
                 disabled={isSubmitting}
                 className={cn(
                   'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-                  isPersonal ? 'text-violet-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-destructive' : 'text-zinc-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-destructive'
+                  'brain-danger-button-icon'
                 )}
                 title="Eliminar anuncio"
                 aria-label="Eliminar anuncio"
@@ -401,7 +401,7 @@ const DashboardAnnouncements = ({
                   )}
                 </div>
 
-                {error && <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">{error.message}</p>}
+                {error && <p className="text-xs font-semibold text-destructive">{error.message}</p>}
               </div>
             )}
           </div>
@@ -444,7 +444,7 @@ const DashboardAnnouncements = ({
           className="z-[121] max-w-md rounded-lg border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950"
         >
           <DialogHeader>
-            <div className="w-10 h-10 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-2">
+            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
               <Trash2 className="w-5 h-5" />
             </div>
             <DialogTitle className="text-zinc-950 dark:text-white">Eliminar anuncio</DialogTitle>
@@ -452,7 +452,7 @@ const DashboardAnnouncements = ({
               Este anuncio dejará de aparecer en el dashboard y en su historial. Esta acción no se puede deshacer.
             </DialogDescription>
           </DialogHeader>
-          {error && <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">{error.message}</p>}
+          {error && <p className="text-xs font-semibold text-destructive">{error.message}</p>}
           <DialogFooter className="gap-2 sm:space-x-0">
             <Button variant="outline" className="rounded-lg" disabled={isSubmitting} onClick={() => setDeleteCandidate(null)}>
               Cancelar

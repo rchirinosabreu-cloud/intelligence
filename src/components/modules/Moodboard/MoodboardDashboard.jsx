@@ -156,7 +156,7 @@ const MoodboardDashboard = () => {
                 <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
                    <button
                     onClick={(e) => handleDeleteBoard(e, board.id)}
-                    className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors shadow-sm"
+                    className="brain-danger-button rounded-lg p-1.5"
                    >
                      <Trash2 className="w-3.5 h-3.5" />
                    </button>

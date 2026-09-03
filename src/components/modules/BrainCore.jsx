@@ -17,7 +17,7 @@ const ActionCard = memo(({ item, type }) => {
     const isIntelligence = type === 'INTELLIGENCE';
     const isThreat = type === 'THREAT';
 
-    const severityColor = item.severity === 'critical' || isThreat ? 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400' :
+    const severityColor = item.severity === 'critical' || isThreat ? 'border-destructive/20 bg-destructive/10 text-destructive' :
                          item.severity === 'warning' ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400' :
                          'bg-muted border-border text-muted-foreground';
 

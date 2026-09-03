@@ -188,7 +188,7 @@ const SharedContentPlan = () => {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-6 text-center">
         <div className="w-20 h-20 bg-red-50 dark:bg-red-900/10 rounded-full flex items-center justify-center mb-6">
-          <AlertCircle className="w-10 h-10 text-red-500" />
+          <AlertCircle className="h-10 w-10 text-destructive" />
         </div>
         <h1 className="text-2xl font-black text-zinc-900 dark:text-white mb-2">Parrilla no encontrada</h1>
         <p className="text-zinc-500 max-w-sm">El enlace es inválido o ha expirado. Por favor, solicita uno nuevo a tu ejecutivo de cuenta.</p>

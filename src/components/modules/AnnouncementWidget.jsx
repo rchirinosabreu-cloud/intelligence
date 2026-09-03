@@ -11,7 +11,7 @@ import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 // Types Configuration
 const TYPES = [
-    { id: 'urgent', label: 'URGENTE', icon: AlertCircle, color: 'text-red-500', border: 'border-l-red-500', bg: 'bg-red-500/10' },
+    { id: 'urgent', label: 'URGENTE', icon: AlertCircle, color: 'text-destructive', border: 'border-l-destructive', bg: 'bg-destructive/10' },
     { id: 'win', label: 'LOGRO', icon: Trophy, iconColor: 'text-yellow-500', color: 'text-emerald-500', border: 'border-l-emerald-500', bg: 'bg-emerald-500/10' },
     { id: 'info', label: 'INFO', icon: Info, color: 'text-blue-500', border: 'border-l-blue-500', bg: 'bg-blue-500/10' }
 ];
@@ -352,7 +352,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
                                                 : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700"
                                         )}
                                     >
-                                        {t.id === 'urgent' && <AlertCircle className="w-3 h-3" />}
+                                        {t.id === 'urgent' && <AlertCircle className="h-3 w-3 text-destructive" />}
                                         {t.id === 'win' && <Trophy className="w-3 h-3" />}
                                         {t.id === 'info' && <Info className="w-3 h-3" />}
                                         {t.label}
@@ -400,7 +400,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
                                                     {scope === 'general' && (
                                                         <button
                                                             onClick={() => handleDelete(item.id)}
-                                                            className="opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-red-500 transition-opacity"
+                                                            className="brain-danger-button-icon p-1 opacity-0 group-hover:opacity-100"
                                                         >
                                                             <Trash2 className="w-3.5 h-3.5" />
                                                         </button>

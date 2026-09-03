@@ -310,7 +310,7 @@ const ReferenceCard = ({ item, isMobile, zoom = 1, onDelete, onUpdate, onDragSto
         {!item.isTemp && (
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20 p-1.5 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600"
+            className="brain-danger-button absolute -right-2 -top-2 z-20 rounded-full p-1.5 opacity-0 group-hover:opacity-100"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>

@@ -116,12 +116,12 @@ IMPORTANTE: Respeta exactamente los nombres de campos y la estructura JSON solic
       )}
 
       {error && (
-        <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-xl text-red-200 flex items-start gap-3">
-           <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+        <div className="brain-alert-surface flex items-start gap-3 rounded-xl p-4">
+           <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-destructive" />
            <div>
              <p className="font-semibold">Error al generar resumen</p>
              <p className="text-sm opacity-80">{error}</p>
-             <Button variant="link" onClick={handleGenerate} className="text-red-300 p-0 h-auto mt-2 underline">Reintentar</Button>
+             <Button variant="link" onClick={handleGenerate} className="mt-2 h-auto p-0 text-destructive underline">Reintentar</Button>
            </div>
         </div>
       )}

@@ -28,7 +28,7 @@ const categoryLabels = {
 const severityStyles = {
   INFO: 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300',
   WARNING: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
-  CRITICAL: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'
+  CRITICAL: 'bg-destructive/10 text-destructive'
 };
 
 const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
@@ -119,7 +119,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
           )}
 
           {error && !isReviewing && (
-            <div role="alert" className="flex items-start gap-3 rounded-2xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">
+            <div role="alert" className="brain-alert-surface flex items-start gap-3 rounded-2xl p-4 text-sm">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
               <span>{error}</span>
             </div>
