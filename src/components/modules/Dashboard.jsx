@@ -66,6 +66,7 @@ const focusIconTone = {
 };
 
 const dashboardPanelClass = 'rounded-lg border-zinc-200/80 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/90 shadow-sm hover:shadow-sm hover:bg-white dark:hover:bg-zinc-900/90 dark:hover:border-zinc-800 dark:hover:ring-white/5';
+const topDashboardPanelClass = cn(dashboardPanelClass, 'h-[470px] max-h-[470px]');
 const balancedDashboardGridClass = 'grid grid-cols-1 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)] gap-5';
 
 const formatDate = (value) => {
@@ -434,64 +435,19 @@ const Dashboard = () => {
           </motion.div>
 
           <motion.div variants={item} className={cn(balancedDashboardGridClass, 'items-stretch')}>
-            <Card className={cn(dashboardPanelClass, 'p-0 min-h-[470px]')}>
-              <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-zinc-100 dark:border-zinc-800">
-                <div className="flex items-center gap-3">
-                  <span className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/15 flex items-center justify-center">
-                    <Compass className="w-[18px] h-[18px] text-primary" />
-                  </span>
-                  <div>
-                    <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">Radar de Foco</h3>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Lo que merece atención ahora</p>
-                  </div>
-                </div>
-                <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 rounded-full bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1">
-                  {dashboard.focusCards?.length || 0} {dashboard.focusCards?.length === 1 ? 'señal' : 'señales'}
-                </span>
-              </div>
-              <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {dashboard.focusCards?.map((focusCard) => (
-                  <div key={focusCard.id} className={cn('border-l-2 px-6 py-5', cardTone[focusCard.severity] || cardTone.info)}>
-                    <div className="flex items-start gap-4">
-                      <span className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', focusIconTone[focusCard.severity] || focusIconTone.info)}>
-                        <Zap className="w-[18px] h-[18px]" />
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] uppercase font-semibold text-zinc-400 dark:text-zinc-500">{focusCard.type}</p>
-                        <h4 className="text-sm font-semibold text-zinc-950 dark:text-white mt-0.5">{focusCard.title}</h4>
-                        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1.5 leading-6">{focusCard.content}</p>
-                      </div>
-                    </div>
-                    {focusCard.items?.length > 0 && (
-                      <div className="mt-3 pl-[52px]">
-                        <button
-                          type="button"
-                          onClick={() => toggleFocusCard(focusCard.id)}
-                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-600 hover:text-primary dark:text-zinc-300 dark:hover:text-primary transition-colors"
-                        >
-                          Ver mas
-                          <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', expandedFocusCards[focusCard.id] && 'rotate-180')} />
-                        </button>
-                        {expandedFocusCards[focusCard.id] && (
-                          <div className="mt-3 space-y-2">
-                            {focusCard.items.map((task) => (
-                              <TaskRow
-                                key={task.id}
-                                task={task}
-                                showFeedback={Boolean(task.lastFeedback)}
-                                onClick={() => { window.location.href = getFocusItemUrl(focusCard, task); }}
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Card>
+            <DashboardAnnouncements
+              announcements={dashboard.announcements}
+              teamMembers={teamMembers}
+              canManage={canManageDashboard}
+              onCreate={(announcement) => createAnnouncementMutation.mutateAsync(announcement)}
+              onUpdate={(announcement) => updateAnnouncementMutation.mutateAsync(announcement)}
+              onDelete={(announcement) => deleteAnnouncementMutation.mutateAsync(announcement)}
+              isSubmitting={createAnnouncementMutation.isPending || updateAnnouncementMutation.isPending || deleteAnnouncementMutation.isPending}
+              error={createAnnouncementMutation.error || updateAnnouncementMutation.error || deleteAnnouncementMutation.error}
+              className={topDashboardPanelClass}
+            />
 
-            <Card className={cn(dashboardPanelClass, 'flex flex-col min-h-[470px] h-[470px] max-h-[470px] p-0')}>
+            <Card className={cn(topDashboardPanelClass, 'flex flex-col p-0')}>
               <div className="px-5 py-5 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
                 <div className="flex items-center gap-3">
                   <span className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
@@ -566,17 +522,62 @@ const Dashboard = () => {
           </motion.div>
 
           <motion.div variants={item} className={balancedDashboardGridClass}>
-            <DashboardAnnouncements
-              announcements={dashboard.announcements}
-              teamMembers={teamMembers}
-              canManage={canManageDashboard}
-              onCreate={(announcement) => createAnnouncementMutation.mutateAsync(announcement)}
-              onUpdate={(announcement) => updateAnnouncementMutation.mutateAsync(announcement)}
-              onDelete={(announcement) => deleteAnnouncementMutation.mutateAsync(announcement)}
-              isSubmitting={createAnnouncementMutation.isPending || updateAnnouncementMutation.isPending || deleteAnnouncementMutation.isPending}
-              error={createAnnouncementMutation.error || updateAnnouncementMutation.error || deleteAnnouncementMutation.error}
-              className={dashboardPanelClass}
-            />
+            <Card className={cn(dashboardPanelClass, 'p-0 min-h-[470px]')}>
+              <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/15 flex items-center justify-center">
+                    <Compass className="w-[18px] h-[18px] text-primary" />
+                  </span>
+                  <div>
+                    <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">Radar de Foco</h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Lo que merece atención ahora</p>
+                  </div>
+                </div>
+                <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 rounded-full bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1">
+                  {dashboard.focusCards?.length || 0} {dashboard.focusCards?.length === 1 ? 'señal' : 'señales'}
+                </span>
+              </div>
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {dashboard.focusCards?.map((focusCard) => (
+                  <div key={focusCard.id} className={cn('border-l-2 px-6 py-5', cardTone[focusCard.severity] || cardTone.info)}>
+                    <div className="flex items-start gap-4">
+                      <span className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', focusIconTone[focusCard.severity] || focusIconTone.info)}>
+                        <Zap className="w-[18px] h-[18px]" />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] uppercase font-semibold text-zinc-400 dark:text-zinc-500">{focusCard.type}</p>
+                        <h4 className="text-sm font-semibold text-zinc-950 dark:text-white mt-0.5">{focusCard.title}</h4>
+                        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1.5 leading-6">{focusCard.content}</p>
+                      </div>
+                    </div>
+                    {focusCard.items?.length > 0 && (
+                      <div className="mt-3 pl-[52px]">
+                        <button
+                          type="button"
+                          onClick={() => toggleFocusCard(focusCard.id)}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-600 hover:text-primary dark:text-zinc-300 dark:hover:text-primary transition-colors"
+                        >
+                          Ver mas
+                          <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', expandedFocusCards[focusCard.id] && 'rotate-180')} />
+                        </button>
+                        {expandedFocusCards[focusCard.id] && (
+                          <div className="mt-3 space-y-2">
+                            {focusCard.items.map((task) => (
+                              <TaskRow
+                                key={task.id}
+                                task={task}
+                                showFeedback={Boolean(task.lastFeedback)}
+                                onClick={() => { window.location.href = getFocusItemUrl(focusCard, task); }}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
 
             <Card className={cn(dashboardPanelClass, 'p-0 min-h-[360px]')}>
               <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-zinc-100 dark:border-zinc-800">

@@ -240,7 +240,7 @@ const DashboardAnnouncements = ({
           )}
         </div>
 
-        <div className="flex-1 p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3 custom-scrollbar">
           {announcements.length > 0 ? (
             announcements.slice(0, 3).map((announcement) => (
               <AnnouncementCard key={`${announcement.scope}-${announcement.id}`} announcement={announcement} compact />
