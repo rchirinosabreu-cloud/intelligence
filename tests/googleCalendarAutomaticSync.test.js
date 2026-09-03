@@ -81,3 +81,47 @@ test('the Google webhook is public and the automatic scheduler starts with the s
   assert.match(routes, /handleGoogleCalendarWebhook/);
   assert.match(server, /initGoogleCalendarSyncScheduler\(\)/);
 });
+
+test('all synchronization entry points share a per-account overlap lock', async () => {
+  const { withGoogleCalendarSyncLock } = await import('../src/services/operationalEventService.js');
+  let release;
+  let calls = 0;
+  const pending = new Promise(resolve => { release = resolve; });
+  const first = withGoogleCalendarSyncLock('account-1', async () => {
+    calls += 1;
+    await pending;
+    return 'done';
+  });
+  const second = withGoogleCalendarSyncLock('account-1', async () => {
+    calls += 1;
+    return 'unexpected';
+  });
+
+  assert.equal(first, second);
+  assert.equal(calls, 1);
+  release();
+  assert.equal(await first, 'done');
+});
+
+test('Google webhooks acknowledge valid notifications before the background sync finishes', async () => {
+  const { handleGoogleCalendarWebhook } = await import('../src/services/operationalEventService.js');
+  let scheduled = false;
+  let syncStarted = false;
+  const result = await handleGoogleCalendarWebhook({
+    'x-goog-channel-id': 'channel-1',
+    'x-goog-channel-token': 'token-1',
+    'x-goog-resource-state': 'exists'
+  }, {
+    findChannel: async () => ({ connectionId: 'account-1' }),
+    scheduleSync: callback => {
+      scheduled = true;
+      void callback().then(() => {});
+    },
+    syncCalendar: async () => { syncStarted = true; }
+  });
+
+  assert.deepEqual(result, { accepted: true });
+  assert.equal(scheduled, true);
+  await Promise.resolve();
+  assert.equal(syncStarted, true);
+});

@@ -5,17 +5,24 @@ import { readFile } from 'node:fs/promises';
 import {
   buildGoogleEventPayload,
   buildGoogleRecurrence,
+  expandOperationalEventOccurrences,
+  getGoogleRecurrenceData,
   listAllGoogleEventPages,
-  mapGoogleEventDates
+  mapGoogleEventDates,
+  mapGoogleEventType,
+  resolveGoogleMemberIds
 } from '../src/services/operationalEventService.js';
 import {
   addExternalEmailTags,
+  fromBogotaDatePickerValue,
   explainGoogleSyncError,
+  getExternalAttendeeEmails,
   getGoogleConnectionHealth,
   getCalendarPopoverPosition,
   getDayEventDisplay,
   normalizeCalendarDescription,
-  summarizeGoogleSyncResults
+  summarizeGoogleSyncResults,
+  toBogotaDatePickerValue
 } from '../src/components/modules/Activity/calendarPresentation.js';
 
 test('Google synchronization errors become clear Spanish explanations', () => {
@@ -230,6 +237,164 @@ test('all-day Brainstudio events use Google date fields with an exclusive end da
 
   assert.deepEqual(payload.start, { date: '2026-08-20' });
   assert.deepEqual(payload.end, { date: '2026-08-21' });
+});
+
+test('calendar exposes fetch failures and its principal controls have accessible names', async () => {
+  const calendar = await readFile(new URL('../src/components/modules/Activity/OperationalCalendar.jsx', import.meta.url), 'utf8');
+  assert.match(calendar, /data-calendar-load-error="status"/);
+  assert.match(calendar, /refetchEvents/);
+  assert.match(calendar, /aria-label="Mes anterior"/);
+  assert.match(calendar, /aria-label="Mes siguiente"/);
+  assert.match(calendar, /htmlFor="operational-event-title"/);
+  assert.match(calendar, /id="operational-event-title"/);
+  assert.doesNotMatch(calendar, /border-red-200\s+bg-red-50/);
+});
+
+test('internal team addresses never reappear as external guest tags', () => {
+  assert.deepEqual(getExternalAttendeeEmails(
+    ['helen@brainstudio.com', 'cliente@empresa.com', 'fred@fireflies.ai'],
+    [{ email: 'HELEN@BRAINSTUDIO.COM' }]
+  ), ['cliente@empresa.com']);
+});
+
+test('calendar form values round-trip as Bogota wall-clock time on every device', () => {
+  const pickerValue = toBogotaDatePickerValue('2026-09-03T14:30:00.000Z');
+  assert.deepEqual(
+    [pickerValue.getFullYear(), pickerValue.getMonth(), pickerValue.getDate(), pickerValue.getHours(), pickerValue.getMinutes()],
+    [2026, 8, 3, 9, 30]
+  );
+  assert.equal(fromBogotaDatePickerValue(pickerValue), '2026-09-03T09:30:00-05:00');
+});
+
+test('Google special event types and Brainstudio metadata keep their operational meaning', () => {
+  assert.equal(mapGoogleEventType({ eventType: 'outOfOffice', summary: 'OOO' }), 'ABSENCE');
+  assert.equal(mapGoogleEventType({ eventType: 'focusTime', summary: 'Focus time' }), 'PROJECT');
+  assert.equal(mapGoogleEventType({
+    summary: 'Llamada',
+    extendedProperties: { private: { brainEventType: 'PRODUCTION' } }
+  }), 'PRODUCTION');
+});
+
+test('custom Google recurrence rules are preserved for a round trip', () => {
+  const rawRules = ['RRULE:FREQ=MONTHLY;BYDAY=1MO;COUNT=6'];
+  assert.deepEqual(getGoogleRecurrenceData({ recurrence: rawRules }), {
+    recurrence: 'GOOGLE',
+    recurrenceEnd: null,
+    googleRecurrence: rawRules
+  });
+  assert.deepEqual(buildGoogleRecurrence({ recurrence: 'GOOGLE', googleRecurrence: rawRules }), rawRules);
+  assert.equal(getGoogleRecurrenceData({ recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE;COUNT=8'] }).recurrence, 'GOOGLE');
+});
+
+test('weekly series are expanded into stable calendar occurrences inside the requested range', () => {
+  const occurrences = expandOperationalEventOccurrences([{
+    id: 'weekly-1',
+    title: 'Comité semanal',
+    recurrence: 'WEEKLY',
+    recurrenceEnd: new Date('2026-09-30T23:59:59.000Z'),
+    startAt: new Date('2026-08-26T14:00:00.000Z'),
+    endAt: new Date('2026-08-26T15:00:00.000Z')
+  }], new Date('2026-09-01T00:00:00.000Z'), new Date('2026-09-30T23:59:59.000Z'));
+
+  assert.deepEqual(occurrences.map(event => event.startAt.toISOString()), [
+    '2026-09-02T14:00:00.000Z',
+    '2026-09-09T14:00:00.000Z',
+    '2026-09-16T14:00:00.000Z',
+    '2026-09-23T14:00:00.000Z',
+    '2026-09-30T14:00:00.000Z'
+  ]);
+  assert.equal(new Set(occurrences.map(event => event.occurrenceKey)).size, 5);
+  assert.equal(occurrences[0].seriesStartAt.toISOString(), '2026-08-26T14:00:00.000Z');
+});
+
+test('Google full synchronization preserves recurrence masters instead of flattening instances', async () => {
+  const service = await readFile(new URL('../src/services/operationalEventService.js', import.meta.url), 'utf8');
+  assert.match(service, /singleEvents:\s*false/);
+  assert.doesNotMatch(service, /singleEvents:\s*false,[\s\S]{0,80}orderBy:\s*'startTime'/);
+});
+
+test('Google attendees are mapped back to internal team members without case sensitivity', () => {
+  assert.deepEqual(resolveGoogleMemberIds(
+    [{ email: 'HELEN@BRAINSTUDIO.COM' }, { email: 'cliente@empresa.com' }],
+    [{ id: 'helen-id', email: 'helen@brainstudio.com' }, { id: 'rodny-id', email: 'rodny@brainstudio.com' }]
+  ), ['helen-id']);
+});
+
+test('patching a timed event into an all-day event explicitly clears stale Google time fields', () => {
+  const payload = buildGoogleEventPayload({
+    id: 'event-convert-all-day',
+    title: 'Permiso',
+    type: 'ABSENCE',
+    description: '',
+    startAt: new Date('2026-09-03T05:00:00.000Z'),
+    endAt: new Date('2026-09-05T05:00:00.000Z'),
+    isAllDay: true,
+    attendeeEmails: [],
+    recurrence: 'NONE'
+  }, { operation: 'patch' });
+
+  assert.deepEqual(payload.start, { date: '2026-09-03', dateTime: null, timeZone: null });
+  assert.deepEqual(payload.end, { date: '2026-09-05', dateTime: null, timeZone: null });
+});
+
+test('patching an all-day event into a timed event explicitly clears stale Google date fields', () => {
+  const payload = buildGoogleEventPayload({
+    id: 'event-convert-timed',
+    title: 'Producción',
+    type: 'PRODUCTION',
+    description: '',
+    startAt: new Date('2026-09-03T14:00:00.000Z'),
+    endAt: new Date('2026-09-03T15:00:00.000Z'),
+    isAllDay: false,
+    attendeeEmails: [],
+    recurrence: 'NONE'
+  }, { operation: 'patch' });
+
+  assert.deepEqual(payload.start, {
+    date: null,
+    dateTime: '2026-09-03T09:00:00-05:00',
+    timeZone: 'America/Bogota'
+  });
+  assert.deepEqual(payload.end, {
+    date: null,
+    dateTime: '2026-09-03T10:00:00-05:00',
+    timeZone: 'America/Bogota'
+  });
+});
+
+test('patching a non-recurring event clears an existing Google recurrence and stale Meet location', () => {
+  const payload = buildGoogleEventPayload({
+    id: 'event-clear-google-fields',
+    title: 'Seguimiento',
+    type: 'PROJECT',
+    description: 'Avances del proyecto',
+    startAt: new Date('2026-09-03T14:00:00.000Z'),
+    endAt: new Date('2026-09-03T15:00:00.000Z'),
+    isAllDay: false,
+    attendeeEmails: [],
+    recurrence: 'NONE',
+    meetingLink: ''
+  }, { operation: 'patch' });
+
+  assert.deepEqual(payload.recurrence, []);
+  assert.equal(payload.location, null);
+});
+
+test('managed Google Meet lines are not duplicated in the Google description', () => {
+  const payload = buildGoogleEventPayload({
+    id: 'event-meet-description',
+    title: 'Reunión',
+    type: 'MEETING',
+    description: 'Agenda\n\nGoogle Meet: https://meet.google.com/abc-defg-hij',
+    startAt: new Date('2026-09-03T14:00:00.000Z'),
+    endAt: new Date('2026-09-03T15:00:00.000Z'),
+    isAllDay: false,
+    attendeeEmails: [],
+    recurrence: 'NONE',
+    meetingLink: 'https://meet.google.com/abc-defg-hij'
+  });
+
+  assert.equal(payload.description, 'Agenda\n\nGoogle Meet: https://meet.google.com/abc-defg-hij');
 });
 
 test('timed Google events use explicit RFC3339 Bogota offsets at midnight', () => {

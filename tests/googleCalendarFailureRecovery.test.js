@@ -98,6 +98,91 @@ test('event updates restore the previous local values when Google Calendar rejec
   assert.deepEqual(calls, ['update', 'sync', 'restore:event-1']);
 });
 
+test('a successful Google write is not rolled back locally when only sync metadata persistence fails', async () => {
+  const { createSyncedOperationalEvent, updateSyncedOperationalEvent } = await import('../src/services/operationalEventService.js');
+  const metadataError = Object.assign(new Error('metadata pending'), {
+    code: 'GOOGLE_SYNC_METADATA_PENDING',
+    preserveLocal: true
+  });
+  let deleted = false;
+  let restored = false;
+
+  await assert.rejects(createSyncedOperationalEvent({
+    createLocalEvent: async () => ({ id: 'created-1' }),
+    syncToGoogle: async () => { throw metadataError; },
+    deleteLocalEvent: async () => { deleted = true; }
+  }), candidate => candidate === metadataError);
+  await assert.rejects(updateSyncedOperationalEvent({
+    updateLocalEvent: async () => ({ id: 'updated-1' }),
+    syncToGoogle: async () => { throw metadataError; },
+    restoreLocalEvent: async () => { restored = true; }
+  }), candidate => candidate === metadataError);
+
+  assert.equal(deleted, false);
+  assert.equal(restored, false);
+});
+
+test('linked Google synchronization errors use a dedicated retry path', async () => {
+  const { retryOperationalEventGoogleSync } = await import('../src/services/operationalEventService.js');
+  assert.equal(typeof retryOperationalEventGoogleSync, 'function');
+
+  const calls = [];
+  const result = await retryOperationalEventGoogleSync('event-1', null, {
+    findEvent: async id => {
+      calls.push(`find:${id}`);
+      return { id, googleLinks: [{ googleEventId: 'google-1', isOrganizer: true }] };
+    },
+    syncToGoogle: async event => {
+      calls.push(`sync:${event.id}`);
+      return { ...event, googleSyncStatus: 'SYNCED' };
+    }
+  });
+
+  assert.equal(result.googleSyncStatus, 'SYNCED');
+  assert.deepEqual(calls, ['find:event-1', 'sync:event-1']);
+});
+
+test('event mutations and linked retries require a manager role', async () => {
+  const activityRoutes = await read('src/routes/api/activity.js');
+  const calendar = await read('src/components/modules/Activity/OperationalCalendar.jsx');
+
+  assert.match(activityRoutes, /router\.post\('\/events',\s*requireManagerRole/);
+  assert.match(activityRoutes, /router\.patch\('\/events\/:id',\s*requireManagerRole/);
+  assert.match(activityRoutes, /router\.delete\('\/events\/:id',\s*requireManagerRole/);
+  assert.match(activityRoutes, /router\.post\('\/google-calendar\/errors\/:id\/retry',\s*requireManagerRole/);
+  assert.match(activityRoutes, /retryOperationalEventGoogleSync/);
+  assert.match(calendar, /google-calendar\/errors\/\$\{eventId\}\/retry/);
+  assert.match(calendar, /linkedRetryMutation\.mutate\(event\.id\)/);
+  assert.doesNotMatch(calendar, /reconciliationMutation\.mutate\(\{ eventIds: \[event\.id\]/);
+});
+
+test('calendar event input rejects unsupported types and recurrence endings before the event begins', async () => {
+  const { validateOperationalEventInput } = await import('../src/services/operationalEventService.js');
+
+  assert.throws(
+    () => validateOperationalEventInput({
+      title: 'Prueba',
+      type: 'INVALID',
+      recurrence: 'NONE',
+      startAt: '2026-09-03T14:00:00.000Z',
+      endAt: '2026-09-03T15:00:00.000Z'
+    }),
+    candidate => candidate.code === 'INVALID_EVENT_TYPE'
+  );
+
+  assert.throws(
+    () => validateOperationalEventInput({
+      title: 'Semanal',
+      type: 'PROJECT',
+      recurrence: 'WEEKLY',
+      recurrenceEnd: '2026-09-01T05:00:00.000Z',
+      startAt: '2026-09-03T14:00:00.000Z',
+      endAt: '2026-09-03T15:00:00.000Z'
+    }),
+    candidate => candidate.code === 'INVALID_EVENT_RECURRENCE'
+  );
+});
+
 test('invalid event ranges are rejected before calendar persistence', async () => {
   const { normalizeOperationalEventRange } = await import('../src/services/operationalEventService.js');
 
@@ -117,6 +202,21 @@ test('calendar date rejections return a useful validation response instead of a 
   assert.match(activityRoutes, /INVALID_GOOGLE_EVENT_TIME/);
   assert.match(activityRoutes, /status\(422\)/);
   assert.match(activityRoutes, /fechas? y horas?/i);
+});
+
+test('linked Google updates carry their ETag and surface concurrent edits as conflicts', async () => {
+  const { getGooglePatchOptions, classifyGoogleCalendarSyncError } = await import('../src/services/operationalEventService.js');
+  assert.deepEqual(getGooglePatchOptions({ googleEtag: '"etag-123"' }), {
+    headers: { 'If-Match': '"etag-123"' }
+  });
+  assert.equal(getGooglePatchOptions({}), undefined);
+  assert.equal(classifyGoogleCalendarSyncError(Object.assign(new Error('Precondition Failed'), { code: 412 })), 'GOOGLE_CALENDAR_CONFLICT');
+
+  const service = await read('src/services/operationalEventService.js');
+  const routes = await read('src/routes/api/activity.js');
+  assert.match(service, /calendar\.events\.patch\([\s\S]*getGooglePatchOptions\(targetLink/);
+  assert.match(routes, /GOOGLE_CALENDAR_CONFLICT/);
+  assert.match(routes, /status\(409\)/);
 });
 
 test('multi-account calendar wiring validates recent connections and exposes real Meet errors', async () => {

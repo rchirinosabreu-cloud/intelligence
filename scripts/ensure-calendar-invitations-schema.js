@@ -14,7 +14,8 @@ try {
       ADD COLUMN IF NOT EXISTS "attendeeEmails" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
       ADD COLUMN IF NOT EXISTS "attendeeResponses" JSONB,
       ADD COLUMN IF NOT EXISTS "googleConnectionId" TEXT,
-      ADD COLUMN IF NOT EXISTS "googleSyncError" TEXT;
+      ADD COLUMN IF NOT EXISTS "googleSyncError" TEXT,
+      ADD COLUMN IF NOT EXISTS "googleRecurrence" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 
     CREATE TABLE IF NOT EXISTS "GoogleCalendarEventLink" (
       "id" TEXT PRIMARY KEY,

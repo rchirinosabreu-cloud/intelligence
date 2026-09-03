@@ -9,7 +9,8 @@ import {
   getOperationalEventReconciliationPreview,
   reconcilePendingOperationalEvents,
   dismissOperationalEventGoogleError,
-  dismissOperationalEventReconciliation
+  dismissOperationalEventReconciliation,
+  retryOperationalEventGoogleSync
 } from '../../services/operationalEventService.js';
 import { getTeamActivityStatus } from '../../services/activityStatusService.js';
 import { createMeetEvent } from '../../services/calendarService.js';
@@ -29,13 +30,32 @@ import { requireManagerRole } from '../../middlewares/authMiddleware.js';
 const router = express.Router();
 
 const sendOperationalEventSaveError = (res, error, fallbackError) => {
-  if (['INVALID_EVENT_RANGE', 'INVALID_GOOGLE_EVENT_TIME'].includes(error.code)) {
+  if (error.code === 'EVENT_NOT_FOUND') {
+    return res.status(404).json({ error: 'El evento ya no existe', code: error.code, details: error.message });
+  }
+  if (['INVALID_EVENT_RANGE', 'INVALID_GOOGLE_EVENT_TIME', 'INVALID_EVENT_TITLE', 'INVALID_EVENT_TYPE', 'INVALID_EVENT_RECURRENCE', 'INVALID_EVENT_ATTENDEES'].includes(error.code)) {
     return res.status(422).json({
-      error: 'Revisa las fechas y horas del evento',
+      error: error.code === 'INVALID_EVENT_RANGE' || error.code === 'INVALID_GOOGLE_EVENT_TIME'
+        ? 'Revisa las fechas y horas del evento'
+        : 'Revisa los datos del evento',
       code: error.code,
-      details: error.code === 'INVALID_EVENT_RANGE'
-        ? error.message
-        : 'Google Calendar rechazó la fecha u hora del evento. Verifica el rango y activa “Todo el día” cuando corresponda.'
+      details: error.code === 'INVALID_GOOGLE_EVENT_TIME'
+        ? 'Google Calendar rechazó la fecha u hora del evento. Verifica el rango y activa “Todo el día” cuando corresponda.'
+        : error.message
+    });
+  }
+  if (error.code === 'GOOGLE_CALENDAR_CONFLICT') {
+    return res.status(409).json({
+      error: 'El evento cambió en Google Calendar',
+      code: error.code,
+      details: 'Google Calendar recibió otra modificación antes que esta. Sincroniza el calendario, revisa la versión más reciente y vuelve a guardar.'
+    });
+  }
+  if (error.code === 'GOOGLE_SYNC_METADATA_PENDING') {
+    return res.status(503).json({
+      error: 'Google Calendar recibió el cambio; falta confirmar la sincronización local',
+      code: error.code,
+      details: 'El evento conserva el cambio. Usa Sincronizar para completar la confirmación sin duplicarlo.'
     });
   }
   return res.status(500).json({ error: fallbackError, details: error.message });
@@ -63,7 +83,7 @@ router.get('/events', async (req, res) => {
   }
 });
 
-router.post('/events', async (req, res) => {
+router.post('/events', requireManagerRole, async (req, res) => {
   try {
     const event = await createOperationalEvent(req.body, req.user?.userId || null);
     res.json(event);
@@ -81,7 +101,7 @@ router.post('/events', async (req, res) => {
   }
 });
 
-router.post('/events/generate-meet', async (req, res) => {
+router.post('/events/generate-meet', requireManagerRole, async (req, res) => {
   const { title, startAt, endAt, description, googleConnectionId } = req.body;
   try {
     const meeting = await createMeetEvent(title, startAt, endAt, description, googleConnectionId);
@@ -210,6 +230,15 @@ router.patch('/google-calendar/errors/:id/dismiss', requireManagerRole, async (r
   }
 });
 
+router.post('/google-calendar/errors/:id/retry', requireManagerRole, async (req, res) => {
+  try {
+    res.json(await retryOperationalEventGoogleSync(req.params.id, req.body?.connectionId || null));
+  } catch (error) {
+    console.error('[Activity API] Error reintentando evento de Google Calendar:', error.response?.data || error);
+    return sendOperationalEventSaveError(res, error, 'No se pudo reintentar la sincronización');
+  }
+});
+
 router.patch('/google-calendar/reconciliation/:id/dismiss', requireManagerRole, async (req, res) => {
   try {
     const result = await dismissOperationalEventReconciliation(req.params.id);
@@ -221,7 +250,7 @@ router.patch('/google-calendar/reconciliation/:id/dismiss', requireManagerRole, 
   }
 });
 
-router.patch('/events/:id', async (req, res) => {
+router.patch('/events/:id', requireManagerRole, async (req, res) => {
   try {
     const event = await updateOperationalEvent(req.params.id, req.body);
     res.json(event);
@@ -231,7 +260,7 @@ router.patch('/events/:id', async (req, res) => {
   }
 });
 
-router.delete('/events/:id', async (req, res) => {
+router.delete('/events/:id', requireManagerRole, async (req, res) => {
   try {
     await deleteOperationalEvent(req.params.id);
     res.json({ success: true });

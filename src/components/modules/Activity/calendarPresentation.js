@@ -54,6 +54,37 @@ export const addExternalEmailTags = (currentEmails = [], rawValue = '') => {
   };
 };
 
+export const getExternalAttendeeEmails = (attendeeEmails = [], teamMembers = []) => {
+  const internalEmails = new Set(teamMembers.map(member => member.email?.trim().toLowerCase()).filter(Boolean));
+  return [...new Set(attendeeEmails
+    .map(email => email?.trim().toLowerCase())
+    .filter(email => email && email !== 'fred@fireflies.ai' && !internalEmails.has(email)))];
+};
+
+const padDatePart = value => String(value).padStart(2, '0');
+
+export const toBogotaDatePickerValue = value => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(new Date(value)).reduce((result, part) => {
+    if (part.type !== 'literal') result[part.type] = Number(part.value);
+    return result;
+  }, {});
+  return new Date(parts.year, parts.month - 1, parts.day, parts.hour === 24 ? 0 : parts.hour, parts.minute, parts.second, 0);
+};
+
+export const fromBogotaDatePickerValue = value => {
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) return null;
+  return `${value.getFullYear()}-${padDatePart(value.getMonth() + 1)}-${padDatePart(value.getDate())}T${padDatePart(value.getHours())}:${padDatePart(value.getMinutes())}:${padDatePart(value.getSeconds())}-05:00`;
+};
+
 export const normalizeCalendarDescription = (description = '') => description
   .replace(/<br\s*\/?\s*>/gi, '\n')
   .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')

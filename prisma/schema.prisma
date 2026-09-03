@@ -517,6 +517,7 @@ model OperationalEvent {
   memberIds              String[]                  @default([]) // IDs of TeamMembers involved
   recurrence             String? // NONE, WEEKLY
   recurrenceEnd          DateTime?
+  googleRecurrence       String[]                  @default([])
   meetingLink            String?
   source                 String                    @default("BRAIN")
   organizerEmail         String?

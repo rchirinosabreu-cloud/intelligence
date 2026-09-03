@@ -10,6 +10,14 @@ import {
 import crypto from 'crypto';
 
 const FIREFLIES_BOT_EMAIL = 'fred@fireflies.ai';
+const OPERATIONAL_EVENT_TYPES = new Set(['PRODUCTION', 'PROJECT', 'MEETING', 'ABSENCE', 'BREAK']);
+const OPERATIONAL_RECURRENCES = new Set(['NONE', 'WEEKLY', 'GOOGLE']);
+
+const createOperationalEventError = (code, message) => {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+};
 
 const getGoogleErrorDetails = (error) => {
   const data = error.response?.data || error.errors || error.message || error;
@@ -80,6 +88,52 @@ export const normalizeOperationalEventRange = (data = {}, current = {}) => {
   return { startAt, endAt };
 };
 
+export const getGooglePatchOptions = (target, fallback = null) => (target?.googleEtag || fallback?.googleEtag)
+  ? { headers: { 'If-Match': target?.googleEtag || fallback.googleEtag } }
+  : undefined;
+
+export const classifyGoogleCalendarSyncError = error => {
+  const status = error.code || error.response?.status;
+  if (status === 412) return 'GOOGLE_CALENDAR_CONFLICT';
+  if (isGoogleOAuthReauthError(error)) return 'GOOGLE_CALENDAR_REAUTH_REQUIRED';
+  const details = getGoogleErrorDetails(error);
+  if (/invalid (?:start|end) time|timeRangeEmpty/i.test(details)) return 'INVALID_GOOGLE_EVENT_TIME';
+  return null;
+};
+
+export const validateOperationalEventInput = (data = {}, current = {}) => {
+  const title = data.title ?? current.title;
+  const type = data.type ?? current.type;
+  const recurrence = data.recurrence ?? current.recurrence ?? 'NONE';
+  const range = normalizeOperationalEventRange(data, current);
+
+  if (!String(title || '').trim()) {
+    throw createOperationalEventError('INVALID_EVENT_TITLE', 'El evento debe tener un título.');
+  }
+  if (!OPERATIONAL_EVENT_TYPES.has(type)) {
+    throw createOperationalEventError('INVALID_EVENT_TYPE', 'El tipo de evento no es válido.');
+  }
+  if (!OPERATIONAL_RECURRENCES.has(recurrence)) {
+    throw createOperationalEventError('INVALID_EVENT_RECURRENCE', 'La recurrencia del evento no es válida.');
+  }
+  if (data.memberIds !== undefined && !Array.isArray(data.memberIds)) {
+    throw createOperationalEventError('INVALID_EVENT_ATTENDEES', 'El equipo involucrado no es válido.');
+  }
+  if (data.attendeeEmails !== undefined && !Array.isArray(data.attendeeEmails)) {
+    throw createOperationalEventError('INVALID_EVENT_ATTENDEES', 'Los invitados externos no son válidos.');
+  }
+
+  const recurrenceEndValue = data.recurrenceEnd ?? current.recurrenceEnd;
+  if (recurrence === 'WEEKLY' && recurrenceEndValue) {
+    const recurrenceEnd = new Date(recurrenceEndValue);
+    if (!Number.isFinite(recurrenceEnd.getTime()) || recurrenceEnd < range.startAt) {
+      throw createOperationalEventError('INVALID_EVENT_RECURRENCE', 'La recurrencia no puede terminar antes de que comience el evento.');
+    }
+  }
+
+  return { ...range, title: String(title).trim(), type, recurrence };
+};
+
 const formatGoogleDateTimeInBogota = (value) => {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Bogota',
@@ -107,7 +161,11 @@ export const getMeetLinkFromGoogleEvent = (event) => {
   return fallbackText.match(/https:\/\/meet\.google\.com\/[a-z0-9-]+/i)?.[0] || null;
 };
 
-const mapGoogleEventType = (event) => {
+export const mapGoogleEventType = (event) => {
+  const explicitType = event.extendedProperties?.private?.brainEventType;
+  if (OPERATIONAL_EVENT_TYPES.has(explicitType)) return explicitType;
+  if (event.eventType === 'outOfOffice') return 'ABSENCE';
+  if (event.eventType === 'focusTime' || event.eventType === 'workingLocation') return 'PROJECT';
   const summary = (event.summary || '').toLowerCase();
   if (getMeetLinkFromGoogleEvent(event) || summary.includes('meet') || summary.includes('reuni')) return 'MEETING';
   if (summary.includes('permiso') || summary.includes('ausencia')) return 'ABSENCE';
@@ -143,20 +201,30 @@ const decodeGoogleDescription = (value) => {
     .trim() || null;
 };
 
-const getGoogleRecurrenceData = (event) => {
+export const getGoogleRecurrenceData = (event) => {
+  const googleRecurrence = Array.isArray(event.recurrence) ? event.recurrence : [];
   const rule = (event.recurrence || []).find(item => item.startsWith('RRULE:'));
-  if (!rule) return { recurrence: 'NONE', recurrenceEnd: null };
+  if (!rule) return { recurrence: 'NONE', recurrenceEnd: null, googleRecurrence: [] };
   const until = rule.match(/(?:^|;)UNTIL=([^;]+)/)?.[1];
   const recurrenceEnd = until && /^\d{8}T\d{6}Z$/.test(until)
     ? new Date(`${until.slice(0, 4)}-${until.slice(4, 6)}-${until.slice(6, 8)}T${until.slice(9, 11)}:${until.slice(11, 13)}:${until.slice(13, 15)}Z`)
     : null;
+  const isSimpleWeekly = /^RRULE:FREQ=WEEKLY(?:;UNTIL=\d{8}T\d{6}Z)?$/.test(rule);
   return {
-    recurrence: rule.includes('FREQ=WEEKLY') ? 'WEEKLY' : 'NONE',
-    recurrenceEnd
+    recurrence: isSimpleWeekly ? 'WEEKLY' : 'GOOGLE',
+    recurrenceEnd,
+    googleRecurrence
   };
 };
 
-const toOperationalEventDataFromGoogle = (event, calendarId, connectionId) => ({
+export const resolveGoogleMemberIds = (attendees = [], teamMembers = []) => {
+  const attendeeEmails = new Set(attendees.map(attendee => attendee.email?.trim().toLowerCase()).filter(Boolean));
+  return teamMembers
+    .filter(member => attendeeEmails.has(member.email?.trim().toLowerCase()))
+    .map(member => member.id);
+};
+
+const toOperationalEventDataFromGoogle = (event, calendarId, connectionId, teamMembers = []) => ({
   title: event.summary || 'Evento de Google Calendar',
   type: mapGoogleEventType(event),
   description: decodeGoogleDescription(event.description),
@@ -164,7 +232,7 @@ const toOperationalEventDataFromGoogle = (event, calendarId, connectionId) => ({
   endAt: mapGoogleEventDates(event).endAt,
   isAllDay: mapGoogleEventDates(event).isAllDay,
   captureWithFireflies: (event.attendees || []).some(attendee => attendee.email?.toLowerCase() === FIREFLIES_BOT_EMAIL),
-  memberIds: [],
+  memberIds: resolveGoogleMemberIds(event.attendees || [], teamMembers),
   ...getGoogleRecurrenceData(event),
   meetingLink: getMeetLinkFromGoogleEvent(event),
   source: 'GOOGLE',
@@ -184,6 +252,9 @@ const toOperationalEventDataFromGoogle = (event, calendarId, connectionId) => ({
 });
 
 export const buildGoogleRecurrence = (event) => {
+  if (event.recurrence === 'GOOGLE') {
+    return Array.isArray(event.googleRecurrence) && event.googleRecurrence.length ? event.googleRecurrence : undefined;
+  }
   if (event.recurrence !== 'WEEKLY') return undefined;
   const until = event.recurrenceEnd
     ? new Date(event.recurrenceEnd).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
@@ -202,18 +273,25 @@ const formatGoogleAllDayDate = value => {
   return `${part('year')}-${part('month')}-${part('day')}`;
 };
 
-export const buildGoogleEventPayload = (event) => ({
+const stripManagedMeetLine = value => String(value || '')
+  .replace(/^Google Meet:\s*https:\/\/meet\.google\.com\/[a-z0-9-]+\s*$/gim, '')
+  .replace(/\n{3,}/g, '\n\n')
+  .trim();
+
+export const buildGoogleEventPayload = (event, { operation = 'insert' } = {}) => ({
   summary: event.title,
-  description: [event.description, event.meetingLink ? `Google Meet: ${event.meetingLink}` : ''].filter(Boolean).join('\n\n'),
-  ...(event.meetingLink ? { location: event.meetingLink } : {}),
+  description: [stripManagedMeetLine(event.description), event.meetingLink ? `Google Meet: ${event.meetingLink}` : ''].filter(Boolean).join('\n\n'),
+  ...(event.meetingLink ? { location: event.meetingLink } : operation === 'patch' ? { location: null } : {}),
   start: isAllDayRange(event)
-    ? { date: formatGoogleAllDayDate(event.startAt) }
-    : { dateTime: formatGoogleDateTimeInBogota(event.startAt), timeZone: 'America/Bogota' },
+    ? { date: formatGoogleAllDayDate(event.startAt), ...(operation === 'patch' ? { dateTime: null, timeZone: null } : {}) }
+    : { ...(operation === 'patch' ? { date: null } : {}), dateTime: formatGoogleDateTimeInBogota(event.startAt), timeZone: 'America/Bogota' },
   end: isAllDayRange(event)
-    ? { date: formatGoogleAllDayDate(event.endAt) }
-    : { dateTime: formatGoogleDateTimeInBogota(event.endAt), timeZone: 'America/Bogota' },
+    ? { date: formatGoogleAllDayDate(event.endAt), ...(operation === 'patch' ? { dateTime: null, timeZone: null } : {}) }
+    : { ...(operation === 'patch' ? { date: null } : {}), dateTime: formatGoogleDateTimeInBogota(event.endAt), timeZone: 'America/Bogota' },
   attendees: event.attendeeEmails.map(email => ({ email })),
-  ...(buildGoogleRecurrence(event) ? { recurrence: buildGoogleRecurrence(event) } : {}),
+  ...(buildGoogleRecurrence(event)
+    ? { recurrence: buildGoogleRecurrence(event) }
+    : operation === 'patch' ? { recurrence: [] } : {}),
   extendedProperties: {
     private: {
       brainOperationalEventId: event.id,
@@ -232,13 +310,62 @@ export const buildGoogleEventPayload = (event) => ({
 
 const toGoogleEventPayload = buildGoogleEventPayload;
 
+export const expandOperationalEventOccurrences = (events = [], start, end) => {
+  const rangeStart = new Date(start);
+  const rangeEnd = new Date(end);
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const expanded = [];
+
+  for (const event of events) {
+    const seriesStart = new Date(event.startAt);
+    const seriesEnd = new Date(event.endAt);
+    if (event.recurrence !== 'WEEKLY') {
+      if (seriesStart <= rangeEnd && seriesEnd >= rangeStart) expanded.push(event);
+      continue;
+    }
+
+    const duration = seriesEnd.getTime() - seriesStart.getTime();
+    const recurrenceEnd = event.recurrenceEnd ? new Date(event.recurrenceEnd) : null;
+    let occurrenceStart = new Date(seriesStart);
+    if (occurrenceStart.getTime() + duration < rangeStart.getTime()) {
+      const elapsedWeeks = Math.max(0, Math.floor((rangeStart.getTime() - occurrenceStart.getTime() - duration) / weekMs));
+      occurrenceStart = new Date(occurrenceStart.getTime() + elapsedWeeks * weekMs);
+      while (occurrenceStart.getTime() + duration < rangeStart.getTime()) {
+        occurrenceStart = new Date(occurrenceStart.getTime() + weekMs);
+      }
+    }
+
+    while (occurrenceStart <= rangeEnd && (!recurrenceEnd || occurrenceStart <= recurrenceEnd)) {
+      expanded.push({
+        ...event,
+        startAt: new Date(occurrenceStart),
+        endAt: new Date(occurrenceStart.getTime() + duration),
+        seriesStartAt: seriesStart,
+        seriesEndAt: seriesEnd,
+        isRecurrenceOccurrence: true,
+        occurrenceKey: `${event.id}:${occurrenceStart.toISOString()}`
+      });
+      occurrenceStart = new Date(occurrenceStart.getTime() + weekMs);
+    }
+  }
+
+  return expanded.sort((left, right) => new Date(left.startAt) - new Date(right.startAt));
+};
+
 export async function getOperationalEvents(start, end) {
   const startDate = new Date(start);
   const endDate = new Date(end);
 
-  return await prisma.operationalEvent.findMany({
+  const events = await prisma.operationalEvent.findMany({
     where: {
       OR: [
+        {
+          AND: [
+            { recurrence: 'WEEKLY' },
+            { startAt: { lte: endDate } },
+            { OR: [{ recurrenceEnd: null }, { recurrenceEnd: { gte: startDate } }] }
+          ]
+        },
         // Event starts within range
         { startAt: { gte: startDate, lte: endDate } },
         // Event ends within range
@@ -254,6 +381,7 @@ export async function getOperationalEvents(start, end) {
     },
     orderBy: { startAt: 'asc' }
   });
+  return expandOperationalEventOccurrences(events, startDate, endDate);
 }
 
 export async function syncOperationalEventToGoogle(event) {
@@ -263,10 +391,11 @@ export async function syncOperationalEventToGoogle(event) {
 
   const calendar = google.calendar({ version: 'v3', auth: auth.oauth2Client });
   const calendarId = targetLink?.calendarId || auth.connection.calendarId || 'primary';
-  const payload = toGoogleEventPayload(event);
+  const linkedGoogleEventId = targetLink?.googleEventId || event.googleEventId;
+  const payload = toGoogleEventPayload(event, { operation: linkedGoogleEventId ? 'patch' : 'insert' });
+  let googleWriteCompleted = false;
 
   try {
-    const linkedGoogleEventId = targetLink?.googleEventId || event.googleEventId;
     const response = linkedGoogleEventId
       ? await calendar.events.patch({
           calendarId,
@@ -274,7 +403,7 @@ export async function syncOperationalEventToGoogle(event) {
           conferenceDataVersion: 1,
           sendUpdates: 'all',
           requestBody: payload
-        })
+        }, getGooglePatchOptions(targetLink, event))
       : await calendar.events.insert({
           calendarId,
           conferenceDataVersion: 1,
@@ -283,6 +412,7 @@ export async function syncOperationalEventToGoogle(event) {
         });
 
     const googleEvent = response.data;
+    googleWriteCompleted = true;
     await prisma.googleCalendarEventLink.upsert({
       where: {
         connectionId_calendarId_googleEventId: {
@@ -330,7 +460,24 @@ export async function syncOperationalEventToGoogle(event) {
   } catch (error) {
     const details = getGoogleErrorDetails(error);
     console.error(`[OperationalEventService] Google Calendar sync failed: ${details}`);
-    if (isGoogleOAuthReauthError(error)) {
+    if (googleWriteCompleted) {
+      await prisma.operationalEvent.update({
+        where: { id: event.id },
+        data: {
+          googleSyncStatus: 'ERROR',
+          googleSyncError: `Google actualizado; metadatos pendientes: ${details}`.slice(0, 2000),
+          googleLastSyncedAt: new Date()
+        }
+      }).catch(metadataStatusError => {
+        console.error('[OperationalEventService] Failed to persist pending metadata status:', metadataStatusError?.response?.data || metadataStatusError);
+      });
+      const metadataError = new Error('Google Calendar se actualizó, pero quedó pendiente confirmar los metadatos locales.', { cause: error });
+      metadataError.code = 'GOOGLE_SYNC_METADATA_PENDING';
+      metadataError.preserveLocal = true;
+      throw metadataError;
+    }
+    const errorCode = classifyGoogleCalendarSyncError(error);
+    if (errorCode === 'GOOGLE_CALENDAR_REAUTH_REQUIRED') {
       await markGoogleCalendarReauthRequired(auth.connection);
     }
     await prisma.operationalEvent.update({
@@ -342,17 +489,34 @@ export async function syncOperationalEventToGoogle(event) {
       }
     });
     const syncError = new Error(`Google Calendar sync failed: ${details}`, { cause: error });
-    if (isGoogleOAuthReauthError(error)) {
-      syncError.code = 'GOOGLE_CALENDAR_REAUTH_REQUIRED';
+    if (errorCode) syncError.code = errorCode;
+    if (errorCode === 'GOOGLE_CALENDAR_REAUTH_REQUIRED') {
       syncError.reconnectRequired = true;
-    } else if (/invalid (?:start|end) time|timeRangeEmpty/i.test(details)) {
-      syncError.code = 'INVALID_GOOGLE_EVENT_TIME';
     }
     throw syncError;
   }
 }
 
-export async function syncGoogleCalendarToOperationalEvents({ start, end, connectionId } = {}) {
+const googleCalendarSyncLocks = new Map();
+
+export const withGoogleCalendarSyncLock = (key, task) => {
+  const lockKey = key || 'default';
+  const existing = googleCalendarSyncLocks.get(lockKey);
+  if (existing) return existing;
+  let pending;
+  try {
+    pending = Promise.resolve(task());
+  } catch (error) {
+    pending = Promise.reject(error);
+  }
+  googleCalendarSyncLocks.set(lockKey, pending);
+  pending.finally(() => {
+    if (googleCalendarSyncLocks.get(lockKey) === pending) googleCalendarSyncLocks.delete(lockKey);
+  }).catch(() => {});
+  return pending;
+};
+
+async function syncGoogleCalendarToOperationalEventsUnlocked({ start, end, connectionId } = {}) {
   const auth = await getAuthorizedGoogleOAuthClient(connectionId || null);
   if (!auth) {
     return { imported: 0, updated: 0, skipped: 0, connected: false };
@@ -373,8 +537,7 @@ export async function syncGoogleCalendarToOperationalEvents({ start, end, connec
     calendarId,
     timeMin: timeMin.toISOString(),
     timeMax: timeMax.toISOString(),
-    singleEvents: true,
-    orderBy: 'startTime',
+    singleEvents: false,
     showDeleted: true,
     maxResults: 250
   };
@@ -394,6 +557,7 @@ export async function syncGoogleCalendarToOperationalEvents({ start, end, connec
   let imported = 0;
   let updated = 0;
   let skipped = 0;
+  const teamMembers = await prisma.teamMember.findMany({ select: { id: true, email: true } });
 
   for (const googleEvent of pageResult.items) {
     if (googleEvent.status === 'cancelled') {
@@ -410,7 +574,7 @@ export async function syncGoogleCalendarToOperationalEvents({ start, end, connec
     }
 
     const brainEventId = googleEvent.extendedProperties?.private?.brainOperationalEventId;
-    const googleData = toOperationalEventDataFromGoogle(googleEvent, calendarId, auth.connection.id);
+    const googleData = toOperationalEventDataFromGoogle(googleEvent, calendarId, auth.connection.id, teamMembers);
     const existingLink = await prisma.googleCalendarEventLink.findFirst({
       where: { connectionId: auth.connection.id, calendarId, googleEventId: googleEvent.id },
       include: { operationalEvent: true }
@@ -462,6 +626,10 @@ export async function syncGoogleCalendarToOperationalEvents({ start, end, connec
   });
 
   return { imported, updated, skipped, connected: true };
+}
+
+export function syncGoogleCalendarToOperationalEvents(options = {}) {
+  return withGoogleCalendarSyncLock(options.connectionId || 'default', () => syncGoogleCalendarToOperationalEventsUnlocked(options));
 }
 
 export async function syncAllGoogleCalendars(options = {}) {
@@ -583,17 +751,28 @@ export async function renewGoogleCalendarWatchChannels() {
   return renewed;
 }
 
-export async function handleGoogleCalendarWebhook(headers = {}) {
+export async function handleGoogleCalendarWebhook(headers = {}, {
+  findChannel = query => prisma.googleCalendarSyncChannel.findFirst(query),
+  scheduleSync = callback => queueMicrotask(callback),
+  syncCalendar = syncGoogleCalendarToOperationalEvents,
+  logger = console
+} = {}) {
   const channelId = headers['x-goog-channel-id'];
   const token = headers['x-goog-channel-token'];
   const resourceState = headers['x-goog-resource-state'];
   if (!channelId || !token) return { accepted: false };
-  const channel = await prisma.googleCalendarSyncChannel.findFirst({
+  const channel = await findChannel({
     where: { channelId, token, expiresAt: { gt: new Date() } }
   });
   if (!channel) return { accepted: false };
   if (resourceState !== 'sync') {
-    await syncGoogleCalendarToOperationalEvents({ connectionId: channel.connectionId });
+    scheduleSync(async () => {
+      try {
+        await syncCalendar({ connectionId: channel.connectionId });
+      } catch (error) {
+        logger.error('[OperationalEventService] Google webhook sync failed:', error.response?.data || error.message);
+      }
+    });
   }
   return { accepted: true };
 }
@@ -630,6 +809,7 @@ export const createSyncedOperationalEvent = async ({
   try {
     return await syncToGoogle(event);
   } catch (error) {
+    if (error.preserveLocal) throw error;
     try {
       await deleteLocalEvent(event.id);
     } catch (cleanupError) {
@@ -648,6 +828,7 @@ export const updateSyncedOperationalEvent = async ({
   try {
     return await syncToGoogle(event);
   } catch (error) {
+    if (error.preserveLocal) throw error;
     try {
       await restoreLocalEvent(event.id);
     } catch (restoreError) {
@@ -658,15 +839,16 @@ export const updateSyncedOperationalEvent = async ({
 };
 
 export async function createOperationalEvent(data, createdById = null) {
-  const range = normalizeOperationalEventRange(data);
+  const validated = validateOperationalEventInput(data);
+  const range = { startAt: validated.startAt, endAt: validated.endAt };
   const externalEmails = (data.attendeeEmails || []).filter(email => email?.toLowerCase() !== FIREFLIES_BOT_EMAIL);
   if (data.captureWithFireflies) externalEmails.push(FIREFLIES_BOT_EMAIL);
   const attendeeEmails = await normalizeAttendeeEmails(data.memberIds || [], externalEmails);
   return await createSyncedOperationalEvent({
     createLocalEvent: () => prisma.operationalEvent.create({
       data: {
-        title: data.title,
-        type: data.type,
+        title: validated.title,
+        type: validated.type,
         description: data.description,
         startAt: range.startAt,
         endAt: range.endAt,
@@ -675,8 +857,9 @@ export async function createOperationalEvent(data, createdById = null) {
         memberIds: data.memberIds || [],
         attendeeEmails,
         attendeeResponses: {},
-        recurrence: data.recurrence || 'NONE',
+        recurrence: validated.recurrence,
         recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
+        googleRecurrence: validated.recurrence === 'GOOGLE' ? (data.googleRecurrence || []) : [],
         meetingLink: data.meetingLink || null,
         googleMeetSpaceName: data.googleMeetSpaceName || null,
         source: data.source || 'BRAIN',
@@ -693,7 +876,9 @@ export async function createOperationalEvent(data, createdById = null) {
 
 export async function updateOperationalEvent(id, data) {
   const current = await prisma.operationalEvent.findUnique({ where: { id } });
-  const range = normalizeOperationalEventRange(data, current || {});
+  if (!current) throw createOperationalEventError('EVENT_NOT_FOUND', 'El evento ya no existe.');
+  const validated = validateOperationalEventInput(data, current);
+  const range = { startAt: validated.startAt, endAt: validated.endAt };
   const memberIds = data.memberIds ?? current?.memberIds ?? [];
   const captureWithFireflies = data.captureWithFireflies ?? current?.captureWithFireflies ?? false;
   const externalEmails = (data.attendeeEmails ?? current?.attendeeEmails ?? []).filter(email => email?.toLowerCase() !== FIREFLIES_BOT_EMAIL);
@@ -704,8 +889,8 @@ export async function updateOperationalEvent(id, data) {
       const event = await prisma.operationalEvent.update({
         where: { id },
         data: {
-          title: data.title,
-          type: data.type,
+          title: data.title === undefined ? undefined : validated.title,
+          type: data.type === undefined ? undefined : validated.type,
           description: data.description,
           startAt: data.startAt === undefined ? undefined : range.startAt,
           endAt: data.endAt === undefined ? undefined : range.endAt,
@@ -713,8 +898,13 @@ export async function updateOperationalEvent(id, data) {
           captureWithFireflies,
           memberIds: data.memberIds,
           attendeeEmails,
-          recurrence: data.recurrence,
-          recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
+          recurrence: data.recurrence === undefined ? undefined : validated.recurrence,
+          recurrenceEnd: data.recurrenceEnd === undefined
+            ? undefined
+            : validated.recurrence === 'WEEKLY' && data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
+          googleRecurrence: data.recurrence === undefined
+            ? undefined
+            : validated.recurrence === 'GOOGLE' ? (data.googleRecurrence || current.googleRecurrence || []) : [],
           meetingLink: data.meetingLink,
           googleMeetSpaceName: data.googleMeetSpaceName,
           googleMeetAccessType: data.googleMeetAccessType
@@ -738,12 +928,25 @@ export async function updateOperationalEvent(id, data) {
         attendeeResponses: current.attendeeResponses,
         recurrence: current.recurrence,
         recurrenceEnd: current.recurrenceEnd,
+        googleRecurrence: current.googleRecurrence,
         meetingLink: current.meetingLink,
         googleMeetSpaceName: current.googleMeetSpaceName,
         googleMeetAccessType: current.googleMeetAccessType
       }
     })
   });
+}
+
+export async function retryOperationalEventGoogleSync(id, connectionId = null, {
+  findEvent = eventId => prisma.operationalEvent.findUnique({ where: { id: eventId }, include: { googleLinks: true } }),
+  syncToGoogle = syncOperationalEventToGoogle
+} = {}) {
+  const event = await findEvent(id);
+  if (!event) throw createOperationalEventError('EVENT_NOT_FOUND', 'El evento ya no existe.');
+  const candidate = connectionId && !event.googleLinks?.length
+    ? { ...event, googleConnectionId: connectionId }
+    : event;
+  return await syncToGoogle(candidate);
 }
 
 export async function deleteOperationalEvent(id) {

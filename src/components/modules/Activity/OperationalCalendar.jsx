@@ -37,11 +37,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import {
   addExternalEmailTags,
   explainGoogleSyncError,
+  fromBogotaDatePickerValue,
   getCalendarPopoverPosition,
   getDayEventDisplay,
+  getExternalAttendeeEmails,
   getGoogleConnectionHealth,
   normalizeCalendarDescription,
-  summarizeGoogleSyncResults
+  summarizeGoogleSyncResults,
+  toBogotaDatePickerValue
 } from './calendarPresentation';
 
 const EVENT_TYPES = [
@@ -149,7 +152,7 @@ const OperationalCalendar = () => {
     }
   });
 
-  const { data: events = [], isLoading } = useQuery({
+  const { data: events = [], isLoading, isError: eventsLoadFailed, error: eventsLoadError, refetch: refetchEvents } = useQuery({
     queryKey: ['operational-events', monthRange.start.toISOString(), monthRange.end.toISOString()],
     queryFn: async () => {
       const res = await fetch(`${getApiBaseUrl()}/api/activity/events?start=${monthRange.start.toISOString()}&end=${monthRange.end.toISOString()}`, {
@@ -178,9 +181,9 @@ const OperationalCalendar = () => {
   const eventsByDay = useMemo(() => {
     const grouped = new Map();
     for (const event of events) {
-      const eventStart = new Date(event.startAt);
-      const exclusiveEnd = new Date(event.endAt);
-      const finalDay = event.isAllDay ? addDays(exclusiveEnd, -1) : exclusiveEnd;
+      const eventStart = toBogotaDatePickerValue(event.startAt);
+      const exclusiveEnd = toBogotaDatePickerValue(event.endAt);
+      const finalDay = event.isAllDay ? addDays(exclusiveEnd, -1) : new Date(exclusiveEnd);
       let segmentLabelAssigned = false;
       let cursor = new Date(eventStart);
       cursor.setHours(0, 0, 0, 0);
@@ -191,6 +194,8 @@ const OperationalCalendar = () => {
         const isDisplayedWorkday = cursor.getDay() !== 0 && cursor.getDay() !== 6;
         const segment = {
           ...event,
+          displayStartAt: eventStart,
+          displayEndAt: exclusiveEnd,
           segmentStartsHere: isSameDay(cursor, eventStart),
           segmentEndsHere: isSameDay(cursor, finalDay),
           segmentShowsLabel: isDisplayedWorkday && !segmentLabelAssigned
@@ -201,7 +206,7 @@ const OperationalCalendar = () => {
       }
     }
     for (const [key, dayEvents] of grouped.entries()) {
-      grouped.set(key, dayEvents.sort((a, b) => Number(b.isAllDay) - Number(a.isAllDay) || new Date(a.startAt) - new Date(b.startAt)));
+      grouped.set(key, dayEvents.sort((a, b) => Number(b.isAllDay) - Number(a.isAllDay) || new Date(a.displayStartAt || a.startAt) - new Date(b.displayStartAt || b.startAt)));
     }
     return grouped;
   }, [events]);
@@ -273,6 +278,39 @@ const OperationalCalendar = () => {
     onError: error => {
       console.error('Google Calendar reconciliation error:', error);
       toast.error(error.message || 'No se pudieron reconciliar los eventos');
+    }
+  });
+
+  const linkedRetryMutation = useMutation({
+    mutationFn: async eventId => {
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/errors/${eventId}/retry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ connectionId: googleErrorConnection?.id || null })
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.details || error.error || 'No se pudo reintentar la sincronización');
+      }
+      return res.json();
+    },
+    onSuccess: (_result, eventId) => {
+      queryClient.invalidateQueries({ queryKey: ['operational-events'] });
+      queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
+      setGoogleRetryError('');
+      setGoogleErrorConnection(current => {
+        if (!current) return null;
+        const syncErrors = (current.syncErrors || []).filter(event => event.id !== eventId);
+        return syncErrors.length
+          ? { ...current, syncErrors, errorCount: Math.max(0, (current.errorCount || 0) - 1) }
+          : null;
+      });
+      toast.success('Evento sincronizado con Google Calendar');
+    },
+    onError: error => {
+      console.error('Google Calendar linked event retry failed:', error);
+      setGoogleRetryError(error.message || 'Google no aceptó la sincronización.');
+      toast.error('El evento sigue sin sincronizar. Revisa la causa indicada.');
     }
   });
 
@@ -440,17 +478,21 @@ const OperationalCalendar = () => {
     setFormData({
       title: event.title,
       type: event.type,
-      startAt: new Date(event.startAt),
-      endAt: new Date(event.endAt),
+      startAt: event.seriesStartAt
+        ? toBogotaDatePickerValue(event.seriesStartAt)
+        : event.displayStartAt ? new Date(event.displayStartAt) : toBogotaDatePickerValue(event.startAt),
+      endAt: event.seriesEndAt
+        ? toBogotaDatePickerValue(event.seriesEndAt)
+        : event.displayEndAt ? new Date(event.displayEndAt) : toBogotaDatePickerValue(event.endAt),
       isAllDay: Boolean(event.isAllDay),
       captureWithFireflies: Boolean(event.captureWithFireflies || event.attendeeEmails?.some(email => email.toLowerCase() === 'fred@fireflies.ai')),
       memberIds: event.memberIds || [],
       recurrence: event.recurrence || 'NONE',
-      recurrenceEnd: event.recurrenceEnd ? new Date(event.recurrenceEnd) : null,
+      recurrenceEnd: event.recurrenceEnd ? toBogotaDatePickerValue(event.recurrenceEnd) : null,
       meetingLink: event.meetingLink || '',
       googleMeetSpaceName: event.googleMeetSpaceName || '',
       description: normalizeCalendarDescription(event.description || ''),
-      attendeeEmails: (event.attendeeEmails || []).filter(email => email.toLowerCase() !== 'fred@fireflies.ai'),
+      attendeeEmails: getExternalAttendeeEmails(event.attendeeEmails || [], team),
       googleConnectionId: event.googleConnectionId || googleConnections[0]?.id || ''
     });
     setExternalEmailDraft('');
@@ -480,7 +522,14 @@ const OperationalCalendar = () => {
       setExternalEmailError(`Correo no válido: ${result.invalid.join(', ')}`);
       return;
     }
-    eventMutation.mutate({ ...formData, attendeeEmails: result.emails, captureWithFireflies: formData.captureWithFireflies });
+    eventMutation.mutate({
+      ...formData,
+      startAt: fromBogotaDatePickerValue(formData.startAt),
+      endAt: fromBogotaDatePickerValue(formData.endAt),
+      recurrenceEnd: formData.recurrenceEnd ? fromBogotaDatePickerValue(formData.recurrenceEnd) : null,
+      attendeeEmails: result.emails,
+      captureWithFireflies: formData.captureWithFireflies
+    });
   };
 
   const generateMeetLink = async () => {
@@ -496,8 +545,8 @@ const OperationalCalendar = () => {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           title: formData.title,
-          startAt: formData.startAt,
-          endAt: formData.endAt,
+          startAt: fromBogotaDatePickerValue(formData.startAt),
+          endAt: fromBogotaDatePickerValue(formData.endAt),
           description: formData.description,
           googleConnectionId: formData.googleConnectionId
         })
@@ -633,13 +682,13 @@ const OperationalCalendar = () => {
             </button>
           )}
           <div className="inline-flex overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-white/5">
-            <button type="button" onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2.5 hover:bg-zinc-50 dark:hover:bg-white/10">
+            <button type="button" onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2.5 hover:bg-zinc-50 dark:hover:bg-white/10" aria-label="Mes anterior" title="Mes anterior">
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button type="button" onClick={() => setCurrentDate(new Date())} className="border-x border-zinc-200 px-4 text-xs font-bold dark:border-white/10">
               Hoy
             </button>
-            <button type="button" onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2.5 hover:bg-zinc-50 dark:hover:bg-white/10">
+            <button type="button" onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2.5 hover:bg-zinc-50 dark:hover:bg-white/10" aria-label="Mes siguiente" title="Mes siguiente">
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
@@ -658,6 +707,16 @@ const OperationalCalendar = () => {
         </div>
       </div>
 
+      {eventsLoadFailed && (
+        <div data-calendar-load-error="status" role="alert" className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-destructive/35 bg-white p-4 text-sm dark:bg-zinc-900 sm:flex-row sm:items-center">
+          <div>
+            <p className="font-bold text-destructive">No pudimos cargar el calendario</p>
+            <p className="mt-1 text-zinc-600 dark:text-zinc-300">{eventsLoadError?.message || 'Comprueba la conexión e inténtalo de nuevo.'}</p>
+          </div>
+          <button type="button" onClick={() => refetchEvents()} className="brain-danger-button min-h-10 rounded-xl px-4 text-xs font-bold">Reintentar</button>
+        </div>
+      )}
+
       <div data-operational-calendar="traditional-month-grid" className="hidden overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900 md:block">
         <div className="grid grid-cols-5 border-b border-zinc-200 bg-zinc-50/80 dark:border-white/10 dark:bg-white/5">
           {['Lun', 'Mar', 'Mié', 'Jue', 'Vie'].map(day => (
@@ -667,7 +726,7 @@ const OperationalCalendar = () => {
           ))}
         </div>
 
-        {isLoading ? (
+        {eventsLoadFailed ? null : isLoading ? (
           <div className="flex h-96 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
           </div>
@@ -709,7 +768,7 @@ const OperationalCalendar = () => {
                   <div className="space-y-1.5">
                     {visibleEvents.map(event => (
                       <button
-                        key={event.id}
+                        key={event.occurrenceKey || event.id}
                         type="button"
                         onMouseEnter={(e) => handleEventMouseEnter(e, event)}
                         onMouseLeave={handleEventMouseLeave}
@@ -731,7 +790,7 @@ const OperationalCalendar = () => {
                           <>
                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
                             <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                            {!event.isAllDay && <span className="shrink-0 font-medium opacity-80">{format(new Date(event.startAt), 'HH:mm')}</span>}
+                            {!event.isAllDay && <span className="shrink-0 font-medium opacity-80">{format(new Date(event.displayStartAt || event.startAt), 'HH:mm')}</span>}
                           </>
                         )}
                       </button>
@@ -753,7 +812,7 @@ const OperationalCalendar = () => {
         )}
       </div>
 
-      <div className="space-y-3 md:hidden" aria-label="Agenda mensual">
+      <div className={cn('space-y-3 md:hidden', eventsLoadFailed && 'hidden')} aria-label="Agenda mensual">
         {monthCalendarDays.filter(day => isSameMonth(day, currentDate)).map(day => {
           const dayKey = format(day, 'yyyy-MM-dd');
           const dayEvents = eventsByDay.get(dayKey) || [];
@@ -766,10 +825,10 @@ const OperationalCalendar = () => {
               </div>
               <div className="space-y-2">
                 {dayEvents.map(event => (
-                  <button key={event.id} type="button" onClick={() => handleEdit(event)} className={cn('flex min-h-11 w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-bold', getEventTypeStyles(event.type))}>
+                  <button key={event.occurrenceKey || event.id} type="button" onClick={() => handleEdit(event)} className={cn('flex min-h-11 w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-bold', getEventTypeStyles(event.type))}>
                     <span className="h-2 w-2 shrink-0 rounded-full bg-current" />
                     <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                    <span className="shrink-0 font-medium opacity-80">{event.isAllDay ? 'Todo el día' : format(new Date(event.startAt), 'HH:mm')}</span>
+                    <span className="shrink-0 font-medium opacity-80">{event.isAllDay ? 'Todo el día' : format(new Date(event.displayStartAt || event.startAt), 'HH:mm')}</span>
                   </button>
                 ))}
               </div>
@@ -791,9 +850,9 @@ const OperationalCalendar = () => {
             <div className="min-h-0 overscroll-contain overflow-y-auto p-6" data-calendar-scroll-container="agenda">
             <div className="grid gap-2 sm:grid-cols-2">
               {(eventsByDay.get(format(selectedDayAgenda, 'yyyy-MM-dd')) || []).map(event => (
-                <button key={event.id} type="button" onClick={() => { setSelectedDayAgenda(null); handleEdit(event); }} className={cn('flex min-h-12 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-xs font-bold', getEventTypeStyles(event.type))}>
+                <button key={event.occurrenceKey || event.id} type="button" onClick={() => { setSelectedDayAgenda(null); handleEdit(event); }} className={cn('flex min-h-12 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-xs font-bold', getEventTypeStyles(event.type))}>
                   <span className="h-2 w-2 shrink-0 rounded-full bg-current" />
-                  <span className="min-w-0 flex-1"><span className="block truncate">{event.title}</span><span className="mt-1 block font-medium opacity-75">{event.isAllDay ? 'Todo el día' : `${format(new Date(event.startAt), 'HH:mm')} – ${format(new Date(event.endAt), 'HH:mm')}`}</span></span>
+                  <span className="min-w-0 flex-1"><span className="block truncate">{event.title}</span><span className="mt-1 block font-medium opacity-75">{event.isAllDay ? 'Todo el día' : `${format(new Date(event.displayStartAt || event.startAt), 'HH:mm')} – ${format(new Date(event.displayEndAt || event.endAt), 'HH:mm')}`}</span></span>
                 </button>
               ))}
             </div>
@@ -845,7 +904,7 @@ const OperationalCalendar = () => {
           </DialogHeader>
           <div className="max-h-[50vh] space-y-2 overflow-y-auto overscroll-contain">
             {googleRetryError && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
+              <div className="rounded-xl border border-destructive/35 bg-white p-3 text-xs text-destructive dark:bg-zinc-900">
                 <p className="font-bold">No se pudo completar la sincronización</p>
                 <p className="mt-1 leading-relaxed">{explainGoogleSyncError(googleRetryError)}</p>
                 <details className="mt-2">
@@ -855,11 +914,11 @@ const OperationalCalendar = () => {
               </div>
             )}
             {(googleErrorConnection?.syncErrors || []).map(event => (
-              <div key={event.id} className="rounded-xl border border-red-200 bg-red-50/60 p-3 dark:border-red-500/20 dark:bg-red-500/10">
+              <div key={event.id} className="rounded-xl border border-destructive/35 bg-white p-3 dark:bg-zinc-900">
                 <p className="font-semibold text-zinc-950 dark:text-white">{event.title}</p>
-                <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">{format(new Date(event.startAt), 'd MMM yyyy, HH:mm', { locale: es })}</p>
+                <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">{format(toBogotaDatePickerValue(event.startAt), 'd MMM yyyy, HH:mm', { locale: es })}</p>
                 {event.googleSyncError ? (
-                  <div className="mt-2 text-xs text-red-700 dark:text-red-200">
+                  <div className="mt-2 text-xs text-destructive">
                     <p className="leading-relaxed">{explainGoogleSyncError(event.googleSyncError)}</p>
                     <details className="mt-2">
                       <summary className="cursor-pointer font-semibold">Ver detalles técnicos</summary>
@@ -870,8 +929,8 @@ const OperationalCalendar = () => {
                   <p className="mt-2 text-xs text-destructive">Aún no hay diagnóstico guardado. Pulsa Reintentar para obtener la causa actual de Google.</p>
                 )}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => reconciliationMutation.mutate({ eventIds: [event.id], connectionId: googleErrorConnection.id })} disabled={reconciliationMutation.isPending} className="brain-danger-button inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-xs font-bold disabled:opacity-60">
-                    {reconciliationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Reintentar
+                  <button type="button" onClick={() => linkedRetryMutation.mutate(event.id)} disabled={linkedRetryMutation.isPending} className="brain-danger-button inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-xs font-bold disabled:opacity-60">
+                    {linkedRetryMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Reintentar
                   </button>
                   <button type="button" onClick={() => dismissGoogleErrorMutation.mutate(event.id)} disabled={dismissGoogleErrorMutation.isPending} className="brain-danger-button-outline inline-flex min-h-10 items-center gap-2 rounded-xl border bg-white px-3 text-xs font-bold disabled:opacity-60 dark:bg-white/5">
                     {dismissGoogleErrorMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} Descartar
@@ -907,7 +966,7 @@ const OperationalCalendar = () => {
                     <input type="checkbox" className="mt-1 h-4 w-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-600" checked={selectedReconciliationIds.includes(event.id)} onChange={input => setSelectedReconciliationIds(input.target.checked ? [...selectedReconciliationIds, event.id] : selectedReconciliationIds.filter(id => id !== event.id))} />
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-bold text-zinc-900 dark:text-white">{event.title}</span>
-                      <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{format(new Date(event.startAt), 'd MMM yyyy, HH:mm', { locale: es })}{event.attendeeEmails?.length ? ` · ${event.attendeeEmails.length} invitado(s)` : ''}</span>
+                      <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{format(toBogotaDatePickerValue(event.startAt), 'd MMM yyyy, HH:mm', { locale: es })}{event.attendeeEmails?.length ? ` · ${event.attendeeEmails.length} invitado(s)` : ''}</span>
                     </span>
                   </label>
                   <button type="button" onClick={() => dismissReconciliationMutation.mutate(event.id)} disabled={dismissReconciliationMutation.isPending} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-bold text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-60 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white" aria-label={`Descartar ${event.title} de conciliación`} title="Descartar de conciliación">
@@ -935,8 +994,9 @@ const OperationalCalendar = () => {
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div data-calendar-scroll-container="event-form" className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto overscroll-contain px-4 pb-6 pt-5 sm:px-6 sm:pt-6 md:grid-cols-2">
               <div className="space-y-1.5 md:col-span-2">
-                <label className="text-xs font-bold text-zinc-500">Título del evento</label>
+                <label htmlFor="operational-event-title" className="text-xs font-bold text-zinc-500">Título del evento</label>
                 <input
+                  id="operational-event-title"
                   type="text"
                   required
                   placeholder="Ej.: Reunión de tráfico"
@@ -948,8 +1008,9 @@ const OperationalCalendar = () => {
 
               <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-2">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500">Tipo</label>
+                  <label htmlFor="operational-event-type" className="text-xs font-bold text-zinc-500">Tipo</label>
                   <select
+                    id="operational-event-type"
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5"
                     value={formData.type}
                     onChange={e => setFormData({ ...formData, type: e.target.value })}
@@ -960,22 +1021,26 @@ const OperationalCalendar = () => {
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500">Recurrencia</label>
+                  <label htmlFor="operational-event-recurrence" className="text-xs font-bold text-zinc-500">Recurrencia</label>
                   <select
+                    id="operational-event-recurrence"
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5"
                     value={formData.recurrence}
                     onChange={e => setFormData({ ...formData, recurrence: e.target.value })}
                   >
                     <option value="NONE">Única vez</option>
                     <option value="WEEKLY">Semanal</option>
+                    {formData.recurrence === 'GOOGLE' && <option value="GOOGLE">Personalizada en Google</option>}
                   </select>
+                  {formData.recurrence === 'GOOGLE' && <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Esta serie conserva su regla avanzada de Google Calendar.</p>}
                 </div>
               </div>
 
               {formData.recurrence === 'WEEKLY' && (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500">Hasta cuándo</label>
+                  <label htmlFor="operational-event-recurrence-end" className="text-xs font-bold text-zinc-500">Hasta cuándo</label>
                   <DatePicker
+                    id="operational-event-recurrence-end"
                     {...brainDatePickerProps}
                     selected={formData.recurrenceEnd}
                     onChange={date => setFormData({ ...formData, recurrenceEnd: date })}
@@ -1011,8 +1076,9 @@ const OperationalCalendar = () => {
 
               <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-2">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500">{formData.isAllDay ? 'Desde' : 'Inicio'}</label>
+                  <label htmlFor="operational-event-start" className="text-xs font-bold text-zinc-500">{formData.isAllDay ? 'Desde' : 'Inicio'}</label>
                   <DatePicker
+                    id="operational-event-start"
                     {...brainDatePickerProps}
                     selected={formData.startAt}
                     onChange={date => {
@@ -1036,8 +1102,9 @@ const OperationalCalendar = () => {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500">{formData.isAllDay ? 'Hasta' : 'Fin'}</label>
+                  <label htmlFor="operational-event-end" className="text-xs font-bold text-zinc-500">{formData.isAllDay ? 'Hasta' : 'Fin'}</label>
                   <DatePicker
+                    id="operational-event-end"
                     {...brainDatePickerProps}
                     selected={formData.isAllDay ? addDays(formData.endAt, -1) : formData.endAt}
                     onChange={date => {
@@ -1062,8 +1129,9 @@ const OperationalCalendar = () => {
 
               {googleConnections.length > 0 && (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Cuenta de Google</label>
+                  <label htmlFor="operational-event-google-account" className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Cuenta de Google</label>
                   <select
+                    id="operational-event-google-account"
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5 dark:text-zinc-100"
                     value={formData.googleConnectionId}
                     onChange={event => setFormData({ ...formData, googleConnectionId: event.target.value })}
@@ -1076,7 +1144,7 @@ const OperationalCalendar = () => {
               )}
 
               <div className="space-y-1.5" data-operational-external-guests="tags">
-                <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Invitados externos</label>
+                <label htmlFor="operational-event-external-guest" className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Invitados externos</label>
                 <div className="flex h-11 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-2 transition [scrollbar-width:none] focus-within:ring-2 focus-within:ring-primary/50 [&::-webkit-scrollbar]:hidden dark:border-zinc-800 dark:bg-zinc-950">
                   {formData.attendeeEmails.map(email => (
                     <span key={email} className="inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-lg bg-violet-100 px-2 py-1 text-xs font-medium text-violet-700 dark:bg-violet-500/15 dark:text-violet-200">
@@ -1085,6 +1153,7 @@ const OperationalCalendar = () => {
                     </span>
                   ))}
                   <input
+                    id="operational-event-external-guest"
                     type="email"
                     inputMode="email"
                     placeholder={formData.attendeeEmails.length ? 'Añadir otro correo' : 'cliente@empresa.com'}
@@ -1122,7 +1191,7 @@ const OperationalCalendar = () => {
                     <input type="checkbox" checked={formData.captureWithFireflies} onChange={event => setFormData({ ...formData, captureWithFireflies: event.target.checked })} className="h-4 w-4 shrink-0 rounded border-zinc-300 text-violet-600 focus:ring-violet-600" />
                   </label>
                   <div className="flex items-center justify-between gap-3">
-                    <label className="text-xs font-bold text-indigo-600 dark:text-indigo-300">Google Meet</label>
+                    <label htmlFor="operational-event-meet-link" className="text-xs font-bold text-indigo-600 dark:text-indigo-300">Google Meet</label>
                     <button
                       type="button"
                       onClick={generateMeetLink}
@@ -1136,6 +1205,7 @@ const OperationalCalendar = () => {
                   <div className="relative">
                     <Video className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
                     <input
+                      id="operational-event-meet-link"
                       type="url"
                       placeholder="https://meet.google.com/..."
                       className="w-full rounded-xl border border-indigo-200 bg-white py-2 pl-11 pr-4 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-600/20 dark:border-indigo-500/20 dark:bg-zinc-900"
@@ -1147,8 +1217,9 @@ const OperationalCalendar = () => {
               )}
 
               <div className="space-y-1.5 md:col-span-2">
-                <label className="text-xs font-bold text-zinc-500">Descripción</label>
+                <label htmlFor="operational-event-description" className="text-xs font-bold text-zinc-500">Descripción</label>
                 <textarea
+                  id="operational-event-description"
                   rows={3}
                   placeholder="Contexto adicional para el equipo..."
                   className="w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:ring-2 focus:ring-primary/50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-600"
