@@ -3,6 +3,7 @@ import { createTask } from './nativeTaskService.js';
 import { uploadToS3, deleteFromS3 } from './s3Service.js';
 import { randomBytes } from 'node:crypto';
 import { buildLinkedTaskUpdates } from '../lib/contentTaskReciprocity.js';
+import { markContentPlanReviewPending } from './briaContentPlanReviewState.js';
 
 let strategicObjectivesColumnExists = null;
 let contentItemFinalAssetColumnsExist = null;
@@ -18,7 +19,11 @@ const contentPlanBaseSelect = {
   deletedAt: true,
   ownerId: true,
   internalNotes: true,
-  shareToken: true
+  shareToken: true,
+  briaReviewState: true,
+  briaReviewRequestedAt: true,
+  briaReviewStartedAt: true,
+  briaReviewError: true
 };
 
 const hasStrategicObjectivesColumn = async () => {
@@ -283,6 +288,10 @@ export const createContentPlan = async (data) => {
         data: {
           deletedAt: null,
           status: status || 'PLANIFICACION',
+          briaReviewState: 'PENDING',
+          briaReviewRequestedAt: new Date(),
+          briaReviewStartedAt: null,
+          briaReviewError: null,
           ...(hasStrategicColumn ? { strategicObjectives: strategicObjectives ?? existingPlan.strategicObjectives } : {})
         },
         select: await getContentPlanSelect({ client: true })
@@ -323,9 +332,16 @@ export const createContentPlan = async (data) => {
 };
 
 export const updateContentPlan = async (id, data) => {
+  const safeData = await filterContentPlanData(data);
   return await prisma.contentPlan.update({
     where: { id },
-    data: await filterContentPlanData(data),
+    data: {
+      ...safeData,
+      briaReviewState: 'PENDING',
+      briaReviewRequestedAt: new Date(),
+      briaReviewStartedAt: null,
+      briaReviewError: null
+    },
     select: await getContentPlanSelect()
   });
 };
@@ -461,6 +477,8 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
     };
   }
 
+  await markContentPlanReviewPending(updatedItem.planId);
+
   return updatedItem;
 };
 
@@ -489,6 +507,8 @@ export const createContentItem = async (data) => {
     data: await filterContentItemData(data),
     select: await getContentItemSelect()
   });
+
+  await markContentPlanReviewPending(item.planId);
 
   return normalizeContentItem(item);
 };
@@ -553,6 +573,8 @@ export const updateContentItem = async (id, data) => {
       })
     )));
 
+    await markContentPlanReviewPending(item.planId, { db: tx });
+
     return item;
   }, { isolationLevel: 'Serializable' });
 
@@ -582,10 +604,14 @@ export const updateContentItem = async (id, data) => {
 };
 
 export const deleteContentItem = async (id) => {
-  return await prisma.contentItem.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-    select: { id: true }
+  return await prisma.$transaction(async (tx) => {
+    const item = await tx.contentItem.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+      select: { id: true, planId: true }
+    });
+    await markContentPlanReviewPending(item.planId, { db: tx });
+    return item;
   });
 };
 
@@ -759,11 +785,15 @@ export const addClientComment = async (itemId, comment) => {
     ? `${item.comments}\n\n[Cliente - ${now}]: ${comment}`
     : `[Cliente - ${now}]: ${comment}`;
 
-  return await prisma.contentItem.update({
-    where: { id: itemId },
-    data: {
-      comments: updatedComments,
-      status: 'DEVUELTO'
-    }
+  return await prisma.$transaction(async (tx) => {
+    const updated = await tx.contentItem.update({
+      where: { id: itemId },
+      data: {
+        comments: updatedComments,
+        status: 'DEVUELTO'
+      }
+    });
+    await markContentPlanReviewPending(updated.planId, { db: tx });
+    return updated;
   });
 };

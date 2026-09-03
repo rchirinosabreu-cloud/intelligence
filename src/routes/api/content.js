@@ -21,7 +21,12 @@ import {
   deleteContentItemFinalAssetById
 } from '../../services/contentService.js';
 import { getFromS3Stream } from '../../services/s3Service.js';
-import { reviewContentPlanWithBria } from '../../services/briaContentPlanReviewService.js';
+import {
+  getContentPlanReview,
+  reviewContentPlanWithBria,
+  updateContentPlanReviewFinding
+} from '../../services/briaContentPlanReviewService.js';
+import { markContentPlanReviewPending } from '../../services/briaContentPlanReviewState.js';
 
 const router = express.Router();
 const upload = multer({
@@ -69,9 +74,26 @@ router.get('/plans/:id', async (req, res) => {
   }
 });
 
+router.get('/plans/:id/bria-review', async (req, res) => {
+  try {
+    const result = await getContentPlanReview(req.params.id);
+    if (!result) return res.status(404).json({ error: 'La parrilla no existe o ya no está disponible.' });
+    return res.json(result);
+  } catch (error) {
+    console.error('[API] Failed to read Bria content-plan review:', error.response?.data || error.message || error);
+    return res.status(500).json({ error: 'No fue posible cargar la revisión compartida de Bria.' });
+  }
+});
+
 router.post('/plans/:id/bria-review', async (req, res) => {
   try {
-    const result = await reviewContentPlanWithBria({ planId: req.params.id });
+    await markContentPlanReviewPending(req.params.id);
+    const result = await reviewContentPlanWithBria({
+      planId: req.params.id,
+      trigger: 'MANUAL',
+      requestedById: req.user.userId,
+      force: true
+    });
     return res.json(result);
   } catch (error) {
     console.error('[API] Bria content-plan review failed:', error.response?.data || error.message || error);
@@ -85,6 +107,28 @@ router.post('/plans/:id/bria-review', async (req, res) => {
         : 'No fue posible revisar esta parrilla.',
       code: error.code || 'BRIA_CONTENT_PLAN_REVIEW_FAILED'
     });
+  }
+});
+
+router.patch('/plans/:id/bria-review/findings/:findingId', async (req, res) => {
+  try {
+    const { action, reason } = req.body || {};
+    if (!['MARK_CORRECTED', 'DISMISS'].includes(action)) {
+      return res.status(400).json({ error: 'Acción de hallazgo no válida.' });
+    }
+    const finding = await updateContentPlanReviewFinding({
+      planId: req.params.id,
+      findingId: req.params.findingId,
+      action,
+      reason,
+      actorUserId: req.user.userId
+    });
+    if (!finding) return res.status(404).json({ error: 'El hallazgo ya no está disponible.' });
+    if (action === 'MARK_CORRECTED') await markContentPlanReviewPending(req.params.id);
+    return res.json({ finding });
+  } catch (error) {
+    console.error('[API] Failed to update Bria finding:', error.response?.data || error.message || error);
+    return res.status(400).json({ error: error.message || 'No fue posible actualizar el hallazgo.' });
   }
 });
 

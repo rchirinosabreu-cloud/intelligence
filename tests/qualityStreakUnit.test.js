@@ -19,6 +19,8 @@ test('SystemStreak Decoupled Quality Streak Tests', async (t) => {
     const originalCreateTask = prisma.task.create;
     const originalUpdateTask = prisma.task.update;
     const originalFindUniqueTask = prisma.task.findUnique;
+    const originalCreateTaskComment = prisma.taskComment.create;
+    const originalCreateOperationalTrace = prisma.operationalTraceEvent.create;
     const originalTransaction = prisma.$transaction;
 
     prisma.$transaction = async (callback) => callback(prisma);
@@ -31,6 +33,8 @@ test('SystemStreak Decoupled Quality Streak Tests', async (t) => {
         prisma.task.create = originalCreateTask;
         prisma.task.update = originalUpdateTask;
         prisma.task.findUnique = originalFindUniqueTask;
+        prisma.taskComment.create = originalCreateTaskComment;
+        prisma.operationalTraceEvent.create = originalCreateOperationalTrace;
         prisma.$transaction = originalTransaction;
     });
 
@@ -184,8 +188,14 @@ test('SystemStreak Decoupled Quality Streak Tests', async (t) => {
             streakUpdated = data;
             return { id: 'global', ...data };
         };
+        prisma.taskComment.create = async ({ data }) => ({ id: 'return-event', ...data });
+        prisma.operationalTraceEvent.create = async ({ data }) => ({ id: 'trace-event', ...data });
 
-        await updateTask('task-123', { status: 'DEVUELTA' }, 'user-456');
+        await updateTask('task-123', {
+            status: 'DEVUELTA',
+            returnReason: 'MISSING_INPUTS',
+            returnNote: 'Faltan los archivos necesarios para completar la tarea.'
+        }, 'user-456');
 
         assert.ok(updatedTaskPayload);
         assert.strictEqual(updatedTaskPayload.status, 'DEVUELTA');

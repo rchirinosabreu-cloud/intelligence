@@ -10,6 +10,7 @@ import { initGoogleCalendarSyncScheduler } from './src/services/googleCalendarSy
 import { initAutomatedMinutesScheduler } from './src/services/automatedMinutesScheduler.js';
 import { initBriaMemoryScheduler } from './src/services/briaMemoryScheduler.js';
 import { initBriaObserverScheduler } from './src/services/briaObserverScheduler.js';
+import { initBriaContentPlanReviewScheduler } from './src/services/briaContentPlanReviewScheduler.js';
 import { getAIHealth } from './src/services/aiService.js';
 import { loggerMiddleware } from './src/middlewares/logger.js';
 import { operationalAuditMiddleware } from './src/middlewares/operationalAuditMiddleware.js';
@@ -189,6 +190,7 @@ async function bootstrap() {
         initAutomatedMinutesScheduler();
         initBriaMemoryScheduler();
         initBriaObserverScheduler();
+        initBriaContentPlanReviewScheduler();
         console.log("[Service: Cron] Tareas en segundo plano inicializadas.");
     } catch (cronError) {
         console.error("[Service: Cron] Fallo al iniciar tareas programadas:", cronError.message);
