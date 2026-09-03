@@ -56,3 +56,24 @@ test('legacy custom modals are migrated to the shared dismissal and focus contra
   assert.match(calendar, /<Dialog open=\{!!reconciliationPreview\}/);
   assert.match(calendar, /<Dialog open=\{!!deleteCandidate\}/);
 });
+
+test('returned task management opens as a centered responsive dialog instead of a side drawer', async () => {
+  const tasks = await read('src/components/modules/NativeTasks.jsx');
+
+  assert.match(tasks, /<Dialog open=\{isReturnedDialogOpen\} onOpenChange=\{setIsReturnedDialogOpen\}>/);
+  assert.match(tasks, /sm:max-w-2xl/);
+  assert.match(tasks, /max-h-\[calc\(100dvh-2rem\)\]/);
+  assert.match(tasks, /flex min-h-0 flex-1 flex-col/);
+  assert.doesNotMatch(tasks, /md:grid-cols-2|xl:grid-cols-3/);
+  assert.doesNotMatch(tasks, /isReturnedSidebarOpen/);
+  assert.doesNotMatch(tasks, /translate-x-full/);
+  assert.doesNotMatch(tasks, /fixed right-0 top-0/);
+});
+
+test('returned task cards keep a neutral surface with only a destructive border', async () => {
+  const tasks = await read('src/components/modules/NativeTasks.jsx');
+
+  assert.match(tasks, /isReturned && !isHighlighted && "border-destructive\/50"/);
+  assert.doesNotMatch(tasks, /isReturned[^\n]*bg-destructive/);
+  assert.doesNotMatch(tasks, /isReturned[^\n]*shadow-inner/);
+});

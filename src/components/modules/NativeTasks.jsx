@@ -19,7 +19,6 @@ import {
     AlertTriangle,
     MessageSquare,
     Edit2,
-    X,
     TaskReintegrateIcon,
     TaskReturnIcon,
     Trash2,
@@ -201,7 +200,7 @@ const NativeTasks = () => {
     const [deletingTask, setDeletingTask] = useState(null);
     const [deleteReason, setDeleteReason] = useState('');
     const [isSubmittingDelete, setIsSubmittingDelete] = useState(false);
-    const [isReturnedSidebarOpen, setIsReturnedSidebarOpen] = useState(false);
+    const [isReturnedDialogOpen, setIsReturnedDialogOpen] = useState(false);
     const [highlightedTaskId, setHighlightedTaskId] = useState(null);
 
     const [isCreating, setIsCreating] = useState(false);
@@ -358,7 +357,7 @@ const NativeTasks = () => {
         const taskId = params.get('taskId');
 
         if (showReturned) {
-            setIsReturnedSidebarOpen(true);
+            setIsReturnedDialogOpen(true);
         }
 
         if (taskId && tasks.length > 0) {
@@ -367,7 +366,7 @@ const NativeTasks = () => {
             if (taskToOpen) {
                 setEditingTask(taskToOpen);
                 if (getColumnId(taskToOpen.status) === 'devuelto') {
-                    setIsReturnedSidebarOpen(true);
+                    setIsReturnedDialogOpen(true);
                 }
             }
             const paramsToClean = new URLSearchParams(location.search);
@@ -1124,66 +1123,52 @@ const NativeTasks = () => {
 
             <DragDropContext onDragEnd={onDragEnd}>
                 <div className="flex gap-6 flex-1 min-h-[500px] relative">
-                    <AnimatePresence>
-                        {isReturnedSidebarOpen && (
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                onClick={() => setIsReturnedSidebarOpen(false)}
-                                className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] transition-opacity"
-                            />
-                        )}
-                    </AnimatePresence>
-                    <div className={cn(
-                        "fixed right-0 top-0 h-full w-full max-w-sm sm:max-w-md bg-white dark:bg-zinc-950 z-[110] shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col border-l border-zinc-200 dark:border-zinc-800",
-                        isReturnedSidebarOpen ? "translate-x-0" : "translate-x-full"
-                    )}>
-                        <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
-                            <div className="flex flex-col">
-                                <h3 className="flex items-center gap-2 text-lg font-bold text-destructive">
-                                    <TaskReturnIcon className="w-5 h-5" /> Tareas devueltas
-                                </h3>
-                                <p className="text-xs text-zinc-500 mt-1 font-medium">Estas tareas requieren tu atención inmediata.</p>
-                            </div>
-                            <button
-                                onClick={() => setIsReturnedSidebarOpen(false)}
-                                className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full text-zinc-400 transition-colors"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <Droppable droppableId="devuelto">
-                            {(provided, snapshot) => (
-                                <div
-                                    {...provided.droppableProps}
-                                    ref={provided.innerRef}
-                                    className={cn("flex-1 space-y-4 overflow-y-auto p-6", snapshot.isDraggingOver && "bg-destructive/5")}
-                                >
-                                    {returnedTasks.length === 0 ? (
-                                        <div className="h-40 flex flex-col items-center justify-center text-zinc-400 border-2 border-dashed border-zinc-100 dark:border-zinc-800 rounded-2xl">
-                                            <CheckCircle2 className="w-8 h-8 mb-2 opacity-20" />
-                                            <p className="text-sm">No hay tareas devueltas</p>
-                                        </div>
-                                    ) : (
-                                        returnedTasks.map((task, index) => (
-                                            <TaskCard
-                                                key={String(task.id)}
-                                                task={task}
-                                                index={index}
-                                                highlightedTaskId={highlightedTaskId}
-                                                onClick={(t) => setEditingTask(t)}
-                                                onReturn={(t) => setReturningTask(t)}
-                                                onReopen={(t) => setReopeningTask(t)}
-                                                onDelete={(t) => setDeletingTask(t)}
-                                            />
-                                        ))
-                                    )}
-                                    {provided.placeholder}
-                                </div>
-                            )}
-                        </Droppable>
-                    </div>
+                    <Dialog open={isReturnedDialogOpen} onOpenChange={setIsReturnedDialogOpen}>
+                        <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] flex-col overflow-hidden border-zinc-200 bg-white p-0 dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-2xl">
+                            <DialogHeader className="shrink-0 border-b border-zinc-100 bg-zinc-50/50 p-6 pr-16 text-left dark:border-zinc-800 dark:bg-zinc-900/50">
+                                <DialogTitle className="flex items-center gap-2 text-lg font-bold text-destructive">
+                                    <TaskReturnIcon className="h-5 w-5" aria-hidden="true" />
+                                    Tareas devueltas
+                                </DialogTitle>
+                                <DialogDescription className="text-sm text-zinc-500 dark:text-zinc-400">
+                                    Estas tareas requieren tu atención inmediata.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <Droppable droppableId="devuelto">
+                                {(provided, snapshot) => (
+                                    <div
+                                        {...provided.droppableProps}
+                                        ref={provided.innerRef}
+                                        className={cn(
+                                            "flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 sm:p-6",
+                                            snapshot.isDraggingOver && "bg-destructive/5"
+                                        )}
+                                    >
+                                        {returnedTasks.length === 0 ? (
+                                            <div className="flex h-40 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-100 text-zinc-400 dark:border-zinc-800">
+                                                <CheckCircle2 className="w-8 h-8 mb-2 opacity-20" />
+                                                <p className="text-sm">No hay tareas devueltas</p>
+                                            </div>
+                                        ) : (
+                                            returnedTasks.map((task, index) => (
+                                                <TaskCard
+                                                    key={String(task.id)}
+                                                    task={task}
+                                                    index={index}
+                                                    highlightedTaskId={highlightedTaskId}
+                                                    onClick={(t) => setEditingTask(t)}
+                                                    onReturn={(t) => setReturningTask(t)}
+                                                    onReopen={(t) => setReopeningTask(t)}
+                                                    onDelete={(t) => setDeletingTask(t)}
+                                                />
+                                            ))
+                                        )}
+                                        {provided.placeholder}
+                                    </div>
+                                )}
+                            </Droppable>
+                        </DialogContent>
+                    </Dialog>
                     <div className="task-board-grid flex-1">
                         {columns.map((col) => {
                             const columnTasks = filteredTasks.filter(t => getColumnId(t.status) === col.id);
@@ -1198,7 +1183,7 @@ const NativeTasks = () => {
                                         </div>
                                         {col.id === 'pendiente' && returnedTasks.length > 0 && (
                                             <button
-                                                onClick={() => setIsReturnedSidebarOpen(true)}
+                                                onClick={() => setIsReturnedDialogOpen(true)}
                                                 className="group/returned relative flex items-center gap-1.5 rounded-xl border border-destructive/20 bg-destructive/10 px-2 py-1 text-destructive shadow-sm transition-all hover:bg-destructive/15"
                                             >
                                                 <TaskReturnIcon className="w-3.5 h-3.5 animate-pulse" />
@@ -1300,7 +1285,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                             task.priority === 'NORMAL' ? "border-blue-500/40 dark:border-blue-500/30" :
                             "border-zinc-200 dark:border-zinc-800"
                         ) : "",
-                        isReturned && !isHighlighted && "border-destructive/30 bg-destructive/5 shadow-inner shadow-destructive/5"
+                        isReturned && !isHighlighted && "border-destructive/50"
                     )}>
                         <div className="flex flex-col gap-3 p-4">
                             <div className="flex justify-between items-start">
