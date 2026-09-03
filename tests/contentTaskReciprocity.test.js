@@ -6,7 +6,8 @@ import {
   buildContentTaskTitle,
   buildContentItemUpdateFromTask,
   buildLinkedTaskUpdates,
-  isPublicationTask
+  isPublicationTask,
+  normalizeLinkedUrls
 } from '../src/lib/contentTaskReciprocity.js';
 
 const date = (value) => new Date(`${value}T00:00:00.000Z`);
@@ -69,6 +70,33 @@ test('reciprocity never rewrites completed work', () => {
   });
 
   assert.deepEqual(updates, []);
+});
+
+test('renaming content updates the generated titles of completed linked tasks without changing their dates', () => {
+  const updates = buildLinkedTaskUpdates({
+    previousItem: {
+      objective: 'Contenido anterior',
+      format: 'Reel',
+      publishDate: date('2026-09-10')
+    },
+    nextItem: {
+      objective: 'Contenido definitivo',
+      format: 'Carrusel',
+      publishDate: date('2026-09-12')
+    },
+    tasks: [{
+      id: 'completed',
+      title: '[Producción] Reel: Contenido anterior',
+      dueDate: date('2026-09-08'),
+      status: 'REALIZADA'
+    }],
+    forceTitles: true
+  });
+
+  assert.deepEqual(updates, [{
+    id: 'completed',
+    data: { title: '[Producción] Carrusel: Contenido definitivo' }
+  }]);
 });
 
 test('generated titles follow content edits while manually customized titles are preserved', () => {
@@ -152,6 +180,46 @@ test('moving a production deadline preserves the content publication date', () =
   assert.equal(update, null);
 });
 
+test('linked task edits update the canonical content name, references and inputs', () => {
+  const update = buildContentItemUpdateFromTask({
+    task: { title: '[Producción] Reel: Campaña', contentItemId: 'content-1' },
+    taskUpdate: {
+      contentObjective: 'Campaña definitiva',
+      contentReferences: [' https://example.com/ref ', 'https://example.com/ref', ''],
+      contentInputs: ['https://example.com/input']
+    }
+  });
+
+  assert.deepEqual(update, {
+    objective: 'Campaña definitiva',
+    mediaUrl: ['https://example.com/ref'],
+    assetsLinks: ['https://example.com/input']
+  });
+});
+
+test('a direct linked task title edit is interpreted as a content-name edit', () => {
+  const update = buildContentItemUpdateFromTask({
+    task: {
+      title: '[Producción] Reel: Campaña anterior',
+      contentItemId: 'content-1',
+      contentItem: { format: 'Reel' }
+    },
+    taskUpdate: { title: '[Producción] Reel: Campaña renovada' }
+  });
+
+  assert.deepEqual(update, { objective: 'Campaña renovada' });
+});
+
+test('canonical link lists trim, deduplicate and remove empty values', () => {
+  assert.deepEqual(normalizeLinkedUrls([
+    ' https://example.com/a ',
+    'https://example.com/a',
+    '',
+    null,
+    'https://example.com/b'
+  ]), ['https://example.com/a', 'https://example.com/b']);
+});
+
 test('content and task services apply reciprocal updates inside their existing transactions', async () => {
   const [contentService, taskService] = await Promise.all([
     readFile(new URL('../src/services/contentService.js', import.meta.url), 'utf8'),
@@ -164,4 +232,19 @@ test('content and task services apply reciprocal updates inside their existing t
   assert.match(taskService, /buildContentItemUpdateFromTask/);
   assert.match(taskService, /buildLinkedTaskUpdates/);
   assert.match(taskService, /excludedTaskIds:\s*\[id\]/);
+  assert.match(taskService, /contentObjective/);
+  assert.match(taskService, /contentReferences/);
+  assert.match(taskService, /contentInputs/);
+});
+
+test('task editor writes linked names and links through canonical content fields', async () => {
+  const taskPanel = await readFile(
+    new URL('../src/components/modules/TaskSidePanel.jsx', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(taskPanel, /contentObjective/);
+  assert.match(taskPanel, /contentReferences/);
+  assert.match(taskPanel, /contentInputs/);
+  assert.match(taskPanel, /handleDeleteContentLink/);
 });

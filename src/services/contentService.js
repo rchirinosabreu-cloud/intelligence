@@ -534,7 +534,9 @@ export const updateContentItem = async (id, data) => {
     const linkedTaskUpdates = buildLinkedTaskUpdates({
       previousItem,
       nextItem,
-      tasks: previousItem.tasks
+      tasks: previousItem.tasks,
+      forceTitles: Object.prototype.hasOwnProperty.call(safeData, 'objective')
+        || Object.prototype.hasOwnProperty.call(safeData, 'format')
     });
 
     const item = await tx.contentItem.update({

@@ -5,8 +5,11 @@ import { classifyTaskDeterministically } from './deterministicTaskClassifier.js'
 import { pickAllowedTaskUpdates } from '../config/security.js';
 import { closeTaskWorkSession } from '../lib/taskTiming.js';
 import {
+    buildContentTaskTitle,
     buildContentItemUpdateFromTask,
-    buildLinkedTaskUpdates
+    buildLinkedTaskUpdates,
+    getContentTaskKind,
+    normalizeLinkedUrls
 } from '../lib/contentTaskReciprocity.js';
 import {
     closeActiveTaskWorkCycle,
@@ -683,6 +686,8 @@ export const updateTask = async (id, data, updaterId = null) => {
                         objective: true,
                         format: true,
                         publishDate: true,
+                        mediaUrl: true,
+                        assetsLinks: true,
                         tasks: {
                             select: {
                                 id: true,
@@ -702,15 +707,6 @@ export const updateTask = async (id, data, updaterId = null) => {
 
         const updateData = pickAllowedTaskUpdates(data);
 
-        if ('title' in updateData || 'comments' in updateData) {
-            const taskClassification = classifyTaskDeterministically({
-                title: updateData.title ?? currentTask.title,
-                description: updateData.comments ?? currentTask.comments ?? ''
-            });
-            updateData.aiCategory = taskClassification.category;
-            updateData.aiComplexity = taskClassification.complexity;
-        }
-
         // Extract and isolate returnReason and reintegrateReason
         const { returnReason, reintegrateReason, reopenReason, reopenNote } = updateData;
         delete updateData.returnReason;
@@ -721,22 +717,42 @@ export const updateTask = async (id, data, updaterId = null) => {
         // Handle adding a single new attachment in edition mode
         if (updateData.newAttachment) {
             const { name, url, category } = updateData.newAttachment;
-            await tx.taskAttachment.create({
-                data: {
-                    taskId: id,
-                    name: name || null,
-                    url,
-                    category: category || 'REFERENCIA'
-                }
-            });
+            if (currentTask.contentItem) {
+                const contentField = category === 'INSUMO' ? 'contentInputs' : 'contentReferences';
+                const currentValues = category === 'INSUMO'
+                    ? currentTask.contentItem.assetsLinks
+                    : currentTask.contentItem.mediaUrl;
+                updateData[contentField] = normalizeLinkedUrls([...(currentValues || []), url]);
+            } else {
+                await tx.taskAttachment.create({
+                    data: {
+                        taskId: id,
+                        name: name || null,
+                        url,
+                        category: category || 'REFERENCIA'
+                    }
+                });
+            }
             delete updateData.newAttachment;
         }
 
         // Handle deleting an attachment in edition mode
         if (updateData.deleteAttachmentId) {
+            const attachment = await tx.taskAttachment.findFirst({
+                where: { id: updateData.deleteAttachmentId, taskId: id },
+                select: { id: true, url: true, category: true }
+            });
             await tx.taskAttachment.deleteMany({
                 where: { id: updateData.deleteAttachmentId, taskId: id }
             });
+            if (attachment && currentTask.contentItem) {
+                const contentField = attachment.category === 'INSUMO' ? 'contentInputs' : 'contentReferences';
+                const currentValues = attachment.category === 'INSUMO'
+                    ? currentTask.contentItem.assetsLinks
+                    : currentTask.contentItem.mediaUrl;
+                updateData[contentField] = normalizeLinkedUrls(currentValues)
+                    .filter((url) => url !== attachment.url);
+            }
             delete updateData.deleteAttachmentId;
         }
 
@@ -763,12 +779,20 @@ export const updateTask = async (id, data, updaterId = null) => {
         if (reciprocalContentUpdate && currentTask.contentItem) {
             const previousItem = currentTask.contentItem;
             const nextItem = { ...previousItem, ...reciprocalContentUpdate };
+            const titleChanged = Object.prototype.hasOwnProperty.call(reciprocalContentUpdate, 'objective')
+                || Object.prototype.hasOwnProperty.call(reciprocalContentUpdate, 'format');
             const siblingTaskUpdates = buildLinkedTaskUpdates({
                 previousItem,
                 nextItem,
                 tasks: previousItem.tasks,
-                excludedTaskIds: [id]
+                excludedTaskIds: [id],
+                forceTitles: titleChanged
             });
+
+            const currentTaskKind = getContentTaskKind(currentTask.title);
+            if (titleChanged && currentTaskKind) {
+                updateData.title = buildContentTaskTitle(currentTaskKind, nextItem);
+            }
 
             await tx.contentItem.update({
                 where: { id: currentTask.contentItemId },
@@ -783,6 +807,19 @@ export const updateTask = async (id, data, updaterId = null) => {
                     select: { id: true }
                 })
             )));
+        }
+
+        delete updateData.contentObjective;
+        delete updateData.contentReferences;
+        delete updateData.contentInputs;
+
+        if ('title' in updateData || 'comments' in updateData) {
+            const taskClassification = classifyTaskDeterministically({
+                title: updateData.title ?? currentTask.title,
+                description: updateData.comments ?? currentTask.comments ?? ''
+            });
+            updateData.aiCategory = taskClassification.category;
+            updateData.aiComplexity = taskClassification.complexity;
         }
 
         // Strict Task Lifecycle Logic (completedAt)

@@ -598,13 +598,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     } catch(e) {}
                 }
 
-                const referenceLinks = (taskData.contentItem?.mediaUrl && taskData.contentItem.mediaUrl.length > 0)
-                    ? taskData.contentItem.mediaUrl
-                    : (taskData.referenceUrl || '');
+                const referenceLinks = taskData.contentItem?.mediaUrl || [];
 
                 setFormData({
                     id: taskData.id,
-                    title: taskData.title || '',
+                    title: taskData.contentItem?.objective || taskData.title || '',
                     clientId: cId,
                     assigneeId: taskData.assigneeId || '',
                     status: taskData.status || 'PENDIENTE',
@@ -615,8 +613,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     isPriority: taskData.isPriority || false,
                     priority: taskData.priority || null,
                     isSpecial: taskData.isSpecial || false,
-                    hasReference: !!taskData.referenceUrl,
-                    referenceUrl: taskData.referenceUrl || '',
+                    hasReference: !!taskData.referenceUrl || referenceLinks.length > 0,
+                    referenceUrl: taskData.contentItem ? '' : (taskData.referenceUrl || ''),
                     referenceLinks: referenceLinks,
                     assetsLinks: taskData.contentItem?.assetsLinks || [],
                     taskComments: taskCommentsCache[taskData.id] || taskData.taskComments || [],
@@ -728,7 +726,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             }
 
             const payload = {
-                [fieldName]: processedVal
+                [fieldName === 'title' && formData.contentItemId ? 'contentObjective' : fieldName]: processedVal
             };
             if (fieldName === 'priority') {
                 payload.isPriority = finalValue === 'URGENTE' || finalValue === 'ALTA';
@@ -765,7 +763,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                 setFormData(prev => ({
                     ...prev,
-                    title: updatedTask.title || prev.title,
+                    title: updatedTask.contentItem?.objective || updatedTask.title || prev.title,
                     assigneeId: updatedTask.assigneeId || '',
                     status: updatedTask.status || 'PENDIENTE',
                     priority: updatedTask.priority || null,
@@ -773,7 +771,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     dueDate: formattedDate,
                     originalStatus: updatedTask.status,
                     taskComments: updatedTask.taskComments || prev.taskComments,
-                    taskAttachments: updatedTask.taskAttachments || prev.taskAttachments
+                    taskAttachments: updatedTask.taskAttachments || prev.taskAttachments,
+                    referenceLinks: updatedTask.contentItem?.mediaUrl || prev.referenceLinks,
+                    assetsLinks: updatedTask.contentItem?.assetsLinks || prev.assetsLinks
                 }));
 
                 setEditingField(null);
@@ -807,7 +807,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             }
 
             const payload = {
-                title: formData.title,
+                ...(formData.contentItemId
+                    ? { contentObjective: formData.title }
+                    : { title: formData.title }),
                 clientId: formData.clientId,
                 assigneeId: formData.assigneeId || null,
                 dueDate: isoDate,
@@ -989,20 +991,29 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     'Content-Type': 'application/json',
                     'Authorization': token ? `Bearer ${token}` : ''
                 },
-                body: JSON.stringify({
-                    newAttachment: {
-                        name: name.trim() || finalUrl,
-                        url: finalUrl,
-                        category
+                body: JSON.stringify(formData.contentItemId
+                    ? {
+                        [category === 'INSUMO' ? 'contentInputs' : 'contentReferences']: Array.from(new Set([
+                            ...(category === 'INSUMO' ? formData.assetsLinks : formData.referenceLinks),
+                            finalUrl
+                        ]))
                     }
-                })
+                    : {
+                        newAttachment: {
+                            name: name.trim() || finalUrl,
+                            url: finalUrl,
+                            category
+                        }
+                    })
             });
 
             if (res.ok) {
                 const updatedTask = await res.json();
                 setFormData(prev => ({
                     ...prev,
-                    taskAttachments: updatedTask.taskAttachments || []
+                    taskAttachments: updatedTask.taskAttachments || [],
+                    referenceLinks: updatedTask.contentItem?.mediaUrl || prev.referenceLinks,
+                    assetsLinks: updatedTask.contentItem?.assetsLinks || prev.assetsLinks
                 }));
                 toast({ title: "Enlace agregado" });
                 onSuccess(); // Refresh Kanban board
@@ -1012,6 +1023,39 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         } catch (err) {
             console.error("Error adding attachment:", err);
             toast({ variant: "destructive", title: "Error", description: "No se pudo guardar el enlace." });
+        }
+    };
+
+    const handleDeleteContentLink = async (category, url) => {
+        try {
+            const isInput = category === 'INSUMO';
+            const currentLinks = isInput ? formData.assetsLinks : formData.referenceLinks;
+            const fieldName = isInput ? 'contentInputs' : 'contentReferences';
+            const nextLinks = currentLinks.filter((value) => value !== url);
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const res = await fetch(`${baseUrl}/api/tasks/${formData.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({ [fieldName]: nextLinks })
+            });
+
+            if (!res.ok) throw new Error('Failed to delete linked content URL');
+
+            const updatedTask = await res.json();
+            setFormData(prev => ({
+                ...prev,
+                referenceLinks: updatedTask.contentItem?.mediaUrl || prev.referenceLinks,
+                assetsLinks: updatedTask.contentItem?.assetsLinks || prev.assetsLinks
+            }));
+            toast({ title: 'Enlace eliminado' });
+            onSuccess();
+        } catch (err) {
+            console.error('Error deleting linked content URL:', err);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar el enlace.' });
         }
     };
 
@@ -1035,7 +1079,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 const updatedTask = await res.json();
                 setFormData(prev => ({
                     ...prev,
-                    taskAttachments: updatedTask.taskAttachments || []
+                    taskAttachments: updatedTask.taskAttachments || [],
+                    referenceLinks: updatedTask.contentItem?.mediaUrl || prev.referenceLinks,
+                    assetsLinks: updatedTask.contentItem?.assetsLinks || prev.assetsLinks
                 }));
                 toast({ title: "Enlace eliminado" });
                 onSuccess(); // Refresh Kanban board
@@ -1908,7 +1954,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         {/* Title Section */}
                         <div className="space-y-2">
                             <label className={taskComposerLabelClass}>
-                                {isEdition ? "Título de la tarea" : "Nombre de la tarea"}
+                                {formData.contentItemId ? 'Nombre del contenido' : (isEdition ? 'Título de la tarea' : 'Nombre de la tarea')}
                             </label>
                             <textarea
                                 data-task-title-input
@@ -1925,6 +1971,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 placeholder={isEdition ? "Ej: Revisión de artes para campaña..." : "Escribe el nombre de la tarea"}
                                 className="min-h-[52px] w-full resize-none overflow-y-auto rounded-none border-0 border-b border-zinc-200/80 bg-transparent px-0 py-1.5 text-xl font-semibold leading-snug text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:border-primary/50 focus:ring-0 dark:border-zinc-800/80 dark:text-zinc-50 dark:placeholder:text-zinc-600 sm:min-h-[56px] sm:text-2xl"
                             />
+                            {formData.contentItemId && (
+                                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                                    Sincronizado con la pieza de la parrilla.
+                                </p>
+                            )}
                         </div>
 
                         {!isEdition && (
@@ -2200,13 +2251,21 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         </div>
                                         {(() => {
                                             const refUrls = [];
-                                            if (formData.referenceUrl) refUrls.push({ id: 'ref-legacy', url: formData.referenceUrl, name: 'Referencia Original' });
+                                            const seenUrls = new Set();
+                                            if (formData.referenceUrl && !formData.contentItemId) {
+                                                refUrls.push({ id: 'ref-legacy', url: formData.referenceUrl, name: 'Referencia Original' });
+                                                seenUrls.add(formData.referenceUrl);
+                                            }
                                             if (Array.isArray(formData.referenceLinks)) {
-                                                formData.referenceLinks.forEach((u, i) => refUrls.push({ id: `ref-link-${i}`, url: u, name: `Enlace de Parrilla ${i+1}` }));
+                                                formData.referenceLinks.forEach((u, i) => {
+                                                    refUrls.push({ id: `ref-link-${i}`, url: u, name: `Referencia ${i+1}`, source: 'content' });
+                                                    seenUrls.add(u);
+                                                });
                                             }
                                             getManualTaskAttachments(formData.taskAttachments)
                                                     .filter(a => a.category === 'REFERENCIA')
-                                                    .forEach(a => refUrls.push({ id: a.id, url: a.url, name: a.name }));
+                                                    .filter(a => !seenUrls.has(a.url))
+                                                    .forEach(a => refUrls.push({ id: a.id, url: a.url, name: a.name, source: 'attachment' }));
 
                                             if (refUrls.length === 0) {
                                                 return null;
@@ -2219,8 +2278,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                             <button type="button" onClick={() => handleTaskAttachmentOpen(item)} className="min-w-0 truncate hover:underline text-indigo-600 flex items-center gap-1 text-left">
                                                                 <ExternalLink size={10} /> {item.name}
                                                             </button>
-                                                            {item.id !== 'ref-legacy' && !item.id.startsWith('ref-link-') && (
-                                                            <button onClick={() => handleDeleteAttachment(item.id)} className="text-zinc-400 hover:text-red-500" aria-label="Eliminar adjunto">
+                                                            {item.id !== 'ref-legacy' && (
+                                                            <button onClick={() => item.source === 'content'
+                                                                ? handleDeleteContentLink('REFERENCIA', item.url)
+                                                                : handleDeleteAttachment(item.id)} className="text-zinc-400 hover:text-red-500" aria-label="Eliminar referencia">
                                                                     <X size={10} />
                                                                 </button>
                                                             )}
@@ -2255,12 +2316,17 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         </div>
                                         {(() => {
                                             const inpUrls = [];
+                                            const seenUrls = new Set();
                                             if (Array.isArray(formData.assetsLinks)) {
-                                                formData.assetsLinks.forEach((u, i) => inpUrls.push({ id: `inp-link-${i}`, url: u, name: `Insumo de Parrilla ${i+1}` }));
+                                                formData.assetsLinks.forEach((u, i) => {
+                                                    inpUrls.push({ id: `inp-link-${i}`, url: u, name: `Insumo ${i+1}`, source: 'content' });
+                                                    seenUrls.add(u);
+                                                });
                                             }
                                             getManualTaskAttachments(formData.taskAttachments)
                                                     .filter(a => a.category === 'INSUMO')
-                                                    .forEach(a => inpUrls.push({ id: a.id, url: a.url, name: a.name }));
+                                                    .filter(a => !seenUrls.has(a.url))
+                                                    .forEach(a => inpUrls.push({ id: a.id, url: a.url, name: a.name, source: 'attachment' }));
 
                                             if (inpUrls.length === 0) {
                                                 return null;
@@ -2273,11 +2339,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                             <button type="button" onClick={() => handleTaskAttachmentOpen(item)} className="min-w-0 truncate hover:underline text-indigo-600 flex items-center gap-1 text-left">
                                                                 <ExternalLink size={10} /> {item.name}
                                                             </button>
-                                                            {!item.id.startsWith('inp-link-') && (
-                                                            <button onClick={() => handleDeleteAttachment(item.id)} className="text-zinc-400 hover:text-red-500" aria-label="Eliminar adjunto">
+                                                            <button onClick={() => item.source === 'content'
+                                                                ? handleDeleteContentLink('INSUMO', item.url)
+                                                                : handleDeleteAttachment(item.id)} className="text-zinc-400 hover:text-red-500" aria-label="Eliminar insumo">
                                                                     <X size={10} />
                                                                 </button>
-                                                            )}
                                                         </div>
                                                     ))}
                                                 </div>
