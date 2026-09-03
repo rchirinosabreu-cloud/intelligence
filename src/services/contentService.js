@@ -2,6 +2,7 @@ import prisma from '../lib/prisma.js';
 import { createTask } from './nativeTaskService.js';
 import { uploadToS3, deleteFromS3 } from './s3Service.js';
 import { randomBytes } from 'node:crypto';
+import { buildLinkedTaskUpdates } from '../lib/contentTaskReciprocity.js';
 
 let strategicObjectivesColumnExists = null;
 let contentItemFinalAssetColumnsExist = null;
@@ -493,25 +494,68 @@ export const createContentItem = async (data) => {
 };
 
 export const updateContentItem = async (id, data) => {
+  const normalizedData = { ...data };
+
   // Ensure publishDate is handled correctly
-  if (data.publishDate) {
+  if (normalizedData.publishDate) {
     // If it's already a string in YYYY-MM-DD format, we convert it to a UTC Date object
     // to prevent Prisma/Postgres from applying local timezone offsets.
-    if (typeof data.publishDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.publishDate)) {
-      data.publishDate = new Date(`${data.publishDate}T00:00:00Z`);
+    if (typeof normalizedData.publishDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(normalizedData.publishDate)) {
+      normalizedData.publishDate = new Date(`${normalizedData.publishDate}T00:00:00Z`);
     } else {
-      data.publishDate = new Date(data.publishDate);
+      normalizedData.publishDate = new Date(normalizedData.publishDate);
     }
   }
 
-  const updatedItem = await prisma.contentItem.update({
-    where: { id },
-    data: await filterContentItemData(data),
-    select: await getContentItemSelect()
-  });
+  const safeData = await filterContentItemData(normalizedData);
+  const itemSelect = await getContentItemSelect();
+  const updatedItem = await prisma.$transaction(async (tx) => {
+    const previousItem = await tx.contentItem.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        objective: true,
+        format: true,
+        publishDate: true,
+        tasks: {
+          select: {
+            id: true,
+            title: true,
+            dueDate: true,
+            status: true
+          }
+        }
+      }
+    });
+
+    if (!previousItem) throw new Error('Content item not found');
+
+    const nextItem = { ...previousItem, ...safeData };
+    const linkedTaskUpdates = buildLinkedTaskUpdates({
+      previousItem,
+      nextItem,
+      tasks: previousItem.tasks
+    });
+
+    const item = await tx.contentItem.update({
+      where: { id },
+      data: safeData,
+      select: itemSelect
+    });
+
+    await Promise.all(linkedTaskUpdates.map(({ id: taskId, data: taskData }) => (
+      tx.task.update({
+        where: { id: taskId },
+        data: taskData,
+        select: { id: true }
+      })
+    )));
+
+    return item;
+  }, { isolationLevel: 'Serializable' });
 
   // --- AUTOMATION: Auto-finalize ContentPlan ---
-  if (data.status === 'PUBLICADO') {
+  if (normalizedData.status === 'PUBLICADO') {
     try {
         const planItems = await prisma.contentItem.findMany({
             where: { planId: updatedItem.planId, deletedAt: null }

@@ -5,6 +5,10 @@ import { classifyTaskDeterministically } from './deterministicTaskClassifier.js'
 import { pickAllowedTaskUpdates } from '../config/security.js';
 import { closeTaskWorkSession } from '../lib/taskTiming.js';
 import {
+    buildContentItemUpdateFromTask,
+    buildLinkedTaskUpdates
+} from '../lib/contentTaskReciprocity.js';
+import {
     closeActiveTaskWorkCycle,
     closeActiveTaskWorkSession,
     ensureTaskWorkCycle,
@@ -672,7 +676,23 @@ export const updateTask = async (id, data, updaterId = null) => {
                 isSpecial: true,
                 assigneeId: true,
                 creatorId: true,
-                contentItemId: true
+                contentItemId: true,
+                contentItem: {
+                    select: {
+                        id: true,
+                        objective: true,
+                        format: true,
+                        publishDate: true,
+                        tasks: {
+                            select: {
+                                id: true,
+                                title: true,
+                                dueDate: true,
+                                status: true
+                            }
+                        }
+                    }
+                }
             }
         });
 
@@ -733,6 +753,36 @@ export const updateTask = async (id, data, updaterId = null) => {
         // Handle explicit incoming date parsing
         if (updateData.dueDate) {
             updateData.dueDate = new Date(updateData.dueDate);
+        }
+
+        const reciprocalContentUpdate = buildContentItemUpdateFromTask({
+            task: currentTask,
+            taskUpdate: updateData
+        });
+
+        if (reciprocalContentUpdate && currentTask.contentItem) {
+            const previousItem = currentTask.contentItem;
+            const nextItem = { ...previousItem, ...reciprocalContentUpdate };
+            const siblingTaskUpdates = buildLinkedTaskUpdates({
+                previousItem,
+                nextItem,
+                tasks: previousItem.tasks,
+                excludedTaskIds: [id]
+            });
+
+            await tx.contentItem.update({
+                where: { id: currentTask.contentItemId },
+                data: reciprocalContentUpdate,
+                select: { id: true }
+            });
+
+            await Promise.all(siblingTaskUpdates.map(({ id: taskId, data: taskData }) => (
+                tx.task.update({
+                    where: { id: taskId },
+                    data: taskData,
+                    select: { id: true }
+                })
+            )));
         }
 
         // Strict Task Lifecycle Logic (completedAt)
