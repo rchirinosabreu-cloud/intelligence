@@ -232,6 +232,29 @@ test('all-day Brainstudio events use Google date fields with an exclusive end da
   assert.deepEqual(payload.end, { date: '2026-08-21' });
 });
 
+test('timed Google events use explicit RFC3339 Bogota offsets at midnight', () => {
+  const payload = buildGoogleEventPayload({
+    id: 'event-midnight',
+    title: 'Permiso',
+    type: 'ABSENCE',
+    description: '',
+    startAt: new Date('2026-09-03T05:00:00.000Z'),
+    endAt: new Date('2026-09-05T04:59:59.000Z'),
+    isAllDay: false,
+    attendeeEmails: [],
+    recurrence: 'NONE'
+  });
+
+  assert.deepEqual(payload.start, {
+    dateTime: '2026-09-03T00:00:00-05:00',
+    timeZone: 'America/Bogota'
+  });
+  assert.deepEqual(payload.end, {
+    dateTime: '2026-09-04T23:59:59-05:00',
+    timeZone: 'America/Bogota'
+  });
+});
+
 test('all-day state is persisted and exposed by the operational calendar', async () => {
   const schema = await readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
   const service = await readFile(new URL('../src/services/operationalEventService.js', import.meta.url), 'utf8');

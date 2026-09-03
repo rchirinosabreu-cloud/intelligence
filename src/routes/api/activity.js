@@ -28,6 +28,19 @@ import { requireManagerRole } from '../../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
+const sendOperationalEventSaveError = (res, error, fallbackError) => {
+  if (['INVALID_EVENT_RANGE', 'INVALID_GOOGLE_EVENT_TIME'].includes(error.code)) {
+    return res.status(422).json({
+      error: 'Revisa las fechas y horas del evento',
+      code: error.code,
+      details: error.code === 'INVALID_EVENT_RANGE'
+        ? error.message
+        : 'Google Calendar rechazó la fecha u hora del evento. Verifica el rango y activa “Todo el día” cuando corresponda.'
+    });
+  }
+  return res.status(500).json({ error: fallbackError, details: error.message });
+};
+
 // Get real-time status for the map
 router.get('/status', async (req, res) => {
   try {
@@ -64,7 +77,7 @@ router.post('/events', async (req, res) => {
         details: error.message
       });
     }
-    res.status(500).json({ error: 'Failed to create event', details: error.message });
+    return sendOperationalEventSaveError(res, error, 'Failed to create event');
   }
 });
 
@@ -214,7 +227,7 @@ router.patch('/events/:id', async (req, res) => {
     res.json(event);
   } catch (error) {
     console.error('[Activity API] Error updating event:', error.response?.data || error);
-    res.status(500).json({ error: 'Failed to update event', details: error.message });
+    return sendOperationalEventSaveError(res, error, 'Failed to update event');
   }
 });
 

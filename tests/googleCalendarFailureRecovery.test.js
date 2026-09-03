@@ -75,6 +75,50 @@ test('event creation removes the local record when Google Calendar rejects the s
   assert.deepEqual(calls, ['create', 'sync', 'delete:event-1']);
 });
 
+test('event updates restore the previous local values when Google Calendar rejects the sync', async () => {
+  const eventService = await import('../src/services/operationalEventService.js');
+  assert.equal(typeof eventService.updateSyncedOperationalEvent, 'function');
+
+  const calls = [];
+  await assert.rejects(
+    eventService.updateSyncedOperationalEvent({
+      updateLocalEvent: async () => {
+        calls.push('update');
+        return { id: 'event-1', title: 'Cambio no confirmado' };
+      },
+      syncToGoogle: async () => {
+        calls.push('sync');
+        throw Object.assign(new Error('Invalid start time.'), { code: 'INVALID_GOOGLE_EVENT_TIME' });
+      },
+      restoreLocalEvent: async () => calls.push('restore:event-1')
+    }),
+    candidate => candidate.code === 'INVALID_GOOGLE_EVENT_TIME'
+  );
+
+  assert.deepEqual(calls, ['update', 'sync', 'restore:event-1']);
+});
+
+test('invalid event ranges are rejected before calendar persistence', async () => {
+  const { normalizeOperationalEventRange } = await import('../src/services/operationalEventService.js');
+
+  assert.throws(
+    () => normalizeOperationalEventRange({
+      startAt: '2026-09-03T15:00:00.000Z',
+      endAt: '2026-09-03T14:00:00.000Z'
+    }),
+    candidate => candidate.code === 'INVALID_EVENT_RANGE'
+  );
+});
+
+test('calendar date rejections return a useful validation response instead of a generic 500', async () => {
+  const activityRoutes = await read('src/routes/api/activity.js');
+
+  assert.match(activityRoutes, /INVALID_EVENT_RANGE/);
+  assert.match(activityRoutes, /INVALID_GOOGLE_EVENT_TIME/);
+  assert.match(activityRoutes, /status\(422\)/);
+  assert.match(activityRoutes, /fechas? y horas?/i);
+});
+
 test('multi-account calendar wiring validates recent connections and exposes real Meet errors', async () => {
   const oauthService = await read('src/services/googleCalendarOAuthService.js');
   const eventService = await read('src/services/operationalEventService.js');

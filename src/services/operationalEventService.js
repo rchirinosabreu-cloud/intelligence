@@ -67,6 +67,19 @@ const normalizeAttendeeEmails = async (memberIds = [], externalEmails = []) => {
     .filter(email => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)))];
 };
 
+export const normalizeOperationalEventRange = (data = {}, current = {}) => {
+  const startAt = new Date(data.startAt ?? current.startAt);
+  const endAt = new Date(data.endAt ?? current.endAt);
+
+  if (!Number.isFinite(startAt.getTime()) || !Number.isFinite(endAt.getTime()) || endAt <= startAt) {
+    const error = new Error('La fecha y hora de finalización deben ser posteriores al inicio.');
+    error.code = 'INVALID_EVENT_RANGE';
+    throw error;
+  }
+
+  return { startAt, endAt };
+};
+
 const formatGoogleDateTimeInBogota = (value) => {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Bogota',
@@ -76,13 +89,14 @@ const formatGoogleDateTimeInBogota = (value) => {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false
+    hourCycle: 'h23'
   }).formatToParts(new Date(value)).reduce((acc, part) => {
     if (part.type !== 'literal') acc[part.type] = part.value;
     return acc;
   }, {});
 
-  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
+  const hour = parts.hour === '24' ? '00' : parts.hour;
+  return `${parts.year}-${parts.month}-${parts.day}T${hour}:${parts.minute}:${parts.second}-05:00`;
 };
 
 export const getMeetLinkFromGoogleEvent = (event) => {
@@ -331,6 +345,8 @@ export async function syncOperationalEventToGoogle(event) {
     if (isGoogleOAuthReauthError(error)) {
       syncError.code = 'GOOGLE_CALENDAR_REAUTH_REQUIRED';
       syncError.reconnectRequired = true;
+    } else if (/invalid (?:start|end) time|timeRangeEmpty/i.test(details)) {
+      syncError.code = 'INVALID_GOOGLE_EVENT_TIME';
     }
     throw syncError;
   }
@@ -623,7 +639,26 @@ export const createSyncedOperationalEvent = async ({
   }
 };
 
+export const updateSyncedOperationalEvent = async ({
+  updateLocalEvent,
+  syncToGoogle,
+  restoreLocalEvent
+}) => {
+  const event = await updateLocalEvent();
+  try {
+    return await syncToGoogle(event);
+  } catch (error) {
+    try {
+      await restoreLocalEvent(event.id);
+    } catch (restoreError) {
+      console.error('[OperationalEventService] Failed to restore local event:', restoreError?.response?.data || restoreError);
+    }
+    throw error;
+  }
+};
+
 export async function createOperationalEvent(data, createdById = null) {
+  const range = normalizeOperationalEventRange(data);
   const externalEmails = (data.attendeeEmails || []).filter(email => email?.toLowerCase() !== FIREFLIES_BOT_EMAIL);
   if (data.captureWithFireflies) externalEmails.push(FIREFLIES_BOT_EMAIL);
   const attendeeEmails = await normalizeAttendeeEmails(data.memberIds || [], externalEmails);
@@ -633,8 +668,8 @@ export async function createOperationalEvent(data, createdById = null) {
         title: data.title,
         type: data.type,
         description: data.description,
-        startAt: new Date(data.startAt),
-        endAt: new Date(data.endAt),
+        startAt: range.startAt,
+        endAt: range.endAt,
         isAllDay: Boolean(data.isAllDay),
         captureWithFireflies: Boolean(data.captureWithFireflies),
         memberIds: data.memberIds || [],
@@ -658,33 +693,57 @@ export async function createOperationalEvent(data, createdById = null) {
 
 export async function updateOperationalEvent(id, data) {
   const current = await prisma.operationalEvent.findUnique({ where: { id } });
+  const range = normalizeOperationalEventRange(data, current || {});
   const memberIds = data.memberIds ?? current?.memberIds ?? [];
   const captureWithFireflies = data.captureWithFireflies ?? current?.captureWithFireflies ?? false;
   const externalEmails = (data.attendeeEmails ?? current?.attendeeEmails ?? []).filter(email => email?.toLowerCase() !== FIREFLIES_BOT_EMAIL);
   if (captureWithFireflies) externalEmails.push(FIREFLIES_BOT_EMAIL);
   const attendeeEmails = await normalizeAttendeeEmails(memberIds, externalEmails);
-  const event = await prisma.operationalEvent.update({
-    where: { id },
-    data: {
-      title: data.title,
-      type: data.type,
-      description: data.description,
-      startAt: data.startAt ? new Date(data.startAt) : undefined,
-      endAt: data.endAt ? new Date(data.endAt) : undefined,
-      isAllDay: data.isAllDay === undefined ? undefined : Boolean(data.isAllDay),
-      captureWithFireflies,
-      memberIds: data.memberIds,
-      attendeeEmails,
-      recurrence: data.recurrence,
-      recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
-      meetingLink: data.meetingLink,
-      googleMeetSpaceName: data.googleMeetSpaceName,
-      googleMeetAccessType: data.googleMeetAccessType
-    }
+  return await updateSyncedOperationalEvent({
+    updateLocalEvent: async () => {
+      const event = await prisma.operationalEvent.update({
+        where: { id },
+        data: {
+          title: data.title,
+          type: data.type,
+          description: data.description,
+          startAt: data.startAt === undefined ? undefined : range.startAt,
+          endAt: data.endAt === undefined ? undefined : range.endAt,
+          isAllDay: data.isAllDay === undefined ? undefined : Boolean(data.isAllDay),
+          captureWithFireflies,
+          memberIds: data.memberIds,
+          attendeeEmails,
+          recurrence: data.recurrence,
+          recurrenceEnd: data.recurrenceEnd ? new Date(data.recurrenceEnd) : null,
+          meetingLink: data.meetingLink,
+          googleMeetSpaceName: data.googleMeetSpaceName,
+          googleMeetAccessType: data.googleMeetAccessType
+        }
+      });
+      return await prisma.operationalEvent.findUnique({ where: { id: event.id }, include: { googleLinks: true } });
+    },
+    syncToGoogle: syncOperationalEventToGoogle,
+    restoreLocalEvent: () => prisma.operationalEvent.update({
+      where: { id },
+      data: {
+        title: current.title,
+        type: current.type,
+        description: current.description,
+        startAt: current.startAt,
+        endAt: current.endAt,
+        isAllDay: current.isAllDay,
+        captureWithFireflies: current.captureWithFireflies,
+        memberIds: current.memberIds,
+        attendeeEmails: current.attendeeEmails,
+        attendeeResponses: current.attendeeResponses,
+        recurrence: current.recurrence,
+        recurrenceEnd: current.recurrenceEnd,
+        meetingLink: current.meetingLink,
+        googleMeetSpaceName: current.googleMeetSpaceName,
+        googleMeetAccessType: current.googleMeetAccessType
+      }
+    })
   });
-
-  const eventWithLinks = await prisma.operationalEvent.findUnique({ where: { id: event.id }, include: { googleLinks: true } });
-  return await syncOperationalEventToGoogle(eventWithLinks);
 }
 
 export async function deleteOperationalEvent(id) {
