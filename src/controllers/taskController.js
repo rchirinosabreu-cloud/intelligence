@@ -19,6 +19,8 @@ import { canDeleteTask, canUpdateTask, isManagerRole, pickAllowedTaskUpdates } f
 import { listTaskWorkHistory } from '../services/taskWorkSessionService.js';
 export { getMyExcessiveTaskAlertsHandler as getMyExcessiveTaskAlerts } from './excessiveTaskAlertController.js';
 export { confirmExcessiveTaskWorkHandler as confirmExcessiveTaskWork } from './excessiveTaskAlertController.js';
+export { getMyReturnedTaskAlertsHandler as getMyReturnedTaskAlerts } from './returnedTaskAlertController.js';
+export { snoozeReturnedTaskReminderHandler as snoozeReturnedTaskReminder } from './returnedTaskAlertController.js';
 
 const COMMENT_MAX_LENGTH = 10_000;
 const taskCommentAuthorSelect = {

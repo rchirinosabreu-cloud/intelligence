@@ -33,7 +33,7 @@ export default function ExcessiveTaskAlertDialog({ userId, userName, enabled = t
     refetchOnWindowFocus: true,
   });
 
-  const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
+  const tasks = enabled && Array.isArray(data?.tasks) ? data.tasks : [];
   const dismissalKey = useMemo(() => {
     if (!userId || tasks.length === 0) return null;
     const signature = tasks.map((task) => task.id).sort().join(',');

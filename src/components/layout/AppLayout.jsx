@@ -13,10 +13,12 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { getNotificationDisplayParts } from '@/utils/notificationUtils';
 import PushNotificationControl from '@/components/notifications/PushNotificationControl';
 import ExcessiveTaskAlertDialog from '@/components/tasks/ExcessiveTaskAlertDialog';
+import ReturnedTaskAlertDialog from '@/components/tasks/ReturnedTaskAlertDialog';
 
 const AppLayout = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isReturnedTaskAlertBlocking, setIsReturnedTaskAlertBlocking] = useState(true);
   const { currentUser, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -61,6 +63,18 @@ const AppLayout = ({ children }) => {
   const displayUser = userData || currentUser;
   const canUseTaskManagement = displayUser?.role === 'ADMIN'
     || displayUser?.modulePermissions?.gestion === true;
+  const previewParams = new URLSearchParams(window.location.search);
+  const showReturnedTaskAlertPreview = import.meta.env.DEV
+    && previewParams.get('previewReturnedAlert') === '1';
+  const returnedTaskAlertPreview = showReturnedTaskAlertPreview
+    ? [{
+        id: previewParams.get('previewTaskId') || 'preview-returned-task',
+        title: 'Ajustar titulares y fotografías',
+        clientName: 'Brainstudio',
+        returnedAt: 'preview-returned-at',
+        elapsedMs: 2 * 60 * 60 * 1000 + 17 * 60 * 1000,
+      }]
+    : null;
 
   // --- REACT QUERY: NOTIFICATIONS ---
   const {
@@ -181,7 +195,18 @@ const AppLayout = ({ children }) => {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-primary/20 relative transition-colors duration-300 font-sans">
       {/* Sidebar - z-[60] (Internal) */}
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <ExcessiveTaskAlertDialog userId={displayUser?.id} userName={displayUser?.name} enabled={canUseTaskManagement} />
+      <ReturnedTaskAlertDialog
+        userId={displayUser?.id}
+        userName={displayUser?.name}
+        enabled={canUseTaskManagement}
+        previewTasks={returnedTaskAlertPreview}
+        onBlockingChange={setIsReturnedTaskAlertBlocking}
+      />
+      <ExcessiveTaskAlertDialog
+        userId={displayUser?.id}
+        userName={displayUser?.name}
+        enabled={canUseTaskManagement && !isReturnedTaskAlertBlocking}
+      />
 
       {/* Header - z-50 */}
       <header className="h-16 lg:pl-64 fixed top-0 left-0 right-0 z-50 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 transition-all">
