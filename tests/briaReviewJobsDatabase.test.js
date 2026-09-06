@@ -1,0 +1,200 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { PrismaClient } from '@prisma/client';
+import { getSafeTestDatabaseUrl } from './helpers/testDatabase.js';
+import * as state from '../src/services/briaContentPlanReviewState.js';
+import * as scheduler from '../src/services/briaContentPlanReviewScheduler.js';
+
+const databaseUrl = getSafeTestDatabaseUrl();
+const start = new Date('2026-09-05T15:00:00Z');
+const rawReview = { summary: 'Revisión de prueba.', verdict: 'ALINEADA', findings: [], dimensions: Object.fromEntries(
+  ['ESTRATEGIA', 'MARCA', 'GRAMATICA', 'CONSISTENCIA'].map(key => [key, { score: 80, confidence: 0.8, assessable: true, note: 'Verificado.' }])) };
+
+test('review jobs preserve ownership and recover safely with real PostgreSQL', { skip: !databaseUrl }, async t => {
+  const db = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+  const createdClients = [];
+  const fixture = async () => {
+    const key = randomUUID();
+    const client = await db.client.create({ data: { name: `Review test ${key}`, slug: `review-test-${key}` } });
+    createdClients.push(client.id);
+    return db.contentPlan.create({ data: { clientId: client.id, month: 9, year: 2026, briaReviewRequestedAt: new Date(start.getTime() - 60000) } });
+  };
+  const options = planId => ({ planId, db, now: () => start, reviewOptions: {
+    getPlan: id => db.contentPlan.findUnique({ where: { id }, include: { client: true, contentItems: true } }),
+    searchMemory: async () => [], ai: { generate: async () => ({ text: JSON.stringify(rawReview), requestId: 'fixture' }) }
+  } });
+  try {
+    await t.test('two competing workers claim one review only', async () => {
+      assert.equal(typeof state.claimContentPlanReview, 'function');
+      const plan = await fixture();
+      const claims = await Promise.all(Array.from({ length: 5 }, () => state.claimContentPlanReview(plan.id, { db, now: start, trigger: 'MANUAL' })));
+      assert.equal(claims.filter(Boolean).length, 1);
+      const current = await db.contentPlan.findUnique({ where: { id: plan.id } });
+      assert.equal(current.briaReviewState, 'RUNNING');
+      assert.equal(current.briaReviewAttempts, 1);
+    });
+    await t.test('a successful review persists the shared score and releases its lease', async () => {
+      assert.equal(typeof scheduler.runContentPlanReviewJob, 'function');
+      const plan = await fixture();
+      const outcome = await scheduler.runContentPlanReviewJob(options(plan.id));
+      assert.equal(outcome.status, 'COMPLETED');
+      assert.equal(outcome.result.review.score, 80);
+      const current = await db.contentPlan.findUnique({ where: { id: plan.id } });
+      assert.equal(current.briaReviewState, 'CURRENT');
+      assert.equal(current.briaReviewLeaseToken, null);
+      assert.equal(await db.contentPlanReview.count({ where: { planId: plan.id } }), 1);
+    });
+    await t.test('manual clicks and an automatic worker coalesce into one AI call', async () => {
+      const plan = await fixture();
+      const config = options(plan.id);
+      let calls = 0;
+      let release;
+      let entered;
+      const ready = new Promise(resolve => { entered = resolve; });
+      config.reviewOptions.ai.generate = () => {
+        calls++;
+        entered();
+        return new Promise(resolve => { release = () => resolve({ text: JSON.stringify(rawReview) }); });
+      };
+      const first = scheduler.runContentPlanReviewJob(config);
+      await ready;
+      try {
+        const competing = await Promise.all(['MANUAL', 'AUTOMATIC', 'MANUAL'].map(trigger => scheduler.runContentPlanReviewJob({ ...config, trigger })));
+        assert.ok(competing.every(result => result.status === 'SKIPPED'));
+      } finally { release(); }
+      assert.equal((await first).status, 'COMPLETED');
+      assert.equal(calls, 1);
+      assert.equal(await db.contentPlanReview.count({ where: { planId: plan.id } }), 1);
+    });
+    await t.test('a cache hit completes its new lease without generating a different score', async () => {
+      const plan = await fixture();
+      const config = options(plan.id);
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
+      await state.markContentPlanReviewPending(plan.id, { db, requestedAt: start });
+      config.reviewOptions.ai.generate = async () => { assert.fail('unchanged review must reuse the shared score'); };
+      const cached = await scheduler.runContentPlanReviewJob(config);
+      assert.equal(cached.status, 'COMPLETED');
+      assert.equal(cached.result.meta.cached, true);
+      assert.equal(cached.result.review.score, 80);
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewLeaseToken, null);
+    });
+    await t.test('editing during generation prevents publication of stale scores and findings', async () => {
+      assert.equal(typeof scheduler.runContentPlanReviewJob, 'function');
+      const plan = await fixture();
+      const config = options(plan.id);
+      config.reviewOptions.ai.generate = async () => {
+        await state.markContentPlanReviewPending(plan.id, { db, requestedAt: new Date(start.getTime() + 1) });
+        return { text: JSON.stringify(rawReview) };
+      };
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'SUPERSEDED');
+      assert.equal(await db.contentPlanReview.count({ where: { planId: plan.id } }), 0);
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewState, 'PENDING');
+    });
+    await t.test('changes to client instructions without a queue mutation still invalidate the snapshot', async () => {
+      assert.equal(typeof scheduler.runContentPlanReviewJob, 'function');
+      const plan = await fixture();
+      const config = options(plan.id);
+      config.reviewOptions.ai.generate = async () => {
+        await db.client.update({ where: { id: plan.clientId }, data: { aiInstructions: 'New approved instructions' } });
+        return { text: JSON.stringify(rawReview) };
+      };
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'SUPERSEDED');
+      assert.equal(await db.contentPlanReview.count({ where: { planId: plan.id } }), 0);
+    });
+    await t.test('transient failures use bounded retries and new edits reset the budget', async () => {
+      assert.equal(typeof scheduler.runContentPlanReviewJob, 'function');
+      const plan = await fixture();
+      let tick = start;
+      const config = { ...options(plan.id), trigger: 'AUTOMATIC', now: () => tick, logger: { error() {} } };
+      config.reviewOptions.ai.generate = async () => { throw Object.assign(new Error('temporary upstream failure'), { status: 503 }); };
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const result = await scheduler.runContentPlanReviewJob(config);
+        assert.equal(result.status, 'FAILED');
+        const current = await db.contentPlan.findUnique({ where: { id: plan.id } });
+        assert.equal(current.briaReviewAttempts, attempt);
+        assert.equal(current.briaReviewState, attempt < 3 ? 'PENDING' : 'FAILED');
+        tick = new Date(tick.getTime() + 10 * 60000);
+      }
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'SKIPPED');
+      await state.markContentPlanReviewPending(plan.id, { db, requestedAt: tick });
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewAttempts, 0);
+    });
+    await t.test('expired worker cannot complete or fail a replacement worker', async () => {
+      assert.equal(typeof state.claimContentPlanReview, 'function');
+      const plan = await fixture();
+      const old = await state.claimContentPlanReview(plan.id, { db, now: start, trigger: 'AUTOMATIC' });
+      const later = new Date(start.getTime() + 10 * 60000);
+      const replacement = await state.claimContentPlanReview(plan.id, { db, now: later, trigger: 'AUTOMATIC' });
+      assert.ok(replacement);
+      assert.notEqual(old.token, replacement.token);
+      await assert.rejects(db.$transaction(tx => state.completeContentPlanReviewLease(tx, old, later)), { code: 'BRIA_REVIEW_SUPERSEDED' });
+      await state.failContentPlanReview(old, new Error('late error'), { db, now: later });
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewLeaseToken, replacement.token);
+    });
+    await t.test('scheduler recovers abandoned RUNNING work and respects retry delays', async () => {
+      const plan = await fixture();
+      await state.claimContentPlanReview(plan.id, { db, now: start, trigger: 'AUTOMATIC' });
+      const later = new Date(start.getTime() + 10 * 60000);
+      const config = options(plan.id);
+      const outcomes = await scheduler.reconcilePendingContentPlanReviews({ db, now: () => later, limit: 100, reviewOptions: config.reviewOptions });
+      assert.equal(outcomes.find(outcome => outcome.planId === plan.id)?.status, 'COMPLETED');
+      const delayed = await fixture();
+      await db.contentPlan.update({ where: { id: delayed.id }, data: { briaReviewNextAttemptAt: new Date(later.getTime() + 60000) } });
+      const waiting = await scheduler.reconcilePendingContentPlanReviews({ db, now: () => later, limit: 100, reviewOptions: config.reviewOptions });
+      assert.equal(waiting.some(outcome => outcome.planId === delayed.id), false);
+    });
+    await t.test('authentication errors stop retries, while an explicit rerun gets a fresh budget', async () => {
+      const plan = await fixture();
+      const config = { ...options(plan.id), logger: { error() {} } };
+      config.reviewOptions.ai.generate = async () => { throw Object.assign(new Error('bad credentials fixture'), { status: 401 }); };
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'FAILED');
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewState, 'FAILED');
+      config.reviewOptions.ai.generate = async () => ({ text: JSON.stringify(rawReview) });
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewAttempts, 1);
+    });
+    await t.test('repeated worker crashes end in a visible failure instead of infinite recovery', async () => {
+      const plan = await fixture();
+      for (let attempt = 0; attempt < 3; attempt++) {
+        assert.ok(await state.claimContentPlanReview(plan.id, { db, trigger: 'AUTOMATIC', now: new Date(start.getTime() + attempt * 6 * 60000) }));
+      }
+      assert.equal(await state.claimContentPlanReview(plan.id, { db, trigger: 'AUTOMATIC', now: new Date(start.getTime() + 18 * 60000) }), null);
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewState, 'FAILED');
+    });
+    await t.test('the additive startup schema is repeatable and preserves existing reviews and leases', async () => {
+      const plan = await fixture();
+      await scheduler.runContentPlanReviewJob(options(plan.id));
+      const lease = await state.claimContentPlanReview(plan.id, { db, now: start, trigger: 'MANUAL' });
+      const before = await db.contentPlan.findUnique({ where: { id: plan.id }, include: { briaReviews: true } });
+      const script = fileURLToPath(new URL('../scripts/ensure-content-plan-reviews-schema.js', import.meta.url));
+      for (let run = 0; run < 2; run++) {
+        execFileSync(process.execPath, [script], { env: { ...process.env, DATABASE_URL: databaseUrl }, stdio: 'pipe' });
+      }
+      const after = await db.contentPlan.findUnique({ where: { id: plan.id }, include: { briaReviews: true } });
+      assert.deepEqual(after, before);
+      assert.equal(after.briaReviewLeaseToken, lease.token);
+      assert.equal(after.briaReviews.length, 1);
+    });
+    await t.test('deadline releases a hung job and late generation cannot publish', async () => {
+      assert.equal(typeof scheduler.runContentPlanReviewJob, 'function');
+      const plan = await fixture();
+      let finish;
+      const config = { ...options(plan.id), timeoutMs: 250, logger: { error() {} } };
+      config.reviewOptions.ai.generate = () => new Promise(resolve => { finish = resolve; });
+      const outcome = await scheduler.runContentPlanReviewJob(config);
+      assert.equal(outcome.status, 'FAILED');
+      assert.equal(outcome.error.code, 'BRIA_REVIEW_TIMEOUT');
+      assert.ok(finish, 'AI generation was reached');
+      finish({ text: JSON.stringify(rawReview) });
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(await db.contentPlanReview.count({ where: { planId: plan.id } }), 0);
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewLeaseToken, null);
+    });
+  } finally {
+    for (const id of createdClients) await db.client.delete({ where: { id } });
+    await db.$disconnect();
+  }
+});

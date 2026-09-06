@@ -23,10 +23,10 @@ import {
 import { getFromS3Stream } from '../../services/s3Service.js';
 import {
   getContentPlanReview,
-  reviewContentPlanWithBria,
   updateContentPlanReviewFinding
 } from '../../services/briaContentPlanReviewService.js';
 import { markContentPlanReviewPending } from '../../services/briaContentPlanReviewState.js';
+import { runContentPlanReviewJob } from '../../services/briaContentPlanReviewScheduler.js';
 
 const router = express.Router();
 const upload = multer({
@@ -87,14 +87,16 @@ router.get('/plans/:id/bria-review', async (req, res) => {
 
 router.post('/plans/:id/bria-review', async (req, res) => {
   try {
-    await markContentPlanReviewPending(req.params.id);
-    const result = await reviewContentPlanWithBria({
+    const outcome = await runContentPlanReviewJob({
       planId: req.params.id,
       trigger: 'MANUAL',
-      requestedById: req.user.userId,
-      force: true
+      reviewOptions: { requestedById: req.user.userId, force: true }
     });
-    return res.json(result);
+    if (outcome.status === 'FAILED') throw outcome.error;
+    if (outcome.status !== 'COMPLETED') {
+      return res.status(202).json(await getContentPlanReview(req.params.id));
+    }
+    return res.json(outcome.result);
   } catch (error) {
     console.error('[API] Bria content-plan review failed:', error.response?.data || error.message || error);
     if (error.code === 'CONTENT_PLAN_NOT_FOUND') {

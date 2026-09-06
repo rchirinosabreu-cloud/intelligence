@@ -3,7 +3,7 @@ import { createTask } from './nativeTaskService.js';
 import { uploadToS3, deleteFromS3 } from './s3Service.js';
 import { randomBytes } from 'node:crypto';
 import { buildLinkedTaskUpdates } from '../lib/contentTaskReciprocity.js';
-import { markContentPlanReviewPending } from './briaContentPlanReviewState.js';
+import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from './briaContentPlanReviewState.js';
 
 let strategicObjectivesColumnExists = null;
 let contentItemFinalAssetColumnsExist = null;
@@ -288,10 +288,7 @@ export const createContentPlan = async (data) => {
         data: {
           deletedAt: null,
           status: status || 'PLANIFICACION',
-          briaReviewState: 'PENDING',
-          briaReviewRequestedAt: new Date(),
-          briaReviewStartedAt: null,
-          briaReviewError: null,
+          ...buildContentPlanReviewPendingData(),
           ...(hasStrategicColumn ? { strategicObjectives: strategicObjectives ?? existingPlan.strategicObjectives } : {})
         },
         select: await getContentPlanSelect({ client: true })
@@ -337,10 +334,7 @@ export const updateContentPlan = async (id, data) => {
     where: { id },
     data: {
       ...safeData,
-      briaReviewState: 'PENDING',
-      briaReviewRequestedAt: new Date(),
-      briaReviewStartedAt: null,
-      briaReviewError: null
+      ...buildContentPlanReviewPendingData()
     },
     select: await getContentPlanSelect()
   });

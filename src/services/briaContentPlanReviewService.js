@@ -5,6 +5,7 @@ import { createOpenAIClient } from './openAIClient.js';
 import { getAIInstance } from './aiService.js';
 import { getContentPlanById } from './contentService.js';
 import { searchBriaMemory } from './briaMemoryService.js';
+import { completeContentPlanReviewLease, supersededReviewError } from './briaContentPlanReviewState.js';
 
 export const CONTENT_PLAN_REVIEW_PROMPT_VERSION = 'content-plan-review-v2';
 
@@ -67,28 +68,31 @@ const normalizeText = (value) => String(value || '')
 const cleanString = (value, maxLength = 4000) => String(value || '').trim().slice(0, maxLength);
 const hashValue = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
-const compactPlan = (plan) => ({
+const compactPlan = (plan, { truncate = true, maxItems = 60 } = {}) => {
+  const text = truncate ? cleanString : (value) => String(value || '').trim();
+  return ({
   id: plan.id,
   client: {
     id: plan.client?.id || plan.clientId,
     name: plan.client?.name || '',
-    instructions: cleanString(plan.client?.aiInstructions, 3000)
+    instructions: text(plan.client?.aiInstructions, 3000)
   },
   period: `${plan.month}/${plan.year}`,
-  strategicObjectives: cleanString(plan.strategicObjectives, 3000),
-  internalNotes: cleanString(plan.internalNotes, 3000),
+  strategicObjectives: text(plan.strategicObjectives, 3000),
+  internalNotes: text(plan.internalNotes, 3000),
   items: (plan.items || plan.contentItems || [])
-    .slice(0, 60)
+    .slice(0, maxItems)
     .map((item) => ({
-      id: String(item.id), objective: cleanString(item.objective, 500), format: cleanString(item.format, 120),
-      copyText: cleanString(item.copyText, 1800), captionText: cleanString(item.captionText, 1800),
-      clientFeedback: cleanString(item.comments, 1000), internalNotes: cleanString(item.internalNotes, 1000),
+      id: String(item.id), objective: text(item.objective, 500), format: text(item.format, 120),
+      copyText: text(item.copyText, 1800), captionText: text(item.captionText, 1800),
+      clientFeedback: text(item.comments, 1000), internalNotes: text(item.internalNotes, 1000),
       publishDate: item.publishDate || null, status: item.status || null
     }))
     .sort((a, b) => a.id.localeCompare(b.id))
-});
+  });
+};
 
-export const buildContentPlanRevisionHash = (plan) => hashValue(compactPlan(plan));
+export const buildContentPlanRevisionHash = (plan) => hashValue(compactPlan(plan, { truncate: false, maxItems: Infinity }));
 export const buildContentPlanAnalysisHash = ({ revisionHash, evidence, promptVersion }) => hashValue({
   revisionHash,
   promptVersion,
@@ -208,12 +212,19 @@ const toApiResult = (run, findings = [], planState = 'CURRENT') => ({
   }
 });
 
-const createPrismaRepository = (db = prisma) => ({
-  async markCurrent(planId, startedAt) {
-    await db.contentPlan.updateMany({
-      where: { id: planId, OR: [{ briaReviewRequestedAt: null }, { briaReviewRequestedAt: { lte: startedAt } }] },
-      data: { briaReviewState: 'CURRENT', briaReviewStartedAt: null, briaReviewError: null }
-    });
+const guardReviewPublication = async (tx, { planId, execution, revisionHash, now, signal }) => {
+  signal?.throwIfAborted();
+  await completeContentPlanReviewLease(tx, execution, now());
+  const currentPlan = await tx.contentPlan.findUnique({
+    where: { id: planId }, include: { client: true, contentItems: true }
+  });
+  if (!currentPlan || buildContentPlanRevisionHash(currentPlan) !== revisionHash) throw supersededReviewError();
+  signal?.throwIfAborted();
+};
+
+export const createContentPlanReviewRepository = (db = prisma) => ({
+  async markCurrent(planId, _startedAt, guard) {
+    await db.$transaction(tx => guardReviewPublication(tx, { ...guard, planId }));
   },
   async findByAnalysisHash(analysisHash, { planId } = {}) {
     if (!planId) return null;
@@ -228,8 +239,9 @@ const createPrismaRepository = (db = prisma) => ({
     ]);
     return toApiResult(run, findings, planState?.briaReviewState || 'CURRENT');
   },
-  async saveCompletedReview({ analysisHash, revisionHash, promptVersion, result, plan, trigger, requestedById, startedAt }) {
+  async saveCompletedReview({ analysisHash, revisionHash, promptVersion, result, plan, trigger, requestedById, startedAt, execution, now, signal }) {
     return db.$transaction(async (tx) => {
+      await guardReviewPublication(tx, { planId: plan.id, execution, revisionHash, now, signal });
       const run = await tx.contentPlanReview.upsert({
         where: { planId_analysisHash: { planId: plan.id, analysisHash } },
         create: {
@@ -282,14 +294,11 @@ const createPrismaRepository = (db = prisma) => ({
         },
         data: { status: 'RESOLVED', resolvedAt: new Date(result.meta.reviewedAt) }
       });
-      await tx.contentPlan.updateMany({
-        where: { id: plan.id, OR: [{ briaReviewRequestedAt: null }, { briaReviewRequestedAt: { lte: startedAt } }] },
-        data: { briaReviewState: 'CURRENT', briaReviewStartedAt: null, briaReviewError: null }
-      });
       const findings = await tx.contentPlanReviewFinding.findMany({
         where: { planId: plan.id, status: { in: ['OPEN', 'VERIFYING'] } },
         orderBy: [{ severity: 'asc' }, { lastDetectedAt: 'desc' }]
       });
+      signal?.throwIfAborted();
       return toApiResult(run, findings, 'CURRENT');
     });
   }
@@ -332,8 +341,9 @@ export const updateContentPlanReviewFinding = async ({
 
 export const reviewContentPlanWithBria = async ({
   planId, getPlan = getContentPlanById, searchMemory = searchBriaMemory, ai = defaultAi(), repository,
-  trigger = 'MANUAL', requestedById = null, force = false, now = () => new Date()
+  trigger = 'MANUAL', requestedById = null, force = false, now = () => new Date(), execution, signal
 } = {}) => {
+  signal?.throwIfAborted();
   const startedAt = now();
   const plan = await getPlan(planId);
   if (!plan) {
@@ -345,13 +355,14 @@ export const reviewContentPlanWithBria = async ({
   const candidates = await searchMemory({
     query: buildContentPlanReviewQuery(plan), clientId: client.id, includeUnscoped: true, limit: 16
   });
+  signal?.throwIfAborted();
   const evidence = candidates.filter((item) => belongsToClient(item, client)).slice(0, 8).map(presentEvidence);
   const revisionHash = buildContentPlanRevisionHash(plan);
   const analysisHash = buildContentPlanAnalysisHash({ revisionHash, evidence, promptVersion: CONTENT_PLAN_REVIEW_PROMPT_VERSION });
-  const persistence = repository || (getPlan === getContentPlanById ? createPrismaRepository() : null);
+  const persistence = repository || (getPlan === getContentPlanById ? createContentPlanReviewRepository() : null);
   const cached = force ? null : await persistence?.findByAnalysisHash?.(analysisHash, { planId: plan.id });
-  if (cached) {
-    await persistence?.markCurrent?.(plan.id, startedAt);
+  if (cached && !cached.review?.findings?.some(finding => finding.status === 'VERIFYING')) {
+    await persistence?.markCurrent?.(plan.id, startedAt, { execution, revisionHash, now, signal });
     return { ...cached, meta: { ...cached.meta, revisionHash, analysisHash, promptVersion: CONTENT_PLAN_REVIEW_PROMPT_VERSION, cached: true, state: 'CURRENT' } };
   }
 
@@ -370,8 +381,9 @@ export const reviewContentPlanWithBria = async ({
   const aiResult = await ai.generate({
     model: AI_MODELS.fast,
     instructions: 'Eres Bria, directora de inteligencia operativa de Brainstudio. Responde solo con el JSON solicitado, en español claro y profesional.',
-    prompt, responseSchema: CONTENT_PLAN_REVIEW_SCHEMA, maxOutputTokens: 5000
+    prompt, responseSchema: CONTENT_PLAN_REVIEW_SCHEMA, maxOutputTokens: 5000, signal
   });
+  signal?.throwIfAborted();
   const review = parseBriaContentPlanReview(aiResult.text);
   const allowedEvidenceIds = new Set(evidence.map((item) => item.id));
   const itemIds = new Set((plan.items || plan.contentItems || []).map((item) => String(item.id)));
@@ -391,7 +403,7 @@ export const reviewContentPlanWithBria = async ({
   return persistence?.saveCompletedReview
     ? persistence.saveCompletedReview({
         analysisHash, revisionHash, promptVersion: CONTENT_PLAN_REVIEW_PROMPT_VERSION,
-        result, plan, trigger, requestedById, startedAt
+        result, plan, trigger, requestedById, startedAt, execution, now, signal
       })
     : result;
 };

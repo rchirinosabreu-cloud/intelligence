@@ -157,35 +157,49 @@ export class OpenAIRequestError extends Error {
 export const createOpenAIClient = ({
   apiKey = process.env.OPENAI_API_KEY,
   fetchImpl = globalThis.fetch,
-  models = {}
+  models = {},
+  requestTimeoutMs = 90000
 } = {}) => {
   const selectedModels = { ...DEFAULT_MODELS, ...models };
 
-  const request = async (path, body) => {
+  const request = async (path, body, signal) => {
     if (!apiKey) throw new OpenAIRequestError('OPENAI_API_KEY no está configurada.', { code: 'OPENAI_NOT_CONFIGURED' });
     if (typeof fetchImpl !== 'function') throw new OpenAIRequestError('No hay un cliente HTTP disponible para OpenAI.');
 
-    const response = await fetchImpl(`${OPENAI_API_BASE_URL}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-        'User-Agent': 'BrainStudioIntelligence/3.0'
-      },
-      body: JSON.stringify(body)
-    });
-
-    const requestId = response.headers?.get?.('x-request-id') || undefined;
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const upstreamMessage = payload?.error?.message || `OpenAI respondió HTTP ${response.status}`;
-      throw new OpenAIRequestError(upstreamMessage, {
-        status: response.status,
-        requestId,
-        code: payload?.error?.code || payload?.error?.type
+    const timeout = new AbortController();
+    const requestSignal = signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal;
+    const timer = setTimeout(() => timeout.abort(), requestTimeoutMs);
+    try {
+      const response = await fetchImpl(`${OPENAI_API_BASE_URL}${path}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          'User-Agent': 'BrainStudioIntelligence/3.0'
+        },
+        body: JSON.stringify(body),
+        signal: requestSignal
       });
+
+      const requestId = response.headers?.get?.('x-request-id') || undefined;
+      const payload = await response.json().catch(() => ({}));
+      requestSignal.throwIfAborted();
+      if (!response.ok) {
+        const upstreamMessage = payload?.error?.message || `OpenAI respondió HTTP ${response.status}`;
+        throw new OpenAIRequestError(upstreamMessage, {
+          status: response.status,
+          requestId,
+          code: payload?.error?.code || payload?.error?.type
+        });
+      }
+      return { payload, requestId };
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason;
+      if (timeout.signal.aborted) throw new OpenAIRequestError('OpenAI superó el tiempo máximo de respuesta.', { code: 'OPENAI_TIMEOUT', status: 504 });
+      throw error;
+    } finally {
+      clearTimeout(timer);
     }
-    return { payload, requestId };
   };
 
   const generate = async ({
@@ -196,7 +210,8 @@ export const createOpenAIClient = ({
     tools = [],
     responseSchema,
     json = false,
-    maxOutputTokens
+    maxOutputTokens,
+    signal
   }) => {
     const body = {
       model,
@@ -208,7 +223,7 @@ export const createOpenAIClient = ({
       ...(maxOutputTokens ? { max_output_tokens: maxOutputTokens } : {})
     };
 
-    const { payload, requestId } = await request('/responses', body);
+    const { payload, requestId } = await request('/responses', body, signal);
     return {
       id: payload.id,
       model: payload.model || model,

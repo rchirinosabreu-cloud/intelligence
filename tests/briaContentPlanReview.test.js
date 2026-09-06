@@ -116,7 +116,10 @@ test('content-plan API and editor expose a read-only Bria review workflow', asyn
   ]);
 
   assert.match(routes, /plans\/:id\/bria-review/);
-  assert.match(routes, /reviewContentPlanWithBria/);
+  assert.match(routes, /runContentPlanReviewJob/);
+  const manualRoute = routes.slice(routes.indexOf("router.post('/plans/:id/bria-review'"), routes.indexOf("router.patch('/plans/:id/bria-review/findings"));
+  assert.doesNotMatch(manualRoute, /markContentPlanReviewPending/);
+  assert.match(manualRoute, /res.status\(202\)/);
   assert.match(editor, /BriaContentPlanReview/);
   assert.match(panel, /Revisión de Bria/);
   assert.match(panel, /Revisar parrilla/);

@@ -351,6 +351,9 @@ model ContentPlan {
   briaReviewRequestedAt DateTime?                  @default(now())
   briaReviewStartedAt   DateTime?
   briaReviewError       String?
+  briaReviewLeaseToken  String?
+  briaReviewAttempts    Int                        @default(0)
+  briaReviewNextAttemptAt DateTime?                @db.Timestamptz()
   contentItems          ContentItem[]
   briaReviews           ContentPlanReview[]
   briaReviewFindings    ContentPlanReviewFinding[]
@@ -360,6 +363,7 @@ model ContentPlan {
   @@index([clientId, deletedAt, year, month])
   @@index([ownerId, deletedAt])
   @@index([briaReviewState, briaReviewRequestedAt])
+  @@index([briaReviewState, briaReviewStartedAt])
 }
 
 model ContentItem {

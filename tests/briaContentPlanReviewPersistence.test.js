@@ -56,6 +56,15 @@ test('content-plan revision is deterministic and changes with reviewable content
   assert.notEqual(buildContentPlanRevisionHash(plan), buildContentPlanRevisionHash(changed));
 });
 
+test('revision invalidation includes pieces beyond 60 and untruncated reviewable text', () => {
+  const large = { ...plan, items: Array.from({ length: 61 }, (_, index) => ({ ...plan.items[0], id: `piece-${index}` })) };
+  const changed = structuredClone(large);
+  changed.items[60].copyText = 'Changed outside the first prompt window';
+  assert.notEqual(buildContentPlanRevisionHash(large), buildContentPlanRevisionHash(changed));
+  const long = { ...plan, items: [{ ...plan.items[0], copyText: 'a'.repeat(2000) }] };
+  assert.notEqual(buildContentPlanRevisionHash(long), buildContentPlanRevisionHash({ ...long, items: [{ ...long.items[0], copyText: `${long.items[0].copyText} correction` }] }));
+});
+
 test('analysis hash includes the plan revision, evidence and prompt version', () => {
   const revisionHash = buildContentPlanRevisionHash(plan);
   const first = buildContentPlanAnalysisHash({
@@ -181,4 +190,18 @@ test('the same plan and memory snapshot reuse one persisted global review', asyn
   assert.equal(first.meta.analysisHash, second.meta.analysisHash);
   assert.equal(second.meta.cached, true);
   assert.equal(second.review.score, 90);
+});
+
+test('marking corrected triggers verification even when the content hash is unchanged', async () => {
+  let calls = 0;
+  const result = await reviewContentPlanWithBria({
+    planId: plan.id, getPlan: async () => plan, searchMemory: async () => [],
+    repository: {
+      findByAnalysisHash: async () => ({ review: { findings: [{ status: 'VERIFYING' }] }, meta: {} }),
+      saveCompletedReview: async ({ result }) => result
+    },
+    ai: { generate: async () => { calls++; return { text: JSON.stringify({ summary: 'Still needs correction', score: 70, findings: [] }) }; } }
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.meta.cached, false);
 });
