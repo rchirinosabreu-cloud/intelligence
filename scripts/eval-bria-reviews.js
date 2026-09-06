@@ -16,7 +16,7 @@ export const parseBriaEvalArgs = argv => {
   const repeats = Number(values.repeats), maxCalls = Number(values['max-calls']);
   if (!Number.isInteger(repeats) || repeats < 1 || repeats > 5) throw new Error('Las repeticiones deben estar entre 1 y 5.');
   if (!Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > 200) throw new Error('El presupuesto debe estar entre 1 y 200 llamadas.');
-  if (!['baseline', 'candidate'].includes(values.variant)) throw new Error('Variante desconocida.');
+  if (!['baseline', 'candidate', 'traceable'].includes(values.variant)) throw new Error('Variante desconocida.');
   const requested = values.cases?.split(',');
   if (requested && (new Set(requested).size !== requested.length || requested.some(id => !briaReviewCases.some(sample => sample.id === id)))) throw new Error('Selección de casos desconocida o repetida.');
   return { live: values.live, variant: values.variant, repeats, maxCalls, cases: requested ? briaReviewCases.filter(sample => requested.includes(sample.id)) : briaReviewCases };

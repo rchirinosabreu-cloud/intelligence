@@ -5,6 +5,7 @@ import { parseBriaEvalArgs } from '../scripts/eval-bria-reviews.js';
 
 test('CLI es solo validación por defecto; requiere opt-in para gasto y valida todas las opciones', () => {
   assert.equal(parseBriaEvalArgs([]).live, false);
+  assert.equal(parseBriaEvalArgs(['--variant', 'traceable']).variant, 'traceable');
   assert.equal(parseBriaEvalArgs(['--live', '--repeats', '2', '--max-calls', '8']).repeats, 2);
   assert.throws(() => parseBriaEvalArgs(['--repeats', 'NaN']), /repeticiones/);
   assert.throws(() => parseBriaEvalArgs(['--max-calls', '201']), /presupuesto/);

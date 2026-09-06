@@ -248,6 +248,7 @@ enum ClientStatus {
 }
 
 model Client {
+  editorialCriteria ClientEditorialCriterion[]
   id                  String               @id @default(uuid())
   name                String
   slug                String               @unique
@@ -335,6 +336,7 @@ enum BoardItemType {
 }
 
 model ContentPlan {
+  proposedEditorialCriteria ClientEditorialCriterion[]
   id                    String                     @id @default(uuid())
   clientId              String
   month                 Int
@@ -429,6 +431,7 @@ model ContentPlanReview {
 }
 
 model ContentPlanReviewFinding {
+  proposedEditorialCriteria ClientEditorialCriterion[]
   id              String            @id @default(uuid())
   planId          String
   itemId          String?
@@ -489,6 +492,30 @@ model Integration {
   client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([clientId, provider])
+}
+
+// Immutable proposal text; decisions append audit entries and advance version.
+// Human-approved, client-scoped memory. Dismissals never write this table.
+model ClientEditorialCriterion {
+  id              String   @id @default(uuid())
+  clientId        String
+  sourcePlanId    String?
+  sourceFindingId String?
+  requestId       String   @unique
+  category        String
+  text            String   @db.VarChar(800)
+  status          String   @default("PROPOSED")
+  version         Int      @default(1)
+  history         Json
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  sourcePlan      ContentPlan? @relation(fields: [sourcePlanId], references: [id], onDelete: SetNull)
+  sourceFinding   ContentPlanReviewFinding? @relation(fields: [sourceFindingId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, status])
+  @@index([sourcePlanId])
+  @@index([sourceFindingId])
 }
 
 model TeamMember {

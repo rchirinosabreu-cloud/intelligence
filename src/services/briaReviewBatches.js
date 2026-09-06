@@ -54,6 +54,7 @@ export const aggregateContentPlanReviewBatches = completed => {
   return {
     summary: completed.length === 1 ? completed[0].review.summary : `Revisé ${totalItems} piezas en ${completed.length} lotes. ${completed.map(part => part.review.summary).join(' ').slice(0, 1050)}`,
     verdict, dimensions: mergedDimensions, findings: [...findings.values()],
+    ...(completed.some(part => part.review.scoreChecks) ? { scoreChecks: completed.flatMap(part => part.review.scoreChecks || []) } : {}),
     scope: { version: 1, totalItems, reviewedItems: totalItems, reviewedItemIds: completed.flatMap(part => part.itemIds), batchCount: completed.length, complete: true,
       fullText: true, crossBatchTextComparison: completed.length === 1 }
   };

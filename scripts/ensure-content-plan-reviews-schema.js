@@ -90,6 +90,25 @@ try {
 
     ALTER TABLE "ContentPlanReviewFinding" ADD COLUMN IF NOT EXISTS "verification" JSONB;
 
+    CREATE TABLE IF NOT EXISTS "ClientEditorialCriterion" (
+      "id" TEXT PRIMARY KEY,
+      "clientId" TEXT NOT NULL REFERENCES "Client"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+      "sourcePlanId" TEXT REFERENCES "ContentPlan"("id") ON DELETE SET NULL ON UPDATE CASCADE,
+      "sourceFindingId" TEXT REFERENCES "ContentPlanReviewFinding"("id") ON DELETE SET NULL ON UPDATE CASCADE,
+      "requestId" TEXT NOT NULL,
+      "category" TEXT NOT NULL,
+      "text" VARCHAR(800) NOT NULL,
+      "status" TEXT NOT NULL DEFAULT 'PROPOSED',
+      "version" INTEGER NOT NULL DEFAULT 1,
+      "history" JSONB NOT NULL,
+      "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS "ClientEditorialCriterion_requestId_key" ON "ClientEditorialCriterion"("requestId");
+    CREATE INDEX IF NOT EXISTS "ClientEditorialCriterion_clientId_status_idx" ON "ClientEditorialCriterion"("clientId", "status");
+    CREATE INDEX IF NOT EXISTS "ClientEditorialCriterion_sourcePlanId_idx" ON "ClientEditorialCriterion"("sourcePlanId");
+    CREATE INDEX IF NOT EXISTS "ClientEditorialCriterion_sourceFindingId_idx" ON "ClientEditorialCriterion"("sourceFindingId");
+
     CREATE UNIQUE INDEX IF NOT EXISTS "ContentPlanReview_planId_analysisHash_key" ON "ContentPlanReview"("planId", "analysisHash");
     CREATE INDEX IF NOT EXISTS "ContentPlanReview_planId_createdAt_idx" ON "ContentPlanReview"("planId", "createdAt");
     CREATE INDEX IF NOT EXISTS "ContentPlanReview_status_createdAt_idx" ON "ContentPlanReview"("status", "createdAt");

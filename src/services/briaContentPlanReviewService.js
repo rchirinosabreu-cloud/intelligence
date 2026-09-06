@@ -10,6 +10,7 @@ import { completeContentPlanReviewLease, supersededReviewError, markContentPlanR
 import { verifyContentPlanFindings } from './briaFindingVerification.js';
 import { getReviewBatchProgress } from './briaReviewBatches.js';
 import { generateContentPlanReview, CONTENT_PLAN_REVIEW_PROMPT_VERSION } from './briaContentPlanReviewGenerator.js';
+import { createClientCriterionService } from './briaClientCriterionService.js';
 export { CONTENT_PLAN_REVIEW_PROMPT_VERSION } from './briaContentPlanReviewGenerator.js';
 export { parseBriaContentPlanReview, calculateContentPlanReviewScore } from './briaContentPlanReviewContract.js';
 
@@ -29,7 +30,8 @@ const compactPlan = (plan, { truncate = true, maxItems = 60 } = {}) => {
   client: {
     id: plan.client?.id || plan.clientId,
     name: plan.client?.name || '',
-    instructions: text(plan.client?.aiInstructions, 3000)
+    instructions: text(plan.client?.aiInstructions, 3000),
+    ...(plan.approvedCriteria?.length ? { approvedCriteria: [...plan.approvedCriteria].sort((a, b) => a.id.localeCompare(b.id)) } : {})
   },
   period: `${plan.month}/${plan.year}`,
   strategicObjectives: text(plan.strategicObjectives, 3000),
@@ -128,11 +130,13 @@ const guardReviewPublication = async (tx, { planId, execution, revisionHash, now
   const currentPlan = await tx.contentPlan.findUnique({
     where: { id: planId }, include: { client: true, contentItems: { where: { deletedAt: null } } }
   });
+  if (currentPlan) currentPlan.approvedCriteria = await createClientCriterionService(tx).approved(currentPlan.clientId);
   if (!currentPlan || buildContentPlanRevisionHash(currentPlan) !== revisionHash) throw supersededReviewError();
   signal?.throwIfAborted();
 };
 
 export const createContentPlanReviewRepository = (db = prisma) => ({
+  findApprovedCriteria: clientId => createClientCriterionService(db).approved(clientId),
   async loadCheckpoint(planId) {
     const plan = await db.contentPlan.findUnique({ where: { id: planId }, select: { briaReviewCheckpoint: true } });
     return plan?.briaReviewCheckpoint;
@@ -283,21 +287,28 @@ export const reviewContentPlanWithBria = async ({
 } = {}) => {
   signal?.throwIfAborted();
   const startedAt = now();
-  const plan = await getPlan(planId);
-  if (!plan) {
+  const loadedPlan = await getPlan(planId);
+  if (!loadedPlan) {
     const error = new Error('La parrilla no existe o ya no está disponible.');
     error.code = 'CONTENT_PLAN_NOT_FOUND';
     throw error;
   }
+  const persistence = repository || (getPlan === getContentPlanById ? createContentPlanReviewRepository() : null);
+  const plan = { ...loadedPlan, approvedCriteria: await persistence?.findApprovedCriteria?.(loadedPlan.clientId || loadedPlan.client?.id) || [] };
   const client = plan.client || { id: plan.clientId, name: '', slug: '' };
   const candidates = await searchMemory({
     query: buildContentPlanReviewQuery(plan), clientId: client.id, includeUnscoped: true, limit: 16
   });
   signal?.throwIfAborted();
-  const evidence = candidates.filter((item) => belongsToClient(item, client)).slice(0, 8).map(presentEvidence);
+  const evidence = [
+    ...plan.approvedCriteria.map(criterion => ({
+      id: `criterion:${criterion.id}:v${criterion.version}`, title: `Criterio validado · ${criterion.category}`,
+      sourceKind: 'CLIENT_CRITERION', sourceUrl: `/parrillas/${plan.id}`, content: criterion.text, score: 1
+    })),
+    ...candidates.filter((item) => belongsToClient(item, client)).slice(0, 8).map(presentEvidence)
+  ];
   const revisionHash = buildContentPlanRevisionHash(plan);
   const analysisHash = buildContentPlanAnalysisHash({ revisionHash, evidence, promptVersion: CONTENT_PLAN_REVIEW_PROMPT_VERSION });
-  const persistence = repository || (getPlan === getContentPlanById ? createContentPlanReviewRepository() : null);
   const activeFindings = await persistence?.findActiveFindings?.(plan.id) || [];
   const cached = force ? null : await persistence?.findByAnalysisHash?.(analysisHash, { planId: plan.id });
   if (cached && !activeFindings.some(finding => finding.status === 'VERIFYING') && !cached.review?.findings?.some(finding => finding.status === 'VERIFYING')) {

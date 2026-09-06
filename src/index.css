@@ -18,6 +18,10 @@
     --primary: 189 100% 36.3%;
     --primary-foreground: 0 0% 100%;
 
+    /* Approved Bria green/cyan hues, deepened for AA white text in compact dialogs. */
+    --bria-header-start: 0 123 99;
+    --bria-header-end: 0 116 139;
+
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
 
@@ -76,6 +80,10 @@
 }
 
 @layer components {
+  .brain-ai-header {
+    background-image: linear-gradient(135deg, rgb(var(--bria-header-start)), rgb(var(--bria-header-end)));
+    color: white;
+  }
   .brain-popover-surface {
     @apply rounded-xl border border-zinc-200/80 bg-white text-zinc-900 shadow-lg shadow-zinc-950/5 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:shadow-black/20;
     max-width: calc(100vw - 2rem);

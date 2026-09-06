@@ -134,12 +134,12 @@ const convertGeminiContents = (contents = []) => {
   return input;
 };
 
-const buildTextFormat = (schema) => {
+const buildTextFormat = (schema, strict = false) => {
   if (!schema) return { type: 'json_object' };
   return {
     type: 'json_schema',
     name: 'brainstudio_response',
-    strict: false,
+    strict,
     schema: normalizeSchema(schema)
   };
 };
@@ -209,6 +209,8 @@ export const createOpenAIClient = ({
     model = selectedModels.chat,
     tools = [],
     responseSchema,
+    strictSchema = false,
+    reasoningEffort,
     json = false,
     maxOutputTokens,
     signal
@@ -217,9 +219,9 @@ export const createOpenAIClient = ({
       model,
       input: input || prompt,
       ...(instructions ? { instructions } : {}),
-      ...(/^gpt-5(?:\.|-)/.test(model) ? { reasoning: { effort: 'none' } } : {}),
+      ...(/^gpt-5(?:\.|-)/.test(model) ? { reasoning: { effort: reasoningEffort || 'none' } } : {}),
       ...(tools.length ? { tools: normalizeTools(tools) } : {}),
-      ...((responseSchema || json) ? { text: { format: buildTextFormat(responseSchema) } } : {}),
+      ...((responseSchema || json) ? { text: { format: buildTextFormat(responseSchema, strictSchema) } } : {}),
       ...(maxOutputTokens ? { max_output_tokens: maxOutputTokens } : {})
     };
 

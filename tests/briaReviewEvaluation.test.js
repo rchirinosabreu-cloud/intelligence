@@ -8,6 +8,11 @@ const dimensions = Object.fromEntries(['ESTRATEGIA', 'MARCA', 'GRAMATICA', 'CONS
 const example = () => ({ id: 'case', source: { kind: 'synthetic', labels: 'DRAFT' }, snapshot: { id: 'plan', client: { id: 'client' }, items: [{ id: 'p1', copyText: 'Las tarea está lista.' }] }, evidence: [], expected: { required: [expected], forbidden: [], exhaustive: false, scoreBands: {}, assessable: {} } });
 const review = findings => ({ findings, dimensions, score: 100, scope: { reviewedItemIds: ['p1'], complete: true } });
 
+test('unscored traceable results never imply perfect numeric score stability', () => {
+  const runs = [null, 100].map(score => ({ caseId: 'missing-score', status: 'SUCCESS', review: { ...review([]), score }, calls: [], grade: gradeBriaReview(example(), review([])) }));
+  assert.equal(summarizeBriaEvaluation(runs).stability[0].scoreSpread, null);
+});
+
 test('casos sintéticos tienen etiquetas de borrador, IDs únicos y al menos 32 escenarios positivos/negativos', () => {
   assert.ok(briaReviewCases.length >= 32);
   validateBriaEvaluationCases(briaReviewCases);

@@ -15,6 +15,8 @@ import {
   Sparkles
 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
+import BriaClientCriteria from './BriaClientCriteria';
+import BriaScoreDetails from './BriaScoreDetails';
 import {
   Dialog,
   DialogContent,
@@ -275,6 +277,8 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
 
       {isExpanded && (
         <div id="bria-content-plan-review-body" aria-live="polite" className="space-y-5 px-5 pb-6 pt-5 sm:px-6">
+          <div className="flex flex-wrap justify-end gap-2"><BriaScoreDetails review={result?.review} onViewItem={openFindingItem} /><BriaClientCriteria key={planId} planId={planId} onChanged={loadReview} /></div>
+          {result?.meta?.state === 'STALE' && <p className="text-sm text-zinc-600 dark:text-zinc-300">Los criterios del cliente cambiaron. Este puntaje corresponde a una versión anterior; puedes revisar nuevamente esta parrilla finalizada.</p>}
           {isPending && !isReviewing && (
             <div className="flex items-start gap-3 rounded-2xl bg-cyan-50 p-4 text-sm text-cyan-900 dark:bg-cyan-950/30 dark:text-cyan-100">
               <Loader2 className={`mt-0.5 h-5 w-5 shrink-0 ${result?.meta?.state === 'RUNNING' ? 'animate-spin' : ''}`} />

@@ -26,8 +26,10 @@ import {
   updateContentPlanReviewFinding
 } from '../../services/briaContentPlanReviewService.js';
 import { runContentPlanReviewJob } from '../../services/briaContentPlanReviewScheduler.js';
+import { createClientCriteriaRouter } from './clientCriteria.js';
 
 const router = express.Router();
+router.use('/plans/:planId/criteria', createClientCriteriaRouter());
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024, files: 1 }

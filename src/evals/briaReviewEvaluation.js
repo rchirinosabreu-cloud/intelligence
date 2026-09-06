@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { BRIA_REVIEW_RUBRIC, rubricHash } from '../lib/briaReviewRubric.js';
 import { buildContentPlanReviewBatches } from '../services/briaReviewBatches.js';
 import { CONTENT_PLAN_REVIEW_PROMPT_VERSION, generateContentPlanReview } from '../services/briaContentPlanReviewGenerator.js';
+import { TRACEABLE_RUBRIC } from '../services/briaTraceableScore.js';
 
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const key = finding => JSON.stringify([finding.ruleKey, finding.itemId ?? null, finding.field ?? null]);
@@ -96,7 +97,7 @@ export const summarizeBriaEvaluation = runs => {
       agreements.push(union.size ? [...a].filter(item => b.has(item)).length / union.size : 1);
     }
     return { caseId, successfulRuns: group.length, failedRuns: all.length - group.length,
-      scoreSpread: valid ? Math.max(...group.map(run => run.review.score)) - Math.min(...group.map(run => run.review.score)) : null,
+      scoreSpread: valid && group.every(run => Number.isFinite(run.review.score)) ? Math.max(...group.map(run => run.review.score)) - Math.min(...group.map(run => run.review.score)) : null,
       findingAgreement: average(agreements) };
   });
   return {
@@ -119,7 +120,7 @@ export const summarizeBriaEvaluation = runs => {
 export const runBriaReviewEvaluation = async ({ cases, ai, repeats = 1, maxCalls = 40, variant = 'candidate', signal }) => {
   const validation = validateBriaEvaluationCases(cases);
   if (!Number.isInteger(repeats) || repeats < 1 || repeats > 5) throw new Error('Las repeticiones deben estar entre 1 y 5.');
-  if (!['baseline', 'candidate'].includes(variant)) throw new Error('Variante desconocida.');
+  if (!['baseline', 'candidate', 'traceable'].includes(variant)) throw new Error('Variante desconocida.');
   const plannedCalls = cases.reduce((n, sample) => n + buildContentPlanReviewBatches(sample.snapshot).length * repeats, 0);
   if (!Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > 200 || plannedCalls > maxCalls) throw new Error(`El presupuesto de ${maxCalls} llamadas no cubre las ${plannedCalls} necesarias.`);
   const runs = [];
@@ -143,14 +144,15 @@ export const runBriaReviewEvaluation = async ({ cases, ai, repeats = 1, maxCalls
     } };
     try {
       const result = await generateContentPlanReview({ snapshot: sample.snapshot, evidence: sample.evidence, analysisHash: inputHash, ai: measuredAi, variant, signal });
-      runs.push({ ...base, status: 'SUCCESS', review: result.review, calls: result.calls, grade: gradeBriaReview(sample, result.review, { ruleMetricsComparable: variant === 'candidate' }) });
+      runs.push({ ...base, status: 'SUCCESS', review: result.review, calls: result.calls, grade: gradeBriaReview(sample, result.review, { ruleMetricsComparable: variant !== 'baseline' }) });
     } catch (error) {
       if (signal?.aborted) throw error;
-      runs.push({ ...base, status: 'FAILED', calls: attemptedCalls, error: { code: error.code || 'REVIEW_ERROR', requestId: error.requestId || null } });
+      runs.push({ ...base, status: 'FAILED', calls: attemptedCalls, error: { code: error.code || 'REVIEW_ERROR', diagnostic: error.diagnostic || null, requestId: error.requestId || null } });
     }
   }
+  const rubric = variant === 'traceable' ? TRACEABLE_RUBRIC : variant === 'candidate' ? BRIA_REVIEW_RUBRIC : null;
   return { reportVersion: 1, createdAt: new Date().toISOString(), datasetHash: validation.datasetHash,
-    promptVersion: CONTENT_PLAN_REVIEW_PROMPT_VERSION, variant, rubric: variant === 'candidate' ? { version: BRIA_REVIEW_RUBRIC.version, hash: rubricHash() } : null,
+    promptVersion: CONTENT_PLAN_REVIEW_PROMPT_VERSION, variant, rubric: rubric ? { version: rubric.version, hash: rubricHash(rubric) } : null,
     repeats, plannedCalls, decision: validation.synthetic ? 'NEEDS_HUMAN_CALIBRATION' : 'REQUIRES_TEAM_DECISION',
     summary: summarizeBriaEvaluation(runs), runs };
 };
