@@ -85,3 +85,15 @@ test('content mutations mark the global Bria review stale instead of reviewing p
   assert.match(scheduler, /60 \* 1000/);
   assert.match(scheduler, /running/);
 });
+
+test('discard reason and explanation use block layout so vertical field spacing is effective', async () => {
+  const panel = await read('src/components/modules/ContentPlan/BriaContentPlanReview.jsx');
+  const dialog = panel.slice(panel.indexOf('<Dialog open={Boolean(dismissFinding)}'));
+  const labels = [...dialog.matchAll(/<label className="([^"]+)"/g)];
+  assert.equal(labels.length, 2);
+  for (const [, classes] of labels) {
+    assert.match(classes, /\bgrid\b/);
+    assert.match(classes, /\bgap-2\b/);
+  }
+  assert.match(dialog, /space-y-5 p-6/);
+});

@@ -429,14 +429,14 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
             </DialogHeader>
           </div>
           <div className="space-y-5 p-6">
-            <label className="space-y-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
+            <label className="grid gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
               Motivo
               <select value={dismissReason} onChange={(event) => setDismissReason(event.target.value)} className="min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-950 focus:outline-none focus:ring-2 focus:ring-destructive/30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white">
                 {dismissReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
               </select>
             </label>
             {dismissReason === 'Otro motivo' && (
-              <label className="space-y-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
+              <label className="grid gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
                 Explicación
                 <textarea value={customReason} onChange={(event) => setCustomReason(event.target.value)} maxLength={300} rows={3} placeholder="Explica brevemente por qué no aplica…" className="w-full rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-950 focus:outline-none focus:ring-2 focus:ring-destructive/30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white" />
               </label>
