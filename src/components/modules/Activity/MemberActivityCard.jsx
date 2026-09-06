@@ -1,119 +1,48 @@
-import { useEffect } from 'react';
-import { Clock, User, Trash2 } from '@/components/ui/icons';
+import { Clock, Trash2, Video } from '@/components/ui/icons';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
+import { formatActivityEventSchedule } from './calendarPresentation';
 
-const MemberActivityCard = ({
-  isOpen,
-  member,
-  isAdmin,
-  onDeleteEvent,
-  cardRef,
-  cardPosition,
-  handlePointerEnter,
-  handlePointerLeave
-}) => {
-  const memberName = member?.name;
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && memberName) {
-        console.log(`[Lifecycle] MemberActivityCard MOUNTED for ${memberName}`);
-    }
-  }, [memberName]);
-
+const MemberActivityCard = ({ isOpen, member, isAdmin, onDeleteEvent, cardRef, cardPosition, handlePointerEnter, handlePointerLeave }) => {
   if (!member) return null;
-
-  const currentEvent = member.currentEvent;
-  const currentTask = member.currentTask;
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'LIBRE': return 'bg-green-500';
-      case 'ENFOCADO': return 'bg-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.5)]';
-      case 'OCUPADO': return 'bg-orange-500';
-      case 'REUNION': return 'bg-zinc-400';
-      case 'PRODUCCION': return 'bg-fuchsia-500';
-      case 'AUSENTE': return 'bg-red-900';
-      default: return 'bg-zinc-200';
-    }
-  };
-
+  const { currentEvent, currentTask } = member;
   return (
-    <aside
-      ref={cardRef}
-      data-activity-floating-card="member"
-      className={cn(
-        "fixed w-64 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl p-3 z-[60]",
-        isOpen ? "block pointer-events-auto" : "hidden pointer-events-none"
-      )}
+    <aside ref={cardRef} data-activity-floating-card="member"
+      className={cn('brain-popover-surface fixed z-[60] w-72 overflow-y-auto p-4', isOpen ? 'block pointer-events-auto' : 'hidden pointer-events-none')}
       style={{ left: cardPosition?.left || 0, top: cardPosition?.top || 0 }}
-      onPointerEnter={handlePointerEnter}
-      onPointerLeave={handlePointerLeave}
-      role="dialog"
-      aria-label={`Detalles de ${member.name}`}
-    >
-      <div className="space-y-3">
-        <div className="flex items-center">
-          <div className="flex-1 min-w-0">
-            <h4 className="text-[12px] font-black text-zinc-900 dark:text-white truncate uppercase tracking-tight">{member.name}</h4>
-          </div>
-        </div>
-
-        {currentEvent ? (
-          <div className="space-y-3 pt-2">
-            <div className="space-y-1">
-              <span className="text-[9px] font-black uppercase text-zinc-400 tracking-wider">Actividad Actual</span>
-              <h5 className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 leading-tight">
-                {currentEvent.title}
-              </h5>
-            </div>
-
-            <div className="flex items-center justify-between gap-2 p-2.5 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5">
-              <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-600 dark:text-zinc-400">
-                <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                {new Date(currentEvent.startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </div>
-              {isAdmin && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDeleteEvent(currentEvent.id); }}
-                  className="brain-danger-button-icon rounded-lg p-1.5"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {currentEvent.meetingLink && (
-              <a
-                href={currentEvent.meetingLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase shadow-lg shadow-indigo-600/20"
-              >
-                Entrar a Reunión
-              </a>
-            )}
-          </div>
-        ) : currentTask ? (
-           <div className="space-y-2 pt-2">
-              <div className="p-3 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/20">
-                  <h5 className="text-[12px] font-bold text-zinc-900 dark:text-white leading-tight mb-1">
-                    {currentTask.title}
-                  </h5>
-                  <p className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider">
-                    {currentTask.clientName || 'Agencia'}
-                  </p>
-              </div>
-           </div>
-        ) : (
-          <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100 dark:border-emerald-900/20">
-            <User className="w-4 h-4 text-emerald-500" />
-            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-tight">Activo en Oficina</span>
-          </div>
-        )}
+      onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}
+      role="dialog" aria-label={`Detalles de ${member.name}`}>
+      <div className="flex items-center gap-2.5">
+        <TeamAvatar member={member} size={32} showTitle={false} className="h-8 w-8 shrink-0" />
+        <h4 className="min-w-0 text-sm font-semibold leading-5">{member.name}</h4>
       </div>
-      <div className="absolute top-full left-1/2 -translate-x-1/2 border-[10px] border-transparent border-t-white dark:border-t-zinc-900" />
+      {currentEvent ? (
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">Actividad actual</p>
+          <h5 className="text-sm font-medium leading-5">{currentEvent.title}</h5>
+          <div className="flex items-center justify-between gap-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+            <p className="flex min-w-0 items-start gap-2 text-xs leading-5 text-zinc-600 dark:text-zinc-300">
+              <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{formatActivityEventSchedule(currentEvent)}</span>
+            </p>
+            {isAdmin && <button type="button" aria-label="Eliminar evento" title="Eliminar evento"
+              onClick={e => { e.stopPropagation(); onDeleteEvent(currentEvent.id); }}
+              className="brain-danger-button-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-lg">
+              <Trash2 className="h-4 w-4" />
+            </button>}
+          </div>
+          {currentEvent.meetingLink && <a href={currentEvent.meetingLink} target="_blank" rel="noopener noreferrer"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-zinc-200 px-3 text-xs font-medium hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 dark:border-zinc-700 dark:hover:bg-zinc-800">
+            <Video className="h-4 w-4" /> Entrar a reunión
+          </a>}
+        </div>
+      ) : currentTask ? (
+        <div className="mt-3 space-y-1 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">{currentTask.clientName || 'Agencia'}</p>
+          <h5 className="text-sm font-medium leading-5">{currentTask.title}</h5>
+        </div>
+      ) : <p className="mt-3 text-xs text-zinc-600 dark:text-zinc-300">Disponible en oficina</p>}
     </aside>
   );
 };
-
 export default MemberActivityCard;

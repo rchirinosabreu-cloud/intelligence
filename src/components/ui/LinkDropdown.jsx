@@ -72,7 +72,7 @@ const LinkDropdown = ({ label, links = [], icon: Icon = LinkIcon }) => {
                         }}
                     />
                     <div
-                        className="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl z-[70] py-2 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200"
+                        className="brain-popover-surface absolute bottom-full left-0 right-0 z-[70] mb-2 overflow-y-auto py-2 animate-in fade-in slide-in-from-bottom-2 duration-200"
                         data-side-panel-ignore="true"
                     >
                         {linkArray.map((url, idx) => (
@@ -83,7 +83,7 @@ const LinkDropdown = ({ label, links = [], icon: Icon = LinkIcon }) => {
                                     e.stopPropagation();
                                     openPlatformLink(sanitizeUrl(url), { navigate });
                                 }}
-                                className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-[10px] font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border-b last:border-0 border-zinc-100 dark:border-zinc-800/50"
+                                className="flex min-h-11 w-full items-center justify-between gap-3 px-4 py-2.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
                             >
                                 <span className="truncate flex-1 text-left">Enlace #{idx + 1}</span>
                                 <ExternalLink size={12} className="shrink-0 opacity-40" />

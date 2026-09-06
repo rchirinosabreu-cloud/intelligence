@@ -37,6 +37,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import {
   addExternalEmailTags,
   explainGoogleSyncError,
+  formatActivityEventSchedule,
   fromBogotaDatePickerValue,
   getCalendarPopoverPosition,
   getDayEventDisplay,
@@ -864,13 +865,13 @@ const OperationalCalendar = () => {
       {hoveredEvent && (
         <div
           data-operational-event-popover="preview"
-          className="pointer-events-none fixed z-[90] w-[300px] rounded-2xl border border-zinc-200 bg-white p-4 text-sm shadow-2xl shadow-zinc-950/10 dark:border-white/10 dark:bg-zinc-900 dark:shadow-black/30"
+          className="brain-popover-surface pointer-events-none fixed z-[90] w-[300px] overflow-hidden p-4 text-sm"
           style={{ left: hoveredEvent.position.left, top: hoveredEvent.position.top }}
         >
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-bold text-zinc-500">{getTypeLabel(hoveredEvent.event.type)}</p>
-              <h4 className="mt-1 line-clamp-2 font-bold text-zinc-950 dark:text-white">{hoveredEvent.event.title}</h4>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">{getTypeLabel(hoveredEvent.event.type)}</p>
+              <h4 className="mt-1 line-clamp-2 font-semibold leading-5">{hoveredEvent.event.title}</h4>
             </div>
             <span className={cn('mt-1 h-2.5 w-2.5 shrink-0 rounded-full border', getEventTypeStyles(hoveredEvent.event.type))} />
           </div>
@@ -878,7 +879,7 @@ const OperationalCalendar = () => {
             <div className="flex items-center gap-2">
               <Clock className="h-3.5 w-3.5 text-indigo-500" />
               <span>
-                {hoveredEvent.event.isAllDay ? `Todo el día · ${format(new Date(hoveredEvent.event.startAt), 'd MMM', { locale: es })}` : `${format(new Date(hoveredEvent.event.startAt), 'd MMM, HH:mm', { locale: es })} - ${format(new Date(hoveredEvent.event.endAt), 'HH:mm')}`}
+                {formatActivityEventSchedule(hoveredEvent.event)}
               </span>
             </div>
             {hoveredEvent.event.meetingLink && (
@@ -888,7 +889,7 @@ const OperationalCalendar = () => {
               </div>
             )}
             {hoveredEvent.event.description && (
-              <p className="line-clamp-3 rounded-xl bg-zinc-50 p-3 text-zinc-500 dark:bg-white/5 dark:text-zinc-400">
+              <p className="line-clamp-3 border-t border-zinc-100 pt-2 leading-5 text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
                 {normalizeCalendarDescription(hoveredEvent.event.description)}
               </p>
             )}

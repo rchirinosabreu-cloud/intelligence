@@ -23,7 +23,7 @@ export const getGoogleConnectionHealth = (connection, now = new Date()) => {
 export const getCalendarPopoverPosition = (rect, viewport, dimensions = { width: 300, height: 200 }) => {
   const gap = 8;
   const margin = 16;
-  const left = Math.min(Math.max(rect.left, margin), viewport.width - dimensions.width - margin);
+  const left = Math.min(Math.max(rect.left, margin), Math.max(margin, viewport.width - dimensions.width - margin));
   const fitsBelow = rect.bottom + gap + dimensions.height <= viewport.height - margin;
   return { left, top: fitsBelow ? rect.bottom + gap : Math.max(margin, rect.top - dimensions.height - gap), placement: fitsBelow ? 'bottom' : 'top' };
 };
@@ -52,6 +52,29 @@ export const addExternalEmailTags = (currentEmails = [], rawValue = '') => {
     emails: [...new Set([...currentEmails.map(email => email.toLowerCase()), ...valid])],
     invalid: candidates.filter(email => !EMAIL_PATTERN.test(email))
   };
+};
+
+export const formatActivityEventSchedule = (event = {}) => {
+  const start = event.startAt ? new Date(event.startAt) : null;
+  const end = event.endAt ? new Date(event.endAt) : null;
+  if (!start || !Number.isFinite(start.getTime())) return 'Horario no disponible';
+  const validEnd = end && Number.isFinite(end.getTime()) && end > start;
+  const dateLabel = date => new Intl.DateTimeFormat('es-CO', {
+    timeZone: 'America/Bogota', day: 'numeric', month: 'short'
+  }).format(date);
+  const dayKey = date => new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(date);
+  const timeLabel = date => new Intl.DateTimeFormat('es-CO', {
+    timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).format(date);
+  if (event.isAllDay) {
+    const lastDay = validEnd ? new Date(end.getTime() - 1) : start;
+    return `Todo el día · ${dateLabel(start)}${dayKey(start) !== dayKey(lastDay) ? ` – ${dateLabel(lastDay)}` : ''}`;
+  }
+  const recurring = event.recurrence === 'WEEKLY';
+  return `${recurring ? 'Semanal' : dateLabel(start)} · ${timeLabel(start)}${validEnd
+    ? ` – ${!recurring && dayKey(start) !== dayKey(end) ? `${dateLabel(end)}, ` : ''}${timeLabel(end)}` : ''}`;
 };
 
 export const getExternalAttendeeEmails = (attendeeEmails = [], teamMembers = []) => {

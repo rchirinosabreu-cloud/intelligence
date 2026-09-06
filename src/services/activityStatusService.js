@@ -170,6 +170,10 @@ export function calculateMemberStatus(member, todayEvents, now) {
       id: prioritizedEvent.id,
       title: prioritizedEvent.title,
       type: prioritizedEvent.type,
+      startAt: prioritizedEvent.startAt,
+      endAt: prioritizedEvent.endAt,
+      isAllDay: Boolean(prioritizedEvent.isAllDay),
+      recurrence: prioritizedEvent.recurrence,
       meetingLink: prioritizedEvent.meetingLink,
       description: prioritizedEvent.description
     } : null

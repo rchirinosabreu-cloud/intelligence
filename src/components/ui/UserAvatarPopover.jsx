@@ -27,7 +27,7 @@ const UserAvatarPopover = ({ user, children, side = "top" }) => {
       flip({
         fallbackAxisSideDirection: "start",
       }),
-      shift({ padding: 5 }),
+      shift({ padding: 16 }),
     ],
   });
 
@@ -60,15 +60,15 @@ const UserAvatarPopover = ({ user, children, side = "top" }) => {
             ref={refs.setFloating}
             style={floatingStyles}
             {...getFloatingProps()}
-            className="z-[70] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-2xl shadow-2xl min-w-[200px]"
+            className="brain-popover-surface z-[70] w-64 overflow-y-auto p-4"
           >
             <div className="flex items-center gap-3">
-              <TeamAvatar member={user} size={40} showTitle={false} className="w-10 h-10 ring-2 ring-indigo-500/20" />
-              <div className="flex flex-col">
-                <span className="text-sm font-bold text-zinc-900 dark:text-white leading-none">
+              <TeamAvatar member={user} size={32} showTitle={false} className="h-8 w-8 shrink-0" />
+              <div className="flex min-w-0 flex-col">
+                <span className="text-sm font-semibold leading-5">
                   {user.name}
                 </span>
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium mt-1">
+                <span className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                   {user.role || 'Colaborador'}
                 </span>
               </div>
@@ -76,8 +76,8 @@ const UserAvatarPopover = ({ user, children, side = "top" }) => {
 
             {user.statusMessage && (
                <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
-                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400 italic italic leading-relaxed line-clamp-2">
-                    "{user.statusMessage}"
+                  <p className="line-clamp-3 text-xs leading-5 text-zinc-600 dark:text-zinc-300">
+                    {user.statusMessage}
                   </p>
                </div>
             )}

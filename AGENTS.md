@@ -19,6 +19,7 @@ Este archivo contiene las reglas y el contexto inmutable del proyecto para evita
 - **Superficies de IA y Bria:** Todas las superficies destacadas relacionadas con IA, Bria o su mascota (banners, encabezados de paneles, novedades y popups) deben usar el degradado turquesa/verde/cian aprobado, conservar texto blanco de alto contraste e integrar la mascota. **Nunca usar banners negros** ni fondos negros para estas experiencias. Los cuerpos de modales y tarjetas siguen siendo neutros y compatibles con light/dark mode.
 
 ## 4. Componentes y UI Elements
+- **Popovers:** Usar la superficie compartida `brain-popover-surface`: fondo neutro light/dark, borde fino, sombra suave, títulos en caja normal y peso semibold. Evitar sombras grandes, flechas decorativas y tarjetas anidadas. Limitar ancho/alto al viewport; las fechas deben tener fallback legible y respetar America/Bogota.
 - **Boring Avatars:** Se utiliza la librería `boring-avatars` para los avatares en toda la aplicación (Dashboard, CampfireWidget, Tasks). Siempre respeta su importación y uso en los componentes en lugar de depender exclusivamente de imágenes estáticas, a menos que se especifique lo contrario.
 - **React Datepicker:** (Si se especifica o está instalado) Debe integrarse correctamente y utilizar los estilos oscuros (`react-datepicker/dist/react-datepicker.css`), asegurándose de no romper la estética general del formulario en modals (e.g., bordes redondos, fondos transparentes, hover oscuro).
 
