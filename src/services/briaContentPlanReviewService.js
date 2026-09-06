@@ -130,13 +130,13 @@ const guardReviewPublication = async (tx, { planId, execution, revisionHash, now
   const currentPlan = await tx.contentPlan.findUnique({
     where: { id: planId }, include: { client: true, contentItems: { where: { deletedAt: null } } }
   });
-  if (currentPlan) currentPlan.approvedCriteria = await createClientCriterionService(tx).approved(currentPlan.clientId);
+  if (currentPlan) currentPlan.approvedCriteria = await createClientCriterionService(tx).approved(currentPlan.clientId, currentPlan.id);
   if (!currentPlan || buildContentPlanRevisionHash(currentPlan) !== revisionHash) throw supersededReviewError();
   signal?.throwIfAborted();
 };
 
 export const createContentPlanReviewRepository = (db = prisma) => ({
-  findApprovedCriteria: clientId => createClientCriterionService(db).approved(clientId),
+  findApprovedCriteria: (clientId, planId) => createClientCriterionService(db).approved(clientId, planId),
   async loadCheckpoint(planId) {
     const plan = await db.contentPlan.findUnique({ where: { id: planId }, select: { briaReviewCheckpoint: true } });
     return plan?.briaReviewCheckpoint;
@@ -294,7 +294,7 @@ export const reviewContentPlanWithBria = async ({
     throw error;
   }
   const persistence = repository || (getPlan === getContentPlanById ? createContentPlanReviewRepository() : null);
-  const plan = { ...loadedPlan, approvedCriteria: await persistence?.findApprovedCriteria?.(loadedPlan.clientId || loadedPlan.client?.id) || [] };
+  const plan = { ...loadedPlan, approvedCriteria: await persistence?.findApprovedCriteria?.(loadedPlan.clientId || loadedPlan.client?.id, loadedPlan.id) || [] };
   const client = plan.client || { id: plan.clientId, name: '', slug: '' };
   const candidates = await searchMemory({
     query: buildContentPlanReviewQuery(plan), clientId: client.id, includeUnscoped: true, limit: 16

@@ -105,6 +105,15 @@ try {
       "updatedAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE UNIQUE INDEX IF NOT EXISTS "ClientEditorialCriterion_requestId_key" ON "ClientEditorialCriterion"("requestId");
+    ALTER TABLE "ClientEditorialCriterion" ADD COLUMN IF NOT EXISTS "scope" TEXT NOT NULL DEFAULT 'CLIENT';
+    ALTER TABLE "ClientEditorialCriterion" ADD COLUMN IF NOT EXISTS "provenance" JSONB;
+    CREATE TABLE IF NOT EXISTS "ClientCriterionDiscovery" (
+      "clientId" TEXT PRIMARY KEY REFERENCES "Client"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+      "sourceHash" TEXT NOT NULL, "state" TEXT NOT NULL, "leaseToken" TEXT,
+      "startedAt" TIMESTAMPTZ(3), "completedAt" TIMESTAMPTZ(3),
+      "checkpoint" JSONB, "result" JSONB, "error" TEXT,
+      "seenKeys" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]
+    );
     CREATE INDEX IF NOT EXISTS "ClientEditorialCriterion_clientId_status_idx" ON "ClientEditorialCriterion"("clientId", "status");
     CREATE INDEX IF NOT EXISTS "ClientEditorialCriterion_sourcePlanId_idx" ON "ClientEditorialCriterion"("sourcePlanId");
     CREATE INDEX IF NOT EXISTS "ClientEditorialCriterion_sourceFindingId_idx" ON "ClientEditorialCriterion"("sourceFindingId");

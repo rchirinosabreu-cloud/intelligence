@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright-core';
+const base = process.env.BRIA_PILOT_URL || 'http://127.0.0.1:3004';
+const demo = await fetch(`${base}/api/demo`).then(r => r.json());
+const endpoint = `${base}/api/content/plans/${demo.planId}/criteria`;
+await fetch(`${base}/api/demo/viewer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"viewer":"Responsable"}' });
+const result = await fetch(`${endpoint}/discover`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+assert.equal(result.status, 200);
+const discovery = await result.json(); assert.equal(discovery.state, 'COMPLETED'); assert.ok(discovery.result.created > 0);
+let criteria = await fetch(endpoint).then(r => r.json());
+const candidate = criteria.criteria.find(c => c.provenance?.origin === 'BRIA');
+assert.equal(candidate.status, 'PROPOSED'); assert.ok(candidate.provenance.evidence.length);
+const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+try {
+  const page = await browser.newPage({ viewport: { width: 1366, height: 1000 }, reducedMotion: 'reduce' });
+  await page.goto(`${base}/tests/fixtures/bria-pilot.html`);
+  await page.getByRole('button', { name: 'Criterios del cliente', exact: true }).click();
+  const article = page.getByRole('dialog').locator('article').filter({ hasText: candidate.text });
+  await article.getByRole('button', { name: 'Ver detalle', exact: true }).click();
+  await page.evaluate(() => document.fonts.ready);
+  await page.screenshot({ path: 'output/bria-discovery-pilot-live.png', fullPage: true });
+  await page.reload(); await page.getByRole('button', { name: 'Criterios del cliente', exact: true }).click();
+  await article.getByText('Propuesto por Bria', { exact: true }).waitFor();
+  await article.getByRole('button', { name: 'Más opciones', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Ajustar', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Criterio', exact: true }).fill('Usar un tono cercano durante septiembre.');
+  await page.getByRole('textbox', { name: 'Por qué debe recordarlo Bria', exact: true }).fill('Ajuste de ejemplo validado en el piloto.');
+  await page.getByRole('button', { name: 'Guardar ajuste', exact: true }).click();
+  await page.getByRole('heading', { name: 'Lo que Bria debe recordar', exact: true }).waitFor();
+  await page.getByRole('dialog').locator('article').getByText('Usar un tono cercano durante septiembre.', { exact: true }).waitFor();
+  criteria = await fetch(endpoint).then(r => r.json());
+  const edited = criteria.criteria.find(c => c.id === candidate.id);
+  assert.equal(edited.version, candidate.version + 1); assert.equal(edited.history.at(-1).action, 'EDIT'); assert.equal(edited.status, 'PROPOSED');
+  console.log('Real local HTTP/PG discovery: persisted evidence, reload, versioned draft edit and no auto-approval OK. AI output simulated explicitly.');
+} finally { await browser.close(); }

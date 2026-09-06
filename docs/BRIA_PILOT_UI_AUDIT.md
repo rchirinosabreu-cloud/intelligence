@@ -39,6 +39,10 @@ Tras la validación visual del usuario, priorizar paginación si el volumen lo r
 
 Se mantiene 18/20 con los mismos límites de alcance y pendientes. Sin nuevos P0/P1 observados en los recorridos probados. La jerarquía ahora coloca «Proponer criterio» debajo de la explicación y alinea la lista y las acciones a la izquierda. Las acciones no tienen superficie, borde ni sombra visible; mantienen semántica de botón, foco de teclado y área mínima de 44×44 px.
 
-`briaCriteriaActions.mjs` verifica seis vistas (incluido oscuro), contraste AA de las cuatro acciones, texto al 200%, separación vertical, cierre por ESC/exterior, cancelación sin petición, confirmación explícita y conservación del estado ante 500/espera del servidor. `briaClientCriteria.mjs` conserva la regresión completa de propuestas/decisiones/historial. `briaPilot.mjs` comprueba HTTP/PostgreSQL reales: propietario sin borrar, admin con borrado y desaparición persistente después de recargar. Solo borra una fila ficticia creada por ese test.
+`briaCriteriaActions.mjs` verifica seis vistas (incluido oscuro), colores semánticos y contraste de las acciones, texto al 200%, separación vertical, menú secundario accesible, cierre por ESC/exterior, cancelación sin petición, confirmación explícita y conservación del estado ante 500/espera del servidor. `briaClientCriteria.mjs` conserva la regresión completa de propuestas/decisiones/historial. `briaPilot.mjs` comprueba HTTP/PostgreSQL reales: propietario sin borrar, admin con borrado y desaparición persistente después de recargar. Solo borra una fila ficticia creada por ese test.
+
+### Simplificación posterior aprobada
+
+Aprobar usa turquesa; rechazar, texto neutro. El rojo queda para revocar/eliminar dentro de «⋯», junto con ajustar cuando corresponde. «Ver detalle» concentra las fuentes y después un historial plegable. No se eliminan datos ni permisos por esta simplificación visual. La prueba de descubrimiento cubre evidencia visible, orden de fuentes/historial y ajuste desde el menú.
 
 Capturas: `output/bria-criteria-actions-*`, `output/bria-criteria-delete-*` y `output/bria-criteria-admin-live.png`. No se ha ejecutado eliminación sobre criterios reales del usuario.

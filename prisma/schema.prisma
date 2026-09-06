@@ -248,6 +248,7 @@ enum ClientStatus {
 }
 
 model Client {
+  criterionDiscovery ClientCriterionDiscovery?
   editorialCriteria ClientEditorialCriterion[]
   id                  String               @id @default(uuid())
   name                String
@@ -494,7 +495,7 @@ model Integration {
   @@unique([clientId, provider])
 }
 
-// Immutable proposal text; decisions append audit entries and advance version.
+// Draft edits and decisions append audit entries and advance version; approved text is immutable.
 // Human-approved, client-scoped memory. Dismissals never write this table.
 model ClientEditorialCriterion {
   id              String   @id @default(uuid())
@@ -507,6 +508,8 @@ model ClientEditorialCriterion {
   status          String   @default("PROPOSED")
   version         Int      @default(1)
   history         Json
+  scope           String   @default("CLIENT")
+  provenance      Json?
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime @updatedAt @db.Timestamptz(3)
   client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -516,6 +519,21 @@ model ClientEditorialCriterion {
   @@index([clientId, status])
   @@index([sourcePlanId])
   @@index([sourceFindingId])
+}
+
+// One shared, resumable discovery per client. Contains hashes/checkpoints, never active rules.
+model ClientCriterionDiscovery {
+  clientId        String   @id
+  sourceHash      String
+  state           String
+  leaseToken      String?
+  startedAt       DateTime? @db.Timestamptz(3)
+  completedAt     DateTime? @db.Timestamptz(3)
+  checkpoint      Json?
+  result          Json?
+  seenKeys        String[] @default([])
+  error           String?
+  client          Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }
 
 model TeamMember {

@@ -10,13 +10,23 @@ if (url.protocol !== 'postgresql:' || url.hostname !== '127.0.0.1' || url.port !
 }
 process.env.DATABASE_URL = url.href;
 const port = Number(process.env.BRIA_PILOT_PORT || 3002);
-if (![3002, 3003].includes(port)) throw new Error('El piloto solo admite los puertos locales 3002 o 3003.');
+if (![3002, 3003, 3004].includes(port)) throw new Error('El piloto solo admite los puertos locales 3002, 3003 o 3004.');
 const origin = `http://127.0.0.1:${port}`;
 const [{ createClientCriterionService }, { createClientCriteriaRouter }, { TRACEABLE_RUBRIC, parseTraceableReview }] = await Promise.all([
   import('../src/services/briaClientCriterionService.js'), import('../src/routes/api/clientCriteria.js'), import('../src/services/briaTraceableScore.js')
 ]);
 const db = new PrismaClient({ datasources: { db: { url: url.href } } });
 const service = createClientCriterionService(db);
+const { createCriterionDiscoveryService } = await import('../src/services/briaCriterionDiscoveryService.js');
+// Simulated provider only. Extraction, validation, persistence and authorization are real.
+const discovery = createCriterionDiscoveryService({ db, generate: async ({ sources }) => {
+  const source = sources.find(s => s.text === 'Para septiembre, usar tú y un tono cercano.');
+  return { model: 'simulado-piloto-local', text: JSON.stringify({ proposals: source ? [{
+    category: 'MARCA', text: 'Durante septiembre, tratar a la audiencia de tú y mantener un tono cercano.',
+    reason: 'La nota interna del equipo propone este tratamiento para septiembre; necesita validación. Ejemplo con respuesta de IA simulada.',
+    scope: 'PLAN', scopePlanId: source.planId, basis: 'EXPLICIT', evidence: [{ sourceId: source.id, quote: source.text }], conflicts: []
+  }] : [] }) };
+} });
 const app = express();
 app.use(express.json({ limit: '16kb' }));
 const key = randomUUID();
@@ -26,8 +36,9 @@ for (const [label, role] of [['Responsable', 'EDITOR'], ['Colaborador', 'EDITOR'
   users[label] = await db.user.create({ data: { name: `${label} de ejemplo`, role, email: `${label}-${key}@local.invalid`, password: 'not-a-valid-password-hash', modulePermissions: { parrillas: true } } });
 }
 const member = await db.teamMember.create({ data: { name: 'Responsable de ejemplo', role: 'Editorial', userId: users.Responsable.id } });
-const plan = await db.contentPlan.create({ data: { clientId: client.id, ownerId: member.id, month: 9, year: 2026 } });
+const plan = await db.contentPlan.create({ data: { clientId: client.id, ownerId: member.id, month: 9, year: 2026, internalNotes: JSON.stringify(['Para septiembre, usar tú y un tono cercano.']) } });
 await service.propose({ planId: plan.id, actorUserId: users.Colaborador.id, requestId: randomUUID(), category: 'MARCA', text: 'Usar un tono cercano y tratar a la audiencia de tú.', reason: 'La guía vigente del cliente define este tratamiento.' });
+await db.contentItem.create({ data: { planId: plan.id, objective: 'Mostrar servicios.', format: 'Post', copyText: 'Conoce nuestros diseños.', captionText: 'Cuéntanos tu idea.', publishDate: new Date('2026-09-15T15:00:00Z'), status: 'APROBADO', comments: '[Cliente - 01/09/2026]: Preferimos mensajes cercanos.', internalNotes: 'El tratamiento formal no aplica a esta campaña.' } });
 let selected = 'Responsable';
 const snapshot = { items: [{ id: 'piece', copyText: 'Nuestros diseños comunica tu idea.', objective: 'Explicar los servicios de diseño.' }] };
 const known = new Set(['GRAMMAR_AGREEMENT', 'GRAMMAR_SPELLING', 'GRAMMAR_CLARITY', 'STRATEGY_OBJECTIVE']);
@@ -47,7 +58,7 @@ app.use('/api/content/plans/:planId/criteria', (req, res, next) => {
   if (req.params.planId !== plan.id) return res.status(404).json({ error: 'Esta muestra solo permite su parrilla ficticia.' });
   req.user = { userId: users[selected].id };
   next();
-}, createClientCriteriaRouter(service));
+}, createClientCriteriaRouter(service, console, discovery));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'API fuera del alcance del piloto local.' }));
 const vite = await createViteServer({ logLevel: 'error', define: { 'import.meta.env.VITE_API_URL': JSON.stringify(origin) }, server: { host: '127.0.0.1', middlewareMode: true, hmr: { host: '127.0.0.1', port: port + 20000 } }, appType: 'mpa' });
 app.use(vite.middlewares);

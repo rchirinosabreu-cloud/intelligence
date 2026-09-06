@@ -4,13 +4,14 @@ import { canValidateClientCriterion, validateCriterionProposal, criterionDecisio
 import { buildContentPlanReviewPendingData } from './briaContentPlanReviewState.js';
 
 const planInclude = { owner: { select: { userId: true } }, client: { select: { name: true, isArchived: true } } };
-const context = async (db, planId, actorUserId) => {
+export const criterionContext = async (db, planId, actorUserId) => {
   const actor = actorUserId ? await db.user.findUnique({ where: { id: actorUserId }, select: { id: true, name: true, role: true, isActive: true, modulePermissions: true } }) : null;
   if (!actor?.isActive || !hasModulePermission(actor, 'parrillas')) throw criterionError(403, 'No tienes acceso a los criterios de parrillas.');
   const plan = await db.contentPlan.findFirst({ where: { id: planId, deletedAt: null }, include: planInclude });
   if (!plan || plan.client.isArchived) throw criterionError(404, 'La parrilla no está disponible.');
   return { actor, plan };
 };
+const context = criterionContext;
 const historyEvent = ({ actor, planId, action, reason, version, now }) => ({
   action, reason, version, planId, actorUserId: actor.id, actorName: actor.name, actorRole: actor.role, at: now.toISOString()
 });
@@ -33,11 +34,29 @@ export const createClientCriterionService = (db = prisma) => ({
   async list({ planId, actorUserId }) {
     const { plan, actor } = await context(db, planId, actorUserId);
     const criteria = await db.clientEditorialCriterion.findMany({ where: { clientId: plan.clientId }, include: sourceInclude, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] });
-    return { clientId: plan.clientId, clientName: plan.client.name, canPropose: true, criteria: criteria.map(item => present(item, actor)) };
+    return { clientId: plan.clientId, clientName: plan.client.name, canPropose: true, canDiscover: canValidateClientCriterion(actor, plan), criteria: criteria.map(item => present(item, actor)) };
   },
-  async approved(clientId) {
-    return db.clientEditorialCriterion.findMany({ where: { clientId, status: 'APPROVED' }, orderBy: { id: 'asc' },
+  async approved(clientId, planId) {
+    return db.clientEditorialCriterion.findMany({ where: { clientId, status: 'APPROVED', OR: [{ scope: 'CLIENT' }, ...(planId ? [{ scope: 'PLAN', sourcePlanId: planId }] : [])] }, orderBy: { id: 'asc' },
       select: { id: true, version: true, category: true, text: true, sourcePlanId: true } });
+  },
+  async edit({ planId, actorUserId, criterionId, version, scope, ...input }) {
+    const data = validateCriterionProposal(input);
+    if (!['CLIENT', 'PLAN'].includes(scope)) throw criterionError(400, 'Selecciona un alcance válido.');
+    return db.$transaction(async tx => {
+      const initial = await context(tx, planId, actorUserId);
+      await lockClient(tx, initial.plan.clientId);
+      const { plan, actor } = await context(tx, planId, actorUserId);
+      if (plan.clientId !== initial.plan.clientId) throw criterionError(409, 'La parrilla cambió de cliente.');
+      const criterion = await tx.clientEditorialCriterion.findFirst({ where: { id: criterionId, clientId: plan.clientId }, include: sourceInclude });
+      if (!criterion) throw criterionError(404, 'El criterio no pertenece a este cliente.');
+      if (!canValidateClientCriterion(actor, criterion.sourcePlan)) throw criterionError(403, 'Solo el responsable de origen, PM o admin pueden ajustar esta propuesta.');
+      if (criterion.status !== 'PROPOSED' || version !== criterion.version || (scope === 'PLAN' && (!criterion.sourcePlan || criterion.sourcePlan.deletedAt))) throw criterionError(409, 'Solo se ajustan propuestas vigentes en su versión actual.');
+      return present(await tx.clientEditorialCriterion.update({ where: { id: criterionId }, data: {
+        text: data.text, category: data.category, scope, version: version + 1,
+        history: [...criterion.history, { ...historyEvent({ actor, planId, action: 'EDIT', reason: data.reason, version: version + 1, now: new Date() }), before: { text: criterion.text, category: criterion.category, scope: criterion.scope }, after: { text: data.text, category: data.category, scope } }]
+      }, include: sourceInclude }), actor);
+    });
   },
   async propose({ planId, actorUserId, requestId, findingId = null, ...input }) {
     const data = validateCriterionProposal(input);

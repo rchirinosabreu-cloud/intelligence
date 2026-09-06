@@ -36,7 +36,11 @@ try {
     const propose = await dialog.getByRole('button', { name: 'Proponer criterio', exact: true }).boundingBox();
     assert.ok(propose.y >= description.y + description.height + 10, `${name}: propose must sit below description`);
     assert.ok(Math.abs(propose.x - description.x) < 2, `${name}: propose must align left`);
-    for (const label of ['Aprobar', 'Revocar', 'Rechazar', 'Eliminar']) {
+    const approved = dialog.locator('article').filter({ hasText: criteria[0].text });
+    const proposed = dialog.locator('article').filter({ hasText: criteria[1].text });
+    assert.deepEqual(await proposed.getByRole('button').allTextContents(), ['⋯', 'Aprobar', 'Rechazar', 'Ver detalle']);
+    assert.deepEqual(await approved.getByRole('button').allTextContents(), ['⋯', 'Ver detalle']);
+    for (const label of ['Aprobar', 'Rechazar']) {
       const action = dialog.getByRole('button', { name: label, exact: true }).first();
       const style = await action.evaluate(button => {
         const css = getComputedStyle(button), rect = button.getBoundingClientRect();
@@ -51,18 +55,51 @@ try {
       assert.equal(style.background, 'rgba(0, 0, 0, 0)'); assert.equal(style.border, '0px');
       assert.ok(style.shadow === 'none' || style.shadow.replaceAll('rgba(0, 0, 0, 0) 0px 0px 0px 0px', '').replaceAll(', ', '') === '', `${label}: no visible shadow`);
       assert.ok(style.width >= 44 && style.height >= 44, `${label}: touch target`);
-      assert.ok(style.color[0] > style.color[1] * 1.5 && style.color[0] > style.color[2], `${label}: red text`);
+      if (label === 'Aprobar') assert.ok(style.color[1] > style.color[0] * 1.5 && style.color[2] > style.color[0] * 1.5, `${label}: turquoise text`);
+      else assert.ok(Math.max(...style.color) - Math.min(...style.color) < 20, `${label}: neutral text`);
       assert.ok(style.contrast >= 4.5, `${name}/${label}: contrast ${style.contrast}`);
     }
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: `output/bria-criteria-actions-${name}.png`, fullPage: true });
-    const approved = dialog.locator('article').filter({ hasText: criteria[0].text });
-    await approved.getByRole('button', { name: 'Eliminar', exact: true }).click();
+    const openApprovedMenu = async () => {
+      await approved.getByRole('button', { name: 'Más opciones', exact: true }).click();
+      const menu = page.getByRole('menu');
+      await menu.waitFor();
+      await menu.evaluate(async element => { await Promise.all(element.getAnimations().map(animation => animation.finished)); });
+      assert.deepEqual(await menu.getByRole('menuitem').allTextContents(), ['Revocar', 'Eliminar']);
+      for (const item of await menu.getByRole('menuitem').all()) {
+        const css = await item.evaluate(element => ({ color: getComputedStyle(element).color, height: element.getBoundingClientRect().height, semantic: element.classList.contains('text-destructive') }));
+        assert.ok(css.semantic && css.height >= 44, `destructive menu action with touch target: ${JSON.stringify(css)}`);
+        for (const focused of [false, true]) {
+          if (focused) await item.focus();
+          await item.evaluate(async element => { await Promise.all(element.getAnimations().map(animation => animation.finished)); });
+          const contrast = await item.evaluate(element => {
+            const context = document.createElement('canvas').getContext('2d');
+            const luminance = color => { context.clearRect(0, 0, 1, 1); context.fillStyle = color; context.fillRect(0, 0, 1, 1); return [...context.getImageData(0, 0, 1, 1).data].slice(0, 3).map(v => v / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0); };
+            let surface = element;
+            while (getComputedStyle(surface).backgroundColor === 'rgba(0, 0, 0, 0)') surface = surface.parentElement;
+            const values = [luminance(getComputedStyle(element).color), luminance(getComputedStyle(surface).backgroundColor)].sort((a, b) => a - b);
+            return (values[1] + .05) / (values[0] + .05);
+          });
+          assert.ok(contrast >= 4.5, `${name}: menu ${await item.textContent()} ${focused ? 'focused' : 'normal'} contrast ${contrast}`);
+        }
+      }
+    };
+    await openApprovedMenu();
+    await page.screenshot({ path: `output/bria-criteria-menu-${name}.png`, fullPage: true });
+    await page.keyboard.press('Escape');
+    await page.getByRole('menu').waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Más opciones');
+    assert.equal(await dialog.isVisible(), true, 'Escape closes only the menu');
+    assert.equal(await approved.getByRole('button', { name: 'Más opciones', exact: true }).evaluate(el => el === document.activeElement), true);
+    await openApprovedMenu();
+    await page.getByRole('menuitem', { name: 'Eliminar', exact: true }).click();
     await dialog.getByText('Esta acción no se puede deshacer.', { exact: false }).waitFor();
     const confirm = dialog.getByRole('button', { name: 'Eliminar definitivamente', exact: true });
     assert.equal(await confirm.isDisabled(), true);
     await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click(); assert.equal(deletionCalls, 0);
-    await approved.getByRole('button', { name: 'Eliminar', exact: true }).click();
+    await openApprovedMenu();
+    await page.getByRole('menuitem', { name: 'Eliminar', exact: true }).click();
     await dialog.getByLabel('Escribe ELIMINAR para confirmar').fill('ELIMINAR');
     await confirm.evaluate(async button => { await Promise.all(button.getAnimations().map(animation => animation.finished)); });
     await page.screenshot({ path: `output/bria-criteria-delete-${name}.png`, fullPage: true });
@@ -78,7 +115,9 @@ try {
     admin = false;
     await page.getByRole('button', { name: 'Criterios del cliente', exact: true }).click();
     await dialog.getByText(criteria[1].text, { exact: true }).waitFor();
-    assert.equal(await dialog.getByRole('button', { name: 'Eliminar', exact: true }).count(), 0);
+    await proposed.getByRole('button', { name: 'Más opciones', exact: true }).click();
+    assert.deepEqual(await page.getByRole('menuitem').allTextContents(), ['Ajustar']);
+    await page.keyboard.press('Escape');
     assert.equal(await dialog.getByRole('button', { name: 'Aprobar', exact: true }).count(), 1);
     await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
     assert.ok(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1), `${name}: 200% text overflow`);

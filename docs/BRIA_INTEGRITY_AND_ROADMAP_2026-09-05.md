@@ -2,6 +2,8 @@
 
 Fecha: 5 de septiembre de 2026. Auditoría de código sobre `main`, base `9dd5c16`, más el ajuste pendiente de popovers. Documento de diagnóstico y propuesta: **no constituye autorización ni implementación de la nueva arquitectura**.
 
+Seguimiento, 6 de septiembre: fiabilidad, cobertura, verificación de hallazgos y gobierno de criterios tienen bloques implementados; esto no certifica cerradas todas las brechas de la auditoría. El nuevo bloque local de [aprendizajes editoriales](BRIA_CRITERION_DISCOVERY.md) propone criterios desde feedback, notas internas y piezas aprobadas, previa solicitud y sin autoaprobación. Siguiente puerta: validación editorial con responsables, calibración del puntaje candidato y después extracción por cambios. La unificación completa de contexto y los flujos de reuniones/foco siguen pendientes.
+
 Actualización posterior: el ajuste de popovers se publicó en `a2d4cfc`. Tras autorización del usuario se inició el primer bloque de fiabilidad de revisiones de parrillas y la limpieza de herramientas del repositorio. Su alcance y límites se registran en [Fase 1: revisiones fiables](BRIA_PHASE_1_REVIEW_RELIABILITY.md) y [Skills del proyecto](AGENT_SKILLS.md). Las cifras y hallazgos siguientes corresponden a la auditoría inicial, no al cierre de todas las fases.
 
 ## Conclusión ejecutiva

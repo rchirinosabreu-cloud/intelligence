@@ -79,10 +79,12 @@ try {
     await page.waitForFunction(() => document.querySelector('button[disabled][data-saving="true"]'));
     hold.resolve(); hold = null;
     await dialog.getByText('Aprobado', { exact: true }).waitFor();
-    await dialog.getByRole('button', { name: 'Historial', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Ver detalle', exact: true }).click();
+    await dialog.locator('summary').filter({ hasText: 'Historial' }).click();
     await dialog.getByText('Confirmado con la guía vigente.').waitFor();
     await page.screenshot({ path: `output/bria-criteria-history-${name}.png`, fullPage: true });
-    await dialog.getByRole('button', { name: 'Revocar', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Más opciones', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Revocar', exact: true }).click();
     await dialog.getByLabel('Motivo de la decisión').fill('La estrategia del cliente cambió.');
     await dialog.getByRole('button', { name: 'Confirmar revocación' }).click();
     await dialog.getByText('Revocado', { exact: true }).waitFor();

@@ -28,7 +28,8 @@ try {
   await page.reload();
   await page.getByRole('button', { name: 'Criterios del cliente', exact: true }).click();
   await dialog.getByText('Aprobado', { exact: true }).waitFor();
-  await dialog.getByRole('button', { name: 'Historial', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Ver detalle', exact: true }).click();
+  await dialog.locator('summary').filter({ hasText: 'Historial' }).click();
   await dialog.getByText('Prueba de aprobación persistida en PostgreSQL local.').waitFor();
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('[role=dialog]')).opacity) === 1);
@@ -45,7 +46,9 @@ try {
   await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('[role=dialog]')).opacity) === 1);
   await page.screenshot({ path: 'output/bria-pilot-persisted-mobile.png', fullPage: true });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-  assert.equal(await dialog.getByRole('button', { name: 'Eliminar', exact: true }).count(), 0);
+  await dialog.getByRole('button', { name: 'Más opciones', exact: true }).click();
+  assert.equal(await page.getByRole('menuitem', { name: 'Eliminar', exact: true }).count(), 0);
+  await page.keyboard.press('Escape');
   await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' });
   await page.getByLabel('Probar como').selectOption('Admin');
   await page.getByRole('button', { name: 'Criterios del cliente', exact: true }).click();
@@ -54,7 +57,8 @@ try {
   const approvedForDeletion = await fetch(`${base}/api/content/plans/${initial.planId}/criteria/${created.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'APPROVE', version: 1, reason: 'Prueba local.' }) }).then(response => { assert.equal(response.status, 200); return response.json(); });
   await page.reload(); await page.getByRole('button', { name: 'Criterios del cliente', exact: true }).click();
   await dialog.getByText(approvedForDeletion.text, { exact: true }).waitFor();
-  await dialog.locator('article').filter({ hasText: approvedForDeletion.text }).getByRole('button', { name: 'Eliminar', exact: true }).click();
+  await dialog.locator('article').filter({ hasText: approvedForDeletion.text }).getByRole('button', { name: 'Más opciones', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Eliminar', exact: true }).click();
   await dialog.getByLabel('Escribe ELIMINAR para confirmar').fill('ELIMINAR');
   await dialog.getByRole('button', { name: 'Eliminar definitivamente', exact: true }).click();
   await dialog.getByText('Lo que Bria debe recordar', { exact: true }).waitFor();
