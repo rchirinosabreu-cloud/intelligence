@@ -20,9 +20,9 @@ Sin rejillas de cards, tarjetas anidadas, banners negros, efectos decorativos nu
 ## Hallazgos y correcciones verificadas
 
 - Desborde real al aumentar texto al 200%: el grid implícito del diálogo crecía según su contenido. Se corrigió con flujo de bloque, cabecera adaptable, mascota de tamaño estable y textos que pueden partirse.
-- Etiquetas destructivas sobre el cuerpo oscuro: 4,24:1, insuficiente para texto pequeño. Se utiliza el componente destructivo compartido con texto de contraste, conservando `#E11D48`. Los errores conservan el borde destructivo y un primer plano legible en oscuro.
+- Etiquetas destructivas sobre el cuerpo oscuro: 4,24:1, insuficiente para texto pequeño. Inicialmente se usó una superficie destructiva; por petición del usuario, ahora las acciones son texto sin relleno ni borde. `brain-destructive-text` deriva el color oscuro del mismo token y las pruebas miden contraste mínimo 4,5:1 en ambos temas. Los errores conservan borde destructivo y texto legible en oscuro.
 - El refresco inicial del formulario podía borrar un error de guardado. Se separó el refresco por apertura del estado de edición; tras un 500 la explicación se conserva y no se simula éxito.
-- La vista local heredaba la API habitual de Vite. El piloto fija explícitamente su API al puerto 3002 y rechaza rutas ajenas a su cliente de ejemplo.
+- La vista local heredaba la API habitual de Vite. El piloto fija explícitamente su API al puerto elegido (3002 o 3003), aísla la recarga HMR por puerto y rechaza rutas ajenas a su cliente de ejemplo.
 
 ## Pendientes no bloqueantes del piloto
 
@@ -34,3 +34,11 @@ No se observaron bloqueos funcionales en los recorridos probados. La **calibraci
 Pruebas: suites de navegador `briaClientCriteria.mjs`, `briaScoreDetails.mjs`, `briaPilot.mjs` y `briaReviewVerification.mjs`. Las dos primeras usan API simulada; el piloto usa HTTP y PostgreSQL locales reales. Capturas bajo `output/bria-*`.
 
 Tras la validación visual del usuario, priorizar paginación si el volumen lo requiere y terminar con `/polish`; repetir `/audit` después de esos cambios. Estas mejoras pueden abordarse juntas o por separado.
+
+## Revisión de acciones y eliminación · 6 de septiembre de 2026
+
+Se mantiene 18/20 con los mismos límites de alcance y pendientes. Sin nuevos P0/P1 observados en los recorridos probados. La jerarquía ahora coloca «Proponer criterio» debajo de la explicación y alinea la lista y las acciones a la izquierda. Las acciones no tienen superficie, borde ni sombra visible; mantienen semántica de botón, foco de teclado y área mínima de 44×44 px.
+
+`briaCriteriaActions.mjs` verifica seis vistas (incluido oscuro), contraste AA de las cuatro acciones, texto al 200%, separación vertical, cierre por ESC/exterior, cancelación sin petición, confirmación explícita y conservación del estado ante 500/espera del servidor. `briaClientCriteria.mjs` conserva la regresión completa de propuestas/decisiones/historial. `briaPilot.mjs` comprueba HTTP/PostgreSQL reales: propietario sin borrar, admin con borrado y desaparición persistente después de recargar. Solo borra una fila ficticia creada por ese test.
+
+Capturas: `output/bria-criteria-actions-*`, `output/bria-criteria-delete-*` y `output/bria-criteria-admin-live.png`. No se ha ejecutado eliminación sobre criterios reales del usuario.

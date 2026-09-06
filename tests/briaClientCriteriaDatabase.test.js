@@ -84,6 +84,71 @@ test('client criteria: real PostgreSQL persistence, authorization, atomic histor
       assert.equal(saved.status, 'PROPOSED');
       assert.equal(saved.history.length, 1);
     });
+    const newCriterion = () => service.propose({ planId: plan.id, actorUserId: owner.id, ...input, requestId: randomUUID() });
+    const approve = criterion => service.decide({ planId: plan.id, actorUserId: owner.id, criterionId: criterion.id, action: 'APPROVE', version: criterion.version, reason: 'Guía validada.' });
+    const deletion = criterion => ({ planId: plan.id, actorUserId: admin.id, criterionId: criterion.id, version: criterion.version, confirmation: 'ELIMINAR' });
+    await t.test('delete capability is admin-only; owner, PM, collaborator and inactive admin cannot delete', async () => {
+      const criterion = await approve(await newCriterion());
+      assert.equal((await service.list({ planId: plan.id, actorUserId: admin.id })).criteria.find(c => c.id === criterion.id).canDelete, true);
+      for (const actor of [owner, pm, stranger]) {
+        assert.equal((await service.list({ planId: plan.id, actorUserId: actor.id })).criteria.find(c => c.id === criterion.id).canDelete, false);
+        await assert.rejects(service.remove({ ...deletion(criterion), actorUserId: actor.id }), { status: 403 });
+      }
+      await db.user.update({ where: { id: admin.id }, data: { isActive: false } });
+      try { await assert.rejects(service.remove(deletion(criterion)), { status: 403 }); }
+      finally { await db.user.update({ where: { id: admin.id }, data: { isActive: true } }); }
+      assert.ok(await db.clientEditorialCriterion.findUnique({ where: { id: criterion.id } }));
+    });
+    await t.test('delete requires explicit confirmation, valid ID, current version and matching client', async () => {
+      const criterion = await newCriterion();
+      for (const confirmation of [undefined, '', true, 'eliminar']) await assert.rejects(service.remove({ ...deletion(criterion), confirmation }), { status: 400 });
+      for (const criterionId of [undefined, '', 7]) await assert.rejects(service.remove({ ...deletion(criterion), criterionId }), { status: 400 });
+      for (const version of [undefined, '1', 0, 2]) await assert.rejects(service.remove({ ...deletion(criterion), version }), { status: 409 });
+      await assert.rejects(service.remove({ ...deletion(criterion), planId: other.id }), { status: 404 });
+      assert.ok(await db.clientEditorialCriterion.findUnique({ where: { id: criterion.id } }));
+    });
+    await t.test('hard-delete removes approved row/history, invalidates active work and leaves other clients alone', async () => {
+      const criterion = await approve(await newCriterion());
+      const now = new Date(), lease = await claimContentPlanReview(plan.id, { db, now, trigger: 'MANUAL' });
+      const result = await service.remove(deletion(criterion));
+      assert.deepEqual(result, { deleted: true, id: criterion.id });
+      assert.equal(await db.clientEditorialCriterion.findUnique({ where: { id: criterion.id } }), null);
+      assert.ok(!(await service.approved(plan.clientId)).some(c => c.id === criterion.id));
+      assert.ok(!(await service.list({ planId: plan.id, actorUserId: admin.id })).criteria.some(c => c.id === criterion.id));
+      for (const id of [plan.id, sibling.id]) assert.equal((await db.contentPlan.findUnique({ where: { id } })).briaReviewState, 'PENDING');
+      assert.equal((await db.contentPlan.findUnique({ where: { id: archived.id } })).briaReviewState, 'STALE');
+      assert.equal((await db.contentPlan.findUnique({ where: { id: other.id } })).briaReviewState, 'CURRENT');
+      await assert.rejects(createContentPlanReviewRepository(db).saveCheckpoint(plan.id, {}, { execution: lease, now: () => now }), { code: 'BRIA_REVIEW_SUPERSEDED' });
+      await assert.rejects(service.remove(deletion(criterion)), { status: 404 });
+    });
+    await t.test('deleting unused/rejected criteria does not schedule unnecessary reviews', async () => {
+      const criterion = await newCriterion();
+      const rejected = await service.decide({ planId: plan.id, actorUserId: pm.id, criterionId: criterion.id, action: 'REJECT', version: 1, reason: 'Duplicado.' });
+      await db.contentPlan.update({ where: { id: plan.id }, data: { briaReviewState: 'CURRENT' } });
+      await service.remove(deletion(rejected));
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewState, 'CURRENT');
+    });
+    await t.test('failed review invalidation rolls back hard-delete including history', async () => {
+      const criterion = await approve(await newCriterion());
+      const broken = { $transaction: fn => db.$transaction(tx => fn(new Proxy(tx, { get(target, key) {
+        if (key === 'contentPlan') return new Proxy(tx.contentPlan, { get(model, op) {
+          if (op === 'updateMany') return () => { throw new Error('delete queue failure'); };
+          return model[op];
+        } });
+        return target[key];
+      } }))) };
+      await assert.rejects(createClientCriterionService(broken).remove(deletion(criterion)), /delete queue failure/);
+      assert.deepEqual((await db.clientEditorialCriterion.findUnique({ where: { id: criterion.id } })).history, criterion.history);
+    });
+    await t.test('concurrent deletion/revocation cannot silently accept an obsolete version', async () => {
+      const criterion = await approve(await newCriterion());
+      const outcomes = await Promise.allSettled([
+        service.remove(deletion(criterion)),
+        service.decide({ planId: plan.id, actorUserId: pm.id, criterionId: criterion.id, action: 'REVOKE', version: criterion.version, reason: 'Cambió la guía.' })
+      ]);
+      assert.equal(outcomes.filter(result => result.status === 'fulfilled').length, 1);
+      assert.ok([404, 409].includes(outcomes.find(result => result.status === 'rejected').reason.status));
+    });
   } finally {
     await db.client.deleteMany({ where: { id: { in: clients } } });
     await db.teamMember.deleteMany({ where: { id: { in: members } } });

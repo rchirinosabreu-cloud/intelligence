@@ -52,7 +52,11 @@ try {
     const actionContrast = await dialog.getByRole('button', { name: 'Rechazar', exact: true }).evaluate(button => {
       let element = button, background;
       while (element) { const color = getComputedStyle(element).backgroundColor; if (color !== 'rgba(0, 0, 0, 0)' && color !== 'transparent') { background = color; break; } element = element.parentElement; }
-      const luminance = color => color.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => v / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+      const luminance = color => {
+        const context = document.createElement('canvas').getContext('2d');
+        context.fillStyle = color; context.fillRect(0, 0, 1, 1);
+        return [...context.getImageData(0, 0, 1, 1).data].slice(0, 3).map(v => v / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+      };
       const values = [luminance(getComputedStyle(button).color), luminance(background)].sort((a, b) => a - b);
       return (values[1] + .05) / (values[0] + .05);
     });

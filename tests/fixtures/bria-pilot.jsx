@@ -6,7 +6,7 @@ import '../../src/index.css';
 
 function Pilot() {
   const [data, setData] = useState(null), [error, setError] = useState(''), [dark, setDark] = useState(false);
-  useEffect(() => { fetch('/api/demo').then(response => { if (!response.ok) throw new Error('Inicia el servidor del piloto en el puerto 3002.'); return response.json(); }).then(setData).catch(error => { console.error(error); setError(error.message); }); }, []);
+  useEffect(() => { fetch('/api/demo').then(response => { if (!response.ok) throw new Error('Inicia el servidor local del piloto.'); return response.json(); }).then(setData).catch(error => { console.error(error); setError(error.message); }); }, []);
   const changeViewer = async event => {
     try {
       const response = await fetch('/api/demo/viewer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ viewer: event.target.value }) });

@@ -61,3 +61,21 @@ Pruebas de navegador: `tests/browser/briaClientCriteria.mjs`, `briaScoreDetails.
 ## Siguiente puerta de decisión
 
 Validar texto, diseño y flujo local. Después seleccionar parrillas y responsables para adjudicar ejemplos reales anonimizados, en particular cuándo una pieza **desarrolla suficientemente el objetivo**. Calibrar pesos, severidad, cobertura mínima y latencia; repetir comparación. Publicar criterios y cálculo son decisiones separadas: este último no debe activarse mientras esa calibración esté pendiente.
+
+## Ajuste de criterios · 6 de septiembre de 2026
+
+- Proponer se ubica debajo de la explicación; aprobar/rechazar/revocar/eliminar son acciones de texto rojo sin superficie, con foco visible y objetivos táctiles de 44 px. El modo oscuro deriva un tono accesible del token destructivo, no un rojo independiente.
+- Un admin activo puede borrar definitivamente cualquier criterio mediante `DELETE /api/content/plans/:planId/criteria/:criterionId`, enviando su versión y `confirmation: "ELIMINAR"`. El backend comprueba rol vigente, cliente y versión; no acepta identidad enviada en el payload. Responsable y PM conservan validar/revocar, pero no borrar.
+- El borrado elimina el registro y su historial sin papelera. Conserva las revisiones anteriores como documentos históricos; estas no vuelven a usarse como criterios aprobados. Si la regla estaba aprobada, se invalidan los trabajos en curso y se encolan parrillas activas en la misma transacción. Un error al encolar revierte el borrado.
+- No requiere cambios de esquema ni modifica datos productivos durante las pruebas. El piloto admite `BRIA_PILOT_PORT=3003` para abrir una muestra independiente sin cerrar ni alterar la muestra que el usuario tenía en 3002. Las pruebas integradas admiten `BRIA_PILOT_URL=http://127.0.0.1:3003`.
+
+### Ejemplos hipotéticos para acordar con el cliente
+
+| Categoría | Criterio de ejemplo | Justificación de ejemplo (solo si existe ese acuerdo) |
+| --- | --- | --- |
+| Marca | Usar un tono cercano y profesional; dirigirse a la audiencia de tú y evitar promesas exageradas. | Tratamiento y personalidad definidos en la guía de voz aprobada. |
+| Estrategia | En piezas de conversión del servicio de diseño, explicar un beneficio concreto y cerrar con una invitación a solicitar asesoría. | La campaña busca generar consultas calificadas sobre ese servicio. |
+| Gramática | Redactar en español de Colombia, revisar tildes y concordancia, y evitar mayúsculas sostenidas salvo siglas. | Convención editorial acordada para las piezas de esta cuenta. |
+| Consistencia | Usar el mismo nombre del servicio y las mismas condiciones de la oferta en el arte, el copy y el caption. | Evitar contradicciones dentro de una pieza y entre publicaciones de la campaña. |
+
+Son ejemplos, no memoria validada de Aristea ni criterios para guardar automáticamente. La categoría organiza el tipo de regla, no limita otras comprobaciones básicas que Bria ya realiza.

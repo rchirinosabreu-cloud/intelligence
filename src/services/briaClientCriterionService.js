@@ -16,10 +16,18 @@ const historyEvent = ({ actor, planId, action, reason, version, now }) => ({
 });
 const present = (criterion, actor) => {
   const { sourcePlan, ...result } = criterion;
-  return { ...result, canValidate: canValidateClientCriterion(actor, sourcePlan) };
+  return { ...result, canValidate: canValidateClientCriterion(actor, sourcePlan), canDelete: actor.role === 'ADMIN' };
 };
 const sourceInclude = { sourcePlan: { select: { deletedAt: true, owner: { select: { userId: true } } } } };
 const lockClient = (tx, clientId) => tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${clientId}, 0))::text`;
+const invalidateClientReviews = async (tx, clientId, now = new Date()) => {
+  const pending = buildContentPlanReviewPendingData(now);
+  await tx.contentPlan.updateMany({ where: { clientId, deletedAt: null }, data: { ...pending, briaReviewState: 'STALE' } });
+  await tx.contentPlan.updateMany({ where: { clientId, deletedAt: null, OR: [
+    { status: { in: ['PLANIFICACION', 'EN_APROBACION', 'ACTIVO'] } },
+    { briaReviewFindings: { some: { status: 'VERIFYING' } } }
+  ] }, data: pending });
+};
 
 export const createClientCriterionService = (db = prisma) => ({
   async list({ planId, actorUserId }) {
@@ -74,15 +82,29 @@ export const createClientCriterionService = (db = prisma) => ({
         status: next.status, version: next.version,
         history: [...criterion.history, historyEvent({ actor, planId: plan.id, action, reason: next.reason, version: next.version, now })]
       }, include: sourceInclude });
-      if (['APPROVE', 'REVOKE'].includes(action)) {
-        const pending = buildContentPlanReviewPendingData(now);
-        await tx.contentPlan.updateMany({ where: { clientId: plan.clientId, deletedAt: null }, data: { ...pending, briaReviewState: 'STALE' } });
-        await tx.contentPlan.updateMany({ where: { clientId: plan.clientId, deletedAt: null, OR: [
-          { status: { in: ['PLANIFICACION', 'EN_APROBACION', 'ACTIVO'] } },
-          { briaReviewFindings: { some: { status: 'VERIFYING' } } }
-        ] }, data: pending });
-      }
+      if (['APPROVE', 'REVOKE'].includes(action)) await invalidateClientReviews(tx, plan.clientId, now);
       return present(updated, actor);
+    });
+  },
+  async remove({ planId, actorUserId, criterionId, version, confirmation }) {
+    return db.$transaction(async tx => {
+      const initial = await context(tx, planId, actorUserId);
+      if (initial.actor.role !== 'ADMIN') throw criterionError(403, 'Solo un admin puede eliminar definitivamente un criterio.');
+      if (confirmation !== 'ELIMINAR' || typeof criterionId !== 'string' || !criterionId.trim()) {
+        throw criterionError(400, 'Confirma explícitamente el criterio que deseas eliminar.');
+      }
+      await lockClient(tx, initial.plan.clientId);
+      // Same lock order as approval/revocation and review publication.
+      await tx.$queryRaw`SELECT "id" FROM "ContentPlan" WHERE "clientId" = ${initial.plan.clientId} ORDER BY "id" FOR UPDATE`;
+      const { plan, actor } = await context(tx, planId, actorUserId);
+      if (actor.role !== 'ADMIN') throw criterionError(403, 'Solo un admin puede eliminar definitivamente un criterio.');
+      if (plan.clientId !== initial.plan.clientId) throw criterionError(409, 'La parrilla cambió de cliente. Actualiza la lista.');
+      const criterion = await tx.clientEditorialCriterion.findFirst({ where: { id: criterionId, clientId: plan.clientId } });
+      if (!criterion) throw criterionError(404, 'El criterio no pertenece a este cliente o ya fue eliminado.');
+      if (!Number.isInteger(version) || version !== criterion.version) throw criterionError(409, 'Este criterio cambió. Actualiza la lista antes de eliminarlo.');
+      await tx.clientEditorialCriterion.delete({ where: { id: criterion.id } });
+      if (criterion.status === 'APPROVED') await invalidateClientReviews(tx, plan.clientId);
+      return { deleted: true, id: criterion.id };
     });
   }
 });

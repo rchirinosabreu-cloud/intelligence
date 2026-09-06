@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
-const base = 'http://127.0.0.1:3002';
+const base = process.env.BRIA_PILOT_URL || 'http://127.0.0.1:3002';
 const initial = await fetch(`${base}/api/demo`).then(response => { assert.equal(response.status, 200); return response.json(); });
 assert.ok(initial.viewers.includes('Responsable') && initial.review.summary.includes('ficticias'));
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
@@ -45,6 +45,28 @@ try {
   await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('[role=dialog]')).opacity) === 1);
   await page.screenshot({ path: 'output/bria-pilot-persisted-mobile.png', fullPage: true });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  assert.equal(await dialog.getByRole('button', { name: 'Eliminar', exact: true }).count(), 0);
+  await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' });
+  await page.getByLabel('Probar como').selectOption('Admin');
+  await page.getByRole('button', { name: 'Criterios del cliente', exact: true }).click();
+  await dialog.getByText('Aprobado', { exact: true }).waitFor();
+  const created = await fetch(`${base}/api/content/plans/${initial.planId}/criteria`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Criterio temporal creado únicamente por el test de borrado.', category: 'MARCA', reason: 'Fixture desechable de eliminación.', requestId: crypto.randomUUID() }) }).then(response => { assert.equal(response.status, 201); return response.json(); });
+  const approvedForDeletion = await fetch(`${base}/api/content/plans/${initial.planId}/criteria/${created.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'APPROVE', version: 1, reason: 'Prueba local.' }) }).then(response => { assert.equal(response.status, 200); return response.json(); });
+  await page.reload(); await page.getByRole('button', { name: 'Criterios del cliente', exact: true }).click();
+  await dialog.getByText(approvedForDeletion.text, { exact: true }).waitFor();
+  await dialog.locator('article').filter({ hasText: approvedForDeletion.text }).getByRole('button', { name: 'Eliminar', exact: true }).click();
+  await dialog.getByLabel('Escribe ELIMINAR para confirmar').fill('ELIMINAR');
+  await dialog.getByRole('button', { name: 'Eliminar definitivamente', exact: true }).click();
+  await dialog.getByText('Lo que Bria debe recordar', { exact: true }).waitFor();
+  assert.equal(await dialog.getByText(approvedForDeletion.text, { exact: true }).count(), 0);
+  await page.reload(); await page.getByRole('button', { name: 'Criterios del cliente', exact: true }).click();
+  await dialog.getByText('Aprobado', { exact: true }).waitFor();
+  assert.equal(await dialog.getByText(approvedForDeletion.text, { exact: true }).count(), 0);
+  const remaining = await fetch(`${base}/api/content/plans/${initial.planId}/criteria`).then(response => response.json());
+  assert.equal(remaining.criteria.some(c => c.id === approvedForDeletion.id), false);
+  await page.setViewportSize({ width: 1366, height: 1000 });
+  await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('[role=dialog]')).opacity) === 1);
+  await page.screenshot({ path: 'output/bria-criteria-admin-live.png', fullPage: true });
   assert.deepEqual(errors, []);
-  console.log('Real local backend: unauthorized role rejected, owner approval persisted after reload, history and responsive score UI OK.');
+  console.log('Real local backend: permissions, owner approval/history, score UI and admin deletion persisted after reload OK.');
 } finally { await browser.close(); }

@@ -5,7 +5,7 @@ import { createClientCriteriaRouter } from '../src/routes/api/clientCriteria.js'
 
 test('criteria HTTP routes whitelist payload, use authenticated identity and hide internal errors', async () => {
   const calls = [];
-  const service = Object.fromEntries(['list', 'propose', 'decide'].map(name => [name, async args => {
+  const service = Object.fromEntries(['list', 'propose', 'decide', 'remove'].map(name => [name, async args => {
     calls.push([name, args]);
     if (args.reason === 'fail') throw new Error('secret database hostname');
     if (args.reason === 'denied') throw Object.assign(new Error('Sin permiso.'), { status: 403 });
@@ -29,5 +29,8 @@ test('criteria HTTP routes whitelist payload, use authenticated identity and hid
       assert.equal(response.status, status);
       assert.doesNotMatch(await response.text(), /secret database/);
     }
+    const deletion = await fetch(`${base}/rule`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: 2, confirmation: 'ELIMINAR', actorUserId: 'spoofed-admin', role: 'ADMIN', clientId: 'foreign' }) });
+    assert.equal(deletion.status, 200);
+    assert.deepEqual(calls.at(-1), ['remove', { planId: 'plan', actorUserId: 'actual-actor', criterionId: 'rule', version: 2, confirmation: 'ELIMINAR' }]);
   } finally { await new Promise(resolve => server.close(resolve)); }
 });

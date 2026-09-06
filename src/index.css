@@ -80,6 +80,10 @@
 }
 
 @layer components {
+  /* Text-only destructive actions keep the global hue and readable dark contrast. */
+  .dark .brain-destructive-text {
+    color: color-mix(in srgb, hsl(var(--destructive)) 85%, hsl(var(--foreground)));
+  }
   .brain-ai-header {
     background-image: linear-gradient(135deg, rgb(var(--bria-header-start)), rgb(var(--bria-header-end)));
     color: white;

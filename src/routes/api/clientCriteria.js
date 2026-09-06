@@ -22,5 +22,9 @@ export const createClientCriteriaRouter = (service = createClientCriterionServic
     const { action, reason, version } = req.body || {};
     return service.decide({ ...identity(req), criterionId: req.params.criterionId, action, reason, version });
   }));
+  router.delete('/:criterionId', handle(req => {
+    const { version, confirmation } = req.body || {};
+    return service.remove({ ...identity(req), criterionId: req.params.criterionId, version, confirmation });
+  }));
   return router;
 };

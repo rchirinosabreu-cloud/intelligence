@@ -9,6 +9,9 @@ if (url.protocol !== 'postgresql:' || url.hostname !== '127.0.0.1' || url.port !
   throw new Error('La muestra solo admite la base local brainstudio_test en 127.0.0.1:55439. No se cargará .env.');
 }
 process.env.DATABASE_URL = url.href;
+const port = Number(process.env.BRIA_PILOT_PORT || 3002);
+if (![3002, 3003].includes(port)) throw new Error('El piloto solo admite los puertos locales 3002 o 3003.');
+const origin = `http://127.0.0.1:${port}`;
 const [{ createClientCriterionService }, { createClientCriteriaRouter }, { TRACEABLE_RUBRIC, parseTraceableReview }] = await Promise.all([
   import('../src/services/briaClientCriterionService.js'), import('../src/routes/api/clientCriteria.js'), import('../src/services/briaTraceableScore.js')
 ]);
@@ -46,9 +49,9 @@ app.use('/api/content/plans/:planId/criteria', (req, res, next) => {
   next();
 }, createClientCriteriaRouter(service));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'API fuera del alcance del piloto local.' }));
-const vite = await createViteServer({ logLevel: 'error', define: { 'import.meta.env.VITE_API_URL': JSON.stringify('http://127.0.0.1:3002') }, server: { host: '127.0.0.1', middlewareMode: true }, appType: 'mpa' });
+const vite = await createViteServer({ logLevel: 'error', define: { 'import.meta.env.VITE_API_URL': JSON.stringify(origin) }, server: { host: '127.0.0.1', middlewareMode: true, hmr: { host: '127.0.0.1', port: port + 20000 } }, appType: 'mpa' });
 app.use(vite.middlewares);
-const server = app.listen(3002, '127.0.0.1', () => console.log('Piloto aislado listo: http://127.0.0.1:3002/tests/fixtures/bria-pilot.html · PostgreSQL local · sin llamadas a IA'));
+const server = app.listen(port, '127.0.0.1', () => console.log(`Piloto aislado listo: ${origin}/tests/fixtures/bria-pilot.html · PostgreSQL local · sin llamadas a IA`));
 let closing = false;
 const close = async () => {
   if (closing) return; closing = true;

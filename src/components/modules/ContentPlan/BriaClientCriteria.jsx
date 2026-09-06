@@ -6,7 +6,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 
 const categories = { MARCA: 'Marca', ESTRATEGIA: 'Estrategia', GRAMATICA: 'Gramática', CONSISTENCIA: 'Consistencia' };
 const statuses = { PROPOSED: 'Por validar', APPROVED: 'Aprobado', REJECTED: 'Rechazado', REVOKED: 'Revocado' };
-const actions = { APPROVE: ['Aprobar criterio', 'Confirmar aprobación'], REJECT: ['Rechazar propuesta', 'Confirmar rechazo'], REVOKE: ['Revocar criterio', 'Confirmar revocación'] };
+const actions = { APPROVE: ['Aprobar criterio', 'Confirmar aprobación'], REJECT: ['Rechazar propuesta', 'Confirmar rechazo'], REVOKE: ['Revocar criterio', 'Confirmar revocación'], DELETE: ['Eliminar criterio', 'Eliminar definitivamente'] };
+const textActionClass = 'min-h-11 min-w-11 px-0 font-medium active:scale-100';
+const criterionActionClass = `${textActionClass} text-destructive brain-destructive-text`;
 const historyLabels = { PROPOSE: 'Propuesta', APPROVE: 'Aprobación', REJECT: 'Rechazo', REVOKE: 'Revocación' };
 const inputClass = 'min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950 focus:outline-none focus:ring-2 focus:ring-cyan-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100';
 const auth = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } });
@@ -16,6 +18,7 @@ const formatDate = value => Number.isFinite(new Date(value).getTime())
 export default function BriaClientCriteria({ planId, onChanged }) {
   const [open, setOpen] = useState(false), [data, setData] = useState(null), [error, setError] = useState('');
   const [form, setForm] = useState(null), [text, setText] = useState(''), [category, setCategory] = useState('MARCA'), [reason, setReason] = useState('');
+  const [confirmation, setConfirmation] = useState('');
   const [saving, setSaving] = useState(false), [loading, setLoading] = useState(false), [historyId, setHistoryId] = useState(null);
   const sequence = useRef(0), mounted = useRef(true), requestId = useRef(null), interacting = useRef(false);
   interacting.current = Boolean(form || saving);
@@ -42,10 +45,10 @@ export default function BriaClientCriteria({ planId, onChanged }) {
   }, [open, load]);
   const changeOpen = value => {
     setOpen(value);
-    if (!value) { setForm(null); setReason(''); setError(''); sequence.current++; }
+    if (!value) { setForm(null); setReason(''); setConfirmation(''); setError(''); sequence.current++; }
   };
   const start = (action, criterion = null) => {
-    setError(''); setReason(''); setText(''); setCategory('MARCA');
+    setError(''); setReason(''); setConfirmation(''); setText(''); setCategory('MARCA');
     requestId.current = crypto.randomUUID();
     setForm({ action, criterion });
   };
@@ -55,6 +58,7 @@ export default function BriaClientCriteria({ planId, onChanged }) {
     setSaving(true); setError(''); sequence.current++;
     try {
       if (form.action === 'PROPOSE') await axios.post(endpoint, { text, category, reason, requestId: requestId.current }, auth());
+      else if (form.action === 'DELETE') await axios.delete(`${endpoint}/${form.criterion.id}`, { ...auth(), data: { version: form.criterion.version, confirmation } });
       else await axios.patch(`${endpoint}/${form.criterion.id}`, { action: form.action, version: form.criterion.version, reason }, auth());
       if (!mounted.current) return;
       setForm(null); setReason('');
@@ -66,6 +70,7 @@ export default function BriaClientCriteria({ planId, onChanged }) {
     } finally { if (mounted.current) setSaving(false); }
   };
   const proposing = form?.action === 'PROPOSE';
+  const deleting = form?.action === 'DELETE';
   return <>
     <Button type="button" variant="outline" className="min-h-11 rounded-xl" onClick={() => changeOpen(true)}>Criterios del cliente</Button>
     <Dialog open={open} onOpenChange={changeOpen}>
@@ -88,16 +93,17 @@ export default function BriaClientCriteria({ planId, onChanged }) {
               <label className="grid gap-2 text-sm font-medium">Criterio<textarea required maxLength={800} rows={3} disabled={saving} value={text} onChange={e => setText(e.target.value)} placeholder="Describe una regla concreta, vigente y aplicable a este cliente." className={inputClass} /></label>
             </> : <>
               <p className="break-words text-sm font-medium leading-relaxed">{form.criterion.text}</p>
-              <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{form.action === 'APPROVE' ? 'Bria usará este criterio en las revisiones de este cliente. Las parrillas activas se revisarán de nuevo.' : form.action === 'REVOKE' ? 'Bria dejará de usar este criterio. La decisión y su historial se conservarán.' : 'La propuesta no se incorporará a la memoria. El motivo quedará en el historial.'}</p>
+              <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{deleting ? 'Se eliminarán este criterio y todo su historial. Bria dejará de usarlo. Esta acción no se puede deshacer. Las revisiones ya guardadas se conservarán.' : form.action === 'APPROVE' ? 'Bria usará este criterio en las revisiones de este cliente. Las parrillas activas se revisarán de nuevo.' : form.action === 'REVOKE' ? 'Bria dejará de usar este criterio. La decisión y su historial se conservarán.' : 'La propuesta no se incorporará a la memoria. El motivo quedará en el historial.'}</p>
             </>}
-            <label className="grid gap-2 text-sm font-medium">{proposing ? 'Por qué debe recordarlo Bria' : 'Motivo de la decisión'}<textarea required maxLength={500} rows={3} disabled={saving} value={reason} onChange={e => setReason(e.target.value)} placeholder="Indica el acuerdo, la guía vigente o el contexto que respalda tu decisión." className={inputClass} /></label>
+            {deleting ? <label className="grid gap-2 text-sm font-medium">Escribe ELIMINAR para confirmar<input required autoComplete="off" maxLength={8} disabled={saving} value={confirmation} onChange={e => setConfirmation(e.target.value)} className={inputClass} /></label>
+              : <label className="grid gap-2 text-sm font-medium">{proposing ? 'Por qué debe recordarlo Bria' : 'Motivo de la decisión'}<textarea required maxLength={500} rows={3} disabled={saving} value={reason} onChange={e => setReason(e.target.value)} placeholder="Indica el acuerdo, la guía vigente o el contexto que respalda tu decisión." className={inputClass} /></label>}
             <div className="flex flex-col-reverse gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800 sm:flex-row sm:justify-end">
               <Button type="button" variant="ghost" className="min-h-11" disabled={saving} onClick={() => { setForm(null); setError(''); }}>Cancelar</Button>
-              <Button type="submit" data-saving={saving} className={`min-h-11 ${form.action === 'REVOKE' || form.action === 'REJECT' ? 'bg-destructive text-destructive-foreground hover:bg-destructive hover:brightness-95' : 'bg-[rgb(var(--bria-header-end))] text-white hover:bg-[rgb(var(--bria-header-start))] dark:bg-[rgb(var(--bria-header-end))]'}`} disabled={saving || !reason.trim() || (proposing && !text.trim())}>{saving ? 'Guardando…' : proposing ? 'Guardar propuesta' : actions[form.action][1]}</Button>
+              <Button type="submit" variant={proposing ? 'default' : 'link'} data-saving={saving} className={proposing ? 'min-h-11 bg-[rgb(var(--bria-header-end))] text-white hover:bg-[rgb(var(--bria-header-start))] dark:bg-[rgb(var(--bria-header-end))]' : criterionActionClass} disabled={saving || (deleting ? confirmation !== 'ELIMINAR' : !reason.trim() || (proposing && !text.trim()))}>{saving ? deleting ? 'Eliminando…' : 'Guardando…' : proposing ? 'Guardar propuesta' : actions[form.action][1]}</Button>
             </div>
           </form> : <>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <p className="max-w-md text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">Solo los criterios aprobados se usan en las revisiones de este cliente. Puedes consultar quién los validó y por qué.</p>
+            <div className="flex flex-col items-start gap-4">
+              <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">Solo los criterios aprobados se usan en las revisiones de este cliente. Puedes consultar quién los validó y por qué.</p>
               {data?.canPropose && <Button type="button" variant="outline" disabled={saving} onClick={() => start('PROPOSE')} className="min-h-11 shrink-0 rounded-xl">Proponer criterio</Button>}
             </div>
             {!data && loading && <p role="status" className="text-sm">Cargando criterios…</p>}
@@ -107,10 +113,11 @@ export default function BriaClientCriteria({ planId, onChanged }) {
               {(data?.criteria || []).map(criterion => <article key={criterion.id} className="space-y-3 py-5 first:pt-0">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-zinc-600 dark:text-zinc-300"><span>{categories[criterion.category]}</span><span>·</span><span>{statuses[criterion.status]}</span><span className="ml-auto">v{criterion.version}</span></div>
                 <p className="break-words text-sm leading-relaxed">{criterion.text}</p>
-                <div className="flex flex-wrap gap-2">
-                  {criterion.canValidate && criterion.status === 'PROPOSED' && <><Button type="button" variant="outline" className="min-h-11 rounded-xl" onClick={() => start('APPROVE', criterion)}>Aprobar</Button><Button type="button" variant="destructive" className="min-h-11 hover:bg-destructive hover:brightness-95" onClick={() => start('REJECT', criterion)}>Rechazar</Button></>}
-                  {criterion.canValidate && criterion.status === 'APPROVED' && <Button type="button" variant="destructive" className="min-h-11 hover:bg-destructive hover:brightness-95" onClick={() => start('REVOKE', criterion)}>Revocar</Button>}
-                  <Button type="button" variant="ghost" className="min-h-11" aria-expanded={historyId === criterion.id} onClick={() => setHistoryId(value => value === criterion.id ? null : criterion.id)}>Historial</Button>
+                <div className="flex flex-wrap gap-x-5 gap-y-1">
+                  {criterion.canValidate && criterion.status === 'PROPOSED' && <><Button type="button" variant="link" className={criterionActionClass} onClick={() => start('APPROVE', criterion)}>Aprobar</Button><Button type="button" variant="link" className={criterionActionClass} onClick={() => start('REJECT', criterion)}>Rechazar</Button></>}
+                  {criterion.canValidate && criterion.status === 'APPROVED' && <Button type="button" variant="link" className={criterionActionClass} onClick={() => start('REVOKE', criterion)}>Revocar</Button>}
+                  {criterion.canDelete && <Button type="button" variant="link" className={`${criterionActionClass} text-destructive`} onClick={() => start('DELETE', criterion)}>Eliminar</Button>}
+                  <Button type="button" variant="link" className={`${textActionClass} text-zinc-600 dark:text-zinc-300`} aria-expanded={historyId === criterion.id} onClick={() => setHistoryId(value => value === criterion.id ? null : criterion.id)}>Historial</Button>
                 </div>
                 {historyId === criterion.id && <ol className="space-y-4 border-l border-zinc-200 pl-4 dark:border-zinc-700">{criterion.history.map((entry, index) => <li key={index} className="space-y-1 text-xs leading-relaxed"><p className="font-medium">{historyLabels[entry.action]} · {entry.actorName} · v{entry.version}</p><p className="text-zinc-500 dark:text-zinc-400">{formatDate(entry.at)}</p><p className="break-words text-sm text-zinc-600 dark:text-zinc-300">{entry.reason}</p></li>)}</ol>}
               </article>)}
