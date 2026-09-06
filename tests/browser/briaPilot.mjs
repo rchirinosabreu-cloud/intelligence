@@ -62,7 +62,7 @@ try {
   await dialog.getByLabel('Escribe ELIMINAR para confirmar').fill('ELIMINAR');
   await dialog.getByRole('button', { name: 'Eliminar definitivamente', exact: true }).click();
   await dialog.getByText('Lo que Bria debe recordar', { exact: true }).waitFor();
-  assert.equal(await dialog.getByText(approvedForDeletion.text, { exact: true }).count(), 0);
+  await dialog.getByText(approvedForDeletion.text, { exact: true }).waitFor({ state: 'detached' });
   await page.reload(); await page.getByRole('button', { name: 'Criterios del cliente', exact: true }).click();
   await dialog.getByText('Aprobado', { exact: true }).waitFor();
   assert.equal(await dialog.getByText(approvedForDeletion.text, { exact: true }).count(), 0);
@@ -71,6 +71,37 @@ try {
   await page.setViewportSize({ width: 1366, height: 1000 });
   await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('[role=dialog]')).opacity) === 1);
   await page.screenshot({ path: 'output/bria-criteria-admin-live.png', fullPage: true });
+  // Real form -> HTTP router -> PostgreSQL: manual context is optional, decisions are not.
+  await dialog.getByRole('button', { name: 'Proponer criterio', exact: true }).click();
+  const save = dialog.getByRole('button', { name: 'Guardar propuesta', exact: true });
+  assert.equal(await save.isDisabled(), true);
+  const optionalText = `Regla de prueba sin contexto ${crypto.randomUUID()}`;
+  await dialog.getByRole('textbox', { name: 'Criterio', exact: true }).fill(optionalText);
+  assert.equal(await save.isEnabled(), true);
+  assert.equal(await dialog.getByRole('textbox', { name: 'Contexto o fuente (opcional)', exact: true }).isVisible(), false);
+  await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('[role=dialog]')).opacity) === 1);
+  await page.screenshot({ path: 'output/bria-criteria-optional-live.png', fullPage: true });
+  await save.click();
+  await dialog.getByText(optionalText, { exact: true }).waitFor();
+  await page.reload(); await page.getByRole('button', { name: 'Criterios del cliente', exact: true }).click();
+  const article = dialog.locator('article').filter({ hasText: optionalText });
+  await article.getByText('Por validar', { exact: true }).waitFor();
+  await article.getByRole('button', { name: 'Ver detalle', exact: true }).click();
+  await article.locator('summary').filter({ hasText: 'Historial' }).click();
+  await article.getByText('Sin contexto añadido.', { exact: true }).waitFor();
+  await article.getByRole('button', { name: 'Aprobar', exact: true }).click();
+  assert.equal(await dialog.getByRole('button', { name: 'Confirmar aprobación', exact: true }).isDisabled(), true);
+  await dialog.getByRole('textbox', { name: 'Motivo de la decisión', exact: true }).fill('Validado solo en la base ficticia del piloto.');
+  await dialog.getByRole('button', { name: 'Confirmar aprobación', exact: true }).click();
+  await article.getByText('Aprobado', { exact: true }).waitFor();
+  const persisted = await fetch(`${base}/api/content/plans/${initial.planId}/criteria`).then(response => response.json());
+  const optional = persisted.criteria.find(c => c.text === optionalText);
+  assert.equal(optional.status, 'APPROVED');
+  assert.equal(optional.history[0].reason, '');
+  assert.equal(optional.history[1].reason, 'Validado solo en la base ficticia del piloto.');
+  // Remove only the temporary criterion created by this test in the isolated pilot.
+  const cleanup = await fetch(`${base}/api/content/plans/${initial.planId}/criteria/${optional.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: optional.version, confirmation: 'ELIMINAR' }) });
+  assert.equal(cleanup.status, 200);
   assert.deepEqual(errors, []);
-  console.log('Real local backend: permissions, owner approval/history, score UI and admin deletion persisted after reload OK.');
+  console.log('Real local backend: permissions, owner approval/history, score UI, admin deletion and optional manual context persisted after reload OK.');
 } finally { await browser.close(); }

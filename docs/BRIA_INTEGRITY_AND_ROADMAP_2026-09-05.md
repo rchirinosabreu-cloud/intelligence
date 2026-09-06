@@ -4,6 +4,8 @@ Fecha: 5 de septiembre de 2026. Auditoría de código sobre `main`, base `9dd5c1
 
 Seguimiento, 6 de septiembre: fiabilidad, cobertura, verificación de hallazgos y gobierno de criterios tienen bloques implementados; esto no certifica cerradas todas las brechas de la auditoría. El nuevo bloque local de [aprendizajes editoriales](BRIA_CRITERION_DISCOVERY.md) propone criterios desde feedback, notas internas y piezas aprobadas, previa solicitud y sin autoaprobación. Siguiente puerta: validación editorial con responsables, calibración del puntaje candidato y después extracción por cambios. La unificación completa de contexto y los flujos de reuniones/foco siguen pendientes.
 
+Cierre técnico del bloque de parrillas para práctica: contexto manual opcional, trazabilidad y decisiones obligatorias conservadas, pruebas de regresión y [guía de práctica](BRIA_PARRILLAS_PRACTICE.md). Esta entrega no cierra la aceptación editorial, la medición de productividad ni las otras brechas P1. La semana de uso real aportará casos para decidir los siguientes ajustes; no se habilita el puntaje candidato ni la extracción automática por comentario.
+
 Actualización posterior: el ajuste de popovers se publicó en `a2d4cfc`. Tras autorización del usuario se inició el primer bloque de fiabilidad de revisiones de parrillas y la limpieza de herramientas del repositorio. Su alcance y límites se registran en [Fase 1: revisiones fiables](BRIA_PHASE_1_REVIEW_RELIABILITY.md) y [Skills del proyecto](AGENT_SKILLS.md). Las cifras y hallazgos siguientes corresponden a la auditoría inicial, no al cierre de todas las fases.
 
 ## Conclusión ejecutiva

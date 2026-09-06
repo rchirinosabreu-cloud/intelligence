@@ -149,6 +149,27 @@ test('client criteria: real PostgreSQL persistence, authorization, atomic histor
       assert.equal(outcomes.filter(result => result.status === 'fulfilled').length, 1);
       assert.ok([404, 409].includes(outcomes.find(result => result.status === 'rejected').reason.status));
     });
+    await t.test('manual creation without context stays auditable, idempotent and unapproved; decisions still require reasons', async () => {
+      const request = { planId: plan.id, actorUserId: stranger.id, text: 'Criterio manual sin contexto adicional.', category: 'MARCA', requestId: randomUUID() };
+      const criterion = await service.propose(request);
+      assert.equal(criterion.status, 'PROPOSED');
+      assert.equal(criterion.history[0].reason, '');
+      assert.equal(criterion.history[0].actorUserId, stranger.id);
+      assert.equal(criterion.history[0].planId, plan.id);
+      assert.ok(Number.isFinite(new Date(criterion.history[0].at).getTime()));
+      assert.equal((await service.propose({ ...request, reason: '  ' })).id, criterion.id);
+      assert.equal((await createClientCriterionService(db).list({ planId: plan.id, actorUserId: owner.id })).criteria.find(c => c.id === criterion.id).history[0].reason, '');
+      assert.equal((await service.approved(plan.clientId)).some(c => c.id === criterion.id), false);
+      await assert.rejects(service.propose({ ...request, reason: 'Un contexto diferente' }), { status: 409 });
+      await assert.rejects(service.edit({ ...request, actorUserId: owner.id, criterionId: criterion.id, version: 1, scope: 'CLIENT' }), { status: 400 });
+      for (const action of ['APPROVE', 'REJECT']) await assert.rejects(service.decide({ planId: plan.id, actorUserId: owner.id, criterionId: criterion.id, version: 1, action }), { status: 400 });
+      const approved = await approve(criterion);
+      assert.equal(approved.history.length, 2);
+      assert.equal(approved.history[0].reason, '');
+      assert.equal(approved.history[1].reason, 'Guía validada.');
+      await assert.rejects(service.decide({ planId: plan.id, actorUserId: owner.id, criterionId: criterion.id, version: 2, action: 'REVOKE' }), { status: 400 });
+      await service.remove(deletion(approved));
+    });
   } finally {
     await db.client.deleteMany({ where: { id: { in: clients } } });
     await db.teamMember.deleteMany({ where: { id: { in: members } } });

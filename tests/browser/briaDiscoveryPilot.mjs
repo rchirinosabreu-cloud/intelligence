@@ -24,7 +24,7 @@ try {
   await article.getByRole('button', { name: 'Más opciones', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Ajustar', exact: true }).click();
   await page.getByRole('textbox', { name: 'Criterio', exact: true }).fill('Usar un tono cercano durante septiembre.');
-  await page.getByRole('textbox', { name: 'Por qué debe recordarlo Bria', exact: true }).fill('Ajuste de ejemplo validado en el piloto.');
+  await page.getByRole('textbox', { name: 'Motivo del ajuste', exact: true }).fill('Ajuste de ejemplo validado en el piloto.');
   await page.getByRole('button', { name: 'Guardar ajuste', exact: true }).click();
   await page.getByRole('heading', { name: 'Lo que Bria debe recordar', exact: true }).waitFor();
   await page.getByRole('dialog').locator('article').getByText('Usar un tono cercano durante septiembre.', { exact: true }).waitFor();

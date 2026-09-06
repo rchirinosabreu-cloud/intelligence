@@ -21,6 +21,24 @@ test('proposal requires bounded explicit rule and justification, with a known ca
     assert.throws(() => validateCriterionProposal(bad), { status: 400 });
   }
 });
+
+test('manual proposals allow absent context without fabricating a justification', () => {
+  const base = { text: ' Usar tú. ', category: 'MARCA' };
+  for (const reason of [undefined, null, '', '   ']) {
+    assert.deepEqual(validateCriterionProposal({ ...base, reason }, { reasonRequired: false }), { text: 'Usar tú.', category: 'MARCA', reason: '' });
+  }
+  assert.equal(validateCriterionProposal({ ...base, reason: ' Guía vigente. ' }, { reasonRequired: false }).reason, 'Guía vigente.');
+  for (const reason of [23, false, {}, [], 'x'.repeat(501)]) {
+    assert.throws(() => validateCriterionProposal({ ...base, reason }, { reasonRequired: false }), { status: 400 });
+  }
+  assert.throws(() => validateCriterionProposal({ ...base, text: '' }, { reasonRequired: false }), { status: 400 });
+});
+
+test('draft adjustments and AI proposals retain mandatory reasons by default', () => {
+  for (const reason of [undefined, null, '', '   ']) {
+    assert.throws(() => validateCriterionProposal({ text: 'Usar tú.', category: 'MARCA', reason }), { status: 400 });
+  }
+});
 test('approval/rejection/revocation require a reason and exact expected version; no silent undo or auto-learning', () => {
   const criterion = { status: 'PROPOSED', version: 1 };
   assert.equal(criterionDecision(criterion, { action: 'APPROVE', version: 1, reason: 'Guía vigente confirmada.' }).status, 'APPROVED');

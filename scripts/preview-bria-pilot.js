@@ -10,7 +10,7 @@ if (url.protocol !== 'postgresql:' || url.hostname !== '127.0.0.1' || url.port !
 }
 process.env.DATABASE_URL = url.href;
 const port = Number(process.env.BRIA_PILOT_PORT || 3002);
-if (![3002, 3003, 3004].includes(port)) throw new Error('El piloto solo admite los puertos locales 3002, 3003 o 3004.');
+if (![3002, 3003, 3004, 3005].includes(port)) throw new Error('El piloto solo admite los puertos locales 3002, 3003, 3004 o 3005.');
 const origin = `http://127.0.0.1:${port}`;
 const [{ createClientCriterionService }, { createClientCriteriaRouter }, { TRACEABLE_RUBRIC, parseTraceableReview }] = await Promise.all([
   import('../src/services/briaClientCriterionService.js'), import('../src/routes/api/clientCriteria.js'), import('../src/services/briaTraceableScore.js')

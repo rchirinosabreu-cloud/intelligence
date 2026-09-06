@@ -11,9 +11,14 @@ const boundedText = (value, max, name) => {
   if (typeof value !== 'string' || !value.trim() || value.trim().length > max) throw criterionError(400, `${name} es obligatorio y admite hasta ${max} caracteres.`);
   return value.trim();
 };
-export const validateCriterionProposal = ({ text, reason, category } = {}) => {
+const optionalContext = value => {
+  if (value == null) return '';
+  if (typeof value !== 'string' || value.trim().length > 500) throw criterionError(400, 'El contexto debe ser texto y admite hasta 500 caracteres.');
+  return value.trim();
+};
+export const validateCriterionProposal = ({ text, reason, category } = {}, { reasonRequired = true } = {}) => {
   if (!CRITERION_CATEGORIES.includes(category)) throw criterionError(400, 'Selecciona una categoría válida.');
-  return { text: boundedText(text, 800, 'El criterio'), reason: boundedText(reason, 500, 'El motivo'), category };
+  return { text: boundedText(text, 800, 'El criterio'), reason: reasonRequired ? boundedText(reason, 500, 'El motivo') : optionalContext(reason), category };
 };
 export const criterionDecision = (criterion, { action, version, reason } = {}) => {
   const transitions = { APPROVE: ['PROPOSED', 'APPROVED'], REJECT: ['PROPOSED', 'REJECTED'], REVOKE: ['APPROVED', 'REVOKED'] };

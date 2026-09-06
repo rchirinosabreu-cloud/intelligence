@@ -59,7 +59,7 @@ export const createClientCriterionService = (db = prisma) => ({
     });
   },
   async propose({ planId, actorUserId, requestId, findingId = null, ...input }) {
-    const data = validateCriterionProposal(input);
+    const data = validateCriterionProposal(input, { reasonRequired: false });
     if (typeof requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(requestId)) throw criterionError(400, 'La solicitud necesita un identificador válido.');
     return db.$transaction(async tx => {
       const { plan, actor } = await context(tx, planId, actorUserId);

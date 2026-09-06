@@ -2,15 +2,16 @@
 
 ## Estado y alcance
 
-Implementado localmente; no publicado en este bloque. El motor compartido productivo continúa en `content-plan-review-v4`. No se cambia automáticamente a la candidata `traceable`.
+El bloque inicial y sus ajustes posteriores están en `main`. La simplificación del contexto manual se verifica para la entrega de práctica descrita en [Guía de práctica de parrillas](BRIA_PARRILLAS_PRACTICE.md). El motor compartido productivo continúa en `content-plan-review-v4`. No se cambia automáticamente a la candidata `traceable`.
 
 ### Criterios editoriales
 
 - Entrada: botón **Criterios del cliente** en la revisión de la parrilla.
-- Cualquier usuario activo con acceso a parrillas puede proponer una regla concreta y justificarla.
+- Cualquier usuario activo con acceso a parrillas puede proponer una regla concreta. El contexto manual es opcional y se despliega con **Añadir contexto → Contexto o fuente (opcional)**. La regla y categoría siguen siendo obligatorias; sin contexto se conserva el historial con autor/fecha y razón vacía, no se inventa una justificación.
 - Validan el responsable de la **parrilla de origen** (`owner.userId`), los PMs y admins activos con acceso al módulo. Los permisos se vuelven a consultar en backend; no se confía en el rol enviado por el navegador.
 - Estados: `PROPOSED → APPROVED → REVOKED` o `PROPOSED → REJECTED`. No se modifica silenciosamente una regla aprobada; un cambio de criterio requiere otra propuesta.
 - Cada decisión exige motivo y versión esperada. Dos decisiones concurrentes sobre una versión tienen un solo ganador; la otra recibe 409.
+- Ajustar un borrador conserva **Motivo del ajuste** obligatorio. Las propuestas generadas por Bria también requieren razón y citas; el contexto opcional solo aplica a la creación manual.
 - Texto, categoría, cliente, parrilla/hallazgo de origen y historial se conservan en `ClientEditorialCriterion`. El historial contiene acción, versión, actor ID/nombre/rol, contexto de parrilla, motivo y fecha. Los nombres son una instantánea, no un sistema de permisos.
 - Los descartes siguen en `ContentPlanReviewFinding.actionReason`; **no** se convierten automáticamente en criterios.
 - Las reglas `APPROVED` se leen directamente por `clientId` al preparar la revisión, con evidencia `criterion:<id>:v<version>`. No dependen de encontrar un embedding y nunca se prestan a otro cliente.
@@ -54,13 +55,13 @@ Implementación conforme a [Structured Outputs](https://developers.openai.com/ap
 2. Ejecutar `node scripts/preview-bria-pilot.js`.
 3. Abrir `http://127.0.0.1:3002/tests/fixtures/bria-pilot.html`.
 
-La muestra crea un cliente ficticio y cuatro usuarios locales (Responsable, Colaborador, PM, Admin); no crea cuentas utilizables en producción. La API permite solo esa parrilla. El adaptador de UI se fija al puerto 3002 y no hereda la API habitual de `.env`. El selector de roles pertenece exclusivamente a esta muestra; no existe en producción. El desglose usa respuestas **ficticias**, no se presenta como revisión real de IA. Las aprobaciones sí atraviesan el servicio y PostgreSQL local reales. No hay llamadas a modelos desde el piloto.
+La muestra crea un cliente ficticio y cuatro usuarios locales (Responsable, Colaborador, PM, Admin); no crea cuentas utilizables en producción. La API permite solo esa parrilla. El adaptador de UI se fija al puerto del piloto y no hereda la API habitual de `.env`. Admite `BRIA_PILOT_PORT` 3002, 3003, 3004 o 3005 para no reemplazar muestras en uso. El selector de roles pertenece exclusivamente a esta muestra; no existe en producción. El desglose usa respuestas **ficticias**, no se presenta como revisión real de IA. Las aprobaciones sí atraviesan el servicio y PostgreSQL local reales. No hay llamadas a modelos desde el piloto.
 
 Pruebas de navegador: `tests/browser/briaClientCriteria.mjs`, `briaScoreDetails.mjs` (API simulada) y `briaPilot.mjs` (API/base local real). Capturas en `output/bria-criteria-*`, `output/bria-score-*` y `output/bria-pilot-*`.
 
 ## Siguiente puerta de decisión
 
-Validar texto, diseño y flujo local. Después seleccionar parrillas y responsables para adjudicar ejemplos reales anonimizados, en particular cuándo una pieza **desarrolla suficientemente el objetivo**. Calibrar pesos, severidad, cobertura mínima y latencia; repetir comparación. Publicar criterios y cálculo son decisiones separadas: este último no debe activarse mientras esa calibración esté pendiente.
+La siguiente puerta es la práctica con parrillas reales según la [guía de la semana](BRIA_PARRILLAS_PRACTICE.md). Recoger ejemplos adjudicados por responsables, en particular cuándo una pieza **desarrolla suficientemente el objetivo**. Después calibrar pesos, severidad, cobertura mínima y latencia; repetir comparación. Publicar criterios y cálculo son decisiones separadas: este último no debe activarse mientras esa calibración esté pendiente.
 
 ## Ajuste de criterios · 6 de septiembre de 2026
 

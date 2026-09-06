@@ -82,7 +82,7 @@ export default function BriaClientCriteria({ planId, onChanged }) {
     if (saving) return;
     setSaving(true); setError(''); sequence.current++;
     try {
-      if (form.action === 'PROPOSE') await axios.post(endpoint, { text, category, reason, requestId: requestId.current }, auth());
+      if (form.action === 'PROPOSE') await axios.post(endpoint, { text, category, ...(reason.trim() ? { reason: reason.trim() } : {}), requestId: requestId.current }, auth());
       else if (form.action === 'EDIT') await axios.patch(`${endpoint}/${form.criterion.id}/draft`, { text, category, scope, reason, version: form.criterion.version }, auth());
       else if (form.action === 'DELETE') await axios.delete(`${endpoint}/${form.criterion.id}`, { ...auth(), data: { version: form.criterion.version, confirmation } });
       else await axios.patch(`${endpoint}/${form.criterion.id}`, { action: form.action, version: form.criterion.version, reason }, auth());
@@ -125,10 +125,14 @@ export default function BriaClientCriteria({ planId, onChanged }) {
               {form.action === 'APPROVE' && Boolean(form.criterion.provenance?.conflicts?.length) && <p className="text-sm text-destructive brain-destructive-text">Esta propuesta señala un conflicto con criterios aprobados. Revisa las fuentes y resuelve la contradicción antes de aprobar.</p>}
             </>}
             {deleting ? <label className="grid gap-2 text-sm font-medium">Escribe ELIMINAR para confirmar<input required autoComplete="off" maxLength={8} disabled={saving} value={confirmation} onChange={e => setConfirmation(e.target.value)} className={inputClass} /></label>
-              : <label className="grid gap-2 text-sm font-medium">{drafting ? 'Por qué debe recordarlo Bria' : 'Motivo de la decisión'}<textarea required maxLength={500} rows={3} disabled={saving} value={reason} onChange={e => setReason(e.target.value)} placeholder="Indica el acuerdo, la guía vigente o el contexto que respalda tu decisión." className={inputClass} /></label>}
+              : proposing ? <details className="text-sm text-zinc-600 dark:text-zinc-300">
+                <summary className="min-h-11 cursor-pointer content-center rounded-md font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Añadir contexto</summary>
+                <label className="mt-3 grid gap-2 text-sm font-medium">Contexto o fuente (opcional)<textarea maxLength={500} rows={3} disabled={saving} value={reason} onChange={e => setReason(e.target.value)} placeholder="Si aporta valor, añade el acuerdo, la guía o la fuente que respalda este criterio." className={inputClass} /></label>
+              </details>
+              : <label className="grid gap-2 text-sm font-medium">{editing ? 'Motivo del ajuste' : 'Motivo de la decisión'}<textarea required maxLength={500} rows={3} disabled={saving} value={reason} onChange={e => setReason(e.target.value)} placeholder="Indica el acuerdo, la guía vigente o el contexto que respalda tu decisión." className={inputClass} /></label>}
             <div className="flex flex-col-reverse gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800 sm:flex-row sm:justify-end">
               <Button type="button" variant="ghost" className="min-h-11" disabled={saving} onClick={() => { setForm(null); setError(''); }}>Cancelar</Button>
-              <Button type="submit" variant={drafting ? 'default' : 'link'} data-saving={saving} className={drafting ? 'min-h-11 bg-[rgb(var(--bria-header-end))] text-white hover:bg-[rgb(var(--bria-header-start))] dark:bg-[rgb(var(--bria-header-end))]' : form.action === 'APPROVE' ? approveActionClass : form.action === 'REJECT' ? neutralActionClass : criterionActionClass} disabled={saving || (deleting ? confirmation !== 'ELIMINAR' : !reason.trim() || (drafting && !text.trim()))}>{saving ? deleting ? 'Eliminando…' : 'Guardando…' : proposing ? 'Guardar propuesta' : actions[form.action][1]}</Button>
+              <Button type="submit" variant={drafting ? 'default' : 'link'} data-saving={saving} className={drafting ? 'min-h-11 bg-[rgb(var(--bria-header-end))] text-white hover:bg-[rgb(var(--bria-header-start))] dark:bg-[rgb(var(--bria-header-end))]' : form.action === 'APPROVE' ? approveActionClass : form.action === 'REJECT' ? neutralActionClass : criterionActionClass} disabled={saving || (deleting ? confirmation !== 'ELIMINAR' : (!proposing && !reason.trim()) || (drafting && !text.trim()))}>{saving ? deleting ? 'Eliminando…' : 'Guardando…' : proposing ? 'Guardar propuesta' : actions[form.action][1]}</Button>
             </div>
           </form> : <>
             <div className="flex flex-col items-start gap-4">
@@ -178,7 +182,7 @@ export default function BriaClientCriteria({ planId, onChanged }) {
                 </li>)}</ul></section>}
                   <details className="text-zinc-600 dark:text-zinc-300"><summary className="min-h-11 cursor-pointer content-center rounded-md text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Historial</summary>
                     <p className="mb-3 text-xs leading-relaxed">Quién propuso, ajustó o validó este criterio, y por qué.</p>
-                    <ol className="space-y-4">{(criterion.history || []).map((entry, index) => <li key={index} className="space-y-1 text-xs leading-relaxed"><p className="font-medium">{historyLabels[entry.action]} · {entry.actorName} · v{entry.version}</p><p className="text-zinc-500 dark:text-zinc-400">{formatDate(entry.at)}</p><p className="break-words text-sm">{entry.reason}</p></li>)}</ol>
+                    <ol className="space-y-4">{(criterion.history || []).map((entry, index) => <li key={index} className="space-y-1 text-xs leading-relaxed"><p className="font-medium">{historyLabels[entry.action]} · {entry.actorName} · v{entry.version}</p><p className="text-zinc-500 dark:text-zinc-400">{formatDate(entry.at)}</p><p className="break-words text-sm">{entry.reason || (entry.action === 'PROPOSE' ? 'Sin contexto añadido.' : 'Motivo no registrado.')}</p></li>)}</ol>
                   </details>
                 </div>}
               </article>)}

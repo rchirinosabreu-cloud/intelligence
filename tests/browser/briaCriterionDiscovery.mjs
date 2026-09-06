@@ -68,7 +68,7 @@ try {
     await dialog.getByRole('button', { name: 'Más opciones', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Ajustar', exact: true }).click();
     await dialog.getByRole('textbox', { name: 'Criterio', exact: true }).fill('Tratamiento de tú durante septiembre.');
-    await dialog.getByLabel('Por qué debe recordarlo Bria', { exact: true }).fill('Ajuste editorial de la responsable.');
+    await dialog.getByLabel('Motivo del ajuste', { exact: true }).fill('Ajuste editorial de la responsable.');
     await dialog.getByRole('button', { name: 'Guardar ajuste', exact: true }).click();
     await dialog.getByText('Tratamiento de tú durante septiembre.', { exact: true }).waitFor();
     await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' });

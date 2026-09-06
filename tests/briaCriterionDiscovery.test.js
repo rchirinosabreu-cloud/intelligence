@@ -34,6 +34,7 @@ test('AI fenced JSON proposals require literal evidence, known scope and explici
   const suggestion = { category: 'MARCA', text: 'Evitar tecnicismos en esta parrilla.', reason: 'El equipo lo propone para este mes.', scope: 'PLAN', scopePlanId: 'plan', basis: 'EXPLICIT', evidence: [{ sourceId: internal.id, quote: internal.text }], conflicts: [] };
   const parse = candidate => module.parseCriterionSuggestions('```json\n' + JSON.stringify({ proposals: [candidate] }) + '\n```', sources, []);
   assert.equal(parse(suggestion)[0].provenance.evidence[0].kind, 'INTERNAL_NOTE');
+  for (const reason of [undefined, null, '', '   ']) assert.throws(() => parse({ ...suggestion, reason }), { status: 400 });
   assert.throws(() => parse({ ...suggestion, evidence: [{ sourceId: internal.id, quote: 'Cita inventada' }] }), /evidencia/i);
   assert.throws(() => parse({ ...suggestion, scopePlanId: 'foreign' }), /alcance/i);
   assert.throws(() => parse({ ...suggestion, conflicts: ['unknown-rule'] }), /conflicto/i);
