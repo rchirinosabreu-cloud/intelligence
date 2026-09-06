@@ -23,6 +23,11 @@ Este archivo contiene las reglas y el contexto inmutable del proyecto para evita
 - **Boring Avatars:** Se utiliza la librería `boring-avatars` para los avatares en toda la aplicación (Dashboard, CampfireWidget, Tasks). Siempre respeta su importación y uso en los componentes en lugar de depender exclusivamente de imágenes estáticas, a menos que se especifique lo contrario.
 - **React Datepicker:** (Si se especifica o está instalado) Debe integrarse correctamente y utilizar los estilos oscuros (`react-datepicker/dist/react-datepicker.css`), asegurándose de no romper la estética general del formulario en modals (e.g., bordes redondos, fondos transparentes, hover oscuro).
 
+## Herramientas de agentes y documentación
+- Las skills compartidas del repositorio viven únicamente en `.agents/skills`; conservar `skills-lock.json` y revisar cambios antes de actualizar. No versionar adaptadores/enlaces generados para otros asistentes. Las preferencias personales se instalan a nivel de usuario. Política y catálogo: `docs/AGENT_SKILLS.md`.
+- Tono de Brainstudio: **Estratégico, Analítico y Propositivo** (preservado del antiguo `.agent/skills/agency-tone.md`).
+- Las skills de desarrollo no son la memoria de Bria ni se cargan automáticamente en producción. Su comportamiento operativo se implementa y evalúa en los servicios de la aplicación.
+
 ## 5. Integridad de Estados (Task Lifecycle)
 - **Regla Estricta de Completitud:** El campo `completedAt` de una `Task` está estrictamente acoplado a su `status`.
   - Si `status` cambia a `'Realizado'`, el backend DEBE inyectar automáticamente `completedAt: new Date()` (solo si no tenía una fecha previa para evitar sobrescribir el historial al editar otros campos).

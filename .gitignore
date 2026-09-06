@@ -36,3 +36,9 @@ test-results/
 verification/
 screenshots/
 artifacts/
+
+# Local verification output and generated adapters for other coding agents.
+/output/
+/skills/
+/.*/skills/
+!/.agents/skills/
