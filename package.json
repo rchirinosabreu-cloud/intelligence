@@ -23,7 +23,8 @@
     "test": "node --test \"tests/**/*.test.js\"",
     "test:ci": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
     "storage:configure-cors": "node scripts/configure-storage-cors.js",
-    "test:activity-build": "node --test tests/activityComponentsCompile.test.js"
+    "test:activity-build": "node --test tests/activityComponentsCompile.test.js",
+    "eval:bria": "node scripts/eval-bria-reviews.js"
   },
   "prisma": {
     "seed": "node scripts/sync_service_catalog.js"
