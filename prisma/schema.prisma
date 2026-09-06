@@ -354,6 +354,7 @@ model ContentPlan {
   briaReviewLeaseToken  String?
   briaReviewAttempts    Int                        @default(0)
   briaReviewNextAttemptAt DateTime?                @db.Timestamptz()
+  briaReviewCheckpoint  Json?
   contentItems          ContentItem[]
   briaReviews           ContentPlanReview[]
   briaReviewFindings    ContentPlanReviewFinding[]
@@ -407,6 +408,7 @@ model ContentPlanReview {
   verdict          String?
   score            Int?
   coverage         Int?
+  scope            Json?
   dimensions       Json?
   findingsSnapshot Json?
   evidenceSnapshot Json?

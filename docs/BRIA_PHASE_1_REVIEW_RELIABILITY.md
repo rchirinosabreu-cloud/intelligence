@@ -50,7 +50,7 @@ No se llamó al modelo real ni se modificó la base productiva. Estas pruebas ve
 
 ## Siguiente entrega recomendada: cobertura y criterio verificables
 
-1. Revisar todas las piezas por lotes y exponer cobertura real. El prompt actual aún limita a 60 piezas y recorta campos; corregir la huella NO elimina ese límite de análisis. Impedir que una revisión parcial resuelva hallazgos fuera de su cobertura.
+1. Revisar todas las piezas por lotes y exponer cobertura real. Continuación implementada en [cobertura y recuperación por lotes](BRIA_REVIEW_BATCH_COVERAGE.md), con sus pruebas y límites documentados. Impedir que una revisión parcial resuelva hallazgos fuera de su cobertura.
 2. Versionar la rúbrica y crear casos de evaluación con parrillas anonimizadas aprobados por el equipo: errores reales, falsos positivos, correcciones resueltas, contenido sin memoria de cliente y coherencia entre piezas.
 3. Unificar contexto vigente por cliente con procedencia, permisos, evidencia y reglas aprobadas. Invalidar revisiones al cambiar conocimiento relevante, no solo al editar contenido. La comprobación de instrucciones durante la publicación no sustituye este flujo.
 4. Pilotear con pocas parrillas y medir: tiempo hasta aprobación, correcciones verificadas, descartes por falso positivo, coste y latencia. Ampliar autonomía cuando las mediciones lo justifiquen.

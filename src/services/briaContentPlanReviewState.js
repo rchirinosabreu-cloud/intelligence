@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma.js';
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 
 export const BRIA_REVIEW_LEASE_MS = 5 * 60 * 1000;
 export const BRIA_REVIEW_MAX_ATTEMPTS = 3;
@@ -8,7 +9,7 @@ export const BRIA_CONTENT_PLAN_REVIEW_DEBOUNCE_MS = 45 * 1000;
 export const buildContentPlanReviewPendingData = (requestedAt = new Date()) => ({
   briaReviewState: 'PENDING', briaReviewRequestedAt: requestedAt,
   briaReviewStartedAt: null, briaReviewError: null, briaReviewLeaseToken: null,
-  briaReviewAttempts: 0, briaReviewNextAttemptAt: null
+  briaReviewAttempts: 0, briaReviewNextAttemptAt: null, briaReviewCheckpoint: Prisma.DbNull
 });
 
 export const supersededReviewError = () => Object.assign(
@@ -67,9 +68,17 @@ export const completeContentPlanReviewLease = async (tx, lease, now = new Date()
     ...leaseWhere(lease), briaReviewStartedAt: { gt: new Date(now.getTime() - BRIA_REVIEW_LEASE_MS) }
   }, data: {
     briaReviewState: 'CURRENT', briaReviewStartedAt: null,
-    briaReviewLeaseToken: null, briaReviewNextAttemptAt: null, briaReviewError: null
+    briaReviewLeaseToken: null, briaReviewNextAttemptAt: null, briaReviewError: null, briaReviewCheckpoint: Prisma.DbNull
   } });
   if (!result.count) throw supersededReviewError();
+};
+
+export const saveContentPlanReviewCheckpoint = async (db, lease, checkpoint, now = new Date()) => {
+  if (!lease?.token) throw supersededReviewError();
+  const saved = await db.contentPlan.updateMany({ where: {
+    ...leaseWhere(lease), briaReviewStartedAt: { gt: new Date(now.getTime() - BRIA_REVIEW_LEASE_MS) }
+  }, data: { briaReviewCheckpoint: checkpoint } });
+  if (!saved.count) throw supersededReviewError();
 };
 
 export const failContentPlanReview = async (lease, error, { db = prisma, now = new Date() } = {}) => {
@@ -80,7 +89,8 @@ export const failContentPlanReview = async (lease, error, { db = prisma, now = n
     error.code === 'BRIA_REVIEW_SUPERSEDED' ? buildContentPlanReviewPendingData(now) : {
       briaReviewState: retry ? 'PENDING' : 'FAILED', briaReviewStartedAt: null, briaReviewLeaseToken: null,
       briaReviewNextAttemptAt: retry ? new Date(now.getTime() + 60000 * (2 ** (lease.attempts - 1))) : null,
-      briaReviewError: retry ? 'Bria reintentará la revisión automáticamente.' : 'No se pudo completar la revisión. Puedes revisar nuevamente.'
+      briaReviewError: error.code === 'BRIA_REVIEW_CONTEXT_TOO_LARGE' ? error.message
+        : retry ? 'Bria reintentará la revisión automáticamente.' : 'No se pudo completar la revisión. Puedes revisar nuevamente.'
     }
   });
 };

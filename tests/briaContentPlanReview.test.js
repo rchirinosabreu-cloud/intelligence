@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { reviewPayload } from './helpers/briaReview.js';
 
 import {
   buildContentPlanReviewQuery,
@@ -83,7 +84,7 @@ test('Bria review isolates client evidence, uses the economical model and preser
       return {
         model: 'gpt-5.6-luna',
         requestId: 'req-review-1',
-        text: '```json\n{"summary":"La propuesta contradice una regla de marca.","verdict":"REQUIERE_AJUSTES","score":64,"findings":[{"category":"MARCA","severity":"WARNING","title":"Evitar competir por precio","detail":"La palabra barato contradice el posicionamiento.","recommendation":"Reformular desde diseño y durabilidad.","itemId":"piece-1","evidenceIds":["chunk-own","chunk-wrong","missing"]}]}\n```'
+        text: '```json\n' + JSON.stringify(reviewPayload(request, { findings: [{ category: 'MARCA', severity: 'WARNING', title: 'Evitar competir por precio', detail: 'La palabra barato contradice el posicionamiento.', recommendation: 'Reformular desde diseño y durabilidad.', itemId: 'piece-1', evidenceIds: ['chunk-own', 'chunk-wrong', 'missing'] }] })) + '\n```'
       };
     }
   };

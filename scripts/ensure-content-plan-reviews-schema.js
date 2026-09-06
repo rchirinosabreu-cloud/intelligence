@@ -23,6 +23,7 @@ try {
       ALTER TABLE "ContentPlan" ADD COLUMN IF NOT EXISTS "briaReviewLeaseToken" TEXT;
       ALTER TABLE "ContentPlan" ADD COLUMN IF NOT EXISTS "briaReviewAttempts" INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE "ContentPlan" ADD COLUMN IF NOT EXISTS "briaReviewNextAttemptAt" TIMESTAMPTZ;
+      ALTER TABLE "ContentPlan" ADD COLUMN IF NOT EXISTS "briaReviewCheckpoint" JSONB;
 
       IF NOT review_column_existed THEN
         UPDATE "ContentPlan"
@@ -96,6 +97,7 @@ try {
     CREATE INDEX IF NOT EXISTS "ContentPlanReviewFinding_planId_status_severity_idx" ON "ContentPlanReviewFinding"("planId", "status", "severity");
     CREATE INDEX IF NOT EXISTS "ContentPlanReviewFinding_itemId_idx" ON "ContentPlanReviewFinding"("itemId");
     CREATE INDEX IF NOT EXISTS "ContentPlanReviewFinding_lastReviewId_idx" ON "ContentPlanReviewFinding"("lastReviewId");
+    ALTER TABLE "ContentPlanReview" ADD COLUMN IF NOT EXISTS "scope" JSONB;
     CREATE INDEX IF NOT EXISTS "ContentPlan_briaReviewState_briaReviewRequestedAt_idx" ON "ContentPlan"("briaReviewState", "briaReviewRequestedAt");
     CREATE INDEX IF NOT EXISTS "ContentPlan_briaReviewState_briaReviewStartedAt_idx" ON "ContentPlan"("briaReviewState", "briaReviewStartedAt");
   `);

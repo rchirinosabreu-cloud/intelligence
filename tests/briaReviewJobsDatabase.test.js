@@ -7,7 +7,8 @@ import { PrismaClient } from '@prisma/client';
 import { getSafeTestDatabaseUrl } from './helpers/testDatabase.js';
 import * as state from '../src/services/briaContentPlanReviewState.js';
 import * as scheduler from '../src/services/briaContentPlanReviewScheduler.js';
-import { updateContentPlanReviewFinding } from '../src/services/briaContentPlanReviewService.js';
+import { updateContentPlanReviewFinding, getContentPlanReview, createContentPlanReviewRepository } from '../src/services/briaContentPlanReviewService.js';
+import { reviewPayload } from './helpers/briaReview.js';
 
 const databaseUrl = getSafeTestDatabaseUrl();
 const start = new Date('2026-09-05T15:00:00Z');
@@ -25,19 +26,54 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
   };
   const options = planId => ({ planId, db, now: () => start, reviewOptions: {
     getPlan: id => db.contentPlan.findUnique({ where: { id }, include: { client: true, contentItems: true } }),
-    searchMemory: async () => [], ai: { generate: async () => ({ text: JSON.stringify(rawReview), requestId: 'fixture' }) }
+    searchMemory: async () => [], ai: { generate: async request => ({ text: JSON.stringify(request.responseSchema.properties.verifications ? { verifications: [] } : reviewPayload(request, rawReview)), requestId: 'fixture' }) }
   } });
   const findingFixture = async () => {
     const plan = await fixture();
     const item = await db.contentItem.create({ data: { planId: plan.id, objective: 'Objetivo', format: 'Reel', copyText: 'Texto corregido', captionText: '', publishDate: start } });
     const config = options(plan.id);
-    config.reviewOptions.ai.generate = async () => ({ text: JSON.stringify({ ...rawReview, findings: [{
+    config.reviewOptions.ai.generate = async request => ({ text: JSON.stringify({ ...reviewPayload(request, rawReview), findings: [{
       ruleKey: 'TEXT_ERROR', field: 'copyText', itemId: item.id, category: 'GRAMATICA', severity: 'INFO', title: 'Revisar texto', detail: 'Error en el texto', recommendation: 'Corregir el texto', evidenceIds: []
     }] }) });
     const result = await scheduler.runContentPlanReviewJob(config);
     return { plan, item, finding: result.result.review.findings[0], config: options(plan.id) };
   };
   try {
+    await t.test('completed batches survive a transient failure and only the complete result is published', async () => {
+      const plan = await fixture();
+      await db.contentItem.createMany({ data: Array.from({ length: 13 }, (_, i) => ({ planId: plan.id, objective: `Pieza ${i}`, format: 'Reel', copyText: 'Texto', captionText: '', publishDate: start })) });
+      const config = { ...options(plan.id), logger: { error() {} } };
+      let calls = 0;
+      config.reviewOptions.ai.generate = async request => {
+        if (++calls === 2) throw Object.assign(new Error('upstream fixture'), { status: 503 });
+        return { text: JSON.stringify(reviewPayload(request)) };
+      };
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'FAILED');
+      const pending = await db.contentPlan.findUnique({ where: { id: plan.id } });
+      assert.equal(pending.briaReviewCheckpoint.completed.length, 1);
+      assert.equal(await db.contentPlanReview.count({ where: { planId: plan.id } }), 0);
+      const pendingApi = await getContentPlanReview(plan.id, { db });
+      assert.deepEqual(pendingApi.meta.progress, { completedBatches: 1, totalBatches: 2, reviewedItems: 12, totalItems: 13 });
+      calls = 0;
+      config.reviewOptions.ai.generate = async request => { calls++; return { text: JSON.stringify(reviewPayload(request)) }; };
+      config.now = () => new Date(start.getTime() + 120000);
+      const resumed = await scheduler.runContentPlanReviewJob(config);
+      assert.equal(resumed.status, 'COMPLETED');
+      assert.equal(calls, 1);
+      assert.equal(resumed.result.review.scope.reviewedItems, 13);
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewCheckpoint, null);
+      assert.equal((await getContentPlanReview(plan.id, { db })).review.scope.reviewedItems, 13);
+    });
+    await t.test('edits clear partial progress and old workers cannot write another checkpoint', async () => {
+      const plan = await fixture();
+      const lease = await state.claimContentPlanReview(plan.id, { db, now: start, trigger: 'MANUAL' });
+      const repository = createContentPlanReviewRepository(db);
+      const checkpoint = { analysisHash: 'old', completed: [], totalItems: 13, totalBatches: 2 };
+      await repository.saveCheckpoint(plan.id, checkpoint, { execution: lease, now: () => start });
+      await state.markContentPlanReviewPending(plan.id, { db, requestedAt: new Date(start.getTime() + 1) });
+      await assert.rejects(repository.saveCheckpoint(plan.id, checkpoint, { execution: lease, now: () => start }), { code: 'BRIA_REVIEW_SUPERSEDED' });
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewCheckpoint, null);
+    });
     await t.test('marking corrected queues verification atomically; a queue failure rolls back the finding', async () => {
       const { plan, finding } = await findingFixture();
       const broken = { $transaction: fn => db.$transaction(tx => fn(new Proxy(tx, { get(target, key) {
@@ -68,7 +104,7 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       const { plan, item, finding, config } = await findingFixture();
       await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', db, now: start });
       let call = 0;
-      config.reviewOptions.ai.generate = async () => ({ text: JSON.stringify(++call === 1 ? rawReview : { verifications: [{ findingId: finding.id, outcome: 'RESOLVED', reason: 'El texto actual está corregido.', evidence: [{ itemId: item.id, field: 'copyText', quote: 'Texto corregido' }] }] }) });
+      config.reviewOptions.ai.generate = async request => ({ text: JSON.stringify(++call === 1 ? reviewPayload(request, rawReview) : { verifications: [{ findingId: finding.id, outcome: 'RESOLVED', reason: 'El texto actual está corregido.', evidence: [{ itemId: item.id, field: 'copyText', quote: 'Texto corregido' }] }] }) });
       const outcome = await scheduler.runContentPlanReviewJob(config);
       assert.equal(outcome.status, 'COMPLETED');
       const updated = await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } });
@@ -80,12 +116,12 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       const { plan, finding, config } = await findingFixture();
       await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', db, now: start });
       let first = true;
-      config.reviewOptions.ai.generate = async () => {
+      config.reviewOptions.ai.generate = async request => {
         if (first) {
           first = false;
           await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'UNDO_CORRECTION', db, now: new Date(start.getTime() + 1) });
         }
-        return { text: JSON.stringify(rawReview) };
+        return { text: JSON.stringify(reviewPayload(request, rawReview)) };
       };
       assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'SUPERSEDED');
       assert.equal((await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } })).status, 'OPEN');
@@ -101,7 +137,7 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       const { plan, finding, item, config } = await findingFixture();
       await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', db, now: start });
       let call = 0;
-      config.reviewOptions.ai.generate = async () => ({ text: JSON.stringify(++call === 1 ? { ...rawReview, findings: [finding] } : { verifications: [{ findingId: finding.id, outcome: 'RESOLVED', reason: 'Corregido', evidence: [{ itemId: item.id, field: 'copyText', quote: 'Texto corregido' }] }] }) });
+      config.reviewOptions.ai.generate = async request => ({ text: JSON.stringify(++call === 1 ? { ...reviewPayload(request, rawReview), findings: [finding] } : { verifications: [{ findingId: finding.id, outcome: 'RESOLVED', reason: 'Corregido', evidence: [{ itemId: item.id, field: 'copyText', quote: 'Texto corregido' }] }] }) });
       assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
       const current = await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } });
       assert.equal(current.status, 'OPEN');
@@ -114,7 +150,7 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       } });
       await state.markContentPlanReviewPending(plan.id, { db, requestedAt: start });
       config.reviewOptions.force = true;
-      config.reviewOptions.ai.generate = async () => ({ text: JSON.stringify({ ...rawReview, findings: [finding] }) });
+      config.reviewOptions.ai.generate = async request => ({ text: JSON.stringify({ ...reviewPayload(request, rawReview), findings: [finding] }) });
       assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
       const current = await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } });
       assert.equal(current.status, 'OPEN');
@@ -124,8 +160,8 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       const { plan, item, finding, config } = await findingFixture();
       await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', db, now: start });
       let call = 0;
-      config.reviewOptions.ai.generate = async () => {
-        if (++call === 1) return { text: JSON.stringify(rawReview) };
+      config.reviewOptions.ai.generate = async request => {
+        if (++call === 1) return { text: JSON.stringify(reviewPayload(request, rawReview)) };
         await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'DISMISS', reason: 'Decisión estratégica consciente', db, now: new Date(start.getTime() + 1) });
         return { text: JSON.stringify({ verifications: [{ findingId: finding.id, outcome: 'RESOLVED', reason: 'Corregido', evidence: [{ itemId: item.id, field: 'copyText', quote: 'Texto corregido' }] }] }) };
       };
@@ -172,10 +208,10 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       let release;
       let entered;
       const ready = new Promise(resolve => { entered = resolve; });
-      config.reviewOptions.ai.generate = () => {
+      config.reviewOptions.ai.generate = request => {
         calls++;
         entered();
-        return new Promise(resolve => { release = () => resolve({ text: JSON.stringify(rawReview) }); });
+        return new Promise(resolve => { release = () => resolve({ text: JSON.stringify(reviewPayload(request, rawReview)) }); });
       };
       const first = scheduler.runContentPlanReviewJob(config);
       await ready;
@@ -192,7 +228,7 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       const config = options(plan.id);
       assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
       await state.markContentPlanReviewPending(plan.id, { db, requestedAt: start });
-      config.reviewOptions.ai.generate = async () => { assert.fail('unchanged review must reuse the shared score'); };
+      config.reviewOptions.ai.generate = async request => { assert.fail('unchanged review must reuse the shared score'); };
       const cached = await scheduler.runContentPlanReviewJob(config);
       assert.equal(cached.status, 'COMPLETED');
       assert.equal(cached.result.meta.cached, true);
@@ -203,9 +239,9 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       assert.equal(typeof scheduler.runContentPlanReviewJob, 'function');
       const plan = await fixture();
       const config = options(plan.id);
-      config.reviewOptions.ai.generate = async () => {
+      config.reviewOptions.ai.generate = async request => {
         await state.markContentPlanReviewPending(plan.id, { db, requestedAt: new Date(start.getTime() + 1) });
-        return { text: JSON.stringify(rawReview) };
+        return { text: JSON.stringify(reviewPayload(request, rawReview)) };
       };
       assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'SUPERSEDED');
       assert.equal(await db.contentPlanReview.count({ where: { planId: plan.id } }), 0);
@@ -215,9 +251,9 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       assert.equal(typeof scheduler.runContentPlanReviewJob, 'function');
       const plan = await fixture();
       const config = options(plan.id);
-      config.reviewOptions.ai.generate = async () => {
+      config.reviewOptions.ai.generate = async request => {
         await db.client.update({ where: { id: plan.clientId }, data: { aiInstructions: 'New approved instructions' } });
-        return { text: JSON.stringify(rawReview) };
+        return { text: JSON.stringify(reviewPayload(request, rawReview)) };
       };
       assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'SUPERSEDED');
       assert.equal(await db.contentPlanReview.count({ where: { planId: plan.id } }), 0);
@@ -227,7 +263,7 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       const plan = await fixture();
       let tick = start;
       const config = { ...options(plan.id), trigger: 'AUTOMATIC', now: () => tick, logger: { error() {} } };
-      config.reviewOptions.ai.generate = async () => { throw Object.assign(new Error('temporary upstream failure'), { status: 503 }); };
+      config.reviewOptions.ai.generate = async request => { throw Object.assign(new Error('temporary upstream failure'), { status: 503 }); };
       for (let attempt = 1; attempt <= 3; attempt++) {
         const result = await scheduler.runContentPlanReviewJob(config);
         assert.equal(result.status, 'FAILED');
@@ -267,10 +303,10 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
     await t.test('authentication errors stop retries, while an explicit rerun gets a fresh budget', async () => {
       const plan = await fixture();
       const config = { ...options(plan.id), logger: { error() {} } };
-      config.reviewOptions.ai.generate = async () => { throw Object.assign(new Error('bad credentials fixture'), { status: 401 }); };
+      config.reviewOptions.ai.generate = async request => { throw Object.assign(new Error('bad credentials fixture'), { status: 401 }); };
       assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'FAILED');
       assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewState, 'FAILED');
-      config.reviewOptions.ai.generate = async () => ({ text: JSON.stringify(rawReview) });
+      config.reviewOptions.ai.generate = async request => ({ text: JSON.stringify(reviewPayload(request, rawReview)) });
       assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
       assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewAttempts, 1);
     });
@@ -306,7 +342,7 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       assert.equal(outcome.status, 'FAILED');
       assert.equal(outcome.error.code, 'BRIA_REVIEW_TIMEOUT');
       assert.ok(finish, 'AI generation was reached');
-      finish({ text: JSON.stringify(rawReview) });
+      finish({ text: JSON.stringify({ ...rawReview, reviewedItemIds: [] }) });
       await new Promise(resolve => setImmediate(resolve));
       assert.equal(await db.contentPlanReview.count({ where: { planId: plan.id } }), 0);
       assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewLeaseToken, null);

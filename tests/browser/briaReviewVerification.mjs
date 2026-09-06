@@ -4,7 +4,9 @@ import { createServer } from 'vite';
 import { chromium } from 'playwright-core';
 
 const base = {
-  review: { summary: 'He revisado la parrilla. Esta corrección necesita confirmación antes de cerrarse.', verdict: 'REQUIERE_AJUSTES', score: 80, coverage: 100, dimensions: {},
+  review: { summary: 'He revisado la parrilla. Esta corrección necesita confirmación antes de cerrarse.', verdict: 'REQUIERE_AJUSTES', score: 80, coverage: 100,
+    scope: { complete: true, reviewedItems: 61, totalItems: 61, batchCount: 6, crossBatchTextComparison: false },
+    dimensions: Object.fromEntries(['ESTRATEGIA', 'MARCA', 'GRAMATICA', 'CONSISTENCIA'].map(key => [key, { assessable: true }])),
     findings: [{ id: 'finding', status: 'VERIFYING', category: 'CONSISTENCIA', severity: 'INFO', title: 'Confirmar el estado de publicación', detail: 'La pieza tiene ajustes pendientes y figura como publicada.', recommendation: 'Revisar el estado y confirmar que la versión publicada incluye los ajustes.', itemId: 'piece', evidenceIds: [] }] },
   evidence: [], meta: { planId: 'verification-fixture', state: 'FAILED', cached: true, memorySourcesUsed: 0, reviewedAt: '2026-09-05T15:00:00Z' }
 };
@@ -42,6 +44,20 @@ try {
     await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), dark);
     const retry = page.getByRole('button', { name: 'Reintentar verificación', exact: true });
     await retry.waitFor();
+    await page.getByText('61/61 piezas revisadas', { exact: true }).waitFor({ timeout: 5000 });
+    await page.getByText('4/4 dimensiones evaluadas', { exact: true }).waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    // Initial loading replaces the full-width action; wait for its CSS transition before measuring.
+    await page.waitForFunction(() => {
+      const button = document.querySelector('button[aria-label="Revisar nuevamente"]');
+      return button?.getBoundingClientRect().width === 44 && button?.querySelector('svg')?.getBoundingClientRect().width >= 16;
+    }, null, { timeout: 5000 });
+    const refreshBounds = await page.getByRole('button', { name: 'Revisar nuevamente', exact: true }).evaluate(button => ({
+      width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height,
+      icon: button.querySelector('svg').getBoundingClientRect().width, classes: button.className
+    }));
+    assert.equal(refreshBounds.width, 44, JSON.stringify(refreshBounds));
+    assert.ok(refreshBounds.icon >= 16, JSON.stringify(refreshBounds));
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: `output/bria-verification-${name}.png`, fullPage: true });
     const layout = await page.evaluate(() => ({ width: innerWidth, body: document.documentElement.scrollWidth,
@@ -67,6 +83,19 @@ try {
     await page.getByRole('button', { name: 'Corregido', exact: true }).waitFor();
     assert.equal(await undo.count(), 0);
     assert.equal(actionCount, 4);
+    result.meta.state = 'RUNNING';
+    result.meta.progress = { completedBatches: 1, totalBatches: 2, reviewedItems: 12, totalItems: 13 };
+    await page.reload();
+    await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), dark);
+    await page.getByText('Avance guardado: 12/13 piezas · 1/2 lotes.', { exact: true }).waitFor();
+    await page.getByText('Puntaje de la última revisión completa.', { exact: true }).waitFor();
+    await page.waitForFunction(() => document.querySelector('button[aria-label="Revisar nuevamente"]')?.getBoundingClientRect().width === 44, null, { timeout: 5000 });
+    await page.screenshot({ path: `output/bria-coverage-${name}.png`, fullPage: true });
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    result.review.scope = null;
+    result.meta.state = 'CURRENT';
+    await page.reload();
+    await page.getByText('Cobertura de piezas no registrada', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Ver pieza', exact: true }).click();
     assert.ok(page.url().endsWith('?item=piece'));
     await page.getByText('Pieza de ejemplo', { exact: true }).waitFor();

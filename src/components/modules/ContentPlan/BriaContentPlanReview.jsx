@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { getFindingVerificationUi } from '@/lib/briaVerificationUi';
+import { getBriaReviewCoverageUi } from '@/lib/briaReviewCoverageUi';
 import {
   AlertCircle,
   CheckCircle2,
@@ -96,6 +97,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
   );
   const findings = result?.review?.findings || [];
   const isPending = ['PENDING', 'RUNNING'].includes(result?.meta?.state);
+  const coverageUi = getBriaReviewCoverageUi(result?.review, result?.meta);
 
   const updateRailControls = useCallback(() => {
     const rail = findingsRailRef.current;
@@ -280,6 +282,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
                 {result?.meta?.state === 'RUNNING'
                   ? 'Bria está actualizando la revisión compartida.'
                   : 'Hay cambios recientes. Bria actualizará esta revisión automáticamente en aproximadamente un minuto.'}
+                {coverageUi.progress && <span className="mt-1 block">{coverageUi.progress}</span>}
               </span>
             </div>
           )}
@@ -287,7 +290,10 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
           {result?.meta?.state === 'FAILED' && (
             <div role="alert" className="brain-alert-surface flex items-start gap-3 rounded-2xl p-4 text-sm">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
-              <span>No se pudo completar el último análisis automático. Puedes intentarlo de nuevo.</span>
+              <span>
+                {result.meta.error || 'No se pudo completar el último análisis automático. Puedes intentarlo de nuevo.'}
+                {coverageUi.progress && <span className="mt-1 block">{coverageUi.progress}</span>}
+              </span>
             </div>
           )}
           {error && (
@@ -311,16 +317,20 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
                     <span className="rounded-full bg-violet-50 px-3 py-1 text-[11px] font-semibold text-violet-700 dark:bg-violet-950/50 dark:text-violet-200">
                       {verdictLabels[result.review.verdict] || 'Revisión lista'}
                     </span>
+                    <span className="text-xs text-zinc-600 dark:text-zinc-300">{coverageUi.pieces}</span>
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">{coverageUi.dimensions}</span>
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {result.meta?.memorySourcesUsed || 0} fuentes · {result.review.coverage ?? 0}% de cobertura
+                      {result.meta?.memorySourcesUsed || 0} fuentes del cliente
                     </span>
                   </div>
                   <p className="mt-3 max-w-4xl text-sm leading-6 text-zinc-700 dark:text-zinc-200">{result.review.summary}</p>
                   {reviewedDate && <p className="mt-2 text-[11px] text-zinc-400">Actualizada {reviewedDate}</p>}
+                  {coverageUi.previousScore && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">Puntaje de la última revisión completa.</p>}
+                  {coverageUi.limit && <p className="mt-2 max-w-4xl text-xs leading-5 text-zinc-500 dark:text-zinc-400">{coverageUi.limit}</p>}
                 </div>
                 {(result.review.coverage ?? 100) < 100 && (
                   <p className="max-w-sm rounded-2xl bg-amber-50 p-3 text-xs leading-5 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-                    El puntaje solo pondera dimensiones con contexto suficiente; la cobertura indica cuánto pudo evaluar Bria sin inventar información.
+                    El puntaje solo pondera dimensiones con contexto suficiente. El conteo de piezas revisadas se muestra por separado.
                   </p>
                 )}
               </div>

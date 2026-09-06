@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { reviewPayload } from './helpers/briaReview.js';
 
 import {
   buildContentPlanAnalysisHash,
@@ -167,6 +168,7 @@ test('the same plan and memory snapshot reuse one persisted global review', asyn
         requestId: 'request-1',
         text: JSON.stringify({
           summary: 'Revisión compartida.',
+          reviewedItemIds: ['piece-1', 'piece-2'],
           verdict: 'ALINEADA',
           dimensions: {
             ESTRATEGIA: { score: 90, confidence: 0.8, assessable: true, note: 'Alineada.' },
@@ -205,7 +207,7 @@ test('marking corrected triggers verification even when the content hash is unch
       findByAnalysisHash: async () => ({ review: { findings: [{ status: 'VERIFYING' }] }, meta: {} }),
       saveCompletedReview: async ({ result }) => result
     },
-    ai: { generate: async () => { calls++; return { text: JSON.stringify({ summary: 'Still needs correction', score: 70, findings: [] }) }; } }
+    ai: { generate: async request => { calls++; return { text: JSON.stringify(reviewPayload(request)) }; } }
   });
   assert.equal(calls, 1);
   assert.equal(result.meta.cached, false);
