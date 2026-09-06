@@ -1,13 +1,15 @@
 import { createHash } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { AI_MODELS } from '../config/aiConfig.js';
 import prisma from '../lib/prisma.js';
 import { createOpenAIClient } from './openAIClient.js';
 import { getAIInstance } from './aiService.js';
 import { getContentPlanById } from './contentService.js';
 import { searchBriaMemory } from './briaMemoryService.js';
-import { completeContentPlanReviewLease, supersededReviewError } from './briaContentPlanReviewState.js';
+import { completeContentPlanReviewLease, supersededReviewError, markContentPlanReviewPending } from './briaContentPlanReviewState.js';
+import { verifyContentPlanFindings } from './briaFindingVerification.js';
 
-export const CONTENT_PLAN_REVIEW_PROMPT_VERSION = 'content-plan-review-v2';
+export const CONTENT_PLAN_REVIEW_PROMPT_VERSION = 'content-plan-review-v3';
 
 const REVIEW_CATEGORIES = new Set(['ESTRATEGIA', 'MARCA', 'GRAMATICA', 'CONSISTENCIA']);
 const REVIEW_SEVERITIES = new Set(['INFO', 'WARNING', 'CRITICAL']);
@@ -81,6 +83,7 @@ const compactPlan = (plan, { truncate = true, maxItems = 60 } = {}) => {
   strategicObjectives: text(plan.strategicObjectives, 3000),
   internalNotes: text(plan.internalNotes, 3000),
   items: (plan.items || plan.contentItems || [])
+    .filter((item) => !item.deletedAt)
     .slice(0, maxItems)
     .map((item) => ({
       id: String(item.id), objective: text(item.objective, 500), format: text(item.format, 120),
@@ -132,6 +135,9 @@ export const transitionContentPlanFinding = (currentStatus, action, {
   now = new Date(), actorUserId = null, reason = null
 } = {}) => {
   if (!['OPEN', 'VERIFYING'].includes(currentStatus)) throw new Error('Este hallazgo ya no admite esa acción.');
+  if (action === 'UNDO_CORRECTION' && currentStatus === 'VERIFYING') {
+    return { status: 'OPEN', resolvedAt: null, lastActionAt: now, lastActionById: actorUserId, actionReason: null };
+  }
   if (action === 'MARK_CORRECTED') {
     return { status: 'VERIFYING', resolvedAt: null, dismissedAt: null, lastActionAt: now, lastActionById: actorUserId, actionReason: null };
   }
@@ -216,13 +222,16 @@ const guardReviewPublication = async (tx, { planId, execution, revisionHash, now
   signal?.throwIfAborted();
   await completeContentPlanReviewLease(tx, execution, now());
   const currentPlan = await tx.contentPlan.findUnique({
-    where: { id: planId }, include: { client: true, contentItems: true }
+    where: { id: planId }, include: { client: true, contentItems: { where: { deletedAt: null } } }
   });
   if (!currentPlan || buildContentPlanRevisionHash(currentPlan) !== revisionHash) throw supersededReviewError();
   signal?.throwIfAborted();
 };
 
 export const createContentPlanReviewRepository = (db = prisma) => ({
+  async findActiveFindings(planId) {
+    return db.contentPlanReviewFinding.findMany({ where: { planId, status: { in: ['OPEN', 'VERIFYING'] } }, orderBy: { firstDetectedAt: 'asc' } });
+  },
   async markCurrent(planId, _startedAt, guard) {
     await db.$transaction(tx => guardReviewPublication(tx, { ...guard, planId }));
   },
@@ -239,7 +248,7 @@ export const createContentPlanReviewRepository = (db = prisma) => ({
     ]);
     return toApiResult(run, findings, planState?.briaReviewState || 'CURRENT');
   },
-  async saveCompletedReview({ analysisHash, revisionHash, promptVersion, result, plan, trigger, requestedById, startedAt, execution, now, signal }) {
+  async saveCompletedReview({ analysisHash, revisionHash, promptVersion, result, verifications = [], plan, trigger, requestedById, startedAt, execution, now, signal }) {
     return db.$transaction(async (tx) => {
       await guardReviewPublication(tx, { planId: plan.id, execution, revisionHash, now, signal });
       const run = await tx.contentPlanReview.upsert({
@@ -282,18 +291,22 @@ export const createContentPlanReviewRepository = (db = prisma) => ({
             category: finding.category, severity: finding.severity, title: finding.title, detail: finding.detail,
             recommendation: finding.recommendation, evidenceIds: finding.evidenceIds,
             lastDetectedAt: new Date(result.meta.reviewedAt),
-            ...(retainDismissal ? {} : { status: 'OPEN', actionReason: null, dismissedAt: null, resolvedAt: null })
+            ...(retainDismissal ? {} : { status: 'OPEN', actionReason: null, dismissedAt: null, resolvedAt: null, verification: Prisma.DbNull })
           }
         });
       }
-      await tx.contentPlanReviewFinding.updateMany({
-        where: {
-          planId: plan.id,
-          status: { in: ['OPEN', 'VERIFYING'] },
-          ...(detectedFingerprints.length ? { fingerprint: { notIn: detectedFingerprints } } : {})
-        },
-        data: { status: 'RESOLVED', resolvedAt: new Date(result.meta.reviewedAt) }
-      });
+      for (const decision of verifications) {
+        const previous = await tx.contentPlanReviewFinding.findFirst({ where: { id: decision.findingId, planId: plan.id } });
+        // A dismissal made while AI was running remains the team's decision.
+        if (!previous || !['OPEN', 'VERIFYING'].includes(previous.status)) continue;
+        const contradicted = decision.outcome === 'RESOLVED' && detectedFingerprints.includes(previous.fingerprint);
+        const conclusion = contradicted ? { ...decision, outcome: 'INCONCLUSIVE', reason: 'La revisión y la verificación no coinciden. El hallazgo sigue abierto para comprobarlo.' } : decision;
+        const resolved = conclusion.outcome === 'RESOLVED';
+        await tx.contentPlanReviewFinding.update({ where: { id: previous.id }, data: {
+          status: resolved ? 'RESOLVED' : 'OPEN', resolvedAt: resolved ? new Date(result.meta.reviewedAt) : null,
+          verification: { ...conclusion, checkedAt: result.meta.reviewedAt, revisionHash }, lastReviewId: run.id
+        } });
+      }
       const findings = await tx.contentPlanReviewFinding.findMany({
         where: { planId: plan.id, status: { in: ['OPEN', 'VERIFYING'] } },
         orderBy: [{ severity: 'asc' }, { lastDetectedAt: 'desc' }]
@@ -308,7 +321,7 @@ export const getContentPlanReview = async (planId, { db = prisma } = {}) => {
   const [plan, run, findings] = await Promise.all([
     db.contentPlan.findUnique({
       where: { id: planId },
-      select: { id: true, clientId: true, briaReviewState: true, briaReviewError: true, briaReviewRequestedAt: true }
+      select: { id: true, clientId: true, briaReviewState: true, briaReviewError: true, briaReviewRequestedAt: true, briaReviewStartedAt: true }
     }),
     db.contentPlanReview.findFirst({ where: { planId, status: 'COMPLETED' }, orderBy: { completedAt: 'desc' } }),
     db.contentPlanReviewFinding.findMany({
@@ -321,22 +334,33 @@ export const getContentPlanReview = async (planId, { db = prisma } = {}) => {
     review: null, evidence: [],
     meta: {
       clientId: plan.clientId, planId, state: plan.briaReviewState, error: plan.briaReviewError,
-      requestedAt: plan.briaReviewRequestedAt, cached: true
+      requestedAt: plan.briaReviewRequestedAt, startedAt: plan.briaReviewStartedAt, cached: true
     }
   };
   const result = toApiResult({ ...run, clientId: plan.clientId }, findings, plan.briaReviewState);
   result.meta.cached = true;
   result.meta.error = plan.briaReviewError;
+  result.meta.requestedAt = plan.briaReviewRequestedAt;
+  result.meta.startedAt = plan.briaReviewStartedAt;
   return result;
 };
 
 export const updateContentPlanReviewFinding = async ({
   planId, findingId, action, reason, actorUserId, db = prisma, now = new Date()
 }) => {
-  const finding = await db.contentPlanReviewFinding.findFirst({ where: { id: findingId, planId } });
-  if (!finding) return null;
-  const data = transitionContentPlanFinding(finding.status, action, { now, actorUserId, reason });
-  return db.contentPlanReviewFinding.update({ where: { id: finding.id }, data });
+  return db.$transaction(async tx => {
+    // Lock in the same order as publication: plan first, finding second.
+    const plans = await tx.$queryRaw`SELECT "id" FROM "ContentPlan" WHERE "id" = ${planId} AND "deletedAt" IS NULL FOR UPDATE`;
+    if (!plans.length) return null;
+    const finding = await tx.contentPlanReviewFinding.findFirst({ where: { id: findingId, planId } });
+    if (!finding) return null;
+    const data = transitionContentPlanFinding(finding.status, action, { now, actorUserId, reason });
+    const updated = await tx.contentPlanReviewFinding.update({ where: { id: finding.id }, data: {
+      ...data, ...(action === 'DISMISS' ? {} : { verification: Prisma.DbNull })
+    } });
+    if (['MARK_CORRECTED', 'UNDO_CORRECTION'].includes(action)) await markContentPlanReviewPending(planId, { db: tx, requestedAt: now });
+    return updated;
+  });
 };
 
 export const reviewContentPlanWithBria = async ({
@@ -360,8 +384,9 @@ export const reviewContentPlanWithBria = async ({
   const revisionHash = buildContentPlanRevisionHash(plan);
   const analysisHash = buildContentPlanAnalysisHash({ revisionHash, evidence, promptVersion: CONTENT_PLAN_REVIEW_PROMPT_VERSION });
   const persistence = repository || (getPlan === getContentPlanById ? createContentPlanReviewRepository() : null);
+  const activeFindings = await persistence?.findActiveFindings?.(plan.id) || [];
   const cached = force ? null : await persistence?.findByAnalysisHash?.(analysisHash, { planId: plan.id });
-  if (cached && !cached.review?.findings?.some(finding => finding.status === 'VERIFYING')) {
+  if (cached && !activeFindings.some(finding => finding.status === 'VERIFYING') && !cached.review?.findings?.some(finding => finding.status === 'VERIFYING')) {
     await persistence?.markCurrent?.(plan.id, startedAt, { execution, revisionHash, now, signal });
     return { ...cached, meta: { ...cached.meta, revisionHash, analysisHash, promptVersion: CONTENT_PLAN_REVIEW_PROMPT_VERSION, cached: true, state: 'CURRENT' } };
   }
@@ -386,12 +411,15 @@ export const reviewContentPlanWithBria = async ({
   signal?.throwIfAborted();
   const review = parseBriaContentPlanReview(aiResult.text);
   const allowedEvidenceIds = new Set(evidence.map((item) => item.id));
-  const itemIds = new Set((plan.items || plan.contentItems || []).map((item) => String(item.id)));
+  const itemIds = new Set((plan.items || plan.contentItems || []).filter(item => !item.deletedAt).map((item) => String(item.id)));
   review.findings = review.findings.map((finding) => ({
     ...finding,
     itemId: finding.itemId && itemIds.has(finding.itemId) ? finding.itemId : null,
     evidenceIds: finding.evidenceIds.filter((id) => allowedEvidenceIds.has(id))
   }));
+  const verifications = await verifyContentPlanFindings({
+    snapshot: compactPlan(plan, { truncate: false, maxItems: Infinity }), findings: activeFindings, evidence, ai, signal
+  });
   const result = {
     review, evidence,
     meta: {
@@ -403,7 +431,7 @@ export const reviewContentPlanWithBria = async ({
   return persistence?.saveCompletedReview
     ? persistence.saveCompletedReview({
         analysisHash, revisionHash, promptVersion: CONTENT_PLAN_REVIEW_PROMPT_VERSION,
-        result, plan, trigger, requestedById, startedAt, execution, now, signal
+        result, verifications, plan, trigger, requestedById, startedAt, execution, now, signal
       })
     : result;
 };

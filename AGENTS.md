@@ -101,3 +101,10 @@ Si un cambio puede afectar datos antiguos, debes proponer un script de migració
 5. Logs de Error Obligatorios:
 
 Todo bloque catch en llamadas a la API debe hacer un console.error del mensaje real que devuelve el servidor (error.response?.data), no solo un texto genérico. Esto nos permite debugear fallos de Railway o Prisma en segundos.
+
+## 7. Integridad de las revisiones de Bria
+
+- La lectura, la huella y la validación antes de publicar deben representar exactamente las mismas piezas activas (`deletedAt: null`). Nunca comparar la revisión visible con piezas eliminadas: provoca reinicios infinitos.
+- Marcar un hallazgo como corregido y programar su verificación son una sola transacción. Deshacer una corrección pendiente invalida cualquier resultado en ejecución. Un fallo de persistencia nunca debe dejar una corrección falsamente confirmada.
+- La desaparición de un hallazgo de la siguiente respuesta de IA no demuestra que se resolvió. Cerrar requiere una verificación explícita de ese hallazgo contra la versión actual y evidencia validada. Ante omisión, contradicción o evidencia insuficiente, conservarlo abierto y explicar el resultado; nunca inventar éxito.
+- Los motivos de descarte pertenecen al historial de ese cliente/parrilla. No convertirlos automáticamente en reglas permanentes de memoria sin un flujo de aprobación.

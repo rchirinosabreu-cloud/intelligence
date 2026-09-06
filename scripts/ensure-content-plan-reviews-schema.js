@@ -87,6 +87,8 @@ try {
       CONSTRAINT "ContentPlanReviewFinding_lastReviewId_fkey" FOREIGN KEY ("lastReviewId") REFERENCES "ContentPlanReview"("id") ON DELETE CASCADE ON UPDATE CASCADE
     );
 
+    ALTER TABLE "ContentPlanReviewFinding" ADD COLUMN IF NOT EXISTS "verification" JSONB;
+
     CREATE UNIQUE INDEX IF NOT EXISTS "ContentPlanReview_planId_analysisHash_key" ON "ContentPlanReview"("planId", "analysisHash");
     CREATE INDEX IF NOT EXISTS "ContentPlanReview_planId_createdAt_idx" ON "ContentPlanReview"("planId", "createdAt");
     CREATE INDEX IF NOT EXISTS "ContentPlanReview_status_createdAt_idx" ON "ContentPlanReview"("status", "createdAt");

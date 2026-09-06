@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { getFindingVerificationUi } from '@/lib/briaVerificationUi';
 import {
   AlertCircle,
   CheckCircle2,
@@ -82,11 +83,12 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
     loadReview();
   }, [loadReview, planUpdatedAt]);
 
+  const hasVerifyingFindings = result?.review?.findings?.some(finding => finding.status === 'VERIFYING');
   useEffect(() => {
-    if (!['PENDING', 'RUNNING'].includes(result?.meta?.state)) return undefined;
+    if (!['PENDING', 'RUNNING'].includes(result?.meta?.state) && !hasVerifyingFindings) return undefined;
     const timer = window.setInterval(() => loadReview({ silent: true }), 5000);
     return () => window.clearInterval(timer);
-  }, [loadReview, result?.meta?.state]);
+  }, [loadReview, result?.meta?.state, hasVerifyingFindings]);
 
   const evidenceById = useMemo(
     () => new Map((result?.evidence || []).map((evidence) => [evidence.id, evidence])),
@@ -363,6 +365,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
                   >
                     {findings.map((finding) => {
                       const sources = (finding.evidenceIds || []).map((id) => evidenceById.get(id)).filter(Boolean);
+                      const verificationUi = getFindingVerificationUi(finding, result?.meta);
                       return (
                         <article data-bria-finding-card key={finding.id || finding.fingerprint} className="relative flex w-[84vw] max-w-sm shrink-0 snap-start flex-col rounded-2xl border border-zinc-200/80 bg-zinc-50/80 p-4 sm:w-[360px] dark:border-zinc-800 dark:bg-zinc-900">
                           <button type="button" disabled={actingId === finding.id} onClick={() => { setDismissFinding(finding); setDismissReason(dismissReasons[0]); setCustomReason(''); }} className="absolute right-3 top-3 min-h-11 rounded-xl px-2.5 text-[11px] font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-60 dark:text-destructive dark:hover:bg-destructive/15">
@@ -375,8 +378,8 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
                             <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${severityStyles[finding.severity] || severityStyles.INFO}`}>
                               {finding.severity === 'CRITICAL' ? 'Crítico' : finding.severity === 'WARNING' ? 'Atención' : 'Mejora'}
                             </span>
-                            {finding.status === 'VERIFYING' && (
-                              <span className="rounded-full bg-cyan-50 px-2 py-1 text-[10px] font-semibold text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-200">Verificando</span>
+                            {verificationUi.label && (
+                              <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${verificationUi.isError ? 'bg-destructive/10 text-destructive dark:bg-destructive/15 dark:text-destructive' : 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-200'}`}>{verificationUi.label}</span>
                             )}
                           </div>
                           <h4 className="mt-3 text-sm font-semibold text-zinc-950 dark:text-white">{finding.title}</h4>
@@ -384,6 +387,9 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
                           <p className="mt-3 flex-1 text-xs leading-5 text-zinc-800 dark:text-zinc-100">
                             <span className="font-semibold">Recomendación:</span> {finding.recommendation}
                           </p>
+                          {verificationUi.description && (
+                            <p role="status" className="mt-3 text-xs leading-5 text-zinc-600 dark:text-zinc-300">{verificationUi.description}</p>
+                          )}
                           {sources.length > 0 && (
                             <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-200/80 pt-3 dark:border-zinc-800">
                               {sources.map((source) => (
@@ -399,9 +405,14 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
                                 Ver pieza
                               </button>
                             )}
-                            <button type="button" disabled={actingId === finding.id || finding.status === 'VERIFYING'} onClick={() => applyFindingAction(finding, 'MARK_CORRECTED')} className={`min-h-11 rounded-xl bg-cyan-100 px-3 text-xs font-semibold text-cyan-800 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-cyan-950/50 dark:text-cyan-100 dark:hover:bg-cyan-900 ${finding.itemId ? '' : 'sm:col-span-2'}`}>
-                              {finding.status === 'VERIFYING' ? 'Pendiente de verificar' : 'Corregido'}
+                            <button type="button" disabled={actingId === finding.id || verificationUi.busy} onClick={() => applyFindingAction(finding, 'MARK_CORRECTED')} className={`min-h-11 rounded-xl bg-cyan-100 px-3 text-xs font-semibold text-cyan-800 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-cyan-950/50 dark:text-cyan-100 dark:hover:bg-cyan-900 ${finding.itemId ? '' : 'sm:col-span-2'}`}>
+                              {verificationUi.busy ? verificationUi.label : verificationUi.canRetry ? 'Reintentar verificación' : 'Corregido'}
                             </button>
+                            {verificationUi.canUndo && (
+                              <button type="button" disabled={actingId === finding.id} onClick={() => applyFindingAction(finding, 'UNDO_CORRECTION')} className="min-h-11 rounded-xl px-3 text-xs font-medium text-zinc-600 hover:bg-zinc-100 disabled:opacity-60 sm:col-span-2 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                                Deshacer «corregido»
+                              </button>
+                            )}
                           </div>
                         </article>
                       );

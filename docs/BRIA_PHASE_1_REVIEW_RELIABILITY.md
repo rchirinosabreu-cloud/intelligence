@@ -56,3 +56,5 @@ No se llamó al modelo real ni se modificó la base productiva. Estas pruebas ve
 4. Pilotear con pocas parrillas y medir: tiempo hasta aprobación, correcciones verificadas, descartes por falso positivo, coste y latencia. Ampliar autonomía cuando las mediciones lo justifiquen.
 
 Persistencia global no significa determinismo absoluto del modelo: dos revisiones explícitas realizadas en momentos distintos todavía pueden producir variaciones. El coordinador evita resultados rivales simultáneos; la calibración y evaluación de criterio son otro trabajo pendiente.
+
+Continuación: [bloqueo de Aristea y verificación explícita](BRIA_FINDING_VERIFICATION.md). Documenta la regresión por piezas eliminadas, su prueba con PostgreSQL y el nuevo cierre basado en conclusiones individuales, con reintentar/deshacer en la interfaz. Los resultados de verificación anteriores corresponden al primer bloque, no a esta continuación.

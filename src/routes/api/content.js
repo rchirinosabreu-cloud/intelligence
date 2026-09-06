@@ -25,7 +25,6 @@ import {
   getContentPlanReview,
   updateContentPlanReviewFinding
 } from '../../services/briaContentPlanReviewService.js';
-import { markContentPlanReviewPending } from '../../services/briaContentPlanReviewState.js';
 import { runContentPlanReviewJob } from '../../services/briaContentPlanReviewScheduler.js';
 
 const router = express.Router();
@@ -115,7 +114,7 @@ router.post('/plans/:id/bria-review', async (req, res) => {
 router.patch('/plans/:id/bria-review/findings/:findingId', async (req, res) => {
   try {
     const { action, reason } = req.body || {};
-    if (!['MARK_CORRECTED', 'DISMISS'].includes(action)) {
+    if (!['MARK_CORRECTED', 'DISMISS', 'UNDO_CORRECTION'].includes(action)) {
       return res.status(400).json({ error: 'Acción de hallazgo no válida.' });
     }
     const finding = await updateContentPlanReviewFinding({
@@ -126,7 +125,6 @@ router.patch('/plans/:id/bria-review/findings/:findingId', async (req, res) => {
       actorUserId: req.user.userId
     });
     if (!finding) return res.status(404).json({ error: 'El hallazgo ya no está disponible.' });
-    if (action === 'MARK_CORRECTED') await markContentPlanReviewPending(req.params.id);
     return res.json({ finding });
   } catch (error) {
     console.error('[API] Failed to update Bria finding:', error.response?.data || error.message || error);

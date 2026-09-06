@@ -65,6 +65,11 @@ test('revision invalidation includes pieces beyond 60 and untruncated reviewable
   assert.notEqual(buildContentPlanRevisionHash(long), buildContentPlanRevisionHash({ ...long, items: [{ ...long.items[0], copyText: `${long.items[0].copyText} correction` }] }));
 });
 
+test('deleted pieces never change the review snapshot used for publication', () => {
+  const stored = { ...plan, items: [...plan.items, { ...plan.items[0], id: 'deleted', deletedAt: new Date() }] };
+  assert.equal(buildContentPlanRevisionHash(stored), buildContentPlanRevisionHash(plan));
+});
+
 test('analysis hash includes the plan revision, evidence and prompt version', () => {
   const revisionHash = buildContentPlanRevisionHash(plan);
   const first = buildContentPlanAnalysisHash({

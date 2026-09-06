@@ -55,7 +55,10 @@ export const reconcilePendingContentPlanReviews = async ({
   const plans = await db.contentPlan.findMany({
     where: {
       deletedAt: null,
-      status: { in: ['PLANIFICACION', 'EN_APROBACION', 'ACTIVO'] },
+      AND: [{ OR: [
+        { status: { in: ['PLANIFICACION', 'EN_APROBACION', 'ACTIVO'] } },
+        { briaReviewFindings: { some: { status: 'VERIFYING' } } }
+      ] }],
       OR: [
         { briaReviewState: 'PENDING', briaReviewRequestedAt: { lte: cutoff },
           OR: [{ briaReviewNextAttemptAt: null }, { briaReviewNextAttemptAt: { lte: now() } }] },

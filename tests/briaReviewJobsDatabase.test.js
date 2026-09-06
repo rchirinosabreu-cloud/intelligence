@@ -7,6 +7,7 @@ import { PrismaClient } from '@prisma/client';
 import { getSafeTestDatabaseUrl } from './helpers/testDatabase.js';
 import * as state from '../src/services/briaContentPlanReviewState.js';
 import * as scheduler from '../src/services/briaContentPlanReviewScheduler.js';
+import { updateContentPlanReviewFinding } from '../src/services/briaContentPlanReviewService.js';
 
 const databaseUrl = getSafeTestDatabaseUrl();
 const start = new Date('2026-09-05T15:00:00Z');
@@ -26,7 +27,114 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
     getPlan: id => db.contentPlan.findUnique({ where: { id }, include: { client: true, contentItems: true } }),
     searchMemory: async () => [], ai: { generate: async () => ({ text: JSON.stringify(rawReview), requestId: 'fixture' }) }
   } });
+  const findingFixture = async () => {
+    const plan = await fixture();
+    const item = await db.contentItem.create({ data: { planId: plan.id, objective: 'Objetivo', format: 'Reel', copyText: 'Texto corregido', captionText: '', publishDate: start } });
+    const config = options(plan.id);
+    config.reviewOptions.ai.generate = async () => ({ text: JSON.stringify({ ...rawReview, findings: [{
+      ruleKey: 'TEXT_ERROR', field: 'copyText', itemId: item.id, category: 'GRAMATICA', severity: 'INFO', title: 'Revisar texto', detail: 'Error en el texto', recommendation: 'Corregir el texto', evidenceIds: []
+    }] }) });
+    const result = await scheduler.runContentPlanReviewJob(config);
+    return { plan, item, finding: result.result.review.findings[0], config: options(plan.id) };
+  };
   try {
+    await t.test('marking corrected queues verification atomically; a queue failure rolls back the finding', async () => {
+      const { plan, finding } = await findingFixture();
+      const broken = { $transaction: fn => db.$transaction(tx => fn(new Proxy(tx, { get(target, key) {
+        if (key === 'contentPlan') return new Proxy(tx.contentPlan, { get(model, op) {
+          if (op === 'update') return args => {
+            if (args.data.briaReviewState === 'PENDING') throw new Error('queue failure fixture');
+            return model.update(args);
+          };
+          return model[op];
+        } });
+        return target[key];
+      } }))) };
+      await assert.rejects(updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', db: broken, now: start }), /queue failure fixture/);
+      assert.equal((await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } })).status, 'OPEN');
+      await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', db, now: start });
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewState, 'PENDING');
+    });
+    await t.test('an omitted verification stays actionable rather than silently resolving', async () => {
+      const { plan, finding, config } = await findingFixture();
+      await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', db, now: start });
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
+      const updated = await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } });
+      assert.equal(updated.status, 'OPEN');
+      assert.equal(updated.verification.outcome, 'INCONCLUSIVE');
+      assert.equal(updated.resolvedAt, null);
+    });
+    await t.test('explicit supported verification resolves the original finding and persists its conclusion', async () => {
+      const { plan, item, finding, config } = await findingFixture();
+      await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', db, now: start });
+      let call = 0;
+      config.reviewOptions.ai.generate = async () => ({ text: JSON.stringify(++call === 1 ? rawReview : { verifications: [{ findingId: finding.id, outcome: 'RESOLVED', reason: 'El texto actual está corregido.', evidence: [{ itemId: item.id, field: 'copyText', quote: 'Texto corregido' }] }] }) });
+      const outcome = await scheduler.runContentPlanReviewJob(config);
+      assert.equal(outcome.status, 'COMPLETED');
+      const updated = await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } });
+      assert.equal(updated.status, 'RESOLVED');
+      assert.equal(updated.verification.outcome, 'RESOLVED');
+      assert.equal(updated.verification.revisionHash, outcome.result.meta.revisionHash);
+    });
+    await t.test('undo during AI work invalidates the old verification and keeps the finding open', async () => {
+      const { plan, finding, config } = await findingFixture();
+      await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', db, now: start });
+      let first = true;
+      config.reviewOptions.ai.generate = async () => {
+        if (first) {
+          first = false;
+          await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'UNDO_CORRECTION', db, now: new Date(start.getTime() + 1) });
+        }
+        return { text: JSON.stringify(rawReview) };
+      };
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'SUPERSEDED');
+      assert.equal((await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } })).status, 'OPEN');
+    });
+    await t.test('a human verification request also runs for a finalized plan', async () => {
+      const { plan, finding, config } = await findingFixture();
+      await db.contentPlan.update({ where: { id: plan.id }, data: { status: 'FINALIZADO' } });
+      await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', db, now: start });
+      const outcomes = await scheduler.reconcilePendingContentPlanReviews({ db, now: () => new Date(start.getTime() + 60000), limit: 100, reviewOptions: config.reviewOptions });
+      assert.equal(outcomes.find(outcome => outcome.planId === plan.id)?.status, 'COMPLETED');
+    });
+    await t.test('conflicting general review cannot silently certify a correction', async () => {
+      const { plan, finding, item, config } = await findingFixture();
+      await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', db, now: start });
+      let call = 0;
+      config.reviewOptions.ai.generate = async () => ({ text: JSON.stringify(++call === 1 ? { ...rawReview, findings: [finding] } : { verifications: [{ findingId: finding.id, outcome: 'RESOLVED', reason: 'Corregido', evidence: [{ itemId: item.id, field: 'copyText', quote: 'Texto corregido' }] }] }) });
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
+      const current = await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } });
+      assert.equal(current.status, 'OPEN');
+      assert.equal(current.verification.outcome, 'INCONCLUSIVE');
+    });
+    await t.test('a finding detected again does not retain an obsolete resolved conclusion', async () => {
+      const { plan, finding, config } = await findingFixture();
+      await db.contentPlanReviewFinding.update({ where: { id: finding.id }, data: {
+        status: 'RESOLVED', resolvedAt: start, verification: { outcome: 'RESOLVED', reason: 'Older content', revisionHash: 'old' }
+      } });
+      await state.markContentPlanReviewPending(plan.id, { db, requestedAt: start });
+      config.reviewOptions.force = true;
+      config.reviewOptions.ai.generate = async () => ({ text: JSON.stringify({ ...rawReview, findings: [finding] }) });
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
+      const current = await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } });
+      assert.equal(current.status, 'OPEN');
+      assert.equal(current.verification, null);
+    });
+    await t.test('dismissal during verification is retained and never converted to a correction', async () => {
+      const { plan, item, finding, config } = await findingFixture();
+      await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', db, now: start });
+      let call = 0;
+      config.reviewOptions.ai.generate = async () => {
+        if (++call === 1) return { text: JSON.stringify(rawReview) };
+        await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'DISMISS', reason: 'Decisión estratégica consciente', db, now: new Date(start.getTime() + 1) });
+        return { text: JSON.stringify({ verifications: [{ findingId: finding.id, outcome: 'RESOLVED', reason: 'Corregido', evidence: [{ itemId: item.id, field: 'copyText', quote: 'Texto corregido' }] }] }) };
+      };
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
+      const current = await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } });
+      assert.equal(current.status, 'DISMISSED');
+      assert.equal(current.actionReason, 'Decisión estratégica consciente');
+      assert.equal(current.resolvedAt, null);
+    });
     await t.test('two competing workers claim one review only', async () => {
       assert.equal(typeof state.claimContentPlanReview, 'function');
       const plan = await fixture();
@@ -46,6 +154,16 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       assert.equal(current.briaReviewState, 'CURRENT');
       assert.equal(current.briaReviewLeaseToken, null);
       assert.equal(await db.contentPlanReview.count({ where: { planId: plan.id } }), 1);
+    });
+    await t.test('soft-deleted pieces do not restart a completed review forever (Aristea regression)', async () => {
+      const plan = await fixture();
+      await db.contentItem.create({ data: { planId: plan.id, objective: 'Deleted piece', format: 'Reel', copyText: '', captionText: '', publishDate: start, deletedAt: start } });
+      const config = options(plan.id);
+      config.reviewOptions.getPlan = id => db.contentPlan.findUnique({ where: { id }, include: {
+        client: true, contentItems: { where: { deletedAt: null } }
+      } });
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewState, 'CURRENT');
     });
     await t.test('manual clicks and an automatic worker coalesce into one AI call', async () => {
       const plan = await fixture();

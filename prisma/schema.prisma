@@ -443,6 +443,7 @@ model ContentPlanReviewFinding {
   evidenceIds     String[]          @default([])
   status          String            @default("OPEN")
   actionReason    String?
+  verification    Json?
   lastActionById  String?
   lastActionAt    DateTime?
   firstDetectedAt DateTime          @default(now())
