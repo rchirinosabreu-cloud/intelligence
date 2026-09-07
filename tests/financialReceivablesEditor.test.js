@@ -17,7 +17,9 @@ test('receivables UI records traceable partial payments instead of zeroing debt 
     assert.match(dashboardSource, /\/receivables\/\$\{paymentDebt\.id\}\/payments/);
     assert.match(dashboardSource, /Registrar pago/);
     assert.match(dashboardSource, /Saldo pendiente/);
-    assert.match(dashboardSource, /paymentForm\.accountId/);
+    assert.match(dashboardSource, /<ReceivablePaymentDialog/);
+    const paymentSource = fs.readFileSync(new URL('../src/components/modules/financial/ReceivablePaymentDialog.jsx', import.meta.url), 'utf8');
+    assert.match(paymentSource, /form\.accountId/);
 });
 
 const makeResponse = () => ({
@@ -44,7 +46,7 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
                     year: 2026,
                     OR: [
                         { importBatchId: 'batch-1' },
-                        { importBatchId: null, origin: 'MANUAL' }
+                        { importBatchId: null }
                     ]
                 });
                 return [{
@@ -79,6 +81,7 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
     assert.equal(res.payload.importBatchId, 'batch-1');
     assert.deepEqual(res.payload.items, [{
         id: 'debt-1',
+        clientId: null,
         clientName: 'Jazmin',
         clientSlug: 'jazmin',
         amount: 4680000,

@@ -48,8 +48,8 @@ test('listFinancialAccounts calculates posted actual balances only', async () =>
         openingBalanceDate: new Date('2026-01-01T12:00:00.000Z'),
         isActive: true,
         records: [
-          { type: 'INCOME', amount: 500 },
-          { type: 'EXPENSE', amount: 200 }
+          { type: 'INCOME', amount: 500, date: new Date('2026-01-02T12:00:00.000Z') },
+          { type: 'EXPENSE', amount: 200, date: new Date('2026-01-03T12:00:00.000Z') }
         ]
       }]
     }

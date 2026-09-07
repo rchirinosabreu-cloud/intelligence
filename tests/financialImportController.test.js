@@ -2,6 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { commitFinancialImport, previewFinancialImport } from '../src/controllers/financialController.js';
 
+test('commitFinancialImport reports protected linked operations as a conflict, not an internal failure', async () => {
+    const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(payload) { this.payload = payload; return this; } };
+    await commitFinancialImport({ file: { buffer: Buffer.from('fixture'), originalname: 'fixture.xlsx' }, body: { year: 2026 } }, res, {
+        prismaClient: {}, buildPlan: () => ({}), persistPlan: async () => { throw Object.assign(new Error('Hay pagos vinculados; no se reemplazó el archivo.'), { code: 'FINANCIAL_IMPORT_LINKED_OPERATIONS', statusCode: 409 }); }
+    });
+    assert.equal(res.statusCode, 409);
+    assert.equal(res.payload.error, 'FINANCIAL_IMPORT_LINKED_OPERATIONS');
+    assert.match(res.payload.message, /pagos vinculados/);
+    assert.equal(res.payload.details, undefined);
+});
+
 test('previewFinancialImport rejects requests without an uploaded file', async () => {
     const req = { file: null, body: { year: 2026 } };
     const res = {

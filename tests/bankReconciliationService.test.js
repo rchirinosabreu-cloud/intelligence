@@ -54,15 +54,15 @@ ESTADO DE CUENTA
 DESDE: 2025/12/31 HASTA: 2026/01/31
 RESUMEN
 SALDO ANTERIOR $ 905,350.97
-TOTAL ABONOS $ 1,090,011.94
-TOTAL CARGOS $ 901,391.22
-SALDO ACTUAL $ 1,093,971.69
+TOTAL ABONOS $ 1,090,006.94
+TOTAL CARGOS $ 182,900.00
+SALDO ACTUAL $ 1,812,457.91
 FECHA DESCRIPCIÓN SUCURSAL DCTO. VALOR SALDO
 1/01 ABONO INTERESES AHORROS .98 905,351.95
-1/01 COMPRA EN CANVA -182,900.00 721,720.35
-22/01 PAGO DE PROV AISLATERM COLOM 590,000.00 593,960.87
-28/01 PAGO DE PROV ALESTRUCTURAR S 500,000.00 1,093,965.73
-31/01 ABONO INTERESES AHORROS 5.96 1,093,971.69
+1/01 COMPRA EN CANVA -182,900.00 722,451.95
+22/01 PAGO DE PROV AISLATERM COLOM 590,000.00 1,312,451.95
+28/01 PAGO DE PROV ALESTRUCTURAR S 500,000.00 1,812,451.95
+31/01 ABONO INTERESES AHORROS 5.96 1,812,457.91
 FIN ESTADO DE CUENTA`;
 
 test('interpreta un extracto Bancolombia sin convertir el saldo en movimiento', () => {
@@ -70,17 +70,19 @@ test('interpreta un extracto Bancolombia sin convertir el saldo en movimiento', 
   assert.equal(result.periodStart, '2025-12-31');
   assert.equal(result.periodEnd, '2026-01-31');
   assert.equal(result.openingBalance, 905350.97);
-  assert.equal(result.closingBalance, 1093971.69);
+  assert.equal(result.closingBalance, 1812457.91);
   assert.equal(result.transactions.length, 5);
   assert.deepEqual(result.transactions[1], {
     postedAt: '2026-01-01', description: 'COMPRA EN CANVA', amount: -182900,
-    balance: 721720.35, sourceRow: 2
+    balance: 722451.95, sourceRow: 2
   });
 });
 
 test('recorre todas las páginas de un extracto y descarta encabezados repetidos', () => {
-  const firstPage = januaryStatement.replace('FIN ESTADO DE CUENTA', '');
-  const secondPage = `ESTADO DE CUENTA\nFECHA DESCRIPCIÓN SUCURSAL DCTO. VALOR SALDO\n1/02 PAGO SEGUNDA PAGINA -70,000.00 1,023,971.69\nFIN ESTADO DE CUENTA`;
+  const firstPage = januaryStatement.replace('FIN ESTADO DE CUENTA', '')
+    .replace('HASTA: 2026/01/31', 'HASTA: 2026/02/28').replace('SALDO ACTUAL $ 1,812,457.91', 'SALDO ACTUAL $ 1,742,457.91')
+    .replace('TOTAL CARGOS $ 182,900.00', 'TOTAL CARGOS $ 252,900.00');
+  const secondPage = `ESTADO DE CUENTA\nFECHA DESCRIPCIÓN SUCURSAL DCTO. VALOR SALDO\n1/02 PAGO SEGUNDA PAGINA -70,000.00 1,742,457.91\nFIN ESTADO DE CUENTA`;
   const result = parseBancolombiaStatementPages([firstPage, secondPage]);
   assert.equal(result.transactions.length, 6);
   assert.equal(result.transactions.at(-1).description, 'PAGO SEGUNDA PAGINA');
@@ -120,11 +122,19 @@ test('aprobar una coincidencia exacta enlaza la cuenta dentro de una transacció
   const calls = [];
   const tx = {
     bankReconciliationMatch: {
-      findUnique: async () => ({ id: 'm1', status: 'PROPOSED', amount: 500000, bankTransaction: { id: 'b1', accountId: 'a1', amount: 500000 }, financialRecord: { id: 'r1', amount: 500000 } }),
-      update: async ({ data }) => calls.push(['match', data])
+      findUnique: async () => ({ id: 'm1', status: 'PROPOSED', amount: 500000,
+        bankTransactionId: 'b1', financialRecordId: 'r1', updatedAt: new Date('2026-09-02'),
+        bankTransaction: { id: 'b1', accountId: 'a1', amount: 500000, status: 'PROPOSED',
+          postedAt: new Date('2026-09-01'), updatedAt: new Date('2026-09-02'), account: { id: 'a1', currency: 'COP', isActive: true } },
+        financialRecord: { id: 'r1', amount: 500000, scenario: 'ACTUAL', status: 'POSTED', origin: 'IMPORT',
+          isProjection: false, type: 'INCOME', accountId: null, date: new Date('2026-09-01'), year: 2026, month: 9,
+          updatedAt: new Date('2026-09-02'), account: null, receivablePayment: null, payrollTransaction: null } }),
+      findFirst: async () => null,
+      updateMany: async ({ data }) => { calls.push(['match', data]); return { count: 1 }; }
     },
-    financialRecord: { update: async ({ data }) => calls.push(['record', data]) },
-    bankTransaction: { update: async ({ data }) => calls.push(['bank', data]) },
+    financialRecord: { updateMany: async ({ data }) => { calls.push(['record', data]); return { count: 1 }; } },
+    bankTransaction: { updateMany: async ({ data }) => { calls.push(['bank', data]); return { count: 1 }; } },
+    financialPeriod: { findUnique: async () => null },
     financialAuditEvent: { create: async ({ data }) => calls.push(['audit', data]) }
   };
   const prismaClient = { $transaction: async (callback) => callback(tx) };

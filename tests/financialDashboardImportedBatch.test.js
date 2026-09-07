@@ -117,7 +117,7 @@ test('getFinancialDashboard uses posted actual records as the source of truth wh
     const receivableWhere = calls.find(([name]) => name === 'accountsReceivable.findMany')[1].where;
     assert.deepEqual(receivableWhere.OR, [
         { importBatchId: 'batch-1' },
-        { importBatchId: null, origin: 'MANUAL' }
+        { importBatchId: null }
     ]);
 });
 

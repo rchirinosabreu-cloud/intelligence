@@ -43,7 +43,7 @@ test('financial ledger uses canonical record endpoints and server-confirmed muta
     assert.match(ledgerSource, /Cerrar mes/);
     assert.match(ledgerSource, /periods\/reopen/);
     assert.match(ledgerSource, /Reabrir mes/);
-    assert.match(ledgerSource, /financialRole === 'ADMIN'/);
+    assert.match(ledgerSource, /hasFinancialPermission\(currentUser, 'admin'\)/);
     assert.match(ledgerSource, /FINANCIAL_PERIOD_UNRECONCILED|movimientos sin conciliar/);
     assert.match(ledgerSource, /\['SERVICIO', 'Servicio'\]/);
     assert.match(ledgerSource, /<DatePicker \{\.\.\.brainDatePickerProps\} selected=\{form\.date/);
@@ -52,7 +52,9 @@ test('financial ledger uses canonical record endpoints and server-confirmed muta
 test('financial operational payment dates use the shared calendar', () => {
     assert.doesNotMatch(dashboardSource, /required type="date" value=\{paymentForm\.paidAt\}/);
     assert.doesNotMatch(dashboardSource, /required type="date" value=\{payrollPaymentForm\.paidAt\}/);
-    assert.match(dashboardSource, /selected=\{paymentForm\.paidAt/);
+    const paymentSource = fs.readFileSync(new URL('../src/components/modules/financial/ReceivablePaymentDialog.jsx', import.meta.url), 'utf8');
+    assert.match(paymentSource, /DatePicker \{\.\.\.brainDatePickerProps\}/);
+    assert.match(paymentSource, /selected=\{form\.paidAt/);
     assert.match(dashboardSource, /selected=\{payrollPaymentForm\.paidAt/);
 });
 

@@ -77,7 +77,7 @@ export const resolveFinancialRole = (systemRole, requestedRole, modulePermission
     if (modulePermissions.financiero !== true) return 'NONE';
 
     const normalizedRole = String(requestedRole || '').toUpperCase();
-    return FINANCIAL_ROLES.has(normalizedRole) && normalizedRole !== 'ADMIN'
+    return FINANCIAL_ROLES.has(normalizedRole) && !['ADMIN', 'NONE'].includes(normalizedRole)
         ? normalizedRole
         : 'EDITOR';
 };

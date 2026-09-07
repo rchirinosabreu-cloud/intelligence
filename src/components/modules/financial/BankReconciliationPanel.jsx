@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -6,9 +6,11 @@ import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, RefreshCw, Uploa
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/Card';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 
 const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('authToken')}` });
 const currency = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2 });
+const PAGE_SIZE = 20;
 
 export default function BankReconciliationPanel({ selectedYear, canApprove }) {
   const inputRef = useRef(null);
@@ -16,15 +18,25 @@ export default function BankReconciliationPanel({ selectedYear, canApprove }) {
   const [accountId, setAccountId] = useState('');
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => { setPage(1); setPreview(null); setFile(null); }, [selectedYear]);
 
   const { data: accountData } = useQuery({
     queryKey: ['financial-accounts'],
     queryFn: async () => (await axios.get(`${getApiBaseUrl()}/api/financials/accounts`, { headers: headers() })).data
   });
   const accounts = Array.isArray(accountData) ? accountData : accountData?.accounts || [];
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['bank-reconciliation', selectedYear],
-    queryFn: async () => (await axios.get(`${getApiBaseUrl()}/api/financials/bank-reconciliation?year=${selectedYear}`, { headers: headers() })).data
+    queryFn: async () => {
+      try {
+        return (await axios.get(`${getApiBaseUrl()}/api/financials/bank-reconciliation?year=${selectedYear}`, { headers: headers() })).data;
+      } catch (requestError) {
+        console.error('[Conciliación bancaria] Error de consulta:', requestError.response?.data || requestError.message);
+        throw requestError;
+      }
+    }
   });
 
   const previewMutation = useMutation({
@@ -44,7 +56,7 @@ export default function BankReconciliationPanel({ selectedYear, canApprove }) {
       return (await axios.post(`${getApiBaseUrl()}/api/financials/bank-reconciliation/import`, body, { headers: headers() })).data;
     },
     onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: ['bank-reconciliation', selectedYear] });
+      await invalidateFinancialQueries(queryClient);
       setPreview(null); setFile(null);
       toast.success(`${result.transactionCount} movimientos importados para revisión.`);
     },
@@ -56,10 +68,7 @@ export default function BankReconciliationPanel({ selectedYear, canApprove }) {
   const approveMutation = useMutation({
     mutationFn: async (id) => (await axios.post(`${getApiBaseUrl()}/api/financials/bank-reconciliation/matches/${id}/approve`, {}, { headers: headers() })).data,
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['bank-reconciliation', selectedYear] }),
-        queryClient.invalidateQueries({ queryKey: ['financial-records'] })
-      ]);
+      await invalidateFinancialQueries(queryClient);
       toast.success('Coincidencia aprobada y cuenta vinculada.');
     },
     onError: (error) => {
@@ -70,7 +79,7 @@ export default function BankReconciliationPanel({ selectedYear, canApprove }) {
   const rebuildMutation = useMutation({
     mutationFn: async () => (await axios.post(`${getApiBaseUrl()}/api/financials/bank-reconciliation/rebuild`, { year: selectedYear }, { headers: headers() })).data,
     onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: ['bank-reconciliation', selectedYear] });
+      await invalidateFinancialQueries(queryClient);
       toast.success(`${result.proposalCount} coincidencias listas para revisar.`);
     },
     onError: (error) => {
@@ -85,6 +94,19 @@ export default function BankReconciliationPanel({ selectedYear, canApprove }) {
   const internalTransfers = data?.internalTransferCandidates || [];
   const continuityGaps = data?.continuityGaps || [];
   const internalTransferIds = new Set(internalTransfers.flatMap((item) => [item.debitTransactionId, item.creditTransactionId]));
+  const hasComparableStatements = useMemo(() => {
+    const accountsWithStatements = new Set();
+    for (const statement of data?.imports || []) {
+      const statementAccount = statement.accountId || statement.account?.id;
+      if (!statementAccount) continue;
+      if (accountsWithStatements.has(statementAccount)) return true;
+      accountsWithStatements.add(statementAccount);
+    }
+    return false;
+  }, [data?.imports]);
+  const pageCount = Math.max(1, Math.ceil(transactions.length / PAGE_SIZE));
+  const visibleTransactions = transactions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage((current) => Math.min(current, pageCount)); }, [pageCount]);
 
   return (
     <section className="space-y-4">
@@ -97,11 +119,74 @@ export default function BankReconciliationPanel({ selectedYear, canApprove }) {
 
       {preview && <Card className="rounded-2xl border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-zinc-900 dark:text-white">Revisión previa</p><p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{preview.periodStart} a {preview.periodEnd} · {preview.transactions.length} movimientos · saldo final {currency.format(preview.closingBalance)}</p></div><div className="flex gap-2"><Button variant="outline" type="button" onClick={() => { setPreview(null); setFile(null); }}>Cancelar</Button><Button type="button" disabled={importMutation.isPending} onClick={() => importMutation.mutate()} className="bg-violet-600 hover:bg-violet-700">{importMutation.isPending ? 'Guardando…' : 'Confirmar importación'}</Button></div></div></Card>}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Card className="rounded-2xl border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900"><p className="text-xs text-zinc-500 dark:text-zinc-400">Extractos cargados</p><p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-white">{data?.imports?.length || 0}</p></Card><Card className="rounded-2xl border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900"><p className="text-xs text-zinc-500 dark:text-zinc-400">Coincidencias propuestas</p><p className="mt-2 text-2xl font-bold text-violet-600 dark:text-violet-300">{proposed.length}</p></Card><Card className="rounded-2xl border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900"><p className="text-xs text-zinc-500 dark:text-zinc-400">Movimientos sin coincidencia</p><p className="mt-2 text-2xl font-bold text-amber-600 dark:text-amber-300">{unmatched.length}</p></Card><Card className="rounded-2xl border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900"><p className="text-xs text-zinc-500 dark:text-zinc-400">Transferencias internas detectadas</p><p className="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-300">{internalTransfers.length}</p></Card></div>
+      {isLoading ? (
+        <div role="status" className="flex justify-center gap-2 py-12 text-sm text-zinc-500 dark:text-zinc-400"><Loader2 className="h-5 w-5 animate-spin" />Cargando conciliación…</div>
+      ) : error ? (
+        <div role="alert" className="rounded-2xl border border-destructive/30 p-5 text-sm text-destructive">
+          <p>No fue posible cargar la conciliación bancaria. No se han comprobado los saldos.</p>
+          <Button variant="outline" type="button" className="mt-3 min-h-11 text-zinc-700 dark:text-zinc-200" onClick={() => refetch()}>Reintentar</Button>
+        </div>
+      ) : <>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            ['Extractos cargados', data?.imports?.length || 0],
+            ['Coincidencias propuestas', proposed.length],
+            ['Movimientos sin coincidencia', unmatched.length],
+            ['Transferencias internas detectadas', internalTransfers.length]
+          ].map(([label, count]) => <Card key={label} className="rounded-2xl border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900"><p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p><p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-white">{count}</p></Card>)}
+        </div>
 
-      <div className={`rounded-2xl border px-4 py-3 text-sm ${continuityGaps.length ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200' : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200'}`}><span className="font-semibold">Continuidad de saldos:</span> {continuityGaps.length ? `${continuityGaps.length} diferencia(s) requieren revisión o extractos faltantes.` : 'los cierres y aperturas cargados coinciden.'}</div>
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${continuityGaps.length ? 'border-destructive/30 text-destructive' : 'border-zinc-200 text-zinc-600 dark:border-white/10 dark:text-zinc-300'}`}>
+          <span className="font-semibold">Continuidad de saldos:</span>{' '}
+          {!data?.imports?.length ? 'Aún no hay extractos para comprobar la continuidad.'
+            : !hasComparableStatements ? 'Se necesitan al menos dos extractos de una misma cuenta para comparar cierres y aperturas.'
+              : !Array.isArray(data?.continuityGaps) ? 'No fue posible comprobar la continuidad de los extractos.'
+                : continuityGaps.length ? `${continuityGaps.length} diferencia(s) requieren revisión o extractos faltantes.`
+                  : 'Sin diferencias en las transiciones de los extractos cargados. No confirma que estén todos los meses ni que los movimientos estén conciliados.'}
+        </div>
 
-      {isLoading ? <div className="flex justify-center py-12 text-zinc-500"><Loader2 className="h-5 w-5 animate-spin" /></div> : <div className="space-y-3">{transactions.slice(0, 80).map((transaction) => { const match = transaction.matches?.find((item) => item.status === 'PROPOSED'); const isInternalTransfer = internalTransferIds.has(transaction.id); const highConfidence = Number(match?.confidence || 0) >= 0.9; return <article key={transaction.id} className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex items-center gap-2">{match || isInternalTransfer ? <CheckCircle2 className="h-4 w-4 shrink-0 text-violet-500" /> : <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />}<p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{transaction.description}</p></div><p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{new Date(transaction.postedAt).toLocaleDateString('es-CO', { timeZone: 'UTC' })} · {transaction.account?.name}</p>{isInternalTransfer && <p className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">Posible traslado entre cuentas propias; no se contabiliza dos veces.</p>}{match && <div className="mt-2 space-y-1"><span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${highConfidence ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200' : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200'}`}>{highConfidence ? 'Alta confianza' : 'Requiere verificación'}</span><p className="text-xs text-violet-700 dark:text-violet-300">Coincidencia propuesta: {match.financialRecord?.description || 'Movimiento contable'} · {match.reason}</p></div>}</div><div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end"><span className={`font-semibold ${Number(transaction.amount) >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>{currency.format(Number(transaction.amount))}</span>{match && canApprove && <Button size="sm" type="button" disabled={approveMutation.isPending} onClick={() => approveMutation.mutate(match.id)}>Aprobar</Button>}</div></div></article>; })}{transactions.length === 0 && <div className="rounded-2xl border border-dashed border-zinc-300 p-10 text-center dark:border-zinc-700"><FileSpreadsheet className="mx-auto h-7 w-7 text-zinc-400" /><p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">Aún no hay extractos importados</p></div>}</div>}
+        <div className="space-y-3">
+          {visibleTransactions.map((transaction) => {
+            const isMatched = transaction.status === 'MATCHED';
+            const approvedMatch = transaction.matches?.find((item) => item.status === 'APPROVED');
+            const match = transaction.matches?.find((item) => item.status === 'PROPOSED');
+            const isInternalTransfer = internalTransferIds.has(transaction.id);
+            const highConfidence = Number(match?.confidence || 0) >= 0.9;
+            return <article key={transaction.id} className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    {isMatched ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                      : <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />}
+                    <p className="break-words text-sm font-semibold text-zinc-900 dark:text-white">{transaction.description}</p>
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{new Date(transaction.postedAt).toLocaleDateString('es-CO', { timeZone: 'UTC' })} · {transaction.account?.name}</p>
+                  {isMatched && <p className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">Conciliado{approvedMatch?.financialRecord?.description ? ` · ${approvedMatch.financialRecord.description}` : ''}</p>}
+                  {isInternalTransfer && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">Posible traslado entre cuentas propias. Revisa ambos movimientos antes de contabilizar.</p>}
+                  {!isMatched && match && <div className="mt-2 space-y-1">
+                    <span className="inline-flex rounded-full bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-700 dark:bg-white/10 dark:text-zinc-200">{highConfidence ? 'Alta confianza' : 'Requiere verificación'}</span>
+                    <p className="text-xs text-violet-700 dark:text-violet-300">Coincidencia propuesta: {match.financialRecord?.description || 'Movimiento contable'} · {match.reason}</p>
+                  </div>}
+                </div>
+                <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
+                  <span className={`font-semibold ${Number(transaction.amount) >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-zinc-900 dark:text-zinc-100'}`}>{currency.format(Number(transaction.amount))}</span>
+                  {!isMatched && match && canApprove && <Button size="sm" type="button" className="min-h-11" disabled={approveMutation.isPending} onClick={() => approveMutation.mutate(match.id)}>Aprobar</Button>}
+                </div>
+              </div>
+            </article>;
+          })}
+          {transactions.length === 0 && <div className="rounded-2xl border border-dashed border-zinc-300 p-10 text-center dark:border-zinc-700"><FileSpreadsheet className="mx-auto h-7 w-7 text-zinc-400" /><p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">{data?.imports?.length ? 'No hay movimientos bancarios en el año seleccionado' : 'Aún no hay extractos importados'}</p></div>}
+        </div>
+
+        {transactions.length > 0 && <nav aria-label="Paginación de conciliación" className="flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-600 dark:text-zinc-300">
+          <p aria-live="polite">Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, transactions.length)} de {transactions.length} movimientos</p>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" type="button" className="min-h-11" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Anterior</Button>
+            <span>Página {page} de {pageCount}</span>
+            <Button variant="outline" type="button" className="min-h-11" disabled={page >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))}>Siguiente</Button>
+          </div>
+        </nav>}
+      </>}
     </section>
   );
 }

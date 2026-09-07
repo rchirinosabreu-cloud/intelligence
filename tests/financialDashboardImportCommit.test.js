@@ -7,7 +7,7 @@ const source = await readFile(new URL('../src/components/modules/FinancialDashbo
 test('financial dashboard confirms audited files through the commit endpoint', () => {
     assert.match(source, /import\/commit/);
     assert.match(source, /Importar a base de datos/);
-    assert.match(source, /invalidateQueries\(\{\s*queryKey:\s*\['financials-dashboard-data'\]/);
+    assert.match(source, /await invalidateFinancialQueries\(queryClient\)/);
     assert.match(source, /data\.sourceSummary\?\.totals/);
     assert.match(source, /Ingresos detectados/);
     assert.match(source, /Resumen mensual importado/);

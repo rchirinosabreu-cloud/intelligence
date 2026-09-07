@@ -1,6 +1,9 @@
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma.js';
 import { getJwtSecret, hasModulePermission, isManagerRole } from '../config/security.js';
+import { hasFinancialPermission } from '../utils/financialPermissions.js';
+
+export { hasFinancialPermission };
 
 const JWT_SECRET = getJwtSecret();
 
@@ -121,14 +124,6 @@ export const requireRole = (role) => {
     next();
   };
 };
-const FINANCIAL_PERMISSION_LEVELS = {
-  NONE: 0,
-  VIEWER: 1,
-  EDITOR: 2,
-  APPROVER: 3,
-  ADMIN: 4
-};
-
 export const requireManagerRole = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Unauthorized', message: 'Usuario no autenticado' });
@@ -137,28 +132,6 @@ export const requireManagerRole = (req, res, next) => {
     return res.status(403).json({ error: 'Acceso denegado. Se requiere rol ADMIN o PROJECT_MANAGER' });
   }
   return next();
-};
-
-const REQUIRED_FINANCIAL_LEVELS = {
-  read: FINANCIAL_PERMISSION_LEVELS.VIEWER,
-  write: FINANCIAL_PERMISSION_LEVELS.EDITOR,
-  approve: FINANCIAL_PERMISSION_LEVELS.APPROVER,
-  admin: FINANCIAL_PERMISSION_LEVELS.ADMIN
-};
-
-export const hasFinancialPermission = (user, permission = 'read') => {
-  if (!user) return false;
-  if (String(user.role || '').toUpperCase() === 'ADMIN') return true;
-
-  const requiredLevel = REQUIRED_FINANCIAL_LEVELS[permission];
-  if (!requiredLevel) return false;
-
-  const financialRole = String(user.financialRole || 'NONE').toUpperCase();
-  const roleLevel = FINANCIAL_PERMISSION_LEVELS[financialRole] || 0;
-  if (roleLevel >= requiredLevel) return true;
-
-  // Existing users keep operational access while explicit roles are assigned.
-  return user.hasFinancialAccess === true && ['read', 'write'].includes(permission);
 };
 
 export const requireFinancialPermission = (permission = 'read') => {
@@ -171,7 +144,7 @@ export const requireFinancialPermission = (permission = 'read') => {
       const userId = req.user.userId || req.user.id;
       const dbUser = await prisma.user.findUnique({
         where: { id: userId },
-        select: { role: true, hasFinancialAccess: true, financialRole: true }
+        select: { role: true, isActive: true, modulePermissions: true, hasFinancialAccess: true, financialRole: true }
       });
 
       if (!dbUser || !hasFinancialPermission(dbUser, permission)) {
@@ -183,6 +156,8 @@ export const requireFinancialPermission = (permission = 'read') => {
 
       req.user.financialRole = dbUser.financialRole;
       req.user.hasFinancialAccess = dbUser.hasFinancialAccess;
+      req.user.role = dbUser.role;
+      req.user.modulePermissions = dbUser.modulePermissions;
       return next();
     } catch (error) {
       console.error("[Auth] Error validating financial access:", error);

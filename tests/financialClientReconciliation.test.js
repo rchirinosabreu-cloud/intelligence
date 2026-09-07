@@ -27,7 +27,8 @@ test('getFinancialClientReconciliation aggregates imported income and receivable
             findMany: async (args) => {
                 assert.deepEqual(args.where, {
                     year: 2026,
-                    importBatchId: 'batch-1'
+                    status: 'POSTED', scenario: 'ACTUAL',
+                    OR: [{ importBatchId: 'batch-1' }, { importBatchId: null }]
                 });
                 return [{
                     id: 'record-1',

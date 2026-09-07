@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -28,6 +28,10 @@ import {
     Wallet
 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
+import { hasFinancialPermission } from '@/utils/financialPermissions';
+import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
+
+const PAGE_SIZE = 25;
 
 const CATEGORIES = [
     ['MEMBRESIA', 'Membresía'],
@@ -98,6 +102,7 @@ const toForm = (record, year) => record ? {
 const FinancialLedger = ({ selectedYear, formatCurrency }) => {
     const queryClient = useQueryClient();
     const [filters, setFilters] = useState({ scenario: 'ACTUAL', month: '', type: '' });
+    const [page, setPage] = useState(1);
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState(null);
     const [form, setForm] = useState(() => emptyForm(selectedYear));
@@ -115,25 +120,32 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
     const [reopenPeriodReason, setReopenPeriodReason] = useState('');
     const [isReopeningPeriod, setIsReopeningPeriod] = useState(false);
     const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    const canApprove = currentUser.role === 'ADMIN' || ['APPROVER', 'ADMIN'].includes(currentUser.financialRole);
-    const canAdmin = currentUser.role === 'ADMIN' || currentUser.financialRole === 'ADMIN';
-    const canWrite = currentUser.role === 'ADMIN' || ['EDITOR', 'APPROVER', 'ADMIN'].includes(currentUser.financialRole) || currentUser.hasFinancialAccess === true;
+    const canApprove = hasFinancialPermission(currentUser, 'approve');
+    const canAdmin = hasFinancialPermission(currentUser, 'admin');
+    const canWrite = hasFinancialPermission(currentUser, 'write');
+
+    useEffect(() => { setPage(1); }, [selectedYear, filters]);
 
     const queryString = useMemo(() => {
-        const params = new URLSearchParams({ year: String(selectedYear), scenario: filters.scenario });
+        const params = new URLSearchParams({ year: String(selectedYear), scenario: filters.scenario, page: String(page), pageSize: String(PAGE_SIZE) });
         if (filters.month) params.set('month', filters.month);
         if (filters.type) params.set('type', filters.type);
         return params.toString();
-    }, [filters, selectedYear]);
+    }, [filters, selectedYear, page]);
 
-    const { data, isLoading, error } = useQuery({
-        queryKey: ['financial-records', selectedYear, filters],
+    const { data, isLoading, isFetching, error, refetch } = useQuery({
+        queryKey: ['financial-records', selectedYear, filters, page],
         queryFn: async () => {
-            const baseUrl = getApiBaseUrl();
-            const response = await axios.get(`${baseUrl}/api/financials/records?${queryString}`, {
-                headers: authHeaders()
-            });
-            return response.data;
+            try {
+                const baseUrl = getApiBaseUrl();
+                const response = await axios.get(`${baseUrl}/api/financials/records?${queryString}`, {
+                    headers: authHeaders()
+                });
+                return response.data;
+            } catch (requestError) {
+                console.error('Error loading financial records:', requestError.response?.data || requestError.message);
+                throw requestError;
+            }
         }
     });
 
@@ -167,6 +179,11 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
     const selectedPeriod = (periodData?.periods || []).find((period) => period.month === Number(filters.month));
 
     const records = useMemo(() => data?.items || [], [data?.items]);
+    const totalRecords = Number(data?.total) || 0;
+    const pageCount = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
+    useEffect(() => {
+        if (data && !isFetching && !error) setPage((current) => Math.min(current, pageCount));
+    }, [data, isFetching, error, pageCount]);
     const totals = useMemo(() => records.reduce((acc, record) => {
         const amount = Number(record.amount) || 0;
         if (record.type === 'INCOME') acc.income += amount;
@@ -188,13 +205,7 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
         setIsEditorOpen(true);
     };
 
-    const refreshFinancialData = async () => {
-        await Promise.all([
-            queryClient.invalidateQueries({ queryKey: ['financial-records'] }),
-            queryClient.invalidateQueries({ queryKey: ['financial-accounts'] }),
-            queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] })
-        ]);
-    };
+    const refreshFinancialData = () => invalidateFinancialQueries(queryClient);
 
     const saveRecord = async (event) => {
         event.preventDefault();
@@ -398,15 +409,15 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
                     <TrendingUp className="h-5 w-5 text-emerald-500" />
-                    <div><p className="text-xs text-zinc-500">Ingresos visibles</p><p className="font-semibold text-zinc-900 dark:text-white">{formatCurrency(totals.income)}</p></div>
+                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Ingresos de esta página</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || error ? '—' : formatCurrency(totals.income)}</p></div>
                 </div>
                 <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
                     <TrendingDown className="h-5 w-5 text-rose-500" />
-                    <div><p className="text-xs text-zinc-500">Egresos visibles</p><p className="font-semibold text-zinc-900 dark:text-white">{formatCurrency(totals.expense)}</p></div>
+                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Egresos de esta página</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || error ? '—' : formatCurrency(totals.expense)}</p></div>
                 </div>
                 <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
                     <FileSpreadsheet className="h-5 w-5 text-violet-500" />
-                    <div><p className="text-xs text-zinc-500">Registros</p><p className="font-semibold text-zinc-900 dark:text-white">{data?.total || 0}</p></div>
+                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Registros con estos filtros</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || error ? '—' : totalRecords}</p></div>
                 </div>
             </div>
 
@@ -414,7 +425,7 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
                 {isLoading ? (
                     <div className="flex items-center justify-center gap-2 py-16 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Cargando movimientos...</div>
                 ) : error ? (
-                    <div className="flex items-center justify-center gap-2 py-16 text-sm text-destructive"><AlertCircle className="h-4 w-4 text-destructive" /> No fue posible cargar el libro.</div>
+                    <div role="alert" className="flex flex-col items-center justify-center gap-3 py-16 text-sm text-destructive"><p className="flex items-center gap-2"><AlertCircle className="h-4 w-4 text-destructive" /> No fue posible cargar el libro.</p><button type="button" onClick={() => refetch()} className="min-h-11 rounded-lg border border-zinc-200 px-4 text-zinc-700 dark:border-white/10 dark:text-zinc-200">Reintentar</button></div>
                 ) : records.length === 0 ? (
                     <div className="py-16 text-center"><Search className="mx-auto h-7 w-7 text-zinc-300" /><p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">No hay movimientos con estos filtros</p></div>
                 ) : (
@@ -441,6 +452,15 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
                     </div>
                 )}
             </div>
+
+            {!isLoading && !error && totalRecords > 0 && <nav aria-label="Paginación de movimientos" className="flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-600 dark:text-zinc-300">
+                <p aria-live="polite">Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalRecords)} de {totalRecords} movimientos</p>
+                <div className="flex items-center gap-2">
+                    <button type="button" disabled={page <= 1 || isFetching} onClick={() => setPage((current) => Math.max(1, current - 1))} className="min-h-11 rounded-lg border border-zinc-200 px-3 disabled:opacity-40 dark:border-white/10">Anterior</button>
+                    <span>Página {page} de {pageCount}</span>
+                    <button type="button" disabled={page >= pageCount || isFetching} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} className="min-h-11 rounded-lg border border-zinc-200 px-3 disabled:opacity-40 dark:border-white/10">Siguiente</button>
+                </div>
+            </nav>}
 
             <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
                 <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl dark:bg-zinc-900">

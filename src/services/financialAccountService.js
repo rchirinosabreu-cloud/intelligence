@@ -68,13 +68,18 @@ export const listFinancialAccounts = async (prismaClient, { includeInactive = fa
           status: 'POSTED',
           scenario: 'ACTUAL'
         },
-        select: { type: true, amount: true }
+        select: { type: true, amount: true, date: true }
       }
     }
   });
 
   return accounts.map(({ records, ...account }) => {
+    // These are accounting dates, not event timestamps: legacy imports use UTC
+    // midnight and manual entries use noon. Both belong to the same ledger day.
+    const openingDate = new Date(account.openingBalanceDate);
+    const openingDayStart = Date.UTC(openingDate.getUTCFullYear(), openingDate.getUTCMonth(), openingDate.getUTCDate());
     const movementBalance = records.reduce((sum, record) => {
+      if (new Date(record.date).getTime() < openingDayStart) return sum;
       const signedAmount = record.type === 'INCOME' ? toNumber(record.amount) : -toNumber(record.amount);
       return sum + signedAmount;
     }, 0);

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import XLSX from 'xlsx';
+import { FinancialDomainError } from './financialRecordService.js';
 
 const MONTHS = [
     'Enero',
@@ -726,6 +727,30 @@ export const persistFinancialImportPlan = async (prismaClient, plan, options = {
     const year = plan.batch.year;
 
     return prismaClient.$transaction(async (tx) => {
+        if (replaceExisting) {
+            // Replacing Excel snapshots must never detach payments (SetNull FK) or
+            // destroy bank evidence. Inspect the same rows this transaction deletes.
+            const [linkedRecords, linkedReceivables] = await Promise.all([
+                tx.financialRecord.count({ where: {
+                    year, importBatchId: { not: null },
+                    OR: [
+                        { receivablePayment: { isNot: null } },
+                        { payrollTransaction: { isNot: null } },
+                        { bankMatches: { some: {} } }
+                    ]
+                } }),
+                tx.accountsReceivable.count({ where: {
+                    year, importBatchId: { not: null }, payments: { some: {} }
+                } })
+            ]);
+            if (linkedRecords || linkedReceivables) {
+                throw new FinancialDomainError(
+                    'FINANCIAL_IMPORT_LINKED_OPERATIONS',
+                    'No se puede reemplazar este año: los datos importados ya están vinculados a pagos, nómina o propuestas de conciliación. Se conservaron todos los registros; se requiere una actualización que preserve esos vínculos.',
+                    409
+                );
+            }
+        }
         const priorClientLinks = replaceExisting
             ? await tx.financialRecord.findMany({
                 where: {
@@ -954,6 +979,16 @@ export const persistFinancialImportPlan = async (prismaClient, plan, options = {
         };
     }, {
         maxWait: 10000,
-        timeout: 60000
+        timeout: 60000,
+        isolationLevel: 'Serializable'
+    }).catch((error) => {
+        if (error?.code === 'P2034') {
+            throw new FinancialDomainError(
+                'FINANCIAL_IMPORT_CONFLICT',
+                'Los datos financieros cambiaron durante la importación. No se reemplazaron registros; actualiza y revisa los pagos o conciliaciones antes de reintentar.',
+                409
+            );
+        }
+        throw error;
     });
 };

@@ -15,7 +15,7 @@ export const auditFinancialIntegrity = async (prismaClient, { year: rawYear } = 
         select: { id: true }
     });
     const activeRecordScope = activeImportBatch?.id
-        ? { OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null, origin: 'MANUAL' }] }
+        ? { OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null }] }
         : {};
     const activeContractScope = activeImportBatch?.id
         ? { OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null }] }

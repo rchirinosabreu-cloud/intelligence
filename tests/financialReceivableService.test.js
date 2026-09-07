@@ -85,8 +85,103 @@ test('createReceivable creates an open client balance with an audit event', asyn
     }, { id: 'user-1' });
 
     assert.equal(result.status, 'DEBE');
+    assert.equal(result.dueDate.toISOString(), '2026-08-15T12:00:00.000Z');
     assert.equal(calls[0][1].data.year, 2026);
     assert.equal(calls[0][1].data.month, 8);
     assert.equal(calls[0][1].data.origin, 'MANUAL');
     assert.equal(calls[1][1].data.action, 'CREATE');
+});
+
+test('editing only notes preserves a remaining payment promise', async () => {
+    const existing = { id: 'debt-1', amount: 1000, period: new Date('2026-09-01T12:00:00Z'), status: 'PROMESADO', payments: [{ amount: 200 }] };
+    const result = await updateReceivable(makeClient(existing, []), 'debt-1', { notes: 'Llamar el viernes' }, { id: 'user-1' });
+    assert.equal(result.status, 'PROMESADO');
+});
+
+test('an explicit DEBE status may clear a collection promise', async () => {
+    const existing = { id: 'debt-1', amount: 1000, period: new Date('2026-09-01T12:00:00Z'), status: 'PROMESADO', payments: [] };
+    const result = await updateReceivable(makeClient(existing, []), 'debt-1', { status: 'DEBE' }, { id: 'user-1' });
+    assert.equal(result.status, 'DEBE');
+});
+
+test('an unknown status is rejected instead of clearing a payment promise', async () => {
+    const existing = { id: 'debt-1', amount: 1000, period: new Date('2026-09-01T12:00:00Z'), status: 'PROMESADO', payments: [] };
+    const calls = [];
+    await assert.rejects(updateReceivable(makeClient(existing, calls), 'debt-1', { status: 'DONE' }, { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_STATUS_INVALID');
+    assert.equal(calls.length, 0);
+});
+
+test('receivable edits use serializable isolation and report concurrent payment conflicts', async () => {
+    let options;
+    const client = { $transaction: async (_callback, transactionOptions) => {
+        options = transactionOptions;
+        throw Object.assign(new Error('Write conflict'), { code: 'P2034' });
+    } };
+    await assert.rejects(updateReceivable(client, 'debt-1', { amount: 1000 }, { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_CONFLICT' && error.statusCode === 409);
+    assert.equal(options.isolationLevel, 'Serializable');
+});
+
+test('due dates reject impossible calendar days instead of rolling into another month', async () => {
+    const existing = { id: 'debt-1', amount: 1000, period: new Date('2026-09-01T12:00:00Z'), status: 'DEBE', payments: [] };
+    for (const dueDate of ['2026-02-31', '2026-13-01', '2026-04-31', '07/09/2026']) {
+        const calls = [];
+        await assert.rejects(updateReceivable(makeClient(existing, calls), 'debt-1', { dueDate }, { id: 'user-1' }),
+            (error) => error.code === 'RECEIVABLE_DUE_DATE_INVALID');
+        assert.equal(calls.length, 0);
+    }
+});
+
+test('setting and clearing a due date preserve its civil date in Bogota', async () => {
+    const existing = { id: 'debt-1', amount: 1000, period: new Date('2026-09-01T12:00:00Z'), status: 'DEBE', payments: [] };
+    const result = await updateReceivable(makeClient(existing, []), 'debt-1', { dueDate: '2026-09-07' }, { id: 'user-1' });
+    assert.equal(result.dueDate.toISOString(), '2026-09-07T12:00:00.000Z');
+    const cleared = await updateReceivable(makeClient({ ...existing, dueDate: result.dueDate }, []), 'debt-1', { dueDate: null }, { id: 'user-1' });
+    assert.equal(cleared.dueDate, null);
+});
+
+test('new debts reject amounts that are not positive safe cents', async () => {
+    const client = { $transaction: async () => ({ id: 'unexpected-create' }) };
+    for (const amount of [0, 1.001, 1.005, 0.009, Number.MAX_SAFE_INTEGER]) {
+        await assert.rejects(createReceivable(client, { clientId: 'client-1', amount, period: '2026-09-01' }, { id: 'user-1' }),
+            (error) => error.code === 'RECEIVABLE_AMOUNT_INVALID');
+    }
+});
+
+test('editing a debt cannot zero its balance or introduce fractional/unsafe cents', async () => {
+    const existing = { id: 'debt-1', amount: 1000, period: new Date('2026-09-01T12:00:00Z'), status: 'DEBE', payments: [] };
+    for (const amount of [0, 1.001, 1.005, 0.009, Number.MAX_SAFE_INTEGER]) {
+        const calls = [];
+        await assert.rejects(updateReceivable(makeClient(existing, calls), 'debt-1', { amount }, { id: 'user-1' }),
+            (error) => error.code === 'RECEIVABLE_AMOUNT_INVALID');
+        assert.equal(calls.length, 0);
+    }
+});
+
+test('editing notes on a legacy zero requires review and never invents a paid state', async () => {
+    const existing = { id: 'debt-1', amount: 0, period: new Date('2026-09-01T12:00:00Z'), status: 'DEBE', payments: [] };
+    const calls = [];
+    await assert.rejects(updateReceivable(makeClient(existing, calls), 'debt-1', { notes: 'Revisar' }, { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_BALANCE_INVALID' && error.statusCode === 409);
+    assert.equal(calls.length, 0);
+});
+
+test('editing legacy paid debts without matching applications requires review instead of reopening collection', async () => {
+    for (const payments of [[], [{ amount: 200 }]]) {
+        const existing = { id: 'debt-1', amount: 1000, period: new Date('2026-09-01T12:00:00Z'), status: 'PAGADO', payments };
+        for (const patch of [{ notes: 'Revisar soporte' }, { comments: 'Importado' }, { status: 'DEBE' }, { amount: 1200 }, { dueDate: '2026-09-30' }]) {
+            const calls = [];
+            await assert.rejects(updateReceivable(makeClient(existing, calls), 'debt-1', patch, { id: 'user-1' }),
+                (error) => error.code === 'RECEIVABLE_BALANCE_INVALID' && error.statusCode === 409);
+            assert.equal(calls.length, 0);
+        }
+    }
+});
+
+test('notes on a fully traced paid debt retain its paid status', async () => {
+    const existing = { id: 'debt-1', amount: 1000, period: new Date('2026-09-01T12:00:00Z'), status: 'PAGADO', payments: [{ amount: 1000 }] };
+    const result = await updateReceivable(makeClient(existing, []), 'debt-1', { notes: 'Soporte verificado' }, { id: 'user-1' });
+    assert.equal(result.status, 'PAGADO');
+    assert.equal(result.amount, 1000);
 });

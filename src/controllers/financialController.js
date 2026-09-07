@@ -20,6 +20,11 @@ const roundFloat = (val) => {
     return Math.round((val + Number.EPSILON) * 100) / 100;
 };
 
+// Active import snapshot plus subsequent platform entries: never discard manual/SYSTEM work.
+const financialSourceScope = (batchId) => batchId
+    ? { OR: [{ importBatchId: batchId }, { importBatchId: null }] }
+    : {};
+
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 const MONTHLY_LEDGER_FIELDS = [
@@ -122,14 +127,17 @@ const serializeReceivable = (receivable) => {
         account: payment.account || null
     }));
     const paidAmount = roundFloat(payments.reduce((sum, payment) => sum + payment.amount, 0));
+    const balanceReviewRequired = receivable.status === 'PAGADO' && roundFloat(amount - paidAmount) > 0;
 
     return {
         id: receivable.id,
+        clientId: receivable.clientId || receivable.client?.id || null,
         clientName: receivable.client?.name || receivable.sourceLabel || 'Cliente sin nombre',
         clientSlug: receivable.client?.slug || null,
         amount,
         paidAmount,
-        outstanding: roundFloat(Math.max(amount - paidAmount, 0)),
+        outstanding: balanceReviewRequired ? null : roundFloat(Math.max(amount - paidAmount, 0)),
+        ...(balanceReviewRequired ? { balanceReviewRequired: true } : {}),
         period: receivable.period instanceof Date ? receivable.period.toISOString() : receivable.period,
         month: receivable.month,
         year: receivable.year,
@@ -147,6 +155,7 @@ const buildReceivableTotals = (items) => items.reduce((totals, item) => {
     totals[status] = roundFloat((totals[status] || 0) + toNum(item.outstanding));
     totals.originalTotal = roundFloat(totals.originalTotal + toNum(item.amount));
     totals.paidTotal = roundFloat(totals.paidTotal + toNum(item.paidAmount));
+    if (item.balanceReviewRequired) totals.reviewCount += 1;
     totals.outstandingTotal = roundFloat(totals.outstandingTotal + toNum(item.outstanding));
     totals.total = totals.outstandingTotal;
     return totals;
@@ -156,6 +165,7 @@ const buildReceivableTotals = (items) => items.reduce((totals, item) => {
     PROMESADO: 0,
     originalTotal: 0,
     paidTotal: 0,
+    reviewCount: 0,
     outstandingTotal: 0,
     total: 0
 });
@@ -204,8 +214,8 @@ const buildClientReconciliationRows = (records, receivables) => {
     receivables.forEach((receivable) => {
         if (!receivable.clientId) return;
         const row = ensureRow(receivable.clientId, receivable.clientId, receivable.client);
-        if (receivable.status === 'DEBE') {
-            row.receivable = roundFloat(row.receivable + toNum(receivable.amount));
+        if (['DEBE', 'PROMESADO'].includes(receivable.status)) {
+            row.receivable = roundFloat(row.receivable + serializeReceivable(receivable).outstanding);
         }
         row.receivableCount += 1;
     });
@@ -234,11 +244,13 @@ export const getFinancialClientReconciliation = async (req, res, dependencies = 
             }
         });
 
-        const importBatchFilter = activeImportBatch?.id ? { importBatchId: activeImportBatch.id } : {};
+        const importBatchFilter = financialSourceScope(activeImportBatch?.id);
         const [records, receivables, targets] = await Promise.all([
             prismaClient.financialRecord.findMany({
                 where: {
                     year,
+                    status: 'POSTED',
+                    scenario: 'ACTUAL',
                     ...importBatchFilter
                 },
                 include: {
@@ -257,6 +269,7 @@ export const getFinancialClientReconciliation = async (req, res, dependencies = 
                     ...importBatchFilter
                 },
                 include: {
+                    payments: { select: { amount: true } },
                     client: {
                         select: {
                             id: true,
@@ -405,9 +418,7 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
             }
         });
 
-        const where = activeImportBatch?.id
-            ? { year, OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null, origin: 'MANUAL' }] }
-            : { year };
+        const where = { year, ...financialSourceScope(activeImportBatch?.id) };
         const receivables = await prismaClient.accountsReceivable.findMany({
             where,
             include: {
@@ -643,9 +654,7 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                 summary: true
             }
         });
-        const importedBatchFilter = activeImportBatch?.id
-            ? { OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null, origin: 'MANUAL' }] }
-            : {};
+        const importedBatchFilter = financialSourceScope(activeImportBatch?.id);
 
         // --- SECTION 1: CASH FLOW & CATEGORIES DISTRIBUTION ---
         const financialRecordWhere = {
@@ -731,10 +740,10 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
 
 
         // --- SECTION 2: ACCOUNTS RECEIVABLE (CARTERA MOROSA) ---
-        // Fetch all receivables that are strictly unpaid ('DEBE')
+        // Promising a payment does not settle the debt.
         const receivables = await prismaClient.accountsReceivable.findMany({
             where: {
-                status: 'DEBE',
+                status: { in: ['DEBE', 'PROMESADO'] },
                 year,
                 ...importedBatchFilter
             },
@@ -1058,10 +1067,10 @@ export const commitFinancialImport = async (req, res, dependencies = {}) => {
         });
     } catch (error) {
         console.error('[Financials API] Import commit failed:', error.response?.data || error);
-        return res.status(500).json({
-            error: 'FINANCIAL_IMPORT_COMMIT_FAILED',
-            message: 'No fue posible guardar la importacion financiera en la base de datos.',
-            details: error.message
+        const statusCode = Number(error.statusCode) || 500;
+        return res.status(statusCode).json({
+            error: error.code || 'FINANCIAL_IMPORT_COMMIT_FAILED',
+            message: statusCode < 500 ? error.message : 'No fue posible guardar la importación financiera en la base de datos.'
         });
     }
 };

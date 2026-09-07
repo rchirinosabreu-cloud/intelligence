@@ -29,6 +29,10 @@ import { useAuth } from '@/context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import FinancialLedger from './financial/FinancialLedger';
 import BankReconciliationPanel from './financial/BankReconciliationPanel';
+import ReceivablePaymentDialog from './financial/ReceivablePaymentDialog';
+import { hasFinancialPermission } from '@/utils/financialPermissions';
+import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
+import { groupFinancialReceivables, financialDebtStatus, formatFinancialPeriod } from '@/utils/financialReceivables';
 
 const CATEGORY_COLORS = {
     'MEMBRESIA': '#009EB9',
@@ -92,9 +96,9 @@ const FinancialDashboard = () => {
     const [editingPayrollContract, setEditingPayrollContract] = useState(null);
     const [payrollContractForm, setPayrollContractForm] = useState(() => emptyPayrollContractForm(2026));
     const [isSavingPayrollContract, setIsSavingPayrollContract] = useState(false);
-    const canAccessFinancials = currentUser?.role === 'ADMIN' || currentUser?.hasFinancialAccess === true || (currentUser?.financialRole && currentUser.financialRole !== 'NONE');
-    const canWriteFinancials = currentUser?.role === 'ADMIN' || currentUser?.hasFinancialAccess === true || ['EDITOR', 'APPROVER', 'ADMIN'].includes(currentUser?.financialRole);
-    const canApproveFinancials = currentUser?.role === 'ADMIN' || ['APPROVER', 'ADMIN'].includes(currentUser?.financialRole);
+    const canAccessFinancials = hasFinancialPermission(currentUser, 'read');
+    const canWriteFinancials = hasFinancialPermission(currentUser, 'write');
+    const canApproveFinancials = hasFinancialPermission(currentUser, 'approve');
 
     // Fetch analytical aggregation from protected backend endpoint
     const { data, isLoading, error } = useQuery({
@@ -124,7 +128,7 @@ const FinancialDashboard = () => {
         enabled: !!(currentUser && canAccessFinancials && activeTab === 'editor')
     });
 
-    const { data: receivablesLedger, isLoading: isReceivablesLedgerLoading } = useQuery({
+    const { data: receivablesLedger, isLoading: isReceivablesLedgerLoading, error: receivablesError, refetch: refetchReceivables } = useQuery({
         queryKey: ['financials-receivables-ledger', selectedYear],
         queryFn: async () => {
             const baseUrl = getApiBaseUrl();
@@ -258,7 +262,7 @@ const FinancialDashboard = () => {
             });
 
             setImportSuccess(`Importación guardada: ${res.data?.counts?.records || 0} registros mensuales, ${res.data?.counts?.receivables || 0} morosos.`);
-            await queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] });
+            await invalidateFinancialQueries(queryClient);
         } catch (error) {
             console.error('Error committing financial import:', error.response?.data || error);
             setImportError(error.response?.data?.message || 'No fue posible guardar la importación financiera.');
@@ -279,10 +283,7 @@ const FinancialDashboard = () => {
             await axios.patch(`${baseUrl}/api/financials/receivables/${debt.id}`, patch, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            await Promise.all([
-                queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] }),
-                queryClient.invalidateQueries({ queryKey: ['financials-receivables-ledger'] })
-            ]);
+await invalidateFinancialQueries(queryClient);
             setImportSuccess('Cartera actualizada.');
         } catch (error) {
             console.error('Error updating financial receivable:', error.response?.data || error);
@@ -293,8 +294,12 @@ const FinancialDashboard = () => {
     };
 
     const openReceivablePayment = (debt) => {
+        setImportError('');
         setPaymentDebt(debt);
         setPaymentForm({
+            source: 'NEW',
+            category: '',
+            requestId: crypto.randomUUID(),
             amount: String(debt.outstanding || ''),
             paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }),
             accountId: '',
@@ -305,7 +310,7 @@ const FinancialDashboard = () => {
 
     const handleReceivablePayment = async (event) => {
         event.preventDefault();
-        if (!paymentDebt?.id) return;
+        if (!paymentDebt?.id || isSavingPayment || !canWriteFinancials) return;
 
         setIsSavingPayment(true);
         setImportError('');
@@ -317,11 +322,7 @@ const FinancialDashboard = () => {
                 ...paymentForm,
                 amount: Number(paymentForm.amount)
             }, { headers: { Authorization: `Bearer ${token}` } });
-            await Promise.all([
-                queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] }),
-                queryClient.invalidateQueries({ queryKey: ['financials-receivables-ledger'] }),
-                queryClient.invalidateQueries({ queryKey: ['financial-accounts'] })
-            ]);
+            await invalidateFinancialQueries(queryClient);
             setPaymentDebt(null);
             setImportSuccess('Pago de cartera registrado.');
         } catch (error) {
@@ -345,11 +346,7 @@ const FinancialDashboard = () => {
                 amount: Number(receivableForm.amount),
                 dueDate: receivableForm.dueDate || null
             }, { headers: { Authorization: `Bearer ${token}` } });
-            await Promise.all([
-                queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] }),
-                queryClient.invalidateQueries({ queryKey: ['financials-receivables-ledger'] }),
-                queryClient.invalidateQueries({ queryKey: ['financials-client-reconciliation'] })
-            ]);
+await invalidateFinancialQueries(queryClient);
             setIsReceivableEditorOpen(false);
             setImportSuccess('Cuenta por cobrar registrada.');
         } catch (error) {
@@ -374,10 +371,7 @@ const FinancialDashboard = () => {
             await axios.patch(`${baseUrl}/api/financials/payroll-contracts/${contractId}`, patch, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            await Promise.all([
-                queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] }),
-                queryClient.invalidateQueries({ queryKey: ['financials-payroll-ledger'] })
-            ]);
+await invalidateFinancialQueries(queryClient);
             setImportSuccess('Nómina actualizada.');
         } catch (error) {
             console.error('Error updating financial payroll contract:', error.response?.data || error);
@@ -433,11 +427,7 @@ const FinancialDashboard = () => {
     };
 
     const invalidatePayroll = async () => {
-        await Promise.all([
-            queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] }),
-            queryClient.invalidateQueries({ queryKey: ['financials-payroll-ledger'] }),
-            queryClient.invalidateQueries({ queryKey: ['financial-accounts'] })
-        ]);
+await invalidateFinancialQueries(queryClient);
     };
 
     const handleGeneratePayroll = async () => {
@@ -521,11 +511,7 @@ const FinancialDashboard = () => {
             }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            await Promise.all([
-                queryClient.invalidateQueries({ queryKey: ['financials-dashboard-data'] }),
-                queryClient.invalidateQueries({ queryKey: ['financials-client-reconciliation'] }),
-                queryClient.invalidateQueries({ queryKey: ['financials-receivables-ledger'] })
-            ]);
+await invalidateFinancialQueries(queryClient);
             setClientLinkTargets(prev => {
                 const next = { ...prev };
                 delete next[sourceClientId];
@@ -585,32 +571,7 @@ const FinancialDashboard = () => {
             .filter(item => item.value > 0);
     }, [data?.categoriesDistribution]);
 
-    const receivablesByClient = useMemo(() => {
-        const grouped = {};
-        const items = receivablesLedger?.items || [];
-
-        items.forEach((item) => {
-            const clientId = item.clientSlug || item.clientName || item.id;
-            if (!grouped[clientId]) {
-                grouped[clientId] = {
-                    clientId,
-                    client: {
-                        name: item.clientName,
-                        slug: item.clientSlug
-                    },
-                    totalOutstanding: 0,
-                    debts: []
-                };
-            }
-
-            if (item.status === 'DEBE') {
-                grouped[clientId].totalOutstanding += Number(item.amount) || 0;
-            }
-            grouped[clientId].debts.push(item);
-        });
-
-        return Object.values(grouped).sort((a, b) => b.totalOutstanding - a.totalOutstanding);
-    }, [receivablesLedger?.items]);
+    const receivablesByClient = useMemo(() => groupFinancialReceivables(receivablesLedger?.items), [receivablesLedger?.items]);
 
     const payrollRows = useMemo(() => {
         if (payrollLedger?.items) {
@@ -653,9 +614,9 @@ const FinancialDashboard = () => {
             {/* Header section with Year/Quarter selection */}
             <PageHeader
                 title="Consola de Inteligencia Financiera"
-                subtitle="Monitoreo en tiempo real del flujo de caja, control de cartera morosa y costos operativos."
+                subtitle="Flujo de caja, cuentas por cobrar y costos operativos."
             >
-                <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-white/5 shadow-sm">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-white/5 shadow-sm">
                     <select
                         value={selectedScenario}
                         onChange={(e) => setSelectedScenario(e.target.value)}
@@ -669,6 +630,7 @@ const FinancialDashboard = () => {
                     <div className="w-px h-4 bg-zinc-200 dark:bg-white/10 mx-1" />
                     <select
                         value={selectedYear}
+                        aria-label="Año financiero"
                         onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                         className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest px-3 py-1.5 focus:ring-0 cursor-pointer"
                     >
@@ -679,8 +641,9 @@ const FinancialDashboard = () => {
                     <div className="w-px h-4 bg-zinc-200 dark:bg-white/10 mx-1" />
                     <select
                         value={selectedQuarter}
+                        aria-label="Trimestre del análisis"
                         onChange={(e) => setSelectedQuarter(e.target.value)}
-                        className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest px-3 py-1.5 focus:ring-0 cursor-pointer"
+                        className="min-w-0 max-w-full bg-transparent border-none text-[10px] font-black uppercase tracking-widest px-3 py-1.5 focus:ring-0 cursor-pointer"
                     >
                         <option value="ALL">Todo el Año</option>
                         <option value="1">Trimestre 1 (Ene-Mar)</option>
@@ -689,7 +652,7 @@ const FinancialDashboard = () => {
                         <option value="4">Trimestre 4 (Oct-Dic)</option>
                     </select>
                 </div>
-                {canApproveFinancials && <div className="flex items-center gap-2">
+                {canApproveFinancials && <div className="flex flex-wrap items-center gap-2">
                     <label className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-300">
                         Mes ejecutado hasta
                         <select value={actualThroughMonth} onChange={(event) => setActualThroughMonth(Number(event.target.value))} className="bg-transparent font-medium text-zinc-900 outline-none dark:text-white">
@@ -779,7 +742,7 @@ const FinancialDashboard = () => {
                 {/* KPI Card 4: Cartera Pendiente (Alert) */}
                 <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm relative overflow-hidden group">
                     <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Cartera en Mora</span>
+                        <span className="text-[10px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Saldo por cobrar · {selectedYear}</span>
                         <div className="rounded-xl bg-destructive/10 p-2">
                             <AlertCircle className="h-4 w-4 text-destructive" />
                         </div>
@@ -823,7 +786,7 @@ const FinancialDashboard = () => {
                         activeTab === 'receivables' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
-                    Cartera Morosa
+                    Cartera
                 </button>
                 <button
                     onClick={() => setActiveTab('payroll')}
@@ -990,7 +953,7 @@ const FinancialDashboard = () => {
                             {canWriteFinancials && <button type="button" onClick={() => { setReceivableForm({ clientId: '', amount: '', period: `${selectedYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`, dueDate: '', comments: '' }); setIsReceivableEditorOpen(true); }} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700">Nueva cuenta por cobrar</button>}
                         </div>
 
-                        {data?.sourceSummary?.totals && (
+                        {data?.sourceSummary?.importBatchId && data?.sourceSummary?.totals && (
                             <Card className="p-4 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                                     <div>
@@ -1011,7 +974,9 @@ const FinancialDashboard = () => {
                             </Card>
                         )}
 
-                        {isReceivablesLedgerLoading ? (
+                        <p className="text-sm text-zinc-600 dark:text-zinc-300">Obligaciones registradas en {selectedYear} · saldo actual después de abonos. Una promesa de pago no reduce la deuda.</p>
+                        {!!receivablesLedger?.totals?.reviewCount && <p role="alert" className="text-sm text-destructive">Hay registros históricos marcados como pagados sin abonos suficientes vinculados. Su saldo está por verificar y no se suma como deuda confirmada.</p>}
+                        {receivablesError ? <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">No fue posible cargar la cartera.<button type="button" onClick={() => refetchReceivables()} className="ml-3 min-h-11 underline">Reintentar</button></div> : isReceivablesLedgerLoading ? (
                             <div className="p-10 bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl text-center">
                                 <Loader2 className="w-5 h-5 animate-spin text-violet-600 mx-auto mb-3" />
                                 <p className="text-sm font-bold text-zinc-900 dark:text-white">Cargando cartera...</p>
@@ -1022,9 +987,9 @@ const FinancialDashboard = () => {
                                     const isExpanded = !!expandedClients[client.clientId];
                                     return (
                                         <Card key={client.clientId} className="p-4 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm">
-                                            <div
+                                            <button type="button" aria-expanded={isExpanded}
                                                 onClick={() => toggleClientExpand(client.clientId)}
-                                                className="flex items-center justify-between cursor-pointer group"
+                                                className="flex min-h-11 w-full items-center justify-between gap-3 text-left group"
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 font-black text-sm">
@@ -1042,58 +1007,55 @@ const FinancialDashboard = () => {
                                                 <div className="flex items-center gap-4">
                                                     <div className="text-right">
                                                         <p className="text-sm font-black text-zinc-900 dark:text-white">
-                                                            {formatCurrency(client.totalOutstanding)}
+                                                            {client.reviewCount > 0 && client.totalOutstanding === 0 ? 'Saldo por verificar' : formatCurrency(client.totalOutstanding)}
                                                         </p>
-                                                        <span className="text-[9px] px-1.5 py-0.5 bg-red-500/10 text-red-500 rounded font-bold uppercase tracking-widest">
-                                                            EN MORA
+                                                        <span className={cn('text-xs', client.overdue > 0 ? 'text-destructive' : 'text-zinc-600 dark:text-zinc-300')}>
+                                                            {client.overdue > 0 ? `Vencido: ${formatCurrency(client.overdue)}` : client.unknownDue > 0 ? 'Sin vencimiento' : client.totalOutstanding > 0 ? 'Por vencer' : client.reviewCount > 0 ? 'Historial por conciliar' : 'Sin saldo pendiente'}
                                                         </span>
+                                                        {client.reviewCount > 0 && <p className="text-xs text-destructive">{client.reviewCount} registro(s) por verificar</p>}
                                                     </div>
                                                     {isExpanded ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}
                                                 </div>
-                                            </div>
+                                            </button>
 
                                             {/* Expandable monthly details */}
                                             {isExpanded && (
                                                 <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-white/5 space-y-3 animate-in fade-in duration-300">
-                                                    <p className="text-[10px] font-black uppercase text-zinc-400 tracking-wider mb-2">Desglose de Facturas Mensuales (Antigüedad)</p>
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-300 mb-2">Obligaciones y abonos</p>
+                                                    <div className="grid grid-cols-1 gap-4">
                                                         {client.debts?.map((debt) => (
                                                             <div key={debt.id} className="p-3 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5 flex flex-col justify-between gap-3">
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <span className="text-[10px] font-bold text-zinc-400">
-                                                                        Periodo: {new Date(debt.period).toLocaleDateString('es-CO', { year: 'numeric', month: 'long' }).toUpperCase()}
+                                                                        Periodo: {formatFinancialPeriod(debt.period)}
                                                                     </span>
                                                                     {savingReceivableId === debt.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600" />}
                                                                 </div>
                                                                 <div className="grid grid-cols-3 gap-2 border-y border-zinc-200 py-3 dark:border-white/10">
                                                                     <div><span className="text-[9px] font-medium text-zinc-400">Valor original</span><p className="mt-1 text-xs font-semibold text-zinc-900 dark:text-white">{formatCurrency(debt.amount || 0)}</p></div>
-                                                                    <div><span className="text-[9px] font-medium text-zinc-400">Pagado</span><p className="mt-1 text-xs font-semibold text-emerald-600">{formatCurrency(debt.paidAmount || 0)}</p></div>
-                                                                    <div><span className="text-[9px] font-medium text-zinc-400">Saldo pendiente</span><p className="mt-1 text-xs font-semibold text-amber-600">{formatCurrency(debt.outstanding || 0)}</p></div>
+                                                                    <div><span className="text-[9px] font-medium text-zinc-400">Abonos registrados</span><p className="mt-1 text-xs font-semibold text-emerald-600">{formatCurrency(debt.paidAmount || 0)}</p></div>
+                                                                    <div><span className="text-[9px] font-medium text-zinc-400">Saldo pendiente</span><p className="mt-1 text-xs font-semibold text-amber-600">{debt.balanceReviewRequired ? 'Por verificar' : formatCurrency(debt.outstanding || 0)}</p></div>
                                                                 </div>
                                                                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
                                                                     <label className="space-y-1">
                                                                         <span className="text-[9px] font-medium text-zinc-400">Estado de seguimiento</span>
                                                                         <select
                                                                             value={debt.status}
-                                                                            disabled={savingReceivableId === debt.id}
+                                                                            disabled={!canWriteFinancials || debt.balanceReviewRequired || savingReceivableId === debt.id}
                                                                             onChange={(event) => handleReceivableUpdate(debt, { status: event.target.value })}
                                                                             className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs font-bold text-zinc-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
                                                                         >
                                                                             <option value="DEBE">Debe</option>
                                                                             <option value="PROMESADO">Promesado</option>
-                                                                            {debt.outstanding <= 0.005 && <option value="PAGADO">Pagado</option>}
+                                                                            {(debt.status === 'PAGADO' || debt.outstanding <= 0.005) && <option value="PAGADO">Pagado</option>}
                                                                         </select>
                                                                     </label>
-                                                                    {debt.outstanding > 0.005 && <button type="button" onClick={() => openReceivablePayment(debt)} className="self-end rounded-lg bg-[#009EB9] px-3 py-2 text-xs font-semibold text-white hover:bg-[#008CA4]">Registrar pago</button>}
+                                                                    {canWriteFinancials && debt.status !== 'PAGADO' && debt.outstanding > 0.005 && <button type="button" onClick={() => openReceivablePayment(debt)} className="min-h-11 self-end rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Registrar pago</button>}
                                                                 </div>
-                                                                {debt.dueDate && (
-                                                                    <p className="text-[9px] text-zinc-500 mt-1">
-                                                                        Vence: {new Date(debt.dueDate).toLocaleDateString('es-CO')}
-                                                                    </p>
-                                                                )}
+                                                                <p className="text-xs text-zinc-600 dark:text-zinc-300">{financialDebtStatus(debt)}{debt.dueDate ? ` · Vence: ${new Date(debt.dueDate).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : ''}</p>
                                                                 <textarea
                                                                     defaultValue={debt.comments || debt.notes || ''}
-                                                                    disabled={savingReceivableId === debt.id}
+                                                                    disabled={!canWriteFinancials || debt.balanceReviewRequired || savingReceivableId === debt.id}
                                                                     onBlur={(event) => {
                                                                         const nextComments = event.target.value;
                                                                         if (nextComments !== (debt.comments || debt.notes || '')) {
@@ -1115,8 +1077,8 @@ const FinancialDashboard = () => {
                         ) : (
                             <div className="p-10 bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl text-center flex flex-col items-center justify-center">
                                 <ShieldCheck className="w-12 h-12 text-emerald-500 mb-3 animate-pulse" />
-                                <h4 className="text-sm font-bold text-zinc-900 dark:text-white">¡Cartera 100% al día!</h4>
-                                <p className="text-[10px] text-zinc-500 max-w-xs mt-1">No hay saldos en mora ni facturas pendientes para este periodo.</p>
+                                <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">Sin obligaciones registradas en {selectedYear}</h4>
+                                <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mt-1">Este resultado no confirma que no existan deudas de otros periodos o pendientes por registrar.</p>
                             </div>
                         )}
                     </div>
@@ -1693,26 +1655,7 @@ const FinancialDashboard = () => {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={!!paymentDebt} onOpenChange={(open) => !open && setPaymentDebt(null)}>
-                <DialogContent className="sm:max-w-md dark:bg-zinc-900">
-                    <DialogHeader>
-                        <DialogTitle>Registrar pago</DialogTitle>
-                        <DialogDescription>
-                            {paymentDebt ? `${paymentDebt.clientName}: saldo ${formatCurrency(paymentDebt.outstanding || 0)}` : 'Registra un abono de cartera.'}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleReceivablePayment} className="space-y-4">
-                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Valor<input required min="0.01" max={paymentDebt?.outstanding || undefined} step="0.01" type="number" value={paymentForm.amount} onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Fecha<DatePicker {...brainDatePickerProps} required selected={paymentForm.paidAt ? new Date(`${paymentForm.paidAt}T12:00:00`) : null} onChange={(date) => setPaymentForm((current) => ({ ...current, paidAt: date ? format(date, 'yyyy-MM-dd') : '' }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" dateFormat="dd/MM/yyyy" /></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cuenta<select required value={paymentForm.accountId} onChange={(event) => setPaymentForm((current) => ({ ...current, accountId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{(financialAccounts?.accounts || []).map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
-                        </div>
-                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Referencia<input value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} placeholder="Transferencia, recibo..." className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
-                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Notas<textarea rows={3} value={paymentForm.notes} onChange={(event) => setPaymentForm((current) => ({ ...current, notes: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
-                        <DialogFooter><button type="button" onClick={() => setPaymentDebt(null)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingPayment} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingPayment && <Loader2 className="h-4 w-4 animate-spin" />}Guardar pago</button></DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
+            <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={importError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
 
             <Dialog open={!!payrollPayment} onOpenChange={(open) => !open && setPayrollPayment(null)}>
                 <DialogContent className="sm:max-w-md dark:bg-zinc-900">

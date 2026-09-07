@@ -76,6 +76,7 @@ test('buildFinancialImportPersistencePlan maps workbook audit into database-read
 test('persistFinancialImportPlan replaces prior imported year data and writes normalized finance rows', async () => {
     const calls = [];
     const makeModel = (name, createReturn = null) => ({
+        count: async () => 0,
         deleteMany: async (args) => calls.push([name, 'deleteMany', args]),
         updateMany: async (args) => calls.push([name, 'updateMany', args]),
         createMany: async (args) => calls.push([name, 'createMany', args]),
@@ -163,11 +164,13 @@ test('persistFinancialImportPlan preserves prior client links by source label wh
     let createdReceivable = null;
     const tx = {
         financialRecord: {
+            count: async () => 0,
             findMany: async () => [{ sourceLabel: 'Gobernación de Bolivar', clientId: 'client-desarrollo' }],
             deleteMany: async () => {},
             createMany: async ({ data }) => { createdRecords = data; }
         },
         accountsReceivable: {
+            count: async () => 0,
             findMany: async (args) => {
                 assert.equal(args.where.clientId, undefined);
                 return [{ sourceLabel: 'Gobernación de Bolivar', clientId: 'client-desarrollo' }];
@@ -216,8 +219,8 @@ test('persistFinancialImportPlan preserves prior client links by source label wh
 test('persistFinancialImportPlan creates payroll contracts even when the payroll person has no user login', async () => {
     const calls = [];
     const tx = {
-        financialRecord: { findMany: async () => [], deleteMany: async () => {}, createMany: async () => {} },
-        accountsReceivable: { findMany: async () => [], deleteMany: async () => {}, create: async () => {} },
+        financialRecord: { count: async () => 0, findMany: async () => [], deleteMany: async () => {}, createMany: async () => {} },
+        accountsReceivable: { count: async () => 0, findMany: async () => [], deleteMany: async () => {}, create: async () => {} },
         financialMonthlySummary: { deleteMany: async () => {}, createMany: async () => {} },
         financialImportBatch: {
             updateMany: async () => {},

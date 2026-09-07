@@ -6,11 +6,14 @@ test('createReceivablePayment supports partial payments and leaves the debt open
     const calls = [];
     const receivable = {
         id: 'debt-1',
+        clientId: 'client-1',
         amount: 1000000,
         status: 'DEBE',
         payments: [{ amount: 200000 }]
     };
     const tx = {
+        client: { findUnique: async () => ({ id: 'client-1' }) },
+        financialAccount: { findUnique: async () => ({ id: 'account-1', isActive: true, currency: 'COP' }) },
         accountsReceivable: {
             findUnique: async () => receivable,
             update: async (args) => {
@@ -42,6 +45,7 @@ test('createReceivablePayment supports partial payments and leaves the debt open
 
     const result = await createReceivablePayment(prismaClient, 'debt-1', {
         amount: 300000,
+        category: 'MEMBRESIA',
         paidAt: '2026-08-10',
         accountId: 'account-1',
         reference: 'TRX-01'
@@ -56,8 +60,10 @@ test('createReceivablePayment supports partial payments and leaves the debt open
 
 test('createReceivablePayment marks a fully collected debt as paid', async () => {
     const tx = {
+        client: { findUnique: async () => ({ id: 'client-1' }) },
+        financialAccount: { findUnique: async () => ({ id: 'account-1', isActive: true, currency: 'COP' }) },
         accountsReceivable: {
-            findUnique: async () => ({ id: 'debt-1', amount: 500000, status: 'DEBE', payments: [] }),
+            findUnique: async () => ({ id: 'debt-1', clientId: 'client-1', amount: 500000, status: 'DEBE', payments: [] }),
             update: async (args) => ({ id: 'debt-1', amount: 500000, status: args.data.status })
         },
         financialPeriod: { findUnique: async () => null },
@@ -69,6 +75,7 @@ test('createReceivablePayment marks a fully collected debt as paid', async () =>
 
     const result = await createReceivablePayment(prismaClient, 'debt-1', {
         amount: 500000,
+        category: 'MEMBRESIA',
         paidAt: '2026-08-10',
         accountId: 'account-1'
     }, { id: 'user-1' });
@@ -87,8 +94,10 @@ test('createReceivablePayment requires the destination cash or bank account', as
 test('createReceivablePayment rejects overpayments', async () => {
     const prismaClient = {
         $transaction: async (callback) => callback({
+            client: { findUnique: async () => ({ id: 'client-1' }) },
+            financialAccount: { findUnique: async () => ({ id: 'account-1', isActive: true, currency: 'COP' }) },
             accountsReceivable: {
-                findUnique: async () => ({ id: 'debt-1', amount: 500000, status: 'DEBE', payments: [{ amount: 450000 }] })
+                findUnique: async () => ({ id: 'debt-1', clientId: 'client-1', amount: 500000, status: 'DEBE', payments: [{ amount: 450000 }] })
             }
         })
     };
@@ -96,6 +105,7 @@ test('createReceivablePayment rejects overpayments', async () => {
     await assert.rejects(
         createReceivablePayment(prismaClient, 'debt-1', {
             amount: 100000,
+            category: 'MEMBRESIA',
             paidAt: '2026-08-10',
             accountId: 'account-1'
         }, { id: 'user-1' }),

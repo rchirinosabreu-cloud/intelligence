@@ -266,3 +266,31 @@ test('updateFinancialRecord recalculates the period and writes an audit event', 
     const auditCall = calls.find(([name]) => name === 'audit.create');
     assert.equal(auditCall[1].data.action, 'UPDATE');
 });
+
+test('receivable candidates are posted actual income, independent of other payments and from the selected client', async () => {
+    let query;
+    const client = {
+        financialRecord: { findMany: async (args) => { query = args; return []; }, count: async () => 0 }
+    };
+    await listFinancialRecords(client, {
+        availableForReceivable: 'true', clientId: 'client-1', accountId: 'account-1',
+        status: 'DRAFT', scenario: 'BUDGET', type: 'EXPENSE', page: '2', pageSize: '20'
+    });
+    assert.deepEqual(query.where, {
+        scenario: 'ACTUAL', type: 'INCOME', status: 'POSTED', clientId: 'client-1', accountId: 'account-1',
+        origin: { not: 'SYSTEM' }, receivablePayment: { is: null }, payrollTransaction: { is: null },
+        isProjection: false, category: { in: ['MEMBRESIA', 'SERVICIO', 'PAUTA'] },
+        account: { is: { isActive: true, currency: 'COP' } }
+    });
+    assert.equal(query.skip, 20);
+    assert.equal(query.take, 20);
+});
+
+test('receivable candidate category restrictions never broaden an explicitly selected category', async () => {
+    let where;
+    const client = { financialRecord: { findMany: async (args) => { where = args.where; return []; }, count: async () => 0 } };
+    await listFinancialRecords(client, { availableForReceivable: true, category: 'SERVICIO' });
+    assert.deepEqual(where.category, { in: ['SERVICIO'] });
+    await listFinancialRecords(client, { availableForReceivable: true, category: 'FINANCIAL' });
+    assert.deepEqual(where.category, { in: [] });
+});

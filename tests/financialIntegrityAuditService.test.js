@@ -67,11 +67,11 @@ test('auditFinancialIntegrity ignores voided history and stale import batches', 
     assert.equal(recordQueries[0].status.not, 'VOIDED');
     assert.deepEqual(recordQueries[0].AND[0].OR, [
         { importBatchId: 'batch-current' },
-        { importBatchId: null, origin: 'MANUAL' }
+        { importBatchId: null }
     ]);
     assert.deepEqual(receivableWhere.OR, [
         { importBatchId: 'batch-current' },
-        { importBatchId: null, origin: 'MANUAL' }
+        { importBatchId: null }
     ]);
     assert.deepEqual(contractWhere.AND[1].OR, [
         { importBatchId: 'batch-current' },

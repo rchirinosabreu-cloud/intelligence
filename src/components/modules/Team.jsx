@@ -7,6 +7,7 @@ import { getApiBaseUrl } from '../../lib/apiBaseUrl';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { cn } from '../../lib/utils';
+import { effectiveFinancialRole } from '../../utils/financialPermissions';
 
 export default function Team() {
   const navigate = useNavigate();
@@ -154,7 +155,7 @@ export default function Team() {
         equipo: !!(rawPerms.equipo || rawPerms.Equipo)
       };
       setSystemRole(userRole);
-      setFinancialRole(member.user?.financialRole || (member.user?.hasFinancialAccess ? 'EDITOR' : 'NONE'));
+      setFinancialRole(effectiveFinancialRole({ ...member.user, role: userRole, modulePermissions: userPerms }));
       setModulePermissions(userPerms);
     } else {
       setEditingMember(null);

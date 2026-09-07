@@ -220,6 +220,15 @@ export const listFinancialRecords = async (prismaClient, filters = {}) => {
     }
     if (filters.clientId) where.clientId = String(filters.clientId);
     if (filters.accountId) where.accountId = String(filters.accountId);
+    if (filters.availableForReceivable === true || filters.availableForReceivable === 'true') {
+        const paymentCategories = ['MEMBRESIA', 'SERVICIO', 'PAUTA'];
+        Object.assign(where, {
+            status: 'POSTED', scenario: 'ACTUAL', type: 'INCOME', origin: { not: 'SYSTEM' },
+            receivablePayment: { is: null }, payrollTransaction: { is: null }, isProjection: false,
+            category: { in: where.category ? paymentCategories.filter((category) => category === where.category) : paymentCategories },
+            account: { is: { isActive: true, currency: 'COP' } }
+        });
+    }
 
     const [items, total] = await Promise.all([
         prismaClient.financialRecord.findMany({
@@ -248,22 +257,64 @@ const dateInputFrom = (date) => {
     ].join('-');
 };
 
+const recordSourceRelations = {
+    receivablePayment: { select: { id: true } },
+    payrollTransaction: { select: { id: true } },
+    bankMatches: { where: { status: 'APPROVED' }, select: { id: true, status: true } }
+};
+
+const assertIndependentFinancialRecord = (record) => {
+    if (record.receivablePayment || record.payrollTransaction || record.bankMatches?.some((match) => match.status === 'APPROVED')) {
+        throw new FinancialDomainError(
+            'FINANCIAL_RECORD_LINKED',
+            'Este movimiento está vinculado a un pago o a una conciliación aprobada. No se puede editar ni anular desde Movimientos; requiere una corrección controlada de la operación de origen.',
+            409
+        );
+    }
+    if (record.origin === 'SYSTEM') {
+        throw new FinancialDomainError(
+            'FINANCIAL_RECORD_SYSTEM_MANAGED',
+            'Este movimiento fue generado por otro proceso. No se puede editar ni anular desde Movimientos; requiere una corrección controlada de la operación de origen.',
+            409
+        );
+    }
+};
+
+// The source links, period checks and write must use the same snapshot. A competing
+// bank approval or ledger edit must fail rather than silently disconnecting money.
+const mutateIndependentFinancialRecord = async (prismaClient, mutation) => {
+    try {
+        return await prismaClient.$transaction(mutation, { isolationLevel: 'Serializable' });
+    } catch (error) {
+        if (error?.code === 'P2034') {
+            throw new FinancialDomainError(
+                'FINANCIAL_RECORD_CONFLICT',
+                'El movimiento cambió mientras se procesaba la operación. Actualiza los datos y vuelve a intentarlo.',
+                409
+            );
+        }
+        throw error;
+    }
+};
+
 export const updateFinancialRecord = async (prismaClient, recordId, patch, actor) => {
     const actorId = actorIdFrom(actor);
 
-    return prismaClient.$transaction(async (tx) => {
-        const existing = await tx.financialRecord.findUnique({ where: { id: recordId } });
+    return mutateIndependentFinancialRecord(prismaClient, async (tx) => {
+        const existing = await tx.financialRecord.findUnique({ where: { id: recordId }, include: recordSourceRelations });
         if (!existing) {
             throw new FinancialDomainError('FINANCIAL_RECORD_NOT_FOUND', 'El movimiento no existe.', 404);
         }
         if (existing.status === 'VOIDED') {
             throw new FinancialDomainError('FINANCIAL_RECORD_VOIDED', 'Un movimiento anulado no se puede editar.', 409);
         }
+        assertIndependentFinancialRecord(existing);
 
         await assertOpenFinancialPeriod(tx, existing.year, existing.month);
         const data = normalizeFinancialRecordInput({
             ...existing,
             ...patch,
+            origin: existing.origin,
             date: patch.date || dateInputFrom(existing.date),
             status: patch.status || existing.status
         });
@@ -297,14 +348,15 @@ export const voidFinancialRecord = async (prismaClient, recordId, reason, actor)
     );
     const actorId = actorIdFrom(actor);
 
-    return prismaClient.$transaction(async (tx) => {
-        const existing = await tx.financialRecord.findUnique({ where: { id: recordId } });
+    return mutateIndependentFinancialRecord(prismaClient, async (tx) => {
+        const existing = await tx.financialRecord.findUnique({ where: { id: recordId }, include: recordSourceRelations });
         if (!existing) {
             throw new FinancialDomainError('FINANCIAL_RECORD_NOT_FOUND', 'El movimiento no existe.', 404);
         }
         if (existing.status === 'VOIDED') {
             throw new FinancialDomainError('FINANCIAL_RECORD_ALREADY_VOIDED', 'El movimiento ya esta anulado.', 409);
         }
+        assertIndependentFinancialRecord(existing);
 
         await assertOpenFinancialPeriod(tx, existing.year, existing.month);
         const updated = await tx.financialRecord.update({
