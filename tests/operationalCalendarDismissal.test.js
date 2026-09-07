@@ -39,7 +39,7 @@ test('dismissing reconciliation preserves the local event and excludes it from f
     }
   };
 
-  await service.dismissOperationalEventReconciliation('event-2', prismaClient);
+  await service.dismissOperationalEventReconciliation('event-2', prismaClient, task => task());
 
   assert.equal(operation.where.id, 'event-2');
   assert.equal(operation.where.source, 'BRAIN');
@@ -53,7 +53,9 @@ test('calendar dismissal is manager-only, persistent and available in both dialo
   const routes = await read('src/routes/api/activity.js');
   const calendar = await read('src/components/modules/Activity/OperationalCalendar.jsx');
 
-  assert.match(service, /googleSyncStatus:\s*\{\s*not:\s*'DISMISSED'\s*\}/);
+  assert.match(service, /getPendingGoogleCalendarWhere\(\)/);
+  assert.match(oauth, /googleSyncStatus:\s*null/);
+  assert.match(oauth, /notIn:\s*\[[^\]]*'DISMISSED'/);
   assert.match(oauth, /googleSyncError:\s*\{\s*not:\s*null\s*\}/);
   assert.match(routes, /google-calendar\/errors\/:id\/dismiss['"],\s*requireManagerRole/);
   assert.match(routes, /google-calendar\/reconciliation\/:id\/dismiss['"],\s*requireManagerRole/);
@@ -63,6 +65,6 @@ test('calendar dismissal is manager-only, persistent and available in both dialo
   assert.match(calendar, /Descartar de conciliación/);
   assert.match(
     service,
-    /reconcilePendingOperationalEvents[\s\S]*?googleSyncStatus:\s*\{\s*not:\s*'DISMISSED'/,
+    /reconcilePendingOperationalEvents[\s\S]*?getPendingGoogleCalendarWhere\(\)/,
   );
 });

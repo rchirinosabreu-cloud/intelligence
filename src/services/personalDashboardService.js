@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma.js';
 import DOMPurify from 'isomorphic-dompurify';
 import { createNotification } from './notificationService.js';
+import { getVisibleOperationalEventWhere, isVisibleOperationalEvent } from './operationalEventVisibility.js';
 
 const ACTIVE_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 const MANAGER_ROLES = ['ADMIN', 'PROJECT_MANAGER'];
@@ -293,7 +294,7 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
       .filter((context) => context?.weekKey === currentWeek && context.weekday >= 1 && context.weekday <= 5)
       .map((context) => context.dateKey)
   ).size;
-  const operationalEventsByWorkday = (member?.authoredOperationalEvents || []).reduce((eventsByDay, event) => {
+  const operationalEventsByWorkday = (member?.authoredOperationalEvents || []).filter(isVisibleOperationalEvent).reduce((eventsByDay, event) => {
     const context = getBogotaWeekContext(event.createdAt);
     if (context?.weekKey !== currentWeek || context.weekday < 1 || context.weekday > 5) return eventsByDay;
     eventsByDay.set(context.dateKey, (eventsByDay.get(context.dateKey) || 0) + 1);
@@ -649,6 +650,7 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
     isAccountantRole(member.role)
       ? prisma.operationalEvent.findMany({
         where: {
+          ...getVisibleOperationalEventWhere(),
           createdById: userId,
           createdAt: {
             gte: challengeWeekWindow.start,

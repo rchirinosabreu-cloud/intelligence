@@ -34,18 +34,29 @@ import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import CalendarDateTimePicker from './CalendarDateTimePicker';
 import {
   addExternalEmailTags,
+  combineBogotaDateAndTime,
+  createCalendarRequestIdentity,
   explainGoogleSyncError,
   formatActivityEventSchedule,
-  fromBogotaDatePickerValue,
+  formatBogotaClock,
+  getBogotaCalendarFormRange,
+  getCalendarEventBounds,
+  getCalendarSaveFeedback,
+  getCalendarStartValidationError,
   getCalendarPopoverPosition,
   getDayEventDisplay,
   getExternalAttendeeEmails,
   getGoogleConnectionHealth,
+  getInitialBogotaCalendarRange,
+  moveBogotaCalendarStart,
   normalizeCalendarDescription,
+  parseCalendarDateInput,
+  serializeBogotaCalendarEventDates,
   summarizeGoogleSyncResults,
-  toBogotaDatePickerValue
+  toBogotaCalendarDate
 } from './calendarPresentation';
 
 const EVENT_TYPES = [
@@ -59,16 +70,6 @@ const EVENT_TYPES = [
 const getAuthHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem('authToken')}`
 });
-
-const getRoundedBogotaNow = (baseDate = new Date()) => {
-  const bogotaNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
-  const start = new Date(baseDate);
-  const minutes = bogotaNow.getMinutes();
-  const roundedMinutes = Math.ceil(minutes / 15) * 15;
-  start.setHours(bogotaNow.getHours(), roundedMinutes === 60 ? 0 : roundedMinutes, 0, 0);
-  if (roundedMinutes === 60) start.setHours(start.getHours() + 1);
-  return start;
-};
 
 const getEventTypeStyles = (type) => {
   switch (type) {
@@ -92,7 +93,7 @@ const getTypeLabel = (type) => EVENT_TYPES.find(item => item.value === type)?.la
 const OperationalCalendar = () => {
   const { currentUser } = useAuth();
   const queryClient = useQueryClient();
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(() => toBogotaCalendarDate(new Date()));
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
@@ -107,12 +108,17 @@ const OperationalCalendar = () => {
   const [isLoadingReconciliation, setIsLoadingReconciliation] = useState(false);
   const [externalEmailDraft, setExternalEmailDraft] = useState('');
   const [externalEmailError, setExternalEmailError] = useState('');
+  const [dateDrafts, setDateDrafts] = useState({});
+  const [dateInputErrors, setDateInputErrors] = useState({});
   const hoverCloseTimerRef = useRef(null);
+  const saveInFlightRef = useRef(false);
+  const createRequestIdentityRef = useRef(createCalendarRequestIdentity());
+  const originalEventDatesRef = useRef(null);
+  const lastCreationAttemptRef = useRef(null);
   const [formData, setFormData] = useState({
     title: '',
     type: 'PRODUCTION',
-    startAt: getRoundedBogotaNow(new Date()),
-    endAt: addDays(getRoundedBogotaNow(new Date()), 0),
+    ...getInitialBogotaCalendarRange(),
     isAllDay: false,
     captureWithFireflies: false,
     memberIds: [],
@@ -136,9 +142,7 @@ const OperationalCalendar = () => {
     const days = [];
     let cursor = monthRange.start;
     while (cursor <= monthRange.end) {
-      if (cursor.getDay() !== 0 && cursor.getDay() !== 6) {
-        days.push(cursor);
-      }
+      if (cursor.getDay() !== 0 && cursor.getDay() !== 6) days.push(cursor);
       cursor = addDays(cursor, 1);
     }
     return days;
@@ -154,9 +158,9 @@ const OperationalCalendar = () => {
   });
 
   const { data: events = [], isLoading, isError: eventsLoadFailed, error: eventsLoadError, refetch: refetchEvents } = useQuery({
-    queryKey: ['operational-events', monthRange.start.toISOString(), monthRange.end.toISOString()],
+    queryKey: ['operational-events', combineBogotaDateAndTime(monthRange.start), combineBogotaDateAndTime(monthRange.end, '23:59:59')],
     queryFn: async () => {
-      const res = await fetch(`${getApiBaseUrl()}/api/activity/events?start=${monthRange.start.toISOString()}&end=${monthRange.end.toISOString()}`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/activity/events?start=${encodeURIComponent(combineBogotaDateAndTime(monthRange.start))}&end=${encodeURIComponent(combineBogotaDateAndTime(monthRange.end, '23:59:59'))}`, {
         headers: getAuthHeaders()
       });
       if (!res.ok) {
@@ -167,30 +171,31 @@ const OperationalCalendar = () => {
     refetchInterval: 15_000
   });
 
-  const { data: googleCalendarStatus } = useQuery({
+  const { data: googleCalendarStatus, isError: googleStatusLoadFailed, refetch: refetchGoogleStatus } = useQuery({
     queryKey: ['google-calendar-status'],
     queryFn: async () => {
       const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/status`, { headers: getAuthHeaders() });
       if (!res.ok) throw new Error('Failed to fetch Google Calendar status');
       return res.json();
-    }
+    },
+    refetchInterval: 15_000
   });
 
   const googleConnections = googleCalendarStatus?.connections || [];
-  const isGoogleAccountConnected = email => googleConnections.some(connection => connection.email.toLowerCase() === email.toLowerCase());
+  const isGoogleAccountConnected = email => googleConnections.some(connection => !connection.reconnectRequired && connection.isActive !== false && connection.email.toLowerCase() === email.toLowerCase());
 
   const eventsByDay = useMemo(() => {
     const grouped = new Map();
     for (const event of events) {
-      const eventStart = toBogotaDatePickerValue(event.startAt);
-      const exclusiveEnd = toBogotaDatePickerValue(event.endAt);
-      const finalDay = event.isAllDay ? addDays(exclusiveEnd, -1) : new Date(exclusiveEnd);
+      const bounds = getCalendarEventBounds(event);
+      if (!bounds) continue;
+      const { eventStart, exclusiveEnd, finalDay } = bounds;
       let segmentLabelAssigned = false;
       let cursor = new Date(eventStart);
       cursor.setHours(0, 0, 0, 0);
-      finalDay.setHours(0, 0, 0, 0);
+      if (cursor < monthRange.start) cursor = new Date(monthRange.start);
 
-      while (cursor <= finalDay) {
+      while (cursor <= finalDay && cursor <= monthRange.end) {
         const key = format(cursor, 'yyyy-MM-dd');
         const isDisplayedWorkday = cursor.getDay() !== 0 && cursor.getDay() !== 6;
         const segment = {
@@ -207,10 +212,10 @@ const OperationalCalendar = () => {
       }
     }
     for (const [key, dayEvents] of grouped.entries()) {
-      grouped.set(key, dayEvents.sort((a, b) => Number(b.isAllDay) - Number(a.isAllDay) || new Date(a.displayStartAt || a.startAt) - new Date(b.displayStartAt || b.startAt)));
+      grouped.set(key, dayEvents.sort((a, b) => Number(b.isAllDay) - Number(a.isAllDay) || new Date(a.startAt) - new Date(b.startAt)));
     }
     return grouped;
-  }, [events]);
+  }, [events, monthRange]);
 
   const connectGoogleCalendar = async (email = '') => {
     try {
@@ -271,6 +276,11 @@ const OperationalCalendar = () => {
         toast.error('El evento sigue sin sincronizar. Revisa la causa indicada.');
         return;
       }
+      if (result.pending) {
+        setReconciliationPreview(null);
+        toast.error('La conciliación sigue pendiente de confirmar en Google Calendar.', { duration: 8000 });
+        return;
+      }
       setReconciliationPreview(null);
       setGoogleErrorConnection(null);
       setGoogleRetryError('');
@@ -295,9 +305,14 @@ const OperationalCalendar = () => {
       }
       return res.json();
     },
-    onSuccess: (_result, eventId) => {
+    onSuccess: (result, eventId) => {
       queryClient.invalidateQueries({ queryKey: ['operational-events'] });
       queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
+      if (!['SYNCED', 'DELETED'].includes(result.googleSyncStatus)) {
+        setGoogleRetryError(result.googleSyncError || 'La sincronización sigue pendiente de confirmación en Google Calendar.');
+        toast.error('La sincronización sigue pendiente de confirmación en Google Calendar.');
+        return;
+      }
       setGoogleRetryError('');
       setGoogleErrorConnection(current => {
         if (!current) return null;
@@ -306,7 +321,7 @@ const OperationalCalendar = () => {
           ? { ...current, syncErrors, errorCount: Math.max(0, (current.errorCount || 0) - 1) }
           : null;
       });
-      toast.success('Evento sincronizado con Google Calendar');
+      toast.success(result.googleSyncStatus === 'DELETED' ? 'Eliminación confirmada en Google Calendar' : 'Evento sincronizado con Google Calendar');
     },
     onError: error => {
       console.error('Google Calendar linked event retry failed:', error);
@@ -383,6 +398,10 @@ const OperationalCalendar = () => {
       const summary = summarizeGoogleSyncResults(results);
       queryClient.invalidateQueries({ queryKey: ['operational-events'] });
       queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
+      if (summary.failed) {
+        toast.error(`Sincronización incompleta: ${summary.failed} fallo(s). Revisa el estado de las cuentas.`);
+        return;
+      }
       toast.success(`Sincronización lista: ${summary.imported} nuevos y ${summary.updated} actualizados`);
     },
     onError: error => {
@@ -392,32 +411,60 @@ const OperationalCalendar = () => {
   });
 
   const eventMutation = useMutation({
-    mutationFn: async (eventData) => {
-      const url = editingEventId
-        ? `${getApiBaseUrl()}/api/activity/events/${editingEventId}`
+    mutationFn: async ({ eventData, eventId }) => {
+      const url = eventId
+        ? `${getApiBaseUrl()}/api/activity/events/${eventId}`
         : `${getApiBaseUrl()}/api/activity/events`;
 
       const res = await fetch(url, {
-        method: editingEventId ? 'PATCH' : 'POST',
+        method: eventId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(eventData)
       });
       if (!res.ok) {
         const error = await res.json().catch(() => ({}));
-        throw new Error(error.details || error.error || 'Failed to save event');
+        throw Object.assign(new Error(error.details || error.error || 'Failed to save event'), {
+          serverData: error, eventId: error.eventId, preserveLocal: error.preserveLocal
+        });
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (event, { eventId }) => {
       queryClient.invalidateQueries({ queryKey: ['operational-events'] });
       queryClient.invalidateQueries({ queryKey: ['team-activity-status'] });
+      queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
       setIsModalOpen(false);
       setEditingEventId(null);
-      toast.success(editingEventId ? 'Evento actualizado' : 'Evento creado');
+      createRequestIdentityRef.current.reset();
+      const feedback = getCalendarSaveFeedback(event, Boolean(eventId));
+      if (feedback.success) toast.success(feedback.message);
+      else toast.error(feedback.message, { duration: 8000 });
     },
     onError: (error) => {
-      console.error('Operational event save error:', error);
+      console.error('Operational event save error:', error.serverData || error);
+      if (error.eventId && error.preserveLocal) {
+        const connection = googleConnections.find(item => item.id === formData.googleConnectionId);
+        setIsModalOpen(false);
+        setEditingEventId(null);
+        setGoogleRetryError('');
+        setGoogleErrorConnection({
+          ...connection,
+          id: formData.googleConnectionId || connection?.id,
+          syncErrors: [{
+            id: error.eventId,
+            title: formData.title,
+            startAt: combineBogotaDateAndTime(formData.startAt, formData.isAllDay ? '00:00' : formData.startTime),
+            googleSyncStatus: error.serverData?.googleSyncStatus || 'PENDING',
+            googleSyncError: error.message
+          }]
+        });
+        queryClient.invalidateQueries({ queryKey: ['operational-events'] });
+        queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
+      }
       toast.error(error.message || 'No se pudo guardar el evento');
+    },
+    onSettled: () => {
+      saveInFlightRef.current = false;
     }
   });
 
@@ -430,12 +477,17 @@ const OperationalCalendar = () => {
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: result => {
       queryClient.invalidateQueries({ queryKey: ['operational-events'] });
       queryClient.invalidateQueries({ queryKey: ['team-activity-status'] });
+      queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
       setIsModalOpen(false);
       setEditingEventId(null);
       setDeleteCandidate(null);
+      if (result.googleSyncStatus === 'PENDING_DELETE') {
+        toast.error('Eliminación pendiente de confirmar en Google Calendar.', { duration: 8000 });
+        return;
+      }
       toast.success('Evento eliminado');
     },
     onError: (error) => {
@@ -445,13 +497,14 @@ const OperationalCalendar = () => {
   });
 
   const openCreateModal = (date = currentDate, type = 'PRODUCTION') => {
-    const start = getRoundedBogotaNow(date);
-    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    if (saveInFlightRef.current) return;
+    createRequestIdentityRef.current.reset();
+    originalEventDatesRef.current = null;
+    lastCreationAttemptRef.current = null;
     setFormData({
       title: '',
       type,
-      startAt: start,
-      endAt: end,
+      ...getInitialBogotaCalendarRange(date),
       isAllDay: false,
       captureWithFireflies: false,
       memberIds: [],
@@ -465,6 +518,8 @@ const OperationalCalendar = () => {
     });
     setExternalEmailDraft('');
     setExternalEmailError('');
+    setDateDrafts({});
+    setDateInputErrors({});
     setEditingEventId(null);
     setIsModalOpen(true);
   };
@@ -476,20 +531,23 @@ const OperationalCalendar = () => {
 
   const handleEdit = (event) => {
     setEditingEventId(event.id);
+    lastCreationAttemptRef.current = null;
+    originalEventDatesRef.current = {
+      startAt: event.seriesStartAt || event.startAt,
+      endAt: event.seriesEndAt || event.endAt,
+      recurrence: event.recurrence,
+      recurrenceEnd: event.recurrenceEnd,
+      isAllDay: event.isAllDay
+    };
     setFormData({
       title: event.title,
       type: event.type,
-      startAt: event.seriesStartAt
-        ? toBogotaDatePickerValue(event.seriesStartAt)
-        : event.displayStartAt ? new Date(event.displayStartAt) : toBogotaDatePickerValue(event.startAt),
-      endAt: event.seriesEndAt
-        ? toBogotaDatePickerValue(event.seriesEndAt)
-        : event.displayEndAt ? new Date(event.displayEndAt) : toBogotaDatePickerValue(event.endAt),
+      ...getBogotaCalendarFormRange(event.seriesStartAt || event.startAt, event.seriesEndAt || event.endAt),
       isAllDay: Boolean(event.isAllDay),
       captureWithFireflies: Boolean(event.captureWithFireflies || event.attendeeEmails?.some(email => email.toLowerCase() === 'fred@fireflies.ai')),
       memberIds: event.memberIds || [],
       recurrence: event.recurrence || 'NONE',
-      recurrenceEnd: event.recurrenceEnd ? toBogotaDatePickerValue(event.recurrenceEnd) : null,
+      recurrenceEnd: event.recurrenceEnd ? toBogotaCalendarDate(event.recurrenceEnd) : null,
       meetingLink: event.meetingLink || '',
       googleMeetSpaceName: event.googleMeetSpaceName || '',
       description: normalizeCalendarDescription(event.description || ''),
@@ -498,8 +556,53 @@ const OperationalCalendar = () => {
     });
     setExternalEmailDraft('');
     setExternalEmailError('');
+    setDateDrafts({});
+    setDateInputErrors({});
     setIsModalOpen(true);
   };
+
+  const handleDateRawInput = (field, event) => {
+    const raw = event?.target?.value;
+    if (typeof raw !== 'string') return;
+    setDateDrafts(current => ({ ...current, [field]: raw }));
+    const valid = (field === 'recurrenceEnd' && !raw) || parseCalendarDateInput(raw);
+    setDateInputErrors(current => ({ ...current, [field]: valid ? '' : 'Escribe la fecha completa en formato DD/MM/AAAA.' }));
+  };
+
+  const acceptCalendarDate = (field, date) => {
+    setDateDrafts(current => ({ ...current, [field]: undefined }));
+    setDateInputErrors(current => ({ ...current, [field]: '' }));
+    if (!date) return null;
+    const noon = new Date(date);
+    noon.setHours(12, 0, 0, 0);
+    return noon;
+  };
+
+  const updateCalendarDateTime = (field, { date, time }, clearDraft = true) => {
+    if (clearDraft) acceptCalendarDate(field, date);
+    if (field === 'startAt') {
+      setDateDrafts(current => ({ ...current, endAt: undefined }));
+      setDateInputErrors(current => ({ ...current, endAt: '' }));
+    }
+    setFormData(current => {
+      if (field === 'startAt') return { ...current, ...moveBogotaCalendarStart(current, date, time) };
+      if (current.isAllDay) return { ...current, endAt: addDays(date < current.startAt ? current.startAt : date, 1) };
+      return { ...current, endAt: date, endTime: time };
+    });
+  };
+
+  const handleDateTimeRawInput = (field, raw, parsed) => {
+    setDateDrafts(current => ({ ...current, [field]: raw }));
+    setDateInputErrors(current => ({ ...current, [field]: parsed ? '' : formData.isAllDay
+      ? 'Escribe la fecha completa en formato DD/MM/AAAA.'
+      : 'Escribe la fecha y hora completas en formato DD/MM/AAAA HH:mm.' }));
+    if (parsed) updateCalendarDateTime(field, parsed, false);
+  };
+
+  const hasDateInputErrors = Object.values(dateInputErrors).some(Boolean);
+  const isUnchangedCreationRetry = () => !editingEventId && lastCreationAttemptRef.current === JSON.stringify([formData, externalEmailDraft]);
+  const startValidationError = isUnchangedCreationRetry() ? '' : getCalendarStartValidationError(formData, originalEventDatesRef.current);
+  const meetStartValidationError = getCalendarStartValidationError(formData);
 
   const commitExternalEmailTags = () => {
     if (!externalEmailDraft.trim()) return;
@@ -518,22 +621,39 @@ const OperationalCalendar = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (saveInFlightRef.current || eventMutation.isPending) return;
+    if (hasDateInputErrors) return;
+    const currentStartError = isUnchangedCreationRetry() ? '' : getCalendarStartValidationError(formData, originalEventDatesRef.current);
+    if (currentStartError) {
+      setFormData(current => ({ ...current }));
+      return;
+    }
     const result = addExternalEmailTags(formData.attendeeEmails, externalEmailDraft);
     if (result.invalid.length) {
       setExternalEmailError(`Correo no válido: ${result.invalid.join(', ')}`);
       return;
     }
-    eventMutation.mutate({
+    const eventData = {
       ...formData,
-      startAt: fromBogotaDatePickerValue(formData.startAt),
-      endAt: fromBogotaDatePickerValue(formData.endAt),
-      recurrenceEnd: formData.recurrenceEnd ? fromBogotaDatePickerValue(formData.recurrenceEnd) : null,
+      ...serializeBogotaCalendarEventDates(formData, originalEventDatesRef.current),
       attendeeEmails: result.emails,
       captureWithFireflies: formData.captureWithFireflies
-    });
+    };
+    delete eventData.startTime;
+    delete eventData.endTime;
+    if (!editingEventId) eventData.requestId = createRequestIdentityRef.current.forPayload(eventData);
+    if (!editingEventId) lastCreationAttemptRef.current = JSON.stringify([formData, externalEmailDraft]);
+    saveInFlightRef.current = true;
+    eventMutation.mutate({ eventData, eventId: editingEventId });
   };
 
   const generateMeetLink = async () => {
+    if (hasDateInputErrors) return;
+    const currentStartError = getCalendarStartValidationError(formData);
+    if (currentStartError) {
+      setFormData(current => ({ ...current }));
+      return;
+    }
     if (!formData.title || !formData.startAt || !formData.endAt) {
       toast.error('Completa titulo y fechas para generar link');
       return;
@@ -546,8 +666,8 @@ const OperationalCalendar = () => {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           title: formData.title,
-          startAt: fromBogotaDatePickerValue(formData.startAt),
-          endAt: fromBogotaDatePickerValue(formData.endAt),
+          startAt: combineBogotaDateAndTime(formData.startAt, formData.startTime),
+          endAt: combineBogotaDateAndTime(formData.endAt, formData.endTime),
           description: formData.description,
           googleConnectionId: formData.googleConnectionId
         })
@@ -558,7 +678,7 @@ const OperationalCalendar = () => {
         throw new Error(error.details || error.error || 'No se pudo generar el link');
       }
       const data = await res.json();
-      setFormData({ ...formData, meetingLink: data.meetingLink, googleMeetSpaceName: data.googleMeetSpaceName || '' });
+      setFormData(current => ({ ...current, meetingLink: data.meetingLink, googleMeetSpaceName: data.googleMeetSpaceName || '' }));
       toast.success('Google Meet generado');
     } catch (err) {
       console.error(err);
@@ -571,6 +691,7 @@ const OperationalCalendar = () => {
   const selectedMembers = team.filter(member => formData.memberIds.includes(member.id));
 
   const closeModal = () => {
+    if (saveInFlightRef.current) return;
     setIsModalOpen(false);
     setEditingEventId(null);
     setDeleteCandidate(null);
@@ -578,6 +699,7 @@ const OperationalCalendar = () => {
 
   useEffect(() => {
     const handleKeyDown = (event) => {
+      if (event.defaultPrevented) return;
       if (event.key === 'Escape') {
         if (deleteCandidate) {
           setDeleteCandidate(null);
@@ -625,7 +747,7 @@ const OperationalCalendar = () => {
               {format(currentDate, 'MMM', { locale: es })}
             </span>
             <span className="flex-1 text-lg font-black text-zinc-900 dark:text-white">
-              {format(new Date(), 'd')}
+              {format(toBogotaCalendarDate(new Date()), 'd')}
             </span>
           </div>
           <div>
@@ -639,14 +761,14 @@ const OperationalCalendar = () => {
         </div>
 
         <div className="flex flex-col gap-3 xl:items-end">
-          {isAdmin && (
-            googleCalendarStatus?.connected ? (
+          {isAdmin && !googleStatusLoadFailed && (
+            googleConnections.length > 0 ? (
               <div className="flex flex-wrap items-center gap-2" aria-label="Estado de cuentas de Google Calendar">
                   {googleConnections.map(connection => {
                     const health = getGoogleConnectionHealth(connection);
                     return (
-                      <button type="button" key={connection.id} onClick={() => { if (health.status === 'error') { setGoogleRetryError(''); setGoogleErrorConnection(connection); } }} disabled={health.status !== 'error'} title={connection.lastSyncedAt ? `Última actualización: ${format(new Date(connection.lastSyncedAt), 'd MMM, HH:mm', { locale: es })}` : 'Sin sincronización registrada'} className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-[10px] font-bold text-zinc-600 transition hover:bg-zinc-200 disabled:cursor-default dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15">
-                        <span className={cn('h-2 w-2 rounded-full', health.status === 'healthy' ? 'bg-emerald-500' : health.status === 'error' ? 'bg-destructive' : 'bg-amber-500')} />
+                      <button type="button" key={connection.id} onClick={() => { if (health.status === 'reconnect') connectGoogleCalendar(connection.email); else if (['error', 'pending'].includes(health.status)) { setGoogleRetryError(''); setGoogleErrorConnection(connection); } }} disabled={!['error', 'reconnect', 'pending'].includes(health.status)} title={connection.lastSyncedAt ? `Última actualización: ${format(toBogotaCalendarDate(connection.lastSyncedAt), 'd MMM', { locale: es }) + ', ' + formatBogotaClock(connection.lastSyncedAt)}` : 'Sin sincronización registrada'} className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-[10px] font-bold text-zinc-600 transition hover:bg-zinc-200 disabled:cursor-default dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15">
+                        <span className={cn('h-2 w-2 rounded-full', health.status === 'healthy' ? 'bg-emerald-500' : ['error', 'reconnect'].includes(health.status) ? 'bg-destructive' : 'bg-amber-500')} />
                         {connection.email.split('@')[0]} · {health.label}
                       </button>
                     );
@@ -686,7 +808,7 @@ const OperationalCalendar = () => {
             <button type="button" onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2.5 hover:bg-zinc-50 dark:hover:bg-white/10" aria-label="Mes anterior" title="Mes anterior">
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <button type="button" onClick={() => setCurrentDate(new Date())} className="border-x border-zinc-200 px-4 text-xs font-bold dark:border-white/10">
+            <button type="button" onClick={() => setCurrentDate(toBogotaCalendarDate(new Date()))} className="border-x border-zinc-200 px-4 text-xs font-bold dark:border-white/10">
               Hoy
             </button>
             <button type="button" onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2.5 hover:bg-zinc-50 dark:hover:bg-white/10" aria-label="Mes siguiente" title="Mes siguiente">
@@ -718,6 +840,13 @@ const OperationalCalendar = () => {
         </div>
       )}
 
+      {isAdmin && googleStatusLoadFailed && (
+        <div role="alert" className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-destructive/35 bg-white p-4 text-sm dark:bg-zinc-900 sm:flex-row sm:items-center">
+          <p className="text-destructive">No pudimos verificar la sincronización con Google Calendar.</p>
+          <button type="button" onClick={() => refetchGoogleStatus()} className="brain-danger-button min-h-10 rounded-xl px-4 text-xs font-bold">Consultar estado</button>
+        </div>
+      )}
+
       <div data-operational-calendar="traditional-month-grid" className="hidden overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900 md:block">
         <div className="grid grid-cols-5 border-b border-zinc-200 bg-zinc-50/80 dark:border-white/10 dark:bg-white/5">
           {['Lun', 'Mar', 'Mié', 'Jue', 'Vie'].map(day => (
@@ -744,13 +873,13 @@ const OperationalCalendar = () => {
                   className={cn(
                     'group min-h-[132px] border-b border-r border-zinc-100 p-2 transition hover:bg-zinc-50 dark:border-white/5 dark:hover:bg-white/5',
                     !isSameMonth(day, currentDate) && 'bg-zinc-50/60 text-zinc-400 dark:bg-zinc-950/30',
-                    isSameDay(day, new Date()) && 'bg-indigo-50/40 dark:bg-indigo-500/10'
+                    isSameDay(day, toBogotaCalendarDate(new Date())) && 'bg-indigo-50/40 dark:bg-indigo-500/10'
                   )}
                 >
                   <div className="mb-2 flex items-center justify-between">
                     <span className={cn(
                       'flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold',
-                      isSameDay(day, new Date()) ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 dark:bg-indigo-500' : 'text-zinc-600 dark:text-zinc-300'
+                      isSameDay(day, toBogotaCalendarDate(new Date())) ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 dark:bg-indigo-500' : 'text-zinc-600 dark:text-zinc-300'
                     )}>
                       {format(day, 'd')}
                     </span>
@@ -791,7 +920,7 @@ const OperationalCalendar = () => {
                           <>
                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
                             <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                            {!event.isAllDay && <span className="shrink-0 font-medium opacity-80">{format(new Date(event.displayStartAt || event.startAt), 'HH:mm')}</span>}
+                            {!event.isAllDay && <span className="shrink-0 font-medium opacity-80">{formatBogotaClock(event.startAt)}</span>}
                           </>
                         )}
                       </button>
@@ -829,7 +958,7 @@ const OperationalCalendar = () => {
                   <button key={event.occurrenceKey || event.id} type="button" onClick={() => handleEdit(event)} className={cn('flex min-h-11 w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-bold', getEventTypeStyles(event.type))}>
                     <span className="h-2 w-2 shrink-0 rounded-full bg-current" />
                     <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                    <span className="shrink-0 font-medium opacity-80">{event.isAllDay ? 'Todo el día' : format(new Date(event.displayStartAt || event.startAt), 'HH:mm')}</span>
+                    <span className="shrink-0 font-medium opacity-80">{event.isAllDay ? 'Todo el día' : formatBogotaClock(event.startAt)}</span>
                   </button>
                 ))}
               </div>
@@ -853,7 +982,7 @@ const OperationalCalendar = () => {
               {(eventsByDay.get(format(selectedDayAgenda, 'yyyy-MM-dd')) || []).map(event => (
                 <button key={event.occurrenceKey || event.id} type="button" onClick={() => { setSelectedDayAgenda(null); handleEdit(event); }} className={cn('flex min-h-12 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-xs font-bold', getEventTypeStyles(event.type))}>
                   <span className="h-2 w-2 shrink-0 rounded-full bg-current" />
-                  <span className="min-w-0 flex-1"><span className="block truncate">{event.title}</span><span className="mt-1 block font-medium opacity-75">{event.isAllDay ? 'Todo el día' : `${format(new Date(event.displayStartAt || event.startAt), 'HH:mm')} – ${format(new Date(event.displayEndAt || event.endAt), 'HH:mm')}`}</span></span>
+                  <span className="min-w-0 flex-1"><span className="block truncate">{event.title}</span><span className="mt-1 block font-medium opacity-75">{event.isAllDay ? 'Todo el día' : `${formatBogotaClock(event.startAt)} – ${formatBogotaClock(event.endAt)}`}</span></span>
                 </button>
               ))}
             </div>
@@ -900,8 +1029,8 @@ const OperationalCalendar = () => {
       <Dialog open={!!googleErrorConnection} onOpenChange={open => { if (!open) setGoogleErrorConnection(null); }}>
         <DialogContent data-google-calendar-errors="dialog" className="max-w-xl rounded-2xl border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <DialogHeader className="text-left">
-            <DialogTitle>Errores de Google Calendar</DialogTitle>
-            <DialogDescription>{googleErrorConnection?.email}. Estos eventos no lograron crearse o actualizarse en Google.</DialogDescription>
+            <DialogTitle>Sincronización con Google Calendar</DialogTitle>
+            <DialogDescription>{googleErrorConnection?.email ? `${googleErrorConnection.email}. ` : ''}Estos cambios todavía no están confirmados en Google. Puedes reintentar su sincronización.</DialogDescription>
           </DialogHeader>
           <div className="max-h-[50vh] space-y-2 overflow-y-auto overscroll-contain">
             {googleRetryError && (
@@ -917,10 +1046,13 @@ const OperationalCalendar = () => {
             {(googleErrorConnection?.syncErrors || []).map(event => (
               <div key={event.id} className="rounded-xl border border-destructive/35 bg-white p-3 dark:bg-zinc-900">
                 <p className="font-semibold text-zinc-950 dark:text-white">{event.title}</p>
-                <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">{format(toBogotaDatePickerValue(event.startAt), 'd MMM yyyy, HH:mm', { locale: es })}</p>
+                <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">{format(toBogotaCalendarDate(event.startAt), 'd MMM yyyy', { locale: es }) + ', ' + formatBogotaClock(event.startAt)}</p>
+                {['PENDING', 'PENDING_DELETE'].includes(event.googleSyncStatus) && (
+                  <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">{event.googleSyncStatus === 'PENDING_DELETE' ? 'Eliminación pendiente de confirmar en Google.' : 'Evento guardado; sincronización pendiente en Google.'} El sistema volverá a intentarlo automáticamente.</p>
+                )}
                 {event.googleSyncError ? (
                   <div className="mt-2 text-xs text-destructive">
-                    <p className="leading-relaxed">{explainGoogleSyncError(event.googleSyncError)}</p>
+                    <p className="leading-relaxed">{explainGoogleSyncError(event.googleSyncError, event.googleSyncStatus)}</p>
                     <details className="mt-2">
                       <summary className="cursor-pointer font-semibold">Ver detalles técnicos</summary>
                       <p className="mt-2 break-words rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-black/20">{event.googleSyncError}</p>
@@ -933,9 +1065,9 @@ const OperationalCalendar = () => {
                   <button type="button" onClick={() => linkedRetryMutation.mutate(event.id)} disabled={linkedRetryMutation.isPending} className="brain-danger-button inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-xs font-bold disabled:opacity-60">
                     {linkedRetryMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Reintentar
                   </button>
-                  <button type="button" onClick={() => dismissGoogleErrorMutation.mutate(event.id)} disabled={dismissGoogleErrorMutation.isPending} className="brain-danger-button-outline inline-flex min-h-10 items-center gap-2 rounded-xl border bg-white px-3 text-xs font-bold disabled:opacity-60 dark:bg-white/5">
+                  {!['PENDING', 'PENDING_DELETE'].includes(event.googleSyncStatus) && <button type="button" onClick={() => dismissGoogleErrorMutation.mutate(event.id)} disabled={dismissGoogleErrorMutation.isPending} className="brain-danger-button-outline inline-flex min-h-10 items-center gap-2 rounded-xl border bg-white px-3 text-xs font-bold disabled:opacity-60 dark:bg-white/5">
                     {dismissGoogleErrorMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} Descartar
-                  </button>
+                  </button>}
                 </div>
               </div>
             ))}
@@ -967,7 +1099,7 @@ const OperationalCalendar = () => {
                     <input type="checkbox" className="mt-1 h-4 w-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-600" checked={selectedReconciliationIds.includes(event.id)} onChange={input => setSelectedReconciliationIds(input.target.checked ? [...selectedReconciliationIds, event.id] : selectedReconciliationIds.filter(id => id !== event.id))} />
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-bold text-zinc-900 dark:text-white">{event.title}</span>
-                      <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{format(toBogotaDatePickerValue(event.startAt), 'd MMM yyyy, HH:mm', { locale: es })}{event.attendeeEmails?.length ? ` · ${event.attendeeEmails.length} invitado(s)` : ''}</span>
+                      <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{format(toBogotaCalendarDate(event.startAt), 'd MMM yyyy', { locale: es }) + ', ' + formatBogotaClock(event.startAt)}{event.attendeeEmails?.length ? ` · ${event.attendeeEmails.length} invitado(s)` : ''}</span>
                     </span>
                   </label>
                   <button type="button" onClick={() => dismissReconciliationMutation.mutate(event.id)} disabled={dismissReconciliationMutation.isPending} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-bold text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-60 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white" aria-label={`Descartar ${event.title} de conciliación`} title="Descartar de conciliación">
@@ -986,14 +1118,16 @@ const OperationalCalendar = () => {
 
       {isModalOpen && (
         <Dialog open={isModalOpen} onOpenChange={open => { if (!open) closeModal(); }}>
-          <DialogContent data-operational-event-form="dialog" className="flex max-h-[calc(100dvh-1rem)] max-w-3xl flex-col gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:max-h-[90dvh]">
+          <DialogContent data-operational-event-form="dialog" onEscapeKeyDown={event => {
+            if (document.querySelector('[data-calendar-date-time-popup]')) event.preventDefault();
+          }} className="flex max-h-[calc(100dvh-1rem)] max-w-3xl flex-col gap-0 overflow-hidden rounded-2xl border-zinc-200 bg-white p-0 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:max-h-[90dvh]">
             <DialogHeader className="border-b border-zinc-100 bg-zinc-50/50 px-6 py-4 text-left dark:border-zinc-800 dark:bg-zinc-900/50">
               <DialogTitle className="text-lg font-semibold text-zinc-950 dark:text-white">{editingEventId ? 'Editar evento' : 'Nuevo evento'}</DialogTitle>
               <DialogDescription className="sr-only">Formulario para crear o editar un evento del calendario.</DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div data-calendar-scroll-container="event-form" className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto overscroll-contain px-4 pb-6 pt-5 sm:px-6 sm:pt-6 md:grid-cols-2">
+              <div data-calendar-scroll-container="event-form" className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-4 overflow-y-auto overscroll-contain px-4 pb-6 pt-5 sm:px-6 sm:pt-6 md:grid-cols-2">
               <div className="space-y-1.5 md:col-span-2">
                 <label htmlFor="operational-event-title" className="text-xs font-bold text-zinc-500">Título del evento</label>
                 <input
@@ -1043,18 +1177,22 @@ const OperationalCalendar = () => {
                   <DatePicker
                     id="operational-event-recurrence-end"
                     {...brainDatePickerProps}
+                    strictParsing
                     selected={formData.recurrenceEnd}
-                    onChange={date => setFormData({ ...formData, recurrenceEnd: date })}
-                    dateFormat="d MMMM, yyyy"
+                    value={dateDrafts.recurrenceEnd}
+                    onChangeRaw={event => handleDateRawInput('recurrenceEnd', event)}
+                    onChange={date => setFormData({ ...formData, recurrenceEnd: acceptCalendarDate('recurrenceEnd', date) })}
+                    dateFormat="dd/MM/yyyy"
                     placeholderText="Seleccionar fecha fin"
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5"
                     wrapperClassName="w-full"
                   />
+                  {dateInputErrors.recurrenceEnd && <p className="brain-destructive-text text-xs text-destructive" role="alert">{dateInputErrors.recurrenceEnd}</p>}
                 </div>
               )}
 
-              <label className="flex min-h-11 cursor-pointer items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-950 md:col-span-2">
-                <span>
+              <label className="flex min-h-min shrink-0 cursor-pointer items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-950 md:col-span-2">
+                <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium text-zinc-800 dark:text-zinc-100">Todo el día</span>
                   <span className="block text-[11px] text-zinc-500 dark:text-zinc-400">El evento se mostrará sin horas en Brain Studio y Google Calendar.</span>
                 </span>
@@ -1063,68 +1201,45 @@ const OperationalCalendar = () => {
                   checked={formData.isAllDay}
                   onChange={event => {
                     const isAllDay = event.target.checked;
-                    const startAt = new Date(formData.startAt);
-                    if (isAllDay) startAt.setHours(0, 0, 0, 0);
-                    else {
-                      const rounded = getRoundedBogotaNow(startAt);
-                      startAt.setHours(rounded.getHours(), rounded.getMinutes(), 0, 0);
-                    }
-                    setFormData({ ...formData, isAllDay, startAt, endAt: isAllDay ? addDays(startAt, 1) : new Date(startAt.getTime() + 60 * 60 * 1000) });
+                    setDateDrafts(current => ({ ...current, startAt: undefined, endAt: undefined }));
+                    setDateInputErrors(current => ({ ...current, startAt: '', endAt: '' }));
+                    setFormData({ ...formData, isAllDay, ...(isAllDay
+                      ? { endAt: addDays(formData.startAt, 1) }
+                      : getInitialBogotaCalendarRange(formData.startAt)) });
                   }}
-                  className="h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                  className="h-4 w-4 shrink-0 rounded border-zinc-300 text-primary focus:ring-primary"
                 />
               </label>
 
               <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <label htmlFor="operational-event-start" className="text-xs font-bold text-zinc-500">{formData.isAllDay ? 'Desde' : 'Inicio'}</label>
-                  <DatePicker
+                  <CalendarDateTimePicker
                     id="operational-event-start"
-                    {...brainDatePickerProps}
                     selected={formData.startAt}
-                    onChange={date => {
-                      if (!date) return;
-                      if (formData.isAllDay) {
-                        const startAt = new Date(date);
-                        startAt.setHours(0, 0, 0, 0);
-                        const durationDays = Math.max(1, Math.round((new Date(formData.endAt) - new Date(formData.startAt)) / (24 * 60 * 60 * 1000)));
-                        setFormData({ ...formData, startAt, endAt: addDays(startAt, durationDays) });
-                        return;
-                      }
-                      const currentDuration = new Date(formData.endAt).getTime() - new Date(formData.startAt).getTime();
-                      setFormData({ ...formData, startAt: date, endAt: new Date(date.getTime() + Math.max(currentDuration, 15 * 60 * 1000)) });
-                    }}
-                    showTimeSelect={!formData.isAllDay}
-                    timeIntervals={15}
-                    timeCaption="Hora"
-                    dateFormat={formData.isAllDay ? 'd MMMM, yyyy' : 'd MMM, HH:mm'}
+                    time={formData.startTime}
+                    isAllDay={formData.isAllDay}
+                    draft={dateDrafts.startAt}
+                    onRawChange={(raw, parsed) => handleDateTimeRawInput('startAt', raw, parsed)}
+                    onChange={value => updateCalendarDateTime('startAt', value)}
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5"
-                    wrapperClassName="w-full"
                   />
+                  {dateInputErrors.startAt && <p className="brain-destructive-text text-xs text-destructive" role="alert">{dateInputErrors.startAt}</p>}
+                  {startValidationError && <p className="brain-destructive-text text-xs text-destructive" role="alert">{startValidationError}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <label htmlFor="operational-event-end" className="text-xs font-bold text-zinc-500">{formData.isAllDay ? 'Hasta' : 'Fin'}</label>
-                  <DatePicker
+                  <CalendarDateTimePicker
                     id="operational-event-end"
-                    {...brainDatePickerProps}
                     selected={formData.isAllDay ? addDays(formData.endAt, -1) : formData.endAt}
-                    onChange={date => {
-                      if (!date) return;
-                      if (formData.isAllDay) {
-                        const inclusiveEnd = new Date(date);
-                        inclusiveEnd.setHours(0, 0, 0, 0);
-                        setFormData({ ...formData, endAt: addDays(inclusiveEnd < formData.startAt ? formData.startAt : inclusiveEnd, 1) });
-                        return;
-                      }
-                      setFormData({ ...formData, endAt: date });
-                    }}
-                    showTimeSelect={!formData.isAllDay}
-                    timeIntervals={15}
-                    timeCaption="Hora"
-                    dateFormat={formData.isAllDay ? 'd MMMM, yyyy' : 'd MMM, HH:mm'}
+                    time={formData.endTime}
+                    isAllDay={formData.isAllDay}
+                    draft={dateDrafts.endAt}
+                    onRawChange={(raw, parsed) => handleDateTimeRawInput('endAt', raw, parsed)}
+                    onChange={value => updateCalendarDateTime('endAt', value)}
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5"
-                    wrapperClassName="w-full"
                   />
+                  {dateInputErrors.endAt && <p className="brain-destructive-text text-xs text-destructive" role="alert">{dateInputErrors.endAt}</p>}
                 </div>
               </div>
 
@@ -1196,7 +1311,7 @@ const OperationalCalendar = () => {
                     <button
                       type="button"
                       onClick={generateMeetLink}
-                      disabled={isGeneratingLink}
+                      disabled={isGeneratingLink || hasDateInputErrors || Boolean(meetStartValidationError)}
                       className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-indigo-700 disabled:opacity-50"
                     >
                       {isGeneratingLink ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
@@ -1277,7 +1392,7 @@ const OperationalCalendar = () => {
                 )}
                 <button
                   type="submit"
-                  disabled={eventMutation.isPending}
+                  disabled={eventMutation.isPending || hasDateInputErrors || Boolean(startValidationError)}
                   className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:opacity-60"
                 >
                   {eventMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}

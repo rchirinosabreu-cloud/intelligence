@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { getVisibleOperationalEventWhere, isVisibleOperationalEvent } from './operationalEventVisibility.js';
 
 const BOGOTA_OFFSET_MS = 5 * 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -157,7 +158,7 @@ export const buildOperationalHealthSnapshot = ({
   taskComments
     .filter((comment) => !comment.type || comment.type === 'human')
     .forEach((comment) => collect({ date: comment.createdAt, moduleId: 'gestion', userId: comment.authorId }));
-  operationalEvents.forEach((event) => collect({ date: event.createdAt, moduleId: 'actividad', userId: event.createdById }));
+  operationalEvents.filter(isVisibleOperationalEvent).forEach((event) => collect({ date: event.createdAt, moduleId: 'actividad', userId: event.createdById }));
   contentPlans.forEach((plan) => collect({
     date: plan.createdAt,
     moduleId: 'parrillas',
@@ -374,7 +375,7 @@ export const getOperationalHealth = async ({ requester, now = new Date(), db = p
       select: { id: true, authorId: true, createdAt: true, type: true }
     }),
     db.operationalEvent.findMany({
-      where: { createdAt: { gte: since } },
+      where: { ...getVisibleOperationalEventWhere(), createdAt: { gte: since } },
       select: { id: true, createdById: true, createdAt: true }
     }),
     db.contentPlan.findMany({

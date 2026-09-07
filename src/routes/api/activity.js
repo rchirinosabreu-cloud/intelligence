@@ -30,12 +30,23 @@ import { requireManagerRole } from '../../middlewares/authMiddleware.js';
 const router = express.Router();
 
 const sendOperationalEventSaveError = (res, error, fallbackError) => {
+  if (error.preserveLocal && error.eventId) {
+    return res.status(503).json({ error: 'El evento está guardado; falta confirmar Google Calendar',
+      code: error.code, eventId: error.eventId, preserveLocal: true, googleSyncStatus: 'PENDING',
+      details: 'Se reintentará automáticamente con el mismo evento. No es necesario crearlo de nuevo.' });
+  }
+  if (['GOOGLE_CALENDAR_BUSY', 'EVENT_REQUEST_CONFLICT', 'EVENT_SYNC_IN_PROGRESS'].includes(error.code)) {
+    return res.status(409).json({ error: error.message, code: error.code, details: error.message });
+  }
+  if (error.code === 'GOOGLE_CALENDAR_NOT_CONNECTED') {
+    return res.status(503).json({ error: error.message, code: error.code, reconnectRequired: true, details: error.message });
+  }
   if (error.code === 'EVENT_NOT_FOUND') {
     return res.status(404).json({ error: 'El evento ya no existe', code: error.code, details: error.message });
   }
-  if (['INVALID_EVENT_RANGE', 'INVALID_GOOGLE_EVENT_TIME', 'INVALID_EVENT_TITLE', 'INVALID_EVENT_TYPE', 'INVALID_EVENT_RECURRENCE', 'INVALID_EVENT_ATTENDEES'].includes(error.code)) {
+  if (['INVALID_EVENT_PAST', 'INVALID_EVENT_REQUEST_ID', 'INVALID_EVENT_RANGE', 'INVALID_GOOGLE_EVENT_TIME', 'INVALID_EVENT_TITLE', 'INVALID_EVENT_TYPE', 'INVALID_EVENT_RECURRENCE', 'INVALID_EVENT_ATTENDEES'].includes(error.code)) {
     return res.status(422).json({
-      error: error.code === 'INVALID_EVENT_RANGE' || error.code === 'INVALID_GOOGLE_EVENT_TIME'
+      error: ['INVALID_EVENT_PAST', 'INVALID_EVENT_RANGE', 'INVALID_GOOGLE_EVENT_TIME'].includes(error.code)
         ? 'Revisa las fechas y horas del evento'
         : 'Revisa los datos del evento',
       code: error.code,
@@ -79,6 +90,10 @@ router.get('/events', async (req, res) => {
     const events = await getOperationalEvents(start, end);
     res.json(events);
   } catch (error) {
+    console.error('[Activity API] Error fetching events:', error.response?.data || error.message);
+    if (['INVALID_CALENDAR_RANGE', 'GOOGLE_CALENDAR_RECURRENCE_LIMIT'].includes(error.code)) {
+      return res.status(422).json({ error: error.message, code: error.code, details: error.message });
+    }
     res.status(500).json({ error: 'Failed to fetch events' });
   }
 });
@@ -262,11 +277,12 @@ router.patch('/events/:id', requireManagerRole, async (req, res) => {
 
 router.delete('/events/:id', requireManagerRole, async (req, res) => {
   try {
-    await deleteOperationalEvent(req.params.id);
+    const event = await deleteOperationalEvent(req.params.id);
+    if (event.googleSyncStatus === 'PENDING_DELETE') return res.status(202).json(event);
     res.json({ success: true });
   } catch (error) {
     console.error('[Activity API] Error deleting event:', error.response?.data || error);
-    res.status(500).json({ error: 'Failed to delete event', details: error.message });
+    return sendOperationalEventSaveError(res, error, 'Failed to delete event');
   }
 });
 

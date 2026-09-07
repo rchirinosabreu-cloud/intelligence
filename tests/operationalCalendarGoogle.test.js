@@ -57,7 +57,7 @@ test('operational calendar records the authenticated creator for dashboard chall
   assert.match(eventModel, /createdBy\s+User\?/);
   assert.match(eventModel, /@@index\(\[createdById, createdAt\]\)/);
   assert.match(activityRoutes, /createOperationalEvent\(req\.body, req\.user\?\.userId \|\| null\)/);
-  assert.match(eventService, /createOperationalEvent\(data, createdById = null\)/);
+  assert.match(eventService, /createOperationalEvent\(data, createdById = null[,)]/);
   assert.match(eventService, /createdById/);
 });
 
@@ -82,8 +82,11 @@ test('operational calendar fixes current render and role issues', async () => {
   assert.match(calendar, /normalizeCalendarDescription/);
   assert.match(calendar, /formData\.isAllDay/);
   assert.match(calendar, /checked=\{formData\.isAllDay\}/);
-  assert.match(calendar, /showTimeSelect=\{!formData\.isAllDay\}/);
-  assert.match(calendar, /getRoundedBogotaNow/);
+  assert.doesNotMatch(calendar, /showTimeSelect/);
+  assert.match(calendar, /getInitialBogotaCalendarRange/);
+  assert.match(calendar, /CalendarDateTimePicker/);
+  assert.doesNotMatch(calendar, /type="time"|\(Bogotá\)/);
+  assert.match(calendar, /strictParsing/);
   assert.match(calendar, /data-operational-calendar="traditional-month-grid"/);
   assert.match(calendar, /grid-cols-5/);
   assert.match(calendar, /\['Lun', 'Mar', 'Mié', 'Jue', 'Vie'\]/);

@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import { JWT } from 'google-auth-library';
-import crypto from 'crypto';
+
 import {
     createOpenGoogleMeetSpace,
     getAuthorizedGoogleOAuthClient,
@@ -100,42 +100,10 @@ export async function getUpcomingEvents(calendarId = process.env.GOOGLE_CALENDAR
 /**
  * Creates a Google Calendar event with a Google Meet link.
  */
-export async function createMeetEvent(title, startAt, endAt, description = '', connectionId = null) {
-    const centralMeet = await createCentralOAuthMeetEvent(title, startAt, endAt, description, connectionId);
+export async function createMeetEvent(title, startAt, endAt, description = '', connectionId = null, { createSpace = createCentralOAuthMeetEvent } = {}) {
+    const centralMeet = await createSpace(title, startAt, endAt, description, connectionId);
     if (centralMeet) return centralMeet;
-    if (connectionId) return null;
-
-    const calendar = getCalendarClient();
-    if (!calendar) return null;
-
-    try {
-        const calendarId = process.env.GOOGLE_CALENDAR_ID || process.env.GOOGLE_WORKSPACE_SUBJECT || 'contacto@brainstudioagencia.com';
-        console.log(`[CalendarService] Creating Meet event in ${calendarId}: ${title}`);
-
-        const response = await calendar.events.insert({
-            calendarId: calendarId,
-            conferenceDataVersion: 1,
-            requestBody: {
-                summary: title,
-                description: description,
-                start: { dateTime: new Date(startAt).toISOString() },
-                end: { dateTime: new Date(endAt).toISOString() },
-                conferenceData: {
-                    createRequest: {
-                        requestId: crypto.randomBytes(16).toString('hex'),
-                        conferenceSolutionKey: { type: 'hangoutsMeet' }
-                    }
-                }
-            }
-        });
-
-        const meetLink = response.data.hangoutLink;
-        console.log(`[CalendarService] Created event with link: ${meetLink}`);
-        return { meetingLink: meetLink, googleMeetSpaceName: null };
-    } catch (error) {
-        console.error("[CalendarService] Failed to create Meet event:", error.response?.data || error.message);
-        throw error;
-    }
+    throw Object.assign(new Error('Conecta una cuenta de Google antes de generar el enlace de Meet.'), { code: 'GOOGLE_CALENDAR_NOT_CONNECTED' });
 }
 
 async function createCentralOAuthMeetEvent(_title, _startAt, _endAt, _description = '', connectionId = null) {

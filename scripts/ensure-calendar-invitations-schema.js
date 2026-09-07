@@ -15,7 +15,21 @@ try {
       ADD COLUMN IF NOT EXISTS "attendeeResponses" JSONB,
       ADD COLUMN IF NOT EXISTS "googleConnectionId" TEXT,
       ADD COLUMN IF NOT EXISTS "googleSyncError" TEXT,
-      ADD COLUMN IF NOT EXISTS "googleRecurrence" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+      ADD COLUMN IF NOT EXISTS "googleRecurrence" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+      ADD COLUMN IF NOT EXISTS "requestId" TEXT,
+      ADD COLUMN IF NOT EXISTS "requestHash" TEXT,
+      ADD COLUMN IF NOT EXISTS "googleSyncAttempts" INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS "googleNextRetryAt" TIMESTAMP(3),
+      ADD COLUMN IF NOT EXISTS "googleRecurringEventId" TEXT,
+      ADD COLUMN IF NOT EXISTS "googleOriginalStartAt" TIMESTAMP(3),
+      ADD COLUMN IF NOT EXISTS "googleTimeZone" TEXT,
+      ADD COLUMN IF NOT EXISTS "googleCancelled" BOOLEAN NOT NULL DEFAULT false;
+
+    ALTER TABLE "GoogleCalendarConnection"
+      ADD COLUMN IF NOT EXISTS "syncVersion" INTEGER NOT NULL DEFAULT 0;
+    CREATE UNIQUE INDEX IF NOT EXISTS "OperationalEvent_requestId_key" ON "OperationalEvent"("requestId");
+    CREATE INDEX IF NOT EXISTS "OperationalEvent_googleSyncStatus_googleNextRetryAt_idx"
+      ON "OperationalEvent"("googleSyncStatus", "googleNextRetryAt");
 
     CREATE TABLE IF NOT EXISTS "GoogleCalendarEventLink" (
       "id" TEXT PRIMARY KEY,

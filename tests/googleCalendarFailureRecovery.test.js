@@ -128,6 +128,7 @@ test('linked Google synchronization errors use a dedicated retry path', async ()
 
   const calls = [];
   const result = await retryOperationalEventGoogleSync('event-1', null, {
+    lock: task => task(),
     findEvent: async id => {
       calls.push(`find:${id}`);
       return { id, googleLinks: [{ googleEventId: 'google-1', isOrganizer: true }] };
@@ -214,7 +215,7 @@ test('linked Google updates carry their ETag and surface concurrent edits as con
 
   const service = await read('src/services/operationalEventService.js');
   const routes = await read('src/routes/api/activity.js');
-  assert.match(service, /calendar\.events\.patch\([\s\S]*getGooglePatchOptions\(targetLink/);
+  assert.match(service, /patchGoogleEventReliably\(calendar,[\s\S]*getGooglePatchOptions\(targetLink/);
   assert.match(routes, /GOOGLE_CALENDAR_CONFLICT/);
   assert.match(routes, /status\(409\)/);
 });

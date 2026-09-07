@@ -13,6 +13,7 @@ test('Google Calendar schedules an incremental sync every five minutes', async (
   const calls = [];
   const timer = () => ({ unref() {} });
   scheduler.initGoogleCalendarSyncScheduler({
+    retryWrites: async () => [],
     syncCalendars: async () => calls.push('sync'),
     renewWatchChannels: async () => calls.push('renew'),
     setTimeoutFn: (callback, delay) => {
@@ -46,6 +47,7 @@ test('automatic Google sync never overlaps a still-running execution', async () 
   let syncCalls = 0;
   const pendingSync = new Promise(resolve => { releaseSync = resolve; });
   scheduler.initGoogleCalendarSyncScheduler({
+    retryWrites: async () => [],
     syncCalendars: async () => {
       syncCalls += 1;
       await pendingSync;

@@ -1,11 +1,13 @@
 import prisma from '../lib/prisma.js';
+import { getOperationalEvents } from './operationalEventService.js';
+import { isVisibleOperationalEvent } from './operationalEventVisibility.js';
 
 /**
  * Calculates the current activity status of all team members.
  * Combines Kanban tasks (EN_CURSO) and Operational Events.
  */
-export async function getTeamActivityStatus() {
-  const members = await prisma.teamMember.findMany({
+export async function getTeamActivityStatus({ db = prisma, readEvents = getOperationalEvents, now = new Date() } = {}) {
+  const members = await db.teamMember.findMany({
     where: { isActive: true },
     select: {
       id: true,
@@ -30,7 +32,6 @@ export async function getTeamActivityStatus() {
   });
 
   // Unified agency time (America/Bogota) as absolute Source of Truth (UTC-5)
-  const now = new Date();
 
   // Robust calculation of Bogota 'today' boundaries in UTC
   // Bogota Day starts when UTC is 05:00:00 (since UTC = Bog + 5)
@@ -38,26 +39,8 @@ export async function getTeamActivityStatus() {
   const startOfToday = new Date(Date.UTC(bogotaNow.getUTCFullYear(), bogotaNow.getUTCMonth(), bogotaNow.getUTCDate(), 5, 0, 0, 0));
   const endOfToday = new Date(startOfToday.getTime() + (24 * 3600000) - 1);
 
-  // Fetch all events for today (to detect ABSENCE and PRODUCTION)
-  // and recurring events
-  const todayEvents = await prisma.operationalEvent.findMany({
-    where: {
-      OR: [
-        {
-          startAt: { lte: endOfToday },
-          endAt: { gte: startOfToday }
-        },
-        {
-          recurrence: 'WEEKLY',
-          startAt: { lte: endOfToday },
-          OR: [
-            { recurrenceEnd: null },
-            { recurrenceEnd: { gte: startOfToday } }
-          ]
-        }
-      ]
-    }
-  });
+  // Share the calendar's recurrence expansion, moved instances and exclusions.
+  const todayEvents = await readEvents(startOfToday, endOfToday);
 
   return members.map(member => calculateMemberStatus(member, todayEvents, now));
 }
@@ -66,13 +49,14 @@ export function calculateMemberStatus(member, todayEvents, now) {
   const BUFFER_MS = 5 * 60 * 1000;
 
   const checkEventActive = (event, time) => {
+    if (!isVisibleOperationalEvent(event)) return false;
     const eventStart = new Date(event.startAt);
     const eventEnd = new Date(event.endAt);
     const checkTime = time.getTime();
     const isMeeting = event.type === 'MEETING' || event.title?.toLowerCase().includes('sala de juntas');
     const currentBuffer = isMeeting ? 0 : BUFFER_MS;
 
-    if (event.recurrence === 'NONE' || !event.recurrence) {
+    if (event.isRecurrenceOccurrence || event.recurrence === 'NONE' || !event.recurrence) {
       return (checkTime >= eventStart.getTime() - currentBuffer) && (checkTime <= eventEnd.getTime() + currentBuffer);
     }
     if (event.recurrence === 'WEEKLY') {

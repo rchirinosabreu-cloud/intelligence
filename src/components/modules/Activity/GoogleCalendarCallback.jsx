@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, CheckCircle2, AlertCircle } from '@/components/ui/icons';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -9,8 +9,11 @@ const GoogleCalendarCallback = () => {
   const navigate = useNavigate();
   const [status, setStatus] = useState('loading');
   const [message, setMessage] = useState('Conectando Google Calendar...');
+  const connectionRequestRef = useRef(null);
 
   useEffect(() => {
+    let active = true;
+    let navigationTimer;
     const code = searchParams.get('code');
     const oauthState = searchParams.get('state');
     if (!code || !oauthState) {
@@ -19,9 +22,9 @@ const GoogleCalendarCallback = () => {
       return;
     }
 
-    const completeConnection = async () => {
-      try {
-        const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/oauth-callback`, {
+    // StrictMode repeats effects; a Google authorization code may be exchanged only once.
+    if (!connectionRequestRef.current || connectionRequestRef.current.code !== code || connectionRequestRef.current.state !== oauthState) {
+      const promise = fetch(`${getApiBaseUrl()}/api/activity/google-calendar/oauth-callback`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -31,19 +34,27 @@ const GoogleCalendarCallback = () => {
             code,
             state: oauthState
           })
-        });
-
+        }).then(async res => {
         if (!res.ok) {
           const error = await res.json().catch(() => ({}));
           throw new Error(error.details || error.error || 'No se pudo conectar Google Calendar');
         }
+        return res.json();
+      });
+      connectionRequestRef.current = { code, state: oauthState, promise };
+    }
 
+    const completeConnection = async () => {
+      try {
+        await connectionRequestRef.current.promise;
+        if (!active) return;
         setStatus('success');
         sessionStorage.removeItem('googleCalendarRequestedEmail');
         setMessage('Google Calendar conectado correctamente.');
         toast.success('Google Calendar conectado');
-        setTimeout(() => navigate('/actividad'), 900);
+        navigationTimer = setTimeout(() => navigate('/actividad'), 900);
       } catch (error) {
+        if (!active) return;
         console.error('Google Calendar OAuth callback error:', error);
         setStatus('error');
         setMessage(error.message || 'No se pudo conectar Google Calendar.');
@@ -52,6 +63,10 @@ const GoogleCalendarCallback = () => {
     };
 
     completeConnection();
+    return () => {
+      active = false;
+      clearTimeout(navigationTimer);
+    };
   }, [navigate, searchParams]);
 
   return (

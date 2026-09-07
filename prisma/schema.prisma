@@ -559,6 +559,8 @@ model TeamMember {
 
 model OperationalEvent {
   id                     String                    @id @default(uuid())
+  requestId              String?                   @unique
+  requestHash            String?
   title                  String
   type                   String // PRODUCTION, ABSENCE, PROJECT, MEETING
   description            String?
@@ -588,6 +590,12 @@ model OperationalEvent {
   googleMeetEndedAt      DateTime?
   googleSyncStatus       String?
   googleSyncError        String?
+  googleSyncAttempts     Int                       @default(0)
+  googleNextRetryAt      DateTime?
+  googleRecurringEventId String?
+  googleOriginalStartAt  DateTime?
+  googleTimeZone         String?
+  googleCancelled        Boolean                   @default(false)
   googleLastSyncedAt     DateTime?
   googleUpdatedAt        DateTime?
   createdById            String?
@@ -600,6 +608,7 @@ model OperationalEvent {
   @@index([googleCalendarId, googleEventId])
   @@index([googleConnectionId, googleCalendarId, googleEventId])
   @@index([createdById, createdAt])
+  @@index([googleSyncStatus, googleNextRetryAt])
 }
 
 model GoogleCalendarConnection {
@@ -613,6 +622,7 @@ model GoogleCalendarConnection {
   connectedAt     DateTime                    @default(now())
   lastSyncedAt    DateTime?
   syncToken       String?
+  syncVersion     Int                         @default(0)
   createdAt       DateTime                    @default(now())
   updatedAt       DateTime                    @updatedAt
   channels        GoogleCalendarSyncChannel[]

@@ -142,7 +142,7 @@ test('dashboard announcements preserve safe rich text and target only the select
     scope: 'MEMBER',
     targetUserId: 'user-helen',
     content: '<p>Mensaje <em>personal</em></p>'
-  }, { db });
+  }, { db, notificationCreator: data => db.notification.create({ data }) });
 
   assert.match(writes[0].payload.data.content, /<strong>equipo<\/strong>/);
   assert.equal(writes[0].payload.data.authorId, 'user-admin');
