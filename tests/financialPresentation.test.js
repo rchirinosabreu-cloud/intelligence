@@ -41,5 +41,6 @@ test('financial mutations invalidate every affected view using the shared helper
   assert.equal(typeof module.invalidateFinancialQueries, 'function');
   const keys = [];
   await module.invalidateFinancialQueries({ invalidateQueries: async ({queryKey}) => keys.push(queryKey[0]) });
+  assert.ok(keys.includes('financial-client-statement'));
   for (const key of ['financial-records','financial-accounts','financials-dashboard-data','financials-receivables-ledger','financials-client-reconciliation','bank-reconciliation','financial-integrity']) assert.ok(keys.includes(key), key);
 });

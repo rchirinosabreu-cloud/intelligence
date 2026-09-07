@@ -20,6 +20,9 @@ let debt = { id: 'demo-debt', clientId: client.id, clientName: client.name, clie
 if (new URLSearchParams(location.search).has('legacyPaid')) debt = { ...debt, outstanding: null, paidAmount: 0, status: 'PAGADO', balanceReviewRequired: true };
 let records = Array.from({ length: 62 }, (_, i) => ({ id: `demo-record-${i}`, clientId: client.id, client, date: '2026-09-07T05:00:00Z', year: 2026, month: 9, amount: i ? 10000 : 200000, type: 'INCOME', category: 'SERVICIO', status: 'POSTED', scenario: 'ACTUAL', origin: 'MANUAL', description: i ? `Ingreso de muestra ${i + 1}` : 'Adicional ya registrado', accountId: account.id, account, reference: `DEMO-${i}` }));
 const income = () => records.reduce((sum, record) => sum + Number(record.amount), 0);
+records[1] = { ...records[1], amount: 400000, attachmentUrl: 'https://example.invalid/soporte.pdf', receivablePayment: { id: 'historical-payment', receivableId: debt.id } };
+records[2] = { ...records[2], attachmentUrl: 'javascript:alert(1)' };
+if (!debt.balanceReviewRequired) debt.payments = [{ id: 'historical-payment', amount: 400000, paidAt: '2026-09-01T05:00:00Z', reference: 'ABONO-01', account, financialRecord: records[1] }];
 axios.defaults.adapter = async config => {
   const url = new URL(config.url, location.origin), path = url.pathname;
   for (const [key, value] of Object.entries(config.params || {})) url.searchParams.set(key, value);
@@ -32,7 +35,12 @@ axios.defaults.adapter = async config => {
     if (new URLSearchParams(location.search).has('carteraError')) throw Object.assign(new Error('Error simulado de lectura'), { response: { data: { message: 'Error simulado de lectura' } } });
     data = { year: 2026, items: [{ ...debt }], totals: { outstandingTotal: debt.outstanding, total: debt.outstanding, reviewCount: debt.balanceReviewRequired ? 1 : 0 } };
   } else if (path.endsWith('/client-reconciliation')) data = { year: 2026, clients: [{ client, clientId: client.id, sourceId: client.id, income: income(), receivable: debt.outstanding, recordCount: records.length, receivableCount: 1 }], targets: [client] };
-  else if (path.endsWith('/records')) {
+  else if (path.endsWith('/statement')) {
+    if (new URLSearchParams(location.search).has('statementError')) throw Object.assign(new Error('Estado de cuenta no disponible (simulado)'), { response: { status: 500, data: { message: 'Estado de cuenta no disponible (simulado)' } } });
+    const section = url.searchParams.get('section'), offset = Number(url.searchParams.get('cursor') || 0);
+    const items = section === 'income' ? records : [{ ...debt, currency: 'COP' }];
+    data = { client, scope: { year: 2026, section }, items: items.slice(offset, offset + 25), nextCursor: offset + 25 < items.length ? String(offset + 25) : null };
+  } else if (path.endsWith('/records')) {
     const page = Number(url.searchParams.get('page') || 1), pageSize = Number(url.searchParams.get('pageSize') || 50);
     data = { items: records.slice((page - 1) * pageSize, page * pageSize), total: records.length, page, pageSize };
   } else if (path.endsWith('/payments')) {

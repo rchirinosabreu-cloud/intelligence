@@ -30,6 +30,7 @@ import { Navigate } from 'react-router-dom';
 import FinancialLedger from './financial/FinancialLedger';
 import BankReconciliationPanel from './financial/BankReconciliationPanel';
 import ReceivablePaymentDialog from './financial/ReceivablePaymentDialog';
+import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import { groupFinancialReceivables, financialDebtStatus, formatFinancialPeriod } from '@/utils/financialReceivables';
@@ -80,6 +81,7 @@ const FinancialDashboard = () => {
     const [savingClientLinkId, setSavingClientLinkId] = useState('');
     const [clientLinkTargets, setClientLinkTargets] = useState({});
     const [paymentDebt, setPaymentDebt] = useState(null);
+    const [statementClient, setStatementClient] = useState(null);
     const [paymentForm, setPaymentForm] = useState({ amount: '', paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }), accountId: '', reference: '', notes: '' });
     const [isSavingPayment, setIsSavingPayment] = useState(false);
     const [isReceivableEditorOpen, setIsReceivableEditorOpen] = useState(false);
@@ -1348,6 +1350,7 @@ await invalidateFinancialQueries(queryClient);
                                                                 <div>
                                                                     <p className="font-black text-zinc-900 dark:text-white">{row.client?.name}</p>
                                                                     <p className="text-[10px] text-zinc-400">{row.client?.slug || 'sin-slug'}</p>
+                                                                    {row.clientId && <button type="button" className="min-h-11 text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setStatementClient({ id: row.clientId, name: row.client?.name })}>Ver estado de cuenta</button>}
                                                                 </div>
                                                             </div>
                                                         </td>
@@ -1359,7 +1362,7 @@ await invalidateFinancialQueries(queryClient);
                                                         <td className="p-4">
                                                             <select
                                                                 value={targetId}
-                                                                disabled={isSaving}
+                                                                disabled={isSaving || !canWriteFinancials}
                                                                 onChange={(event) => setClientLinkTargets(prev => ({
                                                                     ...prev,
                                                                     [sourceId]: event.target.value
@@ -1375,7 +1378,7 @@ await invalidateFinancialQueries(queryClient);
                                                             </select>
                                                         </td>
                                                         <td className="p-4 text-right">
-                                                            <button
+                                                            {canWriteFinancials && <button
                                                                 type="button"
                                                                 disabled={!targetId || isSaving}
                                                                 onClick={() => handleClientLink(sourceId)}
@@ -1383,7 +1386,7 @@ await invalidateFinancialQueries(queryClient);
                                                             >
                                                                 {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
                                                                 Vincular
-                                                            </button>
+                                                            </button>}
                                                         </td>
                                                     </tr>
                                                 );
@@ -1656,6 +1659,7 @@ await invalidateFinancialQueries(queryClient);
             </Dialog>
 
             <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={importError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
+            {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} />}
 
             <Dialog open={!!payrollPayment} onOpenChange={(open) => !open && setPayrollPayment(null)}>
                 <DialogContent className="sm:max-w-md dark:bg-zinc-900">

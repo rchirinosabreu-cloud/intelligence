@@ -34,7 +34,17 @@ Las pruebas de PostgreSQL usan exclusivamente `TEST_DATABASE_URL` validada por `
 - Recorrido Playwright con componentes reales y API simulada: aplicación de ingreso, saldos, permisos, errores, paginación, caso PAGADO heredado y capturas claro/oscuro/móvil; aprobado.
 - `npm run build`, ESLint sobre los archivos de aplicación modificados y `git diff --check`: aprobados. El build conserva avisos de tamaño de bundles y dependencias existentes.
 - Suite general final: 1028 casos, 1020 aprobados, 6 omitidos y 2 fallos (el caso y su contenedor). `qualityStreakUnit.test.js`, caso DEVUELTA, intenta `taskWorkCycle.findFirst` sin simularlo. Se comprobó que el test y su grafo local no cambiaron respecto de HEAD; no se alteraron módulos de tareas para ocultar el fallo.
-- Sin cambios de esquema, datos productivos, commit ni push en este bloque.
+- Sin cambios de esquema ni datos productivos. Primer bloque enviado a `main` en `db3f8b9`; el hash del remoto se verificó después del push. Esto no certifica por sí solo que el despliegue haya terminado.
+
+## Segundo bloque local: estado de cuenta del cliente
+
+- Desde Clientes se abre un modal centrado con obligaciones del año y sus abonos actuales. Los ingresos registrados se consultan en una vista separada: no se descuentan dos veces ni se presume que todo ingreso sea un abono.
+- API de lectura protegida por el mismo permiso Financiero. Páginas de 25 registros, cursor ligado a cliente/año/vista/importación y lectura RepeatableRead. Un cambio de importación entre páginas exige volver al inicio.
+- Los abonos muestran fecha, cuenta, referencia e ingreso vinculado; los soportes solo admiten enlaces HTTP(S). Un importe inválido, falta de vínculo, proyección, cliente/cuenta diferente o PAGADO sin aplicaciones suficientes deja el saldo por verificar.
+- No es una cartera histórica acumulada ni un corte retroactivo. No suma monedas, reparte pagos, crea movimientos ni revierte operaciones. Esas acciones siguen pendientes del siguiente bloque.
+- La invalidación compartida actualiza este detalle tras las operaciones financieras. Los lectores pueden consultarlo, pero no vincular clientes.
+- Verificación local: 314 casos focales (313 aprobados, 0 fallidos, 1 integración PostgreSQL omitida), lint global y build aprobados. Recorridos `financialIntegrity.mjs` y `financialClientStatement.mjs` aprobados con API simulada; capturas claro/oscuro/móvil en `output/financial-client-statement*.png`. La limitación de PostgreSQL y el fallo general previo de `qualityStreakUnit.test.js` siguen registrados arriba; no se certifica la suite general ni concurrencia real con este recorrido.
+- Segundo bloque revisado localmente; Rodny autorizó su push a `main`. Muestra: `http://127.0.0.1:3006/tests/fixtures/financial-integrity.html` → Clientes → Ver estado de cuenta. Solo datos ficticios en memoria. El push no certifica por sí solo la finalización del despliegue.
 
 ## Antes de publicar
 

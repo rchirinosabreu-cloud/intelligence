@@ -1,5 +1,6 @@
 import express from 'express';
 import multer from 'multer';
+import { getClientFinancialStatementHandler } from '../../controllers/financialClientStatementController.js';
 import {
     commitFinancialImport,
     getFinancialDashboard,
@@ -67,6 +68,7 @@ router.post('/periods/reopen', requireFinancialAdmin, reopenFinancialPeriodHandl
 router.get('/monthly-ledger', requireFinancialAccess, getFinancialMonthlyLedger);
 router.patch('/monthly-summaries/:id', requireFinancialWrite, updateFinancialMonthlySummary);
 router.get('/client-reconciliation', requireFinancialAccess, getFinancialClientReconciliation);
+router.get('/clients/:clientId/statement', requireFinancialAccess, getClientFinancialStatementHandler);
 router.patch('/client-links/:sourceClientId', requireFinancialWrite, linkFinancialClient);
 router.get('/receivables-ledger', requireFinancialAccess, getFinancialReceivablesLedger);
 router.patch('/receivables/:id', requireFinancialWrite, updateFinancialReceivable);
